@@ -408,9 +408,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
       onKnowledgeGained: () => this.revealGrowth(),
       onResolved: () => this.returnHome(),
       onFailed: (failure) => this.onRequestLost(failure),
+      onLeave: () => this.leaveContact(),
     });
 
-    this.globeScreen = new GlobeScreen(container, (signalId) => this.openSignal(signalId));
+    this.globeScreen = new GlobeScreen(
+      container,
+      (signalId) => this.openSignal(signalId),
+      () => this.returnToMenu()
+    );
 
     this.attachPicker(world, container);
 
@@ -437,6 +442,40 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.menu?.setEnabled(false);
     this.showGlobe();
+  }
+
+  /**
+   * Step back out of a request to the globe.
+   *
+   * §97: a contact can be left waiting and returned to. The request goes back to
+   * available rather than being abandoned - leaving is not failing, and the player should
+   * never feel trapped in a conversation they are not ready for.
+   */
+  private leaveContact(): void {
+    if (this.phase !== Phase.Contact) return;
+
+    const contactId = this.queue[this.queueIndex - 1]?.mission.contactId;
+    if (contactId) {
+      this.setSignalState(contactId, SignalState.Waiting);
+      this.openable.add(contactId);
+      this.queueIndex -= 1;
+    }
+
+    this.session?.end();
+    this.scene?.deactivate();
+    this.scene = null;
+    this.showGlobe();
+  }
+
+  /** Back to the machine from the globe. */
+  private returnToMenu(): void {
+    this.globeScreen?.detach();
+    this.phone?.setVisible(false);
+    this.globeHandoff = 0;
+    this.phase = Phase.Menu;
+    this.screen = Screen.Tree;
+    this.menu?.setEnabled(true);
+    this.moveTo(HOME_SHOT, 1.4);
   }
 
   /**

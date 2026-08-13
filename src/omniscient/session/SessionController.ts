@@ -39,6 +39,8 @@ export interface SessionHooks {
   onResolved?: (outcome: MissionOutcome, calledBack: boolean) => void;
   /** Fired when the request is lost - the globe puts it on cooldown (§31). */
   onFailed?: (failure: MissionFailure) => void;
+  /** Fired when the player steps back out to the globe. */
+  onLeave?: () => void;
 }
 
 /** Short label under the input telling the player what the game expects (§162). */
@@ -88,6 +90,9 @@ export class SessionController {
           break;
         case 'note':
           this.writeNote(message.text);
+          break;
+        case 'leave':
+          this.hooks.onLeave?.();
           break;
         default:
           break;
@@ -211,6 +216,7 @@ export class SessionController {
       id: hint.id,
       summary: hint.summary,
       detail: this.opened.has(hint.id) ? hint.detail : undefined,
+      keywords: hint.keywords,
     }));
 
     const definition = this.runtime.definition;

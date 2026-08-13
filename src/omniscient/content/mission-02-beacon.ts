@@ -68,29 +68,37 @@ export const MISSION_02: MissionDefinition = {
   hints: [
     {
       id: 'hint-timing',
-      summary: 'It started today, not gradually',
+      summary: 'It only started today',
       detail:
-        'No history of this. Not a fault that crept in - something changed, and it changed '
-        + 'this morning.',
+        'This has never happened before. It did not get slowly worse - it started this '
+        + 'morning, all at once. Something changed today.',
+      keywords: ['today', 'started'],
     },
     {
       id: 'hint-pattern',
-      summary: 'Gone completely, then back',
+      summary: 'The light goes out completely, then comes back',
       detail:
-        'Not dimming, not flickering. Full extinction for three or four seconds, then normal. '
-        + 'That is something taking the whole feed, not a failing lamp.',
+        'It does not dim or flicker. It goes out for three or four seconds and then it is '
+        + 'fine again. Something is taking the whole thing, then giving it back. There is a '
+        + 'pattern to it.',
+      keywords: ['pattern'],
     },
     {
       id: 'hint-weather',
-      summary: 'Clear sky all day',
-      detail: 'No storm, no salt spray, no wind loading. The weather is not doing this.',
+      /**
+       * Eliminative. Nothing here is worth typing back - it exists to close a door, so it
+       * deliberately bolds nothing. A bolded word the game shrugs at is worse than none.
+       */
+      summary: 'The weather is not doing this',
+      detail: 'Clear sky all day. No storm, no wind, no spray off the sea.',
     },
     {
       id: 'hint-splice',
-      summary: 'A splice on the mast bracket',
+      summary: 'The aerial cable is joined to something else',
       detail:
-        'The feed does not run straight to the beacon. There is a joint on the bracket and a '
-        + 'second cable leaving it, heading down the hill towards the town.',
+        'The cable does not go straight to the light. There is a join on the bracket, and a '
+        + 'second cable comes off it and runs down the hill towards the town.',
+      keywords: ['cable', 'aerial', 'join'],
       cue: 'prop.highlight:splice-box',
       revealedBy: 'feed-confirmed',
     },
@@ -110,7 +118,7 @@ export const MISSION_02: MissionDefinition = {
       id: 'ASK_FEED',
       requires: [
         [...TERMS.inspect, ...TERMS.describe, 'trace', 'follow'],
-        ['feed', 'aerial', 'antenna', 'cable', 'lead', 'split', 'splitter', 'mast'],
+        ['feed', 'aerial', 'antenna', 'cable', 'lead', 'split', 'splitter', 'mast', 'join', 'joined', 'splice'],
       ],
       priority: 3,
     },

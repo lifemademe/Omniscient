@@ -33,7 +33,7 @@ export function createSignals(): Signal[] {
       latitude: 44.9,
       longitude: 29.4,
       name: 'Tomas Vasc',
-      label: 'Harbour beacon - intermittent.',
+      label: 'The harbour light keeps going out.',
       // Appears once Mirela's request resolves - because that is what caused it.
       state: SignalState.Resolved,
     },

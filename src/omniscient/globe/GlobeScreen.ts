@@ -71,6 +71,20 @@ const GLOBE_CSS = `
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
+.omni-globe__back {
+  position: absolute;
+  top: 16px; right: 24px;
+  padding: 5px 14px;
+  background: transparent;
+  border: 1px solid #2b5c39;
+  color: #4f9a5e;
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.omni-globe__back:hover { border-color: #4f9a5e; color: #d8ffb0; }
 /* Tooltip on a selected point. */
 .omni-globe__tip {
   position: absolute;
@@ -221,7 +235,8 @@ export class GlobeScreen {
 
   constructor(
     private readonly container: HTMLElement,
-    private readonly onAnswer: (signalId: string) => void
+    private readonly onAnswer: (signalId: string) => void,
+    private readonly onBack: () => void
   ) {
     this.globe = new GlobeView(this.surface, []);
   }
@@ -265,7 +280,17 @@ export class GlobeScreen {
     hint.className = 'omni-globe__hint';
     hint.textContent = 'select a signal';
 
-    root.append(stage, head, hint);
+    // Back to the machine. The globe is a place you go, so it needs a way out.
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'omni-globe__back';
+    back.textContent = '‹ Machine';
+    back.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.onBack();
+    });
+
+    root.append(stage, head, hint, back);
     this.container.appendChild(root);
 
     // Clicking the canvas selects a point; clicking anywhere else clears the selection

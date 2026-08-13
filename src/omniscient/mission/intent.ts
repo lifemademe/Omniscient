@@ -137,7 +137,10 @@ export function resolveIntent(text: string, intents: readonly IntentDefinition[]
  */
 export const TERMS = {
   inspect: ['check', 'look', 'inspect', 'examine', 'see', 'show', 'view', 'open', 'find'],
-  describe: ['describe', 'tell', 'explain', 'what'],
+  // 'ask' and 'about' are how people actually phrase a question to a third party -
+  // "ask her about the water". Broad alone, but every intent using this group pairs it
+  // with a specific subject group, so it cannot fire on its own.
+  describe: ['describe', 'tell', 'explain', 'what', 'ask', 'about', 'say', 'how', 'why', 'where'],
   // 'off' and 'down' are broad on their own, but every intent using this group also
   // requires a power term, so "take the power off" resolves while "off the coast" cannot.
   remove: ['remove', 'disconnect', 'unplug', 'pull', 'cut', 'kill', 'isolate', 'shut', 'off', 'down', 'dead'],

@@ -34,6 +34,8 @@ export interface HintView {
   summary: string;
   /** Set once opened - the phone keeps what it has already told you. */
   detail?: string;
+  /** Words to emphasise: the vocabulary the player can use back. */
+  keywords?: string[];
 }
 
 /** A recorded fact, shown in RECORDS when relevant to the open request (§19). */
@@ -90,7 +92,9 @@ export type PlayerMessage =
   /** Answered a yes/no reading of their last message. */
   | { kind: 'confirm'; accepted: boolean }
   /** Wrote themselves a note after losing a request (§170). */
-  | { kind: 'note'; text: string };
+  | { kind: 'note'; text: string }
+  /** Stepped back out of the request to the globe. */
+  | { kind: 'leave' };
 
 export interface InterventionSurface {
   /** Which transport this is. Diagnostics and telemetry only - gameplay must not branch on it. */

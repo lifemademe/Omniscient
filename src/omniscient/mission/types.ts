@@ -47,6 +47,15 @@ export interface MissionHint {
   summary: string;
   /** What the player learns by opening it. Still observation, not diagnosis. */
   detail: string;
+  /**
+   * Words to emphasise in the summary and detail - the vocabulary the player can use
+   * back. A hint that says "there is water on the floor" is only useful if the player
+   * realises "water" is a word the game will understand.
+   *
+   * Declared as data rather than markup so the renderer keeps building text nodes and
+   * the safe-UI rule holds without exception.
+   */
+  keywords?: string[];
   /** Contact View cue fired when opened, e.g. "prop.highlight:connector-b". */
   cue?: string;
   /**

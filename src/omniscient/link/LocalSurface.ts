@@ -147,6 +147,21 @@ export const TERMINAL_CSS = `
   color: #8fbe93;
 }
 .omni-item--mine { border-left: 2px solid #c9a227; }
+/* Words the player can use back. Bright enough to notice while skimming. */
+.omni-key { color: #d8ffb0; font-weight: bold; }
+/* Leave the request / back to the machine. */
+.omni-back {
+  background: transparent;
+  border: 1px solid #2b5c39;
+  color: #4f9a5e;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+.omni-back:hover { border-color: #4f9a5e; color: #d8ffb0; }
 .omni-empty {
   color: #3f6b48;
   font-size: 11px;
@@ -271,11 +286,18 @@ export class LocalSurface implements InterventionSurface {
 
     const head = document.createElement('div');
     head.className = 'omni-terminal__head';
-    const title = document.createElement('span');
-    title.textContent = 'OMNISCIENT_';
+
+    // Stepping out of a request. §97: a contact can be left waiting and returned to -
+    // the player should never feel trapped in a conversation.
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'omni-back';
+    back.textContent = '‹ Globe';
+    back.addEventListener('click', () => this.dispatch({ kind: 'leave' }));
+
     const contact = document.createElement('span');
     contact.className = 'omni-terminal__contact';
-    head.append(title, contact);
+    head.append(back, contact);
 
     const tabs = document.createElement('div');
     tabs.className = 'omni-tabs';
@@ -466,19 +488,64 @@ export class LocalSurface implements InterventionSurface {
     }
   }
 
+  /**
+   * Write text into a parent, emphasising the words the player can use back.
+   *
+   * Builds text nodes and <strong> elements rather than assigning innerHTML, so the
+   * safe-UI rule holds with no exception carved out for "trusted" content.
+   */
+  private appendEmphasised(parent: HTMLElement, text: string, keywords?: string[]): void {
+    if (!keywords || keywords.length === 0) {
+      parent.appendChild(document.createTextNode(text));
+      return;
+    }
+
+    // Longest first, so "aerial lead" wins over "aerial" when both are listed.
+    const ordered = [...keywords].sort((a, b) => b.length - a.length);
+    let rest = text;
+
+    while (rest.length > 0) {
+      let bestIndex = -1;
+      let bestWord = '';
+
+      for (const word of ordered) {
+        const index = rest.toLowerCase().indexOf(word.toLowerCase());
+        if (index >= 0 && (bestIndex === -1 || index < bestIndex)) {
+          bestIndex = index;
+          bestWord = word;
+        }
+      }
+
+      if (bestIndex === -1) {
+        parent.appendChild(document.createTextNode(rest));
+        return;
+      }
+
+      if (bestIndex > 0) {
+        parent.appendChild(document.createTextNode(rest.slice(0, bestIndex)));
+      }
+      const mark = document.createElement('strong');
+      mark.className = 'omni-key';
+      mark.textContent = rest.slice(bestIndex, bestIndex + bestWord.length);
+      parent.appendChild(mark);
+
+      rest = rest.slice(bestIndex + bestWord.length);
+    }
+  }
+
   private renderHint(hint: HintView): HTMLElement {
     const item = document.createElement('button');
     item.type = 'button';
     item.className = 'omni-item';
 
     const summary = document.createElement('span');
-    summary.textContent = hint.summary;
+    this.appendEmphasised(summary, hint.summary, hint.keywords);
     item.appendChild(summary);
 
     if (hint.detail) {
       const detail = document.createElement('span');
       detail.className = 'omni-item__detail';
-      detail.textContent = hint.detail;
+      this.appendEmphasised(detail, hint.detail, hint.keywords);
       item.appendChild(detail);
     } else {
       const meta = document.createElement('span');

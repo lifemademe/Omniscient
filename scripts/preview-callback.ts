@@ -192,6 +192,26 @@ check(
   new Set(resolved).size === 1 && resolved[0] === 'INSPECT_CONNECTOR'
 );
 
+/**
+ * The bolded words are a promise. If a player reads a hint and types the obvious sentence
+ * around the word we emphasised, the game has to understand it - otherwise the bolding is
+ * actively misleading. One plain sentence per hint, phrased the way somebody would type it.
+ */
+const fromHints: Array<[string, string]> = [
+  ['hint-floor', 'ask her about the flood water'],
+  ['hint-lamp', 'have her describe the set'],
+  ['hint-aerial', 'where does the aerial go'],
+  ['hint-connectors', 'clean the green off the connector'],
+];
+fromHints.forEach(([hintId, text]) => {
+  const result = resolveIntent(text, MISSION_01.intents);
+  check(
+    `A plain reply built on ${hintId}'s bolded words is understood`,
+    result.kind === 'matched',
+    `"${text}" -> ${result.kind === 'matched' ? result.intentId : result.kind}`
+  );
+});
+
 const nonsense = resolveIntent('what is the weather like in Lagos', MISSION_01.intents);
 check('Irrelevant input is unrecognised, not mis-matched', nonsense.kind === 'unrecognised');
 
@@ -340,6 +360,45 @@ session2.start(MISSION_01, MIRELA);
 let state = rec.latest()!;
 
 check('At least three hints on opening', (state.hints?.length ?? 0) >= 3, '§131');
+check(
+  'Hints mark the words the player can use back',
+  (state.hints ?? []).filter((h) => (h.keywords?.length ?? 0) > 0).length >= 2
+);
+
+/**
+ * A bolded word is a promise that the game understands it. An eliminative observation is
+ * allowed to bold nothing - but it is not allowed to bold a word the matcher shrugs at.
+ * Checked across both missions, since the failure is an authoring slip, not a runtime one.
+ */
+[MISSION_01, MISSION_02].forEach((mission) => {
+  const vocabulary = new Set(
+    mission.intents.flatMap((intent) =>
+      [...intent.requires, ...(intent.boosts ?? [])].flat().map((t) => t.toLowerCase())
+    )
+  );
+  const orphans = (mission.hints ?? []).flatMap((hint) =>
+    (hint.keywords ?? [])
+      .filter((word) => !vocabulary.has(word.toLowerCase()))
+      .map((word) => `${hint.id}:${word}`)
+  );
+  check(
+    `${mission.id} bolds no word the intent matcher cannot hear`,
+    orphans.length === 0,
+    orphans.length ? orphans.join(', ') : undefined
+  );
+
+  // And every bolded word has to survive into the rendered text, or nothing is emphasised.
+  const unrendered = (mission.hints ?? []).flatMap((hint) =>
+    (hint.keywords ?? [])
+      .filter((word) => !`${hint.summary} ${hint.detail}`.toLowerCase().includes(word.toLowerCase()))
+      .map((word) => `${hint.id}:${word}`)
+  );
+  check(
+    `${mission.id} bolds only words that appear in the hint text`,
+    unrendered.length === 0,
+    unrendered.length ? unrendered.join(', ') : undefined
+  );
+});
 check(
   'Hints behind a reveal are withheld',
   !state.hints?.some((h) => h.id === 'hint-connectors'),
