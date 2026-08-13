@@ -15,6 +15,7 @@ import * as THREE from 'three';
 import { MIRELA, TOMAS } from './content/contacts.js';
 import { MISSION_01 } from './content/mission-01-transmitter.js';
 import { MISSION_02 } from './content/mission-02-beacon.js';
+import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
 import { KnowledgeTree } from './crt/KnowledgeTree.js';
 import { createCRTTerminal } from './geometry/hardware.js';
@@ -25,7 +26,7 @@ import { VFX_LIBRARY } from './vfx/library.js';
 import { buildContactScene } from './view/scenes.js';
 
 import type { Contact, MissionDefinition } from './mission/types.js';
-import type { ContactScene } from './view/ContactScene.js';
+import type { CameraShot, ContactScene } from './view/ContactScene.js';
 
 /** Stable per-playthrough seed. §123: the same knowledge must draw the same tree. */
 const PLAYTHROUGH_SEED = 0x0c151e;
@@ -35,6 +36,9 @@ const GROWTH_REVEAL_SECONDS = 1.8;
 
 /** Beat between a request resolving and the next signal arriving (§168: quiet matters). */
 const INTER_MISSION_PAUSE = 3.5;
+
+/** Scratch matrix for camera orientation. Reused to avoid per-frame allocation. */
+const CAMERA_MATRIX = new THREE.Matrix4();
 
 const MATERIALS = {
   chassis: new THREE.MeshStandardMaterial({ color: '#b9ad92', roughness: 0.78, metalness: 0.05 }),
@@ -73,6 +77,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
   /** Position the next VFX burst should play at, set by the cue that implied it. */
   private pendingEffectPosition: THREE.Vector3 | null = null;
 
+  /**
+   * The one camera. Owned here rather than per-diorama: ViewTargetCameraNode.setActive
+   * pushes its inner THREE camera onto the world's view-target stack, and a camera
+   * nested inside a diorama that starts hidden never produced a usable view.
+   * One camera, created before beginPlay, that moves to shots the scenes declare.
+   */
+  private camera: ENGINE.ViewTargetCameraNode | null = null;
+  private readonly cameraTweener = new Tweener();
+  private readonly cameraPosition = new THREE.Vector3(0.5, 1.35, 1.5);
+  private readonly cameraTarget = new THREE.Vector3(0, 0.85, -0.5);
+
   /** Tree reveal animation state. */
   private revealFrom = 0;
   private revealProgress = 1;
@@ -97,6 +112,60 @@ export class OmniscientRig extends ENGINE.SceneNode {
     ];
 
     this.buildScenes();
+    this.buildCamera();
+  }
+
+  /** Created before beginPlay so it is part of the tree the engine initialises normally. */
+  private buildCamera(): void {
+    this.camera = ENGINE.ViewTargetCameraNode.create({
+      name: 'ContactCamera',
+      // Wide-ish and slightly long: a fixed cheap camera in somebody's workshop, not a
+      // cinematic rig. §187 wants one clear idea per frame, not constant motion.
+      fov: 46,
+      near: 0.05,
+      far: 400,
+      startActive: true,
+      position: this.cameraPosition.clone(),
+    });
+    this.add(this.camera);
+    this.applyCameraTransform();
+  }
+
+  /**
+   * Point the camera node at the target.
+   *
+   * NOT Object3D.lookAt. That branches on `isCamera`, and ViewTargetCameraNode is a
+   * SceneNode holding a camera rather than being one - so lookAt applies the *object*
+   * convention (+Z toward the target) and the child camera, which looks down -Z, ends up
+   * facing exactly backwards. Matrix4.lookAt gives the camera convention directly.
+   */
+  private applyCameraTransform(): void {
+    if (!this.camera) return;
+    this.camera.position.copy(this.cameraPosition);
+    CAMERA_MATRIX.lookAt(this.cameraPosition, this.cameraTarget, this.camera.up);
+    this.camera.quaternion.setFromRotationMatrix(CAMERA_MATRIX);
+  }
+
+  /** Frame a shot immediately. */
+  private cutTo(shot: CameraShot): void {
+    this.cameraPosition.copy(shot.position);
+    this.cameraTarget.copy(shot.target);
+    this.applyCameraTransform();
+  }
+
+  /** Ease to a shot. */
+  private moveTo(shot: CameraShot, duration: number): void {
+    const fromPosition = this.cameraPosition.clone();
+    const fromTarget = this.cameraTarget.clone();
+
+    this.cameraTweener.add(
+      (t) => {
+        this.cameraPosition.lerpVectors(fromPosition, shot.position, t);
+        this.cameraTarget.lerpVectors(fromTarget, shot.target, t);
+        this.applyCameraTransform();
+      },
+      { duration, easing: Ease.inOutCubic, channel: 'camera' }
+    );
   }
 
   /** Construct every diorama the queue needs, hidden, before play begins. */
@@ -112,10 +181,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.scenes.set(sceneId, scene);
       this.add(scene);
     }
-
-    // TEMP diagnostics: the editor's console store captures errors only, so warn/log
-    // from inside play mode is invisible. Remove once the view is confirmed working.
-    console.error(`[diag] scenes built=${this.scenes.size} ids=${[...this.scenes.keys()].join(',')}`);
   }
 
   public override beginPlay(): boolean {
@@ -123,14 +188,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.configureLook();
     void this.startSession();
-
-    const scene = this.scenes.get('scene-repair-shop');
-    const floor = scene?.debugFirstMesh();
-    console.error(
-      `[diag] rig world=${!!this.getWorld()} parent=${!!this.parent} ` +
-        `sceneParent=${!!scene?.parent} floorParent=${!!floor?.parent} ` +
-        `floorInScene=${floor ? !!floor.parent?.parent : false}`
-    );
 
     return true;
   }
@@ -272,10 +329,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.scene = next;
     this.scene?.activate();
 
-    console.error(
-      `[diag] mount ${sceneId} found=${!!next} visible=${next?.visible} ` +
-        `cameraReady=${next?.hasCamera} props=${next?.propCount}`
-    );
+    const opening = next?.getShot('default');
+    if (opening) this.cutTo(opening);
   }
 
   /**
@@ -284,7 +339,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * position any effect should play at.
    */
   private applyEnvironmentCue(cue: string): void {
-    this.pendingEffectPosition = this.scene?.applyCue(cue) ?? null;
+    const result = this.scene?.applyCue(cue);
+    if (!result) return;
+
+    if (result.shot) {
+      this.moveTo(result.shot, result.shotDuration ?? 1.4);
+    }
+    this.pendingEffectPosition = result.effectPosition ?? null;
   }
 
   private fireVfx(effect: string): void {
@@ -323,6 +384,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   public override tickPrePhysics(deltaTime: number): void {
     super.tickPrePhysics(deltaTime);
+    this.cameraTweener.update(deltaTime);
     if (!this.tree) return;
 
     this.pulse = (this.pulse + deltaTime / 1.6) % 1;

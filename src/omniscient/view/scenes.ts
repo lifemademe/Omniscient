@@ -192,19 +192,11 @@ function buildRepairShop(scene: ContactScene): void {
     })
   );
 
-  // TEMP: unlit marker. If this shows and nothing else does, the geometry is present and
-  // the problem is lighting rather than visibility or camera. Remove once resolved.
-  const marker = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-  marker.translate(0, 1.15, -0.5);
-  scene.registerProp(
-    'debug-marker',
-    meshOf('DebugMarker', marker, new THREE.MeshBasicMaterial({ color: '#ff00ff' }))
-  );
-
-  // Shots. The default frame is a working view of the bench.
+  // Shots. The default frame establishes the room: bench, contact, and enough of the
+  // shelf to read as somebody's workshop (§186 - composition before clutter).
   scene.registerShot('default', {
-    position: new THREE.Vector3(0.5, 1.35, 1.5),
-    target: new THREE.Vector3(0, 0.85, -0.5),
+    position: new THREE.Vector3(1.35, 1.62, 2.35),
+    target: new THREE.Vector3(-0.15, 0.92, -0.7),
   });
   scene.registerShot('transmitter', {
     position: new THREE.Vector3(0.15, 1.05, 0.5),

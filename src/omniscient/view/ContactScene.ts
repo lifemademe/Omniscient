@@ -48,6 +48,15 @@ export interface ContactSceneOptions extends ENGINE.SceneNodeOptions {
   sceneId?: string;
 }
 
+/** What a cue resolved to. Camera work is handed back to the rig. */
+export interface CueResult {
+  /** Set when the cue was a camera move. */
+  shot?: CameraShot;
+  shotDuration?: number;
+  /** Set when a prop action implies an effect at a point in the world. */
+  effectPosition?: THREE.Vector3;
+}
+
 @ENGINE.GameClass()
 export class ContactScene extends ENGINE.SceneNode {
   /**
@@ -75,10 +84,6 @@ export class ContactScene extends ENGINE.SceneNode {
   private readonly props = new Map<string, RegisteredProp>();
   private readonly shots = new Map<string, CameraShot>();
   private readonly tweener = new Tweener();
-
-  private camera: ENGINE.ViewTargetCameraNode | null = null;
-  private readonly cameraPosition = new THREE.Vector3(0, 1.4, 2.2);
-  private readonly cameraTarget = new THREE.Vector3(0, 0.9, 0);
   private built = false;
 
   /**
@@ -103,54 +108,14 @@ export class ContactScene extends ENGINE.SceneNode {
     }
   }
 
-  public override beginPlay(): boolean {
-    if (!super.beginPlay()) return false;
-
-    this.camera = ENGINE.ViewTargetCameraNode.create({
-      name: 'ContactCamera',
-      // Wide-ish and slightly long: a fixed cheap camera in somebody's workshop, not a
-      // cinematic rig. §187 wants one clear idea per frame, not constant motion.
-      fov: 46,
-      near: 0.05,
-      far: 400,
-      // Every diorama exists from startup, so cameras must not fight over the view.
-      // The rig activates exactly one via activate().
-      startActive: false,
-      position: this.cameraPosition.clone(),
-    });
-    this.add(this.camera);
-    this.applyCameraTransform();
-
-    return true;
-  }
-
-  /** True once beginPlay has created the view camera. */
-  public get hasCamera(): boolean {
-    return this.camera !== null;
-  }
-
-  /** How many props the builder registered. Diagnostics. */
-  public get propCount(): number {
-    return this.props.size;
-  }
-
-  /** First registered prop node. Diagnostics only. */
-  public debugFirstMesh(): ENGINE.SceneNode | null {
-    for (const prop of this.props.values()) return prop.node;
-    return null;
-  }
-
-  /** Make this diorama the live view. */
+  /** Show this diorama. The rig owns the camera and frames the shot. */
   public activate(): void {
     this.visible = true;
-    this.camera?.setActive(true);
-    this.cutTo('default');
   }
 
-  /** Hide this diorama and release the view. */
+  /** Hide this diorama. */
   public deactivate(): void {
     this.visible = false;
-    this.camera?.setActive(false);
   }
 
   /**
@@ -175,7 +140,6 @@ export class ContactScene extends ENGINE.SceneNode {
 
     builder(this);
     this.built = true;
-    this.cutTo('default');
   }
 
   /** Drop everything the builder made, keeping the camera. */
@@ -208,13 +172,9 @@ export class ContactScene extends ENGINE.SceneNode {
     this.shots.set(id, shot);
   }
 
-  /** Immediately frame a shot without animating. Used when the request opens. */
-  public cutTo(id: string): void {
-    const shot = this.shots.get(id);
-    if (!shot) return;
-    this.cameraPosition.copy(shot.position);
-    this.cameraTarget.copy(shot.target);
-    this.applyCameraTransform();
+  /** Look up a registered shot. The rig's camera does the framing. */
+  public getShot(id: string): CameraShot | null {
+    return this.shots.get(id) ?? null;
   }
 
   /** World-space position of a prop anchor, for placing effects. */
@@ -229,49 +189,34 @@ export class ContactScene extends ENGINE.SceneNode {
 
   /**
    * Run a mission cue.
-   * @returns the world position an effect should play at, when the cue implies one.
+   *
+   * Prop cues are handled here. Camera cues are resolved to a shot and returned, because
+   * the camera belongs to the rig - see CameraRig.
    */
-  public applyCue(cue: string): THREE.Vector3 | null {
+  public applyCue(cue: string): CueResult {
     const [head, target] = cue.split(':');
     const [domain, action] = (head ?? '').split('.');
 
     if (!domain || !action || !target) {
       console.warn(`[contact-view] malformed cue "${cue}"`);
-      return null;
+      return {};
     }
 
     if (domain === 'camera') {
-      this.moveCamera(target, action);
-      return null;
+      const shot = this.shots.get(target);
+      if (!shot) {
+        console.warn(`[contact-view] no shot registered for "${target}"`);
+        return {};
+      }
+      return { shot, shotDuration: shot.duration ?? (action === 'pan' ? 2.2 : 1.4) };
     }
 
     if (domain === 'prop') {
-      return this.runPropAction(target, action);
+      return { effectPosition: this.runPropAction(target, action) ?? undefined };
     }
 
     console.warn(`[contact-view] unknown cue domain "${domain}"`);
-    return null;
-  }
-
-  private moveCamera(shotId: string, action: string): void {
-    const shot = this.shots.get(shotId);
-    if (!shot) {
-      console.warn(`[contact-view] no shot registered for "${shotId}"`);
-      return;
-    }
-
-    const fromPosition = this.cameraPosition.clone();
-    const fromTarget = this.cameraTarget.clone();
-    const duration = shot.duration ?? (action === 'pan' ? 2.2 : 1.4);
-
-    this.tweener.add(
-      (t) => {
-        this.cameraPosition.lerpVectors(fromPosition, shot.position, t);
-        this.cameraTarget.lerpVectors(fromTarget, shot.target, t);
-        this.applyCameraTransform();
-      },
-      { duration, easing: Ease.inOutCubic, channel: 'camera' }
-    );
+    return {};
   }
 
   /**
@@ -313,12 +258,6 @@ export class ContactScene extends ENGINE.SceneNode {
     }
 
     return this.getAnchorWorldPosition(propId, anchorKey) ?? this.getAnchorWorldPosition(propId, 'default');
-  }
-
-  private applyCameraTransform(): void {
-    if (!this.camera) return;
-    this.camera.position.copy(this.cameraPosition);
-    this.camera.lookAt(this.cameraTarget);
   }
 
   public override tickPrePhysics(deltaTime: number): void {
