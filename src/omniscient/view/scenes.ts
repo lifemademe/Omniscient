@@ -16,7 +16,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { decorMesh } from '../art/mesh.js';
-import { LIGHT, MAT, PERSON } from '../art/palette.js';
+import { ACCENT, LIGHT, MAT, PERSON } from '../art/palette.js';
 import { Ease } from '../core/tween.js';
 import { createCharacter } from '../geometry/character.js';
 import {
@@ -342,45 +342,188 @@ function buildRepairShop(scene: ContactScene): void {
  * mast and its cable run carry the composition, not clutter.
  */
 function buildBeaconMast(scene: ContactScene): void {
-  const deck = new THREE.BoxGeometry(3, 0.1, 3);
-  deck.translate(0, -0.05, 0);
+  // -- The headland ---------------------------------------------------------
+  const deck = new THREE.BoxGeometry(4.2, 0.2, 4.2);
+  deck.translate(0, -0.1, 0);
   scene.registerProp('deck', meshOf('Deck', deck, MAT.ground));
 
-  // Lattice mast: repeated structural motif rather than a modelled tower (§201).
+  /**
+   * Sea and horizon.
+   *
+   * Tomas is halfway up a mast above a harbour at night, and the scene had nothing under
+   * him but a three-metre slab - no height, no coast, no reason for a beacon to exist at
+   * all. One dark plane and a sky band cost almost nothing and are the whole difference
+   * between "up a mast" and "a lattice in a void".
+   */
+  const sea = new THREE.PlaneGeometry(70, 46);
+  sea.rotateX(-Math.PI / 2);
+  sea.translate(0, -5.5, -19);
+  scene.registerProp('sea', meshOf('Sea', sea, MAT.sea));
+
+  // No sky plane. One was tried and cut: an unlit quad out past the mast rendered as a
+  // black slab with a hard seam where it ended and the atmosphere took over, which reads
+  // as a hole in the world rather than as night. The fog is the sky here - it already
+  // fades everything into a cool neutral at distance, which is what a night horizon does.
+
+  // -- The mast -------------------------------------------------------------
   const mastPieces: THREE.BufferGeometry[] = [];
   for (let level = 0; level < 9; level++) {
     const y = level * 0.62;
+    const inset = 0.34 - level * 0.02;
     for (let sx = -1; sx <= 1; sx += 2) {
       for (let sz = -1; sz <= 1; sz += 2) {
         const leg = new THREE.BoxGeometry(0.05, 0.62, 0.05);
-        const inset = 0.34 - level * 0.02;
         leg.translate(sx * inset, y + 0.31, sz * inset);
         mastPieces.push(leg);
       }
     }
-    const brace = new THREE.BoxGeometry(0.72 - level * 0.04, 0.04, 0.04);
-    brace.translate(0, y, 0.34 - level * 0.02);
-    mastPieces.push(brace);
+    // Braces on all four faces plus a diagonal. One brace on one side read as scaffolding
+    // rather than as a structure that could hold a light up through a coastal winter.
+    for (const [w, d, dx, dz] of [
+      [inset * 2, 0.04, 0, inset],
+      [inset * 2, 0.04, 0, -inset],
+      [0.04, inset * 2, inset, 0],
+      [0.04, inset * 2, -inset, 0],
+    ] as const) {
+      const brace = new THREE.BoxGeometry(w, 0.04, d);
+      brace.translate(dx, y, dz);
+      mastPieces.push(brace);
+    }
+    const diagonal = new THREE.BoxGeometry(inset * 2.4, 0.03, 0.03);
+    diagonal.rotateZ(level % 2 === 0 ? 0.75 : -0.75);
+    diagonal.translate(0, y + 0.31, inset);
+    mastPieces.push(diagonal);
   }
-  const mastGeo = mastPieces.reduce((acc, geo) => acc ?? geo, null as THREE.BufferGeometry | null)!;
   const mastRoot = ENGINE.SceneNode.create({ name: 'Mast' });
-  mastPieces.forEach((geo, i) => mastRoot.add(meshOf(`MastPart${i}`, geo, MAT.metal)));
+  mastRoot.add(meshOf('MastLattice', mergeGeometries(mastPieces, false) ?? mastPieces[0], MAT.metal));
   scene.registerProp('mast', mastRoot);
-  void mastGeo;
 
-  // The splice bracket - the object the whole mission turns on.
-  const spliceBody = new THREE.BoxGeometry(0.22, 0.16, 0.12);
-  spliceBody.translate(0, 0.08, 0);
-  const spliceRoot = ENGINE.SceneNode.create({
-    name: 'SpliceBox',
-    position: new THREE.Vector3(0.3, 2.6, 0.36),
+  // A service platform, so Tomas is standing on something.
+  const platformY = 2.02;
+  const platformPieces: THREE.BufferGeometry[] = [];
+  const deckPlate = new THREE.BoxGeometry(1.5, 0.05, 1.1);
+  deckPlate.translate(0.25, platformY, 0.42);
+  platformPieces.push(deckPlate);
+  for (let i = 0; i < 5; i++) {
+    const rail = new THREE.BoxGeometry(0.035, 0.5, 0.035);
+    rail.translate(-0.4 + i * 0.33, platformY + 0.27, 0.94);
+    platformPieces.push(rail);
+  }
+  const handrail = new THREE.BoxGeometry(1.5, 0.04, 0.04);
+  handrail.translate(0.25, platformY + 0.52, 0.94);
+  platformPieces.push(handrail);
+  scene.registerProp(
+    'platform',
+    meshOf('Platform', mergeGeometries(platformPieces, false) ?? deckPlate, MAT.metal)
+  );
+
+  // -- The light itself -----------------------------------------------------
+  const beaconY = 5.6;
+  const housing = new THREE.CylinderGeometry(0.3, 0.34, 0.2, 10);
+  housing.translate(0, beaconY + 0.32, 0);
+  const capBase = new THREE.CylinderGeometry(0.26, 0.3, 0.16, 10);
+  capBase.translate(0, beaconY - 0.18, 0);
+  const beaconRoot = ENGINE.SceneNode.create({ name: 'Beacon' });
+  beaconRoot.add(
+    meshOf('BeaconHousing', mergeGeometries([housing, capBase], false) ?? housing, MAT.equipment)
+  );
+
+  const lensGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.34, 10);
+  lensGeo.translate(0, beaconY + 0.08, 0);
+  const lens = meshOf('BeaconLens', lensGeo, MAT.beaconLit);
+  beaconRoot.add(lens);
+
+  const glow = ENGINE.PointLightNode.create({
+    name: 'BeaconGlow',
+    position: new THREE.Vector3(0, beaconY + 0.08, 0),
+    intensity: 9,
+    color: new THREE.Color(ACCENT.amber),
+    distance: 9,
+    decay: 1.3,
   });
-  spliceRoot.add(meshOf('SpliceBody', spliceBody, MAT.dark));
+  beaconRoot.add(glow);
 
-  const lidGeo = new THREE.BoxGeometry(0.22, 0.02, 0.12);
+  /**
+   * The fault, running on its own.
+   *
+   * "Not dimming - gone, three or four seconds, then back." That is the entire reason
+   * Tomas called, and it happened nowhere: the light was not modelled at all, so the
+   * player was told about a symptom they could never see. It now drops on a loop for as
+   * long as the request is open, which is what makes this a conversation about something
+   * rather than a conversation about a line of dialogue.
+   */
+  let beaconClock = 0;
+  scene.registerProp('beacon', beaconRoot, {
+    anchors: { default: new THREE.Vector3(0, beaconY, 0) },
+    idle: (deltaTime) => {
+      beaconClock = (beaconClock + deltaTime) % 11;
+      // Out for three and a half seconds in every eleven, hard on and hard off: a feed
+      // being pulled down collapses, it does not fade.
+      const dark = beaconClock > 7.5;
+      lens.material = dark ? MAT.beaconDark : MAT.beaconLit;
+      glow.intensity = dark ? 0 : 9;
+    },
+    actions: {
+      /** Steady again, once the two sets are separated. */
+      steady: () => {
+        beaconClock = 0;
+        lens.material = MAT.beaconLit;
+        glow.intensity = 11;
+      },
+    },
+  });
+
+  // -- The cables, which are the evidence -----------------------------------
+  //
+  // hint-splice tells the player "the cable does not go straight to the light. There is a
+  // join on the bracket, and a second cable comes off it and runs down the hill towards
+  // the town." None of that existed either. The feed now visibly leaves the light, stops
+  // at the bracket, and leaves again in a direction that is not the light - which is the
+  // whole deduction, sitting there for anybody who looks.
+  const spliceAt = new THREE.Vector3(0.3, 2.6, 0.36);
+
+  const feedDown = new THREE.TubeGeometry(
+    new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0.06, beaconY - 0.24, 0.1),
+      new THREE.Vector3(0.16, 4.4, 0.3),
+      new THREE.Vector3(0.24, 3.4, 0.38),
+      spliceAt.clone().add(new THREE.Vector3(0, 0.16, 0)),
+    ]),
+    24,
+    0.022,
+    6,
+    false
+  );
+  scene.registerProp('feed-down', meshOf('FeedDown', feedDown, MAT.dark));
+
+  // The second cable: away from the mast, down the hill, towards the town.
+  const feedAway = new THREE.TubeGeometry(
+    new THREE.CatmullRomCurve3([
+      spliceAt.clone().add(new THREE.Vector3(0, 0.02, 0.04)),
+      new THREE.Vector3(0.9, 2.3, 0.75),
+      new THREE.Vector3(2.1, 1.5, 1.5),
+      new THREE.Vector3(3.6, 0.2, 2.6),
+    ]),
+    26,
+    0.02,
+    6,
+    false
+  );
+  scene.registerProp('feed-away', meshOf('FeedAway', feedAway, MAT.dark));
+
+  // -- The splice bracket - the object the whole mission turns on -----------
+  const spliceBody = new THREE.BoxGeometry(0.24, 0.18, 0.14);
+  spliceBody.translate(0, 0.09, 0);
+  const spliceRoot = ENGINE.SceneNode.create({ name: 'SpliceBox', position: spliceAt.clone() });
+  spliceRoot.add(meshOf('SpliceBody', spliceBody, MAT.equipment));
+
+  const lidGeo = new THREE.BoxGeometry(0.24, 0.02, 0.14);
   lidGeo.translate(0, 0.01, 0);
   const lid = meshOf('SpliceLid', lidGeo, MAT.metal);
-  const lidPivot = ENGINE.SceneNode.create({ name: 'LidPivot', position: new THREE.Vector3(0, 0.16, -0.06) });
+  const lidPivot = ENGINE.SceneNode.create({
+    name: 'LidPivot',
+    position: new THREE.Vector3(0, 0.18, -0.07),
+  });
   lidPivot.add(lid);
   spliceRoot.add(lidPivot);
 
@@ -395,23 +538,100 @@ function buildBeaconMast(scene: ContactScene): void {
         });
       },
       spark: (tweener) => {
-        tweener.add((t) => spliceRoot.position.setX(0.3 + Math.sin(t * Math.PI * 6) * 0.015 * (1 - t)), {
-          duration: 0.5,
-          easing: Ease.linear,
-          channel: 'splice-spark',
-        });
+        tweener.add(
+          (t) => spliceRoot.position.setX(0.3 + Math.sin(t * Math.PI * 6) * 0.015 * (1 - t)),
+          {
+            duration: 0.5,
+            easing: Ease.linear,
+            channel: 'splice-spark',
+          }
+        );
       },
     },
   });
 
+  // -- Tomas ----------------------------------------------------------------
+  //
+  // He was not in his own scene at all: the player spent the entire request talking to
+  // somebody who had never been rendered.
+  scene.registerProp(
+    'contact',
+    buildCharacter('Tomas', {
+      seed: 'tomas-vasc',
+      height: 1.79,
+      build: 0.58,
+      shoulders: 0.72,
+      // Braced against the mast, which is where he says he is.
+      lean: 0.1,
+      garment: 'coat',
+      // Wet-weather orange: the only warm thing on a cold headland, and the only piece of
+      // high-visibility clothing in the game, because he is the only person in it who is
+      // somewhere dangerous.
+      colors: { garment: '#a8582c', underlayer: '#3f4a52' },
+      position: new THREE.Vector3(0.62, platformY + 0.03, 0.55),
+      rotation: new THREE.Euler(0, -Math.PI * 0.72, 0),
+    })
+  );
+
+  // -- Night ----------------------------------------------------------------
+  //
+  // Cold moonlight from behind, so the mast and Tomas read as silhouettes with a cool
+  // rim, and the beacon's amber is the only warm source in the scene. When it drops,
+  // everything goes cold - which is the mission, said in light rather than words.
+  scene.registerProp(
+    'moon',
+    ENGINE.PointLightNode.create({
+      name: 'Moonlight',
+      position: new THREE.Vector3(-3.4, 5.5, -4.2),
+      // Raised: with the beacon out for a third of every cycle, too little moonlight left
+      // the scene genuinely unreadable rather than atmospheric.
+      intensity: 17,
+      color: new THREE.Color('#93b0cf'),
+      distance: 30,
+      decay: 1.0,
+    })
+  );
+
+  /**
+   * A second, dimmer cold source from the seaward side.
+   *
+   * The beacon is out for a third of every cycle, and with a single moon behind him the
+   * scene went from atmospheric to genuinely unreadable every time it dropped - the
+   * player could not see the thing they were being asked about. This keeps a floor under
+   * the dark phase without ever competing with the beacon's amber when it is lit.
+   */
+  scene.registerProp(
+    'sea-glow',
+    ENGINE.PointLightNode.create({
+      name: 'SeaGlow',
+      position: new THREE.Vector3(3.6, 1.4, -3.2),
+      intensity: 5,
+      color: new THREE.Color('#5f7f9e'),
+      distance: 20,
+      decay: 1.2,
+    })
+  );
+
+  // -- Shots ----------------------------------------------------------------
   scene.registerShot('default', {
-    position: new THREE.Vector3(1.6, 2.4, 1.8),
-    target: new THREE.Vector3(0, 2.4, 0),
+    // Holds Tomas, the bracket and the light above him, at his own eye level rather than
+    // hanging in space beside the mast looking at nothing.
+    // Wide enough to hold the whole structure: Tomas on his platform, the bracket beside
+    // him and the light above. At 2.5 units out the camera was inside his coat - he
+    // filled the frame and the mast, the cables and the beacon were all off it, which
+    // for a mission about a light going out is the one thing that cannot happen.
+    position: new THREE.Vector3(4.4, 3.9, 4.4),
+    target: new THREE.Vector3(0.25, 3.7, 0.25),
   });
   scene.registerShot('mast-cable', {
-    position: new THREE.Vector3(0.9, 2.7, 1.1),
-    target: new THREE.Vector3(0.3, 2.6, 0.36),
+    position: new THREE.Vector3(1.35, 2.95, 1.35),
+    target: new THREE.Vector3(0.35, 2.66, 0.36),
     duration: 2.4,
+  });
+  scene.registerShot('beacon', {
+    position: new THREE.Vector3(2.2, 4.6, 2.2),
+    target: new THREE.Vector3(0, 5.5, 0),
+    duration: 2.2,
   });
 }
 

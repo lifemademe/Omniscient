@@ -39,6 +39,8 @@ export interface RegisteredProp {
   actions: Record<string, PropAction>;
   /** Local-space points of interest, e.g. where sparks should appear. */
   anchors: Record<string, THREE.Vector3>;
+  /** Per-frame behaviour the world performs on its own. See registerProp. */
+  idle?: (deltaTime: number, node: ENGINE.SceneNode) => void;
 }
 
 /** Populates a scene with its props, shots and actions. Registered by content modules. */
@@ -158,13 +160,26 @@ export class ContactScene extends ENGINE.SceneNode {
   public registerProp(
     id: string,
     node: ENGINE.SceneNode,
-    options: { actions?: Record<string, PropAction>; anchors?: Record<string, THREE.Vector3> } = {}
+    options: {
+      actions?: Record<string, PropAction>;
+      anchors?: Record<string, THREE.Vector3>;
+      /**
+       * Runs every frame while the scene is on view.
+       *
+       * For behaviour the world does on its own rather than because the player said
+       * something. Tomas's beacon is the reason he called: it has to be visibly going out
+       * and coming back the whole time the player is talking to him, not waiting politely
+       * for a cue. A symptom that only appears when you ask about it is not a symptom.
+       */
+      idle?: (deltaTime: number, node: ENGINE.SceneNode) => void;
+    } = {}
   ): void {
     this.add(node);
     this.props.set(id, {
       node,
       actions: options.actions ?? {},
       anchors: options.anchors ?? {},
+      idle: options.idle,
     });
   }
 
@@ -289,6 +304,9 @@ export class ContactScene extends ENGINE.SceneNode {
   public override tickPrePhysics(deltaTime: number): void {
     super.tickPrePhysics(deltaTime);
     this.tweener.update(deltaTime);
+    for (const prop of this.props.values()) {
+      prop.idle?.(deltaTime, prop.node);
+    }
   }
 
   public override endPlay(): boolean {

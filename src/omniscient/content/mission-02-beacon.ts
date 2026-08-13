@@ -228,7 +228,7 @@ export const MISSION_02: MissionDefinition = {
         FIT_ISOLATOR: {
           to: 'isolator-fitted',
           learn: [FACT_BEACON_DROPS_ON_KEYUP, FACT_FEED_NEEDS_ISOLATOR],
-          environment: 'prop.open:splice-box',
+          environment: 'prop.steady:beacon',
         },
         CUT_FEED_LIVE: {
           to: 'arc',
@@ -305,7 +305,7 @@ export const MISSION_02: MissionDefinition = {
         FIT_ISOLATOR: {
           to: 'isolator-fitted',
           learn: [FACT_FEED_NEEDS_ISOLATOR],
-          environment: 'prop.open:splice-box',
+          environment: 'prop.steady:beacon',
         },
         CUT_FEED_LIVE: {
           to: 'arc',

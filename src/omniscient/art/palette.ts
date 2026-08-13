@@ -93,7 +93,13 @@ export const LIGHT = {
   /** Bounce off a warm floor. */
   bounce: '#4a3a2c',
   /** Atmosphere colour. Slightly warmer than the fill so depth reads golden. */
-  haze: '#7d6f5e',
+  /**
+   * Atmosphere. Cooled from a warm brown, which was fine over the workstation and wrong
+   * everywhere else - on Tomas's headland it painted sixty units of warm haze across a
+   * night sea and turned the sky the colour of a dust storm. A neutral cool reads as
+   * distance in both places, and lets each scene's own lights carry its temperature.
+   */
+  haze: '#4c525c',
 } as const;
 
 function standard(color: string, roughness: number, metalness = 0): THREE.MeshStandardMaterial {
@@ -145,6 +151,18 @@ export const MAT = {
    * desaturated against all that warm wood, it separates on hue as well as value.
    */
   equipment: standard('#6a7268', 0.62, 0.15),
+  /**
+   * Night sea and sky, behind Tomas's mast.
+   *
+   * Unlit, because they are distance rather than surface - a lit plane out at the horizon
+   * picks up the moonlight and reads as a wall thirty metres away instead of as the sea.
+   */
+  sea: new THREE.MeshBasicMaterial({ color: '#1a2530' }),
+  nightSky: new THREE.MeshBasicMaterial({ color: '#28323f' }),
+  /** The harbour light, burning. The only warm source on the headland. */
+  beaconLit: new THREE.MeshBasicMaterial({ color: '#ffcf7a', toneMapped: false }),
+  /** The same lens with nothing behind it. Its whole job is to be conspicuously off. */
+  beaconDark: standard('#4a4034', 0.7),
   leaf: standard(GROWTH.leaf, 0.88),
   leafDeep: standard(GROWTH.leafDeep, 0.92),
   stem: standard(GROWTH.stem, 0.9),

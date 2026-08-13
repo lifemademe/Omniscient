@@ -269,6 +269,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.configureLook();
     void this.startSession();
 
+
     return true;
   }
 
