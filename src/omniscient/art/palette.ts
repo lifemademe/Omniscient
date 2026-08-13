@@ -56,6 +56,21 @@ export const ACCENT = {
   bright: '#c4bda6',
 } as const;
 
+/**
+ * People. §185 asks for recurring characters identifiable by silhouette before clothing
+ * detail, so these are few and clearly separated in value rather than a wide gamut.
+ */
+export const PERSON = {
+  skin: ['#c99a72', '#a8724e', '#8c5a3c', '#e0b48c', '#6f4630'],
+  hair: ['#2b211c', '#4a3428', '#7a6a58', '#1d1a19', '#8c6b45'],
+  /** Workwear. Faded, practical, nothing bright. */
+  garment: ['#4a5a63', '#6d5a44', '#3f4a3a', '#7a5346', '#55504a'],
+  /** Aprons, undershirts - the lighter mass that separates torso from arms. */
+  underlayer: ['#b3a58a', '#9c937f', '#c2b79c'],
+  boot: '#2e2723',
+  belt: '#4a3529',
+} as const;
+
 /** Warm key light, as through a coastal window late in the day. */
 export const LIGHT = {
   key: '#ffd9a8',

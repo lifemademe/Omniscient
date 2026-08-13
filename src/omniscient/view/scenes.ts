@@ -15,8 +15,9 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
 import { decorMesh } from '../art/mesh.js';
-import { MAT } from '../art/palette.js';
+import { LIGHT, MAT, PERSON } from '../art/palette.js';
 import { Ease } from '../core/tween.js';
+import { createCharacter } from '../geometry/character.js';
 import {
   createMainsSwitch,
   createShelfStack,
@@ -26,7 +27,43 @@ import {
 
 import { ContactScene } from './ContactScene.js';
 
+import type { CharacterParams } from '../geometry/character.js';
+
 const meshOf = decorMesh;
+
+interface CharacterPlacement extends CharacterParams {
+  position: THREE.Vector3;
+  rotation?: THREE.Euler;
+}
+
+/**
+ * Assemble a generated person into a node.
+ *
+ * Colours come from the generator rather than the shared MAT family: people are the one
+ * thing in the world that should vary between instances (§185), while the built
+ * environment stays on one palette.
+ */
+function buildCharacter(name: string, placement: CharacterPlacement): ENGINE.SceneNode {
+  const parts = createCharacter(placement);
+
+  const root = ENGINE.SceneNode.create({
+    name: 'Contact',
+    position: placement.position.clone(),
+    rotation: placement.rotation?.clone(),
+  });
+  root.setName(name);
+
+  const surface = (color: string, roughness: number): THREE.MeshStandardMaterial =>
+    new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 });
+
+  root.add(meshOf('Skin', parts.skin, surface(parts.colors.skin, 0.82)));
+  root.add(meshOf('Garment', parts.garment, surface(parts.colors.garment, 0.92)));
+  root.add(meshOf('Underlayer', parts.underlayer, surface(parts.colors.underlayer, 0.9)));
+  root.add(meshOf('Hair', parts.hair, surface(parts.colors.hair, 0.95)));
+  root.add(meshOf('Boots', parts.boots, surface(PERSON.boot, 0.75)));
+
+  return root;
+}
 
 /**
  * MISSION 01 - Mirela's repair shop.
@@ -163,23 +200,45 @@ function buildRepairShop(scene: ContactScene): void {
     },
   });
 
-  // Mirela herself. §209: she stands and idles - every instruction she is given is
-  // performed by the bench, the set or the switch, never by her body.
+  // Mirela herself, generated rather than imported. §209: she stands and idles - every
+  // instruction she is given is performed by the bench, the set or the switch, never by
+  // her body - so a well-posed static figure is worth more than a rig with no clips.
   scene.registerProp(
     'contact',
-    ENGINE.ModelMeshNode.create({
-      name: 'Mirela',
-      modelUrl: ENGINE.DEFAULT_CHARACTER_MODEL_URL,
-      position: new THREE.Vector3(-0.95, 0, -1.15),
-      rotation: new THREE.Euler(0, Math.PI * 0.62, 0),
+    buildCharacter('Mirela', {
+      seed: 'mirela-vasc',
+      height: 1.66,
+      build: 0.45,
+      shoulders: 0.42,
+      // Leaning in over the bench, which is where she has been all morning.
+      lean: 0.16,
+      garment: 'apron',
+      position: new THREE.Vector3(-0.72, 0, -1.02),
+      rotation: new THREE.Euler(0, Math.PI * 0.58, 0),
+    })
+  );
+
+  // A work lamp over the bench. §187: one key plus controlled practicals - and a
+  // practical here is motivated, because this is where she has been working. Without it
+  // the diorama has only the distant key and reads as a room at night with the lights
+  // off, which is not the same thing as atmospheric.
+  scene.registerProp(
+    'work-lamp',
+    ENGINE.PointLightNode.create({
+      name: 'WorkLamp',
+      position: new THREE.Vector3(0.25, 1.55, -0.15),
+      intensity: 7.5,
+      color: new THREE.Color(LIGHT.key),
+      distance: 5.5,
+      decay: 1.5,
     })
   );
 
   // Shots. The default frame establishes the room: bench, contact, and enough of the
   // shelf to read as somebody's workshop (§186 - composition before clutter).
   scene.registerShot('default', {
-    position: new THREE.Vector3(1.35, 1.62, 2.35),
-    target: new THREE.Vector3(-0.15, 0.92, -0.7),
+    position: new THREE.Vector3(1.28, 1.52, 2.05),
+    target: new THREE.Vector3(-0.28, 0.9, -0.75),
   });
   scene.registerShot('transmitter', {
     position: new THREE.Vector3(0.15, 1.05, 0.5),

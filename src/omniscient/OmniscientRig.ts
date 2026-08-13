@@ -332,7 +332,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
       intensity: 2.6,
       color: new THREE.Color(LIGHT.key),
     });
-    key.castShadow = true;
+    // Shadows off. The rig spans sixty units - the workstation at one end, the dioramas
+    // at the other - so a single directional shadow map cannot cover both, and the set
+    // that is not inside its bounds renders entirely shadowed. The value structure here
+    // comes from light direction and palette (§187), not from cast shadows.
+    key.castShadow = false;
     this.add(key);
 
     this.add(
