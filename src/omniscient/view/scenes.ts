@@ -14,6 +14,7 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { MAT } from '../art/palette.js';
 import { Ease } from '../core/tween.js';
 import {
   createMainsSwitch,
@@ -23,17 +24,6 @@ import {
 } from '../geometry/props.js';
 
 import { ContactScene } from './ContactScene.js';
-
-/** §187: small reusable material family, warm and imperfect for human spaces. */
-const MAT = {
-  timber: new THREE.MeshStandardMaterial({ color: '#8a6b48', roughness: 0.85, metalness: 0 }),
-  metal: new THREE.MeshStandardMaterial({ color: '#6d6a63', roughness: 0.55, metalness: 0.6 }),
-  plastic: new THREE.MeshStandardMaterial({ color: '#b9ad92', roughness: 0.75, metalness: 0.04 }),
-  dark: new THREE.MeshStandardMaterial({ color: '#2a2724', roughness: 0.6, metalness: 0.15 }),
-  corroded: new THREE.MeshStandardMaterial({ color: '#5d7d4f', roughness: 0.95, metalness: 0.1 }),
-  clean: new THREE.MeshStandardMaterial({ color: '#c9c2ad', roughness: 0.3, metalness: 0.8 }),
-  concrete: new THREE.MeshStandardMaterial({ color: '#6b6659', roughness: 0.95, metalness: 0 }),
-};
 
 /**
  * Create a named mesh. The name is applied after construction because the editor's
@@ -55,11 +45,11 @@ function buildRepairShop(scene: ContactScene): void {
   // Floor and back wall - background mass, not detail (§186).
   const floor = new THREE.BoxGeometry(8, 0.1, 6);
   floor.translate(0, -0.05, 0);
-  scene.registerProp('floor', meshOf('Floor', floor, MAT.concrete));
+  scene.registerProp('floor', meshOf('Floor', floor, MAT.ground));
 
   const wall = new THREE.BoxGeometry(8, 3.2, 0.15);
   wall.translate(0, 1.6, -1.9);
-  scene.registerProp('wall', meshOf('Wall', wall, MAT.concrete));
+  scene.registerProp('wall', meshOf('Wall', wall, MAT.wall));
 
   const shelf = createShelfStack('mirela-shelf');
   const shelfRoot = ENGINE.SceneNode.create({ name: 'Shelf', position: new THREE.Vector3(-2.1, 0, -1.4) });
@@ -219,7 +209,7 @@ function buildRepairShop(scene: ContactScene): void {
 function buildBeaconMast(scene: ContactScene): void {
   const deck = new THREE.BoxGeometry(3, 0.1, 3);
   deck.translate(0, -0.05, 0);
-  scene.registerProp('deck', meshOf('Deck', deck, MAT.concrete));
+  scene.registerProp('deck', meshOf('Deck', deck, MAT.ground));
 
   // Lattice mast: repeated structural motif rather than a modelled tower (§201).
   const mastPieces: THREE.BufferGeometry[] = [];

@@ -15,12 +15,14 @@ import * as THREE from 'three';
 import { MIRELA, TOMAS } from './content/contacts.js';
 import { MISSION_01 } from './content/mission-01-transmitter.js';
 import { MISSION_02 } from './content/mission-02-beacon.js';
+import { LIGHT, MAT } from './art/palette.js';
 import { createSignals, MIRELA_SIGNAL } from './content/signals.js';
 import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
 import { GlobeView, SignalState } from './crt/GlobeView.js';
 import { KnowledgeTree } from './crt/KnowledgeTree.js';
 import { createCRTTerminal } from './geometry/hardware.js';
+import { createWorkstationRoom } from './geometry/room.js';
 import { KnowledgeStore } from './knowledge/KnowledgeStore.js';
 import { LocalSurface } from './link/LocalSurface.js';
 import { BootSequence } from './session/BootSequence.js';
@@ -42,11 +44,16 @@ const GROWTH_REVEAL_SECONDS = 1.8;
 /** Scratch matrix for camera orientation. Reused to avoid per-frame allocation. */
 const CAMERA_MATRIX = new THREE.Matrix4();
 
-const MATERIALS = {
-  chassis: new THREE.MeshStandardMaterial({ color: '#b9ad92', roughness: 0.78, metalness: 0.05 }),
-  bezel: new THREE.MeshStandardMaterial({ color: '#2a2724', roughness: 0.62, metalness: 0.1 }),
-  details: new THREE.MeshStandardMaterial({ color: '#6d6a63', roughness: 0.5, metalness: 0.55 }),
-};
+/**
+ * Create a named mesh. The name is applied after construction because the editor's
+ * default-subobject lint requires a string literal at the create() call site.
+ */
+function meshOf(name: string, geometry: THREE.BufferGeometry, material: THREE.Material): ENGINE.MeshNode {
+  const node = ENGINE.MeshNode.create({ name: 'Part', geometry, material });
+  node.setName(name);
+  return node;
+}
+
 
 interface QueuedRequest {
   mission: MissionDefinition;
@@ -81,8 +88,8 @@ const WORKSTATION_ORIGIN = new THREE.Vector3(0, 0, -60);
  * just as a screen filling the frame.
  */
 const HOME_SHOT: CameraShot = {
-  position: new THREE.Vector3(0.95, 1.02, -57.75),
-  target: new THREE.Vector3(-0.02, 0.46, -59.72),
+  position: new THREE.Vector3(1.55, 1.28, -57.05),
+  target: new THREE.Vector3(-0.18, 0.42, -60.0),
   duration: 2.0,
 };
 
@@ -255,15 +262,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
       position: WORKSTATION_ORIGIN.clone(),
     });
 
-    station.add(
-      ENGINE.MeshNode.create({ name: 'Chassis', geometry: parts.chassis, material: MATERIALS.chassis })
-    );
-    station.add(
-      ENGINE.MeshNode.create({ name: 'Bezel', geometry: parts.bezel, material: MATERIALS.bezel })
-    );
-    station.add(
-      ENGINE.MeshNode.create({ name: 'Details', geometry: parts.details, material: MATERIALS.details })
-    );
+    // The room around the machine. §119 wants a physical workstation, not a floating
+    // object - the desk, the wall behind it and the clutter are what make the CRT read
+    // as somewhere OMNISCIENT_ lives rather than as a prop on a grey plane.
+    for (const part of createWorkstationRoom()) {
+      station.add(meshOf(part.name, part.geometry, MAT[part.material]));
+    }
+
+    station.add(meshOf('Chassis', parts.chassis, MAT.plastic));
+    station.add(meshOf('Bezel', parts.bezel, MAT.dark));
+    station.add(meshOf('Details', parts.details, MAT.metal));
 
     this.surface = new CRTSurface({ width: 192, height: 144 });
     this.tree = new KnowledgeTree(this.surface, this.knowledge.toTreeState());
@@ -291,28 +299,65 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.vfxNodes.set(name, node);
       this.add(node);
     }
+
+    // Dust runs continuously over the diorama - §186's cheap painterly depth.
+    const dust = this.vfxNodes.get('DustVFX');
+    if (dust) dust.position.set(0, 0, -0.4);
   }
 
   /**
-   * §187: one strong key direction plus controlled practicals beats many weak lights.
-   * Warm and low, so the workshop reads as somewhere a person actually works.
+   * §187: one strong key direction plus controlled practicals, not many weak lights.
+   * §186: haze and shafts of light create painterly depth far more cheaply than detail.
+   *
+   * The key is warm and low - late coastal afternoon through a window. The fill is cold
+   * so shadows read as *cold* rather than merely dark, which is what gives a flat-shaded
+   * scene its value separation.
    */
   private buildLighting(): void {
-    this.add(
-      ENGINE.DirectionalLightNode.create({
-        name: 'KeyLight',
-        position: new THREE.Vector3(2.5, 3.4, 2.2),
-        intensity: 2.1,
-        color: new THREE.Color('#ffd9a8'),
-      })
-    );
+    // Restrained: the scene's own Directional Light is still contributing, so a strong
+    // key here double-lights everything and blows the highlights flat - which destroys
+    // the value separation the whole palette is built around.
+    const key = ENGINE.DirectionalLightNode.create({
+      name: 'KeyLight',
+      position: new THREE.Vector3(3.4, 3.0, 2.6),
+      intensity: 2.6,
+      color: new THREE.Color(LIGHT.key),
+    });
+    key.castShadow = true;
+    this.add(key);
 
     this.add(
       ENGINE.HemisphereLightNode.create({
-        name: 'Bounce',
-        intensity: 0.5,
-        color: new THREE.Color('#9fb4c9'),
-        groundColor: new THREE.Color('#3a3128'),
+        name: 'SkyFill',
+        intensity: 1.0,
+        color: new THREE.Color(LIGHT.fill),
+        groundColor: new THREE.Color(LIGHT.bounce),
+      })
+    );
+
+    // A practical over the desk. §187 asks for one key plus controlled practicals - this
+    // is what stops the machine reading as an object on a plane and starts it reading as
+    // an object somebody sits at.
+    this.add(
+      ENGINE.PointLightNode.create({
+        name: 'DeskLamp',
+        position: new THREE.Vector3(-0.75, 1.35, -59.4),
+        intensity: 3.4,
+        color: new THREE.Color(LIGHT.key),
+        distance: 4.5,
+        decay: 1.6,
+      })
+    );
+
+    // Depth. Near/far are tuned to the diorama, not the world - the workstation sits
+    // 60 units away and must not be fogged out of existence.
+    this.add(
+      ENGINE.FogNode.create({
+        name: 'Atmosphere',
+        fogMode: ENGINE.FogMode.Linear,
+        fogColor: new THREE.Color(LIGHT.haze),
+        fogNear: 3.5,
+        fogFar: 26,
       })
     );
   }
@@ -387,6 +432,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     const request = this.queue[index];
     this.mountScene(request.mission.sceneId);
+    this.vfxNodes.get('DustVFX')?.startEmitting();
     this.session.start(request.mission, request.contact);
   }
 

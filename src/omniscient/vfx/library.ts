@@ -150,11 +150,58 @@ export const CircuitPulseVFX: VFXDefinitionJSON = {
   ],
 };
 
+/**
+ * DustVFX - P0, and the cheapest atmosphere in the build.
+ *
+ * §186 asks for haze, dust and shafts of light to create painterly depth economically.
+ * Slow motes drifting through a key light do more for "somebody works here" than any
+ * amount of modelled clutter. Loops quietly and never draws attention to itself (§168).
+ */
+export const DustVFX: VFXDefinitionJSON = {
+  version: 1,
+  name: 'DustVFX',
+  particles: [
+    {
+      nbParticles: 120,
+      intensity: 0.9,
+      renderMode: 'billboard',
+      fadeSize: [0.2, 0.8],
+      fadeAlpha: [0.25, 0.75],
+      // Barely falling. Dust in still air, not snow.
+      gravity: [0.01, -0.012, 0],
+      appearance: 'circular',
+      easeFunction: 'easeInOutSine',
+      blendingMode: 'normal',
+      depthTest: true,
+    },
+  ],
+  emitters: [
+    {
+      particlesIndex: 0,
+      loop: true,
+      duration: 9,
+      nbParticles: 110,
+      spawnMode: 'time',
+      particlesLifetime: [6, 11],
+      // A volume roughly the size of the working half of a room.
+      startPositionMin: [-2.2, 0.1, -1.8],
+      startPositionMax: [2.2, 2.6, 1.4],
+      directionMin: [-0.3, -0.1, -0.3],
+      directionMax: [0.3, 0.25, 0.3],
+      size: [0.006, 0.018],
+      speed: [0.01, 0.05],
+      colorStart: ['#efe0c4', '#d8c9ab'],
+      colorEnd: ['#8a7f6a', '#6b6152'],
+    },
+  ],
+};
+
 /** Every P0 effect, keyed by name, for registration and lookup. */
 export const VFX_LIBRARY = {
   SparkVFX,
   ElectricalArcVFX,
   CircuitPulseVFX,
+  DustVFX,
 } as const;
 
 export type VFXName = keyof typeof VFX_LIBRARY;

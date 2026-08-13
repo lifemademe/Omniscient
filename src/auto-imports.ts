@@ -1,4 +1,5 @@
 import './game-data.js';
+import './omniscient/art/palette.js';
 import './omniscient/content/contacts.js';
 import './omniscient/content/mission-01-transmitter.js';
 import './omniscient/content/mission-02-beacon.js';
@@ -11,6 +12,7 @@ import './omniscient/crt/KnowledgeTree.js';
 import './omniscient/crt/PixelSurface.js';
 import './omniscient/geometry/hardware.js';
 import './omniscient/geometry/props.js';
+import './omniscient/geometry/room.js';
 import './omniscient/knowledge/KnowledgeStore.js';
 import './omniscient/link/LocalSurface.js';
 import './omniscient/link/surface.js';
