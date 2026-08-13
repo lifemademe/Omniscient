@@ -1,12 +1,10 @@
 /**
  * Renders the intervention terminal to a standalone HTML file for visual review.
  *
- * Uses the shipping TERMINAL_CSS and real runtime state - a BootSequence run and a
- * SessionController playthrough - so the preview cannot drift from the game.
+ * Uses the shipping TERMINAL_CSS and a real SessionController playthrough, so the
+ * preview cannot drift from the game.
  *
- * Exists because editor screenshots are unavailable while play mode is active (§208),
- * and because the boot sequence finishes before entering play mode even returns, so it
- * cannot be caught by screen capture at all.
+ * Exists because editor screenshots are unavailable while play mode is active (§208).
  *
  * Usage:  pnpm exec tsx scripts/preview-terminal.ts
  */
@@ -17,7 +15,6 @@ import { MIRELA } from '../src/omniscient/content/contacts.js';
 import { MISSION_01 } from '../src/omniscient/content/mission-01-transmitter.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
 import { TERMINAL_CSS } from '../src/omniscient/link/LocalSurface.js';
-import { BootSequence } from '../src/omniscient/session/BootSequence.js';
 import { SessionController } from '../src/omniscient/session/SessionController.js';
 
 import type {
@@ -64,13 +61,6 @@ function record(): { surface: InterventionSurface; latest: () => SurfaceState | 
   };
 }
 
-// -- Boot ------------------------------------------------------------------------------
-
-const bootRec = record();
-const boot = new BootSequence(bootRec.surface, () => {});
-boot.start();
-for (let i = 0; i < 720 && !boot.isFinished; i++) boot.update(1 / 60);
-
 // -- Mid-mission -----------------------------------------------------------------------
 
 const missionRec = record();
@@ -109,7 +99,6 @@ ${lines}
       </div>`;
 }
 
-const bootState = bootRec.latest()!;
 const missionState = missionRec.latest()!;
 
 const html = `<!doctype html>
@@ -119,7 +108,7 @@ const html = `<!doctype html>
 <title>OMNISCIENT_ terminal</title>
 <style>
   html, body { margin: 0; background: #0b0c0a; font-family: "Courier New", monospace; }
-  .sheet { display: flex; gap: 16px; padding: 16px; width: 1064px; }
+  .sheet { display: flex; gap: 16px; padding: 16px; width: 540px; }
   .panel { width: 508px; }
   .panel__label {
     color: #4f9a5e; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase;
@@ -137,12 +126,6 @@ ${TERMINAL_CSS}
 <body>
   <div class="sheet">
     <div class="panel">
-      <p class="panel__label">first ten seconds (§7)</p>
-      <div class="stage">
-${renderTerminal(bootState, '')}
-      </div>
-    </div>
-    <div class="panel">
       <p class="panel__label">mid-request</p>
       <div class="stage">
 ${renderTerminal(missionState, 'clean the corrosion off the pins')}
@@ -155,4 +138,4 @@ ${renderTerminal(missionState, 'clean the corrosion off the pins')}
 
 const outPath = 'assets/screenshots/terminal-preview.html';
 writeFileSync(outPath, html, 'utf8');
-console.log(`Wrote ${outPath} (boot ${bootState.transcript.length} lines, mission ${missionState.transcript.length} lines)`);
+console.log(`Wrote ${outPath} (${missionState.transcript.length} transcript lines)`);

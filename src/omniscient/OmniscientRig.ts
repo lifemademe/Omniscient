@@ -15,6 +15,7 @@ import * as THREE from 'three';
 import { MIRELA, TOMAS } from './content/contacts.js';
 import { MISSION_01 } from './content/mission-01-transmitter.js';
 import { MISSION_02 } from './content/mission-02-beacon.js';
+import { decorMesh } from './art/mesh.js';
 import { LIGHT, MAT } from './art/palette.js';
 import { createSignals, MIRELA_SIGNAL } from './content/signals.js';
 import { Ease, Tweener } from './core/tween.js';
@@ -25,13 +26,15 @@ import { createCRTTerminal } from './geometry/hardware.js';
 import { createWorkstationRoom } from './geometry/room.js';
 import { KnowledgeStore } from './knowledge/KnowledgeStore.js';
 import { LocalSurface } from './link/LocalSurface.js';
-import { BootSequence } from './session/BootSequence.js';
+import { Picker } from './input/Picker.js';
+import { MainMenu } from './menu/MainMenu.js';
 import { SessionController } from './session/SessionController.js';
 import { SignalBoard } from './session/SignalBoard.js';
 import { VFX_LIBRARY } from './vfx/library.js';
 import { buildContactScene } from './view/scenes.js';
 
 import type { Signal } from './crt/GlobeView.js';
+import type { MenuAction } from './menu/MainMenu.js';
 import type { Contact, MissionDefinition } from './mission/types.js';
 import type { CameraShot, ContactScene } from './view/ContactScene.js';
 
@@ -44,15 +47,7 @@ const GROWTH_REVEAL_SECONDS = 1.8;
 /** Scratch matrix for camera orientation. Reused to avoid per-frame allocation. */
 const CAMERA_MATRIX = new THREE.Matrix4();
 
-/**
- * Create a named mesh. The name is applied after construction because the editor's
- * default-subobject lint requires a string literal at the create() call site.
- */
-function meshOf(name: string, geometry: THREE.BufferGeometry, material: THREE.Material): ENGINE.MeshNode {
-  const node = ENGINE.MeshNode.create({ name: 'Part', geometry, material });
-  node.setName(name);
-  return node;
-}
+const meshOf = decorMesh;
 
 
 interface QueuedRequest {
@@ -65,10 +60,11 @@ interface QueuedRequest {
  * somebody's world, and resolving it brings you back to see what you learned.
  */
 enum Phase {
-  Boot = 'boot',
-  /** At the machine, watching the tree. */
+  /** At the machine, menu up, tree on the CRT. The resting state (§174). */
+  Menu = 'menu',
+  /** At the machine after a request, watching the tree grow. */
   Home = 'home',
-  /** At the machine, globe up, choosing the next request. */
+  /** Pushed into the CRT, globe up, choosing the next request. */
   Choosing = 'choosing',
   Contact = 'contact',
 }
@@ -88,8 +84,8 @@ const WORKSTATION_ORIGIN = new THREE.Vector3(0, 0, -60);
  * just as a screen filling the frame.
  */
 const HOME_SHOT: CameraShot = {
-  position: new THREE.Vector3(1.55, 1.28, -57.05),
-  target: new THREE.Vector3(-0.18, 0.42, -60.0),
+  position: new THREE.Vector3(2.25, 1.55, -56.5),
+  target: new THREE.Vector3(-0.72, 0.86, -60.1),
   duration: 2.0,
 };
 
@@ -109,9 +105,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private queueIndex = 0;
   private pauseRemaining = 0;
 
-  private phase: Phase = Phase.Boot;
+  private phase: Phase = Phase.Menu;
   private screen: Screen = Screen.Tree;
-  private boot: BootSequence | null = null;
+  private menu: MainMenu | null = null;
+  private picker: Picker | null = null;
   private board: SignalBoard | null = null;
   private globe: GlobeView | null = null;
   private signals: Signal[] = createSignals();
@@ -167,6 +164,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.buildScenes();
     this.buildCamera();
+
+    this.menu = new MainMenu(WORKSTATION_ORIGIN);
+    this.add(this.menu.root);
   }
 
   /** Created before beginPlay so it is part of the tree the engine initialises normally. */
@@ -405,11 +405,45 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.board?.handleText(message.text, this.signals, this.openable);
     });
 
-    // §7: open on the machine, cold, with nothing on the screen but a sprout.
-    this.phase = Phase.Boot;
+    this.attachPicker(world, container);
+
+    // Open on the machine at rest: menu up, tree on the CRT (§174, §183).
+    this.phase = Phase.Menu;
+    this.screen = Screen.Tree;
     this.cutTo(HOME_SHOT);
-    this.boot = new BootSequence(this.phone, () => this.showGlobe());
-    this.boot.start();
+    this.menu?.setEnabled(true);
+    this.presentMenuIdle();
+  }
+
+  /** The terminal at rest. One line, so the machine reads as awake but unbothered. */
+  private presentMenuIdle(): void {
+    this.phone?.present({
+      mode: 'chat',
+      contactName: '',
+      transcript: [
+        { source: 'system', name: 'OMNISCIENT_', body: 'knowledge network online' },
+        { source: 'system', name: 'OMNISCIENT_', body: 'plug into a module to begin' },
+      ],
+      awaitingInput: false,
+      hint: 'idle',
+    });
+  }
+
+  private attachPicker(world: ENGINE.World, container: HTMLElement): void {
+    this.picker = new Picker(() => this.camera?.getCamera() ?? null, container);
+    world.inputManager?.addInputHandler(this.picker);
+
+    this.menu?.attach(this.picker);
+    this.menu?.onAction((action) => this.onMenuAction(action));
+  }
+
+  private onMenuAction(action: MenuAction): void {
+    // Only ANSWER A REQUEST is wired for the Jam slice. The rest are texture: §103 wants
+    // the machine to look like it does more than the player currently needs it to.
+    if (action !== 'answer') return;
+
+    this.menu?.setEnabled(false);
+    this.showGlobe();
   }
 
   /** Raise the globe and hand the player the choice (§52). */
@@ -532,7 +566,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
   public override tickPrePhysics(deltaTime: number): void {
     super.tickPrePhysics(deltaTime);
     this.cameraTweener.update(deltaTime);
-    this.boot?.update(deltaTime);
+    if (this.picker) this.menu?.update(deltaTime, this.picker);
     if (!this.tree) return;
 
     this.pulse = (this.pulse + deltaTime / 1.6) % 1;

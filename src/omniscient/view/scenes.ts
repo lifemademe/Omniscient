@@ -14,6 +14,7 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { decorMesh } from '../art/mesh.js';
 import { MAT } from '../art/palette.js';
 import { Ease } from '../core/tween.js';
 import {
@@ -25,15 +26,7 @@ import {
 
 import { ContactScene } from './ContactScene.js';
 
-/**
- * Create a named mesh. The name is applied after construction because the editor's
- * default-subobject lint requires a string literal at the create() call site.
- */
-function meshOf(name: string, geometry: THREE.BufferGeometry, material: THREE.Material): ENGINE.MeshNode {
-  const node = ENGINE.MeshNode.create({ name: 'Prop', geometry, material });
-  node.setName(name);
-  return node;
-}
+const meshOf = decorMesh;
 
 /**
  * MISSION 01 - Mirela's repair shop.

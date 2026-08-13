@@ -89,4 +89,8 @@ export const MAT = {
   clean: standard(ACCENT.bright, 0.28, 0.85),
   /** Unlit - indicator lamps and anything that should read as emitting. */
   lamp: new THREE.MeshBasicMaterial({ color: ACCENT.amber, toneMapped: false }),
+  /** The shut-down control. Dirty red, and the only one of its colour on the machine. */
+  warningLamp: new THREE.MeshBasicMaterial({ color: ACCENT.warning, toneMapped: false }),
+  /** Knowledge green, unlit. The cable's live end and circuit pulses. */
+  knowledgeLamp: new THREE.MeshBasicMaterial({ color: ACCENT.knowledge, toneMapped: false }),
 } as const;
