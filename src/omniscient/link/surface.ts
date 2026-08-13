@@ -28,6 +28,37 @@ export interface TranscriptEntry {
   body: string;
 }
 
+/** An observation the player can open (§131). */
+export interface HintView {
+  id: string;
+  summary: string;
+  /** Set once opened - the phone keeps what it has already told you. */
+  detail?: string;
+}
+
+/** A recorded fact, shown in RECORDS when relevant to the open request (§19). */
+export interface RecordView {
+  id: string;
+  label: string;
+  /** Where it came from, e.g. "Mirela Vasc". */
+  source: string;
+  /** True for notes the player wrote themselves after a failure (§170). */
+  playerWritten: boolean;
+}
+
+/**
+ * A proposed reading of what the player just said, awaiting yes/no.
+ *
+ * §157: the evaluator interprets what the player meant and never invents mission truth.
+ * Surfacing the interpretation makes that boundary visible - the player can see the
+ * reading and correct it, rather than discovering it through a consequence.
+ */
+export interface Confirmation {
+  intentId: string;
+  /** "Do you mean Mirela should take the power off?" */
+  question: string;
+}
+
 export interface SurfaceState {
   mode: SurfaceMode;
   contactName: string;
@@ -37,6 +68,14 @@ export interface SurfaceState {
   awaitingInput: boolean;
   /** Optional hint under the input, e.g. the current tempo. */
   hint?: string;
+  /** Observations available on the phone. */
+  hints?: HintView[];
+  /** Records relevant to this request. */
+  records?: RecordView[];
+  /** When set, the surface asks yes/no instead of accepting free text. */
+  confirming?: Confirmation;
+  /** When set, the request has been lost and the player may write themselves a note. */
+  failure?: { summary: string };
 }
 
 /** §160: gestures compress an instruction into an immediate machine command. */
@@ -45,7 +84,13 @@ export type Gesture = 'swipe-left' | 'swipe-right' | 'swipe-up' | 'swipe-down' |
 export type PlayerMessage =
   | { kind: 'text'; text: string }
   | { kind: 'gesture'; gesture: Gesture }
-  | { kind: 'mode'; mode: SurfaceMode };
+  | { kind: 'mode'; mode: SurfaceMode }
+  /** Opened an observation on the phone. */
+  | { kind: 'hint'; hintId: string }
+  /** Answered a yes/no reading of their last message. */
+  | { kind: 'confirm'; accepted: boolean }
+  /** Wrote themselves a note after losing a request (§170). */
+  | { kind: 'note'; text: string };
 
 export interface InterventionSurface {
   /** Which transport this is. Diagnostics and telemetry only - gameplay must not branch on it. */

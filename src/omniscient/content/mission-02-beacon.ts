@@ -65,6 +65,46 @@ export const MISSION_02: MissionDefinition = {
   },
   openingBeatId: 'open-blind',
 
+  hints: [
+    {
+      id: 'hint-timing',
+      summary: 'It started today, not gradually',
+      detail:
+        'No history of this. Not a fault that crept in - something changed, and it changed '
+        + 'this morning.',
+    },
+    {
+      id: 'hint-pattern',
+      summary: 'Gone completely, then back',
+      detail:
+        'Not dimming, not flickering. Full extinction for three or four seconds, then normal. '
+        + 'That is something taking the whole feed, not a failing lamp.',
+    },
+    {
+      id: 'hint-weather',
+      summary: 'Clear sky all day',
+      detail: 'No storm, no salt spray, no wind loading. The weather is not doing this.',
+    },
+    {
+      id: 'hint-splice',
+      summary: 'A splice on the mast bracket',
+      detail:
+        'The feed does not run straight to the beacon. There is a joint on the bracket and a '
+        + 'second cable leaving it, heading down the hill towards the town.',
+      cue: 'prop.highlight:splice-box',
+      revealedBy: 'feed-confirmed',
+    },
+  ],
+
+  confirmations: {
+    ASK_FEED: 'Do you mean Tomas should trace the aerial feed?',
+    ASK_TIMING: 'Do you mean Tomas should say when it started?',
+    ASK_SISTER: 'Do you mean Tomas should tell you about Mirela?',
+    FIT_ISOLATOR: 'Do you mean Tomas should fit an isolator on the shared feed?',
+    CUT_FEED_LIVE: 'Do you mean Tomas should pull the feed apart while it is carrying?',
+    ADMIT_UNCERTAINTY: 'Do you want to tell him you are not sure yet?',
+  },
+
   intents: [
     {
       id: 'ASK_FEED',
@@ -270,8 +310,35 @@ export const MISSION_02: MissionDefinition = {
           learn: [FACT_FEED_NEEDS_ISOLATOR],
           environment: 'prop.open:splice-box',
         },
+        // Telling him to pull it again, after that, ends badly.
+        CUT_FEED_LIVE: {
+          to: 'lost',
+          environment: 'prop.spark:splice-box',
+          vfx: 'ElectricalArcVFX',
+        },
       },
       onUnrecognised: { to: 'arc', environment: 'prop.spark:splice-box' },
+    },
+
+    {
+      /**
+       * §155: a lost request, not a game over. Nobody is hurt - §93 keeps threat
+       * non-graphic - but the beacon is dark, Tomas is off the mast, and OMNISCIENT_ has
+       * to live with having said it twice.
+       */
+      id: 'lost',
+      tempo: Tempo.Respond,
+      say:
+        'No. No, I am not doing that again - look at it. I am coming down. ' +
+        'The harbour master can put a lamp on the wall tonight and I will find someone in ' +
+        'the morning who knows what they are talking about.',
+      on: {},
+      failure: {
+        summary:
+          'You told Tomas to pull a live feed apart twice. He stopped trusting you before it '
+          + 'could hurt him. The beacon is still dark.',
+        cooldownSeconds: 90,
+      },
     },
 
     {

@@ -59,6 +59,16 @@ export class CRTSurface implements PixelSurface {
     this.texture.generateMipmaps = false;
     this.texture.colorSpace = THREE.SRGBColorSpace;
 
+    // Flip vertically.
+    //
+    // Same bug as the menu module labels, which arrived upside down: as mapped onto the
+    // screen quad, canvas row 0 lands at the bottom. Left uncorrected the Knowledge Tree
+    // sprouts downward from the top of the CRT, roots in the air.
+    this.texture.wrapS = THREE.RepeatWrapping;
+    this.texture.wrapT = THREE.RepeatWrapping;
+    this.texture.repeat.set(1, -1);
+    this.texture.offset.set(0, 1);
+
     // Unlit: a screen emits, it is not lit by the room.
     this.material = new THREE.MeshBasicMaterial({
       map: this.texture,

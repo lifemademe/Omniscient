@@ -35,7 +35,7 @@ import { buildContactScene } from './view/scenes.js';
 
 import type { Signal } from './crt/GlobeView.js';
 import type { MenuAction } from './menu/MainMenu.js';
-import type { Contact, MissionDefinition } from './mission/types.js';
+import type { Contact, MissionDefinition, MissionFailure } from './mission/types.js';
 import type { CameraShot, ContactScene } from './view/ContactScene.js';
 
 /** Stable per-playthrough seed. §123: the same knowledge must draw the same tree. */
@@ -407,6 +407,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       onVfx: (effect) => this.fireVfx(effect),
       onKnowledgeGained: () => this.revealGrowth(),
       onResolved: () => this.returnHome(),
+      onFailed: (failure) => this.onRequestLost(failure),
     });
 
     this.globeScreen = new GlobeScreen(container, (signalId) => this.openSignal(signalId));
@@ -484,6 +485,31 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * the machine to find something has grown. The growth reveal is already running by the
    * time the camera arrives, so the branch draws itself while they watch.
    */
+  /**
+   * A lost request. §31: it goes red on the globe with a countdown, and comes back when
+   * the countdown expires - by which time the player has hopefully written themselves a
+   * note about what went wrong (§170).
+   *
+   * The player stays in the Contact View until they close it, because the note is written
+   * here, while the mistake is still in front of them.
+   */
+  private onRequestLost(failure: MissionFailure): void {
+    const contactId = this.queue[this.queueIndex - 1]?.mission.contactId;
+    if (!contactId) return;
+
+    const signal = this.signals.find((s) => s.id === contactId);
+    if (signal) {
+      signal.state = SignalState.Cooldown;
+      signal.cooldown = failure.cooldownSeconds;
+    }
+    this.openable.delete(contactId);
+    // Back in the queue: when the cooldown lapses it can be attempted again.
+    this.queueIndex -= 1;
+
+    this.pauseRemaining = HOME_DWELL;
+    this.phase = Phase.Home;
+  }
+
   private returnHome(): void {
     this.phase = Phase.Home;
     this.screen = Screen.Tree;

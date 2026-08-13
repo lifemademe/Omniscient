@@ -13,8 +13,19 @@ import { MissionRuntime } from '../mission/MissionRuntime.js';
 import { Tempo } from '../mission/types.js';
 
 import type { KnowledgeStore } from '../knowledge/KnowledgeStore.js';
-import type { InterventionSurface, SurfaceState, TranscriptEntry } from '../link/surface.js';
-import type { Contact, MissionDefinition, MissionOutcome } from '../mission/types.js';
+import type {
+  HintView,
+  InterventionSurface,
+  RecordView,
+  TranscriptEntry,
+} from '../link/surface.js';
+import type { MissionStep } from '../mission/MissionRuntime.js';
+import type {
+  Contact,
+  MissionDefinition,
+  MissionFailure,
+  MissionOutcome,
+} from '../mission/types.js';
 
 /** Hooks the presentation layer supplies. All optional - the session runs without them. */
 export interface SessionHooks {
@@ -26,6 +37,8 @@ export interface SessionHooks {
   onKnowledgeGained?: (factIds: string[]) => void;
   /** Fired once the request resolves. */
   onResolved?: (outcome: MissionOutcome, calledBack: boolean) => void;
+  /** Fired when the request is lost - the globe puts it on cooldown (§31). */
+  onFailed?: (failure: MissionFailure) => void;
 }
 
 /** Short label under the input telling the player what the game expects (§162). */
@@ -40,6 +53,10 @@ export class SessionController {
   private contact: Contact | null = null;
   private transcript: TranscriptEntry[] = [];
   private unsubscribe: (() => void) | null = null;
+  /** Hints the player has opened - the phone keeps what it has already told them. */
+  private opened = new Set<string>();
+  private confirming: { intentId: string; question: string } | null = null;
+  private failed: MissionFailure | null = null;
 
   constructor(
     private readonly surface: InterventionSurface,
@@ -54,9 +71,27 @@ export class SessionController {
     this.contact = contact;
     this.runtime = new MissionRuntime(definition, this.knowledge);
     this.transcript = [];
+    this.opened = new Set();
+    this.confirming = null;
+    this.failed = null;
 
     this.unsubscribe = this.surface.onMessage((message) => {
-      if (message.kind === 'text') this.submit(message.text);
+      switch (message.kind) {
+        case 'text':
+          this.submit(message.text);
+          break;
+        case 'hint':
+          this.openHint(message.hintId);
+          break;
+        case 'confirm':
+          this.answerConfirmation(message.accepted);
+          break;
+        case 'note':
+          this.writeNote(message.text);
+          break;
+        default:
+          break;
+      }
     });
 
     this.push({
@@ -80,9 +115,58 @@ export class SessionController {
     if (!this.runtime || !this.contact || this.runtime.isFinished) return;
 
     this.push({ source: 'omniscient', name: 'OMNISCIENT_', body: text });
+    this.apply(this.runtime.respond(text));
+  }
 
-    const step = this.runtime.respond(text);
-    this.push({ source: 'contact', name: this.contact.name, body: step.say });
+  /** Answer a proposed reading of the last message. */
+  private answerConfirmation(accepted: boolean): void {
+    if (!this.runtime || !this.contact) return;
+
+    this.push({
+      source: 'omniscient',
+      name: 'OMNISCIENT_',
+      body: accepted ? 'yes' : 'no',
+    });
+    this.apply(this.runtime.confirm(accepted));
+  }
+
+  /**
+   * Open an observation. §131: it says more, and the world shows you where.
+   * Reading evidence is not a turn - the contact does not respond to it.
+   */
+  private openHint(hintId: string): void {
+    const hint = this.runtime?.openHint(hintId);
+    if (!hint) return;
+
+    this.opened.add(hintId);
+    this.push({ source: 'system', name: 'OMNISCIENT_', body: hint.detail });
+    if (hint.cue) this.hooks.onEnvironment?.(hint.cue);
+    this.present();
+  }
+
+  /** §170: the player writes themselves a note after losing a request. */
+  private writeNote(text: string): void {
+    if (!this.runtime || !this.contact || !text.trim()) return;
+
+    this.knowledge.writeNote(this.runtime.definition.id, this.contact.id, text);
+    this.push({ source: 'system', name: 'OMNISCIENT_', body: `recorded: ${text.trim()}` });
+    this.failed = null;
+    this.present();
+  }
+
+  private apply(step: MissionStep): void {
+    if (!this.contact) return;
+
+    if (step.confirming) {
+      this.confirming = step.confirming;
+      this.present();
+      return;
+    }
+    this.confirming = null;
+
+    if (step.say) {
+      this.push({ source: 'contact', name: this.contact.name, body: step.say });
+    }
 
     if (step.environment) this.hooks.onEnvironment?.(step.environment);
     if (step.vfx) this.hooks.onVfx?.(step.vfx);
@@ -90,7 +174,13 @@ export class SessionController {
 
     if (step.outcome) {
       this.push({ source: 'system', name: 'OMNISCIENT_', body: step.outcome.say });
-      this.hooks.onResolved?.(step.outcome, this.runtime.calledBack);
+      this.hooks.onResolved?.(step.outcome, this.runtime?.calledBack ?? false);
+    }
+
+    if (step.failure) {
+      this.failed = step.failure;
+      this.push({ source: 'system', name: 'OMNISCIENT_', body: step.failure.summary });
+      this.hooks.onFailed?.(step.failure);
     }
 
     this.present();
@@ -112,19 +202,49 @@ export class SessionController {
   }
 
   private present(): void {
-    if (!this.contact) return;
+    if (!this.contact || !this.runtime) return;
 
-    const finished = this.runtime?.isFinished ?? true;
-    const tempo = this.runtime?.getCurrentBeat().tempo ?? Tempo.Respond;
+    const finished = this.runtime.isFinished;
+    const tempo = this.runtime.getCurrentBeat().tempo;
 
-    const state: SurfaceState = {
+    const hints: HintView[] = this.runtime.getAvailableHints().map((hint) => ({
+      id: hint.id,
+      summary: hint.summary,
+      detail: this.opened.has(hint.id) ? hint.detail : undefined,
+    }));
+
+    const definition = this.runtime.definition;
+    const records: RecordView[] = this.knowledge
+      .getRelevantRecords(
+        definition.id,
+        definition.contactId,
+        definition.knowledge.map((entry) => entry.domain)
+      )
+      .map((fact) => ({
+        id: fact.id,
+        label: fact.label,
+        source: fact.sourceContactId ?? 'observed',
+        playerWritten: fact.playerWritten === true,
+      }));
+
+    this.surface.present({
       mode: tempo === Tempo.Act ? 'action' : 'chat',
       contactName: this.contact.name,
       transcript: this.transcript,
-      awaitingInput: !finished,
-      hint: finished ? 'request resolved' : TEMPO_HINT[tempo],
-    };
+      // A lost request still takes input - the note the player writes themselves.
+      awaitingInput: !finished || this.failed !== null,
+      hint: this.failureHint(finished),
+      hints,
+      records,
+      confirming: this.confirming ?? undefined,
+      failure: this.failed ? { summary: this.failed.summary } : undefined,
+    });
+  }
 
-    this.surface.present(state);
+  private failureHint(finished: boolean): string {
+    if (this.failed) return 'record a note for next time';
+    if (this.confirming) return 'confirm';
+    if (finished) return 'request resolved';
+    return TEMPO_HINT[this.runtime?.getCurrentBeat().tempo ?? Tempo.Respond];
   }
 }

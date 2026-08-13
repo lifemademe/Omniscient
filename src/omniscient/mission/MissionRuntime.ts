@@ -15,7 +15,14 @@ import { Certainty } from '../knowledge/KnowledgeStore.js';
 import { resolveIntent } from './intent.js';
 
 import type { KnowledgeStore } from '../knowledge/KnowledgeStore.js';
-import type { Beat, BeatTransition, MissionDefinition, MissionOutcome } from './types.js';
+import type {
+  Beat,
+  BeatTransition,
+  MissionDefinition,
+  MissionFailure,
+  MissionHint,
+  MissionOutcome,
+} from './types.js';
 
 /** Everything the presentation layer needs after one player message. */
 export interface MissionStep {
@@ -27,16 +34,27 @@ export interface MissionStep {
   vfx?: string;
   /** Facts recorded by this step, for the growth reveal. */
   learned: string[];
-  /** Set once the mission has ended. */
+  /** Set once the mission has ended well. */
   outcome?: MissionOutcome;
+  /** Set once the request has been lost. */
+  failure?: MissionFailure;
   /** True when the runtime asked the player to rephrase rather than advancing. */
   clarifying: boolean;
+  /**
+   * Set when the reading was uncertain: the runtime is proposing an interpretation and
+   * waiting for yes/no rather than acting on a guess.
+   */
+  confirming?: { intentId: string; question: string };
 }
 
 export class MissionRuntime {
   private currentBeatId: string;
   private finished = false;
   private readonly beats: Map<string, Beat>;
+  /** Beats the player has actually reached - gates which hints are observable yet. */
+  private readonly visited = new Set<string>();
+  /** Intent awaiting a yes/no from the player. */
+  private pendingIntent: string | null = null;
   /**
    * Latched at construction. Reading it off the current beat would report false the
    * moment the mission advanced past its opening.
@@ -49,6 +67,7 @@ export class MissionRuntime {
   ) {
     this.beats = new Map(definition.beats.map((beat) => [beat.id, beat]));
     this.currentBeatId = this.resolveOpeningBeat();
+    this.visited.add(this.currentBeatId);
     this._calledBack =
       !!definition.requires && this.currentBeatId === definition.requires.ifKnownBeatId;
   }
@@ -76,6 +95,24 @@ export class MissionRuntime {
     return this.finished;
   }
 
+  /**
+   * Evidence the player could plausibly have noticed by now.
+   *
+   * A hint about the back of the set is not available until somebody has turned the set
+   * around - otherwise the phone would be reporting things nobody can see, which breaks
+   * §131's contract that the environment is what carries the information.
+   */
+  public getAvailableHints(): MissionHint[] {
+    return this.definition.hints.filter(
+      (hint) => !hint.revealedBy || this.visited.has(hint.revealedBy)
+    );
+  }
+
+  /** Open a hint. Returns null if it is not observable yet. */
+  public openHint(hintId: string): MissionHint | null {
+    return this.getAvailableHints().find((hint) => hint.id === hintId) ?? null;
+  }
+
   public getCurrentBeat(): Beat {
     const beat = this.beats.get(this.currentBeatId);
     if (!beat) {
@@ -95,7 +132,18 @@ export class MissionRuntime {
     };
   }
 
-  /** Submit a free-text player response and advance. */
+  /**
+   * Submit a free-text player response and advance.
+   *
+   * A clear, safe reading acts immediately. Two cases stop and ask first:
+   *
+   *   - the reading is ambiguous, so acting would be a guess
+   *   - the reading is something the mission declares unsafe
+   *
+   * Confirming on *every* message would be a second click every turn, which §113 warns
+   * against. Confirming on these two makes the question itself informative: if the game
+   * is asking, either you were vague or you just told somebody to do something dangerous.
+   */
   public respond(text: string): MissionStep {
     if (this.finished) {
       return { say: '', learned: [], clarifying: false };
@@ -106,13 +154,20 @@ export class MissionRuntime {
     const resolution = resolveIntent(text, allowed);
 
     if (resolution.kind === 'matched') {
+      if (this.definition.hiddenTruth.unsafeIntents.includes(resolution.intentId)) {
+        return this.propose(resolution.intentId);
+      }
       return this.applyTransition(beat.on[resolution.intentId]);
     }
 
-    // §159 / §164: ambiguity and non-recognition are in-fiction clarification requests.
-    const fallback = resolution.kind === 'ambiguous' ? beat.onAmbiguous : beat.onUnrecognised;
-    if (fallback) {
-      return { ...this.applyTransition(fallback), clarifying: true };
+    // A tie between readings is exactly the case worth asking about.
+    if (resolution.kind === 'ambiguous' && resolution.candidates.length > 0) {
+      return this.propose(resolution.candidates[0].intentId);
+    }
+
+    // §159 / §164: non-recognition is an in-fiction clarification request.
+    if (beat.onUnrecognised) {
+      return { ...this.applyTransition(beat.onUnrecognised), clarifying: true };
     }
 
     return {
@@ -122,11 +177,53 @@ export class MissionRuntime {
     };
   }
 
+  /** Ask the player to confirm a reading before acting on it. */
+  private propose(intentId: string): MissionStep {
+    this.pendingIntent = intentId;
+    const question = this.definition.confirmations?.[intentId];
+
+    return {
+      say: '',
+      learned: [],
+      clarifying: false,
+      confirming: {
+        intentId,
+        question: question ?? 'Is that what you meant?',
+      },
+    };
+  }
+
+  /** Answer a proposed reading. */
+  public confirm(accepted: boolean): MissionStep {
+    const intentId = this.pendingIntent;
+    this.pendingIntent = null;
+
+    if (!accepted || !intentId) {
+      return {
+        say: 'Right - tell me again, then.',
+        learned: [],
+        clarifying: true,
+      };
+    }
+
+    const beat = this.getCurrentBeat();
+    const transition = beat.on[intentId];
+    if (!transition) {
+      return { say: 'Right - tell me again, then.', learned: [], clarifying: true };
+    }
+    return this.applyTransition(transition);
+  }
+
+  public get isConfirming(): boolean {
+    return this.pendingIntent !== null;
+  }
+
   private applyTransition(transition: BeatTransition): MissionStep {
     // Knowledge from the action taken...
     const learned = this.recordKnowledge(transition.learn ?? []);
 
     this.currentBeatId = transition.to;
+    this.visited.add(this.currentBeatId);
     const next = this.getCurrentBeat();
 
     // ...and from whatever the contact says on arrival.
@@ -140,12 +237,17 @@ export class MissionRuntime {
       }
     }
 
+    if (next.failure) {
+      this.finished = true;
+    }
+
     return {
       say: next.say,
       environment: transition.environment,
       vfx: transition.vfx,
       learned,
       outcome: next.outcome,
+      failure: next.failure,
       clarifying: false,
     };
   }

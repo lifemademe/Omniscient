@@ -20,8 +20,10 @@
  */
 
 import type {
+  HintView,
   InterventionSurface,
   PlayerMessage,
+  RecordView,
   SurfaceState,
   TranscriptEntry,
 } from './surface.js';
@@ -89,6 +91,101 @@ export const TERMINAL_CSS = `
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+/* Tabs: CHAT / HINTS / RECORDS. §162 - the phone changes tool mode as the mission asks. */
+.omni-tabs {
+  display: flex;
+  border-bottom: 1px solid #23422c;
+}
+.omni-tab {
+  flex: 1;
+  padding: 7px 4px;
+  background: transparent;
+  border: none;
+  border-right: 1px solid #1a2f21;
+  color: #4f9a5e;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.omni-tab:last-child { border-right: none; }
+.omni-tab:hover { color: #7fe08a; }
+.omni-tab--active { color: #d8ffb0; background: #10251a; }
+.omni-tab__count { opacity: 0.6; }
+/* Hint and record rows. */
+.omni-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+  background: #0d1c14;
+  border: 1px solid #23422c;
+  color: #cfe6c4;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+.omni-item:hover { border-color: #4f9a5e; color: #d8ffb0; }
+.omni-item--static { cursor: default; }
+.omni-item--static:hover { border-color: #23422c; color: #cfe6c4; }
+.omni-item__meta {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #4f9a5e;
+  margin-top: 4px;
+}
+.omni-item__detail {
+  display: block;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #1e3a28;
+  color: #8fbe93;
+}
+.omni-item--mine { border-left: 2px solid #c9a227; }
+.omni-empty {
+  color: #3f6b48;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 10px;
+}
+/* Confirmation and failure. */
+.omni-confirm { padding: 10px; border-top: 1px solid #23422c; }
+.omni-confirm__q { display: block; color: #d8ffb0; font-size: 13px; margin-bottom: 8px; }
+.omni-confirm__row { display: flex; gap: 8px; }
+.omni-confirm__btn {
+  padding: 5px 18px;
+  background: transparent;
+  border: 1px solid #4f9a5e;
+  color: #7fe08a;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.omni-confirm__btn:hover { background: #14301f; color: #d8ffb0; }
+.omni-failure {
+  padding: 10px;
+  border-top: 1px solid #6b2f28;
+  background: #1a0e0c;
+  color: #d99b8f;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.omni-failure__title {
+  display: block;
+  color: #c2483a;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
 .omni-terminal__foot {
   border-top: 1px solid #23422c;
   padding: 8px 10px 10px;
@@ -140,6 +237,8 @@ export const TERMINAL_CSS = `
 }
 `;
 
+type Tab = 'chat' | 'hints' | 'records';
+
 export class LocalSurface implements InterventionSurface {
   public readonly kind = 'local' as const;
 
@@ -148,9 +247,14 @@ export class LocalSurface implements InterventionSurface {
   private inputElement: HTMLInputElement | null = null;
   private contactElement: HTMLSpanElement | null = null;
   private hintElement: HTMLDivElement | null = null;
+  private tabsElement: HTMLDivElement | null = null;
+  private panelElement: HTMLDivElement | null = null;
+  private extraElement: HTMLDivElement | null = null;
 
   private readonly handlers = new Set<(message: PlayerMessage) => void>();
   private renderedCount = 0;
+  private tab: Tab = 'chat';
+  private lastState: SurfaceState | null = null;
 
   constructor(private readonly container: HTMLElement) {}
 
@@ -173,8 +277,19 @@ export class LocalSurface implements InterventionSurface {
     contact.className = 'omni-terminal__contact';
     head.append(title, contact);
 
+    const tabs = document.createElement('div');
+    tabs.className = 'omni-tabs';
+
     const log = document.createElement('div');
     log.className = 'omni-terminal__log';
+
+    // HINTS and RECORDS render here; the chat log is hidden while they are open.
+    const panel = document.createElement('div');
+    panel.className = 'omni-terminal__log';
+    panel.style.display = 'none';
+
+    // Confirmation prompt or failure notice, above the input.
+    const extra = document.createElement('div');
 
     const foot = document.createElement('div');
     foot.className = 'omni-terminal__foot';
@@ -195,7 +310,7 @@ export class LocalSurface implements InterventionSurface {
     entry.append(caret, input);
     foot.append(hint, entry);
 
-    root.append(head, log, foot);
+    root.append(head, tabs, log, panel, extra, foot);
     this.container.appendChild(root);
 
     // Enter-to-submit. ENGINE.Input has onChange but no submit event, which is one of
@@ -205,7 +320,10 @@ export class LocalSurface implements InterventionSurface {
       const text = input.value.trim();
       if (!text) return;
       input.value = '';
-      this.dispatch({ kind: 'text', text });
+      // After a loss the field is for the player's own note, not for the contact.
+      this.dispatch(
+        this.lastState?.failure ? { kind: 'note', text } : { kind: 'text', text }
+      );
     });
 
     this.root = root;
@@ -213,6 +331,9 @@ export class LocalSurface implements InterventionSurface {
     this.inputElement = input;
     this.contactElement = contact;
     this.hintElement = hint;
+    this.tabsElement = tabs;
+    this.panelElement = panel;
+    this.extraElement = extra;
   }
 
   /**
@@ -249,6 +370,7 @@ export class LocalSurface implements InterventionSurface {
     if (!this.logElement || !this.contactElement || !this.inputElement || !this.hintElement) {
       return;
     }
+    this.lastState = state;
 
     this.contactElement.textContent = state.contactName;
     this.hintElement.textContent = state.hint ?? '';
@@ -263,11 +385,179 @@ export class LocalSurface implements InterventionSurface {
     }
     this.renderedCount = state.transcript.length;
 
-    this.inputElement.disabled = !state.awaitingInput;
-    this.logElement.scrollTop = this.logElement.scrollHeight;
+    // A new line arriving means something happened in the conversation - go back to it.
+    if (state.transcript.length > 0 && this.tab !== 'chat' && state.confirming) {
+      this.tab = 'chat';
+    }
 
-    if (state.awaitingInput) {
-      this.inputElement.focus();
+    this.renderTabs(state);
+    this.renderPanel(state);
+    this.renderExtra(state);
+
+    // While confirming or writing a note, the free-text field is not the way in.
+    const typing = state.awaitingInput && !state.confirming;
+    this.inputElement.disabled = !typing;
+    this.inputElement.placeholder = state.failure ? 'write yourself a note...' : 'transmit...';
+
+    this.logElement.scrollTop = this.logElement.scrollHeight;
+    if (typing) this.inputElement.focus();
+  }
+
+  private renderTabs(state: SurfaceState): void {
+    if (!this.tabsElement) return;
+
+    const specs: Array<{ id: Tab; label: string; count?: number }> = [
+      { id: 'chat', label: 'Chat' },
+      { id: 'hints', label: 'Hints', count: state.hints?.length ?? 0 },
+      { id: 'records', label: 'Records', count: state.records?.length ?? 0 },
+    ];
+
+    this.tabsElement.replaceChildren();
+    for (const spec of specs) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `omni-tab${this.tab === spec.id ? ' omni-tab--active' : ''}`;
+      button.textContent = spec.label;
+
+      if (spec.count !== undefined) {
+        const count = document.createElement('span');
+        count.className = 'omni-tab__count';
+        count.textContent = ` ${spec.count}`;
+        button.appendChild(count);
+      }
+
+      button.addEventListener('click', () => {
+        this.tab = spec.id;
+        if (this.lastState) this.present(this.lastState);
+      });
+      this.tabsElement.appendChild(button);
+    }
+  }
+
+  private renderPanel(state: SurfaceState): void {
+    if (!this.panelElement || !this.logElement) return;
+
+    const showingChat = this.tab === 'chat';
+    this.logElement.style.display = showingChat ? 'flex' : 'none';
+    this.panelElement.style.display = showingChat ? 'none' : 'flex';
+    if (showingChat) return;
+
+    this.panelElement.replaceChildren();
+
+    if (this.tab === 'hints') {
+      const hints = state.hints ?? [];
+      if (hints.length === 0) {
+        this.panelElement.appendChild(this.renderEmpty('nothing observed yet'));
+        return;
+      }
+      for (const hint of hints) {
+        this.panelElement.appendChild(this.renderHint(hint));
+      }
+      return;
+    }
+
+    const records = state.records ?? [];
+    if (records.length === 0) {
+      this.panelElement.appendChild(this.renderEmpty('no records for this contact'));
+      return;
+    }
+    for (const record of records) {
+      this.panelElement.appendChild(this.renderRecord(record));
+    }
+  }
+
+  private renderHint(hint: HintView): HTMLElement {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'omni-item';
+
+    const summary = document.createElement('span');
+    summary.textContent = hint.summary;
+    item.appendChild(summary);
+
+    if (hint.detail) {
+      const detail = document.createElement('span');
+      detail.className = 'omni-item__detail';
+      detail.textContent = hint.detail;
+      item.appendChild(detail);
+    } else {
+      const meta = document.createElement('span');
+      meta.className = 'omni-item__meta';
+      meta.textContent = 'open to look closer';
+      item.appendChild(meta);
+    }
+
+    item.addEventListener('click', () => this.dispatch({ kind: 'hint', hintId: hint.id }));
+    return item;
+  }
+
+  private renderRecord(record: RecordView): HTMLElement {
+    const item = document.createElement('div');
+    item.className = `omni-item omni-item--static${record.playerWritten ? ' omni-item--mine' : ''}`;
+
+    const label = document.createElement('span');
+    label.textContent = record.label;
+    item.appendChild(label);
+
+    const meta = document.createElement('span');
+    meta.className = 'omni-item__meta';
+    meta.textContent = record.playerWritten ? 'your note' : record.source;
+    item.appendChild(meta);
+
+    return item;
+  }
+
+  private renderEmpty(text: string): HTMLElement {
+    const empty = document.createElement('div');
+    empty.className = 'omni-empty';
+    empty.textContent = text;
+    return empty;
+  }
+
+  private renderExtra(state: SurfaceState): void {
+    if (!this.extraElement) return;
+    this.extraElement.replaceChildren();
+
+    if (state.confirming) {
+      const box = document.createElement('div');
+      box.className = 'omni-confirm';
+
+      const question = document.createElement('span');
+      question.className = 'omni-confirm__q';
+      question.textContent = state.confirming.question;
+      box.appendChild(question);
+
+      const row = document.createElement('div');
+      row.className = 'omni-confirm__row';
+      for (const [label, accepted] of [
+        ['Yes', true],
+        ['No', false],
+      ] as const) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'omni-confirm__btn';
+        button.textContent = label;
+        button.addEventListener('click', () => this.dispatch({ kind: 'confirm', accepted }));
+        row.appendChild(button);
+      }
+      box.appendChild(row);
+      this.extraElement.appendChild(box);
+      return;
+    }
+
+    if (state.failure) {
+      const box = document.createElement('div');
+      box.className = 'omni-failure';
+
+      const title = document.createElement('span');
+      title.className = 'omni-failure__title';
+      title.textContent = 'request lost';
+
+      const body = document.createElement('span');
+      body.textContent = state.failure.summary;
+
+      box.append(title, body);
+      this.extraElement.appendChild(box);
     }
   }
 

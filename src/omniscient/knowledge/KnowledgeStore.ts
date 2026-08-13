@@ -46,6 +46,13 @@ export interface Fact {
   certainty: Certainty;
   /** Monotonic learn order. Not wall-clock - keeps replays deterministic. */
   sequence: number;
+  /**
+   * True for notes the player typed themselves after losing a request (§170).
+   *
+   * These are the most interesting records in the store: everything else is what the
+   * world told OMNISCIENT_, and this is what OMNISCIENT_ decided to tell itself.
+   */
+  playerWritten?: boolean;
 }
 
 export interface Connection {
@@ -107,6 +114,7 @@ export class KnowledgeStore {
       certainty?: Certainty;
       contactId?: string | null;
       missionId?: string | null;
+      playerWritten?: boolean;
     } = {}
   ): Fact {
     const existing = this.facts.get(id);
@@ -126,6 +134,7 @@ export class KnowledgeStore {
       sourceMissionId: options.missionId ?? null,
       certainty: options.certainty ?? Certainty.Reported,
       sequence: this.sequence++,
+      playerWritten: options.playerWritten,
     };
     this.facts.set(id, fact);
     this.emit({ kind: 'fact-learned', factId: id });
@@ -186,6 +195,41 @@ export class KnowledgeStore {
   /** Facts learned from one person - the raw material for §164 callbacks. */
   public getFactsFromContact(contactId: string): Fact[] {
     return this.getFacts().filter((fact) => fact.sourceContactId === contactId);
+  }
+
+  /**
+   * A note the player wrote for themselves after losing a request (§170).
+   *
+   * Stored as an ordinary fact so it shows up in RECORDS, grows the tree, and can be
+   * recalled in any later mission - the player's own words become part of what the
+   * intelligence knows.
+   */
+  public writeNote(missionId: string, contactId: string, text: string): Fact {
+    const trimmed = text.trim().slice(0, 240);
+    return this.learn(
+      `note:${missionId}:${this.sequence}`,
+      trimmed,
+      KnowledgeDomain.People,
+      { certainty: Certainty.Reported, contactId, missionId, playerWritten: true }
+    );
+  }
+
+  /**
+   * Records worth showing during a request (§19 contextual recall).
+   *
+   * Anything learned from this contact, anything the player wrote about this mission, and
+   * anything in a domain the mission touches. §95 is explicit that recall surfaces
+   * relevant memories *without revealing the answer*, which is why this filters by
+   * provenance rather than by usefulness.
+   */
+  public getRelevantRecords(missionId: string, contactId: string, domains: KnowledgeDomain[]): Fact[] {
+    const wanted = new Set(domains);
+    return this.getFacts().filter(
+      (fact) =>
+        fact.sourceContactId === contactId ||
+        fact.sourceMissionId === missionId ||
+        wanted.has(fact.domain)
+    );
   }
 
   public getDomains(): KnowledgeDomain[] {

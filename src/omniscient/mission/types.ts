@@ -31,6 +31,31 @@ export enum Tempo {
   Act = 'act',
 }
 
+/**
+ * Something the player can notice and ask about.
+ *
+ * §131: the contact's environment must contain usable evidence, and the player should be
+ * able to point at it. Hints are that evidence made addressable - a short observation on
+ * the phone, which when opened highlights the thing in the Contact View and says more.
+ *
+ * §106 / §95 ASSOCIATIVE RECALL: hints surface what is *observable*, never the answer.
+ * "There is water on the floor" is a hint. "The connector is corroded" is the solution.
+ */
+export interface MissionHint {
+  id: string;
+  /** One line, as OMNISCIENT_ would log an observation. */
+  summary: string;
+  /** What the player learns by opening it. Still observation, not diagnosis. */
+  detail: string;
+  /** Contact View cue fired when opened, e.g. "prop.highlight:connector-b". */
+  cue?: string;
+  /**
+   * Hidden until the beat that makes it observable. A hint about the back of the set is
+   * not available until somebody has turned the set around.
+   */
+  revealedBy?: string;
+}
+
 /** A fact this mission can teach, declared up front so effects stay auditable. */
 export interface MissionKnowledge {
   id: string;
@@ -61,6 +86,13 @@ export interface Beat {
   say: string;
   tempo: Tempo;
   /**
+   * Present on a beat that ends the request badly (§155 / §163).
+   *
+   * Failure has to be genuinely reachable, or the player never gets to write themselves
+   * a note about what went wrong - and the whole learning loop is decorative.
+   */
+  failure?: MissionFailure;
+  /**
    * Knowledge recorded simply for having heard this line.
    *
    * Prefer this over transition-level `learn` for anything the contact *says*. Attaching
@@ -78,6 +110,20 @@ export interface Beat {
   onAmbiguous?: BeatTransition;
   /** Present only on terminal beats. */
   outcome?: MissionOutcome;
+}
+
+/**
+ * A lost request.
+ *
+ * §163: failure generates story and future state. §30: it should teach. The player is
+ * shown plainly what went wrong and invited to write themselves a note, which is waiting
+ * for them when the request comes off cooldown (§31).
+ */
+export interface MissionFailure {
+  /** What actually happened, stated without blame. */
+  summary: string;
+  /** Seconds before the request can be attempted again. */
+  cooldownSeconds: number;
 }
 
 /** §163: outcomes are a spectrum, not success/failure. */
@@ -136,6 +182,15 @@ export interface MissionDefinition {
     unsafeIntents: string[];
   };
   knowledge: MissionKnowledge[];
+  /** Observable evidence the player can open on the phone (§131). At least three. */
+  hints: MissionHint[];
+  /**
+   * How to phrase a proposed reading back to the player, per intent.
+   *
+   * "Do you mean Mirela should take the power off?" - the contact's name in the question
+   * keeps it in fiction rather than reading as a parser prompt.
+   */
+  confirmations?: Record<string, string>;
   intents: IntentDefinition[];
   beats: Beat[];
   openingBeatId: string;

@@ -253,11 +253,37 @@ export class ContactScene extends ENGINE.SceneNode {
     const run = prop.actions[actionKey];
     if (run) {
       run(this.tweener, prop.node);
+    } else if (actionKey.startsWith('highlight')) {
+      // Every prop can be pointed at, whether or not it authored an action for it - a
+      // hint that highlights nothing would be worse than no hint (§131).
+      this.highlight(prop.node);
     } else {
       console.warn(`[contact-view] prop "${propId}" has no action "${actionKey}"`);
     }
 
     return this.getAnchorWorldPosition(propId, anchorKey) ?? this.getAnchorWorldPosition(propId, 'default');
+  }
+
+  /**
+   * Default highlight: three quick pulses of scale.
+   *
+   * Deliberately motion rather than colour - a tint would fight the palette's value
+   * structure, and a thing that *moves* is what the eye finds in a cluttered frame.
+   */
+  private highlight(node: ENGINE.SceneNode): void {
+    const base = node.scale.clone();
+    this.tweener.add(
+      (t) => {
+        const pulse = 1 + Math.sin(t * Math.PI * 6) * 0.14 * (1 - t);
+        node.scale.set(base.x * pulse, base.y * pulse, base.z * pulse);
+      },
+      {
+        duration: 1.1,
+        easing: Ease.linear,
+        channel: `highlight-${node.uuid}`,
+        onComplete: () => node.scale.copy(base),
+      }
+    );
   }
 
   public override tickPrePhysics(deltaTime: number): void {

@@ -13,7 +13,7 @@
  * Usage:  pnpm exec tsx scripts/preview-callback.ts
  */
 
-import { MIRELA } from '../src/omniscient/content/contacts.js';
+import { MIRELA, TOMAS } from '../src/omniscient/content/contacts.js';
 import { MISSION_01 } from '../src/omniscient/content/mission-01-transmitter.js';
 import { MISSION_02 } from '../src/omniscient/content/mission-02-beacon.js';
 import { createSignals, MIRELA_SIGNAL } from '../src/omniscient/content/signals.js';
@@ -40,6 +40,42 @@ function check(label: string, condition: boolean, detail = ''): void {
   const mark = condition ? 'PASS' : 'FAIL';
   if (!condition) failures++;
   console.log(`  [${mark}] ${label}${detail ? ` - ${detail}` : ''}`);
+}
+
+/** A surface that records what it was told, and can send any player message back. */
+function record(): {
+  surface: InterventionSurface;
+  latest: () => SurfaceState | null;
+  send: (message: PlayerMessage) => void;
+  cues: string[];
+} {
+  let handler: ((message: PlayerMessage) => void) | null = null;
+  let latest: SurfaceState | null = null;
+  const cues: string[] = [];
+
+  return {
+    surface: {
+      kind: 'local',
+      connected: true,
+      attach: async () => {},
+      detach: () => {},
+      present: (s) => {
+        latest = s;
+      },
+      onMessage: (h) => {
+        handler = h;
+        return () => {
+          handler = null;
+        };
+      },
+    },
+    latest: () => latest,
+    send: (message) => {
+      if (!handler) throw new Error('surface handler was never registered');
+      handler(message);
+    },
+    cues,
+  };
 }
 
 /** Drive a mission with a script of player messages, logging the exchange. */
@@ -289,6 +325,97 @@ check(
   'Visible points land inside the canvas',
   projected.filter((p) => p.visible).every((p) => p.x >= 0 && p.x <= 192 && p.y >= 0 && p.y <= 144)
 );
+
+// -- 8. Hints, confirmation, failure, records -----------------------------------------
+
+console.log('\n=== HINTS / CONFIRMATION / FAILURE ===\n');
+
+const rec = record();
+const storeE = new KnowledgeStore(SEED);
+const session2 = new SessionController(rec.surface, storeE, {
+  onEnvironment: (cue) => rec.cues.push(cue),
+});
+
+session2.start(MISSION_01, MIRELA);
+let state = rec.latest()!;
+
+check('At least three hints on opening', (state.hints?.length ?? 0) >= 3, '§131');
+check(
+  'Hints behind a reveal are withheld',
+  !state.hints?.some((h) => h.id === 'hint-connectors'),
+  'the back of the set has not been seen yet'
+);
+check('Records panel is present', state.records !== undefined);
+
+// Opening a hint says more and points at the world.
+rec.send({ kind: 'hint', hintId: 'hint-floor' });
+state = rec.latest()!;
+check('Opening a hint reveals its detail', !!state.hints?.find((h) => h.id === 'hint-floor')?.detail);
+check('Opening a hint cues the Contact View', rec.cues.includes('camera.pan:workshop-floor'));
+check(
+  'Reading evidence is not a turn',
+  !state.transcript.some((t) => t.source === 'contact' && t.body.includes('Say that again')),
+  'the contact does not respond to the player reading'
+);
+
+// An ordinary safe instruction acts immediately.
+rec.send({ kind: 'text', text: 'take the power off the set' });
+check('A safe instruction acts without confirming', !rec.latest()!.confirming);
+
+// Something the mission declares unsafe stops and asks first.
+const rec2 = record();
+const session3 = new SessionController(rec2.surface, new KnowledgeStore(SEED));
+session3.start(MISSION_01, MIRELA);
+rec2.send({ kind: 'text', text: 'look at the connectors round the back' });
+rec2.send({ kind: 'text', text: 'clean the corrosion off' });
+
+const risky = rec2.latest()!;
+check('An unsafe instruction proposes a reading first', !!risky.confirming, '§157 made visible');
+check(
+  'The proposal is phrased in fiction and names the risk',
+  risky.confirming?.question.includes('still live') === true,
+  risky.confirming?.question ?? ''
+);
+
+rec2.send({ kind: 'confirm', accepted: false });
+check('Declining does not act on it', !rec2.latest()!.confirming);
+check(
+  'Declining invites another try rather than failing',
+  rec2.latest()!.awaitingInput,
+  '§159 - no red X'
+);
+
+// Failure, and writing yourself a note.
+const rec3 = record();
+const storeF = new KnowledgeStore(SEED);
+let lost = false;
+const session4 = new SessionController(rec3.surface, storeF, {
+  onFailed: () => {
+    lost = true;
+  },
+});
+session4.start(MISSION_02, TOMAS);
+rec3.send({ kind: 'text', text: 'trace the aerial feed down from the mast' });
+// Both unsafe instructions are proposed first, and the player insists both times.
+rec3.send({ kind: 'text', text: 'pull the feed apart' });
+rec3.send({ kind: 'confirm', accepted: true });
+rec3.send({ kind: 'text', text: 'cut the cable' });
+rec3.send({ kind: 'confirm', accepted: true });
+
+const lostState = rec3.latest()!;
+check('A request can genuinely be lost', lost, '§155 - failure has to be reachable');
+check('The loss is explained plainly', !!lostState.failure?.summary);
+check('The player can still type - to write themselves a note', lostState.awaitingInput);
+
+rec3.send({ kind: 'note', text: 'never tell someone to pull a live feed. isolate first.' });
+const noted = rec3.latest()!;
+check('The note is recorded', storeF.getFacts().some((f) => f.playerWritten === true));
+check(
+  'The note shows in records, marked as the player\'s own',
+  noted.records?.some((r) => r.playerWritten) === true,
+  '§170'
+);
+check('Writing the note clears the failure prompt', !noted.failure);
 
 // -- Report ---------------------------------------------------------------------------
 

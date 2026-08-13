@@ -64,6 +64,59 @@ export const MISSION_01: MissionDefinition = {
     },
   ],
 
+  /**
+   * §131: observation, never diagnosis. Every one of these is something anybody looking
+   * at the room could see. None of them says "the connector is corroded" - that is the
+   * conclusion the player has to reach.
+   */
+  hints: [
+    {
+      id: 'hint-floor',
+      summary: 'Tide line on the workshop wall',
+      detail:
+        'A dark band runs along the bottom of the plaster at about a hand\'s height, all the '
+        + 'way round the room. Whatever it was, it was not a spill.',
+      cue: 'camera.pan:workshop-floor',
+    },
+    {
+      id: 'hint-lamp',
+      summary: 'The set has power but no carrier',
+      detail:
+        'Panel lamp is lit and steady. Whatever is wrong is downstream of the supply - it is '
+        + 'getting current and doing nothing with it.',
+      cue: 'camera.push-in:transmitter',
+    },
+    {
+      id: 'hint-aerial',
+      summary: 'One aerial lead, leaving the building',
+      detail:
+        'The feed does not terminate in the room. It runs out through the wall and keeps '
+        + 'going, which means this set is not the only thing on it.',
+      cue: 'camera.push-in:transmitter',
+    },
+    {
+      id: 'hint-connectors',
+      summary: 'Something on the rear connectors',
+      detail:
+        'Green deposit bridging the pins of the fat connector. It is not clean metal under '
+        + 'there.',
+      cue: 'prop.highlight:connector-b',
+      // Only observable once the set has been turned around.
+      revealedBy: 'connector-found',
+    },
+  ],
+
+  confirmations: {
+    INSPECT_UNIT: 'Do you mean Mirela should describe the set itself?',
+    INSPECT_CONNECTOR: 'Do you mean Mirela should look at the connectors on the back?',
+    REMOVE_POWER: 'Do you mean Mirela should take the power off?',
+    CLEAN_CONNECTOR: 'Do you mean Mirela should clean the corrosion off the pins?',
+    CLEAN_LIVE: 'Do you mean Mirela should clean it now, with the set still live?',
+    ASK_HISTORY: 'Do you mean Mirela should say what happened to it?',
+    TEST_TRANSMIT: 'Do you mean Mirela should power it up and try transmitting?',
+    ADMIT_UNCERTAINTY: 'Do you want to tell her you are not sure yet?',
+  },
+
   intents: [
     {
       id: 'INSPECT_UNIT',
