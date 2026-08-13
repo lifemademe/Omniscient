@@ -635,12 +635,19 @@ function buildBeaconMast(scene: ContactScene): void {
     ENGINE.PointLightNode.create({
       name: 'Moonlight',
       position: new THREE.Vector3(-3.4, 5.5, -4.2),
-      // Raised: with the beacon out for a third of every cycle, too little moonlight left
-      // the scene genuinely unreadable rather than atmospheric.
-      intensity: 17,
+      /**
+       * Raised twice, the second time off a recording rather than a still.
+       *
+       * The beacon is out for three and a half seconds in every eleven, and a screenshot
+       * of the lit phase says nothing about the dark one. Played back, the scene went
+       * almost black for a third of the time the player spends with Tomas - not
+       * atmospheric, unreadable. The moon has to carry the scene on its own whenever the
+       * light drops, because that is precisely when the player is looking hardest.
+       */
+      intensity: 30,
       color: new THREE.Color('#93b0cf'),
-      distance: 30,
-      decay: 1.0,
+      distance: 34,
+      decay: 0.9,
     })
   );
 
@@ -657,10 +664,10 @@ function buildBeaconMast(scene: ContactScene): void {
     ENGINE.PointLightNode.create({
       name: 'SeaGlow',
       position: new THREE.Vector3(3.6, 1.4, -3.2),
-      intensity: 5,
+      intensity: 11,
       color: new THREE.Color('#5f7f9e'),
-      distance: 20,
-      decay: 1.2,
+      distance: 24,
+      decay: 1.0,
     })
   );
 
