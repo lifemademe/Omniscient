@@ -18,6 +18,7 @@ import { MISSION_01 } from '../src/omniscient/content/mission-01-transmitter.js'
 import { MISSION_02 } from '../src/omniscient/content/mission-02-beacon.js';
 import { createSignals, MIRELA_SIGNAL } from '../src/omniscient/content/signals.js';
 import { GlobeView, SignalState } from '../src/omniscient/crt/GlobeView.js';
+import { tickCooldowns } from '../src/omniscient/globe/GlobeScreen.js';
 import { GrowthStage } from '../src/omniscient/crt/KnowledgeTree.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
 import { readsAsYesNo, resolveIntent } from '../src/omniscient/mission/intent.js';
@@ -30,6 +31,7 @@ import type {
   PlayerMessage,
   SurfaceState,
 } from '../src/omniscient/link/surface.js';
+import type { Signal } from '../src/omniscient/crt/GlobeView.js';
 import type { MissionDefinition } from '../src/omniscient/mission/types.js';
 
 const SEED = 0x0c151e;
@@ -438,6 +440,47 @@ check(
   'The anomaly has no name and is not a request (§169)',
   signals.some((s) => s.state === SignalState.Unknown && s.name === '')
 );
+
+/**
+ * The cooldown lifecycle, end to end.
+ *
+ * A playtester lost Mirela, watched a frozen "60s", and was then told "no longer waiting"
+ * about somebody who had just become reachable again. Two faults: the globe never put an
+ * expired contact back into the openable set, so the tooltip fell into its last branch
+ * with no Answer button and no way in; and the tip was built once on click, so the number
+ * never moved. A cooldown that never ends is not a cooldown.
+ *
+ * This exercises the real GlobeScreen tick against a real request queue.
+ */
+{
+  const blocked: Signal = {
+    id: MIRELA_SIGNAL,
+    name: 'Mirela Vasc',
+    label: 'Her transmitter is dead.',
+    latitude: 42,
+    longitude: 9,
+    state: SignalState.Cooldown,
+    cooldown: 3,
+  };
+  const openable = new Set<string>();
+  const reopened: string[] = [];
+  const onEnded = (id: string): void => {
+    reopened.push(id);
+    openable.add(id);
+  };
+
+  // The same function the globe's frame loop calls.
+  tickCooldowns(1.0, [blocked], onEnded);
+  check('The countdown actually decreases', (blocked.cooldown ?? 0) < 3, `${blocked.cooldown}s left`);
+  check('It is still blocked partway through', blocked.state === SignalState.Cooldown);
+  check('Nothing reopened early', reopened.length === 0);
+
+  tickCooldowns(5.0, [blocked], onEnded);
+  check('The countdown ends', blocked.state === SignalState.Waiting);
+  check('The request is offered back to the rig', reopened.includes(MIRELA_SIGNAL));
+  check('...and becomes answerable again', openable.has(MIRELA_SIGNAL), 'no more "no longer waiting"');
+  check('The stale countdown is cleared', blocked.cooldown === undefined);
+}
 
 // Projection: the globe must be able to place every signal, and hide the far side.
 const globeSurface = new BufferSurface(192, 144);

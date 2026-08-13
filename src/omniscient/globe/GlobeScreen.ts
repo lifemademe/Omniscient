@@ -19,6 +19,51 @@ import type { PixelSurface } from '../crt/PixelSurface.js';
 import type { Signal } from '../crt/GlobeView.js';
 
 const STYLE_ID = 'omniscient-globe-styles';
+
+/**
+ * The remaining wait, as a clock.
+ *
+ * A bare "60s" is a fact; m:ss visibly counting down is a wait you can feel ending, which
+ * is the whole point of §31 - the player is supposed to watch the door reopen rather than
+ * check back and discover it happened. Seconds are floored so it reads 1:00, 0:59, 0:58
+ * and lands on 0:00 exactly as the request returns.
+ */
+/**
+ * Advance every blocked request's countdown, and report the ones that have come back.
+ *
+ * A free function rather than a method so it can be exercised without a DOM - this is the
+ * part that silently broke. It used to set the state to Waiting and stop, which left the
+ * contact out of the openable set: the point went green, the tooltip fell through to its
+ * last branch and told the player "no longer waiting" about somebody who had just become
+ * reachable, with no Answer button and no way in. A cooldown that never ends is not a
+ * cooldown.
+ *
+ * The caller decides whether the request actually still exists; this only reports that
+ * the wait is over.
+ */
+export function tickCooldowns(
+  deltaTime: number,
+  signals: Signal[],
+  onEnded?: (signalId: string) => void
+): void {
+  for (const signal of signals) {
+    if (signal.state !== SignalState.Cooldown || signal.cooldown === undefined) continue;
+
+    signal.cooldown = Math.max(0, signal.cooldown - deltaTime);
+    if (signal.cooldown > 0) continue;
+
+    signal.state = SignalState.Waiting;
+    signal.cooldown = undefined;
+    onEnded?.(signal.id);
+  }
+}
+
+function formatWait(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const minutes = Math.floor(total / 60);
+  const rest = total % 60;
+  return `unreachable - ${minutes}:${String(rest).padStart(2, '0')}`;
+}
 /** Canvas resolution. Small on purpose - this is a machine's display (§9). */
 const CANVAS_W = 320;
 const CANVAS_H = 240;
@@ -229,6 +274,10 @@ export class GlobeScreen {
   /** The open tooltip, rebuilt only when the selection actually changes. */
   private tipEl: HTMLElement | null = null;
   private tipForId: string | null = null;
+  /** Which branch of buildTip the open tip is showing, so it rebuilds when that changes. */
+  private tipShape = '';
+  /** The countdown line inside the open tip, rewritten in place each frame. */
+  private waitEl: HTMLElement | null = null;
   private pulse = 0;
   /** Display scale from canvas pixels to screen pixels. */
   private scale = 3;
@@ -236,7 +285,9 @@ export class GlobeScreen {
   constructor(
     private readonly container: HTMLElement,
     private readonly onAnswer: (signalId: string) => void,
-    private readonly onBack: () => void
+    private readonly onBack: () => void,
+    /** A blocked request's countdown reached zero - the rig decides if it comes back. */
+    private readonly onCooldownEnded?: (signalId: string) => void
   ) {
     this.globe = new GlobeView(this.surface, []);
   }
@@ -331,13 +382,7 @@ export class GlobeScreen {
 
     // §31: cooldowns tick down while the player is looking at the globe, so a failed
     // request visibly becomes available again rather than silently reappearing.
-    for (const signal of this.signals) {
-      if (signal.state !== SignalState.Cooldown || signal.cooldown === undefined) continue;
-      signal.cooldown = Math.max(0, signal.cooldown - deltaTime);
-      if (signal.cooldown === 0) {
-        signal.state = SignalState.Waiting;
-      }
-    }
+    tickCooldowns(deltaTime, this.signals, this.onCooldownEnded);
 
     // §99: clicking a point stops the world turning until the player looks away.
     if (!this.selectedId) {
@@ -412,25 +457,50 @@ export class GlobeScreen {
     this.syncTip(seen);
   }
 
-  /** Build or drop the tooltip, only when the selection changes. */
+  /**
+   * Build, update or drop the tooltip.
+   *
+   * Rebuilt only when the selection or the signal's *shape* changes - which is what stops
+   * the Answer button being destroyed under the player's cursor between mousedown and
+   * mouseup. Within one shape, the countdown text is rewritten in place every frame, so a
+   * blocked contact shows a number actually ticking down rather than a snapshot of
+   * whatever it was when the point was clicked.
+   */
   private syncTip(visibleIds: Set<string>): void {
     const wanted = this.selectedId && visibleIds.has(this.selectedId) ? this.selectedId : null;
-    if (wanted === this.tipForId) return;
+    const signal = wanted ? this.signals.find((s) => s.id === wanted) : undefined;
+
+    // The shape of the tip: which of the three branches buildTip will take. When this
+    // changes - most importantly the moment a cooldown reaches zero - the tip is rebuilt,
+    // so the Answer button appears immediately without the player reselecting the point.
+    const shape = signal
+      ? `${signal.state}|${this.openable.has(signal.id) ? 'open' : 'shut'}`
+      : '';
+
+    if (wanted === this.tipForId && shape === this.tipShape) {
+      this.updateTipCountdown(signal);
+      return;
+    }
 
     this.tipEl?.remove();
     this.tipEl = null;
     this.tipForId = wanted;
+    this.tipShape = shape;
 
-    if (!wanted || !this.marks) return;
-
-    const signal = this.signals.find((s) => s.id === wanted);
-    if (!signal) return;
+    if (!wanted || !signal || !this.marks) return;
 
     const projected = this.globe.getProjectedSignals().find((p) => p.signal.id === wanted);
     if (!projected) return;
 
     this.tipEl = this.buildTip(signal, projected.x * this.scale, projected.y * this.scale);
     this.marks.appendChild(this.tipEl);
+  }
+
+  /** Rewrite just the remaining time, leaving every other node alone. */
+  private updateTipCountdown(signal: Signal | undefined): void {
+    if (!signal || !this.waitEl) return;
+    if (signal.state !== SignalState.Cooldown || signal.cooldown === undefined) return;
+    this.waitEl.textContent = formatWait(signal.cooldown);
   }
 
   private stateClass(signal: Signal): string {
@@ -455,11 +525,15 @@ export class GlobeScreen {
 
     tip.append(name, label);
 
+    this.waitEl = null;
+
     if (signal.state === SignalState.Cooldown && signal.cooldown !== undefined) {
       const wait = document.createElement('span');
-      wait.className = 'omni-globe__wait';
-      wait.textContent = `unreachable - ${Math.ceil(signal.cooldown)}s`;
+      wait.className = 'omni-globe__wait omni-globe__wait--counting';
+      wait.textContent = formatWait(signal.cooldown);
       tip.appendChild(wait);
+      // Held so the countdown can be rewritten each frame without rebuilding the tip.
+      this.waitEl = wait;
     } else if (this.openable.has(signal.id)) {
       const button = document.createElement('button');
       button.className = 'omni-globe__answer';
@@ -473,7 +547,13 @@ export class GlobeScreen {
     } else {
       const wait = document.createElement('span');
       wait.className = 'omni-globe__wait';
-      wait.textContent = 'no longer waiting';
+      // "no longer waiting" said nothing useful and read as an error - it was the branch
+      // an expired cooldown wrongly fell into, and even where it was correct the player
+      // could not tell whether they had missed something or nothing was there.
+      wait.textContent =
+        signal.state === SignalState.Resolved
+          ? 'you helped here already'
+          : 'nobody is asking here yet';
       tip.appendChild(wait);
     }
 

@@ -517,7 +517,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.globeScreen = new GlobeScreen(
       container,
       (signalId) => this.openSignal(signalId),
-      () => this.returnToMenu()
+      () => this.returnToMenu(),
+      (signalId) => this.reopenAfterCooldown(signalId)
     );
 
     this.attachPicker(world, container);
@@ -652,6 +653,27 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // behind us, but the player is still looking at what went wrong and is being asked to
     // write themselves a note about it - starting the return now took the Contact View
     // away mid-sentence and made §170's note unreachable. The exit is onNoteRecorded.
+  }
+
+  /**
+   * A blocked request's countdown reached zero.
+   *
+   * §31: the request comes back, and the note the player wrote themselves is waiting for
+   * them in Records when it does. The globe cannot decide this on its own - it does not
+   * know whether a mission is still queued - so it asks, and only a contact whose request
+   * is genuinely still pending becomes answerable again.
+   *
+   * Without this the countdown expired into nothing: the point went green, the contact
+   * stayed out of `openable`, and the tooltip said "no longer waiting" with no way in.
+   */
+  private reopenAfterCooldown(signalId: string): void {
+    const pending = this.queue
+      .slice(this.queueIndex)
+      .some((request) => request.mission.contactId === signalId);
+    if (!pending) return;
+
+    this.openable.add(signalId);
+    this.setSignalState(signalId, SignalState.Waiting);
   }
 
   /**
