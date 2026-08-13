@@ -200,11 +200,21 @@ export class GlobeScreen {
   private root: HTMLDivElement | null = null;
   private stage: HTMLDivElement | null = null;
   private marks: HTMLDivElement | null = null;
-  private tip: HTMLDivElement | null = null;
 
   private signals: Signal[] = [];
   private openable: ReadonlySet<string> = new Set();
   private selectedId: string | null = null;
+  /**
+   * Name labels, created once and repositioned.
+   *
+   * These must NOT be rebuilt per frame. Replacing the children every tick destroys the
+   * tooltip's Answer button between mousedown and mouseup, so the click never completes
+   * and the button silently does nothing.
+   */
+  private nameEls = new Map<string, HTMLSpanElement>();
+  /** The open tooltip, rebuilt only when the selection actually changes. */
+  private tipEl: HTMLElement | null = null;
+  private tipForId: string | null = null;
   private pulse = 0;
   /** Display scale from canvas pixels to screen pixels. */
   private scale = 3;
@@ -273,6 +283,9 @@ export class GlobeScreen {
   public detach(): void {
     if (this.root) this.root.style.display = 'none';
     this.clearSelection();
+    this.tipEl?.remove();
+    this.tipEl = null;
+    this.tipForId = null;
   }
 
   public dispose(): void {
@@ -280,7 +293,9 @@ export class GlobeScreen {
     this.root = null;
     this.stage = null;
     this.marks = null;
-    this.tip = null;
+    this.tipEl = null;
+    this.tipForId = null;
+    this.nameEls.clear();
   }
 
   /** Advance rotation, cooldowns and the drawing. */
@@ -323,40 +338,74 @@ export class GlobeScreen {
     }
 
     this.selectedId = best?.id ?? null;
-    this.renderMarks();
   }
 
   private clearSelection(): void {
     this.selectedId = null;
-    this.renderMarks();
   }
 
-  /** Names and the tooltip, positioned over the canvas. */
+  /**
+   * Names and the tooltip, positioned over the canvas.
+   *
+   * Elements persist across frames and are only moved. See nameEls - rebuilding them per
+   * frame breaks clicking entirely.
+   */
   private renderMarks(): void {
     if (!this.marks) return;
 
-    this.marks.replaceChildren();
-    this.tip = null;
+    const seen = new Set<string>();
 
     for (const projected of this.globe.getProjectedSignals()) {
       const { signal } = projected;
-      if (!projected.visible || signal.state === SignalState.Unknown) continue;
+      const showing = projected.visible && signal.state !== SignalState.Unknown;
 
-      const left = projected.x * this.scale;
-      const top = projected.y * this.scale;
+      let name = this.nameEls.get(signal.id);
+      if (!name) {
+        name = document.createElement('span');
+        // Contact names are content - textContent, never innerHTML.
+        name.textContent = signal.name;
+        this.nameEls.set(signal.id, name);
+        this.marks.appendChild(name);
+      }
 
-      const name = document.createElement('span');
+      name.style.display = showing ? 'block' : 'none';
+      if (!showing) continue;
+
+      seen.add(signal.id);
       name.className = `omni-globe__name omni-globe__name--${this.stateClass(signal)}`;
-      name.style.left = `${left}px`;
-      name.style.top = `${top}px`;
-      // Contact names are content - textContent, never innerHTML.
-      name.textContent = signal.name;
-      this.marks.appendChild(name);
+      name.style.left = `${projected.x * this.scale}px`;
+      name.style.top = `${projected.y * this.scale}px`;
 
-      if (signal.id === this.selectedId) {
-        this.marks.appendChild(this.buildTip(signal, left, top));
+      // Keep the open tooltip pinned to its point. The globe is stopped while a signal
+      // is selected, so this is a no-op in practice - but it stays correct if that changes.
+      if (signal.id === this.selectedId && this.tipEl) {
+        this.tipEl.style.left = `${projected.x * this.scale}px`;
+        this.tipEl.style.top = `${projected.y * this.scale}px`;
       }
     }
+
+    this.syncTip(seen);
+  }
+
+  /** Build or drop the tooltip, only when the selection changes. */
+  private syncTip(visibleIds: Set<string>): void {
+    const wanted = this.selectedId && visibleIds.has(this.selectedId) ? this.selectedId : null;
+    if (wanted === this.tipForId) return;
+
+    this.tipEl?.remove();
+    this.tipEl = null;
+    this.tipForId = wanted;
+
+    if (!wanted || !this.marks) return;
+
+    const signal = this.signals.find((s) => s.id === wanted);
+    if (!signal) return;
+
+    const projected = this.globe.getProjectedSignals().find((p) => p.signal.id === wanted);
+    if (!projected) return;
+
+    this.tipEl = this.buildTip(signal, projected.x * this.scale, projected.y * this.scale);
+    this.marks.appendChild(this.tipEl);
   }
 
   private stateClass(signal: Signal): string {
@@ -403,7 +452,6 @@ export class GlobeScreen {
       tip.appendChild(wait);
     }
 
-    this.tip = tip;
     return tip;
   }
 
