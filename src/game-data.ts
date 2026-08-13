@@ -3,8 +3,15 @@
 
 import { registerGeneratedClassMetadata, registerGeneratedPropertyMetadata } from '@gnsx/genesys.js';
 
+import { ContactScene } from './omniscient/view/ContactScene.js';
 
 export function registerMetadata(): void {
+  registerGeneratedPropertyMetadata(ContactScene, {
+      "sceneId": {
+        "type": "string"
+      }
+    });
+
 }
 
 // Deferred to avoid circular reference issues during module initialization

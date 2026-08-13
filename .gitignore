@@ -29,3 +29,13 @@
 # These will be preserved during SDK updates
 # ============================================
 
+# Contains the local Sandbox Studio MCP bearer token — do not commit
+.mcp.json
+
+# Generated previews and debug captures. Regenerate with:
+#   pnpm exec tsx scripts/preview-tree.ts
+#   pnpm exec tsx scripts/preview-terminal.ts
+assets/screenshots/*.jpg
+assets/screenshots/*.png
+assets/screenshots/*.html
+
