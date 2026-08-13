@@ -294,18 +294,53 @@ const m1Unsafe = play(
   storeC,
   [
     'look at the connectors',
-    // Unsafe: the set is still live.
+    // Unsafe: the set is still live. The runtime proposes it back...
     'clean the corrosion off',
-    'take the power off',
-    'clean the connector',
-    'try transmitting again',
+    // ...and this is the player overriding the warning in as many words.
+    'yes',
   ],
   { verbose: true }
 );
 
 console.log('');
-check('Cleaning a live connector does not end the mission', m1Unsafe.isFinished, 'recovered to solved');
-check('Player still reaches a solve after the arc', m1Unsafe.getCurrentBeat().outcome?.kind === 'solved');
+
+/**
+ * Overriding the confirmation has consequences.
+ *
+ * This used to assert the opposite - that the arc was recoverable and the player carried
+ * on to a solve. Three playtests read the flash as the mission ending and were confused
+ * that it was not, and they were right: CLEAN_LIVE is always proposed for confirmation,
+ * so the player has already been asked and has already said yes. The confirmation is the
+ * second chance; a second one after it teaches that the warning is decorative.
+ */
+check('Insisting past the warning ends the request', m1Unsafe.isFinished);
+check(
+  'It ends as a loss, not as a solve',
+  m1Unsafe.getCurrentBeat().failure !== undefined &&
+    m1Unsafe.getCurrentBeat().outcome === undefined
+);
+
+/** The rule has to be the same in both missions, or it is a quirk rather than a rule. */
+[MISSION_01, MISSION_02].forEach((mission) => {
+  const unsafeLandings = mission.beats.flatMap((beat) =>
+    mission.hiddenTruth.unsafeIntents
+      .filter((id) => id in beat.on)
+      .map((id) => mission.beats.find((b) => b.id === beat.on[id].to))
+  );
+  check(
+    `${mission.id}: every unsafe instruction leads somewhere that ends the request`,
+    unsafeLandings.length > 0 && unsafeLandings.every((b) => b?.failure !== undefined),
+    unsafeLandings.map((b) => `${b?.id}${b?.failure ? '' : ' (NO FAILURE)'}`).join(', ')
+  );
+
+  // ...and the loss always explains itself and offers the lesson.
+  const losses = mission.beats.filter((beat) => beat.failure);
+  check(
+    `${mission.id}: every loss says what happened and what would have worked`,
+    losses.length > 0 &&
+      losses.every((b) => (b.failure?.summary.length ?? 0) > 0 && (b.failure?.lesson?.length ?? 0) > 0)
+  );
+});
 
 // -- 6. Session wiring, through a stub surface ----------------------------------------
 //

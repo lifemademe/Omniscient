@@ -154,14 +154,23 @@ console.log('\n=== LOSING MIRELA ===\n');
 
   const first = losing.respond('clean the connector now');
   check('Cleaning a live connector proposes the risk first', first.confirming !== undefined);
-  const sparked = losing.confirm(true);
-  check('Taking that answer sets off the spark', losing.getCurrentBeat().id === 'arc');
-  check('The spark fires an effect', sparked.vfx !== undefined, sparked.vfx);
-  check('The request is NOT over after one spark', !losing.isFinished, 'it is recoverable');
+  check(
+    'The proposal names the danger, so saying yes is an informed choice',
+    /power is still on|live/i.test(first.confirming?.question ?? ''),
+    first.confirming?.question
+  );
 
-  const again = losing.respond('clean the connector now');
-  const lost = again.confirming ? losing.confirm(true) : again;
-  check('Insisting a second time loses the request', losing.isFinished);
+  // Declining is the recovery. It is the ONLY recovery, which is what makes the question
+  // worth asking - see the arc beat in mission-01.
+  const backedOut = losing.confirm(false);
+  check('Declining leaves her unhurt and the request alive', !losing.isFinished);
+  check('...and invites another try', backedOut.clarifying);
+
+  const lost = losing.respond('clean the connector now').confirming
+    ? losing.confirm(true)
+    : losing.respond('clean the connector now');
+  check('Overriding the warning ends the request', losing.isFinished);
+  check('The spark fires an effect', losing.getCurrentBeat().id === 'arc');
   check('The loss is reported', lost.failure !== undefined, lost.failure?.summary);
   check(
     'The loss says what would have worked',

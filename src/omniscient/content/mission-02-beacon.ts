@@ -317,51 +317,29 @@ export const MISSION_02: MissionDefinition = {
     },
 
     {
-      id: 'arc',
-      tempo: Tempo.Act,
-      say:
-        'It flashed - the whole bracket lit up. I have let go of it. There is current in that cable, ' +
-        'I cannot just pull it apart while her set is live down there.',
-      suggest: ['put something in to separate them'],
-      on: {
-        FIT_ISOLATOR: {
-          to: 'isolator-fitted',
-          learn: [FACT_FEED_NEEDS_ISOLATOR],
-          environment: 'prop.open:splice-box',
-        },
-        // Telling him to pull it again, after that, ends badly.
-        CUT_FEED_LIVE: {
-          to: 'lost',
-          environment: 'prop.spark:splice-box',
-          vfx: 'ElectricalArcVFX',
-        },
-      },
-      // No spark on this path. Firing the arc cue whenever the parser missed meant every
-      // typo threw another flash off the bracket Tomas is holding onto, halfway up a mast,
-      // with no consequence and no way out - punishment for the game's failure, not his.
-      onUnrecognised: { to: 'arc' },
-    },
-
-    {
       /**
-       * §155: a lost request, not a game over. Nobody is hurt - §93 keeps threat
-       * non-graphic - but the beacon is dark, Tomas is off the mast, and OMNISCIENT_ has
-       * to live with having said it twice.
+       * Same rule as Mirela's connector: CUT_FEED_LIVE is proposed for confirmation
+       * before it ever fires, so by the time this beat runs the player has been asked
+       * whether they mean to pull it apart while there is current in it, and has said
+       * yes. That confirmation IS the second chance - see the arc beat in mission-01 for
+       * the full reasoning. Both missions have to follow the same rule or it is a quirk
+       * rather than something the player can learn.
        */
-      id: 'lost',
+      id: 'arc',
       tempo: Tempo.Respond,
       say:
-        'No. No, I am not doing that again - look at it. I am coming down. ' +
-        'The harbour master can put a lamp on the wall tonight and I will find someone in ' +
-        'the morning who knows what they are talking about.',
+        'It flashed - the whole bracket lit up and I have let go of it. ' +
+        'There was current in that. You asked me and I said yes, and there was current in it. ' +
+        'I am coming down. The harbour master can put a lamp on the wall tonight.',
       on: {},
       failure: {
         summary:
-          'You told Tomas to pull a live feed apart twice. He stopped trusting you before it '
-          + 'could hurt him. The beacon is still dark.',
+          'You told Tomas to pull a shared cable apart while there was still current in it. '
+          + 'It flashed in his hands. He came down off the mast, and the harbour light is '
+          + 'still going out.',
         lesson:
-          'Two things sharing one cable have to be separated with a proper box, not pulled apart '
-          + 'while there is current in them.',
+          'Two things sharing one cable have to be separated with a proper box, not pulled '
+          + 'apart while there is current in them.',
         cooldownSeconds: 90,
       },
     },

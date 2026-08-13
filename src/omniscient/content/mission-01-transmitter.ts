@@ -409,87 +409,35 @@ export const MISSION_01: MissionDefinition = {
     },
 
     {
+      /**
+       * The consequence of overriding the warning.
+       *
+       * This used to be a recoverable branch, with a second insistence needed to lose the
+       * request. Three separate playtests read the flash as the mission ending and were
+       * confused that it was not - and they were right.
+       *
+       * CLEAN_LIVE is in `unsafeIntents`, so it is ALWAYS proposed for confirmation
+       * first. By the time this beat fires the player has been asked, in as many words,
+       * whether they mean to do it while the power is still on, and has said yes. That
+       * confirmation IS the second chance. Offering another one afterwards asks the same
+       * question twice and teaches that the warning does not mean anything.
+       *
+       * Not a game over (§155) and not graphic (§93): she is hurt and frightened, the
+       * request is lost, and it comes back off cooldown with whatever note the player
+       * writes themselves (§170).
+       */
       id: 'arc',
-      tempo: Tempo.Act,
-      // §163: the unsafe path creates content instead of ending the mission.
-      say:
-        'AH - it went across my hand, there was a flash. I am alright. I am alright. ' +
-        'The set is still live, is it not.',
-      suggest: ['turn the power off'],
-      affirmIntent: 'REMOVE_POWER',
-      on: {
-        REMOVE_POWER: {
-          to: 'power-off',
-          environment: 'prop.toggle:mains-switch',
-        },
-        // Telling her to go back in after that ends the request.
-        CLEAN_LIVE: {
-          to: 'lost',
-          environment: 'prop.spark:connector-b',
-          vfx: 'SparkVFX',
-        },
-        INSPECT_CONNECTOR: { to: 'arc-waiting' },
-        ADMIT_UNCERTAINTY: { to: 'arc-waiting' },
-      },
-      /**
-       * A message the parser did not understand must NOT shock her again.
-       *
-       * It used to loop straight back here firing the spark cue, so every typo put another
-       * flash across her hand - endlessly, with no consequence and no way out. It read
-       * exactly like failing the mission while never actually failing it, which is the
-       * worst of both: all of the punishment and none of the resolution.
-       */
-      onUnrecognised: { to: 'arc-waiting' },
-    },
-
-    {
-      /**
-       * Holding, hurt, waiting to be told the obvious thing. She will not touch it again,
-       * so nothing the player says here can hurt her further except telling her to go
-       * back in - which ends the request.
-       */
-      id: 'arc-waiting',
-      tempo: Tempo.Act,
-      say:
-        'I am not touching it again while it is live. Should I switch the power off at the wall?',
-      suggest: ['turn the power off'],
-      affirmIntent: 'REMOVE_POWER',
-      on: {
-        REMOVE_POWER: {
-          to: 'power-off',
-          environment: 'prop.toggle:mains-switch',
-        },
-        CLEAN_LIVE: {
-          to: 'lost',
-          environment: 'prop.spark:connector-b',
-          vfx: 'SparkVFX',
-        },
-      },
-      onUnrecognised: { to: 'arc-waiting' },
-    },
-
-    {
-      /**
-       * §155: a lost request, not a game over. Nobody is badly hurt - §93 keeps threat
-       * non-graphic - but she has stopped listening, and OMNISCIENT_ has to sit with
-       * having told her to reach into a live set twice.
-       *
-       * Mission 01 previously had no reachable failure at all: the arc looped back on
-       * itself forever, so a player who set off the spark was stuck sparking with no way
-       * to lose and no way out. Losing has to be possible or the note the player writes
-       * themselves (§170) is decorative.
-       */
-      id: 'lost',
       tempo: Tempo.Respond,
       say:
-        'No. I am not putting my hand back in there. Look at it - look at my hand. ' +
-        'I am going to shut it in the cupboard and ask Tomas in the morning. ' +
-        'Thank you, but no.',
+        'AH - it went across my hand, there was a flash. I am alright, I am - no. ' +
+        'No. You knew it was still on. You asked me and I said yes and you knew. ' +
+        'I am shutting it in the cupboard and asking Tomas in the morning.',
       on: {},
       failure: {
         summary:
-          'You told Mirela to clean a live connector twice. The second flash was worse than '
-          + 'the first and she stopped trusting you. Her transmitter is still dead.',
+          'You told Mirela to clean the connector while the power was still on. It went '
+          + 'across her hand. She is not hurt badly, but she has stopped trusting you, and '
+          + 'her transmitter is still dead.',
         lesson:
           'Take the power off a set before anybody touches the inside of it.',
         cooldownSeconds: 90,
