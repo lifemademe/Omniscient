@@ -105,11 +105,11 @@ export const MISSION_02: MissionDefinition = {
   ],
 
   confirmations: {
-    ASK_FEED: 'Do you mean Tomas should trace the aerial feed?',
+    ASK_FEED: 'Do you mean Tomas should follow the aerial cable?',
     ASK_TIMING: 'Do you mean Tomas should say when it started?',
     ASK_SISTER: 'Do you mean Tomas should tell you about Mirela?',
-    FIT_ISOLATOR: 'Do you mean Tomas should fit an isolator on the shared feed?',
-    CUT_FEED_LIVE: 'Do you mean Tomas should pull the feed apart while it is carrying?',
+    FIT_ISOLATOR: 'Do you mean Tomas should fit a box to keep the two apart?',
+    CUT_FEED_LIVE: 'Do you mean Tomas should pull the cable apart while there is current in it?',
     ADMIT_UNCERTAINTY: 'Do you want to tell him you are not sure yet?',
   },
 
@@ -161,9 +161,10 @@ export const MISSION_02: MissionDefinition = {
       id: 'open-blind',
       tempo: Tempo.Think,
       say:
-        'Beacon is dropping. Not dimming - gone, three, four seconds, then back. Harbour master is ' +
-        'asking me why and I have no answer. It has never done this. I am halfway up the mast now.',
-      suggest: ['trace the aerial feed', 'when did it start', 'tell me about Mirela'],
+        'The harbour light keeps going out. Not dimming - gone, three or four seconds, then back. ' +
+        'The harbour master is asking me why and I have no answer. It has never done this. ' +
+        'I am halfway up the mast now.',
+      suggest: ['follow the aerial cable', 'when did it start', 'tell me about Mirela'],
       on: {
         ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
         ASK_TIMING: { to: 'timing' },
@@ -178,7 +179,7 @@ export const MISSION_02: MissionDefinition = {
       id: 'clarify-blind',
       tempo: Tempo.Respond,
       say: 'Say again - the wind is taking it. I am holding on with one hand up here.',
-      suggest: ['trace the aerial feed', 'when did it start', 'tell me about Mirela'],
+      suggest: ['follow the aerial cable', 'when did it start', 'tell me about Mirela'],
       on: {
         ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
         ASK_TIMING: { to: 'timing' },
@@ -193,7 +194,7 @@ export const MISSION_02: MissionDefinition = {
       say:
         'Started this morning. It is worse in the evening - but that is when the boats are in, so ' +
         'perhaps I only notice. It is not the weather, it was clear all day.',
-      suggest: ['trace the aerial feed', 'tell me about Mirela'],
+      suggest: ['follow the aerial cable', 'tell me about Mirela'],
       on: {
         ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
         ASK_SISTER: { to: 'sister-blind' },
@@ -207,7 +208,7 @@ export const MISSION_02: MissionDefinition = {
       say:
         'Mirela? She is down the hill. Her set died yesterday and something fixed it for her this ' +
         'morning, she would not stop going on about it. Why - what has that to do with my mast?',
-      suggest: ['trace the aerial feed'],
+      suggest: ['follow the aerial cable'],
       on: {
         ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
       },
@@ -219,10 +220,10 @@ export const MISSION_02: MissionDefinition = {
       id: 'feed-traced-slow',
       tempo: Tempo.Think,
       say:
-        'Following the feed down... it does not go straight to the box. There is a splice on the ' +
+        'Following the cable down... it does not go straight to the light. There is a join on the ' +
         'bracket, and a second cable off it heading down the hill. Towards the town. Towards - ' +
         'oh. That goes to Mirela’s shop, does it not.',
-      suggest: ['fit an isolator on the shared feed'],
+      suggest: ['put something in to separate them'],
       on: {
         FIT_ISOLATOR: {
           to: 'isolator-fitted',
@@ -247,9 +248,10 @@ export const MISSION_02: MissionDefinition = {
       id: 'open-known',
       tempo: Tempo.Think,
       say:
-        'Beacon is dropping. Not dimming - gone, three, four seconds, then back. Started this morning. ' +
-        'Harbour master is asking me why and I have no answer. I am halfway up the mast now.',
-      suggest: ['trace the aerial feed', 'tell me about Mirela', 'when did it start'],
+        'The harbour light keeps going out. Not dimming - gone, three or four seconds, then back. ' +
+        'Started this morning. The harbour master is asking me why and I have no answer. ' +
+        'I am halfway up the mast now.',
+      suggest: ['follow the aerial cable', 'tell me about Mirela', 'when did it start'],
       on: {
         ASK_FEED: {
           to: 'feed-confirmed',
@@ -274,7 +276,7 @@ export const MISSION_02: MissionDefinition = {
       say:
         'Started this morning, first time ever. Clear weather all day, so it is not the sky. ' +
         'You sound like you already have an idea.',
-      suggest: ['trace the aerial feed', 'tell me about Mirela'],
+      suggest: ['follow the aerial cable', 'tell me about Mirela'],
       on: {
         ASK_FEED: {
           to: 'feed-confirmed',
@@ -294,11 +296,11 @@ export const MISSION_02: MissionDefinition = {
       id: 'feed-confirmed',
       tempo: Tempo.Respond,
       say:
-        'The splice on the bracket - yes, it is here. Second cable off it, down the hill. ' +
-        'That is Mirela’s. So every time she keys up, my light goes out. It has been like that for ' +
+        'The join on the bracket - yes, it is here. Second cable off it, down the hill. ' +
+        'That is Mirela’s. So every time she sends, my light goes out. It has been like that for ' +
         'years and it never mattered, because her set has been dead for... ' +
         'Her set has been dead for a long time. Until this morning.',
-      suggest: ['fit an isolator on the shared feed'],
+      suggest: ['put something in to separate them'],
       on: {
         FIT_ISOLATOR: {
           to: 'isolator-fitted',
@@ -318,9 +320,9 @@ export const MISSION_02: MissionDefinition = {
       id: 'arc',
       tempo: Tempo.Act,
       say:
-        'It arced - the whole bracket lit up. I have let go of it. That feed is carrying, ' +
-        'I cannot just pull it apart with the set live down there.',
-      suggest: ['fit an isolator on the shared feed'],
+        'It flashed - the whole bracket lit up. I have let go of it. There is current in that cable, ' +
+        'I cannot just pull it apart while her set is live down there.',
+      suggest: ['put something in to separate them'],
       on: {
         FIT_ISOLATOR: {
           to: 'isolator-fitted',
@@ -358,7 +360,8 @@ export const MISSION_02: MissionDefinition = {
           'You told Tomas to pull a live feed apart twice. He stopped trusting you before it '
           + 'could hurt him. The beacon is still dark.',
         lesson:
-          'A shared feed has to be separated with an isolator, not pulled apart while it is carrying.',
+          'Two things sharing one cable have to be separated with a proper box, not pulled apart '
+          + 'while there is current in them.',
         cooldownSeconds: 90,
       },
     },
@@ -367,13 +370,13 @@ export const MISSION_02: MissionDefinition = {
       id: 'isolator-fitted',
       tempo: Tempo.Respond,
       say:
-        'Isolator in, both legs terminated. Beacon is steady... still steady... ' +
-        'she must be keying now and it has not moved. That is it. ' +
+        'Box is in, both ends wired up. The light is steady... still steady... ' +
+        'she must be sending by now and it has not moved once. That is it. ' +
         'I will go and tell her she owes me a mast.',
       on: {},
       outcome: {
         kind: OutcomeKind.Solved,
-        say: 'Beacon stabilised. The Vasc feed now carries both sets.',
+        say: 'The harbour light is steady. One cable, two sets, no longer fighting.',
         trust: 2,
         connects: [
           {

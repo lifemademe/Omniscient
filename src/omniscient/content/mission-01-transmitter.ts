@@ -92,9 +92,9 @@ export const MISSION_01: MissionDefinition = {
     },
     {
       id: 'hint-aerial',
-      summary: 'The aerial lead leaves the building',
+      summary: 'The aerial wire leaves the building',
       detail:
-        'The lead does not stop in this room. It goes out through the wall and keeps '
+        'The wire does not stop in this room. It goes out through the wall and keeps '
         + 'going, so this set is not the only thing using it.',
       keywords: ['aerial'],
       cue: 'camera.push-in:transmitter',
@@ -115,12 +115,12 @@ export const MISSION_01: MissionDefinition = {
   confirmations: {
     INSPECT_UNIT: 'Do you mean Mirela should describe the set itself?',
     INSPECT_CONNECTOR: 'Do you mean Mirela should look at the connectors on the back?',
-    REMOVE_POWER: 'Do you mean Mirela should take the power off?',
-    CLEAN_CONNECTOR: 'Do you mean Mirela should clean the corrosion off the pins?',
-    CLEAN_LIVE: 'Do you mean Mirela should clean it now, with the set still live?',
-    ASK_AERIAL: 'Do you mean Mirela should say where the aerial lead goes?',
+    REMOVE_POWER: 'Do you mean Mirela should switch the power off at the wall?',
+    CLEAN_CONNECTOR: 'Do you mean Mirela should clean the green crust off the pins?',
+    CLEAN_LIVE: 'Do you mean Mirela should clean it now, while the power is still on?',
+    ASK_AERIAL: 'Do you mean Mirela should say where the aerial wire goes?',
     ASK_HISTORY: 'Do you mean Mirela should say what happened to it?',
-    TEST_TRANSMIT: 'Do you mean Mirela should power it up and try transmitting?',
+    TEST_TRANSMIT: 'Do you mean Mirela should switch it on and see if it works?',
     ADMIT_UNCERTAINTY: 'Do you want to tell her you are not sure yet?',
   },
 
@@ -152,7 +152,7 @@ export const MISSION_01: MissionDefinition = {
        *
        * Identical to CLEAN_CONNECTOR by design. Safety is enforced by the beat graph -
        * only this intent is reachable while the set is live, only CLEAN_CONNECTOR once
-       * the mains are off - not by keyword exclusion, which would misfire on ordinary
+       * the power is off - not by keyword exclusion, which would misfire on ordinary
        * phrasings like "clean the corrosion off".
        */
       id: 'CLEAN_LIVE',
@@ -197,8 +197,9 @@ export const MISSION_01: MissionDefinition = {
       id: 'open',
       tempo: Tempo.Think,
       say:
-        'It worked yesterday. I keyed it this morning and there is nothing - no carrier, no hiss, ' +
-        'nothing. The lamp comes on, so it is getting power. I have the back off already.',
+        'It worked yesterday. I switched it on this morning and got nothing at all - no sound, ' +
+        'not even a hiss. The lamp on the front still comes on, so it is getting power. ' +
+        'I have the back off already.',
       suggest: [
         'look at the back of the set',
         'what happened to it recently',
@@ -254,7 +255,7 @@ export const MISSION_01: MissionDefinition = {
       // §162: admitting uncertainty is a legitimate move, and the contact rewards it.
       say:
         'That is alright. Honestly it is more than the last one told me. Where do you want me to start - ' +
-        'the front of the set, or round the back where the leads go?',
+        'the front of the set, or round the back where the wires go?',
       suggest: ['look at the back of the set', 'describe the set to me', 'what happened to it recently'],
       on: {
         INSPECT_UNIT: { to: 'unit-overview', environment: 'camera.push-in:transmitter' },
@@ -272,9 +273,9 @@ export const MISSION_01: MissionDefinition = {
       // OMNISCIENT_ has heard it - regardless of how the player phrases what comes next.
       learn: [FACT_SHARED_ANTENNA_FEED],
       say:
-        'Kestrel-3, my father\'s. Lamp is lit, needle does not move when I key it. ' +
-        'The aerial lead runs out through the wall - it feeds the harbour beacon as well, ' +
-        'we split it years ago to save a mast.',
+        'It was my father\'s. The lamp is lit, but the needle does not move when I try to send. ' +
+        'The aerial wire runs out through the wall - it feeds the harbour light as well, ' +
+        'we split it years ago so we would not need two masts.',
       suggest: ['look at the connectors on the back', 'turn the power off', 'what happened to it recently'],
       on: {
         INSPECT_CONNECTOR: {
@@ -298,7 +299,7 @@ export const MISSION_01: MissionDefinition = {
       say:
         'Water? Every spring. The floor goes under about a hand\'s depth and I put everything on the ' +
         'high shelf. The set was on the bench though. It has been fine since, until today. ' +
-        'And the aerial is shared with the harbour beacon, if that matters - we split it years ago.',
+        'And the aerial is shared with the harbour light, if that matters - we split it years ago.',
       suggest: ['look at the connectors on the back', 'turn the power off'],
       on: {
         INSPECT_CONNECTOR: {
@@ -320,9 +321,9 @@ export const MISSION_01: MissionDefinition = {
       tempo: Tempo.Think,
       learn: [FACT_SHARED_ANTENNA_FEED],
       say:
-        'The lead? Out through the wall and up the hill. It feeds the harbour beacon too - ' +
+        'The wire? Out through the wall and up the hill. It feeds the harbour light too - ' +
         'we split it years ago so we would not need two masts. It has never given us trouble. ' +
-        'The fault is in here somewhere, I am sure of it.',
+        'Whatever is wrong is in here somewhere, I am sure of it.',
       suggest: ['look at the connectors on the back', 'turn the power off'],
       on: {
         INSPECT_CONNECTOR: {
@@ -340,8 +341,8 @@ export const MISSION_01: MissionDefinition = {
       id: 'connector-found',
       tempo: Tempo.Think,
       say:
-        'Round the back... ah. There is a green crust on the second connector, the fat one. ' +
-        'It is bridging across the pins. Do you want me to get at it?',
+        'Round the back... ah. There is green crust on the second connector, the fat one. ' +
+        'It is spread right across the pins. Do you want me to get at it?',
       suggest: [
         'turn the power off first',
         'clean the connector now',
@@ -371,7 +372,7 @@ export const MISSION_01: MissionDefinition = {
       id: 'power-off-early',
       tempo: Tempo.Think,
       say:
-        'Mains is off. Lamp is out. Right - what am I looking for?',
+        'Power is off at the wall. The lamp has gone out. Right - what am I looking for?',
       // Only the forward move. Offering "describe the set" here sent the player back to
       // unit-overview, which suggests history, which suggests taking the power off, which
       // lands here again - a three-beat loop a player could tap around indefinitely
@@ -393,7 +394,8 @@ export const MISSION_01: MissionDefinition = {
       id: 'connector-found-safe',
       tempo: Tempo.Think,
       say:
-        'Green crust on the second connector, bridging the pins. Set is dead cold, so I can touch it.',
+        'Green crust on the second connector, right across the pins. The set is dead cold now, ' +
+        'so I can touch it.',
       suggest: ['clean the green off the connector'],
       affirmIntent: 'CLEAN_CONNECTOR',
       on: {
@@ -449,8 +451,7 @@ export const MISSION_01: MissionDefinition = {
       id: 'arc-waiting',
       tempo: Tempo.Act,
       say:
-        'I am not putting my hand near it again while it is live. Tell me to pull the mains '
-        + 'and I will pull the mains.',
+        'I am not touching it again while it is live. Should I switch the power off at the wall?',
       suggest: ['turn the power off'],
       affirmIntent: 'REMOVE_POWER',
       on: {
@@ -498,7 +499,7 @@ export const MISSION_01: MissionDefinition = {
     {
       id: 'power-off',
       tempo: Tempo.Think,
-      say: 'Mains off. Lamp is out. It is cold now - I can get at that crust properly.',
+      say: 'Power is off at the wall, lamp has gone out. It is cold now - I can get at that crust properly.',
       suggest: ['clean the green off the connector'],
       affirmIntent: 'CLEAN_CONNECTOR',
       on: {
@@ -514,8 +515,8 @@ export const MISSION_01: MissionDefinition = {
       id: 'cleaned',
       tempo: Tempo.Respond,
       say:
-        'Scraped back to bright metal, both pins. Pushed it home. Shall I put the mains on and try her?',
-      suggest: ['power it up and try transmitting'],
+        'Scraped back to bright metal, both pins. Pushed it back on. Shall I switch it on and try?',
+      suggest: ['switch it on and try it'],
       affirmIntent: 'TEST_TRANSMIT',
       on: {
         TEST_TRANSMIT: {
@@ -531,7 +532,7 @@ export const MISSION_01: MissionDefinition = {
       id: 'solved',
       tempo: Tempo.Respond,
       say:
-        'There she is. Carrier, needle, the lot. That is my week back. ' +
+        'There it is. The needle is moving. That is my week back. ' +
         'Thank you - genuinely. I will tell Tomas you are worth talking to.',
       on: {},
       outcome: {

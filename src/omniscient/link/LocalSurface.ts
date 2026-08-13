@@ -459,9 +459,24 @@ export class LocalSurface implements InterventionSurface {
       chip.type = 'button';
       chip.className = 'omni-suggest__chip';
       chip.textContent = text;
-      chip.addEventListener('click', () => {
-        if (this.inputElement) this.inputElement.value = '';
+
+      /**
+       * Fires on mousedown, not click.
+       *
+       * present() runs synchronously inside this handler, and it rebuilds the chip row -
+       * so the button is removed from the document between the player pressing and
+       * releasing, the click event never completes, and the reply silently does not
+       * happen. mousedown lands before anything can be torn out from under it.
+       *
+       * The text is put in the input first so the player watches it appear there. These
+       * are meant to teach what typing looks like, not to be a menu that bypasses it.
+       */
+      chip.addEventListener('mousedown', (event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        if (this.inputElement) this.inputElement.value = text;
         this.dispatch({ kind: 'text', text });
+        if (this.inputElement) this.inputElement.value = '';
       });
       element.appendChild(chip);
     }

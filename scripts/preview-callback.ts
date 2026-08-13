@@ -501,9 +501,44 @@ const risky = rec2.latest()!;
 check('An unsafe instruction proposes a reading first', !!risky.confirming, '§157 made visible');
 check(
   'The proposal is phrased in fiction and names the risk',
-  risky.confirming?.question.includes('still live') === true,
+  /\bMirela\b/.test(risky.confirming?.question ?? '') &&
+    /power is still on|still live|while it is live/i.test(risky.confirming?.question ?? ''),
   risky.confirming?.question ?? ''
 );
+
+/**
+ * Plain language, enforced.
+ *
+ * A playtester asked why Mirela says "pull the mains" and how many people would know what
+ * mains means. Both fair. These are people in a coastal town describing their own broken
+ * things to a stranger - they do not talk like a service manual, and the player should
+ * never have to decode trade vocabulary to know what is being offered.
+ */
+const JARGON = /\b(mains|splice|isolator|carrier|keys? up|keyed)\b/i;
+[MISSION_01, MISSION_02].forEach((mission) => {
+  const offenders: string[] = [];
+  const inspect = (where: string, text: string | undefined): void => {
+    if (text && JARGON.test(text)) offenders.push(`${where}: "${JARGON.exec(text)?.[0]}"`);
+  };
+
+  for (const beat of mission.beats) {
+    inspect(beat.id, beat.say);
+    beat.suggest?.forEach((s) => inspect(`${beat.id} chip`, s));
+    inspect(`${beat.id} failure`, beat.failure?.summary);
+    inspect(`${beat.id} lesson`, beat.failure?.lesson);
+    inspect(`${beat.id} outcome`, beat.outcome?.say);
+  }
+  for (const hint of mission.hints ?? []) {
+    inspect(`${hint.id}`, `${hint.summary} ${hint.detail}`);
+  }
+  Object.entries(mission.confirmations ?? {}).forEach(([id, q]) => inspect(id, q));
+
+  check(
+    `${mission.id}: nothing the player reads uses trade jargon`,
+    offenders.length === 0,
+    offenders.length ? offenders.join(', ') : undefined
+  );
+});
 
 rec2.send({ kind: 'confirm', accepted: false });
 check('Declining does not act on it', !rec2.latest()!.confirming);
