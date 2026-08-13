@@ -25,7 +25,10 @@ import { KnowledgeTree } from './crt/KnowledgeTree.js';
 import { createCRTTerminal } from './geometry/hardware.js';
 import { createWorkstationRoom } from './geometry/room.js';
 import { KnowledgeStore } from './knowledge/KnowledgeStore.js';
+import { BroadcastTransport } from './link/BroadcastTransport.js';
 import { LocalSurface } from './link/LocalSurface.js';
+import { RemoteSurface } from './link/RemoteSurface.js';
+import { SurfaceGroup } from './link/SurfaceGroup.js';
 import { GlobeScreen } from './globe/GlobeScreen.js';
 import { Picker } from './input/Picker.js';
 import { MainMenu } from './menu/MainMenu.js';
@@ -122,6 +125,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private surface: CRTSurface | null = null;
   private tree: KnowledgeTree | null = null;
   private phone: LocalSurface | null = null;
+  /** The second-screen wire. Open whether or not anything is listening on it. */
+  private link: BroadcastTransport | null = null;
   private session: SessionController | null = null;
   private vfxNodes = new Map<string, ENGINE.VFXNode>();
 
@@ -503,9 +508,24 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
 
     this.phone = new LocalSurface(container);
-    await this.phone.attach();
 
-    this.session = new SessionController(this.phone, this.knowledge, {
+    /**
+     * §222: the conversation appears on the desktop AND on any paired second screen.
+     *
+     * Pairing adds a surface rather than moving one. If the phone were the only place the
+     * player could answer, losing it mid-request would strand them inside a conversation
+     * with no way out - and the desktop still has to show the transcript to anybody
+     * watching over their shoulder, which for a jam being judged is most of the point.
+     *
+     * The transport here reaches another window of the same origin and no further. That
+     * is the honest limit of what can be built without hosting: see BroadcastTransport.
+     */
+    this.link = new BroadcastTransport();
+    const remote = new RemoteSurface(this.link);
+    const surfaces = new SurfaceGroup([this.phone, remote]);
+    await surfaces.attach();
+
+    this.session = new SessionController(surfaces, this.knowledge, {
       onEnvironment: (cue) => this.applyEnvironmentCue(cue),
       onVfx: (effect) => this.fireVfx(effect),
       onKnowledgeGained: () => this.revealGrowth(),
@@ -816,6 +836,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.session?.end();
     this.phone?.detach();
     this.surface?.dispose();
+    this.link?.close();
+    this.link = null;
     this.session = null;
     this.phone = null;
     this.surface = null;

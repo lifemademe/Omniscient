@@ -7,6 +7,7 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { isPhoneRequested, PhoneClient } from './omniscient/link/PhoneClient.js';
 import { OmniscientRig } from './omniscient/OmniscientRig.js';
 
 @ENGINE.GameClass()
@@ -50,7 +51,27 @@ class MyGameMode extends ENGINE.GameMode {
 class MyGame extends ENGINE.BaseGameLoop {
 }
 
+/**
+ * Second-screen entry (§222).
+ *
+ * The same URL with `?surface=phone` becomes the intervention surface instead of the
+ * game - which is precisely what a scanned code would open. One bundle, one deploy, and
+ * the phone renders with the identical LocalSurface the desktop uses, so the two cannot
+ * drift apart.
+ *
+ * Returns true when it took over, so main() knows not to start a game loop on top of it.
+ */
+function startSecondScreen(container: HTMLElement): boolean {
+  if (!isPhoneRequested()) return false;
+
+  container.style.background = '#05100a';
+  void new PhoneClient().start(container);
+  return true;
+}
+
 export function main(container: HTMLElement, options?: Partial<ENGINE.BaseGameLoopOptions>): ENGINE.IGameLoop {
+  startSecondScreen(container);
+
   const mergedOptions: Partial<ENGINE.BaseGameLoopOptions> = {
     ...options,
     defaultGameModeClass: MyGameMode,
