@@ -20,6 +20,7 @@ import { GrowthStage } from '../src/omniscient/crt/KnowledgeTree.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
 import { resolveIntent } from '../src/omniscient/mission/intent.js';
 import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
+import { BootSequence } from '../src/omniscient/session/BootSequence.js';
 import { SessionController } from '../src/omniscient/session/SessionController.js';
 
 import type {
@@ -251,6 +252,54 @@ check(
   final.transcript.some((t) => t.source === 'omniscient') &&
     final.transcript.some((t) => t.source === 'contact')
 );
+
+// -- 7. Boot sequence (§7) ------------------------------------------------------------
+//
+// The opening runs on a timer, and entering play mode takes longer than the sequence
+// lasts - so it cannot be caught by screenshot. Verified here instead.
+
+console.log('\n=== BOOT SEQUENCE ===\n');
+
+const bootFrames: SurfaceState[] = [];
+const bootSurface: InterventionSurface = {
+  kind: 'local',
+  connected: true,
+  attach: async () => {},
+  detach: () => {},
+  present: (state) => bootFrames.push(state),
+  onMessage: () => () => {},
+};
+
+let bootCompleted = false;
+const bootSeq = new BootSequence(bootSurface, () => {
+  bootCompleted = true;
+});
+
+bootSeq.start();
+check('Presents immediately, before any line', bootFrames.length === 1);
+check('Input is dead during boot', !bootFrames[0].awaitingInput, 'nobody is on the line yet');
+
+// Advance in 1/60s steps over 12 seconds of wall clock.
+for (let i = 0; i < 720 && !bootSeq.isFinished; i++) {
+  bootSeq.update(1 / 60);
+}
+
+const bootFinal = bootFrames[bootFrames.length - 1];
+const bootLines = bootFinal.transcript.map((t) => t.body);
+bootLines.forEach((line) => console.log(`  ${line}`));
+
+check('Boot completes', bootSeq.isFinished);
+check('Completion hook fired - hands off to the first request', bootCompleted);
+check('Opens on the title', bootLines[0] === 'OMNISCIENT_');
+check(
+  'Ends on the first human request (§7)',
+  bootLines[bootLines.length - 1] === '1 human request detected'
+);
+check(
+  'Reports an empty memory at the start',
+  bootLines.some((l) => l.includes('memory') && l.includes('empty'))
+);
+check('Every line is a system line', bootFinal.transcript.every((t) => t.source === 'system'));
 
 // -- Report ---------------------------------------------------------------------------
 

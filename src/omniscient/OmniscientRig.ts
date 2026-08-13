@@ -21,6 +21,7 @@ import { KnowledgeTree } from './crt/KnowledgeTree.js';
 import { createCRTTerminal } from './geometry/hardware.js';
 import { KnowledgeStore } from './knowledge/KnowledgeStore.js';
 import { LocalSurface } from './link/LocalSurface.js';
+import { BootSequence } from './session/BootSequence.js';
 import { SessionController } from './session/SessionController.js';
 import { VFX_LIBRARY } from './vfx/library.js';
 import { buildContactScene } from './view/scenes.js';
@@ -33,9 +34,6 @@ const PLAYTHROUGH_SEED = 0x0c151e;
 
 /** Seconds to draw new growth in, pixel by pixel (§176). */
 const GROWTH_REVEAL_SECONDS = 1.8;
-
-/** Beat between a request resolving and the next signal arriving (§168: quiet matters). */
-const INTER_MISSION_PAUSE = 3.5;
 
 /** Scratch matrix for camera orientation. Reused to avoid per-frame allocation. */
 const CAMERA_MATRIX = new THREE.Matrix4();
@@ -51,6 +49,29 @@ interface QueuedRequest {
   contact: Contact;
 }
 
+/**
+ * Where the player is. §176's HOME LOOP: the machine is home, a request takes you into
+ * somebody's world, and resolving it brings you back to see what you learned.
+ */
+enum Phase {
+  Boot = 'boot',
+  Home = 'home',
+  Contact = 'contact',
+}
+
+/** Where the workstation sits, far from the dioramas so shots never overlap. */
+const WORKSTATION_ORIGIN = new THREE.Vector3(0, 0, -60);
+
+/** Framed on the CRT: this is the shot the player should want to screenshot (§129). */
+const HOME_SHOT: CameraShot = {
+  position: new THREE.Vector3(0.34, 0.72, -58.62),
+  target: new THREE.Vector3(0, 0.46, -59.6),
+  duration: 2.0,
+};
+
+/** Seconds spent at the machine after a request resolves, before the next signal. */
+const HOME_DWELL = 5.5;
+
 @ENGINE.GameClass()
 export class OmniscientRig extends ENGINE.SceneNode {
   private knowledge = new KnowledgeStore(PLAYTHROUGH_SEED);
@@ -63,6 +84,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private queue: QueuedRequest[] = [];
   private queueIndex = 0;
   private pauseRemaining = 0;
+
+  private phase: Phase = Phase.Boot;
+  private boot: BootSequence | null = null;
 
   /**
    * Every diorama, built once at construction and kept hidden until its request opens.
@@ -205,7 +229,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     const station = ENGINE.SceneNode.create({
       name: 'Workstation',
-      position: new THREE.Vector3(0, 0, -60),
+      position: WORKSTATION_ORIGIN.clone(),
     });
 
     station.add(
@@ -300,19 +324,37 @@ export class OmniscientRig extends ENGINE.SceneNode {
       onEnvironment: (cue) => this.applyEnvironmentCue(cue),
       onVfx: (effect) => this.fireVfx(effect),
       onKnowledgeGained: () => this.revealGrowth(),
-      onResolved: () => {
-        this.pauseRemaining = INTER_MISSION_PAUSE;
-      },
+      onResolved: () => this.returnHome(),
     });
 
-    this.openNextRequest();
+    // §7: open on the machine, cold, with nothing on the screen but a sprout.
+    this.phase = Phase.Boot;
+    this.cutTo(HOME_SHOT);
+    this.boot = new BootSequence(this.phone, () => this.openNextRequest());
+    this.boot.start();
+  }
+
+  /**
+   * §176 HOME LOOP: a request resolves, knowledge updates, and the player comes back to
+   * the machine to find something has grown. The growth reveal is already running by the
+   * time the camera arrives, so the branch draws itself while they watch.
+   */
+  private returnHome(): void {
+    this.phase = Phase.Home;
+    this.pauseRemaining = HOME_DWELL;
+    this.moveTo(HOME_SHOT, HOME_SHOT.duration ?? 2.0);
   }
 
   private openNextRequest(): void {
     const next = this.queue[this.queueIndex];
-    if (!next || !this.session) return;
+    if (!next || !this.session) {
+      // Nothing left. Stay at the machine - §168, the quiet is the ending.
+      this.phase = Phase.Home;
+      return;
+    }
     this.queueIndex += 1;
 
+    this.phase = Phase.Contact;
     this.mountScene(next.mission.sceneId);
     this.session.start(next.mission, next.contact);
   }
@@ -385,6 +427,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
   public override tickPrePhysics(deltaTime: number): void {
     super.tickPrePhysics(deltaTime);
     this.cameraTweener.update(deltaTime);
+    this.boot?.update(deltaTime);
     if (!this.tree) return;
 
     this.pulse = (this.pulse + deltaTime / 1.6) % 1;
@@ -397,10 +440,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.tree.draw(1, this.pulse);
     }
 
-    // §168: let the resolution land before the next signal arrives.
-    if (this.pauseRemaining > 0) {
+    // §168: let the resolution land at the machine before the next signal arrives.
+    if (this.phase === Phase.Home && this.pauseRemaining > 0) {
       this.pauseRemaining -= deltaTime;
-      if (this.pauseRemaining <= 0 && this.session?.isFinished) {
+      if (this.pauseRemaining <= 0) {
         this.openNextRequest();
       }
     }

@@ -16,6 +16,7 @@ import './omniscient/mission/intent.js';
 import './omniscient/mission/MissionRuntime.js';
 import './omniscient/mission/types.js';
 import './omniscient/OmniscientRig.js';
+import './omniscient/session/BootSequence.js';
 import './omniscient/session/SessionController.js';
 import './omniscient/vfx/library.js';
 import './omniscient/view/ContactScene.js';
