@@ -201,6 +201,20 @@ export const TERMINAL_CSS = `
   text-transform: uppercase;
   margin-bottom: 5px;
 }
+.omni-failure__lesson {
+  display: block;
+  margin-top: 7px;
+  padding-left: 8px;
+  border-left: 2px solid #c9a227;
+  color: #e0c265;
+}
+.omni-failure__prompt {
+  display: block;
+  margin-top: 8px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: #7a8f80;
+}
 .omni-terminal__foot {
   border-top: 1px solid #23422c;
   padding: 8px 10px 10px;
@@ -709,6 +723,22 @@ export class LocalSurface implements InterventionSurface {
       body.textContent = state.failure.summary;
 
       box.append(title, body);
+
+      // What would have worked. The player is about to be asked to write this down in
+      // their own words, and being asked to record a lesson nobody told them is a test.
+      if (state.failure.lesson) {
+        const lesson = document.createElement('span');
+        lesson.className = 'omni-failure__lesson';
+        lesson.textContent = state.failure.lesson;
+        box.appendChild(lesson);
+      }
+
+      const prompt = document.createElement('span');
+      prompt.className = 'omni-failure__prompt';
+      prompt.textContent =
+        'Write yourself a note below. It will be waiting for you when this request comes back.';
+      box.appendChild(prompt);
+
       this.extraElement.appendChild(box);
     }
   }

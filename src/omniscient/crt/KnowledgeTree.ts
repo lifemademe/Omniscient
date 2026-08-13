@@ -69,7 +69,10 @@ const STAGE_CONFIG: Record<
   GrowthStage,
   { depth: number; trunk: number; limb: number; spread: number }
 > = {
-  [GrowthStage.Sprout]: { depth: 1, trunk: 10, limb: 9, spread: 0.5 },
+  // Sprout is what a brand-new save shows on the title screen, so it has to read as a
+  // living thing rather than as a scratch on the tube - one fork and a pair of leaves,
+  // small on purpose, but unmistakably something that has started.
+  [GrowthStage.Sprout]: { depth: 2, trunk: 12, limb: 11, spread: 0.62 },
   [GrowthStage.Sapling]: { depth: 3, trunk: 15, limb: 15, spread: 0.58 },
   [GrowthStage.Branching]: { depth: 4, trunk: 18, limb: 20, spread: 0.64 },
   [GrowthStage.Interwoven]: { depth: 5, trunk: 21, limb: 23, spread: 0.7 },
@@ -89,6 +92,9 @@ const PALETTE = {
   bridge: '#c9a227',
   /** Non-Earth growth: cold, wrong, unexplained (§122 - no popup, let them notice). */
   alien: '#8f6bff',
+  /** The line the tree stands on. Dim enough to never compete with growth. */
+  ground: '#2a5636',
+  groundDim: '#1c3c26',
 };
 
 /**
@@ -280,6 +286,7 @@ export class KnowledgeTree {
     const visible = Math.floor(this.segments.length * Math.min(Math.max(reveal, 0), 1));
 
     this.surface.clear();
+    this.drawGroundline();
 
     // Trunk and main limbs glow; the fine outer twigs stay hard, so the halo reads as
     // depth in the canopy rather than fogging the whole tree into a green smear.
@@ -301,6 +308,26 @@ export class KnowledgeTree {
 
     this.surface.applyScanlines();
     this.surface.commit();
+  }
+
+  /**
+   * A dim line for the tree to stand on.
+   *
+   * The menu screen shows real progress, which means a new save legitimately shows almost
+   * nothing - and a sprout floating in the middle of an empty tube reads as a rendering
+   * fault rather than as a beginning. A groundline costs three pixels of height, gives
+   * the screen structure before anything has been learned, and makes the first branch
+   * land somewhere instead of just appearing.
+   */
+  private drawGroundline(): void {
+    const y = this.surface.height - 5;
+    const margin = Math.round(this.surface.width * 0.14);
+
+    this.surface.line(margin, y, this.surface.width - margin, y, PALETTE.ground);
+    // Broken second line under it, so the base has a little depth rather than one hard rule.
+    for (let x = margin + 4; x < this.surface.width - margin - 4; x += 7) {
+      this.surface.line(x, y + 2, x + 3, y + 2, PALETTE.groundDim);
+    }
   }
 
   /**

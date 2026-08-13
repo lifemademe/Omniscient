@@ -39,6 +39,11 @@ export interface SessionHooks {
   onResolved?: (outcome: MissionOutcome, calledBack: boolean) => void;
   /** Fired when the request is lost - the globe puts it on cooldown (§31). */
   onFailed?: (failure: MissionFailure) => void;
+  /**
+   * Fired once the player has written their note about a lost request.
+   * This, not the loss itself, is when the Contact View is finished with.
+   */
+  onNoteRecorded?: () => void;
   /** Fired when the player steps back out to the globe. */
   onLeave?: () => void;
 }
@@ -149,7 +154,15 @@ export class SessionController {
     this.present();
   }
 
-  /** §170: the player writes themselves a note after losing a request. */
+  /**
+   * §170: the player writes themselves a note after losing a request.
+   *
+   * Writing it is the last thing that happens here. Once it is recorded the request is
+   * genuinely over, so the session hands back to the globe - where the contact is now red
+   * and counting down. Previously the rig started that return the instant the request was
+   * lost, which pulled the player out of the Contact View before they could write
+   * anything, and the note they were being invited to write was unreachable.
+   */
   private writeNote(text: string): void {
     if (!this.runtime || !this.contact || !text.trim()) return;
 
@@ -157,6 +170,7 @@ export class SessionController {
     this.push({ source: 'system', name: 'OMNISCIENT_', body: `recorded: ${text.trim()}` });
     this.failed = null;
     this.present();
+    this.hooks.onNoteRecorded?.();
   }
 
   private apply(step: MissionStep): void {
@@ -249,7 +263,9 @@ export class SessionController {
           ? undefined
           : this.runtime.getCurrentBeat().suggest,
       confirming: this.confirming ?? undefined,
-      failure: this.failed ? { summary: this.failed.summary } : undefined,
+      failure: this.failed
+        ? { summary: this.failed.summary, lesson: this.failed.lesson }
+        : undefined,
     });
   }
 

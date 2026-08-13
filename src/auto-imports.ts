@@ -11,7 +11,6 @@ import './omniscient/crt/CRTSurface.js';
 import './omniscient/crt/GlobeView.js';
 import './omniscient/crt/KnowledgeTree.js';
 import './omniscient/crt/PixelSurface.js';
-import './omniscient/crt/TreeAttract.js';
 import './omniscient/geometry/character.js';
 import './omniscient/geometry/foliage.js';
 import './omniscient/geometry/hardware.js';

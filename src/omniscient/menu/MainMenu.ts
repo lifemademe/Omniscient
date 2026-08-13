@@ -93,7 +93,7 @@ const PITCH = 0.345;
  * rest, and having them stand in front of the machine rather than behind it is the more
  * honest read anyway - these are the controls, not scenery.
  */
-const STACK_ORIGIN = new THREE.Vector3(-1.72, 1.95, -0.35);
+const STACK_ORIGIN = new THREE.Vector3(-1.6, 1.95, -0.35);
 /** How far a hovered plate pushes out toward the player. */
 const HOVER_PUSH = 0.045;
 

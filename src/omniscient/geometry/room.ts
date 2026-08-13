@@ -101,6 +101,12 @@ function createWindow(): RoomPart[] {
   return parts;
 }
 
+/**
+ * The pinboard: above the machine, in the gap between the menu stack and the window.
+ * Narrow, because that gap is narrow - at full width it ran over the window's left jamb.
+ */
+const BOARD = { x: -0.34, y: 1.82, width: 1.36, height: 0.88 } as const;
+
 /** Where the plant sits: desk right, under the window, out of the machine's way. */
 const PLANT = { x: 1.28, y: 0, z: -0.66 } as const;
 
@@ -358,25 +364,77 @@ export function createWorkstationRoom(): RoomPart[] {
     material: 'dark',
   });
 
-  // Notes pinned to the wall, clustered just above the desk where somebody would
-  // actually put them - scattered across the whole wall they read as floating paper.
+  /**
+   * A pinboard, above and behind the machine.
+   *
+   * The notes used to be pinned straight onto the wall at desk height, which put them
+   * behind the CRT and gave them nothing to read against - five pale rectangles on a pale
+   * wall, in shadow, indistinguishable from smudges. A dark board fixes both problems at
+   * once: it gives the paper the contrast it needs to register at all, and it fills the
+   * empty upper middle of the frame, which was the last large area of the home shot doing
+   * no work.
+   */
+  const board = new THREE.BoxGeometry(BOARD.width, BOARD.height, 0.03);
+  board.translate(BOARD.x, BOARD.y, -2.0);
+  parts.push({ name: 'Pinboard', geometry: board, material: 'dark' });
+
+  const boardFrame: THREE.BufferGeometry[] = [];
+  const railW = BOARD.width + 0.07;
+  const halfH = BOARD.height / 2;
+  const halfW = BOARD.width / 2;
+  for (const [w, h, dx, dy] of [
+    [railW, 0.05, 0, halfH],
+    [railW, 0.05, 0, -halfH],
+    [0.05, BOARD.height, -halfW, 0],
+    [0.05, BOARD.height, halfW, 0],
+  ] as const) {
+    const rail = new THREE.BoxGeometry(w, h, 0.045);
+    rail.translate(BOARD.x + dx, BOARD.y + dy, -1.995);
+    boardFrame.push(rail);
+  }
+  parts.push({
+    name: 'PinboardFrame',
+    geometry: mergeGeometries(boardFrame, false) ?? boardFrame[0],
+    material: 'timber',
+  });
+
+  // Notes on it. Overlapping and off-square, layered rather than laid out on a grid -
+  // this is a board somebody has been adding to, not a display.
+  // Hand-placed rather than gridded. Four across two rows came out looking like a
+  // spreadsheet; these overlap, sit at different heights and vary in size, which is what a
+  // board somebody keeps adding to actually looks like.
   const notes: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < 5; i++) {
-    const note = new THREE.BoxGeometry(range(rng, 0.15, 0.22), range(rng, 0.13, 0.19), 0.005);
-    note.rotateZ(jitter(rng, 0.16));
+  const layout: ReadonlyArray<readonly [number, number, number, number]> = [
+    [-0.44, 0.19, 0.28, 0.24],
+    [-0.14, 0.23, 0.22, 0.17],
+    [0.16, 0.17, 0.26, 0.26],
+    [0.42, 0.21, 0.18, 0.2],
+    [-0.36, -0.19, 0.24, 0.22],
+    [-0.02, -0.24, 0.3, 0.19],
+    [0.34, -0.17, 0.2, 0.25],
+  ];
+  layout.forEach(([dx, dy, w, h], i) => {
+    const note = new THREE.BoxGeometry(w, h, 0.006);
+    note.rotateZ(jitter(rng, 0.13));
     note.translate(
-      -0.72 + i * 0.36 + jitter(rng, 0.05),
-      range(rng, 0.62, 1.02),
-      // Flush against the wall face at z = -2.1 + 0.08.
-      -2.015
+      BOARD.x + dx + jitter(rng, 0.02),
+      BOARD.y + dy + jitter(rng, 0.03),
+      -1.978 + i * 0.001
     );
     notes.push(note);
-  }
+  });
   parts.push({
     name: 'Notes',
     geometry: mergeGeometries(notes, false) ?? notes[0],
     material: 'paper',
   });
+
+  // A length of string with two things hanging off it, across the lower half. One
+  // diagonal breaks the grid of rectangles and says this board has been lived with.
+  const string = new THREE.BoxGeometry(BOARD.width - 0.06, 0.008, 0.008);
+  string.rotateZ(0.035);
+  string.translate(BOARD.x, BOARD.y - 0.14, -1.972);
+  parts.push({ name: 'BoardString', geometry: string, material: 'metal' });
 
   /**
    * A shelf on the side wall, with things on it.

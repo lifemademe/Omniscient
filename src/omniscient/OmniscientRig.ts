@@ -22,7 +22,6 @@ import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
 import { GlobeView, SignalState } from './crt/GlobeView.js';
 import { KnowledgeTree } from './crt/KnowledgeTree.js';
-import { TreeAttract } from './crt/TreeAttract.js';
 import { createCRTTerminal } from './geometry/hardware.js';
 import { createWorkstationRoom } from './geometry/room.js';
 import { KnowledgeStore } from './knowledge/KnowledgeStore.js';
@@ -96,8 +95,12 @@ const HOME_SHOT: CameraShot = {
   // The target sits between the stack and the window rather than on the stack, because
   // the shot has to hold both: aiming at the menu alone swung the machine and the window
   // out to the right and pushed the lower plates off the left edge.
-  position: new THREE.Vector3(1.28, 1.36, -56.95),
-  target: new THREE.Vector3(-0.28, 0.95, -60.15),
+  // Pulled back a touch from the tightest framing on purpose. The camera uses a vertical
+  // FOV, so a narrower window crops the sides - and the menu plates live at the left
+  // extreme, which makes them the first thing to be cut. The margin is cheap insurance
+  // against the player's window not being the shape mine is.
+  position: new THREE.Vector3(1.3, 1.38, -56.7),
+  target: new THREE.Vector3(-0.3, 0.95, -60.15),
   duration: 2.0,
 };
 
@@ -116,8 +119,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private knowledge = new KnowledgeStore(PLAYTHROUGH_SEED);
   private surface: CRTSurface | null = null;
   private tree: KnowledgeTree | null = null;
-  /** The title screen's looping growth arc. Only drawn while in Phase.Menu. */
-  private attract: TreeAttract | null = null;
   private phone: LocalSurface | null = null;
   private session: SessionController | null = null;
   private vfxNodes = new Map<string, ENGINE.VFXNode>();
@@ -297,10 +298,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
     station.add(meshOf('Details', parts.details, MAT.metal));
 
     this.surface = new CRTSurface({ width: 192, height: 144 });
+    /**
+     * The menu screen shows the REAL knowledge state, at every stage including an empty
+     * one. A looping attract sequence was tried here and withdrawn: showing a full canopy
+     * on a save that has learned nothing tells the player the screen is decoration, and
+     * the screen is the entire premise - it is the picture of what they have made of
+     * OMNISCIENT_ so far, and it has to be earned to mean anything.
+     */
     this.tree = new KnowledgeTree(this.surface, this.knowledge.toTreeState());
-    this.attract = new TreeAttract(this.surface, PLAYTHROUGH_SEED);
     this.globe = new GlobeView(this.surface, this.signals);
-    this.attract.advance(0, 0);
+    this.tree.draw(1);
 
     station.add(
       ENGINE.MeshNode.create({ name: 'Screen', geometry: parts.screen, material: this.surface.material })
@@ -501,6 +508,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       onKnowledgeGained: () => this.revealGrowth(),
       onResolved: () => this.returnHome(),
       onFailed: (failure) => this.onRequestLost(failure),
+      onNoteRecorded: () => this.closeLostRequest(),
       onLeave: () => this.leaveContact(),
     });
 
@@ -638,8 +646,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // Back in the queue: when the cooldown lapses it can be attempted again.
     this.queueIndex -= 1;
 
-    this.pauseRemaining = HOME_DWELL;
-    this.phase = Phase.Home;
+    // Deliberately NOT leaving the Contact View here. The globe is already updating
+    // behind us, but the player is still looking at what went wrong and is being asked to
+    // write themselves a note about it - starting the return now took the Contact View
+    // away mid-sentence and made §170's note unreachable. The exit is onNoteRecorded.
+  }
+
+  /**
+   * The player has written their note. The request is finished with, so go back out to
+   * the globe - where the contact they just lost is now red and counting down.
+   */
+  private closeLostRequest(): void {
+    if (this.phase !== Phase.Contact) return;
+
+    this.session?.end();
+    this.scene?.deactivate();
+    this.scene = null;
+    this.showGlobe();
   }
 
   private returnHome(): void {
@@ -747,11 +770,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (this.screen === Screen.Globe) {
       this.globe?.advance(deltaTime);
       this.globe?.draw(this.pulse);
-    } else if (this.phase === Phase.Menu) {
-      // The title screen runs the whole growth arc on a loop rather than showing the
-      // save state - see TreeAttract. Nothing has been learned yet, so there is nothing
-      // honest to display, and a blank screen is the worst possible first impression.
-      this.attract?.advance(deltaTime, this.pulse);
     } else if (this.revealProgress < 1) {
       this.revealProgress = Math.min(this.revealProgress + deltaTime / GROWTH_REVEAL_SECONDS, 1);
       const reveal = this.revealFrom + (1 - this.revealFrom) * this.revealProgress;

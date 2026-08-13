@@ -354,6 +354,8 @@ export const MISSION_02: MissionDefinition = {
         summary:
           'You told Tomas to pull a live feed apart twice. He stopped trusting you before it '
           + 'could hurt him. The beacon is still dark.',
+        lesson:
+          'A shared feed has to be separated with an isolator, not pulled apart while it is carrying.',
         cooldownSeconds: 90,
       },
     },

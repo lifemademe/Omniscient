@@ -152,6 +152,16 @@ export interface Beat {
 export interface MissionFailure {
   /** What actually happened, stated without blame. */
   summary: string;
+  /**
+   * The thing to do differently, in one plain sentence.
+   *
+   * Separate from `summary` because they do different jobs: the summary says what
+   * happened, the lesson says what would have worked. Without it the player is told they
+   * failed and then asked to write down why, which is a test rather than a lesson - the
+   * point of §170 is that they leave knowing something, and the note they write is how
+   * they put it in their own words, not how they discover it.
+   */
+  lesson?: string;
   /** Seconds before the request can be attempted again. */
   cooldownSeconds: number;
 }

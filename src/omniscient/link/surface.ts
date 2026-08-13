@@ -85,7 +85,7 @@ export interface SurfaceState {
   /** When set, the surface asks yes/no instead of accepting free text. */
   confirming?: Confirmation;
   /** When set, the request has been lost and the player may write themselves a note. */
-  failure?: { summary: string };
+  failure?: { summary: string; lesson?: string };
 }
 
 /** §160: gestures compress an instruction into an immediate machine command. */

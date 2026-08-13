@@ -94,6 +94,53 @@ for (const mission of [MISSION_01, MISSION_02]) {
   }
 }
 
+console.log('\n=== LOSING MIRELA ===\n');
+
+/**
+ * The whole shape of a loss, in the order the player experiences it.
+ *
+ * Mission 01 had no reachable failure at all - the arc looped back on itself forever, so
+ * a player who set off the spark could neither recover nor lose, and the note they were
+ * being invited to write was unreachable. This walks the arc through to the loss and out
+ * the other side.
+ */
+{
+  const store = new KnowledgeStore(SEED);
+  const losing = new MissionRuntime(MISSION_01, store);
+  losing.open();
+  losing.respond('look at the connectors on the back');
+
+  const first = losing.respond('clean the connector now');
+  check('Cleaning a live connector proposes the risk first', first.confirming !== undefined);
+  const sparked = losing.confirm(true);
+  check('Taking that answer sets off the spark', losing.getCurrentBeat().id === 'arc');
+  check('The spark fires an effect', sparked.vfx !== undefined, sparked.vfx);
+  check('The request is NOT over after one spark', !losing.isFinished, 'it is recoverable');
+
+  const again = losing.respond('clean the connector now');
+  const lost = again.confirming ? losing.confirm(true) : again;
+  check('Insisting a second time loses the request', losing.isFinished);
+  check('The loss is reported', lost.failure !== undefined, lost.failure?.summary);
+  check(
+    'The loss says what would have worked',
+    (lost.failure?.lesson?.length ?? 0) > 0,
+    lost.failure?.lesson
+  );
+  check(
+    'It puts the contact on a countdown',
+    (lost.failure?.cooldownSeconds ?? 0) > 0,
+    `${lost.failure?.cooldownSeconds}s`
+  );
+
+  // And the note the player writes has to survive to the retry.
+  store.writeNote(MISSION_01.id, MIRELA.id, 'turn the power off before she touches it');
+  const records = store.getRelevantRecords(MISSION_01.id, MIRELA.id, []);
+  check(
+    'The note is kept, marked as the player\'s own',
+    records.some((r) => r.playerWritten && r.label.includes('power off'))
+  );
+}
+
 console.log(
   failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} CHECK(S) FAILED\n`
 );

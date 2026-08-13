@@ -414,15 +414,50 @@ export const MISSION_01: MissionDefinition = {
         'AH - it went across my hand, there was a flash. I am alright. I am alright. ' +
         'The set is still live, is it not.',
       suggest: ['turn the power off'],
+      affirmIntent: 'REMOVE_POWER',
       on: {
         REMOVE_POWER: {
           to: 'power-off',
           environment: 'prop.toggle:mains-switch',
         },
+        // Telling her to go back in after that ends the request.
+        CLEAN_LIVE: {
+          to: 'lost',
+          environment: 'prop.spark:connector-b',
+          vfx: 'SparkVFX',
+        },
       },
       onUnrecognised: {
         to: 'arc',
         environment: 'prop.spark:connector-b',
+      },
+    },
+
+    {
+      /**
+       * §155: a lost request, not a game over. Nobody is badly hurt - §93 keeps threat
+       * non-graphic - but she has stopped listening, and OMNISCIENT_ has to sit with
+       * having told her to reach into a live set twice.
+       *
+       * Mission 01 previously had no reachable failure at all: the arc looped back on
+       * itself forever, so a player who set off the spark was stuck sparking with no way
+       * to lose and no way out. Losing has to be possible or the note the player writes
+       * themselves (§170) is decorative.
+       */
+      id: 'lost',
+      tempo: Tempo.Respond,
+      say:
+        'No. I am not putting my hand back in there. Look at it - look at my hand. ' +
+        'I am going to shut it in the cupboard and ask Tomas in the morning. ' +
+        'Thank you, but no.',
+      on: {},
+      failure: {
+        summary:
+          'You told Mirela to clean a live connector twice. The second flash was worse than '
+          + 'the first and she stopped trusting you. Her transmitter is still dead.',
+        lesson:
+          'Take the power off a set before anybody touches the inside of it.',
+        cooldownSeconds: 90,
       },
     },
 
