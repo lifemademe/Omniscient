@@ -213,6 +213,37 @@ export const TERMINAL_CSS = `
   margin-bottom: 6px;
   min-height: 12px;
 }
+.omni-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-bottom: 8px;
+}
+.omni-suggest__label {
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #3f7a4c;
+  width: 100%;
+  margin-bottom: 1px;
+}
+.omni-suggest__chip {
+  font: inherit;
+  font-size: 11px;
+  color: #a8f0b6;
+  background: rgba(40, 96, 56, 0.4);
+  border: 1px solid #2f6b3a;
+  border-radius: 11px;
+  padding: 3px 9px;
+  cursor: pointer;
+  text-align: left;
+}
+.omni-suggest__chip:hover {
+  background: rgba(72, 160, 92, 0.55);
+  border-color: #7fe08a;
+  color: #e6ffe9;
+}
 .omni-terminal__entry { display: flex; align-items: center; gap: 6px; }
 .omni-terminal__caret { color: #4f9a5e; }
 .omni-terminal__input {
@@ -265,6 +296,9 @@ export class LocalSurface implements InterventionSurface {
   private tabsElement: HTMLDivElement | null = null;
   private panelElement: HTMLDivElement | null = null;
   private extraElement: HTMLDivElement | null = null;
+  private suggestElement: HTMLDivElement | null = null;
+  /** Last rendered suggestion set, so the chips are not rebuilt under the player's cursor. */
+  private renderedSuggestKey = '';
 
   private readonly handlers = new Set<(message: PlayerMessage) => void>();
   private renderedCount = 0;
@@ -315,6 +349,12 @@ export class LocalSurface implements InterventionSurface {
 
     const foot = document.createElement('div');
     foot.className = 'omni-terminal__foot';
+
+    // Example replies. Persistent element rebuilt in place - see renderMarks: replacing
+    // clickable children every frame destroys the button between mousedown and mouseup.
+    const suggestions = document.createElement('div');
+    suggestions.className = 'omni-suggest';
+
     const hint = document.createElement('div');
     hint.className = 'omni-terminal__hint';
 
@@ -330,7 +370,7 @@ export class LocalSurface implements InterventionSurface {
     input.spellcheck = false;
     input.placeholder = 'transmit...';
     entry.append(caret, input);
-    foot.append(hint, entry);
+    foot.append(suggestions, hint, entry);
 
     root.append(head, tabs, log, panel, extra, foot);
     this.container.appendChild(root);
@@ -356,6 +396,48 @@ export class LocalSurface implements InterventionSurface {
     this.tabsElement = tabs;
     this.panelElement = panel;
     this.extraElement = extra;
+    this.suggestElement = suggestions;
+  }
+
+  /**
+   * Example replies under the input.
+   *
+   * Rebuilt only when the set of suggestions actually changes. Tapping one puts the text
+   * in the input and sends it, so what reaches the runtime is indistinguishable from
+   * typing - and the player sees the words appear, which is how they learn the register
+   * rather than just clicking through it.
+   */
+  private renderSuggestions(suggestions: string[] | undefined): void {
+    const element = this.suggestElement;
+    if (!element) return;
+
+    const key = (suggestions ?? []).join(' ');
+    if (key === this.renderedSuggestKey) return;
+    this.renderedSuggestKey = key;
+
+    element.replaceChildren();
+    if (!suggestions || suggestions.length === 0) {
+      element.style.display = 'none';
+      return;
+    }
+    element.style.display = 'flex';
+
+    const label = document.createElement('span');
+    label.className = 'omni-suggest__label';
+    label.textContent = 'you could say';
+    element.appendChild(label);
+
+    for (const text of suggestions) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'omni-suggest__chip';
+      chip.textContent = text;
+      chip.addEventListener('click', () => {
+        if (this.inputElement) this.inputElement.value = '';
+        this.dispatch({ kind: 'text', text });
+      });
+      element.appendChild(chip);
+    }
   }
 
   /**
@@ -375,6 +457,8 @@ export class LocalSurface implements InterventionSurface {
     this.inputElement = null;
     this.contactElement = null;
     this.hintElement = null;
+    this.suggestElement = null;
+    this.renderedSuggestKey = '';
     this.handlers.clear();
     this.renderedCount = 0;
   }
@@ -396,6 +480,7 @@ export class LocalSurface implements InterventionSurface {
 
     this.contactElement.textContent = state.contactName;
     this.hintElement.textContent = state.hint ?? '';
+    this.renderSuggestions(state.suggestions);
 
     // Append only what is new, so the log does not flicker or lose scroll position.
     if (state.transcript.length < this.renderedCount) {

@@ -199,6 +199,11 @@ export const MISSION_01: MissionDefinition = {
       say:
         'It worked yesterday. I keyed it this morning and there is nothing - no carrier, no hiss, ' +
         'nothing. The lamp comes on, so it is getting power. I have the back off already.',
+      suggest: [
+        'look at the back of the set',
+        'what happened to it recently',
+        'describe the set to me',
+      ],
       on: {
         INSPECT_UNIT: {
           to: 'unit-overview',
@@ -227,6 +232,11 @@ export const MISSION_01: MissionDefinition = {
       id: 'clarify',
       tempo: Tempo.Respond,
       say: 'Say that again? I have my hands in it, I did not catch you.',
+      suggest: [
+        'look at the back of the set',
+        'turn the power off',
+        'what happened to it recently',
+      ],
       on: {
         INSPECT_UNIT: { to: 'unit-overview', environment: 'camera.push-in:transmitter' },
         INSPECT_CONNECTOR: { to: 'connector-found', environment: 'prop.rotate:transmitter-rear' },
@@ -245,6 +255,7 @@ export const MISSION_01: MissionDefinition = {
       say:
         'That is alright. Honestly it is more than the last one told me. Where do you want me to start - ' +
         'the front of the set, or round the back where the leads go?',
+      suggest: ['look at the back of the set', 'describe the set to me', 'what happened to it recently'],
       on: {
         INSPECT_UNIT: { to: 'unit-overview', environment: 'camera.push-in:transmitter' },
         INSPECT_CONNECTOR: { to: 'connector-found', environment: 'prop.rotate:transmitter-rear' },
@@ -264,6 +275,7 @@ export const MISSION_01: MissionDefinition = {
         'Kestrel-3, my father\'s. Lamp is lit, needle does not move when I key it. ' +
         'The aerial lead runs out through the wall - it feeds the harbour beacon as well, ' +
         'we split it years ago to save a mast.',
+      suggest: ['look at the connectors on the back', 'turn the power off', 'what happened to it recently'],
       on: {
         INSPECT_CONNECTOR: {
           to: 'connector-found',
@@ -287,6 +299,7 @@ export const MISSION_01: MissionDefinition = {
         'Water? Every spring. The floor goes under about a hand\'s depth and I put everything on the ' +
         'high shelf. The set was on the bench though. It has been fine since, until today. ' +
         'And the aerial is shared with the harbour beacon, if that matters - we split it years ago.',
+      suggest: ['look at the connectors on the back', 'turn the power off'],
       on: {
         INSPECT_CONNECTOR: {
           to: 'connector-found',
@@ -310,6 +323,7 @@ export const MISSION_01: MissionDefinition = {
         'The lead? Out through the wall and up the hill. It feeds the harbour beacon too - ' +
         'we split it years ago so we would not need two masts. It has never given us trouble. ' +
         'The fault is in here somewhere, I am sure of it.',
+      suggest: ['look at the connectors on the back', 'turn the power off'],
       on: {
         INSPECT_CONNECTOR: {
           to: 'connector-found',
@@ -328,6 +342,14 @@ export const MISSION_01: MissionDefinition = {
       say:
         'Round the back... ah. There is a green crust on the second connector, the fat one. ' +
         'It is bridging across the pins. Do you want me to get at it?',
+      suggest: [
+        'turn the power off first',
+        'clean the connector now',
+        'what happened to it recently',
+      ],
+      // She asked a direct question. "Yes" means clean it while it is still live - which
+      // is the unsafe intent, so it gets proposed back for confirmation rather than done.
+      affirmIntent: 'CLEAN_LIVE',
       on: {
         REMOVE_POWER: {
           to: 'power-off',
@@ -350,6 +372,11 @@ export const MISSION_01: MissionDefinition = {
       tempo: Tempo.Think,
       say:
         'Mains is off. Lamp is out. Right - what am I looking for?',
+      // Only the forward move. Offering "describe the set" here sent the player back to
+      // unit-overview, which suggests history, which suggests taking the power off, which
+      // lands here again - a three-beat loop a player could tap around indefinitely
+      // without the game ever pointing at the connectors.
+      suggest: ['look at the connectors on the back'],
       on: {
         INSPECT_CONNECTOR: {
           to: 'connector-found-safe',
@@ -367,6 +394,8 @@ export const MISSION_01: MissionDefinition = {
       tempo: Tempo.Think,
       say:
         'Green crust on the second connector, bridging the pins. Set is dead cold, so I can touch it.',
+      suggest: ['clean the green off the connector'],
+      affirmIntent: 'CLEAN_CONNECTOR',
       on: {
         CLEAN_CONNECTOR: {
           to: 'cleaned',
@@ -384,6 +413,7 @@ export const MISSION_01: MissionDefinition = {
       say:
         'AH - it went across my hand, there was a flash. I am alright. I am alright. ' +
         'The set is still live, is it not.',
+      suggest: ['turn the power off'],
       on: {
         REMOVE_POWER: {
           to: 'power-off',
@@ -400,6 +430,8 @@ export const MISSION_01: MissionDefinition = {
       id: 'power-off',
       tempo: Tempo.Think,
       say: 'Mains off. Lamp is out. It is cold now - I can get at that crust properly.',
+      suggest: ['clean the green off the connector'],
+      affirmIntent: 'CLEAN_CONNECTOR',
       on: {
         CLEAN_CONNECTOR: {
           to: 'cleaned',
@@ -414,6 +446,8 @@ export const MISSION_01: MissionDefinition = {
       tempo: Tempo.Respond,
       say:
         'Scraped back to bright metal, both pins. Pushed it home. Shall I put the mains on and try her?',
+      suggest: ['power it up and try transmitting'],
+      affirmIntent: 'TEST_TRANSMIT',
       on: {
         TEST_TRANSMIT: {
           to: 'solved',

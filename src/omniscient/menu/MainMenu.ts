@@ -84,8 +84,16 @@ const MODULES: ModuleSpec[] = [
 
 /** Vertical pitch of the stack. */
 const PITCH = 0.345;
-/** Where the stack sits relative to the workstation origin - left of the CRT, on the desk. */
-const STACK_ORIGIN = new THREE.Vector3(-1.5, 1.78, -0.62);
+/**
+ * Where the stack sits relative to the workstation origin - left of the CRT, on the desk.
+ *
+ * Moved further left and forward: sitting at x=-1.5 and behind the machine in z, the
+ * stack was partly occluded by the CRT from the home shot. Squaring the camera fixed most
+ * of it; giving the plates some clearance and bringing them nearer the player fixes the
+ * rest, and having them stand in front of the machine rather than behind it is the more
+ * honest read anyway - these are the controls, not scenery.
+ */
+const STACK_ORIGIN = new THREE.Vector3(-1.72, 1.95, -0.35);
 /** How far a hovered plate pushes out toward the player. */
 const HOVER_PUSH = 0.045;
 

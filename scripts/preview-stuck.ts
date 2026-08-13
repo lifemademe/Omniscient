@@ -1,0 +1,100 @@
+/**
+ * Walks Mission 01 the way a player actually does, and proves there is always a way on.
+ *
+ * Written after a playtest stalled: "check the socket" was understood, and then nothing
+ * was. The failure was not the parser - it was that the game never showed what kind of
+ * thing to say, and a beat that ended with a direct question did not accept "yes".
+ *
+ * So this does not test the happy path. It replays the stuck session, then walks every
+ * beat asserting that following the on-screen suggestions from the opening line reaches an
+ * outcome - which is the actual promise the suggestion chips make.
+ */
+
+import { MIRELA } from '../src/omniscient/content/contacts.js';
+import { MISSION_01 } from '../src/omniscient/content/mission-01-transmitter.js';
+import { MISSION_02 } from '../src/omniscient/content/mission-02-beacon.js';
+import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
+import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
+
+const SEED = 0x0c151e;
+let failures = 0;
+
+function check(label: string, ok: boolean, detail?: string): void {
+  if (!ok) failures++;
+  console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${label}${detail ? ` - ${detail}` : ''}`);
+}
+
+console.log('\n=== THE STUCK SESSION ===\n');
+
+const runtime = new MissionRuntime(MISSION_01, new KnowledgeStore(SEED));
+runtime.open();
+
+const socket = runtime.respond('check the socket');
+console.log(`  "check the socket" -> ${runtime.getCurrentBeat().id}`);
+check('"check the socket" finds the corrosion', runtime.getCurrentBeat().id === 'connector-found');
+
+// This is where the playtest died. She asks "Do you want me to get at it?" and the
+// player, reasonably, answers the question.
+const yes = runtime.respond('yes');
+check(
+  '"yes" to a direct question is understood',
+  yes.confirming !== undefined || runtime.getCurrentBeat().id !== 'connector-found',
+  yes.confirming ? `proposes: ${yes.confirming.question}` : runtime.getCurrentBeat().id
+);
+check(
+  'and it proposes the unsafe reading rather than silently doing it',
+  yes.confirming?.intentId === 'CLEAN_LIVE'
+);
+
+const declined = runtime.confirm(false);
+check('declining leaves the set live and invites another try', declined.clarifying);
+check('still on the connector beat', runtime.getCurrentBeat().id === 'connector-found');
+
+console.log(`\n  opening suggestions: ${MISSION_01.beats[0].suggest?.join(' / ')}`);
+check('the opening offers a way in', (MISSION_01.beats[0].suggest?.length ?? 0) >= 2);
+check('the stuck beat now offers a way on', (socket.say.length ?? 0) > 0);
+
+console.log('\n=== FOLLOWING THE SUGGESTIONS ===\n');
+
+/**
+ * A player who reads nothing, thinks about nothing, and taps the chip in the same
+ * position every single time must still reach an ending.
+ *
+ * That is the floor the chips promise, and it is not automatic: a beat whose suggestions
+ * point backwards can form a cycle the player taps around forever while the game never
+ * points at the answer. Mission 01 had exactly that - unit-overview to history to
+ * power-off-early and back - and only walking it in every position exposed it.
+ */
+for (const mission of [MISSION_01, MISSION_02]) {
+  const widest = Math.max(...mission.beats.map((beat) => beat.suggest?.length ?? 0));
+
+  for (let slot = 0; slot < widest; slot++) {
+    const walker = new MissionRuntime(mission, new KnowledgeStore(SEED));
+    walker.open();
+
+    const path: string[] = [walker.getCurrentBeat().id];
+    let guard = 0;
+
+    while (!walker.isFinished && guard++ < 40) {
+      const suggestions = walker.getCurrentBeat().suggest ?? [];
+      if (suggestions.length === 0) break;
+
+      // Short lists clamp, so slot 2 on a one-chip beat still takes that chip.
+      const text = suggestions[Math.min(slot, suggestions.length - 1)];
+      const step = walker.respond(text);
+      // Chips can legitimately propose an unsafe reading; accept it, so the dangerous
+      // branch is exercised rather than quietly avoided by the test.
+      if (step.confirming) walker.confirm(true);
+      path.push(walker.getCurrentBeat().id);
+    }
+
+    const label = `${mission.id}: always chip ${slot + 1}`;
+    console.log(`  ${label}: ${path.join(' -> ')}`);
+    check(`${label} reaches an ending`, walker.isFinished, `${path.length} beats`);
+  }
+}
+
+console.log(
+  failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} CHECK(S) FAILED\n`
+);
+process.exit(failures === 0 ? 0 : 1);

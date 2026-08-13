@@ -111,6 +111,27 @@ export interface Beat {
    * If they heard it, they know it.
    */
   learn?: string[];
+  /**
+   * Example replies for this beat, shown under the input.
+   *
+   * NOT a menu. Each one is sent as ordinary typed text and resolved by the same intent
+   * matcher, so they demonstrate the *kind* of thing to say rather than replacing saying
+   * it - the player can always type their own words, and these are there for the moment
+   * where they have no idea what those words would be.
+   *
+   * Every beat that expects a reply needs these. Without them the game is a guessing game
+   * about vocabulary, which is not the game.
+   */
+  suggest?: string[];
+  /**
+   * The intent a bare "yes" means here.
+   *
+   * Set it on every beat where the contact asks a direct question. Mirela ends a beat
+   * with "Do you want me to get at it?" - answering "yes" has to do something, and
+   * routing it through an intent id rather than straight to a transition means an unsafe
+   * answer still gets confirmed first.
+   */
+  affirmIntent?: string;
   /** Intent id -> transition. */
   on: Record<string, BeatTransition>;
   /** Where an unmatched message goes. §159: clarify, never show a red X. */

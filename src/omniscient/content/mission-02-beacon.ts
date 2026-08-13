@@ -163,6 +163,7 @@ export const MISSION_02: MissionDefinition = {
       say:
         'Beacon is dropping. Not dimming - gone, three, four seconds, then back. Harbour master is ' +
         'asking me why and I have no answer. It has never done this. I am halfway up the mast now.',
+      suggest: ['trace the aerial feed', 'when did it start', 'tell me about Mirela'],
       on: {
         ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
         ASK_TIMING: { to: 'timing' },
@@ -177,6 +178,7 @@ export const MISSION_02: MissionDefinition = {
       id: 'clarify-blind',
       tempo: Tempo.Respond,
       say: 'Say again - the wind is taking it. I am holding on with one hand up here.',
+      suggest: ['trace the aerial feed', 'when did it start', 'tell me about Mirela'],
       on: {
         ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
         ASK_TIMING: { to: 'timing' },
@@ -191,6 +193,7 @@ export const MISSION_02: MissionDefinition = {
       say:
         'Started this morning. It is worse in the evening - but that is when the boats are in, so ' +
         'perhaps I only notice. It is not the weather, it was clear all day.',
+      suggest: ['trace the aerial feed', 'tell me about Mirela'],
       on: {
         ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
         ASK_SISTER: { to: 'sister-blind' },
@@ -204,6 +207,7 @@ export const MISSION_02: MissionDefinition = {
       say:
         'Mirela? She is down the hill. Her set died yesterday and something fixed it for her this ' +
         'morning, she would not stop going on about it. Why - what has that to do with my mast?',
+      suggest: ['trace the aerial feed'],
       on: {
         ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
       },
@@ -218,6 +222,7 @@ export const MISSION_02: MissionDefinition = {
         'Following the feed down... it does not go straight to the box. There is a splice on the ' +
         'bracket, and a second cable off it heading down the hill. Towards the town. Towards - ' +
         'oh. That goes to Mirela’s shop, does it not.',
+      suggest: ['fit an isolator on the shared feed'],
       on: {
         FIT_ISOLATOR: {
           to: 'isolator-fitted',
@@ -244,6 +249,7 @@ export const MISSION_02: MissionDefinition = {
       say:
         'Beacon is dropping. Not dimming - gone, three, four seconds, then back. Started this morning. ' +
         'Harbour master is asking me why and I have no answer. I am halfway up the mast now.',
+      suggest: ['trace the aerial feed', 'tell me about Mirela', 'when did it start'],
       on: {
         ASK_FEED: {
           to: 'feed-confirmed',
@@ -268,6 +274,7 @@ export const MISSION_02: MissionDefinition = {
       say:
         'Started this morning, first time ever. Clear weather all day, so it is not the sky. ' +
         'You sound like you already have an idea.',
+      suggest: ['trace the aerial feed', 'tell me about Mirela'],
       on: {
         ASK_FEED: {
           to: 'feed-confirmed',
@@ -291,6 +298,7 @@ export const MISSION_02: MissionDefinition = {
         'That is Mirela’s. So every time she keys up, my light goes out. It has been like that for ' +
         'years and it never mattered, because her set has been dead for... ' +
         'Her set has been dead for a long time. Until this morning.',
+      suggest: ['fit an isolator on the shared feed'],
       on: {
         FIT_ISOLATOR: {
           to: 'isolator-fitted',
@@ -312,6 +320,7 @@ export const MISSION_02: MissionDefinition = {
       say:
         'It arced - the whole bracket lit up. I have let go of it. That feed is carrying, ' +
         'I cannot just pull it apart with the set live down there.',
+      suggest: ['fit an isolator on the shared feed'],
       on: {
         FIT_ISOLATOR: {
           to: 'isolator-fitted',

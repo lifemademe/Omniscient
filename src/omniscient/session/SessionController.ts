@@ -242,6 +242,12 @@ export class SessionController {
       hint: this.failureHint(finished),
       hints,
       records,
+      // Suppressed once the request is over or while a reading is pending - in both cases
+      // the only useful move is the one the surface is already asking for.
+      suggestions:
+        finished || this.confirming || this.failed
+          ? undefined
+          : this.runtime.getCurrentBeat().suggest,
       confirming: this.confirming ?? undefined,
       failure: this.failed ? { summary: this.failed.summary } : undefined,
     });

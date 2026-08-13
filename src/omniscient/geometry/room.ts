@@ -191,7 +191,11 @@ function createDeskPlant(rng: Rng): RoomPart[] {
  */
 function createChair(rng: Rng): RoomPart[] {
   const parts: RoomPart[] = [];
-  const at = new THREE.Vector3(-0.75, 0, 0.95);
+  // Pushed left and much nearer the camera. Sitting mid-floor it was directly in the
+  // sightline to the two lowest menu plates - a framing element that hides the buttons is
+  // not framing anything. Up against the near edge of frame it does the job it was added
+  // for and blocks nothing.
+  const at = new THREE.Vector3(-1.6, 0, 1.55);
   // Turned out from the desk, the way a chair is left rather than tucked in.
   const turn = 0.42 + jitter(rng, 0.08);
 

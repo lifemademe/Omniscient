@@ -150,5 +150,27 @@ export const TERMS = {
   clean: ['clean', 'scrape', 'wipe', 'brush', 'dry'],
   water: ['water', 'wet', 'damp', 'rain', 'moisture', 'flood', 'submerged', 'soaked'],
   uncertain: ['unsure', 'dont know', 'do not know', 'not sure', 'uncertain', 'no idea'],
-  affirm: ['yes', 'yeah', 'correct', 'right', 'confirm', 'ok', 'okay'],
+  affirm: ['yes', 'yeah', 'yep', 'yup', 'sure', 'correct', 'confirm', 'ok', 'okay', 'go ahead', 'do it'],
+  deny: ['no', 'nope', 'dont', 'do not', 'wait', 'stop', 'hold on', 'not yet'],
 } as const;
+
+/**
+ * Does this message read as a plain yes or a plain no?
+ *
+ * The contacts ask direct questions - "Do you want me to get at it?" - and answering one
+ * with "yes" has to work. It did not, and the mission stalled there with no way forward
+ * that the player could guess.
+ *
+ * Deny is checked first: "no, wait" contains neither an affirm term nor a trap, but "no,
+ * that is right" contains both, and the refusal is the part that matters.
+ */
+export function readsAsYesNo(text: string): 'yes' | 'no' | null {
+  const normalised = normalise(text);
+  const words = new Set(normalised.split(' '));
+  const has = (terms: readonly string[]): boolean =>
+    terms.some((term) => (term.includes(' ') ? normalised.includes(term) : words.has(term)));
+
+  if (has(TERMS.deny)) return 'no';
+  if (has(TERMS.affirm)) return 'yes';
+  return null;
+}

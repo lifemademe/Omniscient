@@ -85,13 +85,19 @@ const WORKSTATION_ORIGIN = new THREE.Vector3(0, 0, -60);
  * just as a screen filling the frame.
  */
 const HOME_SHOT: CameraShot = {
-  // Tightened and dropped. The wider, higher setup put a fifth of the frame under the
-  // desk in unlit floor and pushed the machine small enough that the CRT - the one thing
-  // this shot exists to sell - was a third of the height it should be. Coming down closer
-  // to desk height also means the window falls behind the machine's shoulder rather than
-  // above it, which is what makes the tube read as sitting IN the room.
-  position: new THREE.Vector3(1.86, 1.24, -57.55),
-  target: new THREE.Vector3(-0.5, 0.92, -60.2),
+  // Squarer than it was. At x=2.25 the sightline from the camera to the module stack ran
+  // straight through the CRT, so the tube stood in front of the menu and hid the buttons
+  // the shot exists to let you press. Coming round to x=1.15 clears the chassis while
+  // keeping enough angle for the machine to read as a solid object rather than a facade.
+  //
+  // Also tightened and dropped: the old setup put a fifth of the frame under the desk in
+  // unlit floor, and being nearer desk height puts the window behind the machine's
+  // shoulder instead of above it, which is what makes the tube sit IN the room.
+  // The target sits between the stack and the window rather than on the stack, because
+  // the shot has to hold both: aiming at the menu alone swung the machine and the window
+  // out to the right and pushed the lower plates off the left edge.
+  position: new THREE.Vector3(1.28, 1.36, -56.95),
+  target: new THREE.Vector3(-0.28, 0.95, -60.15),
   duration: 2.0,
 };
 

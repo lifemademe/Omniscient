@@ -74,6 +74,14 @@ export interface SurfaceState {
   hints?: HintView[];
   /** Records relevant to this request. */
   records?: RecordView[];
+  /**
+   * Example replies for the current beat, shown as chips under the input.
+   *
+   * Tapping one sends it as ordinary text, so it goes through exactly the same
+   * interpretation as anything typed by hand - these teach the register, they are not a
+   * dialogue menu and the player is never restricted to them.
+   */
+  suggestions?: string[];
   /** When set, the surface asks yes/no instead of accepting free text. */
   confirming?: Confirmation;
   /** When set, the request has been lost and the player may write themselves a note. */

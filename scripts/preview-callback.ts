@@ -20,7 +20,7 @@ import { createSignals, MIRELA_SIGNAL } from '../src/omniscient/content/signals.
 import { GlobeView, SignalState } from '../src/omniscient/crt/GlobeView.js';
 import { GrowthStage } from '../src/omniscient/crt/KnowledgeTree.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
-import { resolveIntent } from '../src/omniscient/mission/intent.js';
+import { readsAsYesNo, resolveIntent } from '../src/omniscient/mission/intent.js';
 import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
 import { SessionController } from '../src/omniscient/session/SessionController.js';
 import { BufferSurface } from './lib/pixel-preview.js';
@@ -211,6 +211,75 @@ fromHints.forEach(([hintId, text]) => {
     `"${text}" -> ${result.kind === 'matched' ? result.intentId : result.kind}`
   );
 });
+
+/**
+ * The suggestion contract, and the most important check in this file.
+ *
+ * A player got stuck on Mission 01 with no idea what to type. Suggestions are the fix, so
+ * every one of them has to actually work: a chip that resolves to nothing, or resolves to
+ * an intent the current beat cannot accept, is worse than no chip at all - it teaches the
+ * player that the game does not listen.
+ */
+[MISSION_01, MISSION_02].forEach((mission) => {
+  const broken: string[] = [];
+  const silent: string[] = [];
+
+  for (const beat of mission.beats) {
+    // A terminal beat has nothing to suggest; every other beat must offer a way forward.
+    if (beat.outcome || beat.failure) continue;
+    if (!beat.suggest || beat.suggest.length === 0) {
+      silent.push(beat.id);
+      continue;
+    }
+    const allowed = mission.intents.filter((intent) => intent.id in beat.on);
+    for (const text of beat.suggest) {
+      const result = resolveIntent(text, allowed);
+      if (result.kind !== 'matched') broken.push(`${beat.id}: "${text}" -> ${result.kind}`);
+    }
+  }
+
+  check(
+    `${mission.id}: every non-terminal beat offers a way forward`,
+    silent.length === 0,
+    silent.length ? `no suggestions on ${silent.join(', ')}` : undefined
+  );
+  check(
+    `${mission.id}: every suggested reply is accepted by the beat that offers it`,
+    broken.length === 0,
+    broken.length ? broken.join(' | ') : undefined
+  );
+});
+
+/**
+ * A closed question has to take a direct answer.
+ *
+ * "Do you want me to get at it?" needs "yes" to mean something. "Where do you want me to
+ * start?" does not - so the check looks for a wh-word in the closing sentence and treats
+ * anything carrying one as an open question, which it is.
+ */
+const WH = /\b(what|where|when|why|who|which|how)\b/i;
+const asksClosedQuestion = (say: string): boolean => {
+  const trimmed = say.trimEnd();
+  if (!trimmed.endsWith('?')) return false;
+  const lastSentence = trimmed.split(/(?<=[.!?])\s+/).pop() ?? trimmed;
+  return !WH.test(lastSentence);
+};
+
+[MISSION_01, MISSION_02].forEach((mission) => {
+  const unanswerable = mission.beats
+    .filter((beat) => asksClosedQuestion(beat.say) && !beat.outcome && !beat.failure)
+    .filter((beat) => !beat.affirmIntent || !(beat.affirmIntent in beat.on))
+    .map((beat) => beat.id);
+  check(
+    `${mission.id}: "yes" means something wherever the contact asks a question`,
+    unanswerable.length === 0,
+    unanswerable.length ? unanswerable.join(', ') : undefined
+  );
+});
+
+check('A plain yes reads as yes', readsAsYesNo('yes') === 'yes');
+check('A plain no reads as no', readsAsYesNo('no, wait') === 'no');
+check('An instruction is not a yes/no', readsAsYesNo('turn the power off') === null);
 
 const nonsense = resolveIntent('what is the weather like in Lagos', MISSION_01.intents);
 check('Irrelevant input is unrecognised, not mis-matched', nonsense.kind === 'unrecognised');

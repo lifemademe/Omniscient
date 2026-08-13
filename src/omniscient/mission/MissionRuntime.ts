@@ -12,7 +12,7 @@
 
 import { Certainty } from '../knowledge/KnowledgeStore.js';
 
-import { resolveIntent } from './intent.js';
+import { readsAsYesNo, resolveIntent } from './intent.js';
 
 import type { KnowledgeStore } from '../knowledge/KnowledgeStore.js';
 import type {
@@ -150,6 +150,36 @@ export class MissionRuntime {
     }
 
     const beat = this.getCurrentBeat();
+
+    /**
+     * A typed yes or no while a reading is pending answers the reading.
+     *
+     * The surface shows buttons for this, but nothing stops the player from typing the
+     * answer instead - and when they did, it fell through to intent matching, missed, and
+     * left the proposal hanging forever with no way to clear it.
+     */
+    if (this.pendingIntent) {
+      const answer = readsAsYesNo(text);
+      if (answer) return this.confirm(answer === 'yes');
+    }
+
+    // A direct question deserves a direct answer. See Beat.affirmIntent.
+    if (beat.affirmIntent && beat.on[beat.affirmIntent]) {
+      const answer = readsAsYesNo(text);
+      if (answer === 'yes') {
+        return this.definition.hiddenTruth.unsafeIntents.includes(beat.affirmIntent)
+          ? this.propose(beat.affirmIntent)
+          : this.applyTransition(beat.on[beat.affirmIntent]);
+      }
+      if (answer === 'no') {
+        return {
+          say: 'Alright - not that, then. What do you want me to do?',
+          learned: [],
+          clarifying: true,
+        };
+      }
+    }
+
     const allowed = this.definition.intents.filter((intent) => intent.id in beat.on);
     const resolution = resolveIntent(text, allowed);
 
