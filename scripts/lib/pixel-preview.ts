@@ -24,11 +24,26 @@ export class BufferSurface implements PixelSurface {
     this.clear();
   }
 
+  /**
+   * Wipe to background, with the same centre-weighted phosphor wash CRTSurface paints.
+   * Mirrored so the preview is a fair picture of the shipping screen rather than a
+   * cleaner one - the flat black version hid exactly the problem it should have shown.
+   */
   public clear(): void {
-    for (let i = 0; i < this.width * this.height; i++) {
-      this.data[i * 3] = BACKGROUND[0];
-      this.data[i * 3 + 1] = BACKGROUND[1];
-      this.data[i * 3 + 2] = BACKGROUND[2];
+    const cx = this.width / 2;
+    const cy = this.height * 0.56;
+    const radius = Math.max(this.width, this.height) * 0.62;
+
+    for (let y = 0; y < this.height; y++) {
+      for (let x = 0; x < this.width; x++) {
+        const t = Math.min(1, Math.hypot(x - cx, y - cy) / radius);
+        // Matches the two-stop gradient in CRTSurface.clear closely enough to judge by.
+        const strength = t < 0.55 ? 0.3 + (0.13 - 0.3) * (t / 0.55) : 0.13 * (1 - (t - 0.55) / 0.45);
+        const offset = (y * this.width + x) * 3;
+        this.data[offset] = BACKGROUND[0] + Math.round((90 - BACKGROUND[0]) * strength);
+        this.data[offset + 1] = BACKGROUND[1] + Math.round((190 - BACKGROUND[1]) * strength);
+        this.data[offset + 2] = BACKGROUND[2] + Math.round((120 - BACKGROUND[2]) * strength);
+      }
     }
   }
 
@@ -58,6 +73,66 @@ export class BufferSurface implements PixelSurface {
 
     for (;;) {
       this.pixel(px, py, color);
+      if (px === ex && py === ey) break;
+      const e2 = 2 * err;
+      if (e2 >= dy) {
+        err += dy;
+        px += sx;
+      }
+      if (e2 <= dx) {
+        err += dx;
+        py += sy;
+      }
+    }
+  }
+
+  /**
+   * Phosphor halo, matching CRTSurface. Mirrored here rather than skipped so the headless
+   * preview shows what the game shows - a preview that renders a different image from the
+   * one shipping is worse than no preview.
+   */
+  public glowLine(x0: number, y0: number, x1: number, y1: number, color: string): void {
+    const [r, g, b] = hexToRgb(color);
+    for (const [ox, oy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ] as const) {
+      this.blendLine(x0 + ox, y0 + oy, x1 + ox, y1 + oy, r, g, b, 0.24);
+    }
+    this.line(x0, y0, x1, y1, color);
+  }
+
+  /** Walk a line blending each pixel toward a colour rather than replacing it. */
+  private blendLine(
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    r: number,
+    g: number,
+    b: number,
+    alpha: number
+  ): void {
+    let px = Math.round(x0);
+    let py = Math.round(y0);
+    const ex = Math.round(x1);
+    const ey = Math.round(y1);
+
+    const dx = Math.abs(ex - px);
+    const dy = -Math.abs(ey - py);
+    const sx = px < ex ? 1 : -1;
+    const sy = py < ey ? 1 : -1;
+    let err = dx + dy;
+
+    for (;;) {
+      if (px >= 0 && py >= 0 && px < this.width && py < this.height) {
+        const offset = (py * this.width + px) * 3;
+        this.data[offset] += Math.round((r - this.data[offset]) * alpha);
+        this.data[offset + 1] += Math.round((g - this.data[offset + 1]) * alpha);
+        this.data[offset + 2] += Math.round((b - this.data[offset + 2]) * alpha);
+      }
       if (px === ex && py === ey) break;
       const e2 = 2 * err;
       if (e2 >= dy) {

@@ -155,19 +155,31 @@ export function createCRTTerminal(params: CRTTerminalParams = {}): HardwareParts
   // --- Vents ---------------------------------------------------------------
   // Slots run front-to-back along both shoulders. Slight length variance stops the
   // repeat reading as a texture.
+  //
+  // These sat at `width/2 - 0.03` with a 0.05-wide box, which put every slot entirely
+  // INSIDE the chassis - seven pieces of geometry per side, buried, never once visible.
+  // Without boolean cuts the honest read is a proud louvre rather than a recessed slot,
+  // so they now stand a little off the surface where the key can catch their top edges.
   const ventLength = p.depth * 0.42;
   for (let side = -1; side <= 1; side += 2) {
     for (let i = 0; i < p.ventCount; i++) {
       const t = (i + 1) / (p.ventCount + 1);
       const slot = ventSlot(ventLength * range(rng, 0.86, 1.0), 0.05);
       slot.translate(
-        side * (p.width / 2 - 0.03),
+        side * (p.width / 2 + 0.008),
         p.height * (0.16 + t * 0.66),
         -p.depth * 0.1 + jitter(rng, 0.02 * wear)
       );
       detailPieces.push(slot);
     }
   }
+
+  // The seam where the two halves of the case meet. One continuous dark line around a
+  // large pale mass is the single cheapest thing that stops it reading as an untouched
+  // box - every piece of hardware this machine is pretending to be has one.
+  const seam = new THREE.BoxGeometry(p.width + 0.012, 0.014, p.depth * 0.92);
+  seam.translate(0, p.height * 0.34, -p.depth * 0.02);
+  detailPieces.push(seam);
 
   // --- Control rail --------------------------------------------------------
   const railY = p.height * 0.13;
@@ -200,16 +212,27 @@ export function createCRTTerminal(params: CRTTerminalParams = {}): HardwareParts
 
   // --- Accumulated maintenance --------------------------------------------
   // Wear does not mean noise: it means evidence that somebody has had this open.
+  // Riveted-on plates. These were all on the rear face, which no shot in the game ever
+  // sees - evidence of repair nobody could find. They now go on the top and the right
+  // shoulder, where the three-quarter home shot actually looks.
   const patchCount = Math.round(wear * 3);
   for (let i = 0; i < patchCount; i++) {
-    const patch = new THREE.BoxGeometry(range(rng, 0.08, 0.2), range(rng, 0.05, 0.12), 0.012);
-    patch.translate(
-      jitter(rng, p.width * 0.3),
-      p.height * range(rng, 0.15, 0.9),
-      -p.depth / 2 - 0.005
-    );
-    patch.rotateZ(jitter(rng, 0.15));
-    detailPieces.push(patch);
+    if (i % 2 === 0) {
+      // Lying on the top face.
+      const patch = new THREE.BoxGeometry(range(rng, 0.08, 0.18), 0.01, range(rng, 0.06, 0.14));
+      patch.rotateY(jitter(rng, 0.2));
+      patch.translate(jitter(rng, p.width * 0.28), p.height + 0.005, jitter(rng, p.depth * 0.22));
+      detailPieces.push(patch);
+    } else {
+      // Screwed flat to the right shoulder, facing the camera in the home shot.
+      const patch = new THREE.BoxGeometry(0.01, range(rng, 0.05, 0.11), range(rng, 0.08, 0.16));
+      patch.translate(
+        p.width * 0.5 + 0.005,
+        p.height * range(rng, 0.45, 0.85),
+        -p.depth * range(rng, 0.05, 0.3)
+      );
+      detailPieces.push(patch);
+    }
   }
 
   return {

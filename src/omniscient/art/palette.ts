@@ -52,8 +52,22 @@ export const ACCENT = {
   data: '#2f7391',
   /** Corrosion. The fault Mission 01 turns on, so it has to read instantly. */
   corrosion: '#6f8a4a',
-  /** Bright metal, freshly cleaned. Also paper - the highest value, used sparingly. */
+  /** Bright metal, freshly cleaned. The highest value, used sparingly. */
   bright: '#c4bda6',
+} as const;
+
+/**
+ * Living green. Deliberately separated from ACCENT.corrosion - the theme is Overgrown,
+ * and the plant escaping its pot must not read as the same substance as the fault eating
+ * Mirela's connector. Cooler and more saturated than the corrosion green.
+ */
+export const GROWTH = {
+  /** Leaf faces catching light. */
+  leaf: '#5c7a45',
+  /** The shaded mass underneath. Foliage needs two values or it reads as a flat blob. */
+  leafDeep: '#38512e',
+  /** Stems and tendrils. Woodier, drier. */
+  stem: '#6b7248',
 } as const;
 
 /**
@@ -96,12 +110,42 @@ export const MAT = {
   ground: standard(HUMAN.ground, 0.96),
   wall: standard(HUMAN.wall, 0.92),
   timber: standard(HUMAN.timber, 0.85),
+  /**
+   * Darker stained timber, for anything in the near foreground. A framing element lit to
+   * the same value as the subject stops framing and starts competing - the chair sitting
+   * in the front of the home shot has to fall away, not glow.
+   */
+  timberDark: standard('#5a4430', 0.9),
   timberLit: standard(HUMAN.timberLit, 0.8),
   metal: standard(HUMAN.metal, 0.45, 0.65),
   plastic: standard(HUMAN.plastic, 0.72, 0.03),
   dark: standard(HUMAN.dark, 0.6, 0.1),
   corroded: standard(ACCENT.corrosion, 0.95),
+  /**
+   * Freshly scraped metal. Metalness this high needs an environment to reflect - it is
+   * only ever used on the cleaned connector, which sits under the Contact View key.
+   */
   clean: standard(ACCENT.bright, 0.28, 0.85),
+  /**
+   * Paper. Was sharing `clean`, which made every note and document on the wall a sheet
+   * of polished steel - with no envmap in this scene, that renders nearly black.
+   */
+  paper: standard(ACCENT.bright, 0.94),
+  leaf: standard(GROWTH.leaf, 0.88),
+  leafDeep: standard(GROWTH.leafDeep, 0.92),
+  stem: standard(GROWTH.stem, 0.9),
+  /**
+   * Sky through a window. Unlit, so it stays bright regardless of the room's exposure -
+   * but NOT pure white. At full value it out-shouted the CRT, which is the one thing in
+   * the frame that has to win, so it sits a clear step below the screen's brightest green.
+   */
+  daylight: new THREE.MeshBasicMaterial({ color: '#d8c49b', toneMapped: false }),
+  /**
+   * The sea below the horizon. Splitting the glazing in two costs one extra plane and
+   * turns a blank rectangle into a view - which is the whole reason these people are on
+   * this coast and the reason there is a harbour beacon to fix.
+   */
+  daylightSea: new THREE.MeshBasicMaterial({ color: '#8f9a8e', toneMapped: false }),
   /** Unlit - indicator lamps and anything that should read as emitting. */
   lamp: new THREE.MeshBasicMaterial({ color: ACCENT.amber, toneMapped: false }),
   /** The shut-down control. Dirty red, and the only one of its colour on the machine. */

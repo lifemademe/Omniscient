@@ -56,15 +56,26 @@ interface Segment {
   alien: boolean;
 }
 
-/** Per-stage topology. Tuned so each step is visible at a glance, per §175. */
-const STAGE_CONFIG: Record<GrowthStage, { depth: number; trunk: number; spread: number }> = {
-  [GrowthStage.Sprout]: { depth: 1, trunk: 14, spread: 0.5 },
-  [GrowthStage.Sapling]: { depth: 3, trunk: 22, spread: 0.55 },
-  [GrowthStage.Branching]: { depth: 4, trunk: 28, spread: 0.6 },
-  [GrowthStage.Interwoven]: { depth: 5, trunk: 33, spread: 0.62 },
-  [GrowthStage.Canopy]: { depth: 6, trunk: 38, spread: 0.66 },
-  [GrowthStage.Overgrown]: { depth: 7, trunk: 44, spread: 0.72 },
-  [GrowthStage.Transcendent]: { depth: 8, trunk: 48, spread: 0.78 },
+/**
+ * Per-stage topology. Tuned so each step is visible at a glance, per §175.
+ *
+ * `trunk` and `limb` are deliberately separate. They were one number, which coupled the
+ * height of the bare stem to the size of the canopy - so every time the tree grew, the
+ * trunk grew with it and the branching stayed marooned in the top third of the tube. A
+ * tree gets *bushier* as it matures, not stiltier: the trunk barely moves after Sapling
+ * and the canopy is what expands.
+ */
+const STAGE_CONFIG: Record<
+  GrowthStage,
+  { depth: number; trunk: number; limb: number; spread: number }
+> = {
+  [GrowthStage.Sprout]: { depth: 1, trunk: 10, limb: 9, spread: 0.5 },
+  [GrowthStage.Sapling]: { depth: 3, trunk: 15, limb: 15, spread: 0.58 },
+  [GrowthStage.Branching]: { depth: 4, trunk: 18, limb: 20, spread: 0.64 },
+  [GrowthStage.Interwoven]: { depth: 5, trunk: 21, limb: 23, spread: 0.7 },
+  [GrowthStage.Canopy]: { depth: 6, trunk: 23, limb: 25, spread: 0.74 },
+  [GrowthStage.Overgrown]: { depth: 7, trunk: 25, limb: 27, spread: 0.8 },
+  [GrowthStage.Transcendent]: { depth: 8, trunk: 26, limb: 28, spread: 0.86 },
 };
 
 const PALETTE = {
@@ -100,10 +111,34 @@ function growSegments(state: KnowledgeState, width: number, height: number): Seg
   const baseX = width / 2;
   const baseY = height - 6;
 
-  let frontier: Frontier[] = [
-    { x: baseX, y: baseY, angle: -Math.PI / 2, length: cfg.trunk, depth: 0 },
-  ];
   let order = 0;
+
+  /**
+   * The trunk, in three leaning sections rather than one ruler-straight line.
+   *
+   * A single segment from the base gave every stage the same silhouette: a bare vertical
+   * stick with a ball of twigs balanced on top. Sectioning it costs two extra segments
+   * and buys a trunk that sways, and splitting the first branches off partway up means
+   * the canopy starts low enough to read as a tree instead of as broccoli.
+   */
+  let trunkX = baseX;
+  let trunkY = baseY;
+  let trunkAngle = -Math.PI / 2 + jitter(rng, 0.05);
+  const sections = 3;
+
+  for (let i = 0; i < sections; i++) {
+    const sectionLength = (cfg.trunk / sections) * range(rng, 0.88, 1.12);
+    const x1 = trunkX + Math.cos(trunkAngle) * sectionLength;
+    const y1 = trunkY + Math.sin(trunkAngle) * sectionLength;
+    segments.push({ x0: trunkX, y0: trunkY, x1, y1, depth: 0, order: order++, alien: false });
+    trunkX = x1;
+    trunkY = y1;
+    trunkAngle += jitter(rng, 0.13);
+  }
+
+  let frontier: Frontier[] = [
+    { x: trunkX, y: trunkY, angle: trunkAngle, length: cfg.limb, depth: 1 },
+  ];
 
   while (frontier.length > 0) {
     const next: Frontier[] = [];
@@ -126,13 +161,32 @@ function growSegments(state: KnowledgeState, width: number, height: number): Seg
 
       // Two children, occasionally three once the tree is dense enough to carry it.
       const childCount = node.depth > 1 && rng() < 0.22 ? 3 : 2;
+
+      /**
+       * Splits open wide at the base and tighten as they climb.
+       *
+       * Apical dominance is real, but applying it from the first fork made the leader
+       * carry on almost vertically for several levels - so the tree grew a second, fake
+       * trunk above the real one and the canopy ended up marooned at the top of the tube
+       * again. Trees fork hardest where the limbs are thickest. Below depth 2 there is no
+       * leader at all: it is a genuine fork, and that is what opens the silhouette out
+       * across the width of the screen.
+       */
+      const openness = node.depth <= 1 ? 1.75 : node.depth === 2 ? 1.25 : 1;
+      const hasLeader = node.depth >= 2;
+      const leader = hasLeader ? Math.floor(rng() * childCount) : -1;
+
       for (let i = 0; i < childCount; i++) {
-        const offset = (i - (childCount - 1) / 2) * cfg.spread;
+        const isLeader = i === leader;
+        const offset =
+          (i - (childCount - 1) / 2) * cfg.spread * openness * (isLeader ? 0.45 : 1.15);
         next.push({
           x: x1,
           y: y1,
           angle: node.angle + offset + jitter(rng, 0.22),
-          length: node.length * range(rng, 0.62, 0.78),
+          length:
+            node.length *
+            (isLeader ? range(rng, 0.78, 0.92) : range(rng, 0.62, 0.78)),
           depth: node.depth + 1,
         });
       }
@@ -227,9 +281,16 @@ export class KnowledgeTree {
 
     this.surface.clear();
 
+    // Trunk and main limbs glow; the fine outer twigs stay hard, so the halo reads as
+    // depth in the canopy rather than fogging the whole tree into a green smear.
     for (let i = 0; i < visible; i++) {
       const segment = this.segments[i];
-      this.surface.line(segment.x0, segment.y0, segment.x1, segment.y1, colorFor(segment, cfg.depth));
+      const color = colorFor(segment, cfg.depth);
+      if (segment.depth <= 2 && this.surface.glowLine) {
+        this.surface.glowLine(segment.x0, segment.y0, segment.x1, segment.y1, color);
+      } else {
+        this.surface.line(segment.x0, segment.y0, segment.x1, segment.y1, color);
+      }
     }
 
     this.drawBridges(visible);
@@ -252,11 +313,30 @@ export class KnowledgeTree {
     const rng = createRng(this.state.seed ^ 0x9e3779b9);
     const count = Math.min(this.state.connections, 6);
 
+    // Only outer growth is eligible. Picking from the whole tree let a bridge run from a
+    // trunk section to the far side of the canopy, which read as a lasso thrown over the
+    // top rather than as two limbs finding each other.
+    const tips = this.segments.slice(0, visible).filter((s) => s.depth >= 3);
+    if (tips.length < 2) return;
+
     for (let i = 0; i < count; i++) {
-      const a = this.segments[Math.floor(rng() * visible)];
-      const b = this.segments[Math.floor(rng() * visible)];
-      if (!a || !b || a === b) continue;
-      this.surface.line(a.x1, a.y1, b.x1, b.y1, PALETTE.bridge);
+      const a = tips[Math.floor(rng() * tips.length)];
+      if (!a) continue;
+
+      // The nearest tip that is far enough away to belong to a different limb. Close
+      // enough to read as a graft, distant enough not to look like a drawing error.
+      let best: Segment | null = null;
+      let bestDistance = Infinity;
+      for (const b of tips) {
+        if (b === a) continue;
+        const distance = Math.hypot(b.x1 - a.x1, b.y1 - a.y1);
+        if (distance < 14 || distance > 46) continue;
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          best = b;
+        }
+      }
+      if (best) this.surface.line(a.x1, a.y1, best.x1, best.y1, PALETTE.bridge);
     }
   }
 

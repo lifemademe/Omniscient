@@ -27,9 +27,17 @@ export interface CRTSurfaceOptions {
 const DEFAULTS: Required<CRTSurfaceOptions> = {
   width: 192,
   height: 144,
-  background: '#06120b',
+  background: '#08180e',
   tint: 0xffffff,
 };
+
+/** Four-neighbour spread for the phosphor halo. Diagonals would fatten the traces too much. */
+const GLOW_OFFSETS: ReadonlyArray<readonly [number, number]> = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
 
 export class CRTSurface implements PixelSurface {
   public readonly canvas: HTMLCanvasElement;
@@ -87,10 +95,50 @@ export class CRTSurface implements PixelSurface {
     return this.options.height;
   }
 
-  /** Wipe to the background colour. Does not upload - call commit(). */
+  /**
+   * Wipe to the background colour. Does not upload - call commit().
+   *
+   * The wash is not flat. A powered CRT has a visible raster - the phosphor glows even
+   * where nothing is drawn, brightest at the centre of the tube and falling off into the
+   * corners. Filling flat black made the screen read as a dead panel in an unlit room,
+   * which is fatal when the screen is the hero object of the whole game.
+   */
   public clear(): void {
+    const { width, height } = this.options;
     this.ctx.fillStyle = this.options.background;
-    this.ctx.fillRect(0, 0, this.options.width, this.options.height);
+    this.ctx.fillRect(0, 0, width, height);
+
+    const glow = this.ctx.createRadialGradient(
+      width / 2,
+      height * 0.56,
+      0,
+      width / 2,
+      height * 0.56,
+      Math.max(width, height) * 0.62
+    );
+    glow.addColorStop(0, 'rgba(90, 190, 120, 0.30)');
+    glow.addColorStop(0.55, 'rgba(50, 130, 78, 0.13)');
+    glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    this.ctx.fillStyle = glow;
+    this.ctx.fillRect(0, 0, width, height);
+  }
+
+  /**
+   * A line with a halo around it.
+   *
+   * At 192x144 mapped onto a screen a few hundred pixels across, single-pixel traces
+   * disappear entirely - the tree was technically drawing and visually absent. Real
+   * phosphor bleeds into its neighbours, so each trace gets a dim spread pass before the
+   * bright core, which both fixes the legibility and is what a CRT actually does.
+   */
+  public glowLine(x0: number, y0: number, x1: number, y1: number, color: string): void {
+    const previous = this.ctx.globalAlpha;
+    this.ctx.globalAlpha = 0.24;
+    for (const [ox, oy] of GLOW_OFFSETS) {
+      this.line(x0 + ox, y0 + oy, x1 + ox, y1 + oy, color);
+    }
+    this.ctx.globalAlpha = previous;
+    this.line(x0, y0, x1, y1, color);
   }
 
   /** Draw a single hard pixel. */

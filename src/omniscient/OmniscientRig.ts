@@ -16,12 +16,13 @@ import { MIRELA, TOMAS } from './content/contacts.js';
 import { MISSION_01 } from './content/mission-01-transmitter.js';
 import { MISSION_02 } from './content/mission-02-beacon.js';
 import { decorMesh } from './art/mesh.js';
-import { LIGHT, MAT } from './art/palette.js';
+import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { createSignals, MIRELA_SIGNAL } from './content/signals.js';
 import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
 import { GlobeView, SignalState } from './crt/GlobeView.js';
 import { KnowledgeTree } from './crt/KnowledgeTree.js';
+import { TreeAttract } from './crt/TreeAttract.js';
 import { createCRTTerminal } from './geometry/hardware.js';
 import { createWorkstationRoom } from './geometry/room.js';
 import { KnowledgeStore } from './knowledge/KnowledgeStore.js';
@@ -84,8 +85,13 @@ const WORKSTATION_ORIGIN = new THREE.Vector3(0, 0, -60);
  * just as a screen filling the frame.
  */
 const HOME_SHOT: CameraShot = {
-  position: new THREE.Vector3(2.25, 1.55, -56.5),
-  target: new THREE.Vector3(-0.72, 0.86, -60.1),
+  // Tightened and dropped. The wider, higher setup put a fifth of the frame under the
+  // desk in unlit floor and pushed the machine small enough that the CRT - the one thing
+  // this shot exists to sell - was a third of the height it should be. Coming down closer
+  // to desk height also means the window falls behind the machine's shoulder rather than
+  // above it, which is what makes the tube read as sitting IN the room.
+  position: new THREE.Vector3(1.86, 1.24, -57.55),
+  target: new THREE.Vector3(-0.5, 0.92, -60.2),
   duration: 2.0,
 };
 
@@ -104,6 +110,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private knowledge = new KnowledgeStore(PLAYTHROUGH_SEED);
   private surface: CRTSurface | null = null;
   private tree: KnowledgeTree | null = null;
+  /** The title screen's looping growth arc. Only drawn while in Phase.Menu. */
+  private attract: TreeAttract | null = null;
   private phone: LocalSurface | null = null;
   private session: SessionController | null = null;
   private vfxNodes = new Map<string, ENGINE.VFXNode>();
@@ -284,8 +292,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.surface = new CRTSurface({ width: 192, height: 144 });
     this.tree = new KnowledgeTree(this.surface, this.knowledge.toTreeState());
+    this.attract = new TreeAttract(this.surface, PLAYTHROUGH_SEED);
     this.globe = new GlobeView(this.surface, this.signals);
-    this.tree.draw(1);
+    this.attract.advance(0, 0);
 
     station.add(
       ENGINE.MeshNode.create({ name: 'Screen', geometry: parts.screen, material: this.surface.material })
@@ -359,6 +368,84 @@ export class OmniscientRig extends ENGINE.SceneNode {
         color: new THREE.Color(LIGHT.key),
         distance: 4.5,
         decay: 1.6,
+      })
+    );
+
+    /**
+     * Daylight through the workstation window.
+     *
+     * The global key comes from front-right, which is right for the Contact View dioramas
+     * at the far end of the rig but wrong here - it would light the wall around the
+     * window from the opposite side to the window itself, and a blown-out aperture lit
+     * from in front reads as a mistake rather than as a window.
+     *
+     * So the workstation gets its own key: a spot placed outside the glazing, aimed into
+     * the room. It is distance-limited, so the dioramas sixty units away never see it,
+     * and it rakes across the desk right to left - which is what puts a lit edge on the
+     * plant, the mug and the machine's near corner instead of flat frontal light, and
+     * lets the light fall off into the darker side where the menu modules live.
+     */
+    const windowKey = ENGINE.SpotLightNode.create({
+      name: 'WindowKey',
+      position: WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(1.16, 2.2, -3.0)),
+      // Pulled back from 26: at full strength it lit the side wall as brightly as the
+      // desk, turning the left third of frame into a pale field that fought the machine.
+      intensity: 17,
+      color: new THREE.Color(LIGHT.key),
+      // Wide and very soft. A hard-edged pool on the floor would read as a stage light;
+      // the penumbra is doing the work of a window's diffuse spill.
+      angle: 0.8,
+      penumbra: 0.9,
+      distance: 8,
+      decay: 1.25,
+    });
+    windowKey.castShadow = false;
+    // Aim across the desk rather than straight at the wall opposite, so the beam travels
+    // along the desk surface and the near clutter picks up a rim.
+    windowKey.lookAt(WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(-0.6, 0.1, 0.2)));
+    this.add(windowKey);
+
+    /**
+     * The screen lights the room.
+     *
+     * This is the most valuable light in the scene for two reasons. Compositionally it
+     * completes the pair: warm daylight from the window on the left, cold green from the
+     * tube on the right, so every object in between has a warm edge and a cool edge and
+     * the room stops reading as flat. Narratively it is the point of the whole game -
+     * OMNISCIENT_ is not an object sitting in the room, it is the thing illuminating it,
+     * and the light it casts is the colour of its own growth.
+     *
+     * Tight distance so the spill dies before the wall behind: this is a glow off a
+     * screen, not a green floodlight.
+     */
+    /**
+     * Warm bounce off the floor, in front of the desk.
+     *
+     * Without it the desk top was a bright warm quad with absolute black beneath - so it
+     * read as a rug lying on the floor rather than as a surface with an edge and legs.
+     * Everything the key hits should throw something back; this is that return, and it is
+     * what gives the desk its front edge, the chassis its lower corner, and the side wall
+     * enough value to stop the shelf floating in a void.
+     */
+    this.add(
+      ENGINE.PointLightNode.create({
+        name: 'FloorBounce',
+        position: WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(0.6, -0.55, 0.5)),
+        intensity: 1.6,
+        color: new THREE.Color(LIGHT.bounce),
+        distance: 4.2,
+        decay: 1.4,
+      })
+    );
+
+    this.add(
+      ENGINE.PointLightNode.create({
+        name: 'ScreenGlow',
+        position: WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(0, 0.42, 0.34)),
+        intensity: 2.2,
+        color: new THREE.Color(ACCENT.knowledge),
+        distance: 2.1,
+        decay: 1.8,
       })
     );
 
@@ -654,6 +741,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (this.screen === Screen.Globe) {
       this.globe?.advance(deltaTime);
       this.globe?.draw(this.pulse);
+    } else if (this.phase === Phase.Menu) {
+      // The title screen runs the whole growth arc on a loop rather than showing the
+      // save state - see TreeAttract. Nothing has been learned yet, so there is nothing
+      // honest to display, and a blank screen is the worst possible first impression.
+      this.attract?.advance(deltaTime, this.pulse);
     } else if (this.revealProgress < 1) {
       this.revealProgress = Math.min(this.revealProgress + deltaTime / GROWTH_REVEAL_SECONDS, 1);
       const reveal = this.revealFrom + (1 - this.revealFrom) * this.revealProgress;

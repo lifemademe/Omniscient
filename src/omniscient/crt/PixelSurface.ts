@@ -19,6 +19,12 @@ export interface PixelSurface {
   /** Hard-edged line. Implementations must not anti-alias. */
   line(x0: number, y0: number, x1: number, y1: number, color: string): void;
 
+  /**
+   * A line with a phosphor halo around it, for traces that must read at a distance.
+   * Optional - implementations that cannot blend fall back to a plain line.
+   */
+  glowLine?(x0: number, y0: number, x1: number, y1: number, color: string): void;
+
   /** Darken alternate rows. */
   applyScanlines(strength?: number): void;
 
