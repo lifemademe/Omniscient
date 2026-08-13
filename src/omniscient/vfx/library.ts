@@ -30,9 +30,15 @@ export const SparkVFX: VFXDefinitionJSON = {
   particles: [
     {
       nbParticles: 64,
-      intensity: 3.2,
+      // Tuned against the shipping camera, not against a preview.
+      //
+      // At authored values this filled Mirela's entire workshop with metre-long white
+      // streaks - a firework, for what is meant to be a connector letting go under her
+      // hand. §93 keeps threat non-graphic and §187 wants it to read at gameplay distance
+      // without washing the frame out; it was doing the opposite of both.
+      intensity: 3.0,
       renderMode: 'stretchBillboard',
-      stretchScale: 5.0,
+      stretchScale: 2.6,
       fadeSize: [0.0, 0.7],
       fadeAlpha: [0.0, 0.75],
       gravity: [0, -9.5, 0],
@@ -46,16 +52,16 @@ export const SparkVFX: VFXDefinitionJSON = {
     {
       particlesIndex: 0,
       loop: false,
-      duration: 0.12,
-      nbParticles: 36,
+      duration: 0.1,
+      nbParticles: 26,
       spawnMode: 'burst',
-      particlesLifetime: [0.18, 0.5],
-      startPositionMin: [-0.015, -0.015, -0.015],
-      startPositionMax: [0.015, 0.015, 0.015],
+      particlesLifetime: [0.16, 0.36],
+      startPositionMin: [-0.01, -0.01, -0.01],
+      startPositionMax: [0.01, 0.01, 0.01],
       directionMin: [-1, 0.1, -1],
       directionMax: [1, 1, 1],
-      size: [0.008, 0.022],
-      speed: [1.6, 4.2],
+      size: [0.007, 0.017],
+      speed: [0.85, 2.1],
       colorStart: ['#fff6d8', '#ffd489'],
       colorEnd: ['#c25a12', '#5a1e00'],
     },
@@ -74,9 +80,11 @@ export const ElectricalArcVFX: VFXDefinitionJSON = {
   particles: [
     {
       nbParticles: 48,
-      intensity: 4.0,
+      // Same overscale as SparkVFX and further past it - stretchScale 9 on a burst
+      // travelling at 7 units a second is a lightning strike, not a bracket arcing.
+      intensity: 2.6,
       renderMode: 'stretchBillboard',
-      stretchScale: 9.0,
+      stretchScale: 2.4,
       fadeSize: [0.0, 0.4],
       fadeAlpha: [0.05, 0.35],
       gravity: [0, 0, 0],
@@ -91,15 +99,15 @@ export const ElectricalArcVFX: VFXDefinitionJSON = {
       particlesIndex: 0,
       loop: false,
       duration: 0.08,
-      nbParticles: 24,
+      nbParticles: 14,
       spawnMode: 'burst',
-      particlesLifetime: [0.06, 0.16],
-      startPositionMin: [-0.01, -0.01, -0.01],
-      startPositionMax: [0.01, 0.01, 0.01],
+      particlesLifetime: [0.05, 0.13],
+      startPositionMin: [-0.008, -0.008, -0.008],
+      startPositionMax: [0.008, 0.008, 0.008],
       directionMin: [-1, -1, -1],
       directionMax: [1, 1, 1],
-      size: [0.006, 0.014],
-      speed: [3.5, 7.0],
+      size: [0.003, 0.008],
+      speed: [0.9, 2.1],
       colorStart: ['#ffffff', '#bfeaff'],
       colorEnd: ['#2f7ad6', '#101a4a'],
     },
