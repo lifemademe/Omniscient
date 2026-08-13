@@ -38,6 +38,11 @@ export interface CharacterParams {
   /** Forward lean in radians. Somebody who works at a bench does not stand straight. */
   lean?: number;
   garment?: Garment;
+  /**
+   * Pin any of the generated colours. Omitted channels stay seeded, so this is a nudge
+   * for named characters rather than a second way to author a whole person.
+   */
+  colors?: Partial<{ skin: string; garment: string; underlayer: string; hair: string }>;
 }
 
 /** Geometry grouped by material role. */
@@ -124,11 +129,20 @@ export function createCharacter(params: CharacterParams): CharacterParts {
   const lean = params.lean ?? range(rng, 0.04, 0.14);
   const garment = params.garment ?? pick(rng, ['apron', 'coat', 'overalls'] as const);
 
+  /**
+   * Seeded, but overridable per character.
+   *
+   * Crowd and background people should vary freely - that is what the generator is for.
+   * The named recurring contacts should not: §185 wants them identifiable, and the seeded
+   * pick handed Mirela a warm brown that matched her own workshop exactly, so she read as
+   * a wooden mannequin standing in a wooden room. Art-directing the two people the player
+   * actually talks to is worth one optional field.
+   */
   const colors = {
-    skin: pick(rng, PERSON.skin),
-    garment: pick(rng, PERSON.garment),
-    underlayer: pick(rng, PERSON.underlayer),
-    hair: pick(rng, PERSON.hair),
+    skin: params.colors?.skin ?? pick(rng, PERSON.skin),
+    garment: params.colors?.garment ?? pick(rng, PERSON.garment),
+    underlayer: params.colors?.underlayer ?? pick(rng, PERSON.underlayer),
+    hair: params.colors?.hair ?? pick(rng, PERSON.hair),
   };
 
   // Proportion scaffold.

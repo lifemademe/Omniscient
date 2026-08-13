@@ -13,6 +13,7 @@
 
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { decorMesh } from '../art/mesh.js';
 import { LIGHT, MAT, PERSON } from '../art/palette.js';
@@ -81,6 +82,40 @@ function buildRepairShop(scene: ContactScene): void {
   wall.translate(0, 1.6, -1.9);
   scene.registerProp('wall', meshOf('Wall', wall, MAT.wall));
 
+  /**
+   * The tide line, and the point of §131.
+   *
+   * hint-floor tells the player "a dark line runs round the bottom of the walls, about a
+   * hand off the floor. The room has been flooded, and not just once." None of it was
+   * there. The observation panel was describing a room that did not exist, which is the
+   * exact failure §131 is written to prevent - the environment is supposed to carry the
+   * information, and a hint about invisible evidence is just the game telling you the
+   * answer with extra steps.
+   *
+   * Two bands, uneven and slightly apart, because a room that floods every spring has
+   * more than one high-water mark and they never land in the same place twice.
+   */
+  const tideMarks: THREE.BufferGeometry[] = [];
+  for (const [height, thickness] of [
+    [0.26, 0.035],
+    [0.19, 0.02],
+  ] as const) {
+    const back = new THREE.BoxGeometry(8, thickness, 0.02);
+    back.translate(0, height, -1.815);
+    tideMarks.push(back);
+  }
+  // Round the corner and onto the shelf's legs, so it reads as a level the whole room
+  // sat under rather than a stripe painted on one wall.
+  for (const x of [-2.35, -1.85]) {
+    const post = new THREE.BoxGeometry(0.08, 0.03, 0.02);
+    post.translate(x, 0.24, -1.28);
+    tideMarks.push(post);
+  }
+  scene.registerProp(
+    'tide-line',
+    meshOf('TideLine', mergeGeometries(tideMarks, false) ?? tideMarks[0], MAT.tideStain)
+  );
+
   const shelf = createShelfStack('mirela-shelf');
   const shelfRoot = ENGINE.SceneNode.create({ name: 'Shelf', position: new THREE.Vector3(-2.1, 0, -1.4) });
   shelfRoot.add(meshOf('ShelfBody', shelf.body, MAT.timber));
@@ -99,7 +134,7 @@ function buildRepairShop(scene: ContactScene): void {
     name: 'Transmitter',
     position: new THREE.Vector3(0, 0.81, -0.5),
   });
-  setRoot.add(meshOf('SetShell', set.body, MAT.plastic));
+  setRoot.add(meshOf('SetShell', set.body, MAT.equipment));
   setRoot.add(meshOf('SetFittings', set.fittings, MAT.metal));
 
   scene.registerProp('transmitter', setRoot, {
@@ -213,6 +248,18 @@ function buildRepairShop(scene: ContactScene): void {
       // Leaning in over the bench, which is where she has been all morning.
       lean: 0.16,
       garment: 'apron',
+      /**
+       * Art-directed rather than seeded. Her workshop is warm timber from wall to bench,
+       * and the seeded roll gave her a warm brown coat over it - so the one person in the
+       * scene disappeared into her own furniture and read as a wooden mannequin.
+       *
+       * A cold blue-grey work coat over a pale apron is the only cool mass in the room,
+       * which puts the human at the top of the read where she belongs.
+       */
+      colors: {
+        garment: '#42525c',
+        underlayer: '#c2b79c',
+      },
       position: new THREE.Vector3(-0.72, 0, -1.02),
       rotation: new THREE.Euler(0, Math.PI * 0.58, 0),
     })
@@ -234,15 +281,51 @@ function buildRepairShop(scene: ContactScene): void {
     })
   );
 
+  /**
+   * Cold daylight from the shop door, opposite the lamp.
+   *
+   * With only the warm practical, every surface in the room converged on the same orange:
+   * bench, boxes, shelf, transmitter and Mirela were one value and one hue, and nothing
+   * read against anything. §187 asks for the hero prop to stay legible against its
+   * environment, and it cannot do that when the environment is the same colour.
+   *
+   * One cool source on the far side does the whole job - every object now has a warm side
+   * and a cold side, which is what separates planes when there is no texture to do it.
+   */
+  scene.registerProp(
+    'door-light',
+    ENGINE.PointLightNode.create({
+      name: 'DoorLight',
+      position: new THREE.Vector3(-2.4, 1.7, 1.6),
+      intensity: 4.2,
+      color: new THREE.Color(LIGHT.fill),
+      distance: 7,
+      decay: 1.4,
+    })
+  );
+
   // Shots. The default frame establishes the room: bench, contact, and enough of the
   // shelf to read as somebody's workshop (§186 - composition before clutter).
   scene.registerShot('default', {
-    position: new THREE.Vector3(1.28, 1.52, 2.05),
-    target: new THREE.Vector3(-0.28, 0.9, -0.75),
+    // Target raised to chest height rather than bench height, so she is in the frame
+    // instead of cropped at the shoulders by a camera aimed at the furniture.
+    position: new THREE.Vector3(1.32, 1.46, 1.82),
+    target: new THREE.Vector3(-0.34, 1.06, -0.72),
   });
   scene.registerShot('transmitter', {
-    position: new THREE.Vector3(0.15, 1.05, 0.5),
-    target: new THREE.Vector3(0, 0.9, -0.5),
+    /**
+     * The set, with the person who owns it still in shot.
+     *
+     * This was a metre from the target and aimed square at the box: the transmitter
+     * filled the frame, Mirela was nowhere in it, and the whole scene read as a
+     * screenshot of a prop. The request is a conversation with somebody - losing her the
+     * moment the player looks closely at anything is the wrong trade every time.
+     *
+     * Now it comes in from her side of the bench, so the set is still the biggest thing
+     * in frame and her hands and shoulder hold the left edge.
+     */
+    position: new THREE.Vector3(0.92, 1.24, 0.92),
+    target: new THREE.Vector3(-0.2, 0.99, -0.6),
     duration: 1.5,
   });
   scene.registerShot('workshop-floor', {

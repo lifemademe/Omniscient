@@ -131,6 +131,20 @@ export const MAT = {
    * of polished steel - with no envmap in this scene, that renders nearly black.
    */
   paper: standard(ACCENT.bright, 0.94),
+  /**
+   * The high-water mark left on a wall that floods every spring. Darker and greener than
+   * the wall it sits on, the way damp plaster stains - not a painted stripe.
+   */
+  tideStain: standard('#41453a', 0.98),
+  /**
+   * Equipment housings - the crackle-finish grey-green of every field radio ever made.
+   *
+   * §187 requires the hero prop to stay legible against its environment. The transmitter
+   * was aged plastic sitting on timber, two warm mid values a shade apart, so the object
+   * the entire mission is about had no edge against the bench it stood on. Cool and
+   * desaturated against all that warm wood, it separates on hue as well as value.
+   */
+  equipment: standard('#6a7268', 0.62, 0.15),
   leaf: standard(GROWTH.leaf, 0.88),
   leafDeep: standard(GROWTH.leafDeep, 0.92),
   stem: standard(GROWTH.stem, 0.9),
