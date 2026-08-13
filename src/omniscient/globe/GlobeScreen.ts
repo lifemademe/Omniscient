@@ -119,8 +119,13 @@ function formatWait(seconds: number): string {
 /** Canvas resolution. Small on purpose - this is a machine's display (§9). */
 const CANVAS_W = 320;
 const CANVAS_H = 240;
-/** How close a click has to land, in canvas pixels. */
-const HIT_RADIUS = 9;
+/**
+ * How close a click has to land, in canvas pixels.
+ *
+ * Generous on purpose. These are names on a turning globe, not buttons on a form, and a
+ * near miss should open the contact rather than deselect everything.
+ */
+const HIT_RADIUS = 16;
 
 /**
  * How close two labels may sit before one is pushed down a row, in canvas pixels.
@@ -142,7 +147,17 @@ const GLOBE_CSS = `
   font-family: "Courier New", ui-monospace, monospace;
   overflow: hidden;
 }
-.omni-globe__stage { position: relative; align-self: center; justify-self: center; }
+/*
+ * The globe takes clicks. The console frame around it is deliberately click-through so
+ * that chrome never eats a press meant for the world - and wrapping the globe in that
+ * frame silently made the globe chrome too. Nothing was selectable at all.
+ */
+.omni-globe__stage {
+  position: relative;
+  align-self: center;
+  justify-self: center;
+  pointer-events: auto;
+}
 /* The globe screen borrows the console frame; these are the parts specific to it. */
 .omni-cv--globe { pointer-events: none; }
 .omni-cv__body--globe { grid-template-columns: min(23vw, 260px) 1fr; }

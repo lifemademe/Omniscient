@@ -206,7 +206,7 @@ export const MISSION_02: MissionDefinition = {
       id: 'sister-blind',
       tempo: Tempo.Think,
       say:
-        'Mirela? She is down the hill. Her set died yesterday and something fixed it for her this ' +
+        'Mirela? She is down the coast at Portu Vech. Her set died yesterday and something fixed it for her this ' +
         'morning, she would not stop going on about it. Why - what has that to do with my mast?',
       suggest: ['follow the aerial cable'],
       on: {

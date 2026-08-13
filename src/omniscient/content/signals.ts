@@ -30,8 +30,18 @@ export function createSignals(): Signal[] {
     },
     {
       id: TOMAS_SIGNAL,
-      latitude: 44.9,
-      longitude: 29.4,
+      /**
+       * Up the coast from his sister, not next door to her.
+       *
+       * They were 0.7 degrees apart, which on a whole-globe view is the same pixel - the
+       * two points drew on top of each other and only one could be reached. Geography had
+       * to give, because a globe you cannot click is worse than a headland that is a
+       * drive rather than a walk from the town.
+       *
+       * His dialogue moved with it: he no longer says she is down the hill.
+       */
+      latitude: 51.4,
+      longitude: 41.8,
       name: 'Tomas Vasc',
       label: 'The harbour light keeps going out.',
       // Appears once Mirela's request resolves - because that is what caused it.

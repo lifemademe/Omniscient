@@ -483,6 +483,43 @@ check(
 }
 
 /**
+ * No two signals project to the same place.
+ *
+ * A globe where two contacts share a pixel is a globe where one of them cannot be
+ * reached. Checked against the real signal list at several rotations, because two points
+ * can be comfortably apart from one angle and coincident from another.
+ */
+{
+  const surface = new BufferSurface(320, 240);
+  const view = new GlobeView(surface, createSignals());
+  const collisions: string[] = [];
+
+  for (let step = 0; step < 12; step++) {
+    view.advance(0.5, 1);
+    const visible = view
+      .getProjectedSignals()
+      .filter((p) => p.visible && p.signal.state !== SignalState.Unknown)
+      // Face-on only. At the limb every pair compresses to nothing however far apart they
+      // really are, and a point edge-on to the viewer cannot be clicked either way.
+      .filter((p) => Math.hypot(p.x - 160, p.y - 122) < 100 * 0.8);
+
+    for (let i = 0; i < visible.length; i++) {
+      for (let j = i + 1; j < visible.length; j++) {
+        const gap = Math.hypot(visible[i].x - visible[j].x, visible[i].y - visible[j].y);
+        if (gap < 12) {
+          collisions.push(`${visible[i].signal.id}/${visible[j].signal.id} ${gap.toFixed(1)}px`);
+        }
+      }
+    }
+  }
+  check(
+    'No two signals ever land on top of each other',
+    collisions.length === 0,
+    collisions.slice(0, 3).join(', ')
+  );
+}
+
+/**
  * Labels never draw on top of each other.
  *
  * Mirela and Tomas are less than a degree apart, which on this globe is the same pixel -
