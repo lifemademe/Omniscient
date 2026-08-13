@@ -21,14 +21,24 @@ export interface Signal {
   longitude: number;
   /** Short label shown when selected, e.g. "PORTU VECH - it worked yesterday". */
   label: string;
+  /** Who is calling. Shown against the point on the globe. */
+  name: string;
   state: SignalState;
+  /**
+   * Seconds until a failed request can be attempted again (§31 mission cooldowns).
+   * Counts down while the globe is up; the point is red and unopenable until it hits
+   * zero. §98: this makes failure cost something without creating a dead end.
+   */
+  cooldown?: number;
 }
 
 export enum SignalState {
-  /** Available to open. Pulses. */
+  /** Available to open. Green, pulsing. */
   Waiting = 'waiting',
   /** Currently open. Steady and bright. */
   Active = 'active',
+  /** Failed, and cooling down. Red, with a countdown (§31). */
+  Cooldown = 'cooldown',
   /** Finished. Dim, still visible - the world remembers (§163). */
   Resolved = 'resolved',
   /**
@@ -45,7 +55,9 @@ const PALETTE = {
   waiting: '#7fe08a',
   active: '#d8ffb0',
   resolved: '#2f6b3a',
-  /** Dirty red = warning / contradiction. Used for the signal that should not be there. */
+  /** Dirty red = a request that went wrong and is not yet reachable again. */
+  cooldown: '#c2483a',
+  /** Fainter red. The signal that should not be there. */
   unknown: '#8f3f4a',
   terminator: '#0f2430',
 };
@@ -74,6 +86,20 @@ export class GlobeView {
   /** Radians per second. Slow - §54 warns against constant motion for its own sake. */
   public advance(deltaTime: number, speed = 0.16): void {
     this.rotation = (this.rotation + deltaTime * speed) % (Math.PI * 2);
+  }
+
+  /**
+   * Where each signal currently sits on screen.
+   *
+   * The globe is drawn to a canvas, so hit-testing and name labels are done in canvas
+   * space by the presentation layer rather than by raycasting a texture on a mesh -
+   * which is the whole reason the globe is its own screen rather than a 3D object.
+   */
+  public getProjectedSignals(): Array<{ signal: Signal; x: number; y: number; visible: boolean }> {
+    return this.signals.map((signal) => {
+      const point = this.project(signal.latitude, signal.longitude);
+      return { signal, x: point.x, y: point.y, visible: point.visible };
+    });
   }
 
   private get centreX(): number {
@@ -185,6 +211,9 @@ export class GlobeView {
       case SignalState.Waiting:
         // Blink: on for most of the cycle, briefly off. Reads as a heartbeat.
         return pulse < 0.78 ? PALETTE.waiting : PALETTE.terminator;
+      case SignalState.Cooldown:
+        // Red, and blinking harder than a waiting signal - something went wrong here.
+        return pulse < 0.5 ? PALETTE.cooldown : PALETTE.terminator;
       case SignalState.Unknown:
         // Far slower and fainter - easy to miss, which is the point (§169).
         return pulse < 0.12 ? PALETTE.unknown : null;

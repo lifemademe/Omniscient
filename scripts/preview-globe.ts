@@ -9,7 +9,8 @@
 
 import { writeFileSync } from 'node:fs';
 
-import { GlobeView, SignalState } from '../src/omniscient/crt/GlobeView.js';
+import { createSignals } from '../src/omniscient/content/signals.js';
+import { GlobeView } from '../src/omniscient/crt/GlobeView.js';
 
 import { BufferSurface, encodePng } from './lib/pixel-preview.js';
 
@@ -20,29 +21,8 @@ const CELL_H = 144;
 const COLS = 4;
 const GUTTER = 4;
 
-/** Portu Vech is fictional; these put it on the Black Sea coast. */
-const SIGNALS: Signal[] = [
-  {
-    id: 'mirela',
-    latitude: 44.2,
-    longitude: 28.6,
-    label: 'PORTU VECH - "it worked yesterday"',
-    state: SignalState.Waiting,
-  },
-  {
-    id: 'tomas',
-    latitude: 44.3,
-    longitude: 28.7,
-    label: 'PORTU VECH - HARBOUR BEACON - INTERMITTENT',
-    state: SignalState.Waiting,
-  },
-  // §52: tease requests that are not implemented. They make the world bigger for free.
-  { id: 'tease-1', latitude: 35.7, longitude: 139.7, label: 'TOKYO - UNKNOWN SIGNAL', state: SignalState.Waiting },
-  { id: 'tease-2', latitude: 6.5, longitude: 3.4, label: 'LAGOS - URGENT', state: SignalState.Waiting },
-  { id: 'tease-3', latitude: -33.9, longitude: 151.2, label: 'SYDNEY - ANIMAL PROBLEM', state: SignalState.Resolved },
-  // §169: the anomaly. Barely visible, never explained.
-  { id: 'anomaly', latitude: 12.0, longitude: -80.0, label: 'UNKNOWN SOURCE', state: SignalState.Unknown },
-];
+/** The shipping signal set, so the preview cannot drift from the game. */
+const SIGNALS: Signal[] = createSignals();
 
 /** Four moments: rotating, with the anomaly caught on its rare frame in the last one. */
 const FRAMES: Array<{ rotate: number; pulse: number; selected: string | null }> = [

@@ -17,12 +17,13 @@ import { MIRELA } from '../src/omniscient/content/contacts.js';
 import { MISSION_01 } from '../src/omniscient/content/mission-01-transmitter.js';
 import { MISSION_02 } from '../src/omniscient/content/mission-02-beacon.js';
 import { createSignals, MIRELA_SIGNAL } from '../src/omniscient/content/signals.js';
+import { GlobeView, SignalState } from '../src/omniscient/crt/GlobeView.js';
 import { GrowthStage } from '../src/omniscient/crt/KnowledgeTree.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
 import { resolveIntent } from '../src/omniscient/mission/intent.js';
 import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
 import { SessionController } from '../src/omniscient/session/SessionController.js';
-import { SignalBoard } from '../src/omniscient/session/SignalBoard.js';
+import { BufferSurface } from './lib/pixel-preview.js';
 
 import type {
   InterventionSurface,
@@ -256,49 +257,37 @@ check(
 
 // -- 7. Signal selection (§52 / §99) --------------------------------------------------
 
-console.log('\n=== SIGNAL BOARD ===\n');
+console.log('\n=== SIGNALS ===\n');
 
-const boardFrames: SurfaceState[] = [];
-const boardSurface: InterventionSurface = {
-  kind: 'local',
-  connected: true,
-  attach: async () => {},
-  detach: () => {},
-  present: (state) => boardFrames.push(state),
-  onMessage: () => () => {},
-};
-
-const selected: string[] = [];
-const board = new SignalBoard(boardSurface, (id) => selected.push(id));
 const signals = createSignals();
-const openable = new Set([MIRELA_SIGNAL]);
+signals.forEach((s) => console.log(`  ${s.state.padEnd(9)} ${(s.name || '-').padEnd(16)} ${s.label}`));
 
-board.present(signals, openable);
-const listing = boardFrames[0].transcript.map((t) => t.body);
-listing.forEach((line) => console.log(`  ${line}`));
-
-check('Board lists only openable signals', listing.filter((l) => l.startsWith('  ')).length === 1);
-check('Board invites a selection', listing[listing.length - 1].includes('name a location'));
-check('Board accepts input', boardFrames[0].awaitingInput);
-
-check('Matches on a location word', board.handleText('portu vech', signals, openable));
-check('Selected the right signal', selected[0] === MIRELA_SIGNAL);
-
-selected.length = 0;
+const nameable = signals.filter((s) => s.state !== SignalState.Unknown);
+check('At most five nameable signals at once', nameable.length <= 5, '§96 conscious channel cap');
+check('Every nameable signal has a name for the globe', nameable.every((s) => s.name.length > 0));
+check('Mirela is the one openable request at the start', signals[0].id === MIRELA_SIGNAL);
 check(
-  'Matches on any word from the label, not just the location',
-  board.handleText('the one that worked yesterday', signals, openable) && selected[0] === MIRELA_SIGNAL
-);
-
-selected.length = 0;
-check(
-  'Rejects an unknown location without selecting',
-  !board.handleText('tokyo', signals, openable) && selected.length === 0,
-  'Tokyo is a tease, not an openable request'
+  'Tomas is not yet calling - his beacon breaks because of Mirela',
+  signals.find((s) => s.id === 'tomas')?.state === SignalState.Resolved
 );
 check(
-  'Rejection explains itself rather than failing silently',
-  boardFrames[boardFrames.length - 1].transcript.some((t) => t.body.includes('no signal by that name'))
+  'A failed request is on cooldown with a countdown (§31)',
+  signals.some((s) => s.state === SignalState.Cooldown && (s.cooldown ?? 0) > 0)
+);
+check(
+  'The anomaly has no name and is not a request (§169)',
+  signals.some((s) => s.state === SignalState.Unknown && s.name === '')
+);
+
+// Projection: the globe must be able to place every signal, and hide the far side.
+const globeSurface = new BufferSurface(192, 144);
+const globe = new GlobeView(globeSurface, signals);
+const projected = globe.getProjectedSignals();
+check('Projects every signal', projected.length === signals.length);
+check('Culls the far hemisphere', projected.some((p) => !p.visible), 'orthographic back-face cull');
+check(
+  'Visible points land inside the canvas',
+  projected.filter((p) => p.visible).every((p) => p.x >= 0 && p.x <= 192 && p.y >= 0 && p.y <= 144)
 );
 
 // -- Report ---------------------------------------------------------------------------

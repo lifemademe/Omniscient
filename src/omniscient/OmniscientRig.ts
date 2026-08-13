@@ -26,10 +26,10 @@ import { createCRTTerminal } from './geometry/hardware.js';
 import { createWorkstationRoom } from './geometry/room.js';
 import { KnowledgeStore } from './knowledge/KnowledgeStore.js';
 import { LocalSurface } from './link/LocalSurface.js';
+import { GlobeScreen } from './globe/GlobeScreen.js';
 import { Picker } from './input/Picker.js';
 import { MainMenu } from './menu/MainMenu.js';
 import { SessionController } from './session/SessionController.js';
-import { SignalBoard } from './session/SignalBoard.js';
 import { VFX_LIBRARY } from './vfx/library.js';
 import { buildContactScene } from './view/scenes.js';
 
@@ -89,6 +89,13 @@ const HOME_SHOT: CameraShot = {
   duration: 2.0,
 };
 
+/** The push-in: hard onto the CRT face, so the screen fills the frame. */
+const SCREEN_SHOT: CameraShot = {
+  position: new THREE.Vector3(0, 0.46, -59.05),
+  target: new THREE.Vector3(0, 0.46, -59.62),
+  duration: 1.6,
+};
+
 /** Seconds spent at the machine after a request resolves, before the next signal. */
 const HOME_DWELL = 5.5;
 
@@ -109,7 +116,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private screen: Screen = Screen.Tree;
   private menu: MainMenu | null = null;
   private picker: Picker | null = null;
-  private board: SignalBoard | null = null;
+  private globeScreen: GlobeScreen | null = null;
+  /** Seconds until the globe screen takes over from the push-in. */
+  private globeHandoff = 0;
   private globe: GlobeView | null = null;
   private signals: Signal[] = createSignals();
   /** Signals that map to a mission still in the queue. */
@@ -396,14 +405,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       onResolved: () => this.returnHome(),
     });
 
-    this.board = new SignalBoard(this.phone, (signalId) => this.openSignal(signalId));
-
-    // The rig owns the surface outside a request; SessionController takes it during one.
-    this.phone.onMessage((message) => {
-      if (message.kind !== 'text') return;
-      if (this.phase !== Phase.Choosing) return;
-      this.board?.handleText(message.text, this.signals, this.openable);
-    });
+    this.globeScreen = new GlobeScreen(container, (signalId) => this.openSignal(signalId));
 
     this.attachPicker(world, container);
 
@@ -432,12 +434,21 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.showGlobe();
   }
 
-  /** Raise the globe and hand the player the choice (§52). */
+  /**
+   * Push into the machine, then hand over to the globe screen (§5's dashboard).
+   *
+   * The camera drives into the CRT until the screen fills the frame, and the globe takes
+   * over from there - so it still reads as looking through OMNISCIENT_'s own display,
+   * while the points stay big enough to click.
+   */
   private showGlobe(): void {
     this.phase = Phase.Choosing;
     this.screen = Screen.Globe;
-    this.phone?.setVisible(true);
-    this.board?.present(this.signals, this.openable);
+    this.phone?.setVisible(false);
+
+    this.moveTo(SCREEN_SHOT, 1.6);
+    // Hand over once the push-in has arrived, not before - the transition is the point.
+    this.globeHandoff = 1.5;
   }
 
   private openSignal(signalId: string): void {
@@ -450,6 +461,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.phase = Phase.Contact;
     this.screen = Screen.Tree;
+    this.globeScreen?.detach();
+    this.phone?.setVisible(true);
 
     const request = this.queue[index];
     this.mountScene(request.mission.sceneId);
@@ -555,6 +568,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
     super.tickPrePhysics(deltaTime);
     this.cameraTweener.update(deltaTime);
     if (this.picker) this.menu?.update(deltaTime, this.picker);
+    this.globeScreen?.update(deltaTime);
+
+    // Hand over to the globe screen once the camera has arrived inside the CRT.
+    if (this.globeHandoff > 0) {
+      this.globeHandoff -= deltaTime;
+      if (this.globeHandoff <= 0) {
+        this.globeScreen?.attach(this.signals, this.openable);
+      }
+    }
+
     if (!this.tree) return;
 
     this.pulse = (this.pulse + deltaTime / 1.6) % 1;
