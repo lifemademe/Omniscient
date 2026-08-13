@@ -18,7 +18,7 @@ import { MISSION_01 } from '../src/omniscient/content/mission-01-transmitter.js'
 import { MISSION_02 } from '../src/omniscient/content/mission-02-beacon.js';
 import { createSignals, MIRELA_SIGNAL } from '../src/omniscient/content/signals.js';
 import { GlobeView, SignalState } from '../src/omniscient/crt/GlobeView.js';
-import { tickCooldowns } from '../src/omniscient/globe/GlobeScreen.js';
+import { layoutLabels, tickCooldowns } from '../src/omniscient/globe/GlobeScreen.js';
 import { GrowthStage } from '../src/omniscient/crt/KnowledgeTree.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
 import { readsAsYesNo, resolveIntent } from '../src/omniscient/mission/intent.js';
@@ -480,6 +480,45 @@ check(
   check('The request is offered back to the rig', reopened.includes(MIRELA_SIGNAL));
   check('...and becomes answerable again', openable.has(MIRELA_SIGNAL), 'no more "no longer waiting"');
   check('The stale countdown is cleared', blocked.cooldown === undefined);
+}
+
+/**
+ * Labels never draw on top of each other.
+ *
+ * Mirela and Tomas are less than a degree apart, which on this globe is the same pixel -
+ * so their names overlapped and only the nearer one could be selected at all. Their
+ * geography is true and stays put; the labels move.
+ */
+{
+  const projections = createSignals()
+    .filter((s) => s.state !== SignalState.Unknown)
+    .map((signal, i) => ({
+      // Deliberately stack the first three at one point - the worst case, and close to
+      // what the two Vasc siblings actually produce.
+      x: i < 3 ? 100 : 40 + i * 30,
+      y: i < 3 ? 60 : 30 + i * 12,
+      signal,
+    }));
+
+  const layout = layoutLabels(projections);
+  check('Every visible signal gets a label position', layout.size === projections.length);
+
+  const spots = [...layout.values()];
+  const collisions = spots.flatMap((a, i) =>
+    spots
+      .slice(i + 1)
+      .filter((b) => Math.abs(a.x - b.x) < 34 && Math.abs(a.y - b.y) < 11)
+      .map(() => `${a.x},${a.y}`)
+  );
+  check('No two labels overlap', collisions.length === 0, collisions.join(' '));
+
+  const stacked = projections.slice(0, 3).map((p) => layout.get(p.signal.id)!);
+  check('Co-located contacts stack into separate rows', new Set(stacked.map((s) => s.y)).size === 3);
+  check(
+    'The topmost keeps its true position - only the ones behind it move',
+    stacked[0].y === 60,
+    'the dots stay honest'
+  );
 }
 
 // Projection: the globe must be able to place every signal, and hide the far side.

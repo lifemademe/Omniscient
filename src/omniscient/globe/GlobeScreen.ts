@@ -58,6 +58,48 @@ export function tickCooldowns(
   }
 }
 
+/**
+ * Place the name labels so none of them draws on top of another.
+ *
+ * Mirela and Tomas are siblings in one small town - 44.2N 28.6E and 44.9N 29.4E, less than
+ * a degree apart. On a globe this size that is the same pixel, so their names drew over
+ * one another and only the nearer one could ever be clicked. Moving them apart
+ * geographically would be a lie: they really are in the same place.
+ *
+ * So the dots stay honest and the labels move. Sorted top-down, the highest keeps its true
+ * position and anything colliding is pushed down a row - which reads correctly, because
+ * two people stacked at one spot is exactly what is true.
+ *
+ * A free function so it can be checked without a DOM. The returned positions are also the
+ * hit-test targets: the label is what the player is aiming at.
+ */
+export function layoutLabels(
+  projections: ReadonlyArray<{ x: number; y: number; signal: Signal }>
+): Map<string, { x: number; y: number }> {
+  const layout = new Map<string, { x: number; y: number }>();
+  const placed: Array<{ x: number; y: number }> = [];
+
+  for (const projected of [...projections].sort((a, b) => a.y - b.y)) {
+    let y = projected.y;
+
+    // Loop rather than test once - three in a cluster need three different rows.
+    for (let guard = 0; guard < projections.length; guard++) {
+      const clash = placed.find(
+        (other) =>
+          Math.abs(other.x - projected.x) < LABEL_GAP_X && Math.abs(other.y - y) < LABEL_GAP_Y
+      );
+      if (!clash) break;
+      y = clash.y + LABEL_GAP_Y;
+    }
+
+    const spot = { x: projected.x, y };
+    placed.push(spot);
+    layout.set(projected.signal.id, spot);
+  }
+
+  return layout;
+}
+
 function formatWait(seconds: number): string {
   const total = Math.max(0, Math.floor(seconds));
   const minutes = Math.floor(total / 60);
@@ -69,6 +111,15 @@ const CANVAS_W = 320;
 const CANVAS_H = 240;
 /** How close a click has to land, in canvas pixels. */
 const HIT_RADIUS = 9;
+
+/**
+ * How close two labels may sit before one is pushed down a row, in canvas pixels.
+ *
+ * X is generous because names are wide and overlap sideways long before they touch
+ * vertically; Y only needs to clear one line of text.
+ */
+const LABEL_GAP_X = 34;
+const LABEL_GAP_Y = 11;
 
 const GLOBE_CSS = `
 .omni-globe {
@@ -276,6 +327,8 @@ export class GlobeScreen {
   private tipForId: string | null = null;
   /** Which branch of buildTip the open tip is showing, so it rebuilds when that changes. */
   private tipShape = '';
+  /** Where each visible label ended up after de-collision. Also the hit-test targets. */
+  private readonly layout = new Map<string, { x: number; y: number }>();
   /** The countdown line inside the open tip, rewritten in place each frame. */
   private waitEl: HTMLElement | null = null;
   private pulse = 0;
@@ -398,12 +451,18 @@ export class GlobeScreen {
     const x = ((event.clientX - rect.left) / rect.width) * CANVAS_W;
     const y = ((event.clientY - rect.top) / rect.height) * CANVAS_H;
 
+    /**
+     * Hit-test against the laid-out LABEL positions, not the raw projected dots.
+     *
+     * Two contacts in the same town project to the same pixel, so testing the dots meant
+     * the nearer one always won and the other could never be selected at all. The label
+     * is what the player is aiming at anyway - it is the thing they can see and read.
+     */
     let best: { id: string; distance: number } | null = null;
-    for (const projected of this.globe.getProjectedSignals()) {
-      if (!projected.visible || projected.signal.state === SignalState.Unknown) continue;
-      const distance = Math.hypot(projected.x - x, projected.y - y);
+    for (const [id, spot] of this.layout) {
+      const distance = Math.hypot(spot.x - x, spot.y - y);
       if (distance <= HIT_RADIUS && (!best || distance < best.distance)) {
-        best = { id: projected.signal.id, distance };
+        best = { id, distance };
       }
     }
 
@@ -424,10 +483,28 @@ export class GlobeScreen {
     if (!this.marks) return;
 
     const seen = new Set<string>();
+    const showing = this.globe
+      .getProjectedSignals()
+      .filter((p) => p.visible && p.signal.state !== SignalState.Unknown);
+
+    /**
+     * Spread labels that land on top of each other.
+     *
+     * Mirela and Tomas are siblings in one small town - 44.2N 28.6E and 44.9N 29.4E, less
+     * than a degree apart. On a globe this size that is the same pixel, so their names
+     * drew over one another and only one of them could ever be clicked. Moving them
+     * apart geographically would be a lie: they really are in the same place.
+     *
+     * So the dots stay honest and the LABELS move. Nearest to the viewer keeps its true
+     * position and anything colliding is pushed down a row, which reads correctly - two
+     * people stacked at one location is exactly what is true.
+     */
+    this.layout.clear();
+    for (const [id, spot] of layoutLabels(showing)) this.layout.set(id, spot);
 
     for (const projected of this.globe.getProjectedSignals()) {
       const { signal } = projected;
-      const showing = projected.visible && signal.state !== SignalState.Unknown;
+      const spot = this.layout.get(signal.id);
 
       let name = this.nameEls.get(signal.id);
       if (!name) {
@@ -438,19 +515,19 @@ export class GlobeScreen {
         this.marks.appendChild(name);
       }
 
-      name.style.display = showing ? 'block' : 'none';
-      if (!showing) continue;
+      name.style.display = spot ? 'block' : 'none';
+      if (!spot) continue;
 
       seen.add(signal.id);
       name.className = `omni-globe__name omni-globe__name--${this.stateClass(signal)}`;
-      name.style.left = `${projected.x * this.scale}px`;
-      name.style.top = `${projected.y * this.scale}px`;
+      name.style.left = `${spot.x * this.scale}px`;
+      name.style.top = `${spot.y * this.scale}px`;
 
-      // Keep the open tooltip pinned to its point. The globe is stopped while a signal
-      // is selected, so this is a no-op in practice - but it stays correct if that changes.
+      // The tooltip follows the label rather than the dot, so a displaced name and its
+      // tooltip stay together and the player is always pointing at the same thing.
       if (signal.id === this.selectedId && this.tipEl) {
-        this.tipEl.style.left = `${projected.x * this.scale}px`;
-        this.tipEl.style.top = `${projected.y * this.scale}px`;
+        this.tipEl.style.left = `${spot.x * this.scale}px`;
+        this.tipEl.style.top = `${spot.y * this.scale}px`;
       }
     }
 
