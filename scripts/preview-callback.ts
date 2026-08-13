@@ -16,12 +16,14 @@
 import { MIRELA } from '../src/omniscient/content/contacts.js';
 import { MISSION_01 } from '../src/omniscient/content/mission-01-transmitter.js';
 import { MISSION_02 } from '../src/omniscient/content/mission-02-beacon.js';
+import { createSignals, MIRELA_SIGNAL } from '../src/omniscient/content/signals.js';
 import { GrowthStage } from '../src/omniscient/crt/KnowledgeTree.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
 import { resolveIntent } from '../src/omniscient/mission/intent.js';
 import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
 import { BootSequence } from '../src/omniscient/session/BootSequence.js';
 import { SessionController } from '../src/omniscient/session/SessionController.js';
+import { SignalBoard } from '../src/omniscient/session/SignalBoard.js';
 
 import type {
   InterventionSurface,
@@ -300,6 +302,53 @@ check(
   bootLines.some((l) => l.includes('memory') && l.includes('empty'))
 );
 check('Every line is a system line', bootFinal.transcript.every((t) => t.source === 'system'));
+
+// -- 8. Signal selection (§52 / §99) --------------------------------------------------
+
+console.log('\n=== SIGNAL BOARD ===\n');
+
+const boardFrames: SurfaceState[] = [];
+const boardSurface: InterventionSurface = {
+  kind: 'local',
+  connected: true,
+  attach: async () => {},
+  detach: () => {},
+  present: (state) => boardFrames.push(state),
+  onMessage: () => () => {},
+};
+
+const selected: string[] = [];
+const board = new SignalBoard(boardSurface, (id) => selected.push(id));
+const signals = createSignals();
+const openable = new Set([MIRELA_SIGNAL]);
+
+board.present(signals, openable);
+const listing = boardFrames[0].transcript.map((t) => t.body);
+listing.forEach((line) => console.log(`  ${line}`));
+
+check('Board lists only openable signals', listing.filter((l) => l.startsWith('  ')).length === 1);
+check('Board invites a selection', listing[listing.length - 1].includes('name a location'));
+check('Board accepts input', boardFrames[0].awaitingInput);
+
+check('Matches on a location word', board.handleText('portu vech', signals, openable));
+check('Selected the right signal', selected[0] === MIRELA_SIGNAL);
+
+selected.length = 0;
+check(
+  'Matches on any word from the label, not just the location',
+  board.handleText('the one that worked yesterday', signals, openable) && selected[0] === MIRELA_SIGNAL
+);
+
+selected.length = 0;
+check(
+  'Rejects an unknown location without selecting',
+  !board.handleText('tokyo', signals, openable) && selected.length === 0,
+  'Tokyo is a tease, not an openable request'
+);
+check(
+  'Rejection explains itself rather than failing silently',
+  boardFrames[boardFrames.length - 1].transcript.some((t) => t.body.includes('no signal by that name'))
+);
 
 // -- Report ---------------------------------------------------------------------------
 

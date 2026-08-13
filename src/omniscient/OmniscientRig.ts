@@ -15,17 +15,21 @@ import * as THREE from 'three';
 import { MIRELA, TOMAS } from './content/contacts.js';
 import { MISSION_01 } from './content/mission-01-transmitter.js';
 import { MISSION_02 } from './content/mission-02-beacon.js';
+import { createSignals, MIRELA_SIGNAL } from './content/signals.js';
 import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
+import { GlobeView, SignalState } from './crt/GlobeView.js';
 import { KnowledgeTree } from './crt/KnowledgeTree.js';
 import { createCRTTerminal } from './geometry/hardware.js';
 import { KnowledgeStore } from './knowledge/KnowledgeStore.js';
 import { LocalSurface } from './link/LocalSurface.js';
 import { BootSequence } from './session/BootSequence.js';
 import { SessionController } from './session/SessionController.js';
+import { SignalBoard } from './session/SignalBoard.js';
 import { VFX_LIBRARY } from './vfx/library.js';
 import { buildContactScene } from './view/scenes.js';
 
+import type { Signal } from './crt/GlobeView.js';
 import type { Contact, MissionDefinition } from './mission/types.js';
 import type { CameraShot, ContactScene } from './view/ContactScene.js';
 
@@ -55,17 +59,30 @@ interface QueuedRequest {
  */
 enum Phase {
   Boot = 'boot',
+  /** At the machine, watching the tree. */
   Home = 'home',
+  /** At the machine, globe up, choosing the next request. */
+  Choosing = 'choosing',
   Contact = 'contact',
+}
+
+/** What the CRT is showing. */
+enum Screen {
+  Tree = 'tree',
+  Globe = 'globe',
 }
 
 /** Where the workstation sits, far from the dioramas so shots never overlap. */
 const WORKSTATION_ORIGIN = new THREE.Vector3(0, 0, -60);
 
-/** Framed on the CRT: this is the shot the player should want to screenshot (§129). */
+/**
+ * The machine, three-quarter on. §129 wants this to be the shot a player screenshots at
+ * the start and again at the end - so the chassis has to read as a physical object, not
+ * just as a screen filling the frame.
+ */
 const HOME_SHOT: CameraShot = {
-  position: new THREE.Vector3(0.34, 0.72, -58.62),
-  target: new THREE.Vector3(0, 0.46, -59.6),
+  position: new THREE.Vector3(0.95, 1.02, -57.75),
+  target: new THREE.Vector3(-0.02, 0.46, -59.72),
   duration: 2.0,
 };
 
@@ -86,7 +103,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private pauseRemaining = 0;
 
   private phase: Phase = Phase.Boot;
+  private screen: Screen = Screen.Tree;
   private boot: BootSequence | null = null;
+  private board: SignalBoard | null = null;
+  private globe: GlobeView | null = null;
+  private signals: Signal[] = createSignals();
+  /** Signals that map to a mission still in the queue. */
+  private openable = new Set<string>([MIRELA_SIGNAL]);
 
   /**
    * Every diorama, built once at construction and kept hidden until its request opens.
@@ -244,6 +267,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.surface = new CRTSurface({ width: 192, height: 144 });
     this.tree = new KnowledgeTree(this.surface, this.knowledge.toTreeState());
+    this.globe = new GlobeView(this.surface, this.signals);
     this.tree.draw(1);
 
     station.add(
@@ -327,11 +351,48 @@ export class OmniscientRig extends ENGINE.SceneNode {
       onResolved: () => this.returnHome(),
     });
 
+    this.board = new SignalBoard(this.phone, (signalId) => this.openSignal(signalId));
+
+    // The rig owns the surface outside a request; SessionController takes it during one.
+    this.phone.onMessage((message) => {
+      if (message.kind !== 'text') return;
+      if (this.phase !== Phase.Choosing) return;
+      this.board?.handleText(message.text, this.signals, this.openable);
+    });
+
     // §7: open on the machine, cold, with nothing on the screen but a sprout.
     this.phase = Phase.Boot;
     this.cutTo(HOME_SHOT);
-    this.boot = new BootSequence(this.phone, () => this.openNextRequest());
+    this.boot = new BootSequence(this.phone, () => this.showGlobe());
     this.boot.start();
+  }
+
+  /** Raise the globe and hand the player the choice (§52). */
+  private showGlobe(): void {
+    this.phase = Phase.Choosing;
+    this.screen = Screen.Globe;
+    this.board?.present(this.signals, this.openable);
+  }
+
+  private openSignal(signalId: string): void {
+    const index = this.queue.findIndex((request) => request.mission.contactId === signalId);
+    if (index < 0 || !this.session) return;
+
+    this.setSignalState(signalId, SignalState.Active);
+    this.openable.delete(signalId);
+    this.queueIndex = index + 1;
+
+    this.phase = Phase.Contact;
+    this.screen = Screen.Tree;
+
+    const request = this.queue[index];
+    this.mountScene(request.mission.sceneId);
+    this.session.start(request.mission, request.contact);
+  }
+
+  private setSignalState(signalId: string, state: SignalState): void {
+    const signal = this.signals.find((s) => s.id === signalId);
+    if (signal) signal.state = state;
   }
 
   /**
@@ -341,22 +402,20 @@ export class OmniscientRig extends ENGINE.SceneNode {
    */
   private returnHome(): void {
     this.phase = Phase.Home;
+    this.screen = Screen.Tree;
     this.pauseRemaining = HOME_DWELL;
     this.moveTo(HOME_SHOT, HOME_SHOT.duration ?? 2.0);
-  }
 
-  private openNextRequest(): void {
+    // Resolving Mirela's request is what puts Tomas on the globe - §163's consequence
+    // chain, visible before the player knows why.
+    const resolvedId = this.queue[this.queueIndex - 1]?.mission.contactId;
+    if (resolvedId) this.setSignalState(resolvedId, SignalState.Resolved);
+
     const next = this.queue[this.queueIndex];
-    if (!next || !this.session) {
-      // Nothing left. Stay at the machine - §168, the quiet is the ending.
-      this.phase = Phase.Home;
-      return;
+    if (next) {
+      this.setSignalState(next.mission.contactId, SignalState.Waiting);
+      this.openable.add(next.mission.contactId);
     }
-    this.queueIndex += 1;
-
-    this.phase = Phase.Contact;
-    this.mountScene(next.mission.sceneId);
-    this.session.start(next.mission, next.contact);
   }
 
   /** Swap the diorama. One scene is live at a time - §133 foregrounds a single contact. */
@@ -432,7 +491,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.pulse = (this.pulse + deltaTime / 1.6) % 1;
 
-    if (this.revealProgress < 1) {
+    if (this.screen === Screen.Globe) {
+      this.globe?.advance(deltaTime);
+      this.globe?.draw(this.pulse);
+    } else if (this.revealProgress < 1) {
       this.revealProgress = Math.min(this.revealProgress + deltaTime / GROWTH_REVEAL_SECONDS, 1);
       const reveal = this.revealFrom + (1 - this.revealFrom) * this.revealProgress;
       this.tree.draw(reveal, this.pulse);
@@ -440,11 +502,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.tree.draw(1, this.pulse);
     }
 
-    // §168: let the resolution land at the machine before the next signal arrives.
+    // §168: let the growth land at the machine before the globe comes back up.
     if (this.phase === Phase.Home && this.pauseRemaining > 0) {
       this.pauseRemaining -= deltaTime;
       if (this.pauseRemaining <= 0) {
-        this.openNextRequest();
+        this.showGlobe();
       }
     }
   }
