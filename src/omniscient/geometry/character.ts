@@ -37,6 +37,8 @@ export interface CharacterParams {
   headScale?: number;
   /** Forward lean in radians. Somebody who works at a bench does not stand straight. */
   lean?: number;
+  /** 0 arms hanging, 1 forearms up and forward as if resting on a surface. */
+  reach?: number;
   garment?: Garment;
   /**
    * Pin any of the generated colours. Omitted channels stay seeded, so this is a nudge
@@ -188,6 +190,17 @@ export function createCharacter(params: CharacterParams): CharacterParts {
   const upperArm = torsoHeight * 0.62;
   const foreArm = torsoHeight * 0.56;
 
+  /**
+   * How far the forearms come up and forward, 0 hanging to 1 resting on a surface.
+   *
+   * Arms hanging straight down is the pose of somebody waiting to be photographed, and it
+   * was the single thing making these figures read as shop mannequins rather than people
+   * mid-job. Bending at the elbow and putting the hands out in front costs one rotation
+   * and is the difference between standing near a bench and working at one.
+   */
+  const reach = params.reach ?? 0;
+  const elbowBend = reach * 1.25;
+
   for (const side of [-1, 1] as const) {
     const outward = side * (shoulderWidth / 2 + limbThick * 0.4);
     const swing = side === 1 ? range(rng, 0.1, 0.35) : range(rng, -0.2, 0.05);
@@ -195,14 +208,21 @@ export function createCharacter(params: CharacterParams): CharacterParts {
     skin.push(
       limb(limbThick, upperArm, limbThick, [outward, shoulderY - upperArm * 0.5, 0], side * 0.12, swing)
     );
+
+    // The elbow. Everything below it swings forward together, so the forearm and hand
+    // stay attached to each other rather than drifting apart as the reach increases.
+    const elbowY = shoulderY - upperArm;
+    const forwardZ = Math.sin(elbowBend) * foreArm * 0.5;
+    const dropY = Math.cos(elbowBend) * foreArm * 0.5;
+
     skin.push(
       limb(
         limbThick * 0.9,
         foreArm,
         limbThick * 0.9,
-        [outward + side * 0.02, shoulderY - upperArm - foreArm * 0.45, swing * 0.28],
+        [outward + side * 0.02, elbowY - dropY, swing * 0.28 + forwardZ],
         side * 0.06,
-        swing * 1.4
+        swing * 1.4 + elbowBend
       )
     );
     // Oversized hands - §185's "a mechanic may have visually dominant hands".
@@ -211,7 +231,13 @@ export function createCharacter(params: CharacterParams): CharacterParts {
         limbThick * 1.25,
         limbThick * 1.5,
         limbThick * 0.8,
-        [outward + side * 0.03, shoulderY - upperArm - foreArm - limbThick * 0.5, swing * 0.5]
+        [
+          outward + side * 0.03,
+          elbowY - dropY * 2 - Math.cos(elbowBend) * limbThick * 0.5,
+          swing * 0.5 + forwardZ * 2 + Math.sin(elbowBend) * limbThick * 0.5,
+        ],
+        0,
+        elbowBend
       )
     );
   }

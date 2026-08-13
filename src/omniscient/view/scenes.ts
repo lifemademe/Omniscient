@@ -17,6 +17,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { decorMesh } from '../art/mesh.js';
 import { ACCENT, LIGHT, MAT, PERSON } from '../art/palette.js';
+import { createRng, jitter, seedFrom } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
 import { createCharacter } from '../geometry/character.js';
 import {
@@ -127,6 +128,53 @@ function buildRepairShop(scene: ContactScene): void {
   benchRoot.add(meshOf('BenchTop', bench.body, MAT.timber));
   benchRoot.add(meshOf('BenchLegs', bench.fittings, MAT.metal));
   scene.registerProp('bench', benchRoot);
+
+  /**
+   * The evidence that this is somebody's job.
+   *
+   * The bench was a bare plank with one radio on it, which reads as a display stand. A
+   * workbench that has been worked at all morning has the back panel off and lying beside
+   * the set, the screws that held it somewhere they will get lost, and the tools that came
+   * out to do it still where they were put down. §186 says clutter only where it supports
+   * story - all of this says the same thing: she has already tried.
+   */
+  const benchRng = createRng(seedFrom('mirela-bench'));
+  const clutter: THREE.BufferGeometry[] = [];
+
+  // The set's back panel, off and leaning against the bench edge.
+  const panel = new THREE.BoxGeometry(0.42, 0.3, 0.012);
+  panel.rotateX(-0.34);
+  panel.rotateY(jitter(benchRng, 0.24));
+  panel.translate(-0.62, 0.94, -0.28);
+  clutter.push(panel);
+
+  // Screwdrivers and a spanner, laid down roughly parallel the way tools are.
+  for (const [x, z, length, angle] of [
+    [0.44, -0.16, 0.26, 0.18],
+    [0.52, -0.06, 0.22, 0.31],
+    [-0.24, -0.12, 0.19, -0.42],
+  ] as const) {
+    const shaft = new THREE.BoxGeometry(length, 0.016, 0.016);
+    shaft.rotateY(angle + jitter(benchRng, 0.1));
+    shaft.translate(x, 0.822, z);
+    clutter.push(shaft);
+  }
+  scene.registerProp(
+    'bench-tools',
+    meshOf('BenchTools', mergeGeometries(clutter, false) ?? panel, MAT.metal)
+  );
+
+  // Screws, in the lid of a tin because that is where they always end up.
+  const tin = new THREE.CylinderGeometry(0.055, 0.052, 0.022, 10);
+  tin.translate(0.24, 0.825, -0.3);
+  scene.registerProp('bench-tin', meshOf('BenchTin', tin, MAT.plastic));
+
+  // A rag, over the bench edge nearest the camera.
+  const rag = new THREE.BoxGeometry(0.2, 0.012, 0.26);
+  rag.rotateY(0.5);
+  rag.rotateX(0.12);
+  rag.translate(-0.9, 0.818, -0.06);
+  scene.registerProp('bench-rag', meshOf('BenchRag', rag, MAT.paper));
 
   // The Kestrel-3.
   const set = createTransmitter({ seed: 'kestrel-3' });
@@ -245,8 +293,11 @@ function buildRepairShop(scene: ContactScene): void {
       height: 1.66,
       build: 0.45,
       shoulders: 0.42,
-      // Leaning in over the bench, which is where she has been all morning.
+      // Leaning in over the bench, which is where she has been all morning, with her
+      // hands on it. Arms hanging at her sides made her a mannequin standing near her
+      // own work rather than somebody in the middle of it.
       lean: 0.16,
+      reach: 0.85,
       garment: 'apron',
       /**
        * Art-directed rather than seeded. Her workshop is warm timber from wall to bench,
@@ -561,8 +612,9 @@ function buildBeaconMast(scene: ContactScene): void {
       height: 1.79,
       build: 0.58,
       shoulders: 0.72,
-      // Braced against the mast, which is where he says he is.
+      // Braced against the mast, which is where he says he is - one hand up on it.
       lean: 0.1,
+      reach: 0.55,
       garment: 'coat',
       // Wet-weather orange: the only warm thing on a cold headland, and the only piece of
       // high-visibility clothing in the game, because he is the only person in it who is

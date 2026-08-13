@@ -11,6 +11,8 @@
  * asks the globe to keep teasing the next request without revealing everything.
  */
 
+import { COASTLINES } from './coastlines.js';
+
 import type { PixelSurface } from './PixelSurface.js';
 
 export interface Signal {
@@ -50,8 +52,12 @@ export enum SignalState {
 
 const PALETTE = {
   /** Cold cyan = data / scanning (§9). */
-  grid: '#1d4a5c',
-  gridBright: '#2f7391',
+  // Dimmed. The graticule is scaffolding, and at full strength it competed with the
+  // coastlines and the signals, which are the two things the player is actually reading.
+  grid: '#153845',
+  gridBright: '#26607a',
+  /** Land. The brightest thing on the globe except the signals themselves. */
+  land: '#3f8fa8',
   waiting: '#7fe08a',
   active: '#d8ffb0',
   resolved: '#2f6b3a',
@@ -141,6 +147,7 @@ export class GlobeView {
 
     this.drawMeridians();
     this.drawParallels();
+    this.drawCoastlines();
     this.drawSignals(pulse, selectedId);
 
     this.surface.applyScanlines();
@@ -169,6 +176,28 @@ export class GlobeView {
         const point = this.project(lat, lon);
         if (previous && previous.visible && point.visible) {
           this.surface.line(previous.x, previous.y, point.x, point.y, color);
+        }
+        previous = point;
+      }
+    }
+  }
+
+  /**
+   * The land, drawn over the grid.
+   *
+   * Brighter than the graticule on purpose: the grid is scaffolding and the coast is the
+   * thing the player actually navigates by. Segments are dropped when either end is on
+   * the far side of the sphere, which is what makes the globe read as solid rather than
+   * as a transparent wireframe with continents printed on both sides of it.
+   */
+  private drawCoastlines(): void {
+    for (const ring of COASTLINES) {
+      let previous: Projected | null = null;
+      for (let i = 0; i <= ring.length; i++) {
+        const [lon, lat] = ring[i % ring.length];
+        const point = this.project(lat, lon);
+        if (previous && previous.visible && point.visible) {
+          this.surface.line(previous.x, previous.y, point.x, point.y, PALETTE.land);
         }
         previous = point;
       }

@@ -7,6 +7,7 @@ import './omniscient/content/mission-02-beacon.js';
 import './omniscient/content/signals.js';
 import './omniscient/core/rng.js';
 import './omniscient/core/tween.js';
+import './omniscient/crt/coastlines.js';
 import './omniscient/crt/CRTSurface.js';
 import './omniscient/crt/GlobeView.js';
 import './omniscient/crt/KnowledgeTree.js';
