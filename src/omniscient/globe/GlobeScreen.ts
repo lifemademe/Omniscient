@@ -13,12 +13,22 @@
  * SAFE UI: contact names go through textContent.
  */
 
+import { injectConsoleChrome } from '../link/console-chrome.js';
+
 import { GlobeView, SignalState } from '../crt/GlobeView.js';
 
 import type { PixelSurface } from '../crt/PixelSurface.js';
 import type { Signal } from '../crt/GlobeView.js';
 
 const STYLE_ID = 'omniscient-globe-styles';
+
+/** One margin readout. Same shape as the Contact View's, deliberately. */
+interface GlobeCard {
+  card: HTMLDivElement;
+  meter: HTMLDivElement;
+  value: HTMLSpanElement;
+  sub: HTMLSpanElement;
+}
 
 /**
  * The remaining wait, as a clock.
@@ -132,7 +142,12 @@ const GLOBE_CSS = `
   font-family: "Courier New", ui-monospace, monospace;
   overflow: hidden;
 }
-.omni-globe__stage { position: relative; }
+.omni-globe__stage { position: relative; align-self: center; justify-self: center; }
+/* The globe screen borrows the console frame; these are the parts specific to it. */
+.omni-cv--globe { pointer-events: none; }
+.omni-cv__body--globe { grid-template-columns: min(23vw, 260px) 1fr; }
+.omni-cv__readouts--globe { width: 100%; }
+.omni-globe__hintline { color: #35603f; }
 .omni-globe__canvas {
   display: block;
   image-rendering: pixelated;
@@ -161,7 +176,7 @@ const GLOBE_CSS = `
 }
 .omni-globe__hint {
   position: absolute;
-  bottom: 18px; left: 24px;
+  bottom: 46px; right: 26px;
   color: #3f6b48;
   font-size: 11px;
   letter-spacing: 0.12em;
@@ -327,13 +342,23 @@ export class GlobeScreen {
   private tipForId: string | null = null;
   /** Which branch of buildTip the open tip is showing, so it rebuilds when that changes. */
   private tipShape = '';
+  private waitingCard: GlobeCard | null = null;
+  private blockedCard: GlobeCard | null = null;
+  private answeredCard: GlobeCard | null = null;
   /** Where each visible label ended up after de-collision. Also the hit-test targets. */
   private readonly layout = new Map<string, { x: number; y: number }>();
   /** The countdown line inside the open tip, rewritten in place each frame. */
   private waitEl: HTMLElement | null = null;
   private pulse = 0;
-  /** Display scale from canvas pixels to screen pixels. */
-  private scale = 3;
+  /**
+   * Display scale from canvas pixels to screen pixels.
+   *
+   * Dropped from 3 once the console frame went round it: a 960x720 canvas plus a top bar,
+   * a footer and a margin column does not fit a 1080-tall window, and what fell off the
+   * bottom was the button back to the machine. The globe is still the largest thing on
+   * the screen, which is the point - it just no longer pushes its own way out of frame.
+   */
+  private scale = 2.2;
 
   constructor(
     private readonly container: HTMLElement,
@@ -376,26 +401,79 @@ export class GlobeScreen {
     marks.className = 'omni-globe__marks';
     stage.appendChild(marks);
 
-    const head = document.createElement('div');
-    head.className = 'omni-globe__head';
-    head.textContent = 'earth network';
+    /*
+     * The same console the Contact View uses.
+     *
+     * These are two modes of one instrument - the screen you choose a request from and
+     * the screen you answer it through - and they had drifted into looking like two
+     * different games. The player crosses between them every single request, so the seam
+     * was the most visible thing about either.
+     */
+    const shell = document.createElement('div');
+    shell.className = 'omni-cv omni-cv--globe';
+
+    const top = document.createElement('div');
+    top.className = 'omni-cv__top';
+    const brand = document.createElement('span');
+    brand.className = 'omni-cv__brand';
+    brand.textContent = 'Global view';
+    const net = document.createElement('span');
+    net.className = 'omni-cv__net';
+    const bars = document.createElement('span');
+    bars.className = 'omni-cv__bars';
+    for (let i = 0; i < 4; i++) bars.appendChild(document.createElement('i'));
+    const netName = document.createElement('span');
+    netName.textContent = 'Listening';
+    net.append(bars, netName);
+    const scanning = document.createElement('span');
+    scanning.textContent = 'All bands';
+    top.append(brand, net, scanning);
+
+    const body = document.createElement('div');
+    body.className = 'omni-cv__body omni-cv__body--globe';
+
+    const readouts = document.createElement('div');
+    readouts.className = 'omni-cv__readouts omni-cv__readouts--globe';
+    const waiting = this.buildCard('Requests waiting');
+    const blocked = this.buildCard('Unreachable');
+    const answered = this.buildCard('Answered');
+    readouts.append(waiting.card, blocked.card, answered.card);
 
     const hint = document.createElement('div');
     hint.className = 'omni-globe__hint';
     hint.textContent = 'select a signal';
 
     // Back to the machine. The globe is a place you go, so it needs a way out.
-    const back = document.createElement('button');
-    back.type = 'button';
-    back.className = 'omni-globe__back';
-    back.textContent = '‹ Machine';
-    back.addEventListener('click', (event) => {
-      event.stopPropagation();
-      this.onBack();
-    });
+    const actions = document.createElement('div');
+    actions.className = 'omni-cv__actions';
+    actions.appendChild(
+      this.buildAction('⌂', 'The machine', () => this.onBack())
+    );
 
-    root.append(stage, head, hint, back);
+    const column = document.createElement('div');
+    column.className = 'omni-cv__stage';
+    column.append(readouts, actions);
+
+    body.append(column, stage);
+
+    const footer = document.createElement('div');
+    footer.className = 'omni-cv__foot';
+    const os = document.createElement('span');
+    os.textContent = 'Omniscient OS';
+    const notice = document.createElement('span');
+    notice.className = 'omni-globe__hintline';
+    notice.textContent = 'Somebody is always asking.';
+    const corp = document.createElement('span');
+    corp.textContent = 'Omniscient';
+    footer.append(os, notice, corp);
+
+    shell.append(top, body, footer);
+    root.append(shell, hint);
     this.container.appendChild(root);
+
+    this.waitingCard = waiting;
+    this.blockedCard = blocked;
+    this.answeredCard = answered;
 
     // Clicking the canvas selects a point; clicking anywhere else clears the selection
     // and lets the globe turn again.
@@ -444,6 +522,98 @@ export class GlobeScreen {
 
     this.globe.draw(this.pulse, this.selectedId);
     this.renderMarks();
+    this.renderReadouts();
+  }
+
+
+  /** One margin readout, matching the Contact View's. */
+  private buildCard(label: string): GlobeCard {
+    const card = document.createElement('div');
+    card.className = 'omni-card';
+
+    const caption = document.createElement('span');
+    caption.className = 'omni-card__label';
+    caption.textContent = label;
+
+    const meter = document.createElement('div');
+    meter.className = 'omni-meter';
+    for (let i = 0; i < 8; i++) meter.appendChild(document.createElement('i'));
+
+    const value = document.createElement('span');
+    value.className = 'omni-card__value';
+
+    const sub = document.createElement('span');
+    sub.className = 'omni-card__sub';
+
+    card.append(caption, meter, value, sub);
+    return { card, meter, value, sub };
+  }
+
+  private buildAction(glyph: string, label: string, onPress: () => void): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'omni-action';
+
+    const icon = document.createElement('span');
+    icon.className = 'omni-action__glyph';
+    icon.textContent = glyph;
+
+    const text = document.createElement('span');
+    text.textContent = label;
+
+    button.append(icon, text);
+    button.addEventListener('mousedown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onPress();
+    });
+    return button;
+  }
+
+  private fill(card: GlobeCard | null, count: number, value: string, sub: string): void {
+    if (!card) return;
+    const segments = card.meter.children;
+    for (let i = 0; i < segments.length; i++) {
+      segments[i].className = i < Math.min(8, count) ? 'on' : '';
+    }
+    card.value.textContent = value;
+    card.sub.textContent = sub;
+  }
+
+  /**
+   * The margin readouts, from the signal list itself.
+   *
+   * Counts rather than percentages, because that is what the player is deciding between:
+   * how many people are asking, how many they have shut out, and how many they have
+   * already helped. §52 wants the globe to keep saying humanity needs more than
+   * OMNISCIENT_ can answer, and a number is the bluntest way to say it.
+   */
+  private renderReadouts(): void {
+    const waiting = this.signals.filter(
+      (s) => s.state === SignalState.Waiting && this.openable.has(s.id)
+    ).length;
+    const blocked = this.signals.filter((s) => s.state === SignalState.Cooldown).length;
+    const answered = this.signals.filter((s) => s.state === SignalState.Resolved).length;
+
+    this.fill(
+      this.waitingCard,
+      waiting,
+      waiting === 1 ? '1 waiting' : `${waiting} waiting`,
+      waiting > 0 ? 'answerable now' : 'nothing you can take'
+    );
+    this.fill(
+      this.blockedCard,
+      blocked,
+      blocked === 1 ? '1 blocked' : `${blocked} blocked`,
+      blocked > 0 ? 'they will call back' : 'nobody shut out'
+    );
+    this.fill(
+      this.answeredCard,
+      answered,
+      answered === 1 ? '1 answered' : `${answered} answered`,
+      'the world remembers'
+    );
   }
 
   private onStageClick(event: MouseEvent): void {
@@ -638,6 +808,7 @@ export class GlobeScreen {
   }
 
   private injectStyles(): void {
+    injectConsoleChrome();
     if (document.getElementById(STYLE_ID)) return;
     const style = document.createElement('style');
     style.id = STYLE_ID;

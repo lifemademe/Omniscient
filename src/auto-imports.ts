@@ -21,6 +21,7 @@ import './omniscient/geometry/room.js';
 import './omniscient/globe/GlobeScreen.js';
 import './omniscient/input/Picker.js';
 import './omniscient/knowledge/KnowledgeStore.js';
+import './omniscient/link/console-chrome.js';
 import './omniscient/link/LocalSurface.js';
 import './omniscient/link/surface.js';
 import './omniscient/menu/CableCursor.js';
