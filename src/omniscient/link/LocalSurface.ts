@@ -32,14 +32,143 @@ const STYLE_ID = 'omniscient-terminal-styles';
 
 /** Exported so the preview tool renders the shipping styles rather than a copy. */
 export const TERMINAL_CSS = `
-.omni-terminal {
+/*
+ * The Contact View is a whole operator console, not a chat box floating over a render.
+ *
+ * The shell is a full-screen frame with a hole in it: the diorama shows through the left,
+ * the conversation owns a dedicated column on the right, and the readouts sit in the
+ * margins. Nothing overlaps the scene any more, which is what stops the request reading
+ * as a UI mockup pasted over somebody's workshop.
+ *
+ * pointer-events is none on the frame and auto on the controls, so the parts that are
+ * only chrome never eat a click meant for the world behind them.
+ */
+.omni-cv {
   position: absolute;
-  right: 2.5vmin;
-  bottom: 2.5vmin;
-  width: min(34vw, 420px);
-  height: min(62vh, 640px);
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  font-family: "Courier New", ui-monospace, monospace;
+  color: #7fe08a;
+  pointer-events: none;
+  isolation: isolate;
+}
+.omni-cv__top,
+.omni-cv__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 18px;
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  background: linear-gradient(#060d08, #060d08);
+  border-bottom: 1px solid #1d3325;
+  color: #4f9a5e;
+}
+.omni-cv__foot {
+  border-bottom: none;
+  border-top: 1px solid #1d3325;
+  font-size: 10px;
+  color: #35603f;
+}
+.omni-cv__brand { color: #cfe6c4; letter-spacing: 0.28em; }
+.omni-cv__net { display: flex; align-items: center; gap: 9px; color: #7fe08a; }
+.omni-cv__bars { display: flex; align-items: flex-end; gap: 2px; height: 11px; }
+.omni-cv__bars i {
+  display: block;
+  width: 3px;
+  background: #4f9a5e;
+}
+.omni-cv__bars i:nth-child(1) { height: 30%; }
+.omni-cv__bars i:nth-child(2) { height: 55%; }
+.omni-cv__bars i:nth-child(3) { height: 78%; }
+.omni-cv__bars i:nth-child(4) { height: 100%; background: #7fe08a; }
+
+/* The middle band: scene on the left, conversation on the right. */
+.omni-cv__body {
+  display: grid;
+  grid-template-columns: 1fr min(34vw, 430px);
+  gap: 14px;
+  padding: 14px 18px;
+  min-height: 0;
+}
+.omni-cv__stage {
+  position: relative;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  min-height: 0;
+}
+.omni-cv__readouts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(23vw, 260px);
+}
+.omni-card {
+  width: 100%;
+  padding: 9px 11px;
+  background: rgba(6, 14, 9, 0.82);
+  border: 1px solid #23422c;
+  border-radius: 6px;
+  backdrop-filter: blur(2px);
+}
+.omni-card__label {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #4f9a5e;
+  margin-bottom: 5px;
+}
+.omni-card__value { display: block; font-size: 12px; color: #cfe6c4; }
+.omni-card__sub { display: block; font-size: 10px; color: #6a8f72; margin-top: 3px; }
+.omni-meter { display: flex; gap: 3px; margin-bottom: 5px; }
+.omni-meter i {
+  display: block;
+  flex: 1;
+  height: 9px;
+  background: #1d3325;
+  border-radius: 1px;
+}
+.omni-meter i.on { background: #4f9a5e; }
+.omni-meter--trust i.on { background: #7fe08a; }
+
+/* Bottom-left controls, sitting over the scene. */
+.omni-cv__actions {
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+.omni-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 96px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8fbe93;
+  background: rgba(6, 14, 9, 0.86);
+  border: 1px solid #23422c;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.omni-action:hover { border-color: #4f9a5e; color: #d8ffb0; }
+.omni-action__glyph { font-size: 15px; line-height: 1; }
+.omni-action--end { color: #c2483a; border-color: #4d2a25; }
+.omni-action--end:hover { border-color: #c2483a; color: #e8877a; }
+
+.omni-terminal {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   background: #0a1710;
   border: 2px solid #2b3b30;
   border-radius: 10px;
@@ -47,13 +176,33 @@ export const TERMINAL_CSS = `
   font-family: "Courier New", ui-monospace, monospace;
   color: #7fe08a;
   overflow: hidden;
+  pointer-events: auto;
   isolation: isolate;
+}
+.omni-terminal__session {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 12px 0;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #35603f;
+}
+.omni-terminal__where {
+  display: block;
+  padding: 0 12px 8px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #6a8f72;
+  text-align: right;
 }
 .omni-terminal__head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  padding: 10px 12px 8px;
+  padding: 4px 12px 8px;
   border-bottom: 1px solid #23422c;
   letter-spacing: 0.08em;
   font-size: 12px;
@@ -312,6 +461,29 @@ export const TERMINAL_CSS = `
 
 type Tab = 'chat' | 'hints' | 'records';
 
+/** One readout in the left margin: a label, a segmented meter, a value and a note. */
+interface ReadoutCard {
+  card: HTMLDivElement;
+  meter: HTMLDivElement;
+  value: HTMLSpanElement;
+  sub: HTMLSpanElement;
+}
+
+/**
+ * A stable session id for a contact.
+ *
+ * Derived from the name rather than generated, so it is the same every time that person
+ * calls. A number that changes on every reopen is noise pretending to be data.
+ */
+function sessionIdFor(name: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < name.length; i++) {
+    hash ^= name.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `CV-${(hash % 0xffff).toString(16).toUpperCase().padStart(4, '0')}`;
+}
+
 export class LocalSurface implements InterventionSurface {
   public readonly kind = 'local' as const;
 
@@ -323,6 +495,13 @@ export class LocalSurface implements InterventionSurface {
   private tabsElement: HTMLDivElement | null = null;
   private panelElement: HTMLDivElement | null = null;
   private extraElement: HTMLDivElement | null = null;
+  /** The console frame. Owns the transcript panel rather than the other way round. */
+  private shell: HTMLDivElement | null = null;
+  private sessionEl: HTMLElement | null = null;
+  private whereEl: HTMLElement | null = null;
+  private linkCard: ReadoutCard | null = null;
+  private trustCard: ReadoutCard | null = null;
+  private historyCard: ReadoutCard | null = null;
   private suggestElement: HTMLDivElement | null = null;
   /** Last rendered suggestion set, so the chips are not rebuilt under the player's cursor. */
   private renderedSuggestKey = '';
@@ -345,6 +524,11 @@ export class LocalSurface implements InterventionSurface {
     const root = document.createElement('div');
     root.className = 'omni-terminal';
 
+    const session = document.createElement('div');
+    session.className = 'omni-terminal__session';
+    const sessionId = document.createElement('span');
+    session.appendChild(sessionId);
+
     const head = document.createElement('div');
     head.className = 'omni-terminal__head';
 
@@ -353,12 +537,15 @@ export class LocalSurface implements InterventionSurface {
     const back = document.createElement('button');
     back.type = 'button';
     back.className = 'omni-back';
-    back.textContent = '‹ Globe';
+    back.textContent = '‹ Close';
     back.addEventListener('click', () => this.dispatch({ kind: 'leave' }));
 
     const contact = document.createElement('span');
     contact.className = 'omni-terminal__contact';
     head.append(back, contact);
+
+    const where = document.createElement('span');
+    where.className = 'omni-terminal__where';
 
     const tabs = document.createElement('div');
     tabs.className = 'omni-tabs';
@@ -399,8 +586,89 @@ export class LocalSurface implements InterventionSurface {
     entry.append(caret, input);
     foot.append(suggestions, hint, entry);
 
-    root.append(head, tabs, log, panel, extra, foot);
-    this.container.appendChild(root);
+    root.append(session, head, where, tabs, log, panel, extra, foot);
+
+    /*
+     * The console around the conversation.
+     *
+     * Built here rather than as a separate widget because it is all one surface: the
+     * readouts, the call controls and the transcript are the same instrument, and
+     * splitting them would mean two things fighting over the same screen edges.
+     */
+    const shell = document.createElement('div');
+    shell.className = 'omni-cv';
+
+    const top = document.createElement('div');
+    top.className = 'omni-cv__top';
+    const brand = document.createElement('span');
+    brand.className = 'omni-cv__brand';
+    brand.textContent = 'Contact View';
+    const net = document.createElement('span');
+    net.className = 'omni-cv__net';
+    const bars = document.createElement('span');
+    bars.className = 'omni-cv__bars';
+    for (let i = 0; i < 4; i++) bars.appendChild(document.createElement('i'));
+    const netName = document.createElement('span');
+    netName.textContent = 'Coastal network';
+    net.append(bars, netName);
+    const secure = document.createElement('span');
+    secure.textContent = 'Secure link';
+    top.append(brand, net, secure);
+
+    const body = document.createElement('div');
+    body.className = 'omni-cv__body';
+
+    const stage = document.createElement('div');
+    stage.className = 'omni-cv__stage';
+
+    const readouts = document.createElement('div');
+    readouts.className = 'omni-cv__readouts';
+
+    const link = this.buildCard('Connection strength');
+    const trust = this.buildCard('Trust level');
+    const history = this.buildCard('Completed together');
+    readouts.append(link.card, trust.card, history.card);
+
+    const actions = document.createElement('div');
+    actions.className = 'omni-cv__actions';
+    // Only controls that do something. A row of four looks better than a row of two,
+    // and a button that does nothing when pressed is worse than both.
+    actions.append(
+      this.buildAction('☎', 'End call', 'omni-action--end', () =>
+        this.dispatch({ kind: 'leave' })
+      ),
+      this.buildAction('☷', 'Observations', '', () => {
+        this.tab = 'hints';
+        if (this.lastState) this.present(this.lastState);
+      }),
+      this.buildAction('☰', 'Records', '', () => {
+        this.tab = 'records';
+        if (this.lastState) this.present(this.lastState);
+      })
+    );
+
+    stage.append(readouts, actions);
+    body.append(stage, root);
+
+    const footer = document.createElement('div');
+    footer.className = 'omni-cv__foot';
+    const version = document.createElement('span');
+    version.textContent = 'Omniscient OS';
+    const notice = document.createElement('span');
+    notice.textContent = 'All conversations are monitored and recorded.';
+    const corp = document.createElement('span');
+    corp.textContent = 'Omniscient';
+    footer.append(version, notice, corp);
+
+    shell.append(top, body, footer);
+    this.container.appendChild(shell);
+
+    this.shell = shell;
+    this.sessionEl = sessionId;
+    this.whereEl = where;
+    this.linkCard = link;
+    this.trustCard = trust;
+    this.historyCard = history;
 
     // Enter-to-submit. ENGINE.Input has onChange but no submit event, which is one of
     // the reasons this surface is hand-built.
@@ -424,6 +692,107 @@ export class LocalSurface implements InterventionSurface {
     this.panelElement = panel;
     this.extraElement = extra;
     this.suggestElement = suggestions;
+  }
+
+  /** Build one margin readout. Segments are filled later by fillMeter. */
+  private buildCard(label: string): ReadoutCard {
+    const card = document.createElement('div');
+    card.className = 'omni-card';
+
+    const caption = document.createElement('span');
+    caption.className = 'omni-card__label';
+    caption.textContent = label;
+
+    const meter = document.createElement('div');
+    meter.className = 'omni-meter';
+    for (let i = 0; i < 8; i++) meter.appendChild(document.createElement('i'));
+
+    const value = document.createElement('span');
+    value.className = 'omni-card__value';
+
+    const sub = document.createElement('span');
+    sub.className = 'omni-card__sub';
+
+    card.append(caption, meter, value, sub);
+    return { card, meter, value, sub };
+  }
+
+  private buildAction(
+    glyph: string,
+    label: string,
+    modifier: string,
+    onPress: () => void
+  ): HTMLButtonElement {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `omni-action${modifier ? ` ${modifier}` : ''}`;
+
+    const icon = document.createElement('span');
+    icon.className = 'omni-action__glyph';
+    icon.textContent = glyph;
+
+    const text = document.createElement('span');
+    text.textContent = label;
+
+    button.append(icon, text);
+    // mousedown for the same reason the suggestion chips use it - present() can rebuild
+    // things mid-click and a click that never completes is a button that does nothing.
+    button.addEventListener('mousedown', (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      onPress();
+    });
+    return button;
+  }
+
+  /** Light `filled` of the meter's segments. */
+  private fillMeter(meter: HTMLDivElement, filled: number, extraClass = ''): void {
+    meter.className = `omni-meter${extraClass ? ` ${extraClass}` : ''}`;
+    const segments = meter.children;
+    for (let i = 0; i < segments.length; i++) {
+      segments[i].className = i < filled ? 'on' : '';
+    }
+  }
+
+  /**
+   * The margin readouts.
+   *
+   * Every number here is real. Trust is the value MissionOutcome.trust has been awarding
+   * since the schema was written and nothing was collecting; jobs and losses are the
+   * shared history. Inventing a plausible-looking percentage would have been quicker and
+   * would have made the whole console furniture.
+   */
+  private renderReadouts(state: SurfaceState): void {
+    if (this.sessionEl) {
+      this.sessionEl.textContent = `Session ${sessionIdFor(state.contactName)}`;
+    }
+    if (this.whereEl) this.whereEl.textContent = state.contactLocation ?? '';
+
+    if (this.linkCard) {
+      // The link is only ever as good as the request is calm - a lost or urgent request
+      // is not the moment to claim four bars of nothing-wrong.
+      const strong = !state.failure;
+      this.fillMeter(this.linkCard.meter, strong ? 7 : 3);
+      this.linkCard.value.textContent = strong ? 'Stable' : 'Degraded';
+      this.linkCard.sub.textContent = state.failure ? 'contact disengaged' : 'holding';
+    }
+
+    const standing = state.standing;
+    if (this.trustCard) {
+      const trust = standing?.trust ?? 0;
+      this.fillMeter(this.trustCard.meter, Math.round(trust * 8), 'omni-meter--trust');
+      this.trustCard.value.textContent = `${Math.round(trust * 100)}%`;
+      this.trustCard.sub.textContent =
+        trust >= 0.7 ? 'they will take your word' : trust >= 0.4 ? 'willing to listen' : 'wary of you';
+    }
+
+    if (this.historyCard) {
+      const jobs = standing?.jobs ?? 0;
+      const lost = standing?.lost ?? 0;
+      this.fillMeter(this.historyCard.meter, Math.min(8, jobs));
+      this.historyCard.value.textContent = jobs === 1 ? '1 job' : `${jobs} jobs`;
+      this.historyCard.sub.textContent = lost > 0 ? `${lost} left unfinished` : 'nothing left unfinished';
+    }
   }
 
   /**
@@ -489,11 +858,14 @@ export class LocalSurface implements InterventionSurface {
    * intervene with, and nowhere else. On the main menu it is just a green box.
    */
   public setVisible(visible: boolean): void {
-    if (this.root) this.root.style.display = visible ? 'flex' : 'none';
+    // The whole console, not just the transcript - hiding one and leaving the frame up
+    // left an empty operator shell floating over the main menu.
+    if (this.shell) this.shell.style.display = visible ? 'grid' : 'none';
   }
 
   public detach(): void {
-    this.root?.remove();
+    this.shell?.remove();
+    this.shell = null;
     this.root = null;
     this.logElement = null;
     this.inputElement = null;
@@ -523,6 +895,7 @@ export class LocalSurface implements InterventionSurface {
     this.contactElement.textContent = state.contactName;
     this.hintElement.textContent = state.hint ?? '';
     this.renderSuggestions(state.suggestions);
+    this.renderReadouts(state);
     // The whole panel goes red, not just the notice inside it.
     this.root?.classList.toggle('omni-terminal--lost', state.failure !== undefined);
 

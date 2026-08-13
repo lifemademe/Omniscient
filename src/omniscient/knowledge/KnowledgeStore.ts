@@ -85,13 +85,63 @@ const STAGE_THRESHOLDS: ReadonlyArray<{ stage: GrowthStage; facts: number; conne
   { stage: GrowthStage.Sprout, facts: 0, connections: 0 },
 ];
 
+/**
+ * What a contact thinks of OMNISCIENT_, and how much history they have together.
+ *
+ * `MissionOutcome.trust` has been declared since the schema was written and nothing ever
+ * consumed it - solving a request awarded a number into the void. It matters because it
+ * is the only thing in the game that measures the relationship rather than the knowledge:
+ * the tree records what you learned, this records what it cost the people who taught you.
+ */
+export interface ContactStanding {
+  /** 0-1. Starts at a working stranger's benefit of the doubt. */
+  trust: number;
+  /** Requests resolved together. */
+  jobs: number;
+  /** Requests lost. Not hidden from the player - it is part of the history. */
+  lost: number;
+}
+
+/** Where a new contact starts: willing to talk, not yet willing to be told anything. */
+const INITIAL_TRUST = 0.45;
+
 export class KnowledgeStore {
   private readonly facts = new Map<string, Fact>();
   private readonly connections = new Map<string, Connection>();
   private readonly listeners = new Set<(event: KnowledgeEvent) => void>();
+  private readonly standings = new Map<string, ContactStanding>();
   private sequence = 0;
 
   constructor(private readonly seed: number) {}
+
+  /** A contact's standing, created at the default if they are new. */
+  public getStanding(contactId: string): ContactStanding {
+    const existing = this.standings.get(contactId);
+    if (existing) return existing;
+
+    const fresh: ContactStanding = { trust: INITIAL_TRUST, jobs: 0, lost: 0 };
+    this.standings.set(contactId, fresh);
+    return fresh;
+  }
+
+  /**
+   * Record how a request went.
+   *
+   * `trust` is the mission's own award, in the same units the content already uses (a
+   * solve is worth 2), scaled down into 0-1 here so content does not have to think in
+   * fractions. A loss costs more than a solve gains, which is how trust works.
+   */
+  public recordOutcome(contactId: string, solved: boolean, trustAward = 0): void {
+    const standing = this.getStanding(contactId);
+
+    if (solved) {
+      standing.jobs += 1;
+      standing.trust = Math.min(1, standing.trust + trustAward * 0.09);
+    } else {
+      standing.lost += 1;
+      standing.trust = Math.max(0, standing.trust - 0.22);
+    }
+  }
 
   public onChange(listener: (event: KnowledgeEvent) => void): () => void {
     this.listeners.add(listener);

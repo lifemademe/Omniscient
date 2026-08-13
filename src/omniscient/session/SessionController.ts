@@ -192,11 +192,14 @@ export class SessionController {
     if (step.learned.length) this.hooks.onKnowledgeGained?.(step.learned);
 
     if (step.outcome) {
+      // The relationship, not just the knowledge. See KnowledgeStore.recordOutcome.
+      this.knowledge.recordOutcome(this.contact.id, true, step.outcome.trust);
       this.push({ source: 'system', name: 'OMNISCIENT_', body: step.outcome.say });
       this.hooks.onResolved?.(step.outcome, this.runtime?.calledBack ?? false);
     }
 
     if (step.failure) {
+      this.knowledge.recordOutcome(this.contact.id, false);
       this.failed = step.failure;
       this.push({ source: 'system', name: 'OMNISCIENT_', body: step.failure.summary });
       this.hooks.onFailed?.(step.failure);
@@ -247,9 +250,13 @@ export class SessionController {
         playerWritten: fact.playerWritten === true,
       }));
 
+    const standing = this.knowledge.getStanding(this.contact.id);
+
     this.surface.present({
       mode: tempo === Tempo.Act ? 'action' : 'chat',
       contactName: this.contact.name,
+      contactLocation: this.contact.location,
+      standing: { trust: standing.trust, jobs: standing.jobs, lost: standing.lost },
       transcript: this.transcript,
       // A lost request still takes input - the note the player writes themselves.
       awaitingInput: !finished || this.failed !== null,

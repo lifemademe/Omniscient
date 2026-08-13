@@ -61,9 +61,21 @@ export interface Confirmation {
   question: string;
 }
 
+/** How a contact stands with OMNISCIENT_. See KnowledgeStore.ContactStanding. */
+export interface StandingView {
+  /** 0-1. */
+  trust: number;
+  jobs: number;
+  lost: number;
+}
+
 export interface SurfaceState {
   mode: SurfaceMode;
   contactName: string;
+  /** Where they are calling from, e.g. "Coastal repair shop, Portu Vech". */
+  contactLocation?: string;
+  /** Trust and shared history, shown alongside the call. */
+  standing?: StandingView;
   /** Full exchange so far. Renderers may diff or redraw. */
   transcript: TranscriptEntry[];
   /** True when the surface should accept a response. */
