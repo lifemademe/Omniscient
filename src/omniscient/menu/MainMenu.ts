@@ -22,7 +22,7 @@ import { createLabelMaterial } from './labels.js';
 import type { Picker } from '../input/Picker.js';
 import type { ModuleKind } from '../geometry/modules.js';
 
-export type MenuAction = 'answer' | 'circuit' | 'archives' | 'toolkit' | 'settings' | 'shutdown';
+export type MenuAction = 'new-game' | 'continue' | 'settings' | 'credits' | 'shutdown';
 
 interface ModuleSpec {
   id: MenuAction;
@@ -30,53 +30,54 @@ interface ModuleSpec {
   title: string;
   subtitle: string;
   accent: string;
+  /** Present but not selectable - lit dimly, no cable, no action. */
+  disabled?: boolean;
 }
 
 /**
- * §103's suggested module language, adapted. ANSWER A REQUEST sits at the top because it
- * is the only one the player needs on a first run - everything else is texture.
+ * A main menu, in §103's module language: "RESTORE (Continue), INITIALIZE (New Game),
+ * CONFIGURATION, SHUT DOWN".
+ *
+ * The hardware is chosen so the physical act matches the function - you seat a fresh
+ * cartridge to start over, you spool a tape to pick up where you left off. That is the
+ * point of making the menu a machine rather than a list.
  */
 const MODULES: ModuleSpec[] = [
   {
-    id: 'answer',
-    kind: 'speaker',
-    title: 'Answer a request',
-    subtitle: 'Someone needs help.',
+    id: 'new-game',
+    kind: 'cartridge',
+    title: 'New game',
+    subtitle: 'Initialize.',
     accent: ACCENT.knowledge,
   },
   {
-    id: 'circuit',
-    kind: 'card',
-    title: 'Knowledge circuit',
-    subtitle: 'Memories and connections.',
-    accent: ACCENT.knowledge,
-  },
-  {
-    id: 'archives',
+    id: 'continue',
     kind: 'tape',
-    title: 'Memory archives',
-    subtitle: 'Past calls and records.',
+    title: 'Continue',
+    subtitle: 'Restore from memory.',
     accent: ACCENT.amber,
-  },
-  {
-    id: 'toolkit',
-    kind: 'dial',
-    title: 'Toolkit',
-    subtitle: 'Your phone. Your tools.',
-    accent: ACCENT.data,
+    // No save system in the Jam build (§215), so this reads as present but cold.
+    disabled: true,
   },
   {
     id: 'settings',
-    kind: 'cartridge',
+    kind: 'dial',
     title: 'Settings',
     subtitle: 'Audio, display, controls.',
+    accent: ACCENT.data,
+  },
+  {
+    id: 'credits',
+    kind: 'card',
+    title: 'Credits',
+    subtitle: 'Who built this.',
     accent: ACCENT.amber,
   },
   {
     id: 'shutdown',
     kind: 'power',
     title: 'Shut down',
-    subtitle: 'Log off. Rest for now.',
+    subtitle: 'Rest for now.',
     accent: ACCENT.warning,
   },
 ];
@@ -163,7 +164,9 @@ export class MainMenu {
       labelIdle,
       labelLit,
       labelMesh,
-      socket: this.root.position.clone().add(node.position).add(build.socket),
+      // Local to the menu root - the cable's points live in that space too, and mixing
+      // the two sends the tip sixty units off into the world.
+      socket: node.position.clone().add(build.socket),
       baseZ: node.position.z,
     });
   }
@@ -198,7 +201,7 @@ export class MainMenu {
     if (!this.enabled) return;
 
     for (const [key, module] of this.modules) {
-      const hovered = key === id;
+      const hovered = key === id && !module.spec.disabled;
       module.labelMesh.material = hovered ? module.labelLit : module.labelIdle;
       // Plate pushes toward the player - §103's "hovering a module wakes its socket".
       module.node.position.setZ(module.baseZ + (hovered ? HOVER_PUSH : 0));
@@ -214,7 +217,7 @@ export class MainMenu {
     }
 
     const module = this.modules.get(id);
-    if (!module) return;
+    if (!module || module.spec.disabled) return;
 
     this.cable.plugInto(module.socket, () => {
       this.handlers.forEach((handler) => handler(id));
@@ -225,7 +228,8 @@ export class MainMenu {
   public update(deltaTime: number, picker: Picker): void {
     if (this.enabled && !this.cable.isSeated) {
       const point = picker.projectOntoPlane(this.cablePlane, this.scratch);
-      if (point) this.cable.setTarget(point);
+      // The pointer projection is in world space; the cable lives in menu-local space.
+      if (point) this.cable.setTarget(point.sub(this.root.position));
     }
     this.cable.update(deltaTime);
   }

@@ -412,21 +412,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.screen = Screen.Tree;
     this.cutTo(HOME_SHOT);
     this.menu?.setEnabled(true);
-    this.presentMenuIdle();
-  }
-
-  /** The terminal at rest. One line, so the machine reads as awake but unbothered. */
-  private presentMenuIdle(): void {
-    this.phone?.present({
-      mode: 'chat',
-      contactName: '',
-      transcript: [
-        { source: 'system', name: 'OMNISCIENT_', body: 'knowledge network online' },
-        { source: 'system', name: 'OMNISCIENT_', body: 'plug into a module to begin' },
-      ],
-      awaitingInput: false,
-      hint: 'idle',
-    });
+    this.phone.setVisible(false);
   }
 
   private attachPicker(world: ENGINE.World, container: HTMLElement): void {
@@ -438,9 +424,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   private onMenuAction(action: MenuAction): void {
-    // Only ANSWER A REQUEST is wired for the Jam slice. The rest are texture: §103 wants
-    // the machine to look like it does more than the player currently needs it to.
-    if (action !== 'answer') return;
+    // Only NEW GAME is wired for the Jam slice. §103 wants the machine to look like it
+    // does more than the player currently needs it to.
+    if (action !== 'new-game') return;
 
     this.menu?.setEnabled(false);
     this.showGlobe();
@@ -450,6 +436,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private showGlobe(): void {
     this.phase = Phase.Choosing;
     this.screen = Screen.Globe;
+    this.phone?.setVisible(true);
     this.board?.present(this.signals, this.openable);
   }
 
@@ -483,6 +470,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private returnHome(): void {
     this.phase = Phase.Home;
     this.screen = Screen.Tree;
+    this.phone?.setVisible(false);
     this.pauseRemaining = HOME_DWELL;
     this.moveTo(HOME_SHOT, HOME_SHOT.duration ?? 2.0);
 

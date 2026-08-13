@@ -215,6 +215,16 @@ export class LocalSurface implements InterventionSurface {
     this.hintElement = hint;
   }
 
+  /**
+   * Show or hide the terminal.
+   *
+   * It is the intervention surface - it belongs on screen when there is somebody to
+   * intervene with, and nowhere else. On the main menu it is just a green box.
+   */
+  public setVisible(visible: boolean): void {
+    if (this.root) this.root.style.display = visible ? 'flex' : 'none';
+  }
+
   public detach(): void {
     this.root?.remove();
     this.root = null;
