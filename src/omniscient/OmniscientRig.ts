@@ -99,8 +99,10 @@ const HOME_SHOT: CameraShot = {
   // FOV, so a narrower window crops the sides - and the menu plates live at the left
   // extreme, which makes them the first thing to be cut. The margin is cheap insurance
   // against the player's window not being the shape mine is.
-  position: new THREE.Vector3(1.3, 1.38, -56.7),
-  target: new THREE.Vector3(-0.3, 0.95, -60.15),
+  // Raised once the floor was put at the right depth: level with the desk edge, the new
+  // front fascia filled the bottom third of frame and the room lost its floor entirely.
+  position: new THREE.Vector3(1.3, 1.62, -56.7),
+  target: new THREE.Vector3(-0.3, 0.88, -60.15),
   duration: 2.0,
 };
 

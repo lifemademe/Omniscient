@@ -102,6 +102,17 @@ function createWindow(): RoomPart[] {
 }
 
 /**
+ * Floor level, relative to the desk top at y = 0.
+ *
+ * This was effectively zero: the floor slab's surface sat one centimetre below the desk
+ * top, so the desk was a plank lying on the ground with its legs passing straight through
+ * it, the chair stood at desk height, and the whole thing read as a mat rather than as
+ * furniture. A desk is about three quarters of a metre off the floor, so that is where
+ * the floor now is.
+ */
+const FLOOR_Y = -0.76;
+
+/**
  * The pinboard: above the machine, in the gap between the menu stack and the window.
  * Narrow, because that gap is narrow - at full width it ran over the window's left jamb.
  */
@@ -237,7 +248,8 @@ function createChair(rng: Rng): RoomPart[] {
 
   const chair = mergeGeometries(frame, false) ?? seat;
   chair.rotateY(turn);
-  chair.translate(at.x, at.y, at.z);
+  // Built with its feet at y=0, so it drops to the floor rather than standing on the desk.
+  chair.translate(at.x, at.y + FLOOR_Y, at.z);
   parts.push({ name: 'Chair', geometry: chair, material: 'timberDark' });
 
   return parts;
@@ -253,7 +265,7 @@ export function createWorkstationRoom(): RoomPart[] {
 
   // -- Big shapes ----------------------------------------------------------
   const floor = new THREE.BoxGeometry(7, 0.1, 5);
-  floor.translate(0, -0.06, -0.6);
+  floor.translate(0, FLOOR_Y - 0.05, -0.6);
   parts.push({ name: 'RoomFloor', geometry: floor, material: 'ground' });
 
   // The back wall, built AROUND a window rather than as one slab.
@@ -267,20 +279,23 @@ export function createWorkstationRoom(): RoomPart[] {
   const winR = WINDOW.x + WINDOW.width / 2;
   const wallPieces: THREE.BufferGeometry[] = [];
 
-  const leftOfWindow = new THREE.BoxGeometry(winL + 3.5, 3.4, 0.16);
-  leftOfWindow.translate((winL - 3.5) / 2, 1.7, -2.1);
+  const wallTop = 3.4;
+  const wallHeight = wallTop - FLOOR_Y;
+
+  const leftOfWindow = new THREE.BoxGeometry(winL + 3.5, wallHeight, 0.16);
+  leftOfWindow.translate((winL - 3.5) / 2, (wallTop + FLOOR_Y) / 2, -2.1);
   wallPieces.push(leftOfWindow);
 
-  const rightOfWindow = new THREE.BoxGeometry(3.5 - winR, 3.4, 0.16);
-  rightOfWindow.translate((winR + 3.5) / 2, 1.7, -2.1);
+  const rightOfWindow = new THREE.BoxGeometry(3.5 - winR, wallHeight, 0.16);
+  rightOfWindow.translate((winR + 3.5) / 2, (wallTop + FLOOR_Y) / 2, -2.1);
   wallPieces.push(rightOfWindow);
 
-  const underWindow = new THREE.BoxGeometry(WINDOW.width, WINDOW.sill, 0.16);
-  underWindow.translate(WINDOW.x, WINDOW.sill / 2, -2.1);
+  const underWindow = new THREE.BoxGeometry(WINDOW.width, WINDOW.sill - FLOOR_Y, 0.16);
+  underWindow.translate(WINDOW.x, (WINDOW.sill + FLOOR_Y) / 2, -2.1);
   wallPieces.push(underWindow);
 
-  const overWindow = new THREE.BoxGeometry(WINDOW.width, 3.4 - WINDOW.head, 0.16);
-  overWindow.translate(WINDOW.x, (WINDOW.head + 3.4) / 2, -2.1);
+  const overWindow = new THREE.BoxGeometry(WINDOW.width, wallTop - WINDOW.head, 0.16);
+  overWindow.translate(WINDOW.x, (WINDOW.head + wallTop) / 2, -2.1);
   wallPieces.push(overWindow);
 
   parts.push({
@@ -293,8 +308,8 @@ export function createWorkstationRoom(): RoomPart[] {
 
   // Side wall, so the room has a corner. One corner is enough to read as interior;
   // §186 wants the big shapes doing the work.
-  const sideWall = new THREE.BoxGeometry(0.16, 3.4, 4.2);
-  sideWall.translate(-2.6, 1.7, -0.1);
+  const sideWall = new THREE.BoxGeometry(0.16, wallHeight, 4.2);
+  sideWall.translate(-2.6, (wallTop + FLOOR_Y) / 2, -0.1);
   parts.push({ name: 'RoomSideWall', geometry: sideWall, material: 'wall' });
 
   // Desk. The CRT sits at y=0, so the desk top is just below it.
@@ -303,8 +318,17 @@ export function createWorkstationRoom(): RoomPart[] {
   top.translate(0, -0.035, -0.55);
   deskPieces.push(top);
 
+  // Front fascia, hanging below the top along its whole length.
+  //
+  // At this camera height the desk is seen almost edge-on, and a 7cm slab gave it nothing
+  // to read as thickness - it looked like a sheet. The fascia is what makes the eye
+  // accept it as furniture rather than as a surface painted on the floor.
+  const fascia = new THREE.BoxGeometry(3.2, 0.16, 0.06);
+  fascia.translate(0, -0.15, -0.06);
+  deskPieces.push(fascia);
+
   const apron = new THREE.BoxGeometry(3.0, 0.13, 0.05);
-  apron.translate(0, -0.13, -0.07);
+  apron.translate(0, -0.13, -1.04);
   deskPieces.push(apron);
   parts.push({
     name: 'Desk',
@@ -312,11 +336,14 @@ export function createWorkstationRoom(): RoomPart[] {
     material: 'timber',
   });
 
+  // Legs, reaching the actual floor. They used to be 0.78 long hanging off a desk that
+  // was already sitting on the ground, so they passed straight through it into nothing.
+  const legHeight = -FLOOR_Y - 0.07;
   const legs: THREE.BufferGeometry[] = [];
   for (let sx = -1; sx <= 1; sx += 2) {
     for (let sz = -1; sz <= 1; sz += 2) {
-      const leg = new THREE.BoxGeometry(0.08, 0.78, 0.08);
-      leg.translate(sx * 1.45, -0.46, -0.55 + sz * 0.42);
+      const leg = new THREE.BoxGeometry(0.08, legHeight, 0.08);
+      leg.translate(sx * 1.45, FLOOR_Y + legHeight / 2, -0.55 + sz * 0.42);
       legs.push(leg);
     }
   }
@@ -353,8 +380,11 @@ export function createWorkstationRoom(): RoomPart[] {
   // (§186) at the smallest possible scale.
   const cables: THREE.BufferGeometry[] = [];
   for (let i = 0; i < 4; i++) {
-    const drop = new THREE.BoxGeometry(0.018, range(rng, 0.5, 0.85), 0.018);
-    drop.translate(-0.3 + i * 0.22 + jitter(rng, 0.03), -0.35, -1.0 + jitter(rng, 0.05));
+    // From the underside of the desk down to the floor, now that there is a gap between
+    // the two for them to run through.
+    const length = -FLOOR_Y - range(rng, 0.02, 0.12);
+    const drop = new THREE.BoxGeometry(0.018, length, 0.018);
+    drop.translate(-0.3 + i * 0.22 + jitter(rng, 0.03), -0.07 - length / 2, -1.0 + jitter(rng, 0.05));
     drop.rotateZ(jitter(rng, 0.09));
     cables.push(drop);
   }
@@ -482,10 +512,10 @@ export function createWorkstationRoom(): RoomPart[] {
   // possible fix for a room whose two largest planes currently just abut.
   const skirtingPieces: THREE.BufferGeometry[] = [];
   const backSkirting = new THREE.BoxGeometry(7, 0.11, 0.04);
-  backSkirting.translate(0, 0.055, -2.0);
+  backSkirting.translate(0, FLOOR_Y + 0.055, -2.0);
   skirtingPieces.push(backSkirting);
   const sideSkirting = new THREE.BoxGeometry(0.04, 0.11, 4.2);
-  sideSkirting.translate(-2.5, 0.055, -0.1);
+  sideSkirting.translate(-2.5, FLOOR_Y + 0.055, -0.1);
   skirtingPieces.push(sideSkirting);
   parts.push({
     name: 'Skirting',
@@ -504,7 +534,7 @@ export function createWorkstationRoom(): RoomPart[] {
     const box = new THREE.BoxGeometry(w, h, d);
     box.rotateZ(jitter(rng, 0.05));
     box.rotateY(jitter(rng, 0.2));
-    box.translate(x + jitter(rng, 0.05), h / 2, -1.86 + jitter(rng, 0.04));
+    box.translate(x + jitter(rng, 0.05), FLOOR_Y + h / 2, -1.86 + jitter(rng, 0.04));
     floorClutter.push(box);
   }
   parts.push({

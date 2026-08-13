@@ -185,13 +185,26 @@ export const TERMINAL_CSS = `
   cursor: pointer;
 }
 .omni-confirm__btn:hover { background: #14301f; color: #d8ffb0; }
+/*
+ * A lost request has to announce itself. This used to be a quiet box above the input and
+ * a playtester sparked the connector twice without registering that the request had ended
+ * - so it now takes the whole panel border, and the surface turns red around it.
+ */
 .omni-failure {
-  padding: 10px;
-  border-top: 1px solid #6b2f28;
+  padding: 11px;
+  border: 1px solid #7d3830;
+  border-left: 3px solid #c2483a;
   background: #1a0e0c;
   color: #d99b8f;
   font-size: 12px;
   line-height: 1.45;
+}
+.omni-terminal--lost {
+  border-color: #7d3830;
+  box-shadow: 0 0 26px rgba(160, 50, 38, 0.28);
+}
+.omni-terminal--lost .omni-terminal__hint {
+  color: #c2483a;
 }
 .omni-failure__title {
   display: block;
@@ -495,6 +508,8 @@ export class LocalSurface implements InterventionSurface {
     this.contactElement.textContent = state.contactName;
     this.hintElement.textContent = state.hint ?? '';
     this.renderSuggestions(state.suggestions);
+    // The whole panel goes red, not just the notice inside it.
+    this.root?.classList.toggle('omni-terminal--lost', state.failure !== undefined);
 
     // Append only what is new, so the log does not flicker or lose scroll position.
     if (state.transcript.length < this.renderedCount) {

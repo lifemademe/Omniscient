@@ -334,7 +334,10 @@ export const MISSION_02: MissionDefinition = {
           vfx: 'ElectricalArcVFX',
         },
       },
-      onUnrecognised: { to: 'arc', environment: 'prop.spark:splice-box' },
+      // No spark on this path. Firing the arc cue whenever the parser missed meant every
+      // typo threw another flash off the bracket Tomas is holding onto, halfway up a mast,
+      // with no consequence and no way out - punishment for the game's failure, not his.
+      onUnrecognised: { to: 'arc' },
     },
 
     {

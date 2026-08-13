@@ -426,11 +426,45 @@ export const MISSION_01: MissionDefinition = {
           environment: 'prop.spark:connector-b',
           vfx: 'SparkVFX',
         },
+        INSPECT_CONNECTOR: { to: 'arc-waiting' },
+        ADMIT_UNCERTAINTY: { to: 'arc-waiting' },
       },
-      onUnrecognised: {
-        to: 'arc',
-        environment: 'prop.spark:connector-b',
+      /**
+       * A message the parser did not understand must NOT shock her again.
+       *
+       * It used to loop straight back here firing the spark cue, so every typo put another
+       * flash across her hand - endlessly, with no consequence and no way out. It read
+       * exactly like failing the mission while never actually failing it, which is the
+       * worst of both: all of the punishment and none of the resolution.
+       */
+      onUnrecognised: { to: 'arc-waiting' },
+    },
+
+    {
+      /**
+       * Holding, hurt, waiting to be told the obvious thing. She will not touch it again,
+       * so nothing the player says here can hurt her further except telling her to go
+       * back in - which ends the request.
+       */
+      id: 'arc-waiting',
+      tempo: Tempo.Act,
+      say:
+        'I am not putting my hand near it again while it is live. Tell me to pull the mains '
+        + 'and I will pull the mains.',
+      suggest: ['turn the power off'],
+      affirmIntent: 'REMOVE_POWER',
+      on: {
+        REMOVE_POWER: {
+          to: 'power-off',
+          environment: 'prop.toggle:mains-switch',
+        },
+        CLEAN_LIVE: {
+          to: 'lost',
+          environment: 'prop.spark:connector-b',
+          vfx: 'SparkVFX',
+        },
       },
+      onUnrecognised: { to: 'arc-waiting' },
     },
 
     {

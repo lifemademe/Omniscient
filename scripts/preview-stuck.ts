@@ -94,6 +94,48 @@ for (const mission of [MISSION_01, MISSION_02]) {
   }
 }
 
+console.log('\n=== TYPOS ARE NOT PUNISHED ===\n');
+
+/**
+ * Not understanding the player must never hurt the contact.
+ *
+ * The arc beat looped back to itself firing the spark cue on any unrecognised message, so
+ * every typo put another flash across Mirela's hand - forever, with no consequence and no
+ * way out. It read as failing the mission without ever failing it. §159 says a rejected
+ * message produces a clarification, not a punishment, and a physical cue on that path
+ * breaks it just as badly as a red X would.
+ */
+[MISSION_01, MISSION_02].forEach((mission) => {
+  const harmful = mission.beats
+    .filter((beat) => {
+      const path = beat.onUnrecognised;
+      if (!path) return false;
+      return /spark|arc|burn|shock/i.test(`${path.environment ?? ''} ${path.vfx ?? ''}`);
+    })
+    .map((beat) => beat.id);
+  check(
+    `${mission.id}: a message the parser missed never hurts anybody`,
+    harmful.length === 0,
+    harmful.length ? harmful.join(', ') : undefined
+  );
+});
+
+// And the beat you land on after an unrecognised message must still offer a way out.
+[MISSION_01, MISSION_02].forEach((mission) => {
+  const byId = new Map(mission.beats.map((beat) => [beat.id, beat]));
+  const dead = mission.beats
+    .filter((beat) => beat.onUnrecognised)
+    .map((beat) => byId.get(beat.onUnrecognised?.to ?? ''))
+    .filter((target) => target && !target.outcome && !target.failure)
+    .filter((target) => (target?.suggest?.length ?? 0) === 0)
+    .map((target) => target?.id ?? '?');
+  check(
+    `${mission.id}: every clarification beat still shows a way forward`,
+    dead.length === 0,
+    dead.length ? dead.join(', ') : undefined
+  );
+});
+
 console.log('\n=== LOSING MIRELA ===\n');
 
 /**
