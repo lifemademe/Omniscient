@@ -140,3 +140,59 @@ export function createCorrosionBloom(seedKey = 'connector-b-bloom'): THREE.Canva
 
 /** The corrosion colour the bloom is keyed to, so callers can tint matching geometry. */
 export const BLOOM_TINT = ACCENT.corrosion;
+
+/**
+ * Marker pen on the side of a packing box.
+ *
+ * §240 wants real content, and a house being cleared is the one place in this game where
+ * two words carry more than a paragraph of dialogue could. Ileana is emptying a dead
+ * relative's house and sorting photographs of people nobody can name any more; the boxes
+ * say KITCHEN and BOOKS and KEEP, and one of them says WHO?, which is her entire request
+ * written on cardboard in the corner of the room.
+ *
+ * Drawn rather than typed onto a texture atlas because each box needs its own word and
+ * box UVs are shared by all six faces - a label baked into the material would appear on
+ * every side of every box, which is not how anybody has ever packed anything.
+ *
+ * §232: ink and tape only, over transparent. The card's own value comes from MAT.card and
+ * is not touched, so a labelled box sits in exactly the same value group as a blank one.
+ */
+export function createBoxLabel(text: string, seedKey = text): THREE.CanvasTexture | null {
+  return createDecal(256, 128, (ctx, w, h) => {
+    const seed = seedFrom(`box-label-${seedKey}`);
+
+    // A strip of parcel tape under the writing, slightly off square. Most of what makes a
+    // box read as packed rather than as a crate is the tape, and it costs one rectangle.
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(-0.035 + (seed % 1000) / 40000);
+    ctx.fillStyle = 'rgba(206,188,150,0.34)';
+    ctx.fillRect(-w * 0.46, -h * 0.3, w * 0.92, h * 0.6);
+    ctx.strokeStyle = 'rgba(150,132,98,0.3)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-w * 0.46, -h * 0.3, w * 0.92, h * 0.6);
+    ctx.restore();
+
+    // The hand. A wide marker nib and a slight tilt: nobody letters a box neatly.
+    ctx.save();
+    ctx.translate(w / 2, h / 2);
+    ctx.rotate(-0.045);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = 'rgba(34,29,24,0.86)';
+    ctx.font = `bold ${text.length > 6 ? 46 : 60}px "Arial Narrow", Arial, sans-serif`;
+    ctx.fillText(text, 0, 4);
+    ctx.restore();
+
+    // Wear the ink, using the same field that ages everything else in this file.
+    const image = ctx.getImageData(0, 0, w, h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const scuff = fbm(seed + 3, x / w, y / h, { frequency: 18, octaves: 3 });
+        const p = (y * w + x) * 4;
+        image.data[p + 3] *= 1 - clamp01(smoothstep(0.58, 0.86, scuff)) * 0.55;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+  });
+}

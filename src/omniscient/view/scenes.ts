@@ -15,7 +15,7 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-import { createCorrosionBloom, createRatingPlate } from '../art/decals.js';
+import { createBoxLabel, createCorrosionBloom, createRatingPlate } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
 import { ACCENT, LIGHT, MAT } from '../art/palette.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
@@ -995,6 +995,209 @@ function buildSeedlingTunnel(scene: ContactScene): void {
 
 
 /**
+ * What is left in a room somebody is emptying (§241).
+ *
+ * The set was a floor, a wall, a table and a stack of chairs, and the doc comment called
+ * that deliberate - "the way to say a house has had the life taken out of it is empty wall
+ * and stacked chairs rather than more props". That reading is right and the execution was
+ * not: an empty room and an unfinished room look identical in a still, and this one read
+ * as unfinished. The difference between them is EVIDENCE OF REMOVAL, which is a different
+ * thing from clutter and mostly is not props at all.
+ *
+ * Four things, in descending order of how much they say per unit of geometry:
+ *
+ * 1. The marks where the pictures were. Pure value - a rectangle of wall a shade lighter
+ *    than the wall around it, because the paper under a frame does not fade, with a dust
+ *    line at its edge and the hook still in above it. It is the only item here that is
+ *    not an object, and it says more than the other three together.
+ * 2. Packing boxes, some labelled. §240 - KITCHEN, BOOKS, KEEP, and one that says WHO?
+ * 3. Newspaper on the floor, for wrapping. It also gives the largest empty plane in the
+ *    frame something to break it.
+ * 4. A rolled rug against the wall. One diagonal in a room made entirely of rectangles.
+ *
+ * §232: every wall mark stays within 9% of MAT.wall's own value and carries its contrast
+ * in the dust line, which is two pixels wide. The boxes are MAT.card and sit between the
+ * floor and the table in value, so nothing here competes with the window or the photographs.
+ */
+function dressClearedHouse(scene: ContactScene, rng: ReturnType<typeof createRng>): void {
+  // -- Where the pictures were ----------------------------------------------
+  const ghosts: THREE.BufferGeometry[] = [];
+  const dust: THREE.BufferGeometry[] = [];
+  const hooks: THREE.BufferGeometry[] = [];
+
+  // [x, y, width, height] on the back wall. Different sizes and one portrait, because a
+  // wall of matching frames is a gallery and this was somebody's front room.
+  const hung: ReadonlyArray<readonly [number, number, number, number]> = [
+    [1.35, 1.72, 0.52, 0.42],
+    [2.25, 1.5, 0.34, 0.46],
+    [1.86, 2.24, 0.66, 0.3],
+    [-1.62, 1.62, 0.4, 0.52],
+  ];
+  for (const [x, y, w, h] of hung) {
+    const patch = new THREE.PlaneGeometry(w, h);
+    patch.translate(x, y, -2.021);
+    ghosts.push(patch);
+
+    // The dust line: a thin border just outside the patch, darker than the wall. This is
+    // where the contrast lives, so the patch itself can stay almost invisible.
+    for (const [bw, bh, dx, dy] of [
+      [w + 0.02, 0.009, 0, h / 2],
+      [w + 0.02, 0.009, 0, -h / 2],
+      [0.009, h, -w / 2, 0],
+      [0.009, h, w / 2, 0],
+    ] as const) {
+      const edge = new THREE.PlaneGeometry(bw, bh);
+      edge.translate(x + dx, y + dy, -2.019);
+      dust.push(edge);
+    }
+
+    // The hook, still in the wall. Nobody takes the hooks out.
+    const hook = new THREE.BoxGeometry(0.018, 0.03, 0.02);
+    hook.translate(x + jitter(rng, 0.02), y + h / 2 + 0.09, -2.015);
+    hooks.push(hook);
+  }
+
+  scene.registerProp(
+    'wall-marks',
+    meshOf(
+      'WallMarks',
+      mergeGeometries(ghosts, false) ?? ghosts[0],
+      // Lighter than MAT.wall by about 8%, and nothing else. Paper under a frame does not
+      // fade; that is the entire physical claim and the entire budget.
+      new THREE.MeshStandardMaterial({ color: '#756858', roughness: 0.93 })
+    )
+  );
+  scene.registerProp(
+    'wall-dust',
+    meshOf(
+      'WallDust',
+      mergeGeometries(dust, false) ?? dust[0],
+      new THREE.MeshStandardMaterial({ color: '#4d4438', roughness: 0.97 })
+    )
+  );
+  scene.registerProp(
+    'picture-hooks',
+    meshOf('PictureHooks', mergeGeometries(hooks, false) ?? hooks[0], MAT.metal)
+  );
+
+  // -- Packing boxes --------------------------------------------------------
+  //
+  // Along the wall by the door, where things go when a room is being emptied into a hall.
+  interface Carton {
+    /** Foot of the box, at floor level. */
+    at: THREE.Vector3;
+    size: THREE.Vector3;
+    turn: number;
+    /**
+     * What is written on it, and which way that face points before the box is turned.
+     *
+     * The face matters and cost an iteration to learn: the first three labels all went on
+     * the +z faces, which for the stack by the door is the side AWAY from the only light
+     * in the room. They were present, correct and unreadable, and the one that matters
+     * says WHO? - which is Ileana's entire request, written on cardboard, in shadow.
+     */
+    label?: { text: string; face: 'x' | 'z' };
+  }
+
+  const stack: Carton[] = [
+    {
+      at: new THREE.Vector3(-3.0, 0, -1.55),
+      size: new THREE.Vector3(0.5, 0.44, 0.44),
+      turn: 0.08,
+      label: { text: 'KITCHEN', face: 'x' },
+    },
+    {
+      at: new THREE.Vector3(-2.98, 0.44, -1.53),
+      size: new THREE.Vector3(0.46, 0.36, 0.42),
+      turn: -0.14,
+      label: { text: 'WHO?', face: 'x' },
+    },
+    { at: new THREE.Vector3(-2.45, 0, -1.75), size: new THREE.Vector3(0.42, 0.38, 0.4), turn: 0.22 },
+    {
+      at: new THREE.Vector3(2.9, 0, -1.6),
+      size: new THREE.Vector3(0.52, 0.46, 0.44),
+      turn: -0.1,
+      label: { text: 'BOOKS', face: 'z' },
+    },
+    { at: new THREE.Vector3(2.86, 0.46, -1.58), size: new THREE.Vector3(0.44, 0.34, 0.4), turn: 0.17 },
+  ];
+
+  const cartons: THREE.BufferGeometry[] = [];
+  for (const box of stack) {
+    const carton = new THREE.BoxGeometry(box.size.x, box.size.y, box.size.z);
+    carton.rotateY(box.turn);
+    carton.translate(box.at.x, box.at.y + box.size.y / 2, box.at.z);
+    cartons.push(carton);
+
+    if (!box.label) continue;
+    const texture = createBoxLabel(box.label.text);
+    if (!texture) continue;
+
+    // rotateY(phi) sends the quad's own +z to (sin phi, 0, cos phi), so asking for the
+    // x face is the same rotation plus a quarter turn. The label is then pushed out along
+    // that normal rather than along an axis, which is what keeps it on the box when the
+    // box is turned.
+    const phi = box.turn + (box.label.face === 'x' ? Math.PI / 2 : 0);
+    const normal = new THREE.Vector3(Math.sin(phi), 0, Math.cos(phi));
+    const half = (box.label.face === 'x' ? box.size.x : box.size.z) / 2;
+
+    const width = Math.min(box.size.z, box.size.x) * 0.78;
+    const quad = new THREE.PlaneGeometry(width, width * 0.5);
+    quad.rotateY(phi);
+    const seat = box.at
+      .clone()
+      .setY(box.at.y + box.size.y * 0.52)
+      .add(normal.clone().multiplyScalar(half + 0.006));
+    quad.translate(seat.x, seat.y, seat.z);
+
+    scene.registerProp(
+      `label-${box.label.text}`,
+      meshOf(`Label${box.label.text}`, quad, decalMaterial(texture, 0.95))
+    );
+  }
+  scene.registerProp(
+    'boxes',
+    meshOf('Boxes', mergeGeometries(cartons, false) ?? cartons[0], MAT.card)
+  );
+
+  // -- Newspaper, for wrapping ----------------------------------------------
+  //
+  // Sheets rather than a stack: they have been pulled off the pile and used. This is also
+  // the only thing breaking the largest empty plane in the shot.
+  const sheets: THREE.BufferGeometry[] = [];
+  for (const [x, z] of [
+    [-2.35, -1.15],
+    [-1.95, -0.72],
+    [-2.62, -0.55],
+    [2.35, -1.05],
+  ] as const) {
+    const sheet = new THREE.PlaneGeometry(0.34, 0.44);
+    sheet.rotateX(-Math.PI / 2);
+    sheet.rotateY(jitter(rng, 1.4));
+    sheet.translate(x + jitter(rng, 0.12), 0.004, z + jitter(rng, 0.12));
+    sheets.push(sheet);
+  }
+  scene.registerProp(
+    'newspaper',
+    meshOf(
+      'Newspaper',
+      mergeGeometries(sheets, false) ?? sheets[0],
+      // Newsprint, not writing paper: a clear step down from MAT.paper so it does not
+      // pull the eye off the envelopes on the table, which are the ones that matter.
+      new THREE.MeshStandardMaterial({ color: '#9c9382', roughness: 0.98, side: THREE.DoubleSide })
+    )
+  );
+
+  // -- The rug ---------------------------------------------------------------
+  // Rolled and leaning. One diagonal in a room built entirely from rectangles.
+  const rug = new THREE.CylinderGeometry(0.13, 0.14, 1.9, 9);
+  rug.rotateX(0.28);
+  rug.rotateZ(0.16);
+  rug.translate(-3.05, 0.94, -0.35);
+  scene.registerProp('rug', meshOf('Rug', rug, MAT.timberDark));
+}
+
+/**
  * MISSION 04 - the cleared house.
  *
  * A room being emptied: furniture pushed back, a table under the window with a shoebox of
@@ -1010,11 +1213,80 @@ function buildClearedHouse(scene: ContactScene): void {
 
   const floor = new THREE.BoxGeometry(7, 0.1, 6);
   floor.translate(0, -0.05, 0);
-  scene.registerProp('floor', meshOf('Floor', floor, MAT.timberDark));
+  scene.registerProp('floor', meshOf('Floor', floor, MAT.floorboard));
 
-  const wall = new THREE.BoxGeometry(7, 3.0, 0.15);
-  wall.translate(0, 1.5, -2.1);
-  scene.registerProp('wall', meshOf('Wall', wall, MAT.wall));
+  /**
+   * The back wall, built around a doorway, and a side wall so the room has a corner.
+   *
+   * Two problems, one fix. The set was a single slab seven metres wide with a floor and
+   * nothing else, so a camera pulled back far enough to hold the window and the table at
+   * once looked straight off the left edge of the world into black - which is not "a house
+   * with the life taken out of it", it is a missing wall.
+   *
+   * And the doorway is the best value in the room. §241 asks for layers rather than props:
+   * a dark opening is a layer - it puts the deepest value in the frame at the far end of
+   * the longest sightline, gives the left third of the shot something to be, and says the
+   * rest of the house is unlit without a single object being added to say it.
+   */
+  const DOOR = { x: -2.25, width: 0.92, head: 2.06 } as const;
+  /**
+   * Wall height, and why it is not three metres.
+   *
+   * At three the pulled-back camera looked clean over the top of the side wall into the
+   * void it had just been built to hide - a hard horizontal edge across the top left of
+   * frame with nothing above it. Rooms in old coastal houses have high ceilings anyway.
+   */
+  const WALL_TOP = 3.8;
+  const wallPieces: THREE.BufferGeometry[] = [];
+  const doorL = DOOR.x - DOOR.width / 2;
+  const doorR = DOOR.x + DOOR.width / 2;
+
+  const leftOfDoor = new THREE.BoxGeometry(doorL + 3.5, WALL_TOP, 0.15);
+  leftOfDoor.translate((doorL - 3.5) / 2, WALL_TOP / 2, -2.1);
+  wallPieces.push(leftOfDoor);
+
+  const rightOfDoor = new THREE.BoxGeometry(3.5 - doorR, WALL_TOP, 0.15);
+  rightOfDoor.translate((doorR + 3.5) / 2, WALL_TOP / 2, -2.1);
+  wallPieces.push(rightOfDoor);
+
+  const overDoor = new THREE.BoxGeometry(DOOR.width, WALL_TOP - DOOR.head, 0.15);
+  overDoor.translate(DOOR.x, (DOOR.head + WALL_TOP) / 2, -2.1);
+  wallPieces.push(overDoor);
+
+  // The side wall. Far enough left to be off the shot's centre and close enough to cut
+  // the void; it catches almost nothing from either light, which is the point.
+  const sideWall = new THREE.BoxGeometry(0.15, WALL_TOP, 4.8);
+  sideWall.translate(-3.3, WALL_TOP / 2, 0.3);
+  wallPieces.push(sideWall);
+
+  scene.registerProp(
+    'wall',
+    meshOf('Wall', mergeGeometries(wallPieces, false) ?? leftOfDoor, MAT.wall)
+  );
+
+  // What is behind the door: nothing, at the darkest value in the scene. Unlit, because a
+  // lit surface back there would pick up the room's own fill and read as a cupboard.
+  const hall = new THREE.PlaneGeometry(DOOR.width, DOOR.head);
+  hall.translate(DOOR.x, DOOR.head / 2, -2.24);
+  scene.registerProp(
+    'hall',
+    meshOf('Hall', hall, new THREE.MeshBasicMaterial({ color: '#100d0b', toneMapped: false }))
+  );
+
+  // The frame round it, so the opening is a door and not a hole knocked in plaster.
+  const casing: THREE.BufferGeometry[] = [];
+  for (const sx of [-1, 1]) {
+    const jamb = new THREE.BoxGeometry(0.07, DOOR.head, 0.09);
+    jamb.translate(DOOR.x + (sx * (DOOR.width + 0.07)) / 2, DOOR.head / 2, -2.02);
+    casing.push(jamb);
+  }
+  const lintel = new THREE.BoxGeometry(DOOR.width + 0.14, 0.07, 0.09);
+  lintel.translate(DOOR.x, DOOR.head + 0.035, -2.02);
+  casing.push(lintel);
+  scene.registerProp(
+    'door-casing',
+    meshOf('DoorCasing', mergeGeometries(casing, false) ?? lintel, MAT.timber)
+  );
 
   // The same water, the same height, matched to the repair shop on purpose. Two bands,
   // because a room that floods every spring has more than one high-water mark.
@@ -1040,6 +1312,31 @@ function buildClearedHouse(scene: ContactScene): void {
   const pane = new THREE.PlaneGeometry(1.34, 0.94);
   pane.translate(-0.2, 1.75, -1.96);
   scene.registerProp('window', meshOf('Window', pane, MAT.daylight));
+
+  /**
+   * A curtain rail with nothing on it.
+   *
+   * The doc comment on this scene has said "the curtains taken down" since it was
+   * written and there has never been a rail to take them off. One dark horizontal above
+   * a blown-out window is the cheapest sentence in the room: rails do not come down when
+   * curtains do, so an empty one is somebody halfway through leaving.
+   */
+  const railParts: THREE.BufferGeometry[] = [];
+  const rail = new THREE.CylinderGeometry(0.016, 0.016, 1.86, 8);
+  rail.rotateZ(Math.PI / 2);
+  rail.translate(-0.2, 2.43, -1.93);
+  railParts.push(rail);
+  for (const sx of [-1, 1]) {
+    const bracket = new THREE.BoxGeometry(0.035, 0.06, 0.11);
+    bracket.translate(-0.2 + sx * 0.86, 2.4, -1.99);
+    railParts.push(bracket);
+  }
+  scene.registerProp(
+    'curtain-rail',
+    meshOf('CurtainRail', mergeGeometries(railParts, false) ?? rail, MAT.dark)
+  );
+
+  dressClearedHouse(scene, rng);
 
   // -- The table, and what is on it -----------------------------------------
   const table: THREE.BufferGeometry[] = [];
@@ -1139,8 +1436,17 @@ function buildClearedHouse(scene: ContactScene): void {
     reach: 0.6,
     garment: 'coat',
     colors: { garment: '#4a4a52', underlayer: '#b3a58a' },
-    position: new THREE.Vector3(-1.05, 0, -0.32),
-    rotation: new THREE.Euler(0, Math.PI * 0.14, 0),
+    /**
+     * Behind the table, not beside it.
+     *
+     * She used to stand at the near corner, between the camera and her own work, which put
+     * the one person in the scene in the foreground with her back three-quarters turned and
+     * the thing she is asking about behind her. Across the table she faces the camera over
+     * the box, the window is behind her shoulder, and the player is looking at a person and
+     * the problem in one read instead of choosing between them.
+     */
+    position: new THREE.Vector3(-1.0, 0, -1.72),
+    rotation: new THREE.Euler(0, Math.PI * 0.2, 0),
     // Slower and smaller than the rest of the cast. She has been sorting a dead relative's
     // photographs for two days; the difference between her idle and Mirela's is the only
     // characterisation available without faces.
@@ -1162,37 +1468,75 @@ function buildClearedHouse(scene: ContactScene): void {
   );
 
   /**
-   * Fill from the camera side, and it is not optional here.
+   * The bare bulb, and the light that was already pretending to be one.
    *
-   * Ileana's only real light is the window behind her, so she was lit entirely from
-   * behind - which turned the person the player is talking to into a black cut-out and
-   * made her read as facing away however she was actually turned. The hair and the
-   * placket give her a front now; this is what lets anybody see it.
+   * The fill in this room is not optional: Ileana's only real light is the window behind
+   * her, so without it she was a black cut-out facing away however she was actually
+   * turned. But it was a point hanging in mid-air two metres to camera-right of her with
+   * nothing there to be emitting it - the same fault §230 found over the workstation desk
+   * and the desk lamp was built to fix.
    *
-   * Warm against the cold window, so the two lights also do the §230 job of putting a
-   * warm edge and a cool edge on everything between them.
+   * So it moves into a fixture. A flex, a rose and a bulb with no shade on it, over the
+   * table, which is where the one working light in a house being emptied would be: the
+   * shade came down with the curtains. It is closer to her than the old fill was, so the
+   * intensity comes down to match, and now the warm side of every object in the room
+   * points at a thing the player can see.
    */
+  // Off the window's centre line. Hung at x 0.5 the flex ran straight down the middle of
+  // the brightest rectangle in the frame and crossed the curtain rail on the way.
+  const BULB = new THREE.Vector3(0.92, 1.98, -0.42);
+  const fitting: THREE.BufferGeometry[] = [];
+  const flex = new THREE.CylinderGeometry(0.009, 0.009, WALL_TOP - BULB.y, 6);
+  flex.translate(BULB.x, (WALL_TOP + BULB.y) / 2, BULB.z);
+  fitting.push(flex);
+  const rose = new THREE.CylinderGeometry(0.045, 0.045, 0.05, 10);
+  rose.translate(BULB.x, BULB.y + 0.03, BULB.z);
+  fitting.push(rose);
+  scene.registerProp(
+    'light-fitting',
+    meshOf('LightFitting', mergeGeometries(fitting, false) ?? flex, MAT.dark)
+  );
+
+  const glass = new THREE.SphereGeometry(0.042, 10, 8);
+  glass.translate(BULB.x, BULB.y - 0.03, BULB.z);
+  scene.registerProp('bulb', meshOf('Bulb', glass, MAT.lamp));
+
   scene.registerProp(
     'roomfill',
     ENGINE.PointLightNode.create({
       name: 'RoomFill',
-      position: new THREE.Vector3(1.5, 1.7, 1.5),
-      intensity: 13,
+      position: BULB.clone(),
+      // Halved from 13: it used to be four metres from her and is now two, and a fill that
+      // moved closer without coming down would have brightened the person while the §243
+      // note about scenes getting darker looked the other way.
+      intensity: 7,
       color: new THREE.Color('#ffd0a0'),
-      distance: 7,
-      decay: 1.25,
+      distance: 5.5,
+      decay: 1.3,
     })
   );
 
   scene.registerShot('default', {
-    // Across the table, so the box, the envelopes and Ileana are all in one frame - the
-    // three things the request is made of.
-    position: new THREE.Vector3(1.15, 1.42, 1.35),
-    target: new THREE.Vector3(-0.42, 0.85, -1.2),
+    /**
+     * Across the table, so the box, the envelopes and Ileana are all in one frame - the
+     * three things the request is made of.
+     *
+     * Pulled back and raised from 1.15/1.42/1.35, which was a metre and a half from a
+     * standing figure: she filled the left third cropped at the crown, the window was cut
+     * off by the top edge, and the stacked chairs - the one prop that says the house is
+     * being emptied - were entirely outside the frame. At four metres the 46-degree lens
+     * holds three and a half metres of height, so she is about half the frame: present,
+     * uncropped, and not the only thing in it.
+     */
+    position: new THREE.Vector3(2.15, 1.78, 2.0),
+    target: new THREE.Vector3(-0.35, 1.02, -1.15),
   });
   scene.registerShot('photo-box', {
-    position: new THREE.Vector3(0.15, 1.16, -0.3),
-    target: new THREE.Vector3(-0.5, 0.8, -1.08),
+    // Still over her shoulder rather than square on the box. Same trade as Mirela's
+    // transmitter shot: losing the person the moment the player looks closely at the
+    // object is the wrong swap every time.
+    position: new THREE.Vector3(0.62, 1.18, 0.2),
+    target: new THREE.Vector3(-0.48, 0.84, -1.14),
     duration: 2.2,
   });
 }

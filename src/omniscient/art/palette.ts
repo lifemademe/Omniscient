@@ -151,6 +151,19 @@ export const MAT = {
    */
   timberDark: standard('#5a4430', 0.9),
   timberLit: standard(HUMAN.timberLit, 0.8),
+  /**
+   * Floorboards - timber at ROOM scale rather than furniture scale.
+   *
+   * Box UVs hand every face the whole 0..1 square whatever its size, so the family's
+   * per-material repeat is the only thing setting physical grain size (see §239 below).
+   * A seven-metre floor wearing MAT.timberDark's [2, 1] gets tiles three and a half
+   * metres across, which puts knots the size of a dinner plate in the middle of the
+   * boards - from the camera they read as cracks in dried mud, not as a floor.
+   *
+   * A large flat plane is a different physical object from a plank, and it earns a family
+   * member rather than a per-object override.
+   */
+  floorboard: standard('#6a5136', 0.9),
   metal: standard(HUMAN.metal, 0.45, 0.65),
   plastic: standard(HUMAN.plastic, 0.72, 0.03),
   dark: standard(HUMAN.dark, 0.6, 0.1),
@@ -179,6 +192,8 @@ export const MAT = {
    * desaturated against all that warm wood, it separates on hue as well as value.
    */
   equipment: standard('#6a7268', 0.62, 0.15),
+  /** Corrugated card. Boxes, packing, the substance of a house being emptied. */
+  card: standard('#8a7150', 0.96),
   /** Galvanised tube. Dull enough to stand in daylight without becoming the subject. */
   galvanised: standard('#8a8f92', 0.78, 0.2),
   /**
@@ -268,6 +283,12 @@ dress(MAT.timberLit, timberMaps({ color: HUMAN.timberLit, seed: 'timber-lit', re
 dress(
   MAT.timberDark,
   timberMaps({ color: '#5a4430', seed: 'timber-dark', contrast: 0.11, repeat: [2, 1] })
+);
+// Boards run one way, so the repeat is strongly asymmetric: a couple of tiles along their
+// length and sixteen across, which on a six-metre room is a board about a hand wide.
+dress(
+  MAT.floorboard,
+  timberMaps({ color: '#6a5136', seed: 'floorboard', contrast: 0.09, repeat: [3, 16] })
 );
 // Walls get the largest repeat of anything, because they are the largest surfaces and a
 // wall whose mottle is the size of a hand reads as wallpaper.
