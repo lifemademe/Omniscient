@@ -49,6 +49,35 @@ export interface RecordView {
 }
 
 /**
+ * The relation board: boxes to connect, when a beat asks for a shape rather than a
+ * sentence.
+ *
+ * Carries no answers. The surface can render this, let the player wire it up and send
+ * their links back, and it still has no idea which of them are right - §157's boundary,
+ * held at the presentation layer too.
+ */
+export interface BoardPersonView {
+  id: string;
+  /** UNTRUSTED for HTML. Renderers must use textContent. */
+  name: string;
+  /** The one thing the contact said about them. Also untrusted. */
+  note: string;
+}
+
+export interface BoardSlotView {
+  id: string;
+  label: string;
+}
+
+export interface BoardView {
+  prompt: string;
+  people: BoardPersonView[];
+  slots: BoardSlotView[];
+  /** Set after a wrong submission: how many were right, and nothing about which. */
+  score?: { right: number; total: number };
+}
+
+/**
  * A proposed reading of what the player just said, awaiting yes/no.
  *
  * §157: the evaluator interprets what the player meant and never invents mission truth.
@@ -98,6 +127,8 @@ export interface SurfaceState {
   confirming?: Confirmation;
   /** When set, the request has been lost and the player may write themselves a note. */
   failure?: { summary: string; lesson?: string };
+  /** When set, the surface shows the relation board alongside the conversation. */
+  board?: BoardView;
 }
 
 /** §160: gestures compress an instruction into an immediate machine command. */
@@ -114,7 +145,9 @@ export type PlayerMessage =
   /** Wrote themselves a note after losing a request (§170). */
   | { kind: 'note'; text: string }
   /** Stepped back out of the request to the globe. */
-  | { kind: 'leave' };
+  | { kind: 'leave' }
+  /** Sent the relation board: person id -> slot id, for every box they wired up. */
+  | { kind: 'board'; links: Record<string, string> };
 
 export interface InterventionSurface {
   /** Which transport this is. Diagnostics and telemetry only - gameplay must not branch on it. */

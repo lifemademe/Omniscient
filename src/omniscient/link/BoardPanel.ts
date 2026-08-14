@@ -1,0 +1,394 @@
+/**
+ * The relation board - connect-the-boxes, on the console.
+ *
+ * ## Click, then click
+ *
+ * Not drag-and-drop. Dragging is what everybody pictures when they hear "connect the
+ * boxes", and it is also the interaction most likely to be quietly broken for somebody:
+ * it needs pointer capture, it fights the page's own scrolling, it is miserable on a
+ * trackpad and impossible without a pointer at all. Click a name, click a relation, and
+ * a wire appears - same gesture, none of the failure modes, and it costs nothing to
+ * add dragging on top later.
+ *
+ * The lesson behind that is a real one from this project: the suggestion chips shipped
+ * broken because `present()` rebuilt the row between mousedown and mouseup, and no
+ * amount of reading the code found it. Interaction that survives being rebuilt underneath
+ * itself is worth more than interaction that reads well.
+ *
+ * ## Safe UI
+ *
+ * Every name and note here is content - it comes from mission data and, on a remote
+ * surface, over the wire. Nothing in this file touches innerHTML. The wires are SVG
+ * elements built by hand for the same reason.
+ */
+
+import type { BoardView, PlayerMessage } from './surface.js';
+
+const STYLE_ID = 'omniscient-board-styles';
+
+const BOARD_CSS = `
+.omni-board {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 14px;
+  border-top: 1px solid rgba(127, 224, 138, 0.22);
+  background: rgba(6, 14, 9, 0.5);
+}
+.omni-board__prompt {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: #9fd8a8;
+  text-transform: uppercase;
+}
+/* The wires are drawn on a layer behind the boxes, sized to the grid. */
+.omni-board__stage { position: relative; }
+.omni-board__wires {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+.omni-board__grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px 26px;
+  align-items: start;
+}
+.omni-board__column { display: flex; flex-direction: column; gap: 7px; }
+.omni-board__spine {
+  width: 1px;
+  align-self: stretch;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(127, 224, 138, 0.28) 12%,
+    rgba(127, 224, 138, 0.28) 88%,
+    transparent
+  );
+}
+.omni-board__box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  border: 1px solid rgba(127, 224, 138, 0.38);
+  border-radius: 3px;
+  background: rgba(10, 24, 15, 0.85);
+  color: #cfe9d2;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+.omni-board__box:hover { border-color: rgba(127, 224, 138, 0.8); }
+.omni-board__box--armed {
+  border-color: #7fe08a;
+  background: rgba(20, 52, 28, 0.95);
+  box-shadow: 0 0 0 1px rgba(127, 224, 138, 0.5);
+}
+.omni-board__box--linked { border-color: rgba(127, 224, 138, 0.7); }
+.omni-board__box--slot { font-size: 13px; letter-spacing: 0.04em; }
+.omni-board__note {
+  font-size: 11px;
+  color: rgba(159, 216, 168, 0.72);
+  font-style: italic;
+}
+.omni-board__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.omni-board__status { font-size: 11px; color: rgba(159, 216, 168, 0.8); }
+.omni-board__status--score { color: #e0a24c; }
+.omni-board__send {
+  padding: 5px 16px;
+  border: 1px solid rgba(127, 224, 138, 0.6);
+  border-radius: 3px;
+  background: rgba(16, 40, 22, 0.9);
+  color: #cfe9d2;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.omni-board__send:disabled { opacity: 0.35; cursor: default; }
+`;
+
+export function injectBoardStyles(): void {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById(STYLE_ID)) return;
+
+  const style = document.createElement('style');
+  style.id = STYLE_ID;
+  style.textContent = BOARD_CSS;
+  document.head.appendChild(style);
+}
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+export class BoardPanel {
+  public readonly element: HTMLDivElement;
+
+  private readonly stage: HTMLDivElement;
+  private readonly wires: SVGSVGElement;
+  private readonly grid: HTMLDivElement;
+  private readonly status: HTMLSpanElement;
+  private readonly send: HTMLButtonElement;
+
+  /** person id -> slot id. The player's answer so far. */
+  private links = new Map<string, string>();
+  /** The box waiting for its other end, if any. */
+  private armed: string | null = null;
+
+  private personButtons = new Map<string, HTMLButtonElement>();
+  private slotButtons = new Map<string, HTMLButtonElement>();
+  private view: BoardView | null = null;
+  /** Identity of the board currently rendered, so re-presenting does not wipe the work. */
+  private renderedKey = '';
+
+  constructor(private readonly dispatch: (message: PlayerMessage) => void) {
+    injectBoardStyles();
+
+    this.element = document.createElement('div');
+    this.element.className = 'omni-board';
+
+    const prompt = document.createElement('div');
+    prompt.className = 'omni-board__prompt';
+    this.element.appendChild(prompt);
+
+    this.stage = document.createElement('div');
+    this.stage.className = 'omni-board__stage';
+
+    this.wires = document.createElementNS(SVG_NS, 'svg');
+    this.wires.setAttribute('class', 'omni-board__wires');
+    this.stage.appendChild(this.wires);
+
+    this.grid = document.createElement('div');
+    this.grid.className = 'omni-board__grid';
+    this.stage.appendChild(this.grid);
+    this.element.appendChild(this.stage);
+
+    const foot = document.createElement('div');
+    foot.className = 'omni-board__foot';
+
+    this.status = document.createElement('span');
+    this.status.className = 'omni-board__status';
+    foot.appendChild(this.status);
+
+    this.send = document.createElement('button');
+    this.send.className = 'omni-board__send';
+    this.send.type = 'button';
+    this.send.textContent = 'Send';
+    this.send.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      this.submit();
+    });
+    foot.appendChild(this.send);
+
+    this.element.appendChild(foot);
+    this.promptElement = prompt;
+  }
+
+  private readonly promptElement: HTMLDivElement;
+
+  /**
+   * Render a board.
+   *
+   * Re-presenting the same board leaves the player's wiring alone. The session calls
+   * `present()` on every state change - opening a hint, the contact saying something -
+   * and half-finished work being wiped by an unrelated redraw is precisely the class of
+   * bug that shipped in the suggestion chips.
+   */
+  public update(view: BoardView | undefined): void {
+    this.view = view ?? null;
+    if (!view) {
+      this.element.style.display = 'none';
+      return;
+    }
+    this.element.style.display = '';
+
+    const key = `${view.prompt}|${view.people.map((p) => p.id).join(',')}`;
+    if (key !== this.renderedKey) {
+      this.renderedKey = key;
+      this.links.clear();
+      this.armed = null;
+      this.build(view);
+    }
+
+    this.promptElement.textContent = view.prompt;
+    this.refresh(view);
+  }
+
+  private build(view: BoardView): void {
+    this.grid.replaceChildren();
+    this.personButtons.clear();
+    this.slotButtons.clear();
+
+    const people = document.createElement('div');
+    people.className = 'omni-board__column';
+    for (const person of view.people) {
+      const box = document.createElement('button');
+      box.className = 'omni-board__box';
+      box.type = 'button';
+
+      const name = document.createElement('span');
+      name.textContent = person.name;
+      box.appendChild(name);
+
+      const note = document.createElement('span');
+      note.className = 'omni-board__note';
+      note.textContent = person.note;
+      box.appendChild(note);
+
+      // mousedown, not click: a redraw between press and release swallows a click.
+      box.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        this.tapPerson(person.id);
+      });
+
+      this.personButtons.set(person.id, box);
+      people.appendChild(box);
+    }
+    this.grid.appendChild(people);
+
+    const spine = document.createElement('div');
+    spine.className = 'omni-board__spine';
+    this.grid.appendChild(spine);
+
+    const slots = document.createElement('div');
+    slots.className = 'omni-board__column';
+    for (const slot of view.slots) {
+      const box = document.createElement('button');
+      box.className = 'omni-board__box omni-board__box--slot';
+      box.type = 'button';
+      box.textContent = slot.label;
+      box.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        this.tapSlot(slot.id);
+      });
+      this.slotButtons.set(slot.id, box);
+      slots.appendChild(box);
+    }
+    this.grid.appendChild(slots);
+  }
+
+  /**
+   * Tapping a person: arm it, or unlink it if it already has a wire.
+   *
+   * Making a linked box unlink on tap means there is no separate delete gesture to find.
+   * The way to change your mind is the same as the way you made the link.
+   */
+  private tapPerson(personId: string): void {
+    if (this.links.has(personId)) {
+      this.links.delete(personId);
+      this.armed = personId;
+    } else {
+      this.armed = this.armed === personId ? null : personId;
+    }
+    if (this.view) this.refresh(this.view);
+  }
+
+  private tapSlot(slotId: string): void {
+    if (!this.armed) return;
+    this.links.set(this.armed, slotId);
+    this.armed = null;
+    if (this.view) this.refresh(this.view);
+  }
+
+  private submit(): void {
+    if (!this.view || this.links.size < this.view.people.length) return;
+    this.dispatch({ kind: 'board', links: Object.fromEntries(this.links) });
+  }
+
+  private refresh(view: BoardView): void {
+    for (const [id, button] of this.personButtons) {
+      button.classList.toggle('omni-board__box--armed', this.armed === id);
+      button.classList.toggle('omni-board__box--linked', this.links.has(id));
+    }
+
+    const used = new Set(this.links.values());
+    for (const [id, button] of this.slotButtons) {
+      button.classList.toggle('omni-board__box--linked', used.has(id));
+    }
+
+    const placed = this.links.size;
+    const total = view.people.length;
+    this.send.disabled = placed < total;
+
+    if (view.score && placed === total) {
+      this.status.className = 'omni-board__status omni-board__status--score';
+      this.status.textContent = `${view.score.right} of ${view.score.total} were right`;
+    } else if (this.armed) {
+      const name = view.people.find((person) => person.id === this.armed)?.name ?? '';
+      this.status.className = 'omni-board__status';
+      this.status.textContent = `${name} is Ileana's...`;
+    } else {
+      this.status.className = 'omni-board__status';
+      this.status.textContent =
+        placed < total ? `${placed} of ${total} placed` : 'ready to send';
+    }
+
+    this.drawWires();
+  }
+
+  /**
+   * Draw a wire per link.
+   *
+   * Measured from the live layout rather than from anything assumed about the grid, so
+   * the wires follow whatever the boxes actually did - which matters because the boxes
+   * are text and text reflows.
+   */
+  private drawWires(): void {
+    this.wires.replaceChildren();
+
+    const frame = this.stage.getBoundingClientRect();
+    if (frame.width === 0) return;
+
+    this.wires.setAttribute('viewBox', `0 0 ${frame.width} ${frame.height}`);
+
+    for (const [personId, slotId] of this.links) {
+      const from = this.personButtons.get(personId)?.getBoundingClientRect();
+      const to = this.slotButtons.get(slotId)?.getBoundingClientRect();
+      if (!from || !to) continue;
+
+      const x1 = from.right - frame.left;
+      const y1 = from.top + from.height / 2 - frame.top;
+      const x2 = to.left - frame.left;
+      const y2 = to.top + to.height / 2 - frame.top;
+      // Horizontal control points: the wire leaves and arrives level, the way a patched
+      // cable hangs, instead of cutting the diagonal like a diagram.
+      const bend = Math.max(18, (x2 - x1) * 0.45);
+
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute(
+        'd',
+        `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}`
+      );
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', '#7fe08a');
+      path.setAttribute('stroke-width', '1.4');
+      path.setAttribute('stroke-opacity', '0.75');
+      this.wires.appendChild(path);
+
+      for (const [cx, cy] of [
+        [x1, y1],
+        [x2, y2],
+      ]) {
+        const dot = document.createElementNS(SVG_NS, 'circle');
+        dot.setAttribute('cx', String(cx));
+        dot.setAttribute('cy', String(cy));
+        dot.setAttribute('r', '2.4');
+        dot.setAttribute('fill', '#7fe08a');
+        this.wires.appendChild(dot);
+      }
+    }
+  }
+}

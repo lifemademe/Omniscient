@@ -89,11 +89,65 @@ export interface BeatTransition {
   vfx?: string;
 }
 
+/**
+ * A person to be placed on the relation board.
+ *
+ * `answer` is the slot id they actually belong in. Authored, like everything else the
+ * runtime checks - §157: the evaluator never decides what is true.
+ */
+export interface BoardPerson {
+  id: string;
+  /** Rendered via textContent only. */
+  name: string;
+  /** The one thing the contact said about them, kept beside the box as a reminder. */
+  note: string;
+  /** Slot id this person belongs in. */
+  answer: string;
+}
+
+export interface BoardSlot {
+  id: string;
+  label: string;
+}
+
+/**
+ * Connect-the-boxes: a relationship the contact can describe but cannot assemble.
+ *
+ * The conversation missions all resolve by *saying* the right thing, which is the right
+ * default and gets monotonous as the only verb in the game. This is a beat that asks the
+ * player to do something instead - hold five statements at once and work out the shape
+ * they make - which is exactly the job the fiction says OMNISCIENT_ is for.
+ *
+ * A wrong submission is never a failure (§159). The contact says how many are right and
+ * nothing more, so guessing costs attention rather than progress, and the way through is
+ * to go back and re-read what she actually told you.
+ */
+export interface RelationBoard {
+  /** The question, in the contact's voice. */
+  prompt: string;
+  people: BoardPerson[];
+  /** Every slot offered, including ones nobody belongs in. */
+  slots: BoardSlot[];
+  onSolved: BeatTransition;
+  /**
+   * Where a wrong submission goes. Normally back to the same beat - the board stays up
+   * and the player tries again.
+   */
+  onWrong: BeatTransition;
+  /** What the contact says on a wrong submission, before the count. */
+  wrongSay: string;
+}
+
 export interface Beat {
   id: string;
   /** What the contact transmits on arrival. */
   say: string;
   tempo: Tempo;
+  /**
+   * Present on a beat that puts the relation board up instead of asking for a sentence.
+   * The text input stays live, so a player can still talk to the contact while it is open.
+   */
+  board?: RelationBoard;
   /**
    * Present on a beat that ends the request badly (§155 / §163).
    *

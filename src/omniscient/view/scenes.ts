@@ -968,11 +968,204 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   });
 }
 
+
+/**
+ * MISSION 04 - the cleared house.
+ *
+ * A room being emptied: furniture pushed back, a table under the window with a shoebox of
+ * photographs open on it, and the same tide line round the bottom of the wall that Mirela
+ * has in her shop eleven miles down the coast. That mark is the mission's evidence and the
+ * reason the parish records are porridge, so §131 requires it to actually be there.
+ *
+ * Deliberately underdressed. The set is a house with the life taken out of it, and the way
+ * to say that is empty wall and stacked chairs rather than more props.
+ */
+function buildClearedHouse(scene: ContactScene): void {
+  const rng = createRng(seedFrom('ileana-house'));
+
+  const floor = new THREE.BoxGeometry(7, 0.1, 6);
+  floor.translate(0, -0.05, 0);
+  scene.registerProp('floor', meshOf('Floor', floor, MAT.timberDark));
+
+  const wall = new THREE.BoxGeometry(7, 3.0, 0.15);
+  wall.translate(0, 1.5, -2.1);
+  scene.registerProp('wall', meshOf('Wall', wall, MAT.wall));
+
+  // The same water, the same height, matched to the repair shop on purpose. Two bands,
+  // because a room that floods every spring has more than one high-water mark.
+  const tide: THREE.BufferGeometry[] = [];
+  for (const [height, thickness] of [
+    [0.26, 0.035],
+    [0.19, 0.02],
+  ] as const) {
+    const band = new THREE.BoxGeometry(7, thickness, 0.02);
+    band.translate(0, height, -2.015);
+    tide.push(band);
+  }
+  scene.registerProp(
+    'tide-line',
+    meshOf('TideLine', mergeGeometries(tide, false) ?? tide[0], MAT.tideStain)
+  );
+
+  // Window, high and behind, so the table under it is the lit thing in the room.
+  const frame = new THREE.BoxGeometry(1.5, 1.1, 0.06);
+  frame.translate(-0.2, 1.75, -2.0);
+  scene.registerProp('window-frame', meshOf('WindowFrame', frame, MAT.timber));
+
+  const pane = new THREE.PlaneGeometry(1.34, 0.94);
+  pane.translate(-0.2, 1.75, -1.96);
+  scene.registerProp('window', meshOf('Window', pane, MAT.daylight));
+
+  // -- The table, and what is on it -----------------------------------------
+  const table: THREE.BufferGeometry[] = [];
+  const top = new THREE.BoxGeometry(1.7, 0.06, 0.8);
+  top.translate(-0.2, 0.74, -1.1);
+  table.push(top);
+  for (const [x, z] of [
+    [-0.95, -1.44],
+    [0.53, -1.44],
+    [-0.95, -0.78],
+    [0.53, -0.78],
+  ] as const) {
+    const leg = new THREE.BoxGeometry(0.07, 0.74, 0.07);
+    leg.translate(x, 0.37, z);
+    table.push(leg);
+  }
+  scene.registerProp('table', meshOf('Table', mergeGeometries(table, false) ?? top, MAT.timber));
+
+  /**
+   * The box of photographs - the prop the whole request is about.
+   *
+   * Open, with the prints fanned rather than stacked, because a closed box says storage
+   * and an open one says somebody has been going through this for two days.
+   */
+  const boxRoot = ENGINE.SceneNode.create({
+    name: 'PhotoBox',
+    position: new THREE.Vector3(-0.55, 0.77, -1.06),
+  });
+
+  const shell = new THREE.BoxGeometry(0.34, 0.11, 0.24);
+  shell.translate(0, 0.055, 0);
+  boxRoot.add(meshOf('BoxShell', shell, MAT.plastic));
+
+  const lid = new THREE.BoxGeometry(0.36, 0.02, 0.26);
+  lid.rotateZ(0.22);
+  lid.translate(0.32, 0.02, 0.04);
+  boxRoot.add(meshOf('BoxLid', lid, MAT.plastic));
+
+  const prints: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 9; i++) {
+    const print = new THREE.BoxGeometry(0.085, 0.002, 0.062);
+    print.rotateY(jitter(rng, 0.9));
+    print.translate(-0.02 + jitter(rng, 0.26), 0.113 + i * 0.0022, 0.02 + jitter(rng, 0.13));
+    prints.push(print);
+  }
+  boxRoot.add(meshOf('Photographs', mergeGeometries(prints, false) ?? prints[0], MAT.paper));
+  scene.registerProp('photo-box', boxRoot, {
+    anchors: { default: new THREE.Vector3(0, 0.14, 0) },
+  });
+
+  // The four envelopes, squared up, waiting for names.
+  const letters: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 4; i++) {
+    const envelope = new THREE.BoxGeometry(0.16, 0.003, 0.11);
+    envelope.rotateY(jitter(rng, 0.06));
+    envelope.translate(0.34, 0.775 + i * 0.0035, -1.14 + jitter(rng, 0.01));
+    letters.push(envelope);
+  }
+  scene.registerProp(
+    'letters',
+    meshOf('Letters', mergeGeometries(letters, false) ?? letters[0], MAT.paper)
+  );
+
+  // -- Stacked chairs: a house being emptied ---------------------------------
+  const stack: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 3; i++) {
+    const seat = new THREE.BoxGeometry(0.42, 0.05, 0.42);
+    seat.rotateY(jitter(rng, 0.14));
+    seat.translate(1.75, 0.46 + i * 0.13, -1.5);
+    stack.push(seat);
+  }
+  const back = new THREE.BoxGeometry(0.42, 0.5, 0.05);
+  back.translate(1.75, 0.95, -1.7);
+  stack.push(back);
+  for (const [x, z] of [
+    [1.58, -1.34],
+    [1.92, -1.34],
+    [1.58, -1.66],
+    [1.92, -1.66],
+  ] as const) {
+    const leg = new THREE.BoxGeometry(0.05, 0.46, 0.05);
+    leg.translate(x, 0.23, z);
+    stack.push(leg);
+  }
+  scene.registerProp(
+    'chairs',
+    meshOf('Chairs', mergeGeometries(stack, false) ?? back, MAT.timberDark)
+  );
+
+  scene.registerProp(
+    'contact',
+    buildCharacter('Ileana', {
+      seed: 'ileana-marku',
+      height: 1.66,
+      build: 0.4,
+      shoulders: 0.44,
+      // Sitting forward over the table, which is where somebody is after two days of this.
+      lean: 0.34,
+      reach: 0.6,
+      garment: 'coat',
+      colors: { garment: '#4a4a52', underlayer: '#b3a58a' },
+      position: new THREE.Vector3(-1.05, 0, -0.32),
+      rotation: new THREE.Euler(0, Math.PI * 0.14, 0),
+    })
+  );
+
+  // -- Light -----------------------------------------------------------------
+  // One window and one fill. A house with the curtains taken down and half the power off.
+  scene.registerProp(
+    'daylight',
+    ENGINE.PointLightNode.create({
+      name: 'Daylight',
+      position: new THREE.Vector3(-0.2, 2.1, -1.5),
+      intensity: 16,
+      color: new THREE.Color('#cfe0f0'),
+      distance: 9,
+      decay: 1.1,
+    })
+  );
+
+  scene.registerProp(
+    'roomfill',
+    ENGINE.PointLightNode.create({
+      name: 'RoomFill',
+      position: new THREE.Vector3(1.4, 1.9, 1.6),
+      intensity: 6,
+      color: new THREE.Color(LIGHT.key),
+      distance: 8,
+      decay: 1.4,
+    })
+  );
+
+  scene.registerShot('default', {
+    // Across the table, so the box, the envelopes and Ileana are all in one frame - the
+    // three things the request is made of.
+    position: new THREE.Vector3(1.15, 1.42, 1.35),
+    target: new THREE.Vector3(-0.42, 0.85, -1.2),
+  });
+  scene.registerShot('photo-box', {
+    position: new THREE.Vector3(0.15, 1.16, -0.3),
+    target: new THREE.Vector3(-0.5, 0.8, -1.08),
+    duration: 2.2,
+  });
+}
+
 // Registered at module load. auto-imports pulls this module in, so a ContactScene node
 // placed in the editor with a matching sceneId populates itself.
 ContactScene.registerBuilder('scene-repair-shop', buildRepairShop);
 ContactScene.registerBuilder('scene-beacon-mast', buildBeaconMast);
 ContactScene.registerBuilder('scene-seedling-tunnel', buildSeedlingTunnel);
+ContactScene.registerBuilder('scene-cleared-house', buildClearedHouse);
 
 /** Construct a populated diorama for a mission's sceneId, or null when none exists. */
 export function buildContactScene(sceneId: string): ContactScene | null {

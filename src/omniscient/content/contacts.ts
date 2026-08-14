@@ -32,7 +32,22 @@ export const ADAEZE: Contact = {
   teaser: 'LAGOS - SEEDLINGS FAILING - URGENT',
 };
 
-export const CONTACTS: readonly Contact[] = [MIRELA, TOMAS, ADAEZE];
+/**
+ * Another coast, another spring, the same water.
+ *
+ * She was written as Mirela's neighbour and had to move, because two signals in one town
+ * is one dot on the globe. What survived the move is the thing that mattered: her family's
+ * records were pulped by a flood, and OMNISCIENT_ has already stood in a room with a tide
+ * line round the wall.
+ */
+export const ILEANA: Contact = {
+  id: 'ileana',
+  name: 'Ileana Marku',
+  location: 'A cleared house, Vadu Sec',
+  teaser: 'VADU SEC - "there is nobody left who knows"',
+};
+
+export const CONTACTS: readonly Contact[] = [MIRELA, ILEANA, TOMAS, ADAEZE];
 
 export function getContact(id: string): Contact | null {
   return CONTACTS.find((contact) => contact.id === id) ?? null;

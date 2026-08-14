@@ -45,6 +45,14 @@ export interface MissionStep {
    * waiting for yes/no rather than acting on a guess.
    */
   confirming?: { intentId: string; question: string };
+  /**
+   * How many board links were right, after a submission that was not.
+   *
+   * A count and not a list, deliberately. Naming the wrong ones turns the board into a
+   * process of elimination the player can grind without listening; a count says "you have
+   * three of these" and sends them back to what she actually told them.
+   */
+  boardCorrect?: { right: number; total: number };
 }
 
 export class MissionRuntime {
@@ -246,6 +254,35 @@ export class MissionRuntime {
 
   public get isConfirming(): boolean {
     return this.pendingIntent !== null;
+  }
+
+  /**
+   * Submit the relation board.
+   *
+   * `links` maps person id to the slot the player dropped them in. Anything unlinked is
+   * simply wrong rather than an error - a partly filled board is a legitimate guess, and
+   * refusing to grade it would be the game telling the player off for trying.
+   */
+  public submitBoard(links: Record<string, string>): MissionStep {
+    const beat = this.getCurrentBeat();
+    const board = beat.board;
+
+    if (this.finished || !board) {
+      return { say: '', learned: [], clarifying: false };
+    }
+
+    const right = board.people.filter((person) => links[person.id] === person.answer).length;
+    if (right === board.people.length) {
+      return this.applyTransition(board.onSolved);
+    }
+
+    const step = this.applyTransition(board.onWrong);
+    return {
+      ...step,
+      say: board.wrongSay,
+      clarifying: true,
+      boardCorrect: { right, total: board.people.length },
+    };
   }
 
   private applyTransition(transition: BeatTransition): MissionStep {

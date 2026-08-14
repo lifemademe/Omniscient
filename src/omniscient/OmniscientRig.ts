@@ -12,10 +12,11 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
-import { ADAEZE, MIRELA, TOMAS } from './content/contacts.js';
+import { ADAEZE, ILEANA, MIRELA, TOMAS } from './content/contacts.js';
 import { MISSION_01 } from './content/mission-01-transmitter.js';
 import { MISSION_02 } from './content/mission-02-beacon.js';
 import { MISSION_03 } from './content/mission-03-tunnel.js';
+import { MISSION_04 } from './content/mission-04-relations.js';
 import { createScreenGlass } from './art/glass.js';
 import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
@@ -192,6 +193,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.queue = [
       { mission: MISSION_01, contact: MIRELA },
+      /**
+       * Second, and the first request that is not a repair.
+       *
+       * Coming straight after Mirela is the point. The player has just been rewarded for
+       * finding a fault, and there is no fault anywhere in Ileana's request - it is also
+       * where the game stops being only about saying the right sentence.
+       */
+      { mission: MISSION_04, contact: ILEANA },
       { mission: MISSION_02, contact: TOMAS },
       // Adaeze is deliberately last and deliberately elsewhere: by the time the player
       // reaches her they have solved two electrical faults in one small town, which is

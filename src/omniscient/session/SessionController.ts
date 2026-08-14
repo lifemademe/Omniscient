@@ -14,6 +14,7 @@ import { Tempo } from '../mission/types.js';
 
 import type { KnowledgeStore } from '../knowledge/KnowledgeStore.js';
 import type {
+  BoardView,
   HintView,
   InterventionSurface,
   RecordView,
@@ -64,6 +65,8 @@ export class SessionController {
   private opened = new Set<string>();
   private confirming: { intentId: string; question: string } | null = null;
   private failed: MissionFailure | null = null;
+  /** Last board result, so the surface can say how many were right without re-grading. */
+  private boardScore: { right: number; total: number } | null = null;
 
   constructor(
     private readonly surface: InterventionSurface,
@@ -81,6 +84,7 @@ export class SessionController {
     this.opened = new Set();
     this.confirming = null;
     this.failed = null;
+    this.boardScore = null;
 
     this.unsubscribe = this.surface.onMessage((message) => {
       switch (message.kind) {
@@ -98,6 +102,9 @@ export class SessionController {
           break;
         case 'leave':
           this.hooks.onLeave?.();
+          break;
+        case 'board':
+          this.submitBoard(message.links);
           break;
         default:
           break;
@@ -126,6 +133,38 @@ export class SessionController {
 
     this.push({ source: 'omniscient', name: 'OMNISCIENT_', body: text });
     this.apply(this.runtime.respond(text));
+  }
+
+  /**
+   * Send the wired-up board.
+   *
+   * Logged as an OMNISCIENT_ turn in the contact's own terms rather than as raw ids, so
+   * the transcript still reads as a conversation somebody had - "Petra is your aunt" is
+   * what was actually said, and `{petra: 'aunt'}` is only how it travelled.
+   */
+  private submitBoard(links: Record<string, string>): void {
+    if (!this.runtime || !this.contact || this.runtime.isFinished) return;
+
+    const board = this.runtime.getCurrentBeat().board;
+    if (!board) return;
+
+    const spoken = board.people
+      .filter((person) => links[person.id])
+      .map((person) => {
+        const slot = board.slots.find((entry) => entry.id === links[person.id]);
+        return `${person.name} is your ${slot?.label ?? links[person.id]}`;
+      })
+      .join('. ');
+
+    this.push({
+      source: 'omniscient',
+      name: 'OMNISCIENT_',
+      body: spoken ? `${spoken}.` : 'I do not have enough to place them yet.',
+    });
+
+    const step = this.runtime.submitBoard(links);
+    this.boardScore = step.boardCorrect ?? null;
+    this.apply(step);
   }
 
   /** Answer a proposed reading of the last message. */
@@ -273,7 +312,25 @@ export class SessionController {
       failure: this.failed
         ? { summary: this.failed.summary, lesson: this.failed.lesson }
         : undefined,
+      board: finished ? undefined : this.buildBoard(),
     });
+  }
+
+  /** The current beat's board, stripped of its answers, plus the last score. */
+  private buildBoard(): BoardView | undefined {
+    const board = this.runtime?.getCurrentBeat().board;
+    if (!board) return undefined;
+
+    return {
+      prompt: board.prompt,
+      people: board.people.map((person) => ({
+        id: person.id,
+        name: person.name,
+        note: person.note,
+      })),
+      slots: board.slots.map((slot) => ({ id: slot.id, label: slot.label })),
+      score: this.boardScore ?? undefined,
+    };
   }
 
   private failureHint(finished: boolean): string {

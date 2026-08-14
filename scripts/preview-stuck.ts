@@ -14,6 +14,7 @@ import { MIRELA } from '../src/omniscient/content/contacts.js';
 import { MISSION_01 } from '../src/omniscient/content/mission-01-transmitter.js';
 import { MISSION_02 } from '../src/omniscient/content/mission-02-beacon.js';
 import { MISSION_03 } from '../src/omniscient/content/mission-03-tunnel.js';
+import { MISSION_04 } from '../src/omniscient/content/mission-04-relations.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
 import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
 
@@ -66,7 +67,7 @@ console.log('\n=== FOLLOWING THE SUGGESTIONS ===\n');
  * points at the answer. Mission 01 had exactly that - unit-overview to history to
  * power-off-early and back - and only walking it in every position exposed it.
  */
-for (const mission of [MISSION_01, MISSION_02, MISSION_03]) {
+for (const mission of [MISSION_01, MISSION_02, MISSION_03, MISSION_04]) {
   const widest = Math.max(...mission.beats.map((beat) => beat.suggest?.length ?? 0));
 
   for (let slot = 0; slot < widest; slot++) {
@@ -77,6 +78,24 @@ for (const mission of [MISSION_01, MISSION_02, MISSION_03]) {
     let guard = 0;
 
     while (!walker.isFinished && guard++ < 40) {
+      /**
+       * A board beat does not ask for a sentence, so the chip-walk has to be able to
+       * answer one or every mission with a board reads as a dead end here.
+       *
+       * It submits the authored answers, which is the *right* level of cheating for this
+       * test: the question being asked is whether the graph reaches an ending, not
+       * whether a script can solve a puzzle meant for a person.
+       */
+      const board = walker.getCurrentBeat().board;
+      if (board) {
+        const links = Object.fromEntries(
+          board.people.map((person) => [person.id, person.answer])
+        );
+        walker.submitBoard(links);
+        path.push(walker.getCurrentBeat().id);
+        continue;
+      }
+
       const suggestions = walker.getCurrentBeat().suggest ?? [];
       if (suggestions.length === 0) break;
 
@@ -106,7 +125,7 @@ console.log('\n=== TYPOS ARE NOT PUNISHED ===\n');
  * message produces a clarification, not a punishment, and a physical cue on that path
  * breaks it just as badly as a red X would.
  */
-[MISSION_01, MISSION_02, MISSION_03].forEach((mission) => {
+[MISSION_01, MISSION_02, MISSION_03, MISSION_04].forEach((mission) => {
   const harmful = mission.beats
     .filter((beat) => {
       const path = beat.onUnrecognised;
@@ -122,7 +141,7 @@ console.log('\n=== TYPOS ARE NOT PUNISHED ===\n');
 });
 
 // And the beat you land on after an unrecognised message must still offer a way out.
-[MISSION_01, MISSION_02, MISSION_03].forEach((mission) => {
+[MISSION_01, MISSION_02, MISSION_03, MISSION_04].forEach((mission) => {
   const byId = new Map(mission.beats.map((beat) => [beat.id, beat]));
   const dead = mission.beats
     .filter((beat) => beat.onUnrecognised)
@@ -191,6 +210,117 @@ console.log('\n=== LOSING MIRELA ===\n');
     'The note is kept, marked as the player\'s own',
     records.some((r) => r.playerWritten && r.label.includes('power off'))
   );
+}
+
+
+console.log('\n=== THE RELATION BOARD ===\n');
+
+/**
+ * The board is the first thing in the game that is not a sentence, which means it is the
+ * first thing whose rules the player can only learn by trying. That makes its behaviour
+ * on a WRONG answer more important than its behaviour on a right one.
+ */
+{
+  const board = MISSION_04.beats.find((beat) => beat.board)?.board;
+  check('Mission 04 has a board', board !== undefined);
+
+  if (board) {
+    check(
+      'Every person belongs in a slot that actually exists',
+      board.people.every((person) => board.slots.some((slot) => slot.id === person.answer)),
+      board.people
+        .filter((person) => !board.slots.some((slot) => slot.id === person.answer))
+        .map((person) => `${person.name} -> ${person.answer}`)
+        .join(', ')
+    );
+
+    /**
+     * More slots than people, on purpose.
+     *
+     * With exactly one slot per person the final placement is free - the player never has
+     * to make the last and most interesting inference, they just put the leftover name in
+     * the leftover box. Padding the slot list is what keeps the board a reasoning problem
+     * rather than a sorting problem.
+     */
+    check(
+      'There are more slots than people, so it cannot be solved by elimination',
+      board.slots.length > board.people.length,
+      `${board.slots.length} slots, ${board.people.length} people`
+    );
+
+    check(
+      'Every person carries the line the contact said about them',
+      board.people.every((person) => person.note.trim().length > 0)
+    );
+
+    // A wrong answer must not advance, must not fail the request, and must say something.
+    const wrong = new MissionRuntime(MISSION_04, new KnowledgeStore(SEED));
+    wrong.open();
+    wrong.respond('tell me the names');
+    const boardBeatId = wrong.getCurrentBeat().id;
+
+    const scrambled = Object.fromEntries(
+      board.people.map((person, index) => [
+        person.id,
+        board.people[(index + 1) % board.people.length].answer,
+      ])
+    );
+    const missed = wrong.submitBoard(scrambled);
+
+    check('A wrong board does not end the request', !wrong.isFinished);
+    check('A wrong board leaves the board up', wrong.getCurrentBeat().id === boardBeatId);
+    check('A wrong board is not a failure (§159)', missed.failure === undefined);
+    check('The contact says something rather than buzzing', missed.say.length > 0);
+    check(
+      'It reports how many were right, and nothing about which',
+      missed.boardCorrect !== undefined &&
+        missed.boardCorrect.total === board.people.length,
+      `${missed.boardCorrect?.right}/${missed.boardCorrect?.total}`
+    );
+
+    // A partly filled board is a legitimate guess, not an error.
+    const partial = wrong.submitBoard({ [board.people[0].id]: board.people[0].answer });
+    check('A half-filled board is graded rather than rejected', partial.boardCorrect?.right === 1);
+    check('...and still does not end the request', !wrong.isFinished);
+
+    // And the right answer resolves it.
+    const right = new MissionRuntime(MISSION_04, new KnowledgeStore(SEED));
+    right.open();
+    right.respond('tell me the names');
+    const solved = right.submitBoard(
+      Object.fromEntries(board.people.map((person) => [person.id, person.answer]))
+    );
+    check('The right board resolves the request', right.isFinished);
+    check('...with an outcome', solved.outcome !== undefined, solved.outcome?.kind);
+    check(
+      '...and grafts the flood onto what the flood could not take (§107)',
+      (solved.outcome?.connects?.length ?? 0) > 0,
+      solved.outcome?.connects?.[0]?.label
+    );
+  }
+}
+
+/**
+ * The board must be reachable by somebody who only ever taps the first chip.
+ *
+ * The chip-walk above proves the mission ends; this proves the mission's whole point is
+ * on the path rather than down a branch only a careful player finds.
+ */
+{
+  const walker = new MissionRuntime(MISSION_04, new KnowledgeStore(SEED));
+  walker.open();
+  let reached = false;
+  let guard = 0;
+  while (!walker.isFinished && guard++ < 12) {
+    if (walker.getCurrentBeat().board) {
+      reached = true;
+      break;
+    }
+    const suggestions = walker.getCurrentBeat().suggest ?? [];
+    if (!suggestions.length) break;
+    walker.respond(suggestions[0]);
+  }
+  check('Tapping the first chip reaches the board', reached, `${guard} steps`);
 }
 
 console.log(

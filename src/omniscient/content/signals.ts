@@ -14,6 +14,7 @@ import type { Signal } from '../crt/GlobeView.js';
 export const MIRELA_SIGNAL = 'mirela';
 export const TOMAS_SIGNAL = 'tomas';
 export const ADAEZE_SIGNAL = 'adaeze';
+export const ILEANA_SIGNAL = 'ileana';
 
 /**
  * §96 caps conscious attention at five. The globe honours that: five nameable people at
@@ -28,6 +29,24 @@ export function createSignals(): Signal[] {
       name: 'Mirela Vasc',
       label: '"It worked yesterday."',
       state: SignalState.Waiting,
+    },
+    {
+      /**
+       * A long way from the Vascs, and that is geography giving way to clickability for
+       * the second time in this file.
+       *
+       * She wanted to be in Portu Vech - the flood that took her family's records is the
+       * flood that left the tide line on Mirela's wall, and having them share a town said
+       * that in one stroke. Two signals in one town is one dot you cannot click. So the
+       * water stayed in the story and the pin moved, exactly as it did for Tomas.
+       */
+      id: ILEANA_SIGNAL,
+      latitude: 36.1,
+      longitude: 17.4,
+      name: 'Ileana Marku',
+      label: 'There is nobody left who knows.',
+      // Arrives once Mirela's request is closed.
+      state: SignalState.Dormant,
     },
     {
       id: TOMAS_SIGNAL,
@@ -48,15 +67,11 @@ export function createSignals(): Signal[] {
       // Appears once Mirela's request resolves - because that is what caused it.
       state: SignalState.Dormant,
     },
-    // Teases. §52: do not reveal everything, make them curious enough to look.
-    {
-      id: 'tease-tokyo',
-      latitude: 35.7,
-      longitude: 139.7,
-      name: 'Unknown caller',
-      label: 'Tokyo - signal weak.',
-      state: SignalState.Waiting,
-    },
+    // Tease. §52: do not reveal everything, make them curious enough to look.
+    //
+    // There used to be a second one, in Tokyo. Ileana took its place rather than joining
+    // it, because §96 caps the nameable signals at five and a globe that quietly holds
+    // six is a globe where one of them is furniture.
     {
       /**
        * Was a tease, and is now a request. The globe promised her from the first frame of

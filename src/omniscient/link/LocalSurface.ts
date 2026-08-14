@@ -30,6 +30,8 @@ import type {
   TranscriptEntry,
 } from './surface.js';
 
+import { BoardPanel } from './BoardPanel.js';
+
 const STYLE_ID = 'omniscient-terminal-styles';
 
 /** Exported so the preview tool renders the shipping styles rather than a copy. */
@@ -372,6 +374,7 @@ export class LocalSurface implements InterventionSurface {
   private trustCard: ReadoutCard | null = null;
   private historyCard: ReadoutCard | null = null;
   private suggestElement: HTMLDivElement | null = null;
+  private board: BoardPanel | null = null;
   /** Last rendered suggestion set, so the chips are not rebuilt under the player's cursor. */
   private renderedSuggestKey = '';
 
@@ -561,6 +564,19 @@ export class LocalSurface implements InterventionSurface {
     this.panelElement = panel;
     this.extraElement = extra;
     this.suggestElement = suggestions;
+
+    /**
+     * The relation board lives NEXT to the extra panel, not inside it.
+     *
+     * `renderExtra` clears its container on every present, and the session presents on
+     * every state change - opening a hint, the contact answering. A board rebuilt on each
+     * of those would throw away half-finished wiring for reasons the player cannot see,
+     * which is the same shape as the bug that broke the suggestion chips. It is created
+     * once and told to update instead.
+     */
+    this.board = new BoardPanel((message) => this.dispatch(message));
+    this.board.element.style.display = 'none';
+    extra.parentElement?.insertBefore(this.board.element, extra);
   }
 
   /** Build one margin readout. Segments are filled later by fillMeter. */
@@ -786,6 +802,7 @@ export class LocalSurface implements InterventionSurface {
     this.renderTabs(state);
     this.renderPanel(state);
     this.renderExtra(state);
+    this.board?.update(state.board);
 
     // While confirming or writing a note, the free-text field is not the way in.
     const typing = state.awaitingInput && !state.confirming;
