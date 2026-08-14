@@ -28,7 +28,7 @@ import { TunePanel } from './dev/TunePanel.js';
 import { GlobeView, SignalState } from './crt/GlobeView.js';
 import { KnowledgeTree } from './crt/KnowledgeTree.js';
 import { fitSurfaceUvs, readModelParts } from './geometry/model-parts.js';
-import { CHAIR_PLACEMENT, createWorkstationRoom, LAMP } from './geometry/room.js';
+import { CHAIR_PLACEMENT, createWorkstationRoom, DESK_SHIFT, LAMP } from './geometry/room.js';
 import { KnowledgeStore } from './knowledge/KnowledgeStore.js';
 import { BroadcastTransport } from './link/BroadcastTransport.js';
 import { LocalSurface } from './link/LocalSurface.js';
@@ -109,8 +109,10 @@ const HOME_SHOT: CameraShot = {
   // against the player's window not being the shape mine is.
   // Raised once the floor was put at the right depth: level with the desk edge, the new
   // front fascia filled the bottom third of frame and the room lost its floor entirely.
-  position: new THREE.Vector3(1.3, 1.62, -56.7),
-  target: new THREE.Vector3(-0.3, 0.88, -60.15),
+  // Follows the desk back (see DESK_SHIFT). The camera keeps its distance from the
+  // machine rather than staying put and watching it recede.
+  position: new THREE.Vector3(1.3, 1.62, -57.42),
+  target: new THREE.Vector3(-0.3, 0.88, -60.87),
   duration: 2.0,
 };
 
@@ -402,7 +404,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     const monitor = ENGINE.ModelMeshNode.create({
       name: 'Terminal',
-      position: new THREE.Vector3(0, 0, -0.5),
+      position: new THREE.Vector3(0, 0, -0.5 + DESK_SHIFT),
       modelUrl: '@project/assets/models/CRT_TV.glb',
       // The screen, the glass and the lamp each get their own material below, and the
       // model ships with one shared across all four meshes.

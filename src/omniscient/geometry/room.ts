@@ -71,6 +71,69 @@ function createWindow(): RoomPart[] {
   sea.translate(WINDOW.x, WINDOW.sill + (height * (1 - horizon)) / 2, -2.16);
   parts.push({ name: 'WindowSea', geometry: sea, material: 'daylightSea' });
 
+  /**
+   * What is actually out there.
+   *
+   * §241: depth in a background comes from LAYERS and value separation, not from more
+   * detail. A gradient alone is atmosphere with nothing in it - the aperture reads as a
+   * lightbox rather than as a view, because nothing in it is at a distance from anything
+   * else. Three flat silhouettes at three values fix that, and each one is a single quad.
+   *
+   * They are also the only place in the game the player can see the world the requests
+   * come from: a far headland, a nearer one, and the roofs of a town along the water. The
+   * mast on the second headland is Tomas's - the harbour light that goes out in Mission
+   * 02 stands within sight of the machine that answers him, which nobody will notice and
+   * everybody will feel.
+   *
+   * Unlit and un-tone-mapped like the sky behind them, and stacked in z by two
+   * centimetres each so the sort order can never flicker.
+   */
+  const horizonY = WINDOW.sill + height * (1 - horizon);
+
+  // Far headland: barely darker than the sky. Distance is value, not detail.
+  const farLand = new THREE.PlaneGeometry(WINDOW.width, height * 0.1);
+  farLand.translate(WINDOW.x - 0.28, horizonY + height * 0.045, -2.155);
+  parts.push({ name: 'ViewFarLand', geometry: farLand, material: 'viewFar' });
+
+  // Near headland, and the mast on it.
+  const nearLand = new THREE.PlaneGeometry(WINDOW.width * 0.62, height * 0.07);
+  nearLand.translate(WINDOW.x + 0.34, horizonY + height * 0.03, -2.15);
+  parts.push({ name: 'ViewNearLand', geometry: nearLand, material: 'viewNear' });
+
+  const mast = new THREE.PlaneGeometry(0.018, height * 0.13);
+  mast.translate(WINDOW.x + 0.52, horizonY + height * 0.095, -2.145);
+  parts.push({ name: 'ViewMast', geometry: mast, material: 'viewNear' });
+
+  // The town: a run of roofs along the waterline, and the lit windows in them.
+  const roofs: THREE.BufferGeometry[] = [];
+  const lamps: THREE.BufferGeometry[] = [];
+  const rng = createRng(seedFrom('window-town'));
+  for (let i = 0; i < 14; i++) {
+    const w = range(rng, 0.05, 0.12);
+    const h = height * range(rng, 0.022, 0.055);
+    const x = WINDOW.x - WINDOW.width / 2 + 0.08 + i * (WINDOW.width - 0.16) / 13;
+    const roof = new THREE.PlaneGeometry(w, h);
+    roof.translate(x + jitter(rng, 0.02), horizonY + h / 2 - 0.004, -2.14);
+    roofs.push(roof);
+
+    // Not every house has its light on.
+    if (rng() < 0.45) {
+      const lamp = new THREE.PlaneGeometry(0.012, 0.012);
+      lamp.translate(x + jitter(rng, 0.02), horizonY + h * 0.55, -2.135);
+      lamps.push(lamp);
+    }
+  }
+  parts.push({
+    name: 'ViewTown',
+    geometry: mergeGeometries(roofs, false) ?? roofs[0],
+    material: 'viewTown',
+  });
+  parts.push({
+    name: 'ViewTownLights',
+    geometry: mergeGeometries(lamps, false) ?? lamps[0],
+    material: 'lamp',
+  });
+
   // Frame and a single vertical mullion. Dark against the blowout - the strongest
   // value contrast in the room, which is exactly what a window should be.
   const frame: THREE.BufferGeometry[] = [];
@@ -127,8 +190,23 @@ export const FLOOR_Y = -0.76;
  */
 const BOARD = { x: -0.34, y: 1.82, width: 1.36, height: 0.88 } as const;
 
+/**
+ * How far the whole desk group sits back from where it used to.
+ *
+ * Measured before moving anything: the desk's back edge was at z = -1.075 and the wall
+ * face is at -2.02, so there was 95cm of empty floor behind a desk that is pushed against
+ * a wall in every reference frame and in the fiction. It read as an island in the middle
+ * of the room. At -0.72 the gap is 23cm, which is the service space a desk actually
+ * stands off a wall for cables and skirting.
+ *
+ * Applied to the desk, its legs, and everything standing ON it - the machine, the lamp,
+ * the mug, the plant, the paper - plus the menu plates, which hover over the desk and
+ * would otherwise be left behind in mid-air. One constant so the group cannot drift apart.
+ */
+export const DESK_SHIFT = -0.72;
+
 /** Where the plant sits: desk right, under the window, out of the machine's way. */
-const PLANT = { x: 1.28, y: 0, z: -0.66 } as const;
+const PLANT = { x: 1.28, y: 0, z: -0.66 + DESK_SHIFT } as const;
 
 /**
  * The desk plant - and the whole theme in one prop.
@@ -232,7 +310,7 @@ export const LAMP = {
    * never be occluded. So it stays left and gets shorter - the whole fixture now tops out
    * at y 0.38, four centimetres under the lowest plate, and sits 0.2 forward of the stack.
    */
-  base: new THREE.Vector3(-1.34, 0, -0.60),
+  base: new THREE.Vector3(-1.34, 0, -0.60 + DESK_SHIFT),
   /**
    * Centre of the shade opening. The point light goes here.
    *
@@ -241,7 +319,7 @@ export const LAMP = {
    * supposed to throw was lit from within a solid object. The set spans x -0.5..0.5 and
    * z -0.90..-0.10; this is outside it on both.
    */
-  bulb: new THREE.Vector3(-1.06, 0.28, -0.16),
+  bulb: new THREE.Vector3(-1.06, 0.28, -0.16 + DESK_SHIFT),
 } as const;
 
 /**
@@ -396,8 +474,17 @@ export function createWorkstationRoom(): RoomPart[] {
 
   // Desk. The CRT sits at y=0, so the desk top is just below it.
   const deskPieces: THREE.BufferGeometry[] = [];
-  const top = new THREE.BoxGeometry(3.2, 0.07, 1.05);
-  top.translate(0, -0.035, -0.55);
+  /**
+   * 4cm, not 7.
+   *
+   * A worktop is 3-4cm of board. At 7cm, plus a 16cm fascia hanging under its front edge,
+   * the desk presented a 23cm slab to the camera - which is a concrete lintel, not a
+   * bench somebody sits at. The fascia below is now a slim apron rail instead of a second
+   * slab, so the visible edge is about 11cm total: a top with a rail under it, which is
+   * what furniture looks like.
+   */
+  const top = new THREE.BoxGeometry(3.2, 0.04, 1.05);
+  top.translate(0, -0.02, -0.55 + DESK_SHIFT);
   deskPieces.push(top);
 
   // Front fascia, hanging below the top along its whole length.
@@ -405,12 +492,12 @@ export function createWorkstationRoom(): RoomPart[] {
   // At this camera height the desk is seen almost edge-on, and a 7cm slab gave it nothing
   // to read as thickness - it looked like a sheet. The fascia is what makes the eye
   // accept it as furniture rather than as a surface painted on the floor.
-  const fascia = new THREE.BoxGeometry(3.2, 0.16, 0.06);
-  fascia.translate(0, -0.15, -0.06);
+  const fascia = new THREE.BoxGeometry(3.2, 0.07, 0.045);
+  fascia.translate(0, -0.075, -0.06 + DESK_SHIFT);
   deskPieces.push(fascia);
 
-  const apron = new THREE.BoxGeometry(3.0, 0.13, 0.05);
-  apron.translate(0, -0.13, -1.04);
+  const apron = new THREE.BoxGeometry(3.0, 0.09, 0.05);
+  apron.translate(0, -0.085, -1.04 + DESK_SHIFT);
   deskPieces.push(apron);
   parts.push({
     name: 'Desk',
@@ -420,12 +507,12 @@ export function createWorkstationRoom(): RoomPart[] {
 
   // Legs, reaching the actual floor. They used to be 0.78 long hanging off a desk that
   // was already sitting on the ground, so they passed straight through it into nothing.
-  const legHeight = -FLOOR_Y - 0.07;
+  const legHeight = -FLOOR_Y - 0.04;
   const legs: THREE.BufferGeometry[] = [];
   for (let sx = -1; sx <= 1; sx += 2) {
     for (let sz = -1; sz <= 1; sz += 2) {
       const leg = new THREE.BoxGeometry(0.08, legHeight, 0.08);
-      leg.translate(sx * 1.45, FLOOR_Y + legHeight / 2, -0.55 + sz * 0.42);
+      leg.translate(sx * 1.45, FLOOR_Y + legHeight / 2, -0.55 + sz * 0.42 + DESK_SHIFT);
       legs.push(leg);
     }
   }
@@ -450,11 +537,19 @@ export function createWorkstationRoom(): RoomPart[] {
    * side without the end caps sampling it: a cylinder's caps map the whole texture onto a
    * disc, so a mark painted into a closed mug's material comes out warped across the rim.
    */
-  const mugAt = new THREE.Vector3(0.82, 0, -0.16);
+  const mugAt = new THREE.Vector3(0.82, 0, -0.16 + DESK_SHIFT);
   const mugTurn = jitter(rng, 0.4) - 0.5;
 
-  const mugBody = new THREE.CylinderGeometry(0.045, 0.04, 0.1, 12, 1, true);
-  mugBody.translate(0, 0.05, 0);
+  /**
+   * 8cm across the rim and 9cm tall.
+   *
+   * It was 9cm across and 10cm tall with a 6cm handle, which is a tankard - and next to
+   * the machine it read as a bucket somebody had left on the desk. A mug is very slightly
+   * taller than it is wide; getting that ratio the wrong way round is most of why a
+   * drawn mug looks wrong even when the absolute size is close.
+   */
+  const mugBody = new THREE.CylinderGeometry(0.04, 0.035, 0.09, 12, 1, true);
+  mugBody.translate(0, 0.045, 0);
   mugBody.rotateY(mugTurn);
   mugBody.translate(mugAt.x, mugAt.y, mugAt.z);
   const band = mugBand();
@@ -465,20 +560,20 @@ export function createWorkstationRoom(): RoomPart[] {
   });
 
   const mugShell: THREE.BufferGeometry[] = [];
-  const mugBase = new THREE.CylinderGeometry(0.04, 0.04, 0.012, 12);
+  const mugBase = new THREE.CylinderGeometry(0.035, 0.035, 0.01, 12);
   mugBase.translate(0, 0.006, 0);
   mugShell.push(mugBase);
   // The rim, and a suggestion of an interior below it. Without this the open cylinder
   // shows its own back wall through the top and reads as a paper cup.
-  const mugInner = new THREE.CylinderGeometry(0.039, 0.036, 0.014, 12);
-  mugInner.translate(0, 0.086, 0);
+  const mugInner = new THREE.CylinderGeometry(0.0345, 0.032, 0.012, 12);
+  mugInner.translate(0, 0.079, 0);
   mugShell.push(mugInner);
   // The handle. A partial torus, standing in the vertical plane, on the side away from
   // the machine so it breaks the mug's outline against the desk rather than against the
   // chassis.
-  const handle = new THREE.TorusGeometry(0.03, 0.0065, 5, 12, Math.PI * 1.15);
+  const handle = new THREE.TorusGeometry(0.024, 0.0055, 5, 12, Math.PI * 1.15);
   handle.rotateZ(-Math.PI * 0.42);
-  handle.translate(0.052, 0.052, 0);
+  handle.translate(0.045, 0.046, 0);
   mugShell.push(handle);
 
   const mugRest = mergeGeometries(mugShell, false) ?? mugBase;
@@ -495,7 +590,7 @@ export function createWorkstationRoom(): RoomPart[] {
     paper.push(sheet);
   }
   const stack = mergeGeometries(paper, false) ?? paper[0];
-  stack.translate(-0.95, 0.0, -0.42);
+  stack.translate(-0.95, 0.0, -0.42 + DESK_SHIFT);
   parts.push({ name: 'Papers', geometry: stack, material: 'paper' });
 
   parts.push(...createDeskPlant(rng));
@@ -509,7 +604,11 @@ export function createWorkstationRoom(): RoomPart[] {
     // the two for them to run through.
     const length = -FLOOR_Y - range(rng, 0.02, 0.12);
     const drop = new THREE.BoxGeometry(0.018, length, 0.018);
-    drop.translate(-0.3 + i * 0.22 + jitter(rng, 0.03), -0.07 - length / 2, -1.0 + jitter(rng, 0.05));
+    drop.translate(
+      -0.3 + i * 0.22 + jitter(rng, 0.03),
+      -0.04 - length / 2,
+      -1.0 + jitter(rng, 0.05) + DESK_SHIFT
+    );
     drop.rotateZ(jitter(rng, 0.09));
     cables.push(drop);
   }

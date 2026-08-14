@@ -284,6 +284,16 @@ export const MAT = {
    * this coast and the reason there is a harbour beacon to fix.
    */
   daylightSea: new THREE.MeshBasicMaterial({ color: '#8f9a8e', toneMapped: false }),
+  /**
+   * The view out of the window, in three steps of distance.
+   *
+   * §241 again: distance is VALUE. Each layer is a little darker and a little less blue
+   * than the one behind it, which is the whole of aerial perspective and costs three flat
+   * colours. Unlit, so they stay behind the glass rather than picking up the desk lamp.
+   */
+  viewFar: new THREE.MeshBasicMaterial({ color: '#9fb0bd', toneMapped: false, fog: false }),
+  viewNear: new THREE.MeshBasicMaterial({ color: '#7d8b93', toneMapped: false, fog: false }),
+  viewTown: new THREE.MeshBasicMaterial({ color: '#5f6a70', toneMapped: false, fog: false }),
   /** Unlit - indicator lamps and anything that should read as emitting. */
   lamp: new THREE.MeshBasicMaterial({ color: ACCENT.amber, toneMapped: false }),
   /** The shut-down control. Dirty red, and the only one of its colour on the machine. */

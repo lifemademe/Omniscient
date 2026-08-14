@@ -16,6 +16,8 @@ import { decorMesh } from '../art/mesh.js';
 import { ACCENT, MAT } from '../art/palette.js';
 import { createModule, MODULE_PLATE } from '../geometry/modules.js';
 
+import { DESK_SHIFT } from '../geometry/room.js';
+
 import { CableCursor } from './CableCursor.js';
 import { createLabelMaterial } from './labels.js';
 
@@ -93,7 +95,9 @@ const PITCH = 0.345;
  * rest, and having them stand in front of the machine rather than behind it is the more
  * honest read anyway - these are the controls, not scenery.
  */
-const STACK_ORIGIN = new THREE.Vector3(-1.6, 1.95, -0.35);
+// z follows DESK_SHIFT: the plates hover over the desk, so leaving them put while the
+// desk moved back would strand them in the middle of the room.
+const STACK_ORIGIN = new THREE.Vector3(-1.6, 1.95, -0.35 + DESK_SHIFT);
 /** How far a hovered plate pushes out toward the player. */
 const HOVER_PUSH = 0.045;
 
