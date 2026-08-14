@@ -182,13 +182,21 @@ export const MAT = {
   /** Galvanised tube. Dull enough to stand in daylight without becoming the subject. */
   galvanised: standard('#8a8f92', 0.78, 0.2),
   /**
-   * Night sea and sky, behind Tomas's mast.
+   * Painted structural steel - walkways, rails, anything somebody stands on outdoors.
    *
-   * Unlit, because they are distance rather than surface - a lit plane out at the horizon
-   * picks up the moonlight and reads as a wall thirty metres away instead of as the sea.
+   * MAT.metal is 0.65 metalness at 0.45 roughness, which is right for a bracket catching
+   * a rim and badly wrong for a horizontal plate under a light. With no envmap that
+   * metalness kills the diffuse and leaves a tight specular lobe as the only response, so
+   * Tomas's service platform - a flat metre and a half directly beneath the beacon - came
+   * out as the brightest object on the headland after the beacon itself. In a mission
+   * about whether a light is on, the second-brightest thing in frame cannot be the floor.
+   *
+   * Diffuse-dominant, cool, and a clear step below anything it is meant to sit under.
    */
-  sea: new THREE.MeshBasicMaterial({ color: '#1a2530' }),
-  nightSky: new THREE.MeshBasicMaterial({ color: '#28323f' }),
+  steel: standard('#454c55', 0.72, 0.15),
+  // The night sea and sky used to be flat unlit fills here. They are painted gradients
+  // now and live in geometry/backdrop.ts, because a backdrop whose whole content is one
+  // authored canvas has nothing to share with a material family (§187, and see RoomPart).
   /** The harbour light, burning. The only warm source on the headland. */
   beaconLit: new THREE.MeshBasicMaterial({ color: '#ffcf7a', toneMapped: false }),
   /** The same lens with nothing behind it. Its whole job is to be conspicuously off. */

@@ -21,6 +21,7 @@ import { ACCENT, LIGHT, MAT } from '../art/palette.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
 import { createRng, jitter, seedFrom } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
+import { createNightBackdrop } from '../geometry/backdrop.js';
 import { createClump } from './../geometry/foliage.js';
 import {
   createMainsSwitch,
@@ -416,6 +417,15 @@ function buildRepairShop(scene: ContactScene): void {
 }
 
 /**
+ * Where the moon is, declared once.
+ *
+ * The point light and the glow painted into the sky both need it, and a sky whose bright
+ * patch is not where the light is coming from is worse than a sky with no bright patch -
+ * it tells the eye there are two moons and it cannot see either.
+ */
+const MOONLIGHT_AT = new THREE.Vector3(-3.4, 5.5, -4.2);
+
+/**
  * MISSION 02 - the harbour beacon mast.
  *
  * Deliberately sparser: night, height, and one splice bracket that matters. §186 - the
@@ -428,22 +438,24 @@ function buildBeaconMast(scene: ContactScene): void {
   scene.registerProp('deck', meshOf('Deck', deck, MAT.ground));
 
   /**
-   * Sea and horizon.
+   * The night, in four layers (§241).
    *
-   * Tomas is halfway up a mast above a harbour at night, and the scene had nothing under
-   * him but a three-metre slab - no height, no coast, no reason for a beacon to exist at
-   * all. One dark plane and a sky band cost almost nothing and are the whole difference
-   * between "up a mast" and "a lattice in a void".
+   * What used to be here was one unlit plane out at z = -19 doing duty as the sea, and a
+   * note explaining that a sky plane had been tried and cut for reading as a black slab
+   * with a seam. Both problems had the same cause, which is that neither surface was
+   * PAINTED - the atmosphere was being asked to supply the gradient, and it fades to one
+   * neutral by twenty-six units, so the sea arrived as flat pale grey and the sky as
+   * nothing at all.
+   *
+   * Sky, sea, coast and town now come from geometry/backdrop.ts with their values authored
+   * into canvases and the fog switched off. The moon's own position is handed over so the
+   * glow in the sky is where the light actually is.
    */
-  const sea = new THREE.PlaneGeometry(70, 46);
-  sea.rotateX(-Math.PI / 2);
-  sea.translate(0, -5.5, -19);
-  scene.registerProp('sea', meshOf('Sea', sea, MAT.sea));
-
-  // No sky plane. One was tried and cut: an unlit quad out past the mast rendered as a
-  // black slab with a hard seam where it ended and the atmosphere took over, which reads
-  // as a hole in the world rather than as night. The fog is the sky here - it already
-  // fades everything into a cool neutral at distance, which is what a night horizon does.
+  const backdropRoot = ENGINE.SceneNode.create({ name: 'Night' });
+  for (const part of createNightBackdrop(MOONLIGHT_AT)) {
+    backdropRoot.add(meshOf(part.name, part.geometry, part.material));
+  }
+  scene.registerProp('backdrop', backdropRoot);
 
   // -- The mast -------------------------------------------------------------
   const mastPieces: THREE.BufferGeometry[] = [];
@@ -494,7 +506,7 @@ function buildBeaconMast(scene: ContactScene): void {
   platformPieces.push(handrail);
   scene.registerProp(
     'platform',
-    meshOf('Platform', mergeGeometries(platformPieces, false) ?? deckPlate, MAT.metal)
+    meshOf('Platform', mergeGeometries(platformPieces, false) ?? deckPlate, MAT.steel)
   );
 
   // -- The light itself -----------------------------------------------------
@@ -664,7 +676,7 @@ function buildBeaconMast(scene: ContactScene): void {
     'moon',
     ENGINE.PointLightNode.create({
       name: 'Moonlight',
-      position: new THREE.Vector3(-3.4, 5.5, -4.2),
+      position: MOONLIGHT_AT.clone(),
       /**
        * Raised twice, the second time off a recording rather than a still.
        *

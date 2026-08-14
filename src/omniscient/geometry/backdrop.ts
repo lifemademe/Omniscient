@@ -1,0 +1,505 @@
+/**
+ * The night behind Tomas's mast.
+ *
+ * ## What was wrong
+ *
+ * §241: backgrounds are value and layers, not more props. This scene had neither. Behind
+ * the lattice there was a three-metre slab, one flat plane out at z = -19 standing in for
+ * the sea, and then nothing - and because the atmosphere fades everything to a neutral by
+ * twenty-six units, that plane arrived on screen as a sheet of pale grey with pure black
+ * above it. The player spends an entire mission looking at a light going out, framed
+ * against a void.
+ *
+ * ## What §230 took from the reference frame, restated as geometry
+ *
+ * "The figure as a black silhouette against the only bright thing in the frame; the town
+ * as a band of small warm lights at the base of a cold picture; layered depth - rail,
+ * figure, sea, light, cloud." Every one of those is a LAYER at a different distance, and
+ * the scene owned two of them. This module adds the rest, in four draw calls:
+ *
+ *   sky       a painted vertical gradient on a cylinder at 52 units, with a soft cloud
+ *             band and a glow where the moon actually is
+ *   sea       a disc with a painted radial gradient - darker underfoot, lifting toward
+ *             the horizon, which is the cheapest depth cue there is
+ *   coast     a broken silhouette across the far arc, so the horizon is a coastline
+ *             rather than a ruled line
+ *   town      the band of small warm lights, at the foot of the coast
+ *
+ * The default shot points 2° below horizontal with a 46° lens, so the horizon sits about
+ * a quarter of the way up the frame and roughly three quarters of what the player sees is
+ * sky. That is the whole argument for painting it.
+ *
+ * ## §231, and why all of this is unlit
+ *
+ * There is no post-process, no fog exemption by depth and no volumetrics. Distance here
+ * is not simulated, it is painted: every surface below is a MeshBasicMaterial carrying a
+ * canvas, with `fog: false` because the atmosphere is tuned for a diorama eight units
+ * across and would flatten a forty-unit backdrop into one colour, and `toneMapped: false`
+ * because the entire point of authoring a gradient is that the value you paint is the
+ * value that arrives.
+ *
+ * ## §232
+ *
+ * Nothing here is allowed above 0.32 luma except the town lights. The beacon is the
+ * brightest thing on this headland and must stay so through the three and a half seconds
+ * in every eleven when it is out - so the backdrop's ceiling is set below the beacon's
+ * dark-phase floor, and the lights that break it are four pixels across.
+ */
+
+import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
+import { createDecal } from '../art/surface.js';
+import { fbm, smoothstep } from '../art/noise.js';
+import { createRng, range, seedFrom } from '../core/rng.js';
+
+export interface BackdropPart {
+  name: string;
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+}
+
+/** Where the backdrop's shells live. Everything is measured off these. */
+const SKY_RADIUS = 52;
+const SKY_BOTTOM = -7;
+/**
+ * High enough for the beacon shot.
+ *
+ * That camera sits at y 4.6 and pitches 16° up at a 46° lens, so the top of its frame
+ * reaches 39° above horizontal - which at 52 units out is y = 47. A cylinder that stopped
+ * at 30 would have shown its own open rim across the top of the one shot in this mission
+ * that looks at the sky.
+ */
+const SKY_TOP = 50;
+const SEA_Y = -5.5;
+/**
+ * Where the near coast stands. Well inside the sky shell, and that clearance is the point.
+ *
+ * The far ridge was first placed at COAST_RADIUS + 5 with COAST_RADIUS at 41, which is 46
+ * - the sky's own radius. It spent a whole iteration invisible inside the cylinder wall
+ * while its height was blamed for it. There is now six units of ridge separation and
+ * still eight units of clearance to the sky, so nothing can wander into it.
+ */
+const COAST_RADIUS = 38;
+
+/**
+ * The near ridge's own shape, named because the town stands on it.
+ *
+ * These were literals in two places and the coast changed height without the town being
+ * told, which put a dozen streetlights back in the sky - the exact bug the shared
+ * `coastProfile` was extracted to prevent, reintroduced through the parameters instead of
+ * through the function.
+ */
+const NEAR_COAST = { lift: 2.54, relief: 3.04 } as const;
+
+/**
+ * The arc the cameras look into.
+ *
+ * All three shots sit out at +x +z and aim at the mast, so the background they see is the
+ * opposite quadrant. The coast and the town are built across that arc only - a full ring
+ * would enclose the headland in land and lose the open sea, which is half of why anybody
+ * puts a light here.
+ *
+ * Cylinder convention: theta 0 is +z and increases toward +x, so the direction away from
+ * the cameras is atan2(-1, -1) wrapped into [0, 2pi).
+ */
+const AWAY = Math.atan2(-1, -1) + Math.PI * 2;
+const COAST_ARC = 2.0;
+
+function basic(map: THREE.Texture, side: THREE.Side = THREE.FrontSide): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({ map, side, fog: false, toneMapped: false });
+}
+
+function flat(color: string): THREE.MeshBasicMaterial {
+  return new THREE.MeshBasicMaterial({
+    color,
+    fog: false,
+    toneMapped: false,
+    side: THREE.DoubleSide,
+  });
+}
+
+/** World height -> the cylinder's own v, so the gradient can be authored in metres. */
+function skyV(y: number): number {
+  return (y - SKY_BOTTOM) / (SKY_TOP - SKY_BOTTOM);
+}
+
+/**
+ * The sky.
+ *
+ * Three things, in order of how much work they do:
+ *
+ * 1. A vertical gradient, authored in world height rather than in texture space. A night
+ *    sky is lightest at the horizon and darkest overhead, and getting that one relation
+ *    right is most of what makes a painted sky read as sky rather than as a wall.
+ * 2. A cloud band, soft and low-contrast. §230 keeps the cloud LAYER and abandons the
+ *    cloud detail, which is exactly this: something is up there, and it has no edges.
+ * 3. A glow where the moon is. The scene is lit by a point light and until now the sky had
+ *    no idea - so the BEARING is read off that light's position rather than typed in, and
+ *    if the moon moves round the headland the glow moves with it.
+ */
+export function skyTexture(moon: THREE.Vector3): THREE.CanvasTexture | null {
+  // Same convention as the cylinder: theta measured from +z toward +x.
+  const moonU = ((Math.atan2(moon.x, moon.z) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2);
+  /**
+   * The glow's HEIGHT is authored, not derived, and that is deliberate.
+   *
+   * The moonlight is a point light five units from the mast at y 5.5, which is a
+   * forty-five degree elevation - a moon nearly overhead. But that position was chosen to
+   * put a cool rim on the lattice and on Tomas, not to say where the moon is; taken
+   * literally it would paint the glow at the top of the shell where no shot ever looks.
+   *
+   * A low moon over the sea is both the better picture and the more honest reading of the
+   * lighting, because a low moon is what puts a rim on the seaward side of everything -
+   * which is what the SeaGlow light in this scene is already standing in for.
+   */
+  const moonV = skyV(9);
+
+  const texture = createDecal(512, 512, (ctx, w, h) => {
+    // -- The gradient, in metres --------------------------------------------
+    const sky = ctx.createLinearGradient(0, h, 0, 0);
+    const stops: ReadonlyArray<readonly [number, string]> = [
+      // Lifted hard at the bottom after a capture. The first set put the horizon at
+      // #313d4b, which left the far ridge four per cent off the sky it was supposed to
+      // stand against - present in the buffer, invisible to a person. A night sky IS much
+      // lighter at the horizon than overhead, and that difference is what a silhouette
+      // needs to exist at all. Ceiling is 0.29 luma, under the §232 limit at the top.
+      [SKY_BOTTOM, '#43505f'],
+      [SEA_Y, '#404d5c'],
+      [0, '#2e3948'],
+      [8, '#1e2734'],
+      [22, '#161c28'],
+      [SKY_TOP, '#10141d'],
+    ];
+    for (const [y, color] of stops) sky.addColorStop(skyV(y), color);
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+
+    // -- Moon glow ----------------------------------------------------------
+    // Wide and weak. A tight halo would read as a second beacon, and there is only one
+    // light in this mission that is allowed to be the brightest thing in the frame.
+    const glow = ctx.createRadialGradient(
+      moonU * w,
+      (1 - moonV) * h,
+      0,
+      moonU * w,
+      (1 - moonV) * h,
+      w * 0.42
+    );
+    glow.addColorStop(0, 'rgba(150,176,205,0.30)');
+    glow.addColorStop(0.45, 'rgba(120,146,180,0.11)');
+    glow.addColorStop(1, 'rgba(120,146,180,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+
+    // -- Cloud band ---------------------------------------------------------
+    const seed = seedFrom('headland-cloud');
+    const grain = createRng(seedFrom('headland-sky-grain'));
+    const image = ctx.getImageData(0, 0, w, h);
+    for (let y = 0; y < h; y++) {
+      // Canvas row 0 is the top, and createDecal has already arranged for that to land at
+      // the top of the cylinder, so v here counts down from the zenith.
+      const v = 1 - y / h;
+      // Two bands: a broad one low over the sea and a thinner one above it. Both die out
+      // well before the zenith, because cloud at the zenith is just noise on a dark field.
+      const low = smoothstep(skyV(-2), skyV(6), v) * (1 - smoothstep(skyV(9), skyV(17), v));
+      const high = smoothstep(skyV(12), skyV(19), v) * (1 - smoothstep(skyV(22), skyV(31), v));
+      const band = low * 0.85 + high * 0.4;
+
+      for (let x = 0; x < w; x++) {
+        const p = (y * w + x) * 4;
+
+        if (band > 0.002) {
+          const u = x / w;
+          // Stretched hard along u: cloud is wider than it is tall, and the same noise
+          // that reads as smoke at 1:1 reads as weather pulled out sideways.
+          const shape = fbm(seed, u * 2.4, v * 7, { frequency: 3, octaves: 4 });
+          const lift = Math.max(0, shape - 0.44) * band * 96;
+          if (lift > 0) {
+            image.data[p] = Math.min(255, image.data[p] + lift * 0.86);
+            image.data[p + 1] = Math.min(255, image.data[p + 1] + lift * 0.94);
+            image.data[p + 2] = Math.min(255, image.data[p + 2] + lift);
+          }
+        }
+
+        /**
+         * Dither.
+         *
+         * A gradient this shallow across this many pixels is the textbook case for 8-bit
+         * banding, and the first capture had visible steps across the upper sky. Two
+         * levels of per-pixel noise costs nothing, is invisible at any distance, and is
+         * the difference between a painted sky and a contour map.
+         */
+        const n = (grain() - 0.5) * 3.2;
+        image.data[p] = Math.max(0, Math.min(255, image.data[p] + n));
+        image.data[p + 1] = Math.max(0, Math.min(255, image.data[p + 1] + n));
+        image.data[p + 2] = Math.max(0, Math.min(255, image.data[p + 2] + n));
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+  });
+
+  if (texture) {
+    // The cylinder wraps a full turn, so the texture has to as well or there is a seam
+    // down the sky at theta = 0.
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.needsUpdate = true;
+  }
+  return texture;
+}
+
+/**
+ * The sea.
+ *
+ * A radial gradient, darkest under the mast and lifting toward the horizon. That single
+ * relation does the whole job: an evenly coloured plane reads as a floor at whatever
+ * distance the eye guesses, and one that gets lighter as it recedes reads as water going
+ * away from you. It is also the honest version of the effect the atmosphere was producing
+ * by accident before - the difference being that this one stops at the right value
+ * instead of continuing until the sea is brighter than the sky.
+ *
+ * §230 abandoned the wet specular on the sea, so there is no moon path on the water. The
+ * temptation is real and it is a lens effect on a surface that has no waves.
+ */
+export function seaTexture(): THREE.CanvasTexture | null {
+  return createDecal(256, 256, (ctx, w, h) => {
+    const gradient = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.5);
+    gradient.addColorStop(0, '#141d27');
+    gradient.addColorStop(0.22, '#18222d');
+    // The horizon sits at 46 of the disc's 55-unit half-width.
+    gradient.addColorStop((SKY_RADIUS / 55) * 0.5, '#2a3542');
+    gradient.addColorStop(1, '#2a3542');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+  });
+}
+
+/**
+ * The shape of a coastline, as one continuous function of how far round the arc you are.
+ *
+ * Shared, because the town has to stand ON the coast rather than near it. The first
+ * version scattered lights between two heights chosen by eye and put a dozen of them
+ * above the silhouette, hanging in the sky - which is the sort of thing that looks like a
+ * rendering bug rather than like a mistake, and is therefore worse than one.
+ *
+ * Two sine terms at incommensurate rates make the headlands and a third roughens the top
+ * line. No RNG: a coastline is continuous, and a per-sample random height turns a ridge
+ * into a saw.
+ */
+function coastProfile(t: number, radius: number, lift: number, relief: number): {
+  theta: number;
+  radius: number;
+  top: number;
+} {
+  /**
+   * Rates chosen against the ARC IN VIEW, not against the whole ribbon.
+   *
+   * The coast runs 229 degrees and the camera sees about 46 of them, so t only moves
+   * through a fifth of its range on screen. At the first rates the visible stretch got
+   * less than one full swell and the horizon came out as a single smooth curve - the
+   * geometry of a circle in perspective, not a coastline. These are roughly tripled, so
+   * three or four headlands fall inside the frame.
+   */
+  const swell = Math.max(0, Math.sin(t * 21 + 1.2) * 0.5 + Math.sin(t * 6.4) * 0.5);
+  return {
+    theta: AWAY - COAST_ARC + t * COAST_ARC * 2,
+    radius: radius + Math.sin(t * 15 + 0.7) * 2.4 + Math.sin(t * 34) * 0.9,
+    top: SEA_Y + lift + swell * relief + Math.sin(t * 71) * 0.18,
+  };
+}
+
+/**
+ * A coast, as a ribbon.
+ *
+ * The first attempt built this from boxes and it came out crenellated: adjacent blocks
+ * sat at different radii, so the arc opened gaps that showed sky THROUGH the land, and
+ * every block's flat top met its neighbour's in a visible step. From the camera it read
+ * as a battlement. A silhouette is the one thing that has to be continuous, so this is
+ * one triangle strip - two vertices per sample, no seams available to open.
+ *
+ * DoubleSide, and that is load-bearing rather than lazy. The ribbon is a curve that bends
+ * both ways round a circle, so a single winding faces the camera on one part of the arc
+ * and away from it on another. `flat()` said DoubleSide in this comment and did not set
+ * it, and the far ridge was silently culled for two iterations while its height and then
+ * its colour were both blamed - it only came out under a magenta test material, which is
+ * the tool to reach for the moment "it should be there and it is not" happens twice.
+ */
+function coastRibbon(
+  name: string,
+  radius: number,
+  lift: number,
+  relief: number,
+  color: string
+): BackdropPart {
+  // Enough to resolve the roughest term in the profile without stepping it.
+  const samples = 260;
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const base = SEA_Y - 1.4;
+
+  for (let i = 0; i <= samples; i++) {
+    const p = coastProfile(i / samples, radius, lift, relief);
+    const x = Math.sin(p.theta) * p.radius;
+    const z = Math.cos(p.theta) * p.radius;
+    positions.push(x, base, z, x, p.top, z);
+  }
+  for (let i = 0; i < samples; i++) {
+    const a = i * 2;
+    indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  return { name, geometry, material: flat(color) };
+}
+
+/**
+ * Two coasts, at two distances and two values.
+ *
+ * This is the cheapest depth in the whole scene. One ridge is a horizon; two ridges with
+ * the further one lighter is aerial perspective, and the eye reads the gap between them
+ * as kilometres without being told anything. Both stay well under the beacon - see the
+ * §232 note at the top of the file.
+ */
+function coastParts(): BackdropPart[] {
+  /*
+   * Heights worked backwards from the default camera rather than picked by eye. It sits
+   * at y 3.9 and the sea's visible edge - where the water passes behind the sky shell -
+   * is 11.6 degrees below horizontal, so:
+   *
+   *   near ridge, 38 units out: base at the waterline, headlands 4.5 degrees above it
+   *   far ridge,  44 units out: base 3 degrees above it, peaks 8
+   *
+   * With the sky shell at 52 the sea's edge is 10.2 degrees below horizontal, which is
+   * where those numbers come from. Move SKY_RADIUS and these have to be re-derived.
+   *
+   * Which puts the near coast exactly on the horizon line the sea already draws, and the
+   * far one clear above it in a lighter value. That is the whole illusion.
+   */
+  return [
+    coastRibbon('CoastFar', COAST_RADIUS + 6, 3.81, 3.87, '#212b38'),
+    coastRibbon('Coast', COAST_RADIUS, NEAR_COAST.lift, NEAR_COAST.relief, '#10161e'),
+  ];
+}
+
+/**
+ * The town.
+ *
+ * §230's single most valuable note about this frame: the town as a band of small warm
+ * lights at the base of a cold picture. It is the only warm thing here other than the
+ * beacon, and unlike the beacon it never goes out - which matters more than it sounds,
+ * because for three and a half seconds in every eleven these lights are the only evidence
+ * that the harbour Tomas is fixing this for has anybody in it.
+ *
+ * Clustered rather than scattered. Towns are clusters; an even sprinkle along a coast
+ * reads as runway markers. Two brightness groups at two sizes, and each is one merged
+ * geometry, so the whole town is two draw calls.
+ *
+ * Sizes are set against the shimmer they cause, not against realism: at forty units a
+ * 16cm box is four or five pixels, which survives the camera pushing in. Anything smaller
+ * crawls in and out of existence as the lens moves, and a light that flickers when the
+ * camera moves is worse than no light at all in a mission about a light that flickers.
+ */
+function townParts(): BackdropPart[] {
+  const rng = createRng(seedFrom('headland-town'));
+
+  const dim: THREE.BufferGeometry[] = [];
+  const bright: THREE.BufferGeometry[] = [];
+
+  // Four settlements along the shore, of different sizes, plus the harbour.
+  const clusters: ReadonlyArray<readonly [number, number, number]> = [
+    // [offset along the arc in radians, spread, count]
+    [-1.35, 0.16, 12],
+    [-0.55, 0.26, 22],
+    [0.15, 0.34, 30],
+    [1.05, 0.2, 14],
+  ];
+
+  // Arc position, expressed the way coastProfile wants it, so a light can ask the coast
+  // how high the land is underneath it.
+  const asT = (offset: number): number => (offset + COAST_ARC) / (COAST_ARC * 2);
+
+  for (const [offset, spread, count] of clusters) {
+    for (let i = 0; i < count; i++) {
+      const jitterOffset = offset + range(rng, -spread, spread);
+      const ground = coastProfile(asT(jitterOffset), COAST_RADIUS, NEAR_COAST.lift, NEAR_COAST.relief);
+      // Between the waterline and the top of the land at this bearing, weighted low -
+      // towns are on the shore and only a few houses are up the hill. Clamped to the
+      // silhouette, because a light above the ridge is a light in the sky.
+      const climb = rng() < 0.78 ? rng() * 0.3 : 0.3 + rng() * 0.55;
+      const y = SEA_Y + 0.2 + climb * Math.max(0.4, ground.top - SEA_Y - 0.6);
+
+      const isBright = rng() < 0.28;
+      const size = isBright ? 0.24 : 0.16;
+      const light = new THREE.BoxGeometry(size, size * 0.8, size);
+      // Slightly in front of the ridge it stands on, or z-fighting decides which of a
+      // light and a hillside the player sees.
+      const radius = ground.radius - range(rng, 0.4, 1.8);
+      light.translate(Math.sin(ground.theta) * radius, y, Math.cos(ground.theta) * radius);
+      (isBright ? bright : dim).push(light);
+    }
+  }
+
+  // The harbour itself: a tight line of lights along a quay, which is the one piece of
+  // the town that should read as a made thing rather than as a scatter.
+  for (let i = 0; i < 9; i++) {
+    const t = asT(0.15 - 0.09 + (i / 8) * 0.18);
+    const quay = coastProfile(t, COAST_RADIUS, NEAR_COAST.lift, NEAR_COAST.relief);
+    const light = new THREE.BoxGeometry(0.2, 0.16, 0.2);
+    light.translate(
+      Math.sin(quay.theta) * (quay.radius - 1.6),
+      SEA_Y + 0.3,
+      Math.cos(quay.theta) * (quay.radius - 1.6)
+    );
+    bright.push(light);
+  }
+
+  return [
+    { name: 'TownFar', geometry: mergeGeometries(dim, false) ?? dim[0], material: flat('#8a6134') },
+    {
+      name: 'TownNear',
+      geometry: mergeGeometries(bright, false) ?? bright[0],
+      material: flat('#e2ac68'),
+    },
+  ];
+}
+
+/**
+ * Everything behind the mast, as parts the caller turns into meshes.
+ *
+ * Returns nothing without a canvas to paint on, which is what the preview harnesses have.
+ * They walk the mission graph and never render, so a backdrop they cannot paint is a
+ * backdrop they do not need.
+ */
+export function createNightBackdrop(moon: THREE.Vector3): BackdropPart[] {
+  const sky = skyTexture(moon);
+  const sea = seaTexture();
+  if (!sky || !sea) return [];
+
+  const parts: BackdropPart[] = [];
+
+  const shell = new THREE.CylinderGeometry(
+    SKY_RADIUS,
+    SKY_RADIUS,
+    SKY_TOP - SKY_BOTTOM,
+    48,
+    1,
+    true
+  );
+  shell.translate(0, (SKY_TOP + SKY_BOTTOM) / 2, 0);
+  parts.push({ name: 'Sky', geometry: shell, material: basic(sky, THREE.BackSide) });
+
+  // Wider than the sky shell on purpose: the visible horizon is then the line where the
+  // water passes behind the cylinder wall, which is a clean circle at a known radius,
+  // rather than the far edge of a plane that has to be positioned to fake one.
+  const water = new THREE.PlaneGeometry(110, 110);
+  water.rotateX(-Math.PI / 2);
+  water.translate(0, SEA_Y, 0);
+  parts.push({ name: 'Sea', geometry: water, material: basic(sea) });
+
+  parts.push(...coastParts());
+  parts.push(...townParts());
+
+  return parts;
+}
