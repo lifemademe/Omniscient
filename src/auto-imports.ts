@@ -46,5 +46,6 @@ import './omniscient/mission/types.js';
 import './omniscient/OmniscientRig.js';
 import './omniscient/session/SessionController.js';
 import './omniscient/vfx/library.js';
+import './omniscient/view/character-node.js';
 import './omniscient/view/ContactScene.js';
 import './omniscient/view/scenes.js';

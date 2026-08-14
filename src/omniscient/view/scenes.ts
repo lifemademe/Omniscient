@@ -17,11 +17,10 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { createCorrosionBloom, createRatingPlate } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
-import { ACCENT, LIGHT, MAT, PERSON } from '../art/palette.js';
+import { ACCENT, LIGHT, MAT } from '../art/palette.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
 import { createRng, jitter, seedFrom } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
-import { createCharacter } from '../geometry/character.js';
 import { createClump } from './../geometry/foliage.js';
 import {
   createMainsSwitch,
@@ -30,44 +29,22 @@ import {
   createWorkbench,
 } from '../geometry/props.js';
 
+import { placeCharacter } from './character-node.js';
 import { ContactScene } from './ContactScene.js';
 
-import type { CharacterParams } from '../geometry/character.js';
+import type { CharacterPlacement } from './character-node.js';
 
 const meshOf = decorMesh;
 
-interface CharacterPlacement extends CharacterParams {
-  position: THREE.Vector3;
-  rotation?: THREE.Euler;
-}
-
 /**
- * Assemble a generated person into a node.
+ * The contact, standing in their own scene and breathing (§236).
  *
- * Colours come from the generator rather than the shared MAT family: people are the one
- * thing in the world that should vary between instances (§185), while the built
- * environment stays on one palette.
+ * Every diorama registers its person the same way and under the same prop id, so this is
+ * one line rather than four repetitions of the same three.
  */
-function buildCharacter(name: string, placement: CharacterPlacement): ENGINE.SceneNode {
-  const parts = createCharacter(placement);
-
-  const root = ENGINE.SceneNode.create({
-    name: 'Contact',
-    position: placement.position.clone(),
-    rotation: placement.rotation?.clone(),
-  });
-  root.setName(name);
-
-  const surface = (color: string, roughness: number): THREE.MeshStandardMaterial =>
-    new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 });
-
-  root.add(meshOf('Skin', parts.skin, surface(parts.colors.skin, 0.82)));
-  root.add(meshOf('Garment', parts.garment, surface(parts.colors.garment, 0.92)));
-  root.add(meshOf('Underlayer', parts.underlayer, surface(parts.colors.underlayer, 0.9)));
-  root.add(meshOf('Hair', parts.hair, surface(parts.colors.hair, 0.95)));
-  root.add(meshOf('Boots', parts.boots, surface(PERSON.boot, 0.75)));
-
-  return root;
+function addContact(scene: ContactScene, name: string, placement: CharacterPlacement): void {
+  const contact = placeCharacter(name, placement);
+  scene.registerProp('contact', contact.root, { idle: contact.idle });
 }
 
 /**
@@ -341,35 +318,32 @@ function buildRepairShop(scene: ContactScene): void {
   // Mirela herself, generated rather than imported. §209: she stands and idles - every
   // instruction she is given is performed by the bench, the set or the switch, never by
   // her body - so a well-posed static figure is worth more than a rig with no clips.
-  scene.registerProp(
-    'contact',
-    buildCharacter('Mirela', {
-      seed: 'mirela-vasc',
-      height: 1.66,
-      build: 0.45,
-      shoulders: 0.42,
-      // Leaning in over the bench, which is where she has been all morning, with her
-      // hands on it. Arms hanging at her sides made her a mannequin standing near her
-      // own work rather than somebody in the middle of it.
-      lean: 0.16,
-      reach: 0.85,
-      garment: 'apron',
-      /**
-       * Art-directed rather than seeded. Her workshop is warm timber from wall to bench,
-       * and the seeded roll gave her a warm brown coat over it - so the one person in the
-       * scene disappeared into her own furniture and read as a wooden mannequin.
-       *
-       * A cold blue-grey work coat over a pale apron is the only cool mass in the room,
-       * which puts the human at the top of the read where she belongs.
-       */
-      colors: {
-        garment: '#42525c',
-        underlayer: '#c2b79c',
-      },
-      position: new THREE.Vector3(-0.72, 0, -1.02),
-      rotation: new THREE.Euler(0, Math.PI * 0.58, 0),
-    })
-  );
+  addContact(scene, 'Mirela', {
+    seed: 'mirela-vasc',
+    height: 1.66,
+    build: 0.45,
+    shoulders: 0.42,
+    // Leaning in over the bench, which is where she has been all morning, with her
+    // hands on it. Arms hanging at her sides made her a mannequin standing near her
+    // own work rather than somebody in the middle of it.
+    lean: 0.16,
+    reach: 0.85,
+    garment: 'apron',
+    /**
+     * Art-directed rather than seeded. Her workshop is warm timber from wall to bench,
+     * and the seeded roll gave her a warm brown coat over it - so the one person in the
+     * scene disappeared into her own furniture and read as a wooden mannequin.
+     *
+     * A cold blue-grey work coat over a pale apron is the only cool mass in the room,
+     * which puts the human at the top of the read where she belongs.
+     */
+    colors: {
+      garment: '#42525c',
+      underlayer: '#c2b79c',
+    },
+    position: new THREE.Vector3(-0.72, 0, -1.02),
+    rotation: new THREE.Euler(0, Math.PI * 0.58, 0),
+  });
 
   // A work lamp over the bench. §187: one key plus controlled practicals - and a
   // practical here is motivated, because this is where she has been working. Without it
@@ -660,25 +634,26 @@ function buildBeaconMast(scene: ContactScene): void {
   //
   // He was not in his own scene at all: the player spent the entire request talking to
   // somebody who had never been rendered.
-  scene.registerProp(
-    'contact',
-    buildCharacter('Tomas', {
-      seed: 'tomas-vasc',
-      height: 1.79,
-      build: 0.58,
-      shoulders: 0.72,
-      // Braced against the mast, which is where he says he is - one hand up on it.
-      lean: 0.1,
-      reach: 0.55,
-      garment: 'coat',
-      // Wet-weather orange: the only warm thing on a cold headland, and the only piece of
-      // high-visibility clothing in the game, because he is the only person in it who is
-      // somewhere dangerous.
-      colors: { garment: '#a8582c', underlayer: '#3f4a52' },
-      position: new THREE.Vector3(0.62, platformY + 0.03, 0.55),
-      rotation: new THREE.Euler(0, -Math.PI * 0.72, 0),
-    })
-  );
+  addContact(scene, 'Tomas', {
+    seed: 'tomas-vasc',
+    height: 1.79,
+    build: 0.58,
+    shoulders: 0.72,
+    // Braced against the mast, which is where he says he is - one hand up on it.
+    lean: 0.1,
+    reach: 0.55,
+    garment: 'coat',
+    // Wet-weather orange: the only warm thing on a cold headland, and the only piece of
+    // high-visibility clothing in the game, because he is the only person in it who is
+    // somewhere dangerous.
+    colors: { garment: '#a8582c', underlayer: '#3f4a52' },
+    position: new THREE.Vector3(0.62, platformY + 0.03, 0.55),
+    rotation: new THREE.Euler(0, -Math.PI * 0.72, 0),
+    // He is six metres up a lattice on a headland at night. The one figure in the cast
+    // with weather on him gets the larger idle - still under two centimetres at the head,
+    // but visibly more than somebody standing in a kitchen.
+    liveliness: 1.7,
+  });
 
   // -- Night ----------------------------------------------------------------
   //
@@ -941,24 +916,21 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   });
 
   // -- Adaeze ---------------------------------------------------------------
-  scene.registerProp(
-    'contact',
-    buildCharacter('Adaeze', {
-      seed: 'adaeze-okafor',
-      height: 1.71,
-      build: 0.42,
-      shoulders: 0.46,
-      // Crouched at the end of a row, which is where she says she is.
-      lean: 0.3,
-      reach: 0.8,
-      garment: 'apron',
-      colors: { garment: '#2f6a72', underlayer: '#d8c9a8' },
-      // Left of frame and near the camera. Mirroring the scene put her behind the
-      // conversation panel, which is a poor place for the person doing the talking.
-      position: new THREE.Vector3(-1.9, 0, 2.4),
-      rotation: new THREE.Euler(0, Math.PI * 0.1, 0),
-    })
-  );
+  addContact(scene, 'Adaeze', {
+    seed: 'adaeze-okafor',
+    height: 1.71,
+    build: 0.42,
+    shoulders: 0.46,
+    // Crouched at the end of a row, which is where she says she is.
+    lean: 0.3,
+    reach: 0.8,
+    garment: 'apron',
+    colors: { garment: '#2f6a72', underlayer: '#d8c9a8' },
+    // Left of frame and near the camera. Mirroring the scene put her behind the
+    // conversation panel, which is a poor place for the person doing the talking.
+    position: new THREE.Vector3(-1.9, 0, 2.4),
+    rotation: new THREE.Euler(0, Math.PI * 0.1, 0),
+  });
 
   // -- Light ----------------------------------------------------------------
   //
@@ -1145,22 +1117,23 @@ function buildClearedHouse(scene: ContactScene): void {
     meshOf('Chairs', mergeGeometries(stack, false) ?? back, MAT.timberDark)
   );
 
-  scene.registerProp(
-    'contact',
-    buildCharacter('Ileana', {
-      seed: 'ileana-marku',
-      height: 1.66,
-      build: 0.4,
-      shoulders: 0.44,
-      // Sitting forward over the table, which is where somebody is after two days of this.
-      lean: 0.34,
-      reach: 0.6,
-      garment: 'coat',
-      colors: { garment: '#4a4a52', underlayer: '#b3a58a' },
-      position: new THREE.Vector3(-1.05, 0, -0.32),
-      rotation: new THREE.Euler(0, Math.PI * 0.14, 0),
-    })
-  );
+  addContact(scene, 'Ileana', {
+    seed: 'ileana-marku',
+    height: 1.66,
+    build: 0.4,
+    shoulders: 0.44,
+    // Sitting forward over the table, which is where somebody is after two days of this.
+    lean: 0.34,
+    reach: 0.6,
+    garment: 'coat',
+    colors: { garment: '#4a4a52', underlayer: '#b3a58a' },
+    position: new THREE.Vector3(-1.05, 0, -0.32),
+    rotation: new THREE.Euler(0, Math.PI * 0.14, 0),
+    // Slower and smaller than the rest of the cast. She has been sorting a dead relative's
+    // photographs for two days; the difference between her idle and Mirela's is the only
+    // characterisation available without faces.
+    liveliness: 0.7,
+  });
 
   // -- Light -----------------------------------------------------------------
   // One window and one fill. A house with the curtains taken down and half the power off.

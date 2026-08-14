@@ -47,13 +47,37 @@ export interface CharacterParams {
   colors?: Partial<{ skin: string; garment: string; underlayer: string; hair: string }>;
 }
 
-/** Geometry grouped by material role. */
+/** Which of the five surfaces a piece of a body belongs to. */
+export type BodyMaterial = 'skin' | 'garment' | 'underlayer' | 'hair' | 'boots';
+
+/** One merged run of geometry, and the material it wants. Mirrors `RoomPart`. */
+export interface CharacterPiece {
+  material: BodyMaterial;
+  geometry: THREE.BufferGeometry;
+}
+
+/**
+ * A body, split at the hip.
+ *
+ * §236 wants these figures breathing, and a breath is the upper body moving over legs
+ * that do not. One merged mesh per material cannot do that - rotating it takes the boots
+ * with it and the figure skates. So the generator hands back two groups instead of one,
+ * divided at the hip joint, and the caller hangs the upper one off a pivot node.
+ *
+ * The split costs nothing at rest: it is the same geometry in the same places, in four or
+ * five draw calls instead of five, and a figure whose caller ignores `hipHeight` and adds
+ * both groups to the same node is byte-for-byte what this generator used to produce.
+ */
 export interface CharacterParts {
-  skin: THREE.BufferGeometry;
-  garment: THREE.BufferGeometry;
-  underlayer: THREE.BufferGeometry;
-  hair: THREE.BufferGeometry;
-  boots: THREE.BufferGeometry;
+  /**
+   * Everything above the hip. Pre-translated DOWN by `hipHeight`, so the group's own
+   * origin is the hip joint and the caller only has to place a node there.
+   */
+  upper: CharacterPiece[];
+  /** Legs and boots, in character-local space. Planted. */
+  lower: CharacterPiece[];
+  /** Height of the hip joint above the character's feet, in metres. */
+  hipHeight: number;
   colors: {
     skin: string;
     garment: string;
@@ -201,9 +225,12 @@ export function createCharacter(params: CharacterParams): CharacterParts {
   const shoulderY = hipY + torsoHeight;
   const headY = shoulderY + headHeight * 0.62;
 
+  // Above the hip.
   const skin: THREE.BufferGeometry[] = [];
   const cloth: THREE.BufferGeometry[] = [];
   const under: THREE.BufferGeometry[] = [];
+  // Below it, and staying where it is put.
+  const legs: THREE.BufferGeometry[] = [];
   const boots: THREE.BufferGeometry[] = [];
 
   // -- Head. Asymmetry in the jaw is what stops faces reading as identical. ----------
@@ -297,10 +324,10 @@ export function createCharacter(params: CharacterParams): CharacterParts {
     // less here because a standing leg is nearly vertical, but a stance angle applied
     // about the middle of a thigh lifts the hip out of the pelvis just as visibly.
     const hip = new THREE.Vector3(outward, hipY + torsoHeight * 0.02, 0);
-    cloth.push(hangingLimb(limbThick * 1.15, legLength * 0.56, limbThick * 1.15, hip, stance));
+    legs.push(hangingLimb(limbThick * 1.15, legLength * 0.56, limbThick * 1.15, hip, stance));
 
     const knee = hip.clone().add(limbEnd(legLength * 0.56, stance, 0));
-    cloth.push(hangingLimb(limbThick * 1.05, legLength * 0.5, limbThick * 1.05, knee, stance * 0.4));
+    legs.push(hangingLimb(limbThick * 1.05, legLength * 0.5, limbThick * 1.05, knee, stance * 0.4));
 
     const boot = slab(limbThick * 1.3, limbThick * 1.1, limbThick * 2.1, limbThick * 0.25);
     boot.translate(outward, limbThick * 0.5, limbThick * 0.42);
@@ -401,12 +428,36 @@ export function createCharacter(params: CharacterParams): CharacterParts {
     hairPieces.push(back);
   }
 
+  /**
+   * The hip joint, and why it is here rather than at `hipY`.
+   *
+   * A body does not fold at the top of the pelvis - it pivots somewhere around the base
+   * of the lumbar spine, a little above the hip bone. Pivoting at `hipY` swings the whole
+   * waist slab and the coat skirt with it, which reads as a wobbling doll. A few
+   * centimetres higher and the motion is where a torso's motion actually comes from.
+   */
+  const pivotY = hipY + torsoHeight * 0.14;
+
+  const collect = (
+    material: BodyMaterial,
+    pieces: THREE.BufferGeometry[],
+    lift: number
+  ): CharacterPiece[] => {
+    if (pieces.length === 0) return [];
+    const geometry = merge(pieces);
+    if (lift !== 0) geometry.translate(0, lift, 0);
+    return [{ material, geometry }];
+  };
+
   return {
-    skin: merge(skin),
-    garment: merge(cloth),
-    underlayer: under.length ? merge(under) : slab(0.01, 0.01, 0.01),
-    hair: merge(hairPieces),
-    boots: merge(boots),
+    upper: [
+      ...collect('skin', skin, -pivotY),
+      ...collect('garment', cloth, -pivotY),
+      ...collect('underlayer', under, -pivotY),
+      ...collect('hair', hairPieces, -pivotY),
+    ],
+    lower: [...collect('garment', legs, 0), ...collect('boots', boots, 0)],
+    hipHeight: pivotY,
     colors,
   };
 }
