@@ -767,7 +767,9 @@ export class GlobeScreen {
 
   private stateClass(signal: Signal): string {
     if (signal.state === SignalState.Cooldown) return 'cooldown';
-    if (signal.state === SignalState.Resolved) return 'resolved';
+    if (signal.state === SignalState.Resolved || signal.state === SignalState.Dormant) {
+      return 'resolved';
+    }
     return this.openable.has(signal.id) ? 'waiting' : 'resolved';
   }
 
@@ -816,6 +818,7 @@ export class GlobeScreen {
         signal.state === SignalState.Resolved
           ? 'you helped here already'
           : 'nobody is asking here yet';
+
       tip.appendChild(wait);
     }
 

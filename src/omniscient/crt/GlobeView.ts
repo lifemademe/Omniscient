@@ -44,6 +44,17 @@ export enum SignalState {
   /** Finished. Dim, still visible - the world remembers (§163). */
   Resolved = 'resolved',
   /**
+   * Present, but not asking yet.
+   *
+   * Looks exactly like Resolved and means the opposite. Tomas and Adaeze were seeded as
+   * Resolved because it gave the dim steady dot a contact should have before its turn,
+   * and everything that reasoned about Resolved then believed them - the tooltip told the
+   * player "you helped here already" about somebody they had never spoken to, and the
+   * margin readout said two answered before the game had begun. Same pixel, separate
+   * meaning, so the two can never be confused again.
+   */
+  Dormant = 'dormant',
+  /**
    * Present but not openable, and never explained. §52 teases the next request;
    * §169 seeds anomalies that mostly have mundane explanations - until they do not.
    */
@@ -236,6 +247,9 @@ export class GlobeView {
       case SignalState.Active:
         return PALETTE.active;
       case SignalState.Resolved:
+      // Deliberately identical: the difference between "done" and "not yet" is not the
+      // player's to see on the globe, only in what the tooltip says when they ask.
+      case SignalState.Dormant:
         return PALETTE.resolved;
       case SignalState.Waiting:
         // Blink: on for most of the cycle, briefly off. Reads as a heartbeat.

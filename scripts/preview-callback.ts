@@ -478,7 +478,27 @@ check('Every nameable signal has a name for the globe', nameable.every((s) => s.
 check('Mirela is the one openable request at the start', signals[0].id === MIRELA_SIGNAL);
 check(
   'Tomas is not yet calling - his beacon breaks because of Mirela',
-  signals.find((s) => s.id === 'tomas')?.state === SignalState.Resolved
+  signals.find((s) => s.id === 'tomas')?.state === SignalState.Dormant
+);
+/**
+ * Nobody has been helped yet, and the globe must not claim otherwise.
+ *
+ * Tomas and Adaeze were seeded Resolved to get the dim dot of a contact whose turn has not
+ * come. Everything that read Resolved as "you did this" then believed it: hovering Adaeze
+ * said "you helped here already" about a woman the player had never spoken to, and the
+ * margin readout opened the game at two answered. A dim dot and a finished request are not
+ * the same fact and no longer share a state.
+ */
+check(
+  'No request is marked answered before the player has answered one',
+  signals.every((s) => s.state !== SignalState.Resolved),
+  signals.filter((s) => s.state === SignalState.Resolved).map((s) => s.id).join(', ')
+);
+check(
+  'The queued contacts are visible on the globe from the first frame (§52)',
+  ['tomas', 'adaeze'].every(
+    (id) => signals.find((s) => s.id === id)?.state === SignalState.Dormant
+  )
 );
 check(
   'A failed request is on cooldown with a countdown (§31)',

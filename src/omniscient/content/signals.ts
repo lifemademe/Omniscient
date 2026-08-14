@@ -46,7 +46,7 @@ export function createSignals(): Signal[] {
       name: 'Tomas Vasc',
       label: 'The harbour light keeps going out.',
       // Appears once Mirela's request resolves - because that is what caused it.
-      state: SignalState.Resolved,
+      state: SignalState.Dormant,
     },
     // Teases. §52: do not reveal everything, make them curious enough to look.
     {
@@ -70,7 +70,7 @@ export function createSignals(): Signal[] {
       label: 'Lagos - seedlings failing.',
       // Appears once Tomas is settled. Three requests at once would make the slice a
       // queue rather than a choice.
-      state: SignalState.Resolved,
+      state: SignalState.Dormant,
     },
     {
       id: 'tease-toronto',
