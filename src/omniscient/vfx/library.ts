@@ -19,6 +19,17 @@
 import type { VFXDefinitionJSON } from '@gnsx/genesys.js';
 
 /**
+ * ALL FOUR CHECKED AGAINST THE SHIPPING CAMERA.
+ *
+ * Every value here was originally authored blind, against no camera at all, and two of
+ * the four were badly wrong: SparkVFX filled Mirela's whole workshop and ElectricalArcVFX
+ * was a lightning strike. Both are `stretchBillboard`, where stretchScale multiplies with
+ * particle velocity - so a speed that looks reasonable in the numbers becomes a metre-long
+ * streak on screen. The two `billboard` effects, CircuitPulseVFX and DustVFX, were fine as
+ * authored.
+ *
+ * The lesson for anything added later: stretch billboards need looking at, not reading.
+ *
  * SparkVFX - P0.
  * A corroded connector letting go. Short, hot, gravity-bound, gone in half a second.
  * This is the punctuation on the ACT beat, so it has to read instantly at gameplay
