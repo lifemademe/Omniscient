@@ -111,15 +111,27 @@ const HOME_SHOT: CameraShot = {
   // front fascia filled the bottom third of frame and the room lost its floor entirely.
   // Follows the desk back (see DESK_SHIFT). The camera keeps its distance from the
   // machine rather than staying put and watching it recede.
-  position: new THREE.Vector3(1.3, 1.62, -57.42),
-  target: new THREE.Vector3(-0.3, 0.88, -60.87),
+  // Brought in with the machine. The subject is 54% of the size it was, so a camera left
+  // where it stood would have framed a room with a small television in it. Distance from
+  // the target scales with the subject; the angle does not change.
+  //
+  // Reframed after the rescale, from the content rather than by eye. The shot has to hold
+  // the plate stack at x -1.32 and the window at x 2.0 - 3.3 units of width - and a
+  // 46-degree vertical lens at 16:9 needs 2.2 units of distance to do it with nothing to
+  // spare. At 3.0 there is margin for a window that is not the shape mine is, and the aim
+  // sits at the centre of that span rather than left of it, which is what was cropping the
+  // window off the right edge.
+  position: new THREE.Vector3(1.18, 1.62, -58.05),
+  target: new THREE.Vector3(0.16, 1.0, -60.95),
   duration: 2.0,
 };
 
 /** The push-in: hard onto the CRT face, so the screen fills the frame. */
 const SCREEN_SHOT: CameraShot = {
-  position: new THREE.Vector3(0, 0.46, -59.05),
-  target: new THREE.Vector3(0, 0.46, -59.62),
+  // Follows the machine down: the screen centre is at y 0.25 now rather than 0.46, and a
+  // push-in aimed at where the tube used to be would frame the desk in front of it.
+  position: new THREE.Vector3(0, 0.25, -60.72),
+  target: new THREE.Vector3(0, 0.25, -61.05),
   duration: 1.6,
 };
 
@@ -405,6 +417,20 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const monitor = ENGINE.ModelMeshNode.create({
       name: 'Terminal',
       position: new THREE.Vector3(0, 0, -0.5 + DESK_SHIFT),
+      /**
+       * 0.54, which is 54cm across.
+       *
+       * The model is a metre wide as authored, and a CRT of that shape was never bigger
+       * than about 50cm - at full size it was a forty-inch tube in a form factor that
+       * never existed. It looked plausible only because the menu plates beside it were
+       * oversized by the same factor, so the two agreed with each other and disagreed with
+       * the chair, the room and the people.
+       *
+       * Scaling from the node keeps the model's own origin at its feet, so it stays on
+       * the desk without a compensating y - and SCREEN_main, the glass and the lamp are
+       * children, so the CRT surface and the socket anchors all follow for free.
+       */
+      scale: new THREE.Vector3(0.54, 0.54, 0.54),
       modelUrl: '@project/assets/models/CRT_TV.glb',
       // The screen, the glass and the lamp each get their own material below, and the
       // model ships with one shared across all four meshes.

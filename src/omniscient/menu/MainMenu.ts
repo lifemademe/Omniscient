@@ -85,7 +85,7 @@ const MODULES: ModuleSpec[] = [
 ];
 
 /** Vertical pitch of the stack. */
-const PITCH = 0.345;
+const PITCH = 0.193;
 /**
  * Where the stack sits relative to the workstation origin - left of the CRT, on the desk.
  *
@@ -97,7 +97,14 @@ const PITCH = 0.345;
  */
 // z follows DESK_SHIFT: the plates hover over the desk, so leaving them put while the
 // desk moved back would strand them in the middle of the room.
-const STACK_ORIGIN = new THREE.Vector3(-1.6, 1.95, -0.35 + DESK_SHIFT);
+/**
+ * Where the plate stack hangs.
+ *
+ * Lowered and brought in with the plates themselves (see PLATE_W). The bottom plate now
+ * sits at y 0.44 - six centimetres clear of the desk lamp, which tops out at 0.38 and has
+ * already had to be moved once for occupying the same space as SHUT DOWN.
+ */
+const STACK_ORIGIN = new THREE.Vector3(-0.95, 1.3, -0.35 + DESK_SHIFT);
 /** How far a hovered plate pushes out toward the player. */
 const HOVER_PUSH = 0.045;
 

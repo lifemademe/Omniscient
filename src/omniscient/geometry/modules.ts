@@ -33,9 +33,21 @@ export interface ModuleBuild {
   socket: THREE.Vector3;
 }
 
-const PLATE_W = 1.34;
-const PLATE_H = 0.3;
-const PLATE_D = 0.11;
+/**
+ * Plate size, corrected against a real rack panel.
+ *
+ * These were 1.34m wide - a control plate the size of a door - and the CRT beside them was
+ * a metre across. Both were about twice life size, and because they were wrong TOGETHER
+ * they looked right together: the only thing in the frame at true scale was the chair, and
+ * a chair is easy not to compare against.
+ *
+ * A 19-inch rack panel is 0.48m. These are 0.75m, which is generous for a piece of
+ * equipment but reads as a substantial console rather than as furniture, and that is what
+ * this machine should be.
+ */
+const PLATE_W = 0.75;
+const PLATE_H = 0.168;
+const PLATE_D = 0.062;
 
 /** Chamfered plate, shared by every module so the stack reads as one machine. */
 function plateGeometry(chamfer = 0.02): THREE.BufferGeometry {
