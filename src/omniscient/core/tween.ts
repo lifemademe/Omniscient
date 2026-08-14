@@ -89,6 +89,18 @@ export class Tweener {
     finished.forEach((tween) => tween.onComplete?.());
   }
 
+  /**
+   * Drop a running tween without running its onComplete.
+   *
+   * Channel replacement already exists, but replacing a tween means starting another one.
+   * Abandoning is a different thing: §237 needs a plug that has been changed its mind
+   * about to stop where it is and never fire its action, and there is nothing to replace
+   * it with.
+   */
+  public cancel(channel: string): void {
+    this.tweens = this.tweens.filter((tween) => tween.channel !== channel);
+  }
+
   public clear(): void {
     this.tweens = [];
   }

@@ -176,11 +176,36 @@ export function createModule(kind: ModuleKind, seedKey: string): ModuleBuild {
     }
   }
 
+  /**
+   * The socket itself, on every plate.
+   *
+   * §237 requires something to plug INTO. The socket position has been declared since the
+   * cable was written and there was never anything there - the connector flew to a point
+   * in the air a few centimetres off the plate face and stopped, which reads as the cable
+   * bumping into the module rather than entering it.
+   *
+   * A recessed collar with a dark bore. The recess is what sells it: a ring sitting proud
+   * of the surface is a boss, a ring around a hole is a socket, and the difference is one
+   * dark cylinder.
+   */
+  const socketAt = new THREE.Vector3(PLATE_W / 2 - 0.1, 0, face + 0.03);
+
+  const collar = new THREE.CylinderGeometry(0.038, 0.042, 0.022, 12);
+  collar.rotateX(Math.PI / 2);
+  collar.translate(socketAt.x, socketAt.y, face + 0.006);
+  details.push({ geometry: collar, material: 'metal' });
+
+  const bore = new THREE.CylinderGeometry(0.025, 0.025, 0.03, 10);
+  bore.rotateX(Math.PI / 2);
+  bore.translate(socketAt.x, socketAt.y, face + 0.001);
+  details.push({ geometry: bore, material: 'dark' });
+
   return {
     plate: plateGeometry(),
     details,
-    // The cable seats at the right-hand end, clear of whatever hardware is on the left.
-    socket: new THREE.Vector3(PLATE_W / 2 - 0.1, 0, face + 0.03),
+    // The cable seats in the collar at the right-hand end, clear of whatever hardware
+    // that module carries on the left.
+    socket: socketAt,
   };
 }
 

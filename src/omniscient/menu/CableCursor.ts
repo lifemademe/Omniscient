@@ -40,6 +40,8 @@ export class CableCursor {
   private readonly targetTip = new THREE.Vector3();
   /** Set while seated in a socket, so the tip stops following the mouse. */
   private seated: THREE.Vector3 | null = null;
+  /** True from the moment a plug starts until it seats or is cancelled. */
+  private plugging = false;
 
   constructor(anchor: THREE.Vector3) {
     this.anchor.copy(anchor);
@@ -83,24 +85,70 @@ export class CableCursor {
   }
 
   /**
-   * Plug into a socket. The tip snaps home and stays until released - §103's "clicking
-   * physically plugs the connector into the selected module".
+   * Plug into a socket, and only then hand back.
+   *
+   * §237: connection precedes power. That is the game's whole thesis expressed as an
+   * interaction, and it is the first thing every player touches, so the callback has to
+   * fire when the connector is genuinely home rather than when a timer says so.
+   *
+   * It did not. The tween drove `targetTip`, which the visible tip then CHASED with a
+   * damped lerp - so `onComplete` fired at 0.22s with the plug still several centimetres
+   * out and travelling, and the menu opened over the top of its own animation. While
+   * seated the tip now tracks the tween exactly and the chase is skipped, so what the
+   * callback promises and what the screen shows are the same event.
+   *
+   * The budget is 0.36s, inside §237's 350-450ms. Longer than that and it is a tax on
+   * every menu press; shorter and the connection is not read as a connection.
    */
   public plugInto(socket: THREE.Vector3, onSeated?: () => void): void {
+    // §237: a second click mid-plug must not fire the action twice.
+    if (this.plugging || this.seated) return;
+
     const from = this.points[SEGMENTS - 1].clone();
     this.seated = socket.clone();
+    this.plugging = true;
 
     this.tweener.add(
       (t) => {
         this.targetTip.lerpVectors(from, socket, t);
       },
-      { duration: 0.22, easing: Ease.outBack, channel: 'plug', onComplete: onSeated }
+      {
+        duration: 0.36,
+        // Overshoots and settles back, which is what a connector seating actually does.
+        easing: Ease.outBack,
+        channel: 'plug',
+        onComplete: () => {
+          this.plugging = false;
+          onSeated?.();
+        },
+      }
     );
+  }
+
+  /**
+   * Abandon a plug already in flight, without firing its action.
+   *
+   * §237 asks that moving away mid-plug retracts cleanly. Cancelling the tween on its own
+   * channel is what stops the onComplete ever running, so the action cannot arrive after
+   * the player has changed their mind.
+   */
+  public cancelPlug(): void {
+    if (!this.plugging) return;
+    this.tweener.cancel('plug');
+    this.plugging = false;
+    this.seated = null;
   }
 
   /** Release the connector so it follows the pointer again. */
   public unplug(): void {
+    this.tweener.cancel('plug');
+    this.plugging = false;
     this.seated = null;
+  }
+
+  /** True while the connector is travelling into a socket. */
+  public get isPlugging(): boolean {
+    return this.plugging;
   }
 
   public get isSeated(): boolean {
@@ -116,7 +164,13 @@ export class CableCursor {
 
     const dt = Math.min(deltaTime, 1 / 30);
     this.points[0].copy(this.anchor);
-    this.points[SEGMENTS - 1].lerp(this.targetTip, 1 - Math.pow(0.0001, dt));
+    // Seated or seating, the tip IS the tween. Chasing it here is what made the plug
+    // arrive after its own callback (§237).
+    if (this.seated) {
+      this.points[SEGMENTS - 1].copy(this.targetTip);
+    } else {
+      this.points[SEGMENTS - 1].lerp(this.targetTip, 1 - Math.pow(0.0001, dt));
+    }
 
     for (let i = 1; i < SEGMENTS - 1; i++) {
       const previous = this.points[i - 1];

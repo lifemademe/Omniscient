@@ -119,6 +119,10 @@ export class MainMenu {
   private handlers = new Set<(action: MenuAction) => void>();
   private unsubscribe: Array<() => void> = [];
   private enabled = true;
+  /** The module a plug is currently travelling toward, if any. */
+  private plugTarget: MenuAction | null = null;
+  /** The module under the pointer, tracked so a plug can be abandoned when it leaves. */
+  private hovered: MenuAction | null = null;
 
   constructor(origin: THREE.Vector3) {
     this.root = ENGINE.SceneNode.create({ name: 'MainMenu', position: origin.clone() });
@@ -207,6 +211,7 @@ export class MainMenu {
 
   private setHovered(id: MenuAction | null): void {
     if (!this.enabled) return;
+    this.hovered = id;
 
     for (const [key, module] of this.modules) {
       const hovered = key === id && !module.spec.disabled;
@@ -227,13 +232,27 @@ export class MainMenu {
     const module = this.modules.get(id);
     if (!module || module.spec.disabled) return;
 
+    this.plugTarget = id;
     this.cable.plugInto(module.socket, () => {
+      this.plugTarget = null;
       this.handlers.forEach((handler) => handler(id));
     });
   }
 
   /** Fly the cable tip with the pointer while it is not seated. */
   public update(deltaTime: number, picker: Picker): void {
+    /**
+     * §237: moving off the plate mid-plug retracts rather than completing.
+     *
+     * Without this the player can start a connection, change their mind, and have the
+     * menu open anyway a third of a second later - which is the same class of surprise as
+     * an action firing before its animation, just in the other direction.
+     */
+    if (this.plugTarget && this.cable.isPlugging && this.hovered !== this.plugTarget) {
+      this.cable.cancelPlug();
+      this.plugTarget = null;
+    }
+
     if (this.enabled && !this.cable.isSeated) {
       const point = picker.projectOntoPlane(this.cablePlane, this.scratch);
       // The pointer projection is in world space; the cable lives in menu-local space.
