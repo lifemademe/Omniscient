@@ -40,7 +40,7 @@
 
 import * as THREE from 'three';
 
-import { plasterMaps, timberMaps } from './surface.js';
+import { pegboardMaps, plasterMaps, timberMaps } from './surface.js';
 
 /**
  * Human world - warm, imperfect, lived in (§9). Ordered dark to light so the value
@@ -194,6 +194,16 @@ export const MAT = {
   equipment: standard('#6a7268', 0.62, 0.15),
   /** Corrugated card. Boxes, packing, the substance of a house being emptied. */
   card: standard('#8a7150', 0.96),
+  /**
+   * Pegboard, the wall of Mirela's shop.
+   *
+   * §230's reading of the repair-shop reference asks for "dense mid-value texture behind a
+   * light-value hero prop" and that is exactly the value this has to be: a clear step above
+   * MAT.wall so the room does not go dark behind the bench, and a clear step below the
+   * Kestrel-3 so the object the mission is about still wins. Everything busy about it lives
+   * in the normal map, where §232 charges nothing for it.
+   */
+  pegboard: standard('#7d6a4c', 0.8),
   /** Galvanised tube. Dull enough to stand in daylight without becoming the subject. */
   galvanised: standard('#8a8f92', 0.78, 0.2),
   /**
@@ -296,4 +306,10 @@ dress(MAT.wall, plasterMaps({ color: HUMAN.wall, seed: 'wall', repeat: [5, 3] })
 dress(
   MAT.ground,
   plasterMaps({ color: HUMAN.ground, seed: 'ground', contrast: 0.09, repeat: [6, 5] })
+);
+// The board is 3.4m x 1.6m and the holes are at 25mm centres, so the repeat is set so one
+// tile is about 40cm: sixteen holes across a tile, eight and a half tiles across the wall.
+dress(
+  MAT.pegboard,
+  pegboardMaps({ color: '#7d6a4c', seed: 'pegboard', repeat: [8.5, 4], pitch: 16 })
 );

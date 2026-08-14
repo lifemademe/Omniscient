@@ -29,7 +29,7 @@
 
 import * as THREE from 'three';
 
-import { cellEdges, clamp01, fbm, mix, smoothstep } from './noise.js';
+import { cellDistance, cellEdges, clamp01, fbm, mix, smoothstep } from './noise.js';
 import { seedFrom } from '../core/rng.js';
 
 /**
@@ -430,14 +430,31 @@ export function timberMaps(options: NaturalOptions): SurfaceMaps | null {
       const grain = fbm(noiseSeed, u * 0.06, v * 3.2, { frequency: 8, octaves: 4 });
       // Fine fibre on top, so the boundaries between grain bands are not smooth curves.
       const fibre = fbm(noiseSeed + 31, u * 0.3, v * 9, { frequency: 16, octaves: 2 });
+      /**
+       * Knots, sparse and dark - and a blob, not a line.
+       *
+       * This asked `cellEdges` for years' worth of captures, which is F2 - F1 and is near
+       * zero along cell BOUNDARIES. So the dark mark landed on the web between the cells
+       * instead of at their centres, and every timber surface in the game wore a network
+       * of thin dark lines. It read as cracks in dried mud, and it was diagnosed as a
+       * floor problem and a bench problem before it was diagnosed as this.
+       *
+       * `cellDistance` is F1, which is zero AT the centre. A knot is now a round dark
+       * mark of a stated size - 0.22 cell widths at three cells across the tile, so about
+       * seven per cent of a tile - and the grain BENDS round it, which is what a knot
+       * actually does to a board and is most of what makes one read as a knot rather than
+       * as a stain.
+       */
+      const knotCore = 1 - smoothstep(0.0, 0.22, cellDistance(noiseSeed + 7, u, v, 3));
+      const knotMask =
+        knotCore *
+        smoothstep(0.5, 0.78, fbm(noiseSeed + 13, u, v, { frequency: 2, octaves: 2 }));
+
       // Rings: the banding that makes it read as cut through growth rather than painted.
       // Fewer, wider rings, and the fibre pushed hard into the phase rather than added
       // on top. Evenly spaced bands read as corduroy; wood is irregular, and the
       // irregularity has to be inside the ring spacing, not sprinkled over it.
-      const rings = Math.abs(Math.sin((grain * 2.6 + fibre * 0.9) * Math.PI));
-      // Knots, sparse and dark.
-      const knot = 1 - smoothstep(0.0, 0.06, cellEdges(noiseSeed + 7, u, v, 3));
-      const knotMask = knot * smoothstep(0.55, 0.8, fbm(noiseSeed + 13, u, v, { frequency: 2, octaves: 2 }));
+      const rings = Math.abs(Math.sin((grain * 2.6 + fibre * 0.9 + knotMask * 1.7) * Math.PI));
 
       const band = rings * 0.7 + fibre * 0.3;
       return {
@@ -492,6 +509,71 @@ export function plasterMaps(options: NaturalOptions): SurfaceMaps | null {
         shade: 1 + (value - 0.5) * contrast * 2,
         rough: 0.9 + (fine - 0.5) * 0.08,
         height: fine * 0.22 + sweep * 0.3,
+      };
+    }),
+    repeat
+  );
+
+  CACHE.set(key, maps);
+  return maps;
+}
+
+/**
+ * Perforated hardboard - pegboard.
+ *
+ * §230's note on the repair-shop reference is "the pegboard wall as dense mid-value texture
+ * behind a light-value hero prop", and that phrase is a specification: the board's job is
+ * to be BUSY and to stay in one value band, so that the Kestrel-3 in front of it separates
+ * on value without the wall having to be dark.
+ *
+ * Which makes this the strictest §232 case in the file. A hole is a hard dark disc, and a
+ * grid of hard dark discs is pure value contrast at the exact frequency the eye is most
+ * sensitive to. Two things keep it inside the budget: the holes are drawn mostly into the
+ * NORMAL and roughness - a real pegboard hole is a shadow, and there are no shadows here,
+ * so a shallow albedo dip plus a deep normal dimple is the honest substitute - and the dip
+ * itself is capped at `contrast`. At gameplay distance the grid resolves to about four
+ * pixels a hole and reads as tooth rather than as dots, which is the intent.
+ */
+export function pegboardMaps(
+  options: NaturalOptions & { /** Holes across one tile. */ pitch?: number }
+): SurfaceMaps | null {
+  const {
+    color,
+    seed = color,
+    size = 256,
+    contrast = 0.16,
+    relief = 0.5,
+    repeat = [6, 3],
+    pitch = 16,
+  } = options;
+
+  const key = `pegboard:${JSON.stringify([color, seed, size, contrast, relief, repeat, pitch])}`;
+  const cached = CACHE.get(key);
+  if (cached !== undefined) return cached;
+
+  const noiseSeed = seedFrom(seed);
+
+  const maps = applyRepeat(
+    buildMaps(size, parseHex(color), relief, (u, v) => {
+      // Distance to the nearest hole centre, in hole widths. The grid is regular because
+      // pegboard is a manufactured product - this is the one surface in the game where
+      // mathematical perfection is correct.
+      const gx = u * pitch;
+      const gy = v * pitch;
+      const dx = gx - Math.floor(gx) - 0.5;
+      const dy = gy - Math.floor(gy) - 0.5;
+      const hole = 1 - smoothstep(0.15, 0.26, Math.hypot(dx, dy));
+
+      // Hardboard itself: fine, dense, directionless.
+      const fibre = fbm(noiseSeed, u, v, { frequency: 42, octaves: 3 });
+      const stain = fbm(noiseSeed + 19, u, v, { frequency: 4, octaves: 3 });
+
+      return {
+        shade: 1 - hole * contrast * 2.4 + (fibre - 0.5) * 0.05 + (stain - 0.5) * contrast * 0.5,
+        // Board is smooth from handling, the holes' inner edges are not.
+        rough: 0.74 + hole * 0.16 + (fibre - 0.5) * 0.1,
+        // Where the budget is actually spent. The hole is a pit, and a deep one.
+        height: -hole * 1.0 + fibre * 0.05,
       };
     }),
     repeat

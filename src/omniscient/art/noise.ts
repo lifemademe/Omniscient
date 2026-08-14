@@ -104,6 +104,42 @@ export function fbm(seed: number, x: number, y: number, options: FbmOptions = {}
  * irregular cells with sunken borders, and no amount of fbm will produce it because fbm
  * has no edges. It is worth the nine-cell neighbourhood.
  */
+/**
+ * Worley F1: distance to the nearest feature point, in cell widths.
+ *
+ * Near zero AT a cell's centre, rising toward its boundaries - the exact opposite shape to
+ * `cellEdges`, and the one you want for anything that is a scattered BLOB rather than a
+ * network. Knots in timber are blobs.
+ *
+ * Worth spelling out because the confusion between these two cost the whole project a
+ * visible artefact for two commits: `timberMaps` asked `cellEdges` for its knots, which
+ * put the dark mark along every cell boundary instead of at every cell centre, so every
+ * timber surface in the game - the desk, the workbench, Ileana's table and floor, the
+ * chairs - wore a network of thin dark lines that read as cracks in dried mud. It was
+ * visible in every capture and looked like a floor problem, a table problem and a bench
+ * problem before it turned out to be one character in one call.
+ */
+export function cellDistance(seed: number, x: number, y: number, frequency: number): number {
+  const px = x * frequency;
+  const py = y * frequency;
+  const xi = Math.floor(px);
+  const yi = Math.floor(py);
+
+  let nearest = Infinity;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const cx = xi + dx;
+      const cy = yi + dy;
+      const wx = wrap(cx, frequency);
+      const wy = wrap(cy, frequency);
+      const fx = cx + hash2(seed, wx, wy);
+      const fy = cy + hash2(seed + 7919, wx, wy);
+      nearest = Math.min(nearest, Math.hypot(fx - px, fy - py));
+    }
+  }
+  return nearest;
+}
+
 export function cellEdges(seed: number, x: number, y: number, frequency: number): number {
   const px = x * frequency;
   const py = y * frequency;

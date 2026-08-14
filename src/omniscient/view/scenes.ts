@@ -60,9 +60,91 @@ function buildRepairShop(scene: ContactScene): void {
   floor.translate(0, -0.05, 0);
   scene.registerProp('floor', meshOf('Floor', floor, MAT.ground));
 
-  const wall = new THREE.BoxGeometry(8, 3.2, 0.15);
-  wall.translate(0, 1.6, -1.9);
-  scene.registerProp('wall', meshOf('Wall', wall, MAT.wall));
+  const walls: THREE.BufferGeometry[] = [];
+  const back = new THREE.BoxGeometry(8, 3.2, 0.15);
+  back.translate(0, 1.6, -1.9);
+  walls.push(back);
+  // A side wall, so the shot has a corner rather than an edge. The default camera looks
+  // across the bench toward -x and ran off the end of the world on that side.
+  const side = new THREE.BoxGeometry(0.15, 3.2, 5);
+  side.translate(-3.1, 1.6, 0.6);
+  walls.push(side);
+  scene.registerProp('wall', meshOf('Wall', mergeGeometries(walls, false) ?? back, MAT.wall));
+
+  /**
+   * The pegboard, and the one §230 note this scene never acted on.
+   *
+   * "The pegboard wall as dense mid-value texture behind a light-value hero prop." The
+   * repair shop is the diorama most players will see and it had a flat plaster wall behind
+   * the bench - so the Kestrel-3, which is the object the whole mission is about, was a
+   * mid-value box in front of a mid-value field with nothing but a hue shift separating
+   * them. The board is a value step ABOVE the wall and a step BELOW the set, which is the
+   * arrangement §187 keeps asking for and this room never had.
+   *
+   * All the busyness is in the normal map (see `pegboardMaps`), so it costs almost nothing
+   * against §232 and reads as tooth rather than as pattern at the gameplay camera.
+   */
+  const board = new THREE.BoxGeometry(3.4, 1.6, 0.03);
+  board.translate(-0.1, 1.62, -1.805);
+  scene.registerProp('pegboard', meshOf('Pegboard', board, MAT.pegboard));
+
+  /**
+   * What is hanging on it.
+   *
+   * Silhouettes, not tools. At three metres a spanner is fifteen pixels and its only
+   * legible property is its outline, so these are the four outlines a workshop wall has:
+   * things that hang straight down, things that hang in pairs, coils, and one long thing.
+   * The board's own texture does the density; these do the irregularity, which is what
+   * stops a regular grid reading as wallpaper.
+   */
+  const hanging: THREE.BufferGeometry[] = [];
+  const pegRng = createRng(seedFrom('mirela-pegboard'));
+  // [x, y, length, width, kind] - kind 0 straight, 1 forked at the bottom, 2 a coil.
+  const hung: ReadonlyArray<readonly [number, number, number, number, number]> = [
+    [-1.42, 2.02, 0.3, 0.032, 0],
+    [-1.22, 2.06, 0.36, 0.038, 0],
+    [-1.02, 2.0, 0.26, 0.03, 1],
+    [-0.78, 2.08, 0.42, 0.026, 0],
+    [-0.58, 2.02, 0.32, 0.034, 1],
+    [1.02, 2.05, 0.34, 0.03, 0],
+    [1.22, 2.0, 0.28, 0.042, 1],
+    [1.44, 2.08, 0.44, 0.028, 0],
+    [-1.3, 1.3, 0.22, 0.05, 2],
+    [1.15, 1.28, 0.26, 0.056, 2],
+    [0.86, 1.98, 0.5, 0.022, 0],
+  ];
+  for (const [x, y, length, width, kind] of hung) {
+    const lean = jitter(pegRng, 0.07);
+    if (kind === 2) {
+      // A coil of cable or a roll of tape: a ring on a peg.
+      const coil = new THREE.TorusGeometry(length * 0.55, width * 0.5, 5, 12);
+      coil.rotateZ(lean);
+      coil.translate(x, y - length * 0.55, -1.72);
+      hanging.push(coil);
+      continue;
+    }
+    const shaft = new THREE.BoxGeometry(width, length, width * 0.7);
+    shaft.rotateZ(lean);
+    shaft.translate(x, y - length / 2, -1.73);
+    hanging.push(shaft);
+    if (kind === 1) {
+      const jaw = new THREE.BoxGeometry(width * 2.1, width * 1.6, width * 0.7);
+      jaw.rotateZ(lean);
+      jaw.translate(x + Math.sin(lean) * length * 0.5, y - length, -1.73);
+      hanging.push(jaw);
+    }
+  }
+  // Pegs, so the tools are on something.
+  for (const [x, y] of hung.map(([x, y]) => [x, y] as const)) {
+    const peg = new THREE.CylinderGeometry(0.008, 0.008, 0.055, 5);
+    peg.rotateX(Math.PI / 2);
+    peg.translate(x, y + 0.01, -1.76);
+    hanging.push(peg);
+  }
+  scene.registerProp(
+    'pegboard-tools',
+    meshOf('PegboardTools', mergeGeometries(hanging, false) ?? hanging[0], MAT.dark)
+  );
 
   /**
    * The tide line, and the point of §131.
@@ -122,12 +204,30 @@ function buildRepairShop(scene: ContactScene): void {
   const benchRng = createRng(seedFrom('mirela-bench'));
   const clutter: THREE.BufferGeometry[] = [];
 
-  // The set's back panel, off and leaning against the bench edge.
-  const panel = new THREE.BoxGeometry(0.42, 0.3, 0.012);
-  panel.rotateX(-0.34);
+  /**
+    * The set's back panel, off and leaning against the bench edge.
+    *
+    * Moved twice. It used to stand at x = -0.62, on the exact sightline from the default
+    * camera to Mirela, and cut her off at the chest - the one person in the scene, hidden
+    * behind a component she had removed. Parked on the near right instead it cleared her
+    * and immediately became the second largest flat mass in the frame, a hand's width from
+    * the lens and competing with the set. At the BACK right of the bench it does neither:
+    * small, behind the plane the set sits on, and still obviously off the radio.
+    */
+  const panel = new THREE.BoxGeometry(0.36, 0.26, 0.012);
+  panel.rotateX(-0.4);
   panel.rotateY(jitter(benchRng, 0.24));
-  panel.translate(-0.62, 0.94, -0.28);
-  clutter.push(panel);
+  panel.translate(0.66, 0.94, -0.74);
+  /*
+   * On its own, in the SET's material rather than the toolbox's.
+   *
+   * It was merged into the bench clutter and therefore wore MAT.metal - 0.65 metalness -
+   * and once it was leaning back at the angle that cleared Mirela it turned its face to
+   * the work lamp and came back as a sheet of white card, brighter than the Kestrel-3 it
+   * had been unscrewed from. §244: nothing may out-contrast the hero prop, and a part OF
+   * the hero prop doing it is the silliest version of that.
+   */
+  scene.registerProp('set-panel', meshOf('SetPanel', panel, MAT.equipment));
 
   // Screwdrivers and a spanner, laid down roughly parallel the way tools are.
   for (const [x, z, length, angle] of [
@@ -149,6 +249,33 @@ function buildRepairShop(scene: ContactScene): void {
   const tin = new THREE.CylinderGeometry(0.055, 0.052, 0.022, 10);
   tin.translate(0.24, 0.825, -0.3);
   scene.registerProp('bench-tin', meshOf('BenchTin', tin, MAT.plastic));
+
+  /**
+   * Storage under the bench.
+   *
+   * The lower shelf is a two-metre plank facing straight up at the key, so it arrived as
+   * the largest bright area in the frame and sat at the bottom of it doing nothing. Left
+   * alone it pulls the eye down and out of the picture. Boxes on it are cheaper than
+   * relighting, more honest - nobody keeps a clear shelf under a workbench - and they turn
+   * a bright plank into a dark broken line under the lit surface, which is what the bottom
+   * of this composition actually needed.
+   */
+  const understore: THREE.BufferGeometry[] = [];
+  for (const [x, w, h, d] of [
+    [-0.72, 0.42, 0.26, 0.4],
+    [-0.24, 0.3, 0.18, 0.34],
+    [0.34, 0.46, 0.3, 0.44],
+    [0.82, 0.26, 0.22, 0.3],
+  ] as const) {
+    const crate = new THREE.BoxGeometry(w, h, d);
+    crate.rotateY(jitter(benchRng, 0.18));
+    crate.translate(x + jitter(benchRng, 0.04), 0.24 + h / 2, -0.5 + jitter(benchRng, 0.06));
+    understore.push(crate);
+  }
+  scene.registerProp(
+    'bench-store',
+    meshOf('BenchStore', mergeGeometries(understore, false) ?? understore[0], MAT.timberDark)
+  );
 
   // A rag, over the bench edge nearest the camera.
   const rag = new THREE.BoxGeometry(0.2, 0.012, 0.26);
