@@ -109,6 +109,47 @@ function limb(
   return geometry;
 }
 
+/**
+ * A limb that hangs from a joint.
+ *
+ * §235, and the whole reason the arms were wrong. `limb()` rotates a slab about its own
+ * centre, so an arm swung forward by 20 degrees also swung its shoulder end backward by
+ * 20 degrees - out of the torso and into the air behind it. Every pose that tried to look
+ * like working produced a dislocated shoulder, and the more expressive the pose the worse
+ * it got, which is why Ileana leaning over her table was the worst figure in the game.
+ *
+ * Here the slab's top face sits at the origin before rotation, so the joint stays put and
+ * only the far end moves. That is how a shoulder works.
+ */
+function hangingLimb(
+  w: number,
+  h: number,
+  d: number,
+  joint: THREE.Vector3,
+  rotZ = 0,
+  rotX = 0
+): THREE.BufferGeometry {
+  const geometry = slab(w, h, d, Math.min(w, d) * 0.3);
+  geometry.translate(0, -h / 2, 0);
+  if (rotX) geometry.rotateX(rotX);
+  if (rotZ) geometry.rotateZ(rotZ);
+  geometry.translate(joint.x, joint.y, joint.z);
+  return geometry;
+}
+
+/**
+ * Where the far end of a hanging limb ends up.
+ *
+ * Same rotation order as hangingLimb applies to the geometry, so the next joint down
+ * lands exactly on the end of the one above it and the arm stays in one piece however it
+ * is posed.
+ */
+function limbEnd(length: number, rotZ: number, rotX: number): THREE.Vector3 {
+  return new THREE.Vector3(0, -length, 0)
+    .applyAxisAngle(new THREE.Vector3(1, 0, 0), rotX)
+    .applyAxisAngle(new THREE.Vector3(0, 0, 1), rotZ);
+}
+
 function merge(pieces: THREE.BufferGeometry[]): THREE.BufferGeometry {
   return mergeGeometries(pieces, false) ?? pieces[0];
 }
@@ -199,46 +240,51 @@ export function createCharacter(params: CharacterParams): CharacterParts {
    * and is the difference between standing near a bench and working at one.
    */
   const reach = params.reach ?? 0;
-  const elbowBend = reach * 1.25;
+
+  /**
+   * The neutral, which is not "arms straight down".
+   *
+   * §235 asks for a rest pose that reads as a body at rest, and a body at rest never has
+   * straight arms - there is always a few degrees of elbow, the upper arms sit slightly
+   * away from the ribs, and the hands hang a little in front of the hips rather than
+   * beside them. These three constants are that, and `reach` is added on top for somebody
+   * working at a surface.
+   */
+  const ARM_OUT = 0.1;
+  const ARM_FORWARD = 0.1;
+  const ELBOW_REST = 0.16;
+
+  const elbowBend = ELBOW_REST + reach * 1.15;
 
   for (const side of [-1, 1] as const) {
-    const outward = side * (shoulderWidth / 2 + limbThick * 0.4);
-    const swing = side === 1 ? range(rng, 0.1, 0.35) : range(rng, -0.2, 0.05);
+    // Asymmetry, but small. It is the difference between two people and the difference
+    // between a person and a shop mannequin; it is not a pose in itself.
+    const swing = ARM_FORWARD + jitter(rng, 0.09);
+    const outward = side * (ARM_OUT + Math.abs(jitter(rng, 0.03)));
 
-    skin.push(
-      limb(limbThick, upperArm, limbThick, [outward, shoulderY - upperArm * 0.5, 0], side * 0.12, swing)
+    // The shoulder sits inside the chest slab, so the arm reads as joined to the body
+    // rather than parked alongside it.
+    const shoulder = new THREE.Vector3(
+      side * (shoulderWidth / 2 - limbThick * 0.1),
+      shoulderY - torsoHeight * 0.04,
+      0
     );
 
-    // The elbow. Everything below it swings forward together, so the forearm and hand
-    // stay attached to each other rather than drifting apart as the reach increases.
-    const elbowY = shoulderY - upperArm;
-    const forwardZ = Math.sin(elbowBend) * foreArm * 0.5;
-    const dropY = Math.cos(elbowBend) * foreArm * 0.5;
+    skin.push(hangingLimb(limbThick, upperArm, limbThick, shoulder, outward, swing));
 
-    skin.push(
-      limb(
-        limbThick * 0.9,
-        foreArm,
-        limbThick * 0.9,
-        [outward + side * 0.02, elbowY - dropY, swing * 0.28 + forwardZ],
-        side * 0.06,
-        swing * 1.4 + elbowBend
-      )
-    );
+    const elbow = shoulder.clone().add(limbEnd(upperArm, outward, swing));
+    const foreRot = swing + elbowBend;
+    // The forearm keeps a little of the upper arm's outward angle, so the elbow does not
+    // read as a hinge that only works in one plane.
+    const foreOut = outward * 0.45;
+
+    skin.push(hangingLimb(limbThick * 0.9, foreArm, limbThick * 0.9, elbow, foreOut, foreRot));
+
+    const wrist = elbow.clone().add(limbEnd(foreArm, foreOut, foreRot));
+
     // Oversized hands - §185's "a mechanic may have visually dominant hands".
     skin.push(
-      limb(
-        limbThick * 1.25,
-        limbThick * 1.5,
-        limbThick * 0.8,
-        [
-          outward + side * 0.03,
-          elbowY - dropY * 2 - Math.cos(elbowBend) * limbThick * 0.5,
-          swing * 0.5 + forwardZ * 2 + Math.sin(elbowBend) * limbThick * 0.5,
-        ],
-        0,
-        elbowBend
-      )
+      hangingLimb(limbThick * 1.25, limbThick * 1.5, limbThick * 0.8, wrist, foreOut, foreRot)
     );
   }
 
@@ -247,8 +293,14 @@ export function createCharacter(params: CharacterParams): CharacterParts {
     const outward = side * hipWidth * 0.26;
     const stance = side * range(rng, 0.0, 0.05);
 
-    cloth.push(limb(limbThick * 1.15, legLength * 0.55, limbThick * 1.15, [outward, legLength * 0.72, 0], stance));
-    cloth.push(limb(limbThick * 1.05, legLength * 0.5, limbThick * 1.05, [outward, legLength * 0.27, 0], stance * 0.5));
+    // Legs hang from the hip for the same reason arms hang from the shoulder. It matters
+    // less here because a standing leg is nearly vertical, but a stance angle applied
+    // about the middle of a thigh lifts the hip out of the pelvis just as visibly.
+    const hip = new THREE.Vector3(outward, hipY + torsoHeight * 0.02, 0);
+    cloth.push(hangingLimb(limbThick * 1.15, legLength * 0.56, limbThick * 1.15, hip, stance));
+
+    const knee = hip.clone().add(limbEnd(legLength * 0.56, stance, 0));
+    cloth.push(hangingLimb(limbThick * 1.05, legLength * 0.5, limbThick * 1.05, knee, stance * 0.4));
 
     const boot = slab(limbThick * 1.3, limbThick * 1.1, limbThick * 2.1, limbThick * 0.25);
     boot.translate(outward, limbThick * 0.5, limbThick * 0.42);
