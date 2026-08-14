@@ -326,6 +326,25 @@ export function createCharacter(params: CharacterParams): CharacterParts {
       const skirt = slab(hipWidth * 1.15, torsoHeight * 0.55, torsoDepth * 1.05, torsoDepth * 0.2);
       skirt.translate(0, hipY - torsoHeight * 0.08, 0);
       cloth.push(skirt);
+
+      /**
+       * The opening down the front.
+       *
+       * An apron and a bib are front-only and give those garments a direction for free.
+       * A coat is two symmetrical slabs, so Ileana - the only coat in the cast - had no
+       * front at all below the neck. One strip of the underlayer colour down the centre
+       * is a placket, and it is the difference between a person facing you and a person
+       * who might be facing either way.
+       */
+      const placket = slab(shoulderWidth * 0.13, torsoHeight * 1.05, torsoDepth * 0.16, 0.012);
+      placket.rotateX(lean * 0.8);
+      placket.translate(0, hipY + torsoHeight * 0.4, torsoDepth * 0.58);
+      under.push(placket);
+
+      const collar = slab(shoulderWidth * 0.42, torsoHeight * 0.12, torsoDepth * 0.3, 0.015);
+      collar.rotateX(lean);
+      collar.translate(0, shoulderY - torsoHeight * 0.02, torsoDepth * 0.42);
+      under.push(collar);
       break;
     }
     case 'overalls': {
@@ -344,12 +363,32 @@ export function createCharacter(params: CharacterParams): CharacterParts {
     }
   }
 
-  // -- Hair: a mass, not strands ----------------------------------------------------
+  /**
+   * Hair: a mass, not strands - and the thing that tells you which way somebody is facing.
+   *
+   * §235 forbids faces, which leaves a head that is a symmetrical block. The cap here was
+   * DEEPER than the head it sat on and centred on it, so it wrapped the face as
+   * completely as the crown and every figure read as seen from behind whichever way they
+   * were actually turned. Three of the four contacts are angled toward their camera and
+   * all three looked like backs.
+   *
+   * Pushed back and made shallower, it leaves the front plane of the head as bare skin.
+   * That reads as a face at any distance without being one, which is exactly the trade
+   * the blocky style is asking for.
+   */
   const hairPieces: THREE.BufferGeometry[] = [];
-  const cap = slab(headW * 1.06, headHeight * 0.52, headHeight * 0.88, headHeight * 0.2);
+  const cap = slab(headW * 1.02, headHeight * 0.5, headHeight * 0.56, headHeight * 0.16);
   cap.rotateX(lean * 0.4);
-  cap.translate(0, headY + headHeight * 0.3, torsoDepth * 0.04);
+  cap.translate(0, headY + headHeight * 0.31, -headHeight * 0.25);
   hairPieces.push(cap);
+
+  // Sideburns down past the ear line, so the bare front reads as a face rather than as a
+  // hat sitting too far back.
+  for (const side of [-1, 1] as const) {
+    const temple = slab(headW * 0.13, headHeight * 0.38, headHeight * 0.42, headHeight * 0.09);
+    temple.translate(side * headW * 0.45, headY + headHeight * 0.05, -headHeight * 0.16);
+    hairPieces.push(temple);
+  }
 
   // A tied-back mass or a fringe, chosen by seed - cheap variation with a big read.
   if (rng() < 0.5) {

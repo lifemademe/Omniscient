@@ -1176,15 +1176,26 @@ function buildClearedHouse(scene: ContactScene): void {
     })
   );
 
+  /**
+   * Fill from the camera side, and it is not optional here.
+   *
+   * Ileana's only real light is the window behind her, so she was lit entirely from
+   * behind - which turned the person the player is talking to into a black cut-out and
+   * made her read as facing away however she was actually turned. The hair and the
+   * placket give her a front now; this is what lets anybody see it.
+   *
+   * Warm against the cold window, so the two lights also do the §230 job of putting a
+   * warm edge and a cool edge on everything between them.
+   */
   scene.registerProp(
     'roomfill',
     ENGINE.PointLightNode.create({
       name: 'RoomFill',
-      position: new THREE.Vector3(1.4, 1.9, 1.6),
-      intensity: 6,
-      color: new THREE.Color(LIGHT.key),
-      distance: 8,
-      decay: 1.4,
+      position: new THREE.Vector3(1.5, 1.7, 1.5),
+      intensity: 13,
+      color: new THREE.Color('#ffd0a0'),
+      distance: 7,
+      decay: 1.25,
     })
   );
 
