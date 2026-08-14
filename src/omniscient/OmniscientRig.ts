@@ -327,7 +327,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // object - the desk, the wall behind it and the clutter are what make the CRT read
     // as somewhere OMNISCIENT_ lives rather than as a prop on a grey plane.
     for (const part of createWorkstationRoom()) {
-      station.add(meshOf(part.name, part.geometry, MAT[part.material]));
+      // Almost every part names a member of the shared family; the pinboard's notes each
+      // carry their own authored canvas and hand one over directly. See RoomPart.
+      const surface = typeof part.material === 'string' ? MAT[part.material] : part.material;
+      station.add(meshOf(part.name, part.geometry, surface));
     }
 
     this.surface = new CRTSurface({ width: 192, height: 144 });

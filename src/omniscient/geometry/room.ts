@@ -12,6 +12,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
+import { noteMaterial, OBN_NOTES } from '../art/obn.js';
 import { createRng, jitter, range, seedFrom } from '../core/rng.js';
 
 import { createClump, createVine } from './foliage.js';
@@ -22,7 +23,15 @@ import type { MAT } from '../art/palette.js';
 export interface RoomPart {
   name: string;
   geometry: THREE.BufferGeometry;
-  material: keyof typeof MAT;
+  /**
+   * A key into the shared family, or - rarely - a material of its own.
+   *
+   * §187 wants one small shared family and that is still the rule; the escape hatch
+   * exists for surfaces whose whole content is a single authored image, where there is
+   * nothing to share. Eight pinned notes are eight different documents, so they are eight
+   * materials, and there is no version of that which is a family member.
+   */
+  material: keyof typeof MAT | THREE.Material;
 }
 
 /**
@@ -487,42 +496,43 @@ export function createWorkstationRoom(): RoomPart[] {
     material: 'timber',
   });
 
-  // Notes on it. Overlapping and off-square, layered rather than laid out on a grid -
-  // this is a board somebody has been adding to, not a display.
-  // Hand-placed rather than gridded. Four across two rows came out looking like a
-  // spreadsheet; these overlap, sit at different heights and vary in size, which is what a
-  // board somebody keeps adding to actually looks like.
-  const notes: THREE.BufferGeometry[] = [];
-  const layout: ReadonlyArray<readonly [number, number, number, number]> = [
-    [-0.44, 0.19, 0.28, 0.24],
-    [-0.14, 0.23, 0.22, 0.17],
-    [0.16, 0.17, 0.26, 0.26],
-    [0.42, 0.21, 0.18, 0.2],
-    [-0.36, -0.19, 0.24, 0.22],
-    [-0.02, -0.24, 0.3, 0.19],
-    [0.34, -0.17, 0.2, 0.25],
-  ];
-  layout.forEach(([dx, dy, w, h], i) => {
-    const note = new THREE.BoxGeometry(w, h, 0.006);
-    note.rotateZ(jitter(rng, 0.13));
-    note.translate(
-      BOARD.x + dx + jitter(rng, 0.02),
-      BOARD.y + dy + jitter(rng, 0.03),
-      -1.978 + i * 0.001
+  /**
+   * What is actually on the board (§240).
+   *
+   * Until now this was seven blank rectangles of MAT.paper: correct in composition,
+   * completely empty of content, and one of the few things in the room the player can
+   * point a camera at and read. Each note is now its own quad wearing its own authored
+   * canvas - see art/obn.ts for what they say and why the text is sized the way it is.
+   *
+   * Still hand-placed rather than gridded, still overlapping, still off-square. Four
+   * across two rows came out looking like a spreadsheet; a board somebody keeps adding to
+   * has a big sheet in the corner it was pinned to first and small things crowded round it.
+   *
+   * Headless callers (the preview harnesses) get null textures and no note at all, which
+   * is right - a board with nothing on it is exactly what those harnesses used to see.
+   */
+  OBN_NOTES.forEach((note, i) => {
+    const texture = note.texture();
+    if (!texture) return;
+
+    const quad = new THREE.PlaneGeometry(note.width, note.height);
+    quad.rotateZ(jitter(rng, 0.045));
+    quad.translate(
+      BOARD.x + note.at[0] + jitter(rng, 0.012),
+      BOARD.y + note.at[1] + jitter(rng, 0.012),
+      // Forward of the board face at -1.985, and stacked back to front so the big sheet
+      // is underneath everything pinned on top of it later.
+      -1.98 + i * 0.001
     );
-    notes.push(note);
-  });
-  parts.push({
-    name: 'Notes',
-    geometry: mergeGeometries(notes, false) ?? notes[0],
-    material: 'paper',
+    parts.push({ name: `Note${note.id}`, geometry: quad, material: noteMaterial(texture) });
   });
 
   // A length of string with two things hanging off it, across the lower half. One
   // diagonal breaks the grid of rectangles and says this board has been lived with.
+  // In front of every note - it was pinned across them, not under them.
   const string = new THREE.BoxGeometry(BOARD.width - 0.06, 0.008, 0.008);
   string.rotateZ(0.035);
-  string.translate(BOARD.x, BOARD.y - 0.14, -1.972);
+  string.translate(BOARD.x, BOARD.y - 0.14, -1.9705);
   parts.push({ name: 'BoardString', geometry: string, material: 'metal' });
 
   /**

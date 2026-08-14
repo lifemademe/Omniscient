@@ -3,6 +3,7 @@ import './omniscient/art/decals.js';
 import './omniscient/art/glass.js';
 import './omniscient/art/mesh.js';
 import './omniscient/art/noise.js';
+import './omniscient/art/obn.js';
 import './omniscient/art/palette.js';
 import './omniscient/art/surface.js';
 import './omniscient/content/contacts.js';
