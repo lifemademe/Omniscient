@@ -26,7 +26,7 @@ import { CRTSurface } from './crt/CRTSurface.js';
 import { GlobeView, SignalState } from './crt/GlobeView.js';
 import { KnowledgeTree } from './crt/KnowledgeTree.js';
 import { fitSurfaceUvs, readModelParts } from './geometry/model-parts.js';
-import { createWorkstationRoom } from './geometry/room.js';
+import { CHAIR_PLACEMENT, createWorkstationRoom } from './geometry/room.js';
 import { KnowledgeStore } from './knowledge/KnowledgeStore.js';
 import { BroadcastTransport } from './link/BroadcastTransport.js';
 import { LocalSurface } from './link/LocalSurface.js';
@@ -341,6 +341,22 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.tree = new KnowledgeTree(this.surface, this.knowledge.toTreeState());
     this.globe = new GlobeView(this.surface, this.signals);
     this.tree.draw(1);
+
+    /**
+     * The chair, at the transform the generated one worked out.
+     *
+     * Its whole job in this shot is silhouette - a dark shape in the near foreground with
+     * gaps in it - which is exactly what a modelled chair does better than seven boxes.
+     * See CHAIR_PLACEMENT for why it stands where it does.
+     */
+    const chair = ENGINE.ModelMeshNode.create({
+      name: 'Chair',
+      modelUrl: '@project/assets/models/Chair.glb',
+      position: CHAIR_PLACEMENT.position.clone(),
+      rotation: new THREE.Euler(0, CHAIR_PLACEMENT.turn, 0),
+      useDynamicMaterials: true,
+    });
+    station.add(chair);
 
     /**
      * The machine itself, which is now a modelled asset rather than a generated one.

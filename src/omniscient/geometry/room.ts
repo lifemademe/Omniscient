@@ -194,66 +194,36 @@ function createDeskPlant(rng: Rng): RoomPart[] {
 }
 
 /**
- * The chair, pushed back from the desk and turned slightly out.
+ * Where the chair goes, and why there is one.
+ *
+ * The geometry is now Chair.glb - the generated version is gone - but the reasoning that
+ * put a chair here is not, so it stays with the numbers it produced.
  *
  * Two jobs, and it is the best value in the room for either. Compositionally the lower
- * left of the home shot was a quarter of the frame in empty unlit floor; a dark chair
- * back sitting in the near foreground fills it, frames the machine between itself and the
- * window, and adds the depth cue the shot had no way to get otherwise.
+ * left of the home shot was a quarter of the frame in empty unlit floor; a dark chair back
+ * in the near foreground fills it, frames the machine between itself and the window, and
+ * adds the depth cue the shot had no way to get otherwise. It sits hard against the near
+ * edge because mid-floor it stood in the sightline to the two lowest menu plates, and a
+ * framing element that hides the buttons is not framing anything.
  *
  * The other job is the point of §119. Nothing else in this room proves a person uses it -
  * a mug and some paper could be anywhere. An empty chair pushed back at an angle is
  * somebody who got up. The player is the thing on the desk; the chair is where the human
  * they are talking to would have sat, and it is empty.
  */
-function createChair(rng: Rng): RoomPart[] {
-  const parts: RoomPart[] = [];
-  // Pushed left and much nearer the camera. Sitting mid-floor it was directly in the
-  // sightline to the two lowest menu plates - a framing element that hides the buttons is
-  // not framing anything. Up against the near edge of frame it does the job it was added
-  // for and blocks nothing.
-  const at = new THREE.Vector3(-1.6, 0, 1.55);
-  // Turned out from the desk, the way a chair is left rather than tucked in.
-  const turn = 0.42 + jitter(rng, 0.08);
-
-  const frame: THREE.BufferGeometry[] = [];
-
-  // Back posts, running from the floor up past the seat.
-  for (const sx of [-1, 1]) {
-    const post = new THREE.BoxGeometry(0.045, 1.02, 0.045);
-    post.translate(sx * 0.2, 0.51, -0.19);
-    frame.push(post);
-  }
-  // Front legs, shorter - they stop at the seat.
-  for (const sx of [-1, 1]) {
-    const leg = new THREE.BoxGeometry(0.042, 0.46, 0.042);
-    leg.translate(sx * 0.2, 0.23, 0.19);
-    frame.push(leg);
-  }
-
-  const seat = new THREE.BoxGeometry(0.48, 0.045, 0.44);
-  seat.translate(0, 0.47, 0);
-  frame.push(seat);
-
-  // Top rail and two slats. The gaps between them are what makes the silhouette read as
-  // a chair rather than as a dark slab blocking the corner of the frame.
-  const rail = new THREE.BoxGeometry(0.44, 0.075, 0.04);
-  rail.translate(0, 0.98, -0.19);
-  frame.push(rail);
-  for (const y of [0.68, 0.82]) {
-    const slat = new THREE.BoxGeometry(0.42, 0.05, 0.03);
-    slat.translate(0, y, -0.19);
-    frame.push(slat);
-  }
-
-  const chair = mergeGeometries(frame, false) ?? seat;
-  chair.rotateY(turn);
-  // Built with its feet at y=0, so it drops to the floor rather than standing on the desk.
-  chair.translate(at.x, at.y + FLOOR_Y, at.z);
-  parts.push({ name: 'Chair', geometry: chair, material: 'timberDark' });
-
-  return parts;
-}
+export const CHAIR_PLACEMENT = {
+  /**
+   * Station-local, feet on the floor.
+   *
+   * Brought in from x = -1.6 when the modelled chair replaced the generated one. The old
+   * value was tuned to a narrow box-frame chair; a wider upholstered one at the same
+   * place hangs off the left edge with a quarter of it in shot, which frames nothing.
+   * Still well below the menu plates, which is the constraint that put it left at all.
+   */
+  position: new THREE.Vector3(-1.24, FLOOR_Y, 1.38),
+  /** Turned out from the desk, the way a chair is left rather than tucked in. */
+  turn: 0.42,
+} as const;
 
 /**
  * The machine sits on a desk against a wall, with the shallow clutter of somewhere
@@ -374,7 +344,6 @@ export function createWorkstationRoom(): RoomPart[] {
   parts.push({ name: 'Papers', geometry: stack, material: 'paper' });
 
   parts.push(...createDeskPlant(rng));
-  parts.push(...createChair(rng));
 
   // Cable runs from the machine down the back of the desk. Accumulated infrastructure
   // (§186) at the smallest possible scale.
