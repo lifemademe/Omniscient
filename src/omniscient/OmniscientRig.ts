@@ -370,8 +370,21 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * facing +Z, a metre wide - so the desk and the room it was built around still fit it
      * without a single number changing.
      */
+    /**
+     * §238 - the set sits ON the desk, measured rather than eyeballed.
+     *
+     * The desk top runs z = -1.075 to -0.025 and the model is 0.80 deep about its own
+     * centre, so at the station origin it spanned -0.40 to +0.40 and 42cm of it - more
+     * than half its depth - hung off the front edge into the air. It read as a set
+     * balanced on the lip of a bench, which is not where anybody leaves a television.
+     *
+     * At z = -0.50 it spans -0.90 to -0.10: 7.5cm of desk in front of it, 17.5cm behind.
+     * The base needed nothing; the model's origin is already at its feet and the desk
+     * surface is already y = 0.
+     */
     const monitor = ENGINE.ModelMeshNode.create({
       name: 'Terminal',
+      position: new THREE.Vector3(0, 0, -0.5),
       modelUrl: '@project/assets/models/CRT_TV.glb',
       // The screen, the glass and the lamp each get their own material below, and the
       // model ships with one shared across all four meshes.

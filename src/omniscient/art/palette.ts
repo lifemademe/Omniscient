@@ -1,4 +1,30 @@
 /**
+ * ## §230 - WHAT THE CONCEPT ART GIVES US, AND WHAT IT DOES NOT
+ *
+ * Three reference frames were provided. They are generated concept art, and the whole
+ * point of §230 is to decide once what is being taken from them so it stops being
+ * relitigated every time somebody looks at them again.
+ *
+ * **The workstation frame.** Copy: the warm pool of lamp light falling on one corner of a
+ * cold room; the wall above the desk as a working surface covered in paper; the machine
+ * as the only green light in a brown room. Abandon: the volumetric cone around the lamp,
+ * the rain on the glass, the photographic vignette. All three are post-process (§231).
+ *
+ * **The mast frame.** Copy: the figure as a black silhouette against the only bright thing
+ * in the frame; the town as a band of small warm lights at the base of a cold picture;
+ * layered depth - rail, figure, sea, light, cloud. Abandon: the lighthouse beam as visible
+ * volume, the cloud detail, the wet specular on the sea.
+ *
+ * **The repair shop frame.** Copy: the pegboard wall as dense mid-value texture behind a
+ * light-value hero prop; one hard practical light over the bench; the deliberately blocky
+ * figure standing in a detailed room. Abandon: photoreal timber grain, the depth-of-field
+ * falloff to the window, the dust in the air.
+ *
+ * The pattern in all three: take the VALUE STRUCTURE and the LIGHT PLACEMENT, leave the
+ * lens. Everything abandoned is something a camera did, not something a room did.
+ *
+ * ---
+ *
  * The shared palette and material family.
  *
  * §187: prefer a small reusable material family over unique sets per object. §9 gives the
