@@ -528,6 +528,72 @@ export function scrapNote(): THREE.CanvasTexture | null {
 }
 
 /**
+ * The station mug.
+ *
+ * §240 says legible text is authored, and it also implies the reverse: a wordmark six
+ * pixels across is not legible and should not be sold as a reason to do anything. So this
+ * is honest about what it is for. From the home camera the mug is about twenty pixels and
+ * all that reads is a dark band round a pale cylinder - which is what a printed mug looks
+ * like at twenty pixels, and is the whole visual job. The letters are for the push-in, and
+ * for the fact that OBN is canon and its mug should say so.
+ *
+ * Drawn for the SIDE of an open cylinder only. A cylinder's end caps sample the whole
+ * texture squashed onto a disc, so a mark painted into a closed mug's material appears
+ * warped across the rim as well as round the body; the base and rim are separate geometry
+ * wearing the plain family material.
+ *
+ * §232: glaze at the value MAT.plastic already had, band and letters as the only departure,
+ * and the band is two per cent of the mug's surface.
+ */
+export function mugBand(): THREE.CanvasTexture | null {
+  return createDecal(256, 180, (ctx, w, h) => {
+    // The glaze. Not white - see the note on MAT.plastic about light values blowing out.
+    ctx.fillStyle = '#a89c80';
+    ctx.fillRect(0, 0, w, h);
+
+    // A band round the mug at the height a band goes.
+    ctx.fillStyle = '#3f4a52';
+    ctx.fillRect(0, h * 0.3, w, h * 0.34);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#c9c2ad';
+    ctx.font = `bold 48px ${SANS}`;
+    ctx.fillText('OBN', w / 2, h * 0.47);
+
+    // Chips in the glaze at the rim, where a mug always goes first.
+    const rng = createRng(seedFrom('obn-mug'));
+    for (let i = 0; i < 9; i++) {
+      const x = rng() * w;
+      const y = h * (rng() < 0.5 ? 0.03 + rng() * 0.05 : 0.93 + rng() * 0.05);
+      ctx.beginPath();
+      ctx.ellipse(x, y, 2 + rng() * 4, 1.5 + rng() * 2.5, 0, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(126,114,92,0.5)';
+      ctx.fill();
+    }
+
+    // Tea. The inside of a mug somebody actually uses is not the colour of the outside,
+    // and this band sits at the rim where a sliver of the interior would show.
+    ctx.fillStyle = 'rgba(74,58,40,0.22)';
+    ctx.fillRect(0, 0, w, h * 0.035);
+  });
+}
+
+/** The mug's glaze, wearing the band. Repeats twice so the mark reads from either side. */
+export function mugMaterial(texture: THREE.CanvasTexture): THREE.MeshStandardMaterial {
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.repeat.set(2, 1);
+  texture.needsUpdate = true;
+  return new THREE.MeshStandardMaterial({
+    map: texture,
+    roughness: 0.62,
+    metalness: 0.03,
+    side: THREE.DoubleSide,
+  });
+}
+
+/**
  * Material for a pinned sheet.
  *
  * NOT `decalMaterial`: that turns depth writing off, which is right for a stain lying on

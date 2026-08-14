@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-import { noteMaterial, OBN_NOTES } from '../art/obn.js';
+import { mugBand, mugMaterial, noteMaterial, OBN_NOTES } from '../art/obn.js';
 import { createRng, jitter, range, seedFrom } from '../core/rng.js';
 
 import { createClump, createVine } from './foliage.js';
@@ -423,11 +423,54 @@ export function createWorkstationRoom(): RoomPart[] {
 
   // -- Clutter: the part that says somebody works here ----------------------
 
-  // Mug, slightly off-square to the desk. Nothing a person owns is aligned.
-  const mug = new THREE.CylinderGeometry(0.045, 0.04, 0.1, 10);
-  mug.translate(0.82, 0.05, -0.16);
-  mug.rotateY(jitter(rng, 0.4));
-  parts.push({ name: 'Mug', geometry: mug, material: 'plastic' });
+  /**
+   * The mug, slightly off-square to the desk. Nothing a person owns is aligned.
+   *
+   * It was one closed cylinder, which is a tin. A handle is the entire silhouette of a
+   * mug, and at the twenty pixels this thing occupies in the home shot the silhouette is
+   * the only property it has - so the handle is worth more than everything else here put
+   * together. It also breaks the desk's run of squares and cylinders with the one curve
+   * in the room.
+   *
+   * Built open-ended with the base as separate geometry so the OBN band can go on the
+   * side without the end caps sampling it: a cylinder's caps map the whole texture onto a
+   * disc, so a mark painted into a closed mug's material comes out warped across the rim.
+   */
+  const mugAt = new THREE.Vector3(0.82, 0, -0.16);
+  const mugTurn = jitter(rng, 0.4) - 0.5;
+
+  const mugBody = new THREE.CylinderGeometry(0.045, 0.04, 0.1, 12, 1, true);
+  mugBody.translate(0, 0.05, 0);
+  mugBody.rotateY(mugTurn);
+  mugBody.translate(mugAt.x, mugAt.y, mugAt.z);
+  const band = mugBand();
+  parts.push({
+    name: 'Mug',
+    geometry: mugBody,
+    material: band ? mugMaterial(band) : 'plastic',
+  });
+
+  const mugShell: THREE.BufferGeometry[] = [];
+  const mugBase = new THREE.CylinderGeometry(0.04, 0.04, 0.012, 12);
+  mugBase.translate(0, 0.006, 0);
+  mugShell.push(mugBase);
+  // The rim, and a suggestion of an interior below it. Without this the open cylinder
+  // shows its own back wall through the top and reads as a paper cup.
+  const mugInner = new THREE.CylinderGeometry(0.039, 0.036, 0.014, 12);
+  mugInner.translate(0, 0.086, 0);
+  mugShell.push(mugInner);
+  // The handle. A partial torus, standing in the vertical plane, on the side away from
+  // the machine so it breaks the mug's outline against the desk rather than against the
+  // chassis.
+  const handle = new THREE.TorusGeometry(0.03, 0.0065, 5, 12, Math.PI * 1.15);
+  handle.rotateZ(-Math.PI * 0.42);
+  handle.translate(0.052, 0.052, 0);
+  mugShell.push(handle);
+
+  const mugRest = mergeGeometries(mugShell, false) ?? mugBase;
+  mugRest.rotateY(mugTurn);
+  mugRest.translate(mugAt.x, mugAt.y, mugAt.z);
+  parts.push({ name: 'MugFittings', geometry: mugRest, material: 'plastic' });
 
   // Paper stack, leaning.
   const paper: THREE.BufferGeometry[] = [];
