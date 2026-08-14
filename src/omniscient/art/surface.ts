@@ -41,9 +41,16 @@ import { seedFrom } from '../core/rng.js';
  */
 export interface SurfaceMaps {
   map: THREE.Texture;
-  normalMap: THREE.Texture;
-  roughnessMap: THREE.Texture;
-  metalnessMap: THREE.Texture;
+  /**
+   * Null on a flat generator, and that is the point rather than an omission.
+   *
+   * A flat surface is not "a textured surface with a weak normal map" - it is a surface
+   * with no normal map at all, so the material's own roughness scalar and the light
+   * banding do all the work.
+   */
+  normalMap: THREE.Texture | null;
+  roughnessMap: THREE.Texture | null;
+  metalnessMap: THREE.Texture | null;
 }
 
 export interface PaintedMetalOptions {
@@ -55,14 +62,8 @@ export interface PaintedMetalOptions {
   grime?: string;
   seed?: string;
   size?: number;
-  /** Maximum albedo swing either side of `color`, as a fraction. Keep this small. */
-  contrast?: number;
   /** How far in from each edge the paint has been rubbed off, in UV. */
   wear?: number;
-  /** Wrinkle-enamel cell count across a face. Higher = finer crackle. */
-  crackle?: number;
-  /** Normal map strength. */
-  relief?: number;
 }
 
 interface Rgb {
@@ -109,11 +110,41 @@ function textureOf(canvas: HTMLCanvasElement, srgb: boolean): THREE.CanvasTextur
 const CACHE = new Map<string, SurfaceMaps | null>();
 
 /**
- * Crackle-finish painted metal, worn at the edges.
+ * Flat paint, worn at the edges.
  *
- * The look this is after is a piece of field equipment that has been carried by its handle
- * for thirty years: wrinkle enamel over pressed steel, paint polished off every corner and
- * arris, and a tidemark of grime in the lower half where hands and damp have got to it.
+ * This used to generate crackle enamel: a wrinkle-finish cell pattern over the whole
+ * body, fine grain in the albedo, and a normal map to give it micro-relief. It was
+ * convincing and it was wrong, and the reason is worth writing down because §239 did not
+ * make the distinction and cost the project a pass.
+ *
+ * There are two different things called texture. MATERIAL texture - grain, mottle,
+ * crackle - says "this is made of a substance", and it is a realism cue. PAINTERLY
+ * texture - visible strokes following form - says "this image was painted", and it is a
+ * stylisation cue. The reference frames use the second. This generator was producing the
+ * first, which pulls against the style rather than toward it.
+ *
+ * §232 then made it worse rather than better: the contrast budget correctly held the
+ * amplitude low, which left the result too subtle to read as a deliberate surface and too
+ * present to read as clean flat colour. It was paying generation cost, memory and visual
+ * noise to land in the middle of the two things it could have been.
+ *
+ * ## What survives, and the rule that decides it
+ *
+ * Texture earns its place by being EVIDENCE, not by being material. The green body is a
+ * surface and is now one flat colour. The bare metal along the arris is an event -
+ * something happened there, thirty years of a hand on a carrying handle - so it stays.
+ * The grime in the lower half stays as a soft tonal shift because it says the thing has
+ * sat somewhere damp. The crackle said nothing except "this is enamel".
+ *
+ * So wear is authored as a SHAPE rather than a material: a defined band with a ragged but
+ * clean boundary, which you can point at and call rubbed. What it must never be is
+ * speckled and granular, because that is a photograph of metal again by another route.
+ *
+ * No normal map. That is the single most important deletion here - micro-relief under six
+ * lights is what makes a surface read as physically present more than albedo ever does,
+ * and removing it is most of the distance to a flat style on its own. It also lets the
+ * §230 light banding read at full strength, because there is no longer any grain
+ * competing with the band edges to soften them.
  */
 export function paintedMetal(options: PaintedMetalOptions): SurfaceMaps | null {
   const {
@@ -121,14 +152,11 @@ export function paintedMetal(options: PaintedMetalOptions): SurfaceMaps | null {
     worn = '#b9b2a4',
     grime = '#3c3a30',
     seed = color,
-    size = 512,
-    contrast = 0.1,
+    size = 256,
     wear = 0.05,
-    crackle = 56,
-    relief = 0.3,
   } = options;
 
-  const key = JSON.stringify([color, worn, grime, seed, size, contrast, wear, crackle, relief]);
+  const key = `flatpaint:${JSON.stringify([color, worn, grime, seed, size, wear])}`;
   const cached = CACHE.get(key);
   if (cached !== undefined) return cached;
   if (!CAN_PAINT) {
@@ -142,444 +170,132 @@ export function paintedMetal(options: PaintedMetalOptions): SurfaceMaps | null {
   const noiseSeed = seedFrom(seed);
 
   const albedoCanvas = canvasOf(size);
-  const ormCanvas = canvasOf(size);
-  const normalCanvas = canvasOf(size);
-
   const albedoCtx = albedoCanvas.getContext('2d');
-  const ormCtx = ormCanvas.getContext('2d');
-  const normalCtx = normalCanvas.getContext('2d');
-  if (!albedoCtx || !ormCtx || !normalCtx) {
+  if (!albedoCtx) {
     CACHE.set(key, null);
     return null;
   }
 
   const albedo = albedoCtx.createImageData(size, size);
-  const orm = ormCtx.createImageData(size, size);
-  const height = new Float32Array(size * size);
 
   for (let y = 0; y < size; y++) {
     const v = (y + 0.5) / size;
     for (let x = 0; x < size; x++) {
       const u = (x + 0.5) / size;
-      const i = y * size + x;
 
-      // -- Fields ----------------------------------------------------------
-      // Wrinkle cells. `cellEdges` is ~0 on a boundary, so this is a sunken web.
-      const cell = smoothstep(0.0, 0.085, cellEdges(noiseSeed, u, v, crackle));
-      const grain = fbm(noiseSeed + 11, u, v, { frequency: 48, octaves: 3 });
-      const drift = fbm(noiseSeed + 23, u, v, { frequency: 6, octaves: 3 });
-      const ragged = fbm(noiseSeed + 37, u, v, { frequency: 20, octaves: 2 });
-
-      // -- Wear ------------------------------------------------------------
-      // Distance to the nearest UV border is distance to a physical edge, because each
-      // box face owns the whole 0..1 square. A ragged threshold keeps the worn band from
-      // reading as a drawn frame.
+      /**
+       * Distance to the nearest UV border is distance to a physical edge, because each
+       * box face owns the whole 0..1 square. The threshold wanders so the worn band is
+       * not a drawn frame - but it wanders SMOOTHLY, at low frequency. High-frequency
+       * raggedness is what turns a rubbed edge back into speckle.
+       */
       const edge = Math.min(u, 1 - u, v, 1 - v);
-      const band = wear * (0.35 + ragged * 1.5);
-      const rubbed = 1 - smoothstep(band * 0.45, band, edge);
+      const wander = fbm(noiseSeed + 37, u, v, { frequency: 4, octaves: 2 });
+      const band = wear * (0.4 + wander * 1.4);
+      // Hard-ish inner boundary: this is a shape with an edge, not a gradient.
+      const bare = 1 - smoothstep(band * 0.72, band, edge);
 
-      // Chips away from the edges, gated by the large-scale drift so they cluster
-      // instead of peppering the panel evenly.
-      const chip =
-        smoothstep(0.74, 0.88, grain) * smoothstep(0.46, 0.78, drift) * (1 - rubbed);
+      // Grime as one soft tonal shift toward the bottom of a face. No speckle.
+      const settle = smoothstep(0.5, 0.02, v);
+      const dirtiness = clamp01(settle * 0.5) * (1 - bare);
 
-      const bare = clamp01(rubbed * 0.9 + chip);
-
-      // -- Grime -----------------------------------------------------------
-      // v = 0 is the bottom of a box side. Dirt runs down and collects.
-      const settle = smoothstep(0.55, 0.02, v) * (0.3 + drift * 0.85);
-      const dirtiness = clamp01(settle * 0.75) * (1 - bare * 0.6);
-
-      // -- Albedo, inside the contrast budget -------------------------------
-      // Everything except bare metal stays within ±contrast of the base colour. Bare
-      // metal is allowed to leave the group: it is a different substance, and that
-      // discontinuity is exactly what makes wear read as wear rather than as a stain.
-      const shade = 1 + (cell - 0.5) * contrast * 0.55 + (grain - 0.5) * contrast * 0.5;
-      let rgb: Rgb = { r: base.r * shade, g: base.g * shade, b: base.b * shade };
-      rgb = mixRgb(rgb, dirt, dirtiness * 0.55);
+      let rgb: Rgb = { ...base };
+      rgb = mixRgb(rgb, dirt, dirtiness * 0.45);
       rgb = mixRgb(rgb, metal, bare);
 
-      const p = i * 4;
+      const p = (y * size + x) * 4;
       albedo.data[p] = clamp01(rgb.r / 255) * 255;
       albedo.data[p + 1] = clamp01(rgb.g / 255) * 255;
       albedo.data[p + 2] = clamp01(rgb.b / 255) * 255;
       albedo.data[p + 3] = 255;
-
-      // -- Roughness (G) and metalness (B) ----------------------------------
-      // This is where the detail budget is actually spent. Wrinkle troughs hold light
-      // differently from the cell faces, grime is dead flat, and rubbed metal has been
-      // polished by decades of handling.
-      let rough = 0.66 - cell * 0.1 + (grain - 0.5) * 0.14;
-      rough = mix(rough, 0.88, dirtiness);
-      rough = mix(rough, 0.32, bare);
-      const metalness = mix(0.06, 0.82, bare);
-
-      orm.data[p] = 255;
-      orm.data[p + 1] = clamp01(rough) * 255;
-      orm.data[p + 2] = clamp01(metalness) * 255;
-      orm.data[p + 3] = 255;
-
-      // -- Height ------------------------------------------------------------
-      // Cells stand proud, their borders sink, chips are pits.
-      height[i] = cell * 0.3 + grain * 0.12 - chip * 0.7 - rubbed * 0.12;
     }
   }
 
   albedoCtx.putImageData(albedo, 0, 0);
-  ormCtx.putImageData(orm, 0, 0);
 
-  // -- Normals from height, by Sobel ---------------------------------------
-  // Sampling wraps, so the normal map tiles with everything else.
-  const normal = normalCtx.createImageData(size, size);
-  const at = (x: number, y: number): number =>
-    height[((y + size) % size) * size + ((x + size) % size)];
-
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx =
-        at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1) -
-        (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1));
-      const dy =
-        at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1) -
-        (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1));
-
-      // Green-up (OpenGL) convention, which is what three.js expects.
-      const nx = -dx * relief;
-      const ny = -dy * relief;
-      const len = Math.hypot(nx, ny, 1);
-
-      const p = (y * size + x) * 4;
-      normal.data[p] = (nx / len * 0.5 + 0.5) * 255;
-      normal.data[p + 1] = (ny / len * 0.5 + 0.5) * 255;
-      normal.data[p + 2] = (1 / len * 0.5 + 0.5) * 255;
-      normal.data[p + 3] = 255;
-    }
-  }
-  normalCtx.putImageData(normal, 0, 0);
-
+  // Albedo only. No normal, no roughness - the material's own scalars carry those, which
+  // is what "flat" means here.
+  const map = textureOf(albedoCanvas, true);
   const maps: SurfaceMaps = {
-    map: textureOf(albedoCanvas, true),
-    normalMap: textureOf(normalCanvas, false),
-    roughnessMap: textureOf(ormCanvas, false),
-    metalnessMap: textureOf(ormCanvas, false),
+    map,
+    normalMap: null,
+    roughnessMap: null,
+    metalnessMap: null,
   };
   CACHE.set(key, maps);
   return maps;
 }
 
-/**
- * One pixel of a generated surface.
- *
- * `shade` is a multiplier on the base colour and is the only thing that costs value
- * contrast (§232), so generators keep it near 1. Everything else is free detail.
- */
-export interface SurfaceSample {
-  /** Multiplier on the base colour. 1 is the base. */
-  shade: number;
-  /** 0 smooth, 1 completely diffuse. */
-  rough: number;
-  /** Height for the normal pass. Relative units; only gradients matter. */
-  height: number;
-  /** Optional tint to blend toward, and how much. */
-  tint?: { color: Rgb; amount: number };
-}
-
-/**
- * Build a map set from a per-pixel sampler.
- *
- * Extracted so timber, plaster and anything after them do not each re-implement the
- * packing, the Sobel and the tiling wrap. `paintedMetal` predates this and is left alone -
- * it earns its own loop by also carrying metalness and edge-distance wear.
- */
-function buildMaps(
-  size: number,
-  base: Rgb,
-  relief: number,
-  sample: (u: number, v: number) => SurfaceSample
-): SurfaceMaps | null {
-  if (!CAN_PAINT) return null;
-
-  const albedoCanvas = canvasOf(size);
-  const ormCanvas = canvasOf(size);
-  const normalCanvas = canvasOf(size);
-  const albedoCtx = albedoCanvas.getContext('2d');
-  const ormCtx = ormCanvas.getContext('2d');
-  const normalCtx = normalCanvas.getContext('2d');
-  if (!albedoCtx || !ormCtx || !normalCtx) return null;
-
-  const albedo = albedoCtx.createImageData(size, size);
-  const orm = ormCtx.createImageData(size, size);
-  const height = new Float32Array(size * size);
-
-  for (let y = 0; y < size; y++) {
-    const v = (y + 0.5) / size;
-    for (let x = 0; x < size; x++) {
-      const u = (x + 0.5) / size;
-      const i = y * size + x;
-      const s = sample(u, v);
-
-      let rgb: Rgb = { r: base.r * s.shade, g: base.g * s.shade, b: base.b * s.shade };
-      if (s.tint) rgb = mixRgb(rgb, s.tint.color, s.tint.amount);
-
-      const p = i * 4;
-      albedo.data[p] = clamp01(rgb.r / 255) * 255;
-      albedo.data[p + 1] = clamp01(rgb.g / 255) * 255;
-      albedo.data[p + 2] = clamp01(rgb.b / 255) * 255;
-      albedo.data[p + 3] = 255;
-
-      orm.data[p] = 255;
-      orm.data[p + 1] = clamp01(s.rough) * 255;
-      orm.data[p + 2] = 0;
-      orm.data[p + 3] = 255;
-
-      height[i] = s.height;
-    }
-  }
-
-  albedoCtx.putImageData(albedo, 0, 0);
-  ormCtx.putImageData(orm, 0, 0);
-
-  const normal = normalCtx.createImageData(size, size);
-  const at = (x: number, y: number): number =>
-    height[((y + size) % size) * size + ((x + size) % size)];
-
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const dx =
-        at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1) -
-        (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1));
-      const dy =
-        at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1) -
-        (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1));
-
-      const nx = -dx * relief;
-      const ny = -dy * relief;
-      const len = Math.hypot(nx, ny, 1);
-
-      const p = (y * size + x) * 4;
-      normal.data[p] = (nx / len * 0.5 + 0.5) * 255;
-      normal.data[p + 1] = (ny / len * 0.5 + 0.5) * 255;
-      normal.data[p + 2] = (1 / len * 0.5 + 0.5) * 255;
-      normal.data[p + 3] = 255;
-    }
-  }
-  normalCtx.putImageData(normal, 0, 0);
-
-  return {
-    map: textureOf(albedoCanvas, true),
-    normalMap: textureOf(normalCanvas, false),
-    roughnessMap: textureOf(ormCanvas, false),
-    metalnessMap: textureOf(ormCanvas, false),
-  };
-}
-
-export interface NaturalOptions {
+export interface PegboardOptions {
   color: string;
+  /** Hole colour. Near-black; a pegboard hole is a hole. */
+  hole?: string;
   seed?: string;
   size?: number;
-  /** Maximum albedo swing either side of `color`, as a fraction (§232). */
-  contrast?: number;
-  relief?: number;
-  /**
-   * How many times the tile repeats across one 0..1 UV square.
-   *
-   * §239 asks every generator to declare its scale, and this is where that is declared.
-   * Box UVs give every face the whole square whatever its size, so a wall and a mug
-   * receive identical texture coordinates - the repeat is the only thing standing between
-   * plank-sized grain on a coffee cup and thread-sized grain on a wall.
-   */
+  /** Holes across the tile. */
+  pitch?: number;
   repeat?: [number, number];
 }
 
-function applyRepeat(maps: SurfaceMaps | null, repeat: [number, number]): SurfaceMaps | null {
-  if (!maps) return null;
-  for (const texture of [maps.map, maps.normalMap, maps.roughnessMap]) {
-    texture.repeat.set(repeat[0], repeat[1]);
-    texture.needsUpdate = true;
-  }
-  return maps;
-}
-
 /**
- * Sawn timber.
+ * Pegboard, and the one case where a repeating pattern survives the flat pass.
  *
- * Grain is fbm stretched hard along one axis - about twenty to one - which is the whole
- * trick: the same noise that reads as cloud at 1:1 reads as wood the moment it is pulled
- * out sideways. Knots are sparse Worley centres, and they are what stop a plank looking
- * like a smear.
+ * The rule is that texture earns its place by being evidence rather than material, and a
+ * pegboard's holes are neither exactly - they are what the OBJECT IS. Take them away and
+ * it is a brown wall; a workshop with tools hanging on a brown wall has lost the thing
+ * that says the tools hang there.
+ *
+ * So it stays, but it changes register. It used to put all its busyness in a normal map,
+ * which is precisely the micro-relief the flat pass exists to remove - the holes read as
+ * physically drilled under six lights. Now they are painted: flat dark dots in the albedo,
+ * no relief, no roughness. Same information, none of the realism.
  */
-export function timberMaps(options: NaturalOptions): SurfaceMaps | null {
+export function pegboardMaps(options: PegboardOptions): SurfaceMaps | null {
   const {
     color,
+    hole = '#2a2018',
     seed = color,
     size = 256,
-    contrast = 0.13,
-    relief = 0.22,
-    repeat = [2, 1],
-  } = options;
-
-  const key = `timber:${JSON.stringify([color, seed, size, contrast, relief, repeat])}`;
-  const cached = CACHE.get(key);
-  if (cached !== undefined) return cached;
-
-  const noiseSeed = seedFrom(seed);
-  const dark = parseHex('#2a1d12');
-
-  const maps = applyRepeat(
-    buildMaps(size, parseHex(color), relief, (u, v) => {
-      // Stretched along u: the grain runs the length of the board.
-      const grain = fbm(noiseSeed, u * 0.06, v * 3.2, { frequency: 8, octaves: 4 });
-      // Fine fibre on top, so the boundaries between grain bands are not smooth curves.
-      const fibre = fbm(noiseSeed + 31, u * 0.3, v * 9, { frequency: 16, octaves: 2 });
-      /**
-       * Knots, sparse and dark - and a blob, not a line.
-       *
-       * This asked `cellEdges` for years' worth of captures, which is F2 - F1 and is near
-       * zero along cell BOUNDARIES. So the dark mark landed on the web between the cells
-       * instead of at their centres, and every timber surface in the game wore a network
-       * of thin dark lines. It read as cracks in dried mud, and it was diagnosed as a
-       * floor problem and a bench problem before it was diagnosed as this.
-       *
-       * `cellDistance` is F1, which is zero AT the centre. A knot is now a round dark
-       * mark of a stated size - 0.22 cell widths at three cells across the tile, so about
-       * seven per cent of a tile - and the grain BENDS round it, which is what a knot
-       * actually does to a board and is most of what makes one read as a knot rather than
-       * as a stain.
-       */
-      const knotCore = 1 - smoothstep(0.0, 0.22, cellDistance(noiseSeed + 7, u, v, 3));
-      const knotMask =
-        knotCore *
-        smoothstep(0.5, 0.78, fbm(noiseSeed + 13, u, v, { frequency: 2, octaves: 2 }));
-
-      // Rings: the banding that makes it read as cut through growth rather than painted.
-      // Fewer, wider rings, and the fibre pushed hard into the phase rather than added
-      // on top. Evenly spaced bands read as corduroy; wood is irregular, and the
-      // irregularity has to be inside the ring spacing, not sprinkled over it.
-      const rings = Math.abs(Math.sin((grain * 2.6 + fibre * 0.9 + knotMask * 1.7) * Math.PI));
-
-      const band = rings * 0.7 + fibre * 0.3;
-      return {
-        shade: 1 + (band - 0.5) * contrast * 2,
-        // Dense late-growth bands take polish differently from the soft wood between.
-        rough: 0.82 - band * 0.16 + knotMask * 0.1,
-        height: band * 0.2 - knotMask * 0.45,
-        tint: { color: dark, amount: knotMask * 0.55 },
-      };
-    }),
-    repeat
-  );
-
-  CACHE.set(key, maps);
-  return maps;
-}
-
-/**
- * Plaster, or any painted masonry wall.
- *
- * Two scales of mottle and nothing else. A wall is the largest surface in most of these
- * frames and therefore the one where §232 bites hardest: anything with structure at this
- * size becomes a pattern, and a patterned wall pulls the eye off whatever is standing in
- * front of it. This is deliberately almost nothing - it exists to stop a flat fill
- * reading as a flat fill, and it is finished the moment it does.
- */
-export function plasterMaps(options: NaturalOptions): SurfaceMaps | null {
-  const {
-    color,
-    seed = color,
-    size = 256,
-    contrast = 0.075,
-    relief = 0.28,
-    repeat = [2, 2],
-  } = options;
-
-  const key = `plaster:${JSON.stringify([color, seed, size, contrast, relief, repeat])}`;
-  const cached = CACHE.get(key);
-  if (cached !== undefined) return cached;
-
-  const noiseSeed = seedFrom(seed);
-
-  const maps = applyRepeat(
-    buildMaps(size, parseHex(color), relief, (u, v) => {
-      const broad = fbm(noiseSeed, u, v, { frequency: 3, octaves: 3 });
-      const fine = fbm(noiseSeed + 17, u, v, { frequency: 24, octaves: 3 });
-      // A faint trowel direction, so the mottle has a hand in it rather than being noise.
-      const sweep = fbm(noiseSeed + 41, u * 0.35, v * 2.4, { frequency: 6, octaves: 2 });
-
-      const value = broad * 0.55 + sweep * 0.3 + fine * 0.15;
-      return {
-        shade: 1 + (value - 0.5) * contrast * 2,
-        rough: 0.9 + (fine - 0.5) * 0.08,
-        height: fine * 0.22 + sweep * 0.3,
-      };
-    }),
-    repeat
-  );
-
-  CACHE.set(key, maps);
-  return maps;
-}
-
-/**
- * Perforated hardboard - pegboard.
- *
- * §230's note on the repair-shop reference is "the pegboard wall as dense mid-value texture
- * behind a light-value hero prop", and that phrase is a specification: the board's job is
- * to be BUSY and to stay in one value band, so that the Kestrel-3 in front of it separates
- * on value without the wall having to be dark.
- *
- * Which makes this the strictest §232 case in the file. A hole is a hard dark disc, and a
- * grid of hard dark discs is pure value contrast at the exact frequency the eye is most
- * sensitive to. Two things keep it inside the budget: the holes are drawn mostly into the
- * NORMAL and roughness - a real pegboard hole is a shadow, and there are no shadows here,
- * so a shallow albedo dip plus a deep normal dimple is the honest substitute - and the dip
- * itself is capped at `contrast`. At gameplay distance the grid resolves to about four
- * pixels a hole and reads as tooth rather than as dots, which is the intent.
- */
-export function pegboardMaps(
-  options: NaturalOptions & { /** Holes across one tile. */ pitch?: number }
-): SurfaceMaps | null {
-  const {
-    color,
-    seed = color,
-    size = 256,
-    contrast = 0.16,
-    relief = 0.5,
-    repeat = [6, 3],
     pitch = 16,
+    repeat = [8.5, 4],
   } = options;
 
-  const key = `pegboard:${JSON.stringify([color, seed, size, contrast, relief, repeat, pitch])}`;
+  const key = `flatpeg:${JSON.stringify([color, hole, seed, size, pitch, repeat])}`;
   const cached = CACHE.get(key);
   if (cached !== undefined) return cached;
+  if (!CAN_PAINT) {
+    CACHE.set(key, null);
+    return null;
+  }
 
-  const noiseSeed = seedFrom(seed);
+  const canvas = canvasOf(size);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    CACHE.set(key, null);
+    return null;
+  }
 
-  const maps = applyRepeat(
-    buildMaps(size, parseHex(color), relief, (u, v) => {
-      // Distance to the nearest hole centre, in hole widths. The grid is regular because
-      // pegboard is a manufactured product - this is the one surface in the game where
-      // mathematical perfection is correct.
-      const gx = u * pitch;
-      const gy = v * pitch;
-      const dx = gx - Math.floor(gx) - 0.5;
-      const dy = gy - Math.floor(gy) - 0.5;
-      const hole = 1 - smoothstep(0.15, 0.26, Math.hypot(dx, dy));
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, size, size);
 
-      // Hardboard itself: fine, dense, directionless.
-      const fibre = fbm(noiseSeed, u, v, { frequency: 42, octaves: 3 });
-      const stain = fbm(noiseSeed + 19, u, v, { frequency: 4, octaves: 3 });
+  // Radius from the pitch rather than a constant, so changing the pitch does not silently
+  // change how much of the board is hole.
+  const step = size / pitch;
+  const radius = step * 0.17;
+  ctx.fillStyle = hole;
+  for (let row = 0; row < pitch; row++) {
+    for (let col = 0; col < pitch; col++) {
+      ctx.beginPath();
+      ctx.arc((col + 0.5) * step, (row + 0.5) * step, radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
-      return {
-        shade: 1 - hole * contrast * 2.4 + (fibre - 0.5) * 0.05 + (stain - 0.5) * contrast * 0.5,
-        // Board is smooth from handling, the holes' inner edges are not.
-        rough: 0.74 + hole * 0.16 + (fibre - 0.5) * 0.1,
-        // Where the budget is actually spent. The hole is a pit, and a deep one.
-        height: -hole * 1.0 + fibre * 0.05,
-      };
-    }),
-    repeat
-  );
+  const map = textureOf(canvas, true);
+  map.repeat.set(repeat[0], repeat[1]);
+  map.needsUpdate = true;
 
+  const maps: SurfaceMaps = { map, normalMap: null, roughnessMap: null, metalnessMap: null };
   CACHE.set(key, maps);
   return maps;
 }

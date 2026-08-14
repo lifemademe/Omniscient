@@ -57,7 +57,7 @@
 import * as THREE from 'three';
 
 import { applyPaintBanding } from './painterly.js';
-import { pegboardMaps, plasterMaps, timberMaps } from './surface.js';
+import { pegboardMaps } from './surface.js';
 
 /**
  * Human world - warm, imperfect, lived in (§9). Ordered dark to light so the value
@@ -283,33 +283,47 @@ export const MAT = {
 } as const;
 
 /**
- * §239 - the surface pass, applied to the family rather than to objects.
+ * §239 REVISED - the flat pass.
  *
- * §187 is explicit that there is one small shared material family, so texturing a wall
- * means texturing MAT.wall, not texturing a wall. Every room in the game inherits it at
- * once, which is the point and also the risk - so the repeats below are chosen per
- * material rather than shared, because box UVs hand a mug and a wall the same 0..1 square
- * and only the repeat stands between them.
+ * The family used to be dressed in generated timber grain and plaster mottle. It is not
+ * any more, and the deletion is the point rather than a regression.
  *
- * Applied by mutation after construction rather than at the literal, so the material
- * family stays readable as a list of colours and roughness values - which is what it is
- * for - and the textures are an overlay on that rather than a second way to author it.
+ * Material texture - grain, mottle, crackle - says "this is made of a substance", which
+ * is a realism cue, and the reference frames this project is aiming at are stylised. The
+ * generators were producing exactly the kind of surface detail that pulls AWAY from the
+ * target. §232's contrast budget then trapped the result in the middle: too subtle to
+ * read as a deliberate surface, too present to read as clean flat colour, and paying
+ * memory and generation cost for the privilege. On Ileana's walls the plaster mottle did
+ * not read as plaster at all - it read as DAMP, and made a dressed room look grimy.
  *
- * Headless callers get nothing and lose nothing: the generators return null without a
- * canvas and this loop skips them, so the harnesses keep importing the palette.
+ * What flat costs, and where it is paid: with no grain breaking them up, large planes now
+ * need GEOMETRY to break them - skirting, plank seams, panel lines, a dado. That is the
+ * real work in this change; deleting the generators was the easy half.
+ *
+ * What flat buys: the §230 light banding reads at full strength, because nothing is
+ * competing with the band edges any more. Flat colour and stepped light are the same
+ * look, and they reinforce each other.
+ *
+ * What still gets a map, by the rule that texture must be EVIDENCE and not material:
+ *
+ *   - The transmitter, whose worn arris and grime are thirty years of one pair of hands
+ *     and whose corrosion is the answer to a mission (§131).
+ *   - The pegboard, whose holes are what the object IS - now painted rather than
+ *     embossed, so they carry the information without the micro-relief.
+ *   - Every decal: the rating plate, the OBN sheets, the box labels, the tide line. Those
+ *     are text and evidence, and were never material texture in the first place.
  */
 function dress(
   material: THREE.MeshStandardMaterial,
-  maps: ReturnType<typeof timberMaps>
+  maps: ReturnType<typeof pegboardMaps>
 ): void {
   if (!maps) return;
   material.map = maps.map;
   material.normalMap = maps.normalMap;
   material.roughnessMap = maps.roughnessMap;
-  // The maps carry the variation now, so the scalars become multipliers and have to be
-  // neutral - a base colour left in place would tint the map on top of itself.
+  // The map carries the colour now, so the scalar must be neutral or it tints its own
+  // texture. Roughness stays on the material, which is what makes this flat.
   material.color = new THREE.Color('#ffffff');
-  material.roughness = 1;
   material.needsUpdate = true;
 }
 
@@ -324,29 +338,6 @@ for (const material of Object.values(MAT)) {
   if (material instanceof THREE.MeshStandardMaterial) applyPaintBanding(material);
 }
 
-// Timber runs along the board, so the repeat is asymmetric: more tiles across the length
-// than across the width, or the grain comes out square and reads as fabric.
-dress(MAT.timber, timberMaps({ color: HUMAN.timber, seed: 'timber', repeat: [2, 1] }));
-dress(MAT.timberLit, timberMaps({ color: HUMAN.timberLit, seed: 'timber-lit', repeat: [2, 1] }));
-dress(
-  MAT.timberDark,
-  timberMaps({ color: '#5a4430', seed: 'timber-dark', contrast: 0.11, repeat: [2, 1] })
-);
-// Boards run one way, so the repeat is strongly asymmetric: a couple of tiles along their
-// length and sixteen across, which on a six-metre room is a board about a hand wide.
-dress(
-  MAT.floorboard,
-  timberMaps({ color: '#6a5136', seed: 'floorboard', contrast: 0.09, repeat: [3, 16] })
-);
-// Walls get the largest repeat of anything, because they are the largest surfaces and a
-// wall whose mottle is the size of a hand reads as wallpaper.
-dress(MAT.wall, plasterMaps({ color: HUMAN.wall, seed: 'wall', repeat: [5, 3] }));
-dress(
-  MAT.ground,
-  plasterMaps({ color: HUMAN.ground, seed: 'ground', contrast: 0.09, repeat: [6, 5] })
-);
-// The board is 3.4m x 1.6m and the holes are at 25mm centres, so the repeat is set so one
-// tile is about 40cm: sixteen holes across a tile, eight and a half tiles across the wall.
 dress(
   MAT.pegboard,
   pegboardMaps({ color: '#7d6a4c', seed: 'pegboard', repeat: [8.5, 4], pitch: 16 })

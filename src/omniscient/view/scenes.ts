@@ -20,6 +20,8 @@ import { decorMesh } from '../art/mesh.js';
 import { ACCENT, LIGHT, MAT } from '../art/palette.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
 import { createRng, jitter, seedFrom } from '../core/rng.js';
+
+import type { Rng } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
 import { createFieldBackdrop, createNightBackdrop } from '../geometry/backdrop.js';
 import { createClump } from './../geometry/foliage.js';
@@ -46,6 +48,53 @@ const meshOf = decorMesh;
 function addContact(scene: ContactScene, name: string, placement: CharacterPlacement): void {
   const contact = placeCharacter(name, placement);
   scene.registerProp('contact', contact.root, { idle: contact.idle });
+}
+
+/**
+ * Plank seams, as geometry.
+ *
+ * This is the bill for the flat pass. Wood grain used to break up a floor; with the grain
+ * gone a floor is one uninterrupted plane, and a large flat plane reads as a missing
+ * texture rather than as a style. The fix is not to put the noise back - it is to break
+ * the plane with the thing that actually divides a real floor, which is the joint between
+ * one board and the next.
+ *
+ * Thin dark slabs laid proud of the surface rather than grooves cut into it: a groove
+ * needs a shadow to read and this project has no cast shadows, so a groove is invisible
+ * and a raised seam is not. Slightly irregular spacing, because a floor of perfectly
+ * even boards is the same sterility the grain was hiding.
+ */
+function plankSeams(
+  rng: Rng,
+  options: {
+    /** Centre of the run. */
+    at: THREE.Vector3;
+    /** Total width across the boards, and length along them. */
+    width: number;
+    length: number;
+    /** Nominal board width. Actual spacing wanders either side of it. */
+    board: number;
+    /** True when boards run along z; false for along x. */
+    alongZ?: boolean;
+  }
+): THREE.BufferGeometry {
+  const { at, width, length, board, alongZ = true } = options;
+  const pieces: THREE.BufferGeometry[] = [];
+
+  for (let offset = -width / 2 + board; offset < width / 2 - 0.01; offset += board) {
+    const wander = jitter(rng, board * 0.12);
+    const seam = alongZ
+      ? new THREE.BoxGeometry(0.012, 0.004, length)
+      : new THREE.BoxGeometry(length, 0.004, 0.012);
+    seam.translate(
+      at.x + (alongZ ? offset + wander : 0),
+      at.y,
+      at.z + (alongZ ? 0 : offset + wander)
+    );
+    pieces.push(seam);
+  }
+
+  return mergeGeometries(pieces, false) ?? pieces[0];
 }
 
 /**
@@ -310,7 +359,6 @@ function buildRepairShop(scene: ContactScene): void {
         grime: '#3a3a2e',
         seed: 'kestrel-3-shell',
         wear: 0.055,
-        crackle: 88,
       })
     )
   );
@@ -1471,6 +1519,22 @@ function buildClearedHouse(scene: ContactScene): void {
   const floor = new THREE.BoxGeometry(7, 0.1, 6);
   floor.translate(0, -0.05, 0);
   scene.registerProp('floor', meshOf('Floor', floor, MAT.floorboard));
+
+  // Boards, running toward the window. See plankSeams: this is what the deleted grain
+  // used to be doing, done as geometry so it survives a flat material.
+  scene.registerProp(
+    'floor-seams',
+    meshOf(
+      'FloorSeams',
+      plankSeams(rng, {
+        at: new THREE.Vector3(0, 0.001, 0),
+        width: 7,
+        length: 6,
+        board: 0.19,
+      }),
+      MAT.timberDark
+    )
+  );
 
   /**
    * The back wall, built around a doorway, and a side wall so the room has a corner.
