@@ -104,10 +104,36 @@ function plankSeams(
  * "show me the back" is an actual reveal rather than a line of dialogue (§131).
  */
 function buildRepairShop(scene: ContactScene): void {
+  const rng = createRng(seedFrom('mirela-shop'));
+
   // Floor and back wall - background mass, not detail (§186).
   const floor = new THREE.BoxGeometry(8, 0.1, 6);
   floor.translate(0, -0.05, 0);
   scene.registerProp('floor', meshOf('Floor', floor, MAT.ground));
+
+  /**
+   * Board joints, running with the bench.
+   *
+   * The other half of the flat pass's bill. This floor is concrete-coloured and eight
+   * metres of it fills the bottom of every shot in the room with one unbroken value - and
+   * with the plaster generator gone there is nothing left to break it. Wider spacing than
+   * Ileana's floorboards, so it reads as a plank deck over a workshop floor rather than as
+   * a domestic room.
+   */
+  scene.registerProp(
+    'floor-seams',
+    meshOf(
+      'FloorSeams',
+      plankSeams(rng, {
+        at: new THREE.Vector3(0, 0.001, 0),
+        width: 8,
+        length: 6,
+        board: 0.34,
+        alongZ: false,
+      }),
+      MAT.timberDark
+    )
+  );
 
   const walls: THREE.BufferGeometry[] = [];
   const back = new THREE.BoxGeometry(8, 3.2, 0.15);
@@ -671,14 +697,30 @@ function buildBeaconMast(scene: ContactScene): void {
   const deckPlate = new THREE.BoxGeometry(1.5, 0.05, 1.1);
   deckPlate.translate(0.25, platformY, 0.42);
   platformPieces.push(deckPlate);
+  /**
+   * A guardrail at 1.05m, not 0.52m.
+   *
+   * It was knee height on a platform two metres up a lattice - which put the top rail at
+   * Tomas's shin and made a man standing at the edge of a drop read as standing behind a
+   * kerb. A guardrail is 1.1m by every code there has ever been, and the reason is that a
+   * person leans on it, which is exactly what Tomas is doing while he looks at his beacon.
+   *
+   * Found by measuring the diorama props against real dimensions after the workstation
+   * turned out to be at twice life size. It was the only other thing that was wrong.
+   */
   for (let i = 0; i < 5; i++) {
-    const rail = new THREE.BoxGeometry(0.035, 0.5, 0.035);
-    rail.translate(-0.4 + i * 0.33, platformY + 0.27, 0.94);
+    const rail = new THREE.BoxGeometry(0.035, 1.0, 0.035);
+    rail.translate(-0.4 + i * 0.33, platformY + 0.52, 0.94);
     platformPieces.push(rail);
   }
-  const handrail = new THREE.BoxGeometry(1.5, 0.04, 0.04);
-  handrail.translate(0.25, platformY + 0.52, 0.94);
+  const handrail = new THREE.BoxGeometry(1.5, 0.045, 0.045);
+  handrail.translate(0.25, platformY + 1.05, 0.94);
   platformPieces.push(handrail);
+
+  // A mid rail, which is the other half of what makes a barrier read as a barrier.
+  const midRail = new THREE.BoxGeometry(1.5, 0.03, 0.03);
+  midRail.translate(0.25, platformY + 0.54, 0.94);
+  platformPieces.push(midRail);
   scene.registerProp(
     'platform',
     meshOf('Platform', mergeGeometries(platformPieces, false) ?? deckPlate, MAT.steel)
