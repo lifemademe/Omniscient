@@ -150,6 +150,10 @@ function surfaceFor(
     underlayer: [colors.underlayer, 0.9],
     hair: [colors.hair, 0.95],
     boots: [PERSON.boot, 0.75],
+    // Fixed, never seeded. Eye colour is not a characterisation channel at this scale -
+    // it is the one part of the figure that has to read as dark at any distance, and a
+    // seeded roll that handed somebody pale eyes would undo the whole point of having any.
+    eyes: [PERSON.eye, 0.6],
   }[material] as [string, number];
 
   // Banded like the family. The characters are chamfered slabs, and the bevel facets

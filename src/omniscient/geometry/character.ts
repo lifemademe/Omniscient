@@ -48,7 +48,7 @@ export interface CharacterParams {
 }
 
 /** Which of the five surfaces a piece of a body belongs to. */
-export type BodyMaterial = 'skin' | 'garment' | 'underlayer' | 'hair' | 'boots';
+export type BodyMaterial = 'skin' | 'garment' | 'underlayer' | 'hair' | 'boots' | 'eyes';
 
 /** One merged run of geometry, and the material it wants. Mirrors `RoomPart`. */
 export interface CharacterPiece {
@@ -227,6 +227,7 @@ export function createCharacter(params: CharacterParams): CharacterParts {
 
   // Above the hip.
   const skin: THREE.BufferGeometry[] = [];
+  const eyes: THREE.BufferGeometry[] = [];
   const cloth: THREE.BufferGeometry[] = [];
   const under: THREE.BufferGeometry[] = [];
   // Below it, and staying where it is put.
@@ -239,6 +240,32 @@ export function createCharacter(params: CharacterParams): CharacterParts {
   head.rotateX(lean * 0.4);
   head.translate(jitter(rng, 0.006), headY, torsoDepth * 0.06);
   skin.push(head);
+
+  /**
+   * Two dark rectangles, and nothing else.
+   *
+   * §235 said no faces, and the new reference sheet reverses that: those figures read as
+   * PEOPLE at a glance, and the reason is two dark blocks anchoring the head. They are no
+   * less stylised for it. A head with eyes has a front, a direction of attention and
+   * somewhere for the viewer to look - the hair cap and the coat placket were both fixes
+   * for the absence of exactly that.
+   *
+   * Deliberately the whole face: no brow, no mouth, no nose. The moment a third feature
+   * arrives the head stops being a block with eyes and starts being a bad sculpt, and the
+   * blocky style is the thing being protected here, not abandoned.
+   *
+   * Set proud of the face plane rather than inset, because a recess needs a shadow to
+   * read and this project has none - contact occlusion is screen-space and far too subtle
+   * at this scale.
+   */
+  const faceZ = torsoDepth * 0.06 + headHeight * 0.41;
+  const eyeW = headW * 0.17;
+  for (const side of [-1, 1] as const) {
+    const eye = slab(eyeW, headHeight * 0.13, headHeight * 0.05, eyeW * 0.2);
+    eye.rotateX(lean * 0.4);
+    eye.translate(side * headW * 0.23, headY + headHeight * 0.05, faceZ);
+    eyes.push(eye);
+  }
 
   const neck = limb(limbThick * 0.9, headHeight * 0.3, limbThick * 0.9, [0, shoulderY + headHeight * 0.06, 0]);
   skin.push(neck);
@@ -455,6 +482,7 @@ export function createCharacter(params: CharacterParams): CharacterParts {
       ...collect('garment', cloth, -pivotY),
       ...collect('underlayer', under, -pivotY),
       ...collect('hair', hairPieces, -pivotY),
+      ...collect('eyes', eyes, -pivotY),
     ],
     lower: [...collect('garment', legs, 0), ...collect('boots', boots, 0)],
     hipHeight: pivotY,

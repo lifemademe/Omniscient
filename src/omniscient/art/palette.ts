@@ -127,6 +127,8 @@ export const PERSON = {
   /** Aprons, undershirts - the lighter mass that separates torso from arms. */
   underlayer: ['#b3a58a', '#9c937f', '#c2b79c'],
   boot: '#2e2723',
+  /** Eyes. Near-black, so they hold at any distance and in any of these rooms. */
+  eye: '#241f1c',
   belt: '#4a3529',
 } as const;
 
