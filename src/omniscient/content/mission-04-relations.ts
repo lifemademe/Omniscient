@@ -105,34 +105,66 @@ export const MISSION_04: MissionDefinition = {
     },
   ],
 
+  /**
+   * Hints, rewritten after a playtest.
+   *
+   * The first set had one that talked about Mirela's shop - true, and completely useless
+   * here. §106 is explicit that a hint surfaces what is *observable*, and §131 that the
+   * environment carries the information the request needs. A hint that tells you about a
+   * different request tells you nothing about this one, and the player is left holding a
+   * fact with nowhere to put it.
+   *
+   * These are the things in this room that bear on this problem, and the last of them is
+   * the one that matters: while the board is up, the player needs to re-read what she
+   * actually said, and scrollback is not a place you can look things up.
+   */
   hints: [
     {
       id: 'hint-box',
-      summary: 'A shoebox of **photographs** on the table, names pencilled on the backs.',
+      summary: 'A shoebox of **photographs**, names pencilled on the backs.',
       detail:
-        'Some of the pencil has gone silver with age. The hand changes about halfway ' +
-        'through the box - two different people labelled these, years apart, and neither ' +
-        'of them wrote down how anybody was related. They already knew.',
+        'The pencil has gone silver on the older ones. Two different hands wrote these, ' +
+        'years apart, and neither of them put down how anybody was related. They did not ' +
+        'need to. They already knew.',
       keywords: ['photographs', 'names', 'box'],
       cue: 'prop.highlight:photo-box',
     },
     {
       id: 'hint-tideline',
-      summary: 'The same **flood** line on the wall here as in Mirela’s shop.',
+      summary: 'A dark line runs round the wall, about a hand off the floor.',
       detail:
-        'A dark band about a hand off the floor - a different sea, a different spring, ' +
-        'and the mark sits at exactly the height it does in a repair shop OMNISCIENT_ ' +
-        'has already stood in. Whatever took her floor took this family’s papers.',
-      keywords: ['flood', 'water', 'papers'],
+        'The **water** has been in this house. It is the same mark you find on any wall ' +
+        'down here, and it is the reason there is no **paper** left to check her against ' +
+        '- what was on the bottom shelf of the parish office went the same way.',
+      keywords: ['water', 'paper', 'flood'],
     },
     {
       id: 'hint-letters',
-      summary: 'A short stack of **letters**, addressed and unsent.',
+      summary: 'Four **letters**, stamped, with nowhere to send them.',
       detail:
-        'Four envelopes, stamped, no names on them yet. She has written the same thing ' +
-        'four times and stopped at the part where you put down who it is going to.',
-      keywords: ['letters', 'write', 'funeral'],
+        'She has written the same thing out four times and stopped at the line where the ' +
+        'name goes. Four envelopes for a family she has not finished counting.',
+      keywords: ['letters', 'write', 'family'],
       revealedBy: 'why',
+    },
+    {
+      /**
+       * The working note. Everything she said about each name, in one place.
+       *
+       * This exists because of what the board asks for. Holding five statements at once is
+       * the puzzle, but hunting for them in the scrollback is not - that is a chore
+       * wearing the puzzle's coat, and it is what makes a good problem feel unfair.
+       */
+      id: 'hint-said',
+      summary: 'What Ileana has said about each **name**.',
+      detail:
+        'Petra - her mother’s sister.\n' +
+        'Andrei - Petra’s boy.\n' +
+        'Sofia - her mother’s mother.\n' +
+        'Grigore - Sofia was married to him.\n' +
+        'Marta - her brother’s girl.',
+      keywords: ['name', 'names'],
+      revealedBy: 'names',
     },
   ],
 
@@ -197,11 +229,19 @@ export const MISSION_04: MissionDefinition = {
     {
       id: 'open',
       tempo: Tempo.Think,
+      /**
+       * She talks. She does not compose.
+       *
+       * The first pass at this had her saying things like "it comes apart in my hands",
+       * which is a line from a novel and not a thing a tired woman says on a bad phone
+       * line. Grief in plain words is flatter and shorter than grief in good ones, and
+       * every mission in this game is under the same rule: short words, no images.
+       */
       say:
-        'My grandmother died on Tuesday. I am in her house now and I have to write to ' +
-        'the family, and I have got as far as the envelopes. I know all of these ' +
-        'people. I have known them my whole life. I sit down to put it in order and it ' +
-        'comes apart in my hands.',
+        'My grandmother died on Tuesday. I am at her house and I have to write to the ' +
+        'family before it goes in the paper. I have the envelopes ready. But I keep ' +
+        'getting the names wrong, because I have never had to sit down and say out loud ' +
+        'how we are all joined up. I know these people. I just cannot get them in order.',
       learn: [FACT_NAMES_ON_PHOTOGRAPHS],
       suggest: ['tell me the names', 'why does it matter now', 'what happened to the papers'],
       on: {
@@ -231,10 +271,10 @@ export const MISSION_04: MissionDefinition = {
       id: 'papers',
       tempo: Tempo.Think,
       say:
-        'Gone. The spring the water came up over the road it got into the parish office ' +
-        'and everything on the bottom shelf turned to porridge. Births, marriages, all ' +
-        'of it. They dried what they could on the railings and most of it came back ' +
-        'blank. So there is no list. There is me, and there is a box of photographs.',
+        'Gone. The water came up over the road one spring and got into the parish office. ' +
+        'Everything on the bottom shelf was ruined - births, marriages, all of it. So ' +
+        'there is no list anywhere to check me against. There is me, and there is a box ' +
+        'of photographs with names on the back.',
       suggest: ['tell me the names', 'why does it matter now'],
       on: {
         LIST_NAMES: { to: 'names' },
@@ -247,10 +287,10 @@ export const MISSION_04: MissionDefinition = {
       id: 'why',
       tempo: Tempo.Think,
       say:
-        'Because somebody has to be told. There is a way it is done here - you write to ' +
-        'the family before it is in the paper, so they hear it from a person. I have ' +
-        'four envelopes written out and I cannot put a name on one of them without ' +
-        'being sure. I would rather send none than send one to the wrong door.',
+        'Because they have to be told properly. Here you write to the family first, so ' +
+        'they hear it from a person and not off the front page. I have four envelopes ' +
+        'ready. I am not putting a name on one until I am sure. A letter like that at ' +
+        'the wrong door is a horrible thing to do to somebody.',
       /**
        * Only one chip, and that is structural rather than stylistic.
        *
@@ -281,8 +321,8 @@ export const MISSION_04: MissionDefinition = {
       tempo: Tempo.Respond,
       say:
         'To everyone? Half these people are dead. You want me to put a letter through a ' +
-        'door and have it sit on the mat until somebody notices. No. I would rather take ' +
-        'a week over it and get it right. Ask me about them properly.',
+        'door and leave it lying on the mat. No. I will take a week over it and get it ' +
+        'right. Ask me about them properly.',
       suggest: ['tell me the names', 'why does it matter now'],
       on: {
         LIST_NAMES: { to: 'names' },
@@ -302,10 +342,11 @@ export const MISSION_04: MissionDefinition = {
       id: 'names',
       tempo: Tempo.Think,
       say:
-        'Right. Petra first - Petra was my mother’s sister. She had one boy, ' +
-        'Andrei. Then my mother’s mother, that is Sofia, and Sofia was married to ' +
-        'Grigore. And Marta, who is my brother’s girl. That is everybody I have an ' +
-        'address for. Now put them where they go, because I cannot.',
+        'Right. Petra first. Petra was my mother’s sister. She had one boy, Andrei. ' +
+        'Then my mother’s mother, that is Sofia, and Sofia was married to Grigore. And ' +
+        'Marta, who is my brother’s girl. That is everybody I have an address for.\n\n' +
+        'Now put them where they go, because I cannot. If you lose track, ask me again ' +
+        'and I will read them back.',
       suggest: ['go back over it'],
       board: {
         prompt: 'Put each of them where they belong to Ileana.',
@@ -326,11 +367,10 @@ export const MISSION_04: MissionDefinition = {
       id: 'solved',
       tempo: Tempo.Respond,
       say:
-        'That is it. That is them. Say it again - aunt, cousin, grandmother, ' +
-        'grandfather, niece. I have been going round that for two days and you have laid ' +
-        'it out flat.\n\nAnd there are five. I only wrote four envelopes. I have been ' +
-        'forgetting Marta for two days because she is a child, and she is going to be ' +
-        'the one who remembers all of this longest.',
+        'That is it. That is them. Aunt, cousin, grandmother, grandfather, niece. Two ' +
+        'days I have been going round and round that.\n\nAnd there are five. I only ' +
+        'wrote four envelopes. I kept leaving Marta out because she is a child - and she ' +
+        'will be the one who remembers all this the longest.',
       outcome: {
         kind: OutcomeKind.Solved,
         say: 'Ileana has five names and five envelopes.',

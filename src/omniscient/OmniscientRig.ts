@@ -20,7 +20,7 @@ import { MISSION_04 } from './content/mission-04-relations.js';
 import { createScreenGlass } from './art/glass.js';
 import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
-import { createSignals, MIRELA_SIGNAL } from './content/signals.js';
+import { createSignals, MIRELA_SIGNAL, REVEALED_AFTER_FIRST } from './content/signals.js';
 import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
 import { GlobeView, SignalState } from './crt/GlobeView.js';
@@ -718,9 +718,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.session.start(request.mission, request.contact);
   }
 
+  /**
+   * Move a signal to a new state, and put it on the globe if it was not there yet.
+   *
+   * A signal being given a state is the moment it enters the fiction, so un-hiding here
+   * rather than at each call site means a future request cannot be added and then be
+   * invisible because somebody forgot the second line.
+   */
   private setSignalState(signalId: string, state: SignalState): void {
     const signal = this.signals.find((s) => s.id === signalId);
-    if (signal) signal.state = state;
+    if (!signal) return;
+    signal.state = state;
+    signal.hidden = false;
   }
 
   /**
@@ -800,6 +809,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // chain, visible before the player knows why.
     const resolvedId = this.queue[this.queueIndex - 1]?.mission.contactId;
     if (resolvedId) this.setSignalState(resolvedId, SignalState.Resolved);
+
+    // The world opens up after the first request, not before it. §52 still gets its
+    // tease; the player just gets to learn what the globe is for on an empty one first.
+    if (this.queueIndex === 1) {
+      for (const signal of this.signals) {
+        if (REVEALED_AFTER_FIRST.includes(signal.id)) signal.hidden = false;
+      }
+    }
 
     const next = this.queue[this.queueIndex];
     if (next) {

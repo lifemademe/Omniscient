@@ -77,14 +77,36 @@ export const MISSION_03: MissionDefinition = {
    * request where nobody has to think.
    */
   hints: [
+    /**
+     * Rewritten after a playtest: somebody finished this request and still could not say
+     * why one side was dying.
+     *
+     * The hints were all true and all stopped one step short. They said which rows, and
+     * when, and that the water was fine - and never once said what a pale seedling is
+     * actually short of. §106 says a hint surfaces what is observable, not the diagnosis,
+     * and the colour of a leaf IS observable. Naming it is the difference between a
+     * player who solves this and a player who guesses it.
+     */
     {
       id: 'hint-side',
-      summary: 'Only one side is dying',
+      summary: 'Only one **side** is dying, and the line is straight',
       detail:
         'The rows on one side are thin and pale. The rows on the other side, in the same '
-        + 'soil and on the same water, are fine. Whatever this is, it stops halfway across.',
-      keywords: ['side', 'rows'],
+        + 'soil and on the same water, are fine. The change happens over about a hand’s '
+        + 'width, straight down the middle of the tunnel. Nothing that comes up through '
+        + 'the ground stops in a straight line.',
+      keywords: ['side', 'rows', 'line'],
       cue: 'camera.pan:tunnel-rows',
+    },
+    {
+      id: 'hint-pale',
+      summary: 'They are not wilted. They are **pale** and stretched',
+      detail:
+        'A plant short of water goes limp and browns at the edge. These are none of that '
+        + '- they are upright, thin, long between the leaves, and the green has gone out '
+        + 'of them. That is what a seedling looks like when it is reaching for **light** '
+        + 'it cannot find.',
+      keywords: ['pale', 'light', 'shade'],
     },
     {
       id: 'hint-time',
@@ -104,11 +126,13 @@ export const MISSION_03: MissionDefinition = {
     },
     {
       id: 'hint-tree',
-      summary: 'There is a tree over the eastern wall',
+      summary: 'A **tree** stands over the wall on the failing side',
       detail:
-        'A big tree stands just beyond the tunnel on the failing side. Its crown reaches '
-        + 'out over the plastic, and its shade lies right along the dying rows.',
-      keywords: ['tree', 'shade'],
+        'Its crown reaches out over the tunnel, and its shade lies along the dying rows '
+        + 'and stops where they stop. The edge of the shade and the edge of the damage '
+        + 'are the same line. **Cut** the low limbs back and the light lands on those '
+        + 'rows again.',
+      keywords: ['tree', 'shade', 'cut'],
       cue: 'prop.highlight:neighbour-tree',
       // Only visible once somebody has looked outside rather than at the equipment.
       revealedBy: 'pattern-found',
@@ -288,7 +312,7 @@ export const MISSION_03: MissionDefinition = {
         'tunnel. Same soil. Same water. Same seed, same day.',
       suggest: ['look outside the tunnel', 'check the water'],
       on: {
-        LOOK_OUTSIDE: { to: 'outside', environment: 'prop.highlight:neighbour-tree' },
+        LOOK_OUTSIDE: { to: 'outside', environment: 'prop.highlight:shade' },
         CHECK_WATER: { to: 'water-fine' },
         CHECK_POWER: { to: 'power-fine' },
         CUT_BACK: { to: 'outside', environment: 'prop.highlight:neighbour-tree' },

@@ -35,12 +35,34 @@ const BOARD_CSS = `
   border-top: 1px solid rgba(127, 224, 138, 0.22);
   background: rgba(6, 14, 9, 0.5);
 }
+.omni-board__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
 .omni-board__prompt {
   font-size: 12px;
   letter-spacing: 0.06em;
   color: #9fd8a8;
   text-transform: uppercase;
 }
+.omni-board__fold {
+  padding: 2px 10px;
+  border: 1px solid rgba(127, 224, 138, 0.4);
+  border-radius: 3px;
+  background: transparent;
+  color: rgba(207, 233, 210, 0.85);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.omni-board__fold:hover { border-color: rgba(127, 224, 138, 0.8); }
+.omni-board--folded .omni-board__stage,
+.omni-board--folded .omni-board__foot { display: none; }
 /* The wires are drawn on a layer behind the boxes, sized to the grid. */
 .omni-board__stage { position: relative; }
 .omni-board__wires {
@@ -160,9 +182,32 @@ export class BoardPanel {
     this.element = document.createElement('div');
     this.element.className = 'omni-board';
 
+    /**
+     * A head row with a fold control.
+     *
+     * The board had no way to put it down. A playtester could not find one and said so,
+     * which is fair: a panel that appears on its own, covers the conversation and offers
+     * no way out is a modal dialog pretending not to be one. Folding leaves the wiring
+     * exactly where it was - this is getting it out of the way, not cancelling it.
+     */
+    const head = document.createElement('div');
+    head.className = 'omni-board__head';
+
     const prompt = document.createElement('div');
     prompt.className = 'omni-board__prompt';
-    this.element.appendChild(prompt);
+    head.appendChild(prompt);
+
+    this.fold = document.createElement('button');
+    this.fold.className = 'omni-board__fold';
+    this.fold.type = 'button';
+    this.fold.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      this.folded = !this.folded;
+      if (this.view) this.refresh(this.view);
+    });
+    head.appendChild(this.fold);
+
+    this.element.appendChild(head);
 
     this.stage = document.createElement('div');
     this.stage.className = 'omni-board__stage';
@@ -186,7 +231,7 @@ export class BoardPanel {
     this.send = document.createElement('button');
     this.send.className = 'omni-board__send';
     this.send.type = 'button';
-    this.send.textContent = 'Send';
+    this.send.textContent = 'Tell her';
     this.send.addEventListener('mousedown', (event) => {
       event.preventDefault();
       this.submit();
@@ -198,6 +243,8 @@ export class BoardPanel {
   }
 
   private readonly promptElement: HTMLDivElement;
+  private readonly fold: HTMLButtonElement;
+  private folded = false;
 
   /**
    * Render a board.
@@ -309,6 +356,10 @@ export class BoardPanel {
   }
 
   private refresh(view: BoardView): void {
+    this.element.classList.toggle('omni-board--folded', this.folded);
+    this.fold.textContent = this.folded ? 'Show' : 'Hide';
+    if (this.folded) return;
+
     for (const [id, button] of this.personButtons) {
       button.classList.toggle('omni-board__box--armed', this.armed === id);
       button.classList.toggle('omni-board__box--linked', this.links.has(id));
@@ -329,11 +380,17 @@ export class BoardPanel {
     } else if (this.armed) {
       const name = view.people.find((person) => person.id === this.armed)?.name ?? '';
       this.status.className = 'omni-board__status';
-      this.status.textContent = `${name} is Ileana's...`;
+      this.status.textContent = `${name} is her... (pick one on the right)`;
     } else {
       this.status.className = 'omni-board__status';
+      // Says what to do next rather than reporting a score. A disabled button with
+      // "3 of 5 placed" beside it does not tell anybody what the button is waiting for.
       this.status.textContent =
-        placed < total ? `${placed} of ${total} placed` : 'ready to send';
+        placed === 0
+          ? 'pick a name, then pick what they are to her'
+          : placed < total
+            ? `${total - placed} still to place`
+            : 'ready - tell her';
     }
 
     this.drawWires();

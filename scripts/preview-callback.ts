@@ -495,11 +495,40 @@ check(
   signals.filter((s) => s.state === SignalState.Resolved).map((s) => s.id).join(', ')
 );
 check(
-  'The queued contacts are visible on the globe from the first frame (§52)',
-  ['tomas', 'adaeze'].every(
+  'The queued contacts are dormant rather than answerable',
+  ['tomas', 'adaeze', 'ileana'].every(
     (id) => signals.find((s) => s.id === id)?.state === SignalState.Dormant
   )
 );
+
+/**
+ * A new game puts exactly one point on the globe.
+ *
+ * §52 wants a world visibly bigger than the slice, and that was read as "show everything
+ * from the first frame" - six points, one of them answerable, and no way to tell which.
+ * A playtester asked where they were supposed to go, which is the whole question the
+ * opening is meant to answer. The tease is not cut, it is deferred: the extra signals
+ * arrive once the player has done a request and knows what the globe is for.
+ */
+{
+  const shown = signals.filter((s) => !s.hidden);
+  check(
+    'A new game shows exactly one signal',
+    shown.length === 1,
+    shown.map((s) => s.id).join(', ')
+  );
+  check('...and it is Mirela', shown[0]?.id === MIRELA_SIGNAL);
+  check(
+    '...and she is the one the player can answer',
+    shown[0]?.state === SignalState.Waiting
+  );
+  check(
+    'Everything else is waiting off-globe, including the tease and the anomaly',
+    ['tomas', 'adaeze', 'ileana', 'tease-toronto', 'anomaly'].every(
+      (id) => signals.find((s) => s.id === id)?.hidden === true
+    )
+  );
+}
 check(
   'A failed request is on cooldown with a countdown (§31)',
   signals.some((s) => s.state === SignalState.Cooldown && (s.cooldown ?? 0) > 0)

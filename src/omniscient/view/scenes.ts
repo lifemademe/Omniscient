@@ -849,6 +849,41 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     meshOf('RowsFailing', mergeGeometries(failing, false) ?? failing[0], MAT.leafPale)
   );
 
+  /**
+   * The shade itself, as a real object.
+   *
+   * This is the fix for the thing a playtester said plainly: they solved the request and
+   * still did not understand why one side was dying. The dialogue explains it twice, and
+   * §131 is clear that explaining is not the job - the environment has to carry it.
+   *
+   * It could not. Shadow casting is off across the whole project, for a good reason: the
+   * rig spans sixty units and one directional shadow map cannot cover both ends, so the
+   * set outside its bounds renders fully shadowed. Which meant the shade this entire
+   * request turns on was never in the scene at all. The player was told about a shadow,
+   * shown a tunnel with no shadow in it, and then told the shadow had been dealt with.
+   *
+   * So it is geometry: a dark panel lying over the failing bank, with a hard edge down
+   * the middle of the tunnel exactly where she says the line runs. It slides off when the
+   * limbs come off, which is the moment the whole request exists for and the first time
+   * cause and effect are in the same frame.
+   */
+  const shadeGeo = new THREE.PlaneGeometry(1.7, 5.0);
+  shadeGeo.rotateX(-Math.PI / 2);
+  shadeGeo.translate(-1.05, 0.235, -0.2);
+  const shadeMesh = meshOf(
+    'ShadeLine',
+    shadeGeo,
+    new THREE.MeshBasicMaterial({
+      color: '#0e1712',
+      transparent: true,
+      opacity: 0.52,
+      depthWrite: false,
+    })
+  );
+  scene.registerProp('shade', shadeMesh, {
+    anchors: { default: new THREE.Vector3(-1.05, 0.3, -0.2) },
+  });
+
   // -- The tree that is doing it --------------------------------------------
   const treeRoot = ENGINE.SceneNode.create({
     name: 'NeighbourTree',
@@ -884,10 +919,16 @@ function buildSeedlingTunnel(scene: ContactScene): void {
       /** Cutting back: the crown lifts away and the light lands on the failing rows. */
       clear: (tweener) => {
         const from = crown.position.clone();
+        const shadeMaterial = shadeMesh.material as THREE.MeshBasicMaterial;
+        const shadeFrom = shadeMesh.position.x;
         tweener.add(
           (t) => {
             crown.position.set(from.x - t * 2.4, from.y + t * 0.6, from.z);
             crown.scale.setScalar(1 - t * 0.55);
+            // The light arrives as the limbs go. The shade retreats the same way the
+            // crown does, so the player watches one thing cause the other.
+            shadeMesh.position.setX(shadeFrom - t * 2.6);
+            shadeMaterial.opacity = 0.52 * (1 - t);
           },
           {
             duration: 1.4,

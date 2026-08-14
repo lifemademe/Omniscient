@@ -27,6 +27,16 @@ export interface Signal {
   name: string;
   state: SignalState;
   /**
+   * Not on the globe at all yet.
+   *
+   * Different from Dormant, which is a signal you can see and cannot answer. Hidden is a
+   * signal that has not entered the fiction: the first thing a new player sees is one
+   * point, because a globe with six dots on it and one answerable is a search task before
+   * they have learned what answering even is. §52's tease is still the goal - it just
+   * starts after the first request rather than before it.
+   */
+  hidden?: boolean;
+  /**
    * Seconds until a failed request can be attempted again (§31 mission cooldowns).
    * Counts down while the globe is up; the point is red and unopenable until it hits
    * zero. §98: this makes failure cost something without creating a dead end.
@@ -217,6 +227,7 @@ export class GlobeView {
 
   private drawSignals(pulse: number, selectedId: string | null): void {
     for (const signal of this.signals) {
+      if (signal.hidden) continue;
       const point = this.project(signal.latitude, signal.longitude);
       if (!point.visible) continue;
 

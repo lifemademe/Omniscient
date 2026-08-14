@@ -605,11 +605,13 @@ export class GlobeScreen {
    * OMNISCIENT_ can answer, and a number is the bluntest way to say it.
    */
   private renderReadouts(): void {
-    const waiting = this.signals.filter(
+    // Hidden signals are not in the fiction yet, so they cannot be counted in it either.
+    const shown = this.signals.filter((s) => !s.hidden);
+    const waiting = shown.filter(
       (s) => s.state === SignalState.Waiting && this.openable.has(s.id)
     ).length;
-    const blocked = this.signals.filter((s) => s.state === SignalState.Cooldown).length;
-    const answered = this.signals.filter((s) => s.state === SignalState.Resolved).length;
+    const blocked = shown.filter((s) => s.state === SignalState.Cooldown).length;
+    const answered = shown.filter((s) => s.state === SignalState.Resolved).length;
 
     this.fill(
       this.waitingCard,
@@ -670,7 +672,7 @@ export class GlobeScreen {
     const seen = new Set<string>();
     const showing = this.globe
       .getProjectedSignals()
-      .filter((p) => p.visible && p.signal.state !== SignalState.Unknown);
+      .filter((p) => p.visible && !p.signal.hidden && p.signal.state !== SignalState.Unknown);
 
     /**
      * Spread labels that land on top of each other.

@@ -10,6 +10,16 @@ import { SignalState } from '../crt/GlobeView.js';
 
 import type { Signal } from '../crt/GlobeView.js';
 
+/**
+ * Signals revealed once the player has finished their first request.
+ *
+ * The opening globe holds exactly one point, so there is no question about where to go.
+ * Everything §52 wants - a world visibly bigger than the slice, requests going unanswered
+ * elsewhere, an origin that should not exist - arrives the moment the player has done a
+ * thing once and knows what the globe is for.
+ */
+export const REVEALED_AFTER_FIRST = ['tease-toronto', 'anomaly'];
+
 /** Signal ids that map to authored missions, in queue order. */
 export const MIRELA_SIGNAL = 'mirela';
 export const TOMAS_SIGNAL = 'tomas';
@@ -47,6 +57,7 @@ export function createSignals(): Signal[] {
       label: 'There is nobody left who knows.',
       // Arrives once Mirela's request is closed.
       state: SignalState.Dormant,
+      hidden: true,
     },
     {
       id: TOMAS_SIGNAL,
@@ -66,6 +77,7 @@ export function createSignals(): Signal[] {
       label: 'The harbour light keeps going out.',
       // Appears once Mirela's request resolves - because that is what caused it.
       state: SignalState.Dormant,
+      hidden: true,
     },
     // Tease. §52: do not reveal everything, make them curious enough to look.
     //
@@ -86,6 +98,7 @@ export function createSignals(): Signal[] {
       // Appears once Tomas is settled. Three requests at once would make the slice a
       // queue rather than a choice.
       state: SignalState.Dormant,
+      hidden: true,
     },
     {
       id: 'tease-toronto',
@@ -96,6 +109,7 @@ export function createSignals(): Signal[] {
       // Demonstrates §31: this one was attempted and went wrong.
       state: SignalState.Cooldown,
       cooldown: 95,
+      hidden: true,
     },
     // §169: an origin that should not exist. Visible for a few frames in every hundred,
     // never openable, never explained. Most players will not notice it. That is correct.
@@ -106,6 +120,7 @@ export function createSignals(): Signal[] {
       name: '',
       label: 'Unknown source.',
       state: SignalState.Unknown,
+      hidden: true,
     },
   ];
 }
