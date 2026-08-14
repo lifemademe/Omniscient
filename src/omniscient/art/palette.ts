@@ -204,8 +204,16 @@ export const MAT = {
    * in the normal map, where §232 charges nothing for it.
    */
   pegboard: standard('#7d6a4c', 0.8),
-  /** Galvanised tube. Dull enough to stand in daylight without becoming the subject. */
-  galvanised: standard('#8a8f92', 0.78, 0.2),
+  /**
+   * Galvanised tube. Dull enough to stand in daylight without becoming the subject.
+   *
+   * Darkened again once the tunnel had a sky behind it. Six hoops under a sun bright
+   * enough to throw the shadow Mission 03 turns on came out as the brightest lines in the
+   * frame, and they run straight across both beds of seedlings - which are the only thing
+   * in that scene the player has to compare. §244: nothing out-contrasts the hero, and
+   * here the hero is a difference between two patches of green.
+   */
+  galvanised: standard('#6c7276', 0.82, 0.15),
   /**
    * Painted structural steel - walkways, rails, anything somebody stands on outdoors.
    *

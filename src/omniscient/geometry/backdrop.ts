@@ -324,21 +324,21 @@ function coastProfile(t: number, radius: number, lift: number, relief: number): 
  * its colour were both blamed - it only came out under a magenta test material, which is
  * the tool to reach for the moment "it should be there and it is not" happens twice.
  */
-function coastRibbon(
+function silhouetteRibbon(
   name: string,
-  radius: number,
-  lift: number,
-  relief: number,
-  color: string
+  base: number,
+  color: string,
+  arc: number,
+  sample: (t: number) => { theta: number; radius: number; top: number }
 ): BackdropPart {
-  // Enough to resolve the roughest term in the profile without stepping it.
+  // Enough to resolve the roughest term in any profile without stepping it.
   const samples = 260;
   const positions: number[] = [];
   const indices: number[] = [];
-  const base = SEA_Y - 1.4;
+  void arc;
 
   for (let i = 0; i <= samples; i++) {
-    const p = coastProfile(i / samples, radius, lift, relief);
+    const p = sample(i / samples);
     const x = Math.sin(p.theta) * p.radius;
     const z = Math.cos(p.theta) * p.radius;
     positions.push(x, base, z, x, p.top, z);
@@ -352,6 +352,18 @@ function coastRibbon(
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   geometry.setIndex(indices);
   return { name, geometry, material: flat(color) };
+}
+
+function coastRibbon(
+  name: string,
+  radius: number,
+  lift: number,
+  relief: number,
+  color: string
+): BackdropPart {
+  return silhouetteRibbon(name, SEA_Y - 1.4, color, COAST_ARC, (t) =>
+    coastProfile(t, radius, lift, relief)
+  );
 }
 
 /**
@@ -472,6 +484,180 @@ function townParts(): BackdropPart[] {
  * They walk the mission graph and never render, so a backdrop they cannot paint is a
  * backdrop they do not need.
  */
+// ---------------------------------------------------------------------------------------
+// Daylight
+// ---------------------------------------------------------------------------------------
+
+const FIELD_SKY_RADIUS = 62;
+const FIELD_SKY_BOTTOM = -3;
+const FIELD_SKY_TOP = 60;
+/** Where the hedgerow that closes the field stands. */
+const HEDGE_RADIUS = 42;
+
+function fieldSkyV(y: number): number {
+  return (y - FIELD_SKY_BOTTOM) / (FIELD_SKY_TOP - FIELD_SKY_BOTTOM);
+}
+
+/**
+ * Daylight sky.
+ *
+ * Adaeze's tunnel is an outdoor scene at midday and it was standing in a void: nine metres
+ * of ground and then pure black in every direction, with a tree whose canopy floated
+ * unattached above the frame because there was nothing behind it to attach to. It had
+ * become the weakest scene in the game the moment the mast stopped being it.
+ *
+ * The same three moves as the night sky and one addition. Lightest at the horizon and
+ * deepest overhead, which is the relation that makes a painted sky read as sky; a warm
+ * pale band low down, because haze at the horizon is what puts distance into a landscape;
+ * a soft cloud layer; and per-pixel dither, because a shallow gradient across this many
+ * pixels bands in eight bits and does it worse in daylight than at night.
+ *
+ * §232 for a daylight backdrop is the awkward one: a real sky is brighter than anything in
+ * the scene, and this scene's hero is a difference between two beds of seedlings on the
+ * GROUND. So the sky is deliberately hazed rather than saturated, and it is kept out of
+ * the lower third of every registered shot by the hedgerow - the player looks down at the
+ * rows and the sky is above and behind, doing its job as depth rather than as subject.
+ */
+export function fieldSkyTexture(sun: THREE.Vector3): THREE.CanvasTexture | null {
+  const sunU = ((Math.atan2(sun.x, sun.z) + Math.PI * 2) % (Math.PI * 2)) / (Math.PI * 2);
+
+  const texture = createDecal(512, 512, (ctx, w, h) => {
+    const sky = ctx.createLinearGradient(0, h, 0, 0);
+    const stops: ReadonlyArray<readonly [number, string]> = [
+      [FIELD_SKY_BOTTOM, '#cbcdc2'],
+      [0, '#c6cbc4'],
+      [6, '#adbcc4'],
+      [18, '#8ba6c0'],
+      [36, '#7191b6'],
+      [FIELD_SKY_TOP, '#6484ad'],
+    ];
+    for (const [y, color] of stops) sky.addColorStop(fieldSkyV(y), color);
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, w, h);
+
+    // Where the sun is. Not a disc - a disc in an unlit backdrop is a sticker, and the
+    // §230 line about abandoning anything a lens did applies to flare as much as bloom.
+    // This is the brightening AROUND a sun, which is something the air does.
+    const glow = ctx.createRadialGradient(
+      sunU * w,
+      (1 - fieldSkyV(14)) * h,
+      0,
+      sunU * w,
+      (1 - fieldSkyV(14)) * h,
+      w * 0.46
+    );
+    glow.addColorStop(0, 'rgba(255,246,222,0.42)');
+    glow.addColorStop(0.4, 'rgba(255,242,214,0.14)');
+    glow.addColorStop(1, 'rgba(255,240,210,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, w, h);
+
+    const seed = seedFrom('field-cloud');
+    const grain = createRng(seedFrom('field-sky-grain'));
+    const image = ctx.getImageData(0, 0, w, h);
+    for (let y = 0; y < h; y++) {
+      const v = 1 - y / h;
+      const band =
+        smoothstep(fieldSkyV(4), fieldSkyV(16), v) * (1 - smoothstep(fieldSkyV(26), fieldSkyV(48), v));
+
+      for (let x = 0; x < w; x++) {
+        const p = (y * w + x) * 4;
+        if (band > 0.002) {
+          const shape = fbm(seed, (x / w) * 2.2, v * 6, { frequency: 3, octaves: 4 });
+          const lift = Math.max(0, shape - 0.5) * band * 150;
+          if (lift > 0) {
+            image.data[p] = Math.min(255, image.data[p] + lift);
+            image.data[p + 1] = Math.min(255, image.data[p + 1] + lift * 0.98);
+            image.data[p + 2] = Math.min(255, image.data[p + 2] + lift * 0.92);
+          }
+        }
+        const n = (grain() - 0.5) * 3.2;
+        for (let c = 0; c < 3; c++) {
+          image.data[p + c] = Math.max(0, Math.min(255, image.data[p + c] + n));
+        }
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+  });
+
+  if (texture) {
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.needsUpdate = true;
+  }
+  return texture;
+}
+
+/**
+ * The field, running out to the hedge.
+ *
+ * Radial gradient again, and for the same reason: dry ground under the camera, hazing to
+ * the colour of the sky at the horizon. That gradient IS aerial perspective, and with the
+ * atmosphere switched off on this surface there is nothing else to supply it.
+ */
+export function fieldTexture(): THREE.CanvasTexture | null {
+  return createDecal(256, 256, (ctx, w, h) => {
+    const gradient = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.5);
+    gradient.addColorStop(0, '#6b6a45');
+    gradient.addColorStop(0.18, '#71714b');
+    gradient.addColorStop((HEDGE_RADIUS / 70) * 0.5, '#8b937b');
+    gradient.addColorStop(1, '#a3aa96');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+  });
+}
+
+/**
+ * Everything behind Adaeze's tunnel.
+ *
+ * The hedge is one ribbon rather than two, unlike the coast: it is the boundary of one
+ * field, so a second line behind it would read as a second hedge rather than as distance.
+ * The depth here comes from the field's own gradient instead.
+ */
+export function createFieldBackdrop(sun: THREE.Vector3): BackdropPart[] {
+  const sky = fieldSkyTexture(sun);
+  const field = fieldTexture();
+  if (!sky || !field) return [];
+
+  const parts: BackdropPart[] = [];
+
+  const shell = new THREE.CylinderGeometry(
+    FIELD_SKY_RADIUS,
+    FIELD_SKY_RADIUS,
+    FIELD_SKY_TOP - FIELD_SKY_BOTTOM,
+    48,
+    1,
+    true
+  );
+  shell.translate(0, (FIELD_SKY_TOP + FIELD_SKY_BOTTOM) / 2, 0);
+  parts.push({ name: 'Sky', geometry: shell, material: basic(sky, THREE.BackSide) });
+
+  // Just below the scene's own ground slab, whose top face is y = 0. A centimetre of step
+  // at forty metres is nothing; z-fighting across a nine-metre plane is not.
+  const ground = new THREE.PlaneGeometry(140, 140);
+  ground.rotateX(-Math.PI / 2);
+  ground.translate(0, -0.02, 0);
+  parts.push({ name: 'Field', geometry: ground, material: basic(field) });
+
+  // The hedge and the trees in it. All the way round: unlike the headland there is no
+  // reason for a field to be open on one side, and closing it is what makes the tunnel
+  // sit IN somewhere rather than ON something.
+  parts.push(
+    silhouetteRibbon('Hedge', -0.6, '#4a5744', Math.PI, (t) => {
+      const theta = t * Math.PI * 2;
+      // A hedge is a hedge with trees standing in it. The low term is the hedge, the
+      // sparse high one is the trees, and the fine term keeps the top from being a rule.
+      const trees = Math.max(0, Math.sin(t * 47 + 0.6) * 0.6 + Math.sin(t * 13 + 2.1) * 0.5 - 0.35);
+      return {
+        theta,
+        radius: HEDGE_RADIUS + Math.sin(t * 9 + 1.4) * 2.6,
+        top: 2.1 + trees * 7.5 + Math.sin(t * 130) * 0.3,
+      };
+    })
+  );
+
+  return parts;
+}
+
 export function createNightBackdrop(moon: THREE.Vector3): BackdropPart[] {
   const sky = skyTexture(moon);
   const sea = seaTexture();

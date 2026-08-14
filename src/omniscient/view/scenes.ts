@@ -21,7 +21,7 @@ import { ACCENT, LIGHT, MAT } from '../art/palette.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
 import { createRng, jitter, seedFrom } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
-import { createNightBackdrop } from '../geometry/backdrop.js';
+import { createFieldBackdrop, createNightBackdrop } from '../geometry/backdrop.js';
 import { createClump } from './../geometry/foliage.js';
 import {
   createMainsSwitch,
@@ -873,13 +873,38 @@ function buildBeaconMast(scene: ContactScene): void {
  * panel is describing a room that is not there, which is the mistake the first two scenes
  * both made and both had to have fixed.
  */
+const SUNLIGHT_AT = new THREE.Vector3(5.5, 7.5, 1.5);
+
 function buildSeedlingTunnel(scene: ContactScene): void {
   const rng = createRng(seedFrom('adaeze-tunnel'));
 
-  // -- Ground and beds ------------------------------------------------------
-  const ground = new THREE.BoxGeometry(9, 0.2, 7);
-  ground.translate(0, -0.1, 0);
-  scene.registerProp('ground', meshOf('Ground', ground, MAT.ground));
+  /**
+   * The field this is standing in (§241).
+   *
+   * The set was nine metres of ground surrounded by absolute black - an outdoor scene at
+   * midday with no sky, no horizon and no land, in which the neighbour's tree read as a
+   * canopy floating unattached above the frame because there was nothing behind it to be
+   * attached to. It had quietly become the weakest scene in the game the moment Tomas's
+   * headland stopped being it, and for exactly the same reason.
+   *
+   * Sky, field and hedge come from geometry/backdrop.ts, painted and unlit for the reasons
+   * set out there. The sun's own position is handed over so the brightening in the sky is
+   * on the bearing the light is actually coming from - which matters more here than on the
+   * headland, because this entire request is about where the light is.
+   */
+  const fieldRoot = ENGINE.SceneNode.create({ name: 'Field' });
+  for (const part of createFieldBackdrop(SUNLIGHT_AT)) {
+    fieldRoot.add(meshOf(part.name, part.geometry, part.material));
+  }
+  scene.registerProp('backdrop', fieldRoot);
+
+  /*
+   * No ground slab. There used to be a nine-by-seven box of MAT.ground here, and it was
+   * standing in for the world - it existed because there was nothing else under the beds.
+   * With a field running out to a hedge it became a dark brown rectangle with hard edges
+   * lying on grass, which reads as a mat somebody put down rather than as ground. The
+   * field IS the ground now, the same call the sea gets on the headland.
+   */
 
   const beds: THREE.BufferGeometry[] = [];
   for (const side of [-1, 1] as const) {
@@ -1004,23 +1029,107 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     position: new THREE.Vector3(-3.7, 0, -0.4),
   });
 
-  const trunk = new THREE.CylinderGeometry(0.16, 0.26, 3.4, 8);
-  trunk.translate(0, 1.7, 0);
-  treeRoot.add(meshOf('TreeTrunk', trunk, MAT.timberDark));
+  /**
+   * The trunk, and why it is three pieces instead of one cylinder.
+   *
+   * It was a single 3.4-metre tube of constant taper, dead vertical, with five limbs
+   * fanned off the top in one plane. Against black nobody could tell; against a sky it
+   * read as a broom - a pole with sticks on it - and this is the object the entire request
+   * is about. A tree is a cone: fat and flared at the ground, tapering hard, and bending
+   * toward the light it grew into, which for this one is out over Adaeze's tunnel.
+   *
+   * Shorter as well as thicker. At 3.4 it was tall and thin enough to look like scaffolding.
+   */
+  const trunkParts: THREE.BufferGeometry[] = [];
+  const flare = new THREE.CylinderGeometry(0.33, 0.54, 0.36, 9);
+  flare.translate(0, 0.16, 0);
+  trunkParts.push(flare);
 
-  // Limbs reaching back over the tunnel - the shape of the whole problem in one prop.
+  /**
+   * Sections placed by their ENDS rather than their centres.
+   *
+   * `rotateZ` by a positive angle tilts the top toward -x, which is the opposite of what
+   * anybody writing "lean toward the tunnel" expects. Translating a rotated cylinder by
+   * its intended centre therefore put the upper section's foot 58cm from the lower's head
+   * and the trunk came out in two disconnected pieces with daylight between them.
+   *
+   * `section` takes the point the piece grows FROM and works the offset out, so a joint
+   * cannot drift when a lean is edited.
+   */
+  const section = (
+    radiusTop: number,
+    radiusBottom: number,
+    height: number,
+    tilt: number,
+    from: THREE.Vector3
+  ): { geometry: THREE.BufferGeometry; top: THREE.Vector3 } => {
+    const geometry = new THREE.CylinderGeometry(radiusTop, radiusBottom, height, 9);
+    geometry.rotateZ(-tilt);
+    const half = new THREE.Vector3(Math.sin(tilt) * height * 0.5, Math.cos(tilt) * height * 0.5, 0);
+    const centre = from.clone().add(half);
+    geometry.translate(centre.x, centre.y, centre.z);
+    return { geometry, top: from.clone().add(half).add(half) };
+  };
+
+  const lower = section(0.21, 0.34, 1.85, 0.09, new THREE.Vector3(0, 0.05, 0));
+  trunkParts.push(lower.geometry);
+  // Started a little inside the section below, so the joint is a taper rather than a step.
+  const upper = section(0.115, 0.22, 1.5, 0.23, lower.top.clone().add(new THREE.Vector3(-0.02, -0.1, 0.04)));
+  trunkParts.push(upper.geometry);
+  treeRoot.add(
+    meshOf('TreeTrunk', mergeGeometries(trunkParts, false) ?? flare, MAT.timberDark)
+  );
+
+  /**
+   * Limbs reaching out over the tunnel - the shape of the whole problem in one prop.
+   *
+   * Spread in azimuth as well as in lean, so the crown is a mass with depth rather than a
+   * fan seen edge-on, and each limb's foliage is placed at the limb's computed TIP rather
+   * than at a separately guessed coordinate. The old version had the two sets of numbers
+   * drifting apart, which is why the canopy floated clear of the branches holding it.
+   */
   const limbs: THREE.BufferGeometry[] = [];
   const canopy: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < 5; i++) {
-    const lean = 0.5 + i * 0.16;
-    const limb = new THREE.CylinderGeometry(0.05, 0.09, 2.6, 6);
+  const UP = new THREE.Vector3(0, 1, 0);
+  const Z_AXIS = new THREE.Vector3(0, 0, 1);
+  const Y_AXIS = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < 6; i++) {
+    /*
+     * Negative, for the reason spelled out on `section` above - and this one was doing
+     * real damage rather than a cosmetic one. With a positive lean every limb reached out
+     * to -x, which is AWAY from the tunnel, so the crown of the tree the whole request is
+     * about sat over open field while the shade it is supposed to be casting lay on the
+     * seedlings four metres away. The original hand-placed canopy coordinates were at +x
+     * and had been quietly disagreeing with the branches holding them since the scene was
+     * written; nobody could see it against a black background.
+     */
+    const lean = -(0.52 + i * 0.12);
+    const swing = -0.62 + i * 0.26;
+    const length = 2.45 - i * 0.1;
+
+    // geometry.rotateZ then .rotateY composes as Ry * Rz, so the direction has to be
+    // built in the same order or the foliage lands somewhere the branch never went.
+    const dir = UP.clone().applyAxisAngle(Z_AXIS, lean).applyAxisAngle(Y_AXIS, swing);
+    const from = new THREE.Vector3(0.42 + i * 0.03, 2.78 + i * 0.08, 0.03);
+
+    const limb = new THREE.CylinderGeometry(0.045, 0.1, length, 6);
     limb.rotateZ(lean);
-    limb.translate(0.7 + i * 0.16, 2.9 + i * 0.14, -1.1 + i * 0.55);
+    limb.rotateY(swing);
+    const mid = from.clone().addScaledVector(dir, length / 2);
+    limb.translate(mid.x, mid.y, mid.z);
     limbs.push(limb);
 
-    const leaves = new THREE.SphereGeometry(0.85 - i * 0.05, 7, 5);
-    leaves.translate(1.5 + i * 0.2, 3.3 + i * 0.12, -1.2 + i * 0.58);
-    canopy.push(leaves);
+    // Two blobs per limb, one at the tip and one back along it, so the crown has an
+    // interior instead of being a ring of separate balls.
+    for (const [t, radius] of [
+      [1.0, 0.78 - i * 0.03],
+      [0.68, 0.6 - i * 0.02],
+    ] as const) {
+      const blob = new THREE.SphereGeometry(radius, 8, 6);
+      const at = from.clone().addScaledVector(dir, length * t);
+      blob.translate(at.x, at.y - 0.06, at.z);
+      canopy.push(blob);
+    }
   }
   treeRoot.add(meshOf('TreeLimbs', mergeGeometries(limbs, false) ?? limbs[0], MAT.timberDark));
 
@@ -1065,10 +1174,17 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     reach: 0.8,
     garment: 'apron',
     colors: { garment: '#2f6a72', underlayer: '#d8c9a8' },
-    // Left of frame and near the camera. Mirroring the scene put her behind the
-    // conversation panel, which is a poor place for the person doing the talking.
-    position: new THREE.Vector3(-1.9, 0, 2.4),
-    rotation: new THREE.Euler(0, Math.PI * 0.1, 0),
+    /*
+     * Left of frame and near the camera. Mirroring the scene put her behind the
+     * conversation panel, which is a poor place for the person doing the talking.
+     *
+     * Nudged right and forward off the sightline to the tree. At (-1.9, 2.4) she stood
+     * exactly between the default camera and the trunk, so the bottom two metres of the
+     * tree - including its whole base - were behind her and it read as a log hanging in
+     * the air. Being nearer also makes her larger, which she needed.
+     */
+    position: new THREE.Vector3(-1.12, 0, 2.72),
+    rotation: new THREE.Euler(0, Math.PI * 0.13, 0),
   });
 
   // -- Light ----------------------------------------------------------------
@@ -1079,7 +1195,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     'sun',
     ENGINE.PointLightNode.create({
       name: 'Sun',
-      position: new THREE.Vector3(5.5, 7.5, 1.5),
+      position: SUNLIGHT_AT.clone(),
       intensity: 36,
       color: new THREE.Color('#fff0d0'),
       distance: 26,
@@ -1087,15 +1203,25 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     })
   );
 
+  /**
+   * Sky fill, moved round to the camera side.
+   *
+   * It was at (-2.5, 4.5, 3.5) - nearly straight up from Adaeze - and the sun is out past
+   * her at +x. Her apron faces +z and got a grazing angle from both, so the one pale mass
+   * on the one person in the scene rendered as a dark grey rectangle and she read as a
+   * silhouette in full daylight. This is the same fault Ileana had and the same fix: put
+   * some of the ambient where the camera is, because a figure lit only from behind has no
+   * front however carefully the front was built (§235).
+   */
   scene.registerProp(
     'skyfill',
     ENGINE.PointLightNode.create({
       name: 'SkyFill',
-      position: new THREE.Vector3(-2.5, 4.5, 3.5),
-      intensity: 13,
+      position: new THREE.Vector3(-0.6, 3.6, 6.2),
+      intensity: 15,
       color: new THREE.Color('#9fc0d8'),
-      distance: 16,
-      decay: 1.2,
+      distance: 18,
+      decay: 1.15,
     })
   );
 
@@ -1105,8 +1231,12 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     // them is the first thing read.
     // Outside the mouth and above it. From inside, the nearest hoop sat across the lens
     // and the two banks - the entire puzzle - were behind it.
-    position: new THREE.Vector3(1.1, 3.4, 7.0),
-    target: new THREE.Vector3(-1.3, 0.9, -0.6),
+    //
+    // Tilted up and pulled back once there was a sky to tilt into. The neighbour's tree
+    // is the cause of the whole request and its crown was cropped by the top edge, so the
+    // player could see the shade on the failing rows and not the thing casting it.
+    position: new THREE.Vector3(1.45, 3.65, 7.7),
+    target: new THREE.Vector3(-1.4, 1.3, -0.6),
   });
   scene.registerShot('tunnel-rows', {
     position: new THREE.Vector3(2.6, 1.6, 3.0),
