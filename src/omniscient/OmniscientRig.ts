@@ -26,7 +26,7 @@ import { CRTSurface } from './crt/CRTSurface.js';
 import { GlobeView, SignalState } from './crt/GlobeView.js';
 import { KnowledgeTree } from './crt/KnowledgeTree.js';
 import { fitSurfaceUvs, readModelParts } from './geometry/model-parts.js';
-import { CHAIR_PLACEMENT, createWorkstationRoom } from './geometry/room.js';
+import { CHAIR_PLACEMENT, createWorkstationRoom, LAMP } from './geometry/room.js';
 import { KnowledgeStore } from './knowledge/KnowledgeStore.js';
 import { BroadcastTransport } from './link/BroadcastTransport.js';
 import { LocalSurface } from './link/LocalSurface.js';
@@ -484,7 +484,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const key = ENGINE.DirectionalLightNode.create({
       name: 'KeyLight',
       position: new THREE.Vector3(3.4, 3.0, 2.6),
-      intensity: 2.6,
+      // Pulled from 2.6. §230's reading of all three reference frames is a warm pool on
+      // a corner of a COLD room, and a warm global key of that strength makes the whole
+      // room warm - which leaves the lamp with nothing to be warm against.
+      intensity: 1.9,
       color: new THREE.Color(LIGHT.key),
     });
     // Shadows off. The rig spans sixty units - the workstation at one end, the dioramas
@@ -497,7 +500,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.add(
       ENGINE.HemisphereLightNode.create({
         name: 'SkyFill',
-        intensity: 1.0,
+        // Raised as the key came down, so the room does not simply get darker - §243
+        // counts a scene that lost value as a regression however good the reason was.
+        // The trade is warm-everywhere for cold-everywhere-except-the-pool.
+        intensity: 1.35,
         color: new THREE.Color(LIGHT.fill),
         groundColor: new THREE.Color(LIGHT.bounce),
       })
@@ -509,11 +515,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.add(
       ENGINE.PointLightNode.create({
         name: 'DeskLamp',
-        position: new THREE.Vector3(-0.75, 1.35, -59.4),
-        intensity: 3.4,
-        color: new THREE.Color(LIGHT.key),
-        distance: 4.5,
-        decay: 1.6,
+        // Inside the shade of the fixture that now exists, rather than hanging in the air
+        // above the desk with nothing there to be emitting it.
+        position: WORKSTATION_ORIGIN.clone().add(
+          new THREE.Vector3(LAMP.bulb.x, LAMP.bulb.y + 0.03, LAMP.bulb.z)
+        ),
+        // Warmer and tighter than before. It is a bulb under a shade half a metre from
+        // the desk, so it should fall off hard and own a small area completely.
+        intensity: 4.2,
+        color: new THREE.Color('#ffcf96'),
+        distance: 2.6,
+        decay: 1.7,
       })
     );
 

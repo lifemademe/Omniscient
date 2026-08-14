@@ -110,7 +110,7 @@ function createWindow(): RoomPart[] {
  * furniture. A desk is about three quarters of a metre off the floor, so that is where
  * the floor now is.
  */
-const FLOOR_Y = -0.76;
+export const FLOOR_Y = -0.76;
 
 /**
  * The pinboard: above the machine, in the gap between the menu stack and the window.
@@ -189,6 +189,95 @@ function createDeskPlant(rng: Rng): RoomPart[] {
   }).forEach((part, i) => {
     parts.push({ name: `PlantReach${i}`, geometry: part.geometry, material: part.material });
   });
+
+  return parts;
+}
+
+
+/**
+ * Where the desk lamp stands, and where its bulb sits inside the shade.
+ *
+ * Coordinates are DESK-space, not floor-space: the desk top is y = 0 in this module and
+ * FLOOR_Y is 76cm below it. The first version added FLOOR_Y the way the chair does and
+ * built the whole lamp standing on the floor underneath the desk, with its arm rising
+ * past the desk edge like a periscope. The chair is on the floor. The lamp is not.
+ *
+ * Exported because the light and the fixture have to agree. A practical whose lamp node
+ * is not inside its shade is the thing §187 is complaining about when it asks for
+ * controlled practicals rather than many weak lights - the room was lit by a point in
+ * mid-air with nothing there to be emitting it.
+ */
+export const LAMP = {
+  /** Foot of the lamp, on the desk top. */
+  base: new THREE.Vector3(-1.28, 0, -0.84),
+  /**
+   * Centre of the shade opening. The point light goes here.
+   *
+   * Clear of the set, which it was not: at x = -0.44, z = -0.52 the head sat inside the
+   * television's own bounding box, so the arm ran into the chassis and the pool it was
+   * supposed to throw was lit from within a solid object. The set spans x -0.5..0.5 and
+   * z -0.90..-0.10; this is outside it on both.
+   */
+  bulb: new THREE.Vector3(-0.92, 0.46, -0.3),
+} as const;
+
+/**
+ * The desk lamp.
+ *
+ * §230 took one thing from every reference frame: a warm pool of light on a corner of a
+ * cold room. That pool already existed here as a PointLightNode floating 1.35 above the
+ * desk with no object attached to it, which is why the workstation read as evenly lit
+ * rather than as lit BY something. This is the something.
+ *
+ * Placed left of the machine and reaching right, because the home camera sits out at +x -
+ * a lamp on that side puts its arm between the lens and the screen, and the screen is the
+ * one thing in this frame that must never be occluded.
+ *
+ * The arm is a single tube through three control points rather than jointed segments. At
+ * this size the silhouette is all that survives, and a curve reads as an anglepoise more
+ * honestly than four boxes and two hinges nobody can see.
+ */
+function createDeskLamp(rng: Rng): RoomPart[] {
+  const parts: RoomPart[] = [];
+  const { base, bulb } = LAMP;
+
+  const foot = new THREE.CylinderGeometry(0.095, 0.105, 0.024, 14);
+  foot.translate(base.x, base.y + 0.011, base.z);
+  parts.push({ name: 'LampFoot', geometry: foot, material: 'metal' });
+
+  // Up, over, and down onto the desk. The middle point is what gives it the shoulder.
+  const arm = createVine(rng, {
+    leaves: 0,
+    thickness: 0.013,
+    path: [
+      new THREE.Vector3(base.x, base.y + 0.02, base.z),
+      new THREE.Vector3(base.x + 0.04, base.y + 0.46, base.z + 0.06),
+      new THREE.Vector3(base.x + 0.18, base.y + 0.75, base.z + 0.28),
+      new THREE.Vector3(bulb.x + 0.02, bulb.y + 0.16, bulb.z - 0.02),
+    ],
+  });
+  arm.forEach((part, i) => {
+    parts.push({ name: `LampArm${i}`, geometry: part.geometry, material: 'metal' });
+  });
+
+  /**
+   * The shade, open at the bottom.
+   *
+   * Open-ended on purpose: a closed cone hides the bulb and the fixture reads as a lump
+   * on a stick. The lit interior is most of what says "this is where the light is coming
+   * from", and it costs one flag.
+   */
+  const shade = new THREE.ConeGeometry(0.145, 0.155, 14, 1, true);
+  shade.rotateX(Math.PI);
+  shade.rotateZ(-0.34);
+  shade.translate(bulb.x, bulb.y + 0.075, bulb.z);
+  parts.push({ name: 'LampShade', geometry: shade, material: 'plastic' });
+
+  // The bulb itself, unlit, so the fixture has a bright core at this distance rather than
+  // a dark hole where the light is supposedly coming from.
+  const glass = new THREE.SphereGeometry(0.036, 10, 8);
+  glass.translate(bulb.x, bulb.y + 0.03, bulb.z);
+  parts.push({ name: 'LampBulb', geometry: glass, material: 'lamp' });
 
   return parts;
 }
@@ -344,6 +433,7 @@ export function createWorkstationRoom(): RoomPart[] {
   parts.push({ name: 'Papers', geometry: stack, material: 'paper' });
 
   parts.push(...createDeskPlant(rng));
+  parts.push(...createDeskLamp(rng));
 
   // Cable runs from the machine down the back of the desk. Accumulated infrastructure
   // (§186) at the smallest possible scale.
