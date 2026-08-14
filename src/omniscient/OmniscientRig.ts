@@ -23,6 +23,7 @@ import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { createSignals, MIRELA_SIGNAL, REVEALED_AFTER_FIRST } from './content/signals.js';
 import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
+import { TunePanel } from './dev/TunePanel.js';
 import { GlobeView, SignalState } from './crt/GlobeView.js';
 import { KnowledgeTree } from './crt/KnowledgeTree.js';
 import { fitSurfaceUvs, readModelParts } from './geometry/model-parts.js';
@@ -147,6 +148,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private link: BroadcastTransport | null = null;
   private session: SessionController | null = null;
   private vfxNodes = new Map<string, ENGINE.VFXNode>();
+  /** F8. Dev tuning; bindings registered where the lights are built. */
+  private tune: TunePanel | null = null;
+  /** The workstation lights, kept so the panel can reach them. */
+  private lightRig: {
+    key: ENGINE.DirectionalLightNode;
+    sky: ENGINE.HemisphereLightNode;
+    lamp: ENGINE.PointLightNode;
+    windowKey: ENGINE.SpotLightNode;
+    bounce: ENGINE.PointLightNode;
+    glow: ENGINE.PointLightNode;
+  } | null = null;
 
   private queue: QueuedRequest[] = [];
   private queueIndex = 0;
@@ -452,6 +464,68 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
   }
 
+  /**
+   * What the F8 panel can reach.
+   *
+   * Lights and the home shot, which between them are nearly every number that has been
+   * hand-tuned through a rebuild so far. Sliders write straight onto the live objects;
+   * COPY puts the settled values on the clipboard to be pasted back into source, which
+   * is the only place they persist.
+   */
+  private registerTuning(): void {
+    const tune = this.tune;
+    const rig = this.lightRig;
+    if (!tune || !rig) return;
+
+    const hex = (light: { color: THREE.Color }): string => `#${light.color.getHexString()}`;
+
+    tune.group('key + sky');
+    tune.slider({ label: 'key', min: 0, max: 6, get: () => rig.key.intensity, set: (v) => (rig.key.intensity = v) });
+    tune.slider({ label: 'sky', min: 0, max: 4, get: () => rig.sky.intensity, set: (v) => (rig.sky.intensity = v) });
+
+    tune.group('desk lamp');
+    tune.slider({ label: 'intensity', min: 0, max: 12, get: () => rig.lamp.intensity, set: (v) => (rig.lamp.intensity = v) });
+    tune.slider({ label: 'distance', min: 0.5, max: 6, get: () => rig.lamp.distance, set: (v) => (rig.lamp.distance = v) });
+    tune.slider({ label: 'decay', min: 0.5, max: 3, get: () => rig.lamp.decay, set: (v) => (rig.lamp.decay = v) });
+    tune.color({ label: 'color', get: () => hex(rig.lamp), set: (v) => rig.lamp.color.set(v) });
+
+    tune.group('window key');
+    tune.slider({ label: 'intensity', min: 0, max: 40, get: () => rig.windowKey.intensity, set: (v) => (rig.windowKey.intensity = v) });
+    tune.slider({ label: 'angle', min: 0.1, max: 1.4, get: () => rig.windowKey.angle, set: (v) => (rig.windowKey.angle = v) });
+    tune.slider({ label: 'penumbra', min: 0, max: 1, get: () => rig.windowKey.penumbra, set: (v) => (rig.windowKey.penumbra = v) });
+
+    tune.group('bounce + glow');
+    tune.slider({ label: 'bounce', min: 0, max: 5, get: () => rig.bounce.intensity, set: (v) => (rig.bounce.intensity = v) });
+    tune.slider({ label: 'glow', min: 0, max: 6, get: () => rig.glow.intensity, set: (v) => (rig.glow.intensity = v) });
+
+    tune.group('home shot');
+    const axes = ['x', 'y', 'z'] as const;
+    for (const axis of axes) {
+      tune.slider({
+        label: `pos ${axis}`,
+        min: HOME_SHOT.position[axis] - 2,
+        max: HOME_SHOT.position[axis] + 2,
+        get: () => HOME_SHOT.position[axis],
+        set: (v) => {
+          HOME_SHOT.position[axis] = v;
+          if (this.phase === Phase.Menu) this.cutTo(HOME_SHOT);
+        },
+      });
+    }
+    for (const axis of axes) {
+      tune.slider({
+        label: `aim ${axis}`,
+        min: HOME_SHOT.target[axis] - 2,
+        max: HOME_SHOT.target[axis] + 2,
+        get: () => HOME_SHOT.target[axis],
+        set: (v) => {
+          HOME_SHOT.target[axis] = v;
+          if (this.phase === Phase.Menu) this.cutTo(HOME_SHOT);
+        },
+      });
+    }
+  }
+
   private buildVfx(): void {
     for (const [name, definition] of Object.entries(VFX_LIBRARY)) {
       // The node name is set after construction: the editor's default-subobject lint
@@ -500,8 +574,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     key.castShadow = false;
     this.add(key);
 
-    this.add(
-      ENGINE.HemisphereLightNode.create({
+    const sky = ENGINE.HemisphereLightNode.create({
         name: 'SkyFill',
         // Raised as the key came down, so the room does not simply get darker - §243
         // counts a scene that lost value as a regression however good the reason was.
@@ -509,14 +582,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
         intensity: 1.35,
         color: new THREE.Color(LIGHT.fill),
         groundColor: new THREE.Color(LIGHT.bounce),
-      })
-    );
+      });
+    this.add(sky);
 
     // A practical over the desk. §187 asks for one key plus controlled practicals - this
     // is what stops the machine reading as an object on a plane and starts it reading as
     // an object somebody sits at.
-    this.add(
-      ENGINE.PointLightNode.create({
+    const lamp = ENGINE.PointLightNode.create({
         name: 'DeskLamp',
         // Inside the shade of the fixture that now exists, rather than hanging in the air
         // above the desk with nothing there to be emitting it.
@@ -529,8 +601,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
         color: new THREE.Color('#ffcf96'),
         distance: 2.6,
         decay: 1.7,
-      })
-    );
+      });
+    this.add(lamp);
 
     /**
      * Daylight through the workstation window.
@@ -588,27 +660,27 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * what gives the desk its front edge, the chassis its lower corner, and the side wall
      * enough value to stop the shelf floating in a void.
      */
-    this.add(
-      ENGINE.PointLightNode.create({
+    const bounce = ENGINE.PointLightNode.create({
         name: 'FloorBounce',
         position: WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(0.6, -0.55, 0.5)),
         intensity: 1.6,
         color: new THREE.Color(LIGHT.bounce),
         distance: 4.2,
         decay: 1.4,
-      })
-    );
+      });
+    this.add(bounce);
 
-    this.add(
-      ENGINE.PointLightNode.create({
+    const glow = ENGINE.PointLightNode.create({
         name: 'ScreenGlow',
         position: WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(0, 0.42, 0.34)),
         intensity: 2.2,
         color: new THREE.Color(ACCENT.knowledge),
         distance: 2.1,
         decay: 1.8,
-      })
-    );
+      });
+    this.add(glow);
+
+    this.lightRig = { key, sky, lamp, windowKey, bounce, glow };
 
     // Depth. Near/far are tuned to the diorama, not the world - the workstation sits
     // 60 units away and must not be fogged out of existence.
@@ -674,6 +746,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
       onNoteRecorded: () => this.closeLostRequest(),
       onLeave: () => this.leaveContact(),
     });
+
+    this.tune = new TunePanel(container);
+    this.registerTuning();
 
     this.globeScreen = new GlobeScreen(
       container,
@@ -1011,6 +1086,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   public override endPlay(): boolean {
+    this.tune?.dispose();
+    this.tune = null;
     this.session?.end();
     this.phone?.detach();
     this.surface?.dispose();
