@@ -1,0 +1,3 @@
+# Recordings are throwaway - they are read once and replaced.
+*.png
+*.gif
