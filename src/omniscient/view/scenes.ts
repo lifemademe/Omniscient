@@ -530,6 +530,22 @@ function buildRepairShop(scene: ContactScene): void {
     // own work rather than somebody in the middle of it.
     lean: 0.16,
     reach: 0.85,
+    /**
+     * Both hands on the bench, either side of the set.
+     *
+     * Named in scene space - these are points on her actual bench top at y 0.78, just
+     * clear of the transmitter which spans x -0.26 to 0.26 - and the arm angles are
+     * solved to reach them. That is the difference between this and the pose attempt that
+     * was reverted: an authored ANGLE looks right from one camera and foreshortens from
+     * the next, and a hand told to land on the bench lands on it from all of them.
+     *
+     * The left hand rests flat behind the set and the right sits nearer the front edge,
+     * because a person working with something does not place their hands symmetrically.
+     */
+    handsOn: {
+      left: new THREE.Vector3(-0.36, 0.79, -0.72),
+      right: new THREE.Vector3(-0.44, 0.79, -1.1),
+    },
     garment: 'apron',
     /**
      * Art-directed rather than seeded. Her workshop is warm timber from wall to bench,
@@ -878,6 +894,18 @@ function buildBeaconMast(scene: ContactScene): void {
     colors: { garment: '#a8582c', underlayer: '#3f4a52' },
     position: new THREE.Vector3(0.62, platformY + 0.03, 0.55),
     rotation: new THREE.Euler(0, -Math.PI * 0.72, 0),
+    /**
+     * Both hands on the guardrail.
+     *
+     * The rail went from shin height to 1.05m in the same audit that measured the rest of
+     * the room, and this is the other half of it: a barrier only reads as a barrier when
+     * somebody is holding it. He is watching his own light go out from two metres up a
+     * lattice in the wind, and a man in that position has his hands on the rail.
+     */
+    handsOn: {
+      left: new THREE.Vector3(0.5, 3.07, 0.92),
+      right: new THREE.Vector3(0.92, 3.07, 0.92),
+    },
     // He is six metres up a lattice on a headland at night. The one figure in the cast
     // with weather on him gets the larger idle - still under two centimetres at the head,
     // but visibly more than somebody standing in a kitchen.
@@ -1275,6 +1303,22 @@ function buildSeedlingTunnel(scene: ContactScene): void {
      */
     position: new THREE.Vector3(-1.12, 0, 2.72),
     rotation: new THREE.Euler(0, Math.PI * 0.13, 0),
+    /**
+     * One hand down on the end of the bed, the other hanging.
+     *
+     * Only one, deliberately: somebody standing at the mouth of their own tunnel looking
+     * down the rows rests a hand on the frame, and two hands on it would be somebody
+     * holding on.
+     *
+     * The hoop directly above her is 1.72m up - measured, not guessed - so she cannot
+     * reach it standing, and the seedlings are a metre below her hands. That gap is a
+     * fact about the scene rather than a limit of the solver: to touch the rows she would
+     * have to crouch, which is precisely the pose that defeated the previous attempt and
+     * still needs a staging answer rather than a tuning one.
+     */
+    handsOn: {
+      left: new THREE.Vector3(-1.55, 0.95, 2.6),
+    },
   });
 
   // -- Light ----------------------------------------------------------------
@@ -1844,6 +1888,15 @@ function buildClearedHouse(scene: ContactScene): void {
      */
     position: new THREE.Vector3(-1.0, 0, -1.72),
     rotation: new THREE.Euler(0, Math.PI * 0.2, 0),
+    /**
+     * Hands flat on the near edge of the table, which is where two days of sorting
+     * photographs puts them - and on the EDGE rather than out among the box and the
+     * envelopes, because she has stopped. That is the whole reason she is calling.
+     */
+    handsOn: {
+      left: new THREE.Vector3(-1.02, 0.79, -1.47),
+      right: new THREE.Vector3(-0.8, 0.79, -1.5),
+    },
     // Slower and smaller than the rest of the cast. She has been sorting a dead relative's
     // photographs for two days; the difference between her idle and Mirela's is the only
     // characterisation available without faces.

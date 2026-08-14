@@ -39,6 +39,15 @@ export interface CharacterParams {
   lean?: number;
   /** 0 arms hanging, 1 forearms up and forward as if resting on a surface. */
   reach?: number;
+  /**
+   * Where each hand should land, in character-local space - origin at the feet, +Z front.
+   *
+   * Overrides `reach` for whichever side is given, and the joint angles are solved rather
+   * than authored (see solveArm). A side left undefined keeps the resting pose, which is
+   * usually what you want: somebody working at a bench has one hand on the job and the
+   * other hanging.
+   */
+  reachFor?: { left?: THREE.Vector3; right?: THREE.Vector3 };
   garment?: Garment;
   /**
    * Pin any of the generated colours. Omitted channels stay seeded, so this is a nudge
@@ -172,6 +181,77 @@ function limbEnd(length: number, rotZ: number, rotX: number): THREE.Vector3 {
   return new THREE.Vector3(0, -length, 0)
     .applyAxisAngle(new THREE.Vector3(1, 0, 0), rotX)
     .applyAxisAngle(new THREE.Vector3(0, 0, 1), rotZ);
+}
+
+/**
+ * The rotations that point a hanging limb along `dir`.
+ *
+ * Inverts `hangingLimb`'s own convention exactly. That function rotates a limb hanging
+ * down -Y by rotX and then rotZ, which sends it to
+ *
+ *   ( cos(x)·sin(z),  -cos(x)·cos(z),  -sin(x) )
+ *
+ * so a direction can be turned back into the pair of angles that produce it. Without this
+ * the IK below could compute a beautiful skeleton and have no way to build it.
+ */
+function aimAngles(dir: THREE.Vector3): { rotX: number; rotZ: number } {
+  const d = dir.clone().normalize();
+  const rotX = Math.asin(Math.max(-1, Math.min(1, -d.z)));
+  const rotZ = Math.atan2(d.x, -d.y);
+  return { rotX, rotZ };
+}
+
+/**
+ * Two-bone inverse kinematics: put the hand HERE.
+ *
+ * §235 asked for per-contact working poses and the previous attempt was reverted, for a
+ * reason worth keeping: poses were being authored as joint ANGLES, and an angle that looks
+ * right in the editor foreshortens to nothing on a camera the contact happens to be facing.
+ * Adaeze's crouch read as a short woman rather than a crouching one. Tuning angles cannot
+ * fix that, because the thing being specified is not the thing that matters.
+ *
+ * What matters is where the hand ENDS UP - on the bench, on the rail, on the table. So
+ * that is what gets authored, and the angles are solved. A hand told to land on the bench
+ * lands on the bench from every camera in the room.
+ *
+ * Standard law-of-cosines solve. The elbow sits on a circle around the shoulder-to-target
+ * line; `pole` picks the point on that circle, which is what stops the elbow choosing a
+ * direction that happens to point at the lens and collapse the arm into a line.
+ */
+function solveArm(
+  shoulder: THREE.Vector3,
+  target: THREE.Vector3,
+  upperLength: number,
+  foreLength: number,
+  pole: THREE.Vector3
+): { upper: { rotX: number; rotZ: number }; fore: { rotX: number; rotZ: number } } {
+  const toTarget = target.clone().sub(shoulder);
+  const reachable = upperLength + foreLength - 0.001;
+  // Clamped rather than failed: a target out of reach becomes a fully extended arm
+  // pointing at it, which is what a person does, instead of a NaN and an invisible limb.
+  const distance = Math.min(Math.max(toTarget.length(), 0.001), reachable);
+  const axis = toTarget.clone().normalize();
+
+  // Distance along the axis to the elbow's projection, and its offset from the line.
+  const along = (distance * distance + upperLength * upperLength - foreLength * foreLength) /
+    (2 * distance);
+  const offset = Math.sqrt(Math.max(0, upperLength * upperLength - along * along));
+
+  // The pole, made perpendicular to the axis. If the caller hands over something parallel
+  // to it, fall back to straight down, which is where a relaxed elbow goes anyway.
+  let bend = pole.clone().projectOnPlane(axis);
+  if (bend.lengthSq() < 1e-6) bend = new THREE.Vector3(0, -1, 0).projectOnPlane(axis);
+  bend.normalize();
+
+  const elbow = shoulder
+    .clone()
+    .addScaledVector(axis, along)
+    .addScaledVector(bend, offset);
+
+  return {
+    upper: aimAngles(elbow.clone().sub(shoulder)),
+    fore: aimAngles(target.clone().sub(elbow)),
+  };
 }
 
 function merge(pieces: THREE.BufferGeometry[]): THREE.BufferGeometry {
@@ -324,13 +404,34 @@ export function createCharacter(params: CharacterParams): CharacterParts {
       0
     );
 
-    skin.push(hangingLimb(limbThick, upperArm, limbThick, shoulder, outward, swing));
+    const target = side === -1 ? params.reachFor?.left : params.reachFor?.right;
 
-    const elbow = shoulder.clone().add(limbEnd(upperArm, outward, swing));
-    const foreRot = swing + elbowBend;
-    // The forearm keeps a little of the upper arm's outward angle, so the elbow does not
-    // read as a hinge that only works in one plane.
-    const foreOut = outward * 0.45;
+    /**
+     * The elbow goes out and back.
+     *
+     * Out, so the upper arm is not edge-on to a camera in front of the contact; back, so
+     * the forearm comes forward toward the work rather than the elbow leading. This is
+     * the single value that decides whether a reaching arm reads as an arm or as a stick
+     * pointing at the lens.
+     */
+    const pole = new THREE.Vector3(side * 0.8, -0.5, -0.35);
+
+    const solved = target
+      ? solveArm(shoulder, target, upperArm, foreArm, pole)
+      : {
+          upper: { rotX: swing, rotZ: outward },
+          fore: { rotX: swing + elbowBend, rotZ: outward * 0.45 },
+        };
+
+    skin.push(
+      hangingLimb(limbThick, upperArm, limbThick, shoulder, solved.upper.rotZ, solved.upper.rotX)
+    );
+
+    const elbow = shoulder
+      .clone()
+      .add(limbEnd(upperArm, solved.upper.rotZ, solved.upper.rotX));
+    const foreRot = solved.fore.rotX;
+    const foreOut = solved.fore.rotZ;
 
     skin.push(hangingLimb(limbThick * 0.9, foreArm, limbThick * 0.9, elbow, foreOut, foreRot));
 

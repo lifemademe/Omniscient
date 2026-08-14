@@ -22,6 +22,19 @@ export interface CharacterPlacement extends CharacterParams {
   position: THREE.Vector3;
   rotation?: THREE.Euler;
   /**
+   * Where each hand should land, in SCENE space.
+   *
+   * The character generator wants hand targets in its own local space, which means a
+   * scene author placing a hand on a bench would have to subtract the character's
+   * position and un-rotate by its rotation before writing the number down - by hand, for
+   * every contact, and again whenever anybody moved them. So it is done here instead:
+   * name the point in the room the hand should touch, and the placement converts.
+   *
+   * This is what makes the pose survive being moved. Turn a contact to face a different
+   * way and the hand stays on the bench.
+   */
+  handsOn?: { left?: THREE.Vector3; right?: THREE.Vector3 };
+  /**
    * Multiplier on the idle amplitude. 1 is somebody standing in a room; above 1 is
    * somebody standing somewhere that is moving them, which on this cast means Tomas.
    */
@@ -184,8 +197,25 @@ function addPieces(
  * the root. That is the whole reason the generator splits at the hip: the torso node is a
  * pivot at the base of the spine, and everything §236 does happens on it.
  */
+/** Scene-space point -> the character's own local space, given its placement. */
+function toLocal(point: THREE.Vector3, placement: CharacterPlacement): THREE.Vector3 {
+  const local = point.clone().sub(placement.position);
+  if (placement.rotation) {
+    local.applyQuaternion(
+      new THREE.Quaternion().setFromEuler(placement.rotation).invert()
+    );
+  }
+  return local;
+}
+
 export function placeCharacter(name: string, placement: CharacterPlacement): PlacedCharacter {
-  const parts = createCharacter(placement);
+  const parts = createCharacter({
+    ...placement,
+    reachFor: placement.handsOn && {
+      left: placement.handsOn.left ? toLocal(placement.handsOn.left, placement) : undefined,
+      right: placement.handsOn.right ? toLocal(placement.handsOn.right, placement) : undefined,
+    },
+  });
 
   const root = ENGINE.SceneNode.create({
     name: 'Contact',
