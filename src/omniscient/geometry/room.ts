@@ -218,7 +218,21 @@ function createDeskPlant(rng: Rng): RoomPart[] {
  */
 export const LAMP = {
   /** Foot of the lamp, on the desk top. */
-  base: new THREE.Vector3(-1.28, 0, -0.84),
+  /**
+   * Forward and short, to clear the menu.
+   *
+   * Measured, not eyeballed: the plate stack occupies x -2.27..-0.93, y 0.42..2.10,
+   * z -0.405..-0.295 in station space, and the previous lamp put its bulb at z -0.30 and
+   * y 0.46 - inside that volume on all three axes. The shade and the bottom SHUT DOWN
+   * plate were occupying the same cubic centimetres, which is why it read as growing out
+   * of the button.
+   *
+   * It cannot move right: the home camera sits at +x, and a lamp on that side puts its
+   * arm between the lens and the screen, which is the one thing in this frame that must
+   * never be occluded. So it stays left and gets shorter - the whole fixture now tops out
+   * at y 0.38, four centimetres under the lowest plate, and sits 0.2 forward of the stack.
+   */
+  base: new THREE.Vector3(-1.34, 0, -0.60),
   /**
    * Centre of the shade opening. The point light goes here.
    *
@@ -227,7 +241,7 @@ export const LAMP = {
    * supposed to throw was lit from within a solid object. The set spans x -0.5..0.5 and
    * z -0.90..-0.10; this is outside it on both.
    */
-  bulb: new THREE.Vector3(-0.92, 0.46, -0.3),
+  bulb: new THREE.Vector3(-1.06, 0.28, -0.16),
 } as const;
 
 /**
@@ -260,9 +274,9 @@ function createDeskLamp(rng: Rng): RoomPart[] {
     thickness: 0.013,
     path: [
       new THREE.Vector3(base.x, base.y + 0.02, base.z),
-      new THREE.Vector3(base.x + 0.04, base.y + 0.46, base.z + 0.06),
-      new THREE.Vector3(base.x + 0.18, base.y + 0.75, base.z + 0.28),
-      new THREE.Vector3(bulb.x + 0.02, bulb.y + 0.16, bulb.z - 0.02),
+      new THREE.Vector3(base.x + 0.02, base.y + 0.22, base.z + 0.05),
+      new THREE.Vector3(base.x + 0.11, base.y + 0.38, base.z + 0.2),
+      new THREE.Vector3(bulb.x + 0.02, bulb.y + 0.12, bulb.z - 0.02),
     ],
   });
   arm.forEach((part, i) => {

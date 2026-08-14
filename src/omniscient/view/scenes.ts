@@ -1657,30 +1657,64 @@ function buildClearedHouse(scene: ContactScene): void {
     meshOf('Letters', mergeGeometries(letters, false) ?? letters[0], MAT.paper)
   );
 
-  // -- Stacked chairs: a house being emptied ---------------------------------
+  /**
+   * Two chairs, one stacked on the other - and the second one has legs.
+   *
+   * The first version stacked only the SEATS: three slabs at y 0.46, 0.59 and 0.72 with
+   * eight centimetres of air between them and nothing underneath the upper two. It was
+   * meant to say "the furniture is being piled up" and it said "two planks are hovering
+   * over a chair", which is what a playtester saw. A stacked chair is not a seat at a
+   * higher y; it is a whole chair whose legs are resting in the seat below it.
+   *
+   * Built from one description used twice so the two cannot drift apart, and the upper
+   * one is turned and dropped into the lower one's seat rather than balanced on its rim.
+   */
   const stack: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < 3; i++) {
+
+  const addChair = (at: THREE.Vector3, turn: number, legLength: number): void => {
+    const parts: THREE.BufferGeometry[] = [];
+
     const seat = new THREE.BoxGeometry(0.42, 0.05, 0.42);
-    seat.rotateY(jitter(rng, 0.14));
-    seat.translate(1.75, 0.46 + i * 0.13, -1.5);
-    stack.push(seat);
-  }
-  const back = new THREE.BoxGeometry(0.42, 0.5, 0.05);
-  back.translate(1.75, 0.95, -1.7);
-  stack.push(back);
-  for (const [x, z] of [
-    [1.58, -1.34],
-    [1.92, -1.34],
-    [1.58, -1.66],
-    [1.92, -1.66],
-  ] as const) {
-    const leg = new THREE.BoxGeometry(0.05, 0.46, 0.05);
-    leg.translate(x, 0.23, z);
-    stack.push(leg);
-  }
+    seat.translate(0, legLength + 0.025, 0);
+    parts.push(seat);
+
+    // Back posts and rails, rising from the rear edge of the seat.
+    for (const sx of [-1, 1] as const) {
+      const post = new THREE.BoxGeometry(0.05, 0.52, 0.05);
+      post.translate(sx * 0.185, legLength + 0.31, -0.185);
+      parts.push(post);
+    }
+    for (const y of [0.22, 0.44] as const) {
+      const rail = new THREE.BoxGeometry(0.33, 0.06, 0.03);
+      rail.translate(0, legLength + y + 0.05, -0.185);
+      parts.push(rail);
+    }
+
+    for (const [lx, lz] of [
+      [-0.185, -0.185],
+      [0.185, -0.185],
+      [-0.185, 0.185],
+      [0.185, 0.185],
+    ] as const) {
+      const leg = new THREE.BoxGeometry(0.05, legLength, 0.05);
+      leg.translate(lx, legLength / 2, lz);
+      parts.push(leg);
+    }
+
+    const chair = mergeGeometries(parts, false) ?? seat;
+    chair.rotateY(turn);
+    chair.translate(at.x, at.y, at.z);
+    stack.push(chair);
+  };
+
+  // The lower chair, and the upper one sitting down into it: its short legs end at the
+  // lower seat's surface, which is exactly where a stacked chair's feet go.
+  addChair(new THREE.Vector3(1.75, 0, -1.5), 0.1 + jitter(rng, 0.06), 0.44);
+  addChair(new THREE.Vector3(1.72, 0.465, -1.46), -0.22 + jitter(rng, 0.06), 0.12);
+
   scene.registerProp(
     'chairs',
-    meshOf('Chairs', mergeGeometries(stack, false) ?? back, MAT.timberDark)
+    meshOf('Chairs', mergeGeometries(stack, false) ?? stack[0], MAT.timberDark)
   );
 
   addContact(scene, 'Ileana', {
