@@ -57,6 +57,7 @@
 import * as THREE from 'three';
 
 import { applyPaintBanding } from './painterly.js';
+import { skyTexture } from './sky.js';
 import { pegboardMaps } from './surface.js';
 
 /**
@@ -267,6 +268,15 @@ export const MAT = {
    * but NOT pure white. At full value it out-shouted the CRT, which is the one thing in
    * the frame that has to win, so it sits a clear step below the screen's brightest green.
    */
+  /**
+   * Sky through a window.
+   *
+   * Was a single flat colour, which spent the cheapest depth cue in an interior on
+   * nothing (§241). Now a banded vertical gradient: cool at the top of the aperture,
+   * warm and pale at the horizon - the warm-under-cool every reference frame gets its
+   * mood from. Still unlit, still un-tone-mapped, and still a clear step below the CRT's
+   * brightest green, which is the one thing in the home shot that has to win.
+   */
   daylight: new THREE.MeshBasicMaterial({ color: '#d8c49b', toneMapped: false }),
   /**
    * The sea below the horizon. Splitting the glazing in two costs one extra plane and
@@ -342,3 +352,20 @@ dress(
   MAT.pegboard,
   pegboardMaps({ color: '#7d6a4c', seed: 'pegboard', repeat: [8.5, 4], pitch: 16 })
 );
+
+/**
+ * The sky, onto the glazing.
+ *
+ * Applied by mutation for the same reason as the pegboard: the family reads as a list of
+ * colours and the maps are an overlay on it. Banded to five steps so the window matches
+ * the stepped light on every lit surface - a smooth gradient in a banded room reads as a
+ * hole in the wall rather than as a view through it.
+ */
+{
+  const sky = skyTexture({ zenith: '#8ea6bd', horizon: '#e4d3ad', bands: 5 });
+  if (sky) {
+    MAT.daylight.map = sky;
+    MAT.daylight.color = new THREE.Color('#ffffff');
+    MAT.daylight.needsUpdate = true;
+  }
+}

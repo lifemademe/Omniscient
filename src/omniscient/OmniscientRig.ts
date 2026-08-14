@@ -491,7 +491,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     const post = this.post;
     if (post) {
-      const bloom = { strength: 0.5, threshold: 0.75, radius: 0.65 };
+      const bloom = { strength: 0.87, threshold: 0.6, radius: 0.65 };
       const pushBloom = (): void =>
         post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: true, ...bloom });
 
@@ -827,8 +827,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // filament - the halation the reference frames have around every practical.
     this.post.configureEffect(ENGINE.PostProcessPass.Bloom, {
       enabled: true,
-      strength: 0.5,
-      threshold: 0.75,
+      // 0.87 / 0.60, settled on the panel. These predated the whole art pass at 0.5/0.75,
+      // which was tuned when the room had no banded light, no occlusion and a flat window
+      // - and at that threshold only the CRT ever crossed it. Dropping the threshold lets
+      // the lamp filament and the lit sky bleed too, which is the halation every one of
+      // the reference frames has around its practicals.
+      strength: 0.87,
+      threshold: 0.6,
       radius: 0.65,
     });
 
