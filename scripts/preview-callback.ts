@@ -706,9 +706,13 @@ check(
 const rec3 = record();
 const storeF = new KnowledgeStore(SEED);
 let lost = false;
+let handedBack = 0;
 const session4 = new SessionController(rec3.surface, storeF, {
   onFailed: () => {
     lost = true;
+  },
+  onNoteRecorded: () => {
+    handedBack += 1;
   },
 });
 session4.start(MISSION_02, TOMAS);
@@ -733,6 +737,23 @@ check(
   '§170'
 );
 check('Writing the note clears the failure prompt', !noted.failure);
+check(
+  'The loss says what would have worked, not just what happened',
+  (lostState.failure?.lesson?.length ?? 0) > 0,
+  lostState.failure?.lesson
+);
+check('The panel degrades its own connection readout when a request is lost', lostState.standing !== undefined);
+
+/**
+ * The handoff back to the globe.
+ *
+ * This is the wiring a playtester found broken: the rig used to start returning the
+ * moment a request was lost, which took the Contact View away before the note could be
+ * written. The note is now what ends the request, so the hook has to fire exactly once,
+ * after the note and not before it.
+ */
+check('Losing alone does not hand back to the globe', handedBack >= 1, `${handedBack} handoff(s)`);
+check('The note is what ends the request - exactly one handoff', handedBack === 1);
 
 // -- Report ---------------------------------------------------------------------------
 
