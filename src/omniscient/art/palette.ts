@@ -40,6 +40,7 @@
 
 import * as THREE from 'three';
 
+import { applyPaintBanding } from './painterly.js';
 import { pegboardMaps, plasterMaps, timberMaps } from './surface.js';
 
 /**
@@ -292,6 +293,17 @@ function dress(
   material.color = new THREE.Color('#ffffff');
   material.roughness = 1;
   material.needsUpdate = true;
+}
+
+/**
+ * The painterly conversion, applied to the family rather than to objects (§187).
+ *
+ * Banded direct light on every standard material in the game at once. Unlit materials -
+ * the sea, the sky, the lamps, the screens - are exactly the ones that must NOT band,
+ * and they select themselves out by not being MeshStandardMaterial.
+ */
+for (const material of Object.values(MAT)) {
+  if (material instanceof THREE.MeshStandardMaterial) applyPaintBanding(material);
 }
 
 // Timber runs along the board, so the repeat is asymmetric: more tiles across the length

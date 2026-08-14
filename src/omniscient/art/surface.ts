@@ -30,6 +30,7 @@
 import * as THREE from 'three';
 
 import { cellDistance, cellEdges, clamp01, fbm, mix, smoothstep } from './noise.js';
+import { applyPaintBanding } from './painterly.js';
 import { seedFrom } from '../core/rng.js';
 
 /**
@@ -596,7 +597,10 @@ export function texturedFrom(
   const maps = paintedMetal(options);
   if (!maps) return fallback;
 
-  const material = fallback.clone();
+  // clone() drops onBeforeCompile, so the family's paint banding has to be re-applied
+  // to the copy - without this, every textured hero prop would be the one smooth-lit
+  // object in a banded room.
+  const material = applyPaintBanding(fallback.clone());
   material.map = maps.map;
   material.normalMap = maps.normalMap;
   material.roughnessMap = maps.roughnessMap;

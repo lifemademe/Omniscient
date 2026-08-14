@@ -9,6 +9,8 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { applyPaintBanding } from '../art/painterly.js';
+
 import { decorMesh } from '../art/mesh.js';
 import { PERSON } from '../art/palette.js';
 import { createRng, seedFrom } from '../core/rng.js';
@@ -150,7 +152,9 @@ function surfaceFor(
     boots: [PERSON.boot, 0.75],
   }[material] as [string, number];
 
-  return new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 });
+  // Banded like the family. The characters are chamfered slabs, and the bevel facets
+  // snapping between light steps is precisely what makes blocky figures read as painted.
+  return applyPaintBanding(new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 }));
 }
 
 function addPieces(

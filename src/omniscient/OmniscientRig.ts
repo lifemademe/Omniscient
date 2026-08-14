@@ -18,6 +18,7 @@ import { MISSION_02 } from './content/mission-02-beacon.js';
 import { MISSION_03 } from './content/mission-03-tunnel.js';
 import { MISSION_04 } from './content/mission-04-relations.js';
 import { createScreenGlass } from './art/glass.js';
+import { PAINT_UNIFORMS } from './art/painterly.js';
 import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { createSignals, MIRELA_SIGNAL, REVEALED_AFTER_FIRST } from './content/signals.js';
@@ -478,6 +479,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (!tune || !rig) return;
 
     const hex = (light: { color: THREE.Color }): string => `#${light.color.getHexString()}`;
+
+    tune.group('painterly');
+    tune.slider({
+      label: 'bands',
+      min: 2,
+      max: 8,
+      step: 1,
+      get: () => PAINT_UNIFORMS.uPaintBands.value,
+      set: (v) => (PAINT_UNIFORMS.uPaintBands.value = Math.round(v)),
+    });
+    tune.slider({
+      label: 'softness',
+      min: 0.02,
+      max: 0.9,
+      get: () => PAINT_UNIFORMS.uPaintSoft.value,
+      set: (v) => (PAINT_UNIFORMS.uPaintSoft.value = v),
+    });
 
     tune.group('key + sky');
     tune.slider({ label: 'key', min: 0, max: 6, get: () => rig.key.intensity, set: (v) => (rig.key.intensity = v) });
