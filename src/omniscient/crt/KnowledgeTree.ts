@@ -88,6 +88,8 @@ const PALETTE = {
   tip: '#7fe08a',
   /** Data pulse travelling the veins. */
   pulse: '#d8ffb0',
+  /** Growth drawn this instant. Brighter than anything else so new reads as new. */
+  fresh: '#eaffd0',
   /** Cross-domain bridges read warmer - a connection is a human thing. */
   bridge: '#c9a227',
   /** Non-Earth growth: cold, wrong, unexplained (§122 - no popup, let them notice). */
@@ -281,9 +283,21 @@ export class KnowledgeTree {
    *   pixel-by-pixel" return-to-home reveal.
    * @param pulse  0-1 phase of a data pulse travelling the veins. Purely decorative.
    */
-  public draw(reveal = 1, pulse = -1): void {
+  public draw(reveal = 1, pulse = -1, freshFrom = 1): void {
     const cfg = STAGE_CONFIG[this.state.stage];
     const visible = Math.floor(this.segments.length * Math.min(Math.max(reveal, 0), 1));
+    /**
+     * Where the growth the player has just earned begins.
+     *
+     * Recording a resolution back showed the problem: the tree does grow, and the new
+     * branches are the same green as the old ones, so seeing what changed means diffing
+     * two very similar pictures. §175 wants growth visible and earned - if the player has
+     * to hunt for it, it is neither.
+     *
+     * Everything past this index burns bright while it draws and settles to its normal
+     * colour once the reveal finishes, so the eye is told exactly what is new.
+     */
+    const freshIndex = Math.floor(this.segments.length * Math.min(Math.max(freshFrom, 0), 1));
 
     this.surface.clear();
     this.drawGroundline();
@@ -292,7 +306,7 @@ export class KnowledgeTree {
     // depth in the canopy rather than fogging the whole tree into a green smear.
     for (let i = 0; i < visible; i++) {
       const segment = this.segments[i];
-      const color = colorFor(segment, cfg.depth);
+      const color = i >= freshIndex ? PALETTE.fresh : colorFor(segment, cfg.depth);
       if (segment.depth <= 2 && this.surface.glowLine) {
         this.surface.glowLine(segment.x0, segment.y0, segment.x1, segment.y1, color);
       } else {

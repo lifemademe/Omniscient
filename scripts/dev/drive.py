@@ -29,7 +29,7 @@ MOUSEEVENTF_LEFTUP = 0x0004
 # The game window, in desktop pixels. Anything outside this is refused: the point of
 # scripting input is to test the game, and a typo should not be able to press something
 # in another application.
-GAME_RECT = (860, 200, 2270, 1340)
+GAME_RECT = (700, 170, 2555, 1270)
 
 
 def guard(x: int, y: int) -> tuple[int, int]:

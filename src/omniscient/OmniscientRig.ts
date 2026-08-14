@@ -817,7 +817,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
     } else if (this.revealProgress < 1) {
       this.revealProgress = Math.min(this.revealProgress + deltaTime / GROWTH_REVEAL_SECONDS, 1);
       const reveal = this.revealFrom + (1 - this.revealFrom) * this.revealProgress;
-      this.tree.draw(reveal, this.pulse);
+      // Everything past where the old tree ended burns bright while it draws, so the
+      // player sees WHAT they earned rather than being handed two similar trees to diff.
+      this.tree.draw(reveal, this.pulse, this.revealFrom);
     } else {
       this.tree.draw(1, this.pulse);
     }
