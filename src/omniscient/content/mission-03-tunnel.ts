@@ -106,7 +106,7 @@ export const MISSION_03: MissionDefinition = {
         + '- they are upright, thin, long between the leaves, and the green has gone out '
         + 'of them. That is what a seedling looks like when it is reaching for **light** '
         + 'it cannot find.',
-      keywords: ['pale', 'light', 'shade'],
+      keywords: ['pale', 'light'],
     },
     {
       id: 'hint-time',
@@ -154,7 +154,11 @@ export const MISSION_03: MissionDefinition = {
       id: 'ASK_PATTERN',
       requires: [
         [...TERMS.describe, ...TERMS.inspect, 'which'],
-        ['side', 'rows', 'row', 'pattern', 'half', 'which', 'dying', 'failing'],
+        // 'line', 'pale' and 'thin' are here because the hints bold them. A hint that
+        // emphasises a word is telling the player it is vocabulary the game understands,
+        // so the intent has to actually understand it - the harness enforces the pair.
+        ['side', 'rows', 'row', 'pattern', 'half', 'which', 'dying', 'failing', 'line',
+         'pale', 'thin'],
       ],
       priority: 3,
     },

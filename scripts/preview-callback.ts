@@ -660,7 +660,30 @@ const globeSurface = new BufferSurface(192, 144);
 const globe = new GlobeView(globeSurface, signals);
 const projected = globe.getProjectedSignals();
 check('Projects every signal', projected.length === signals.length);
-check('Culls the far hemisphere', projected.some((p) => !p.visible), 'orthographic back-face cull');
+
+/**
+ * Back-face culling, proved against a probe rather than against the cast.
+ *
+ * This used to assert that *some* authored signal fell on the far side, which was true
+ * only because there happened to be a tease in Tokyo. Removing that tease broke a check
+ * about projection maths by changing the story, which is a test depending on something it
+ * has no business depending on. A point at the antipode is what the check actually means.
+ */
+const farSide = new GlobeView(new BufferSurface(192, 144), [
+  {
+    id: 'probe-antipode',
+    latitude: 0,
+    longitude: 180,
+    name: 'probe',
+    label: 'probe',
+    state: SignalState.Unknown,
+  },
+]);
+check(
+  'Culls the far hemisphere',
+  farSide.getProjectedSignals().every((p) => !p.visible),
+  'orthographic back-face cull'
+);
 check(
   'Visible points land inside the canvas',
   projected.filter((p) => p.visible).every((p) => p.x >= 0 && p.x <= 192 && p.y >= 0 && p.y <= 144)
