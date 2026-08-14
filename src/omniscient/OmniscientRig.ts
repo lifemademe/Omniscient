@@ -151,6 +151,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private vfxNodes = new Map<string, ENGINE.VFXNode>();
   /** F8. Dev tuning; bindings registered where the lights are built. */
   private tune: TunePanel | null = null;
+  /** Held from configureLook so the F8 panel can re-configure effects live. */
+  private post: ENGINE.PostProcessManager | null = null;
   /** The workstation lights, kept so the panel can reach them. */
   private lightRig: {
     key: ENGINE.DirectionalLightNode;
@@ -480,6 +482,84 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     const hex = (light: { color: THREE.Color }): string => `#${light.color.getHexString()}`;
 
+    /**
+     * Post-process, live.
+     *
+     * configureEffect is a whole-config call rather than a uniform write, so each slider
+     * re-sends the effect's settings. That is heavier than writing a uniform and still far
+     * cheaper than a thirty-second rebuild, which is the only alternative.
+     */
+    const post = this.post;
+    if (post) {
+      const bloom = { strength: 0.5, threshold: 0.75, radius: 0.65 };
+      const pushBloom = (): void =>
+        post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: true, ...bloom });
+
+      tune.group('bloom');
+      tune.slider({
+        label: 'strength',
+        min: 0,
+        max: 3,
+        get: () => bloom.strength,
+        set: (v) => {
+          bloom.strength = v;
+          pushBloom();
+        },
+      });
+      tune.slider({
+        label: 'threshold',
+        min: 0,
+        max: 1,
+        get: () => bloom.threshold,
+        set: (v) => {
+          bloom.threshold = v;
+          pushBloom();
+        },
+      });
+      tune.slider({
+        label: 'radius',
+        min: 0.1,
+        max: 1,
+        get: () => bloom.radius,
+        set: (v) => {
+          bloom.radius = v;
+          pushBloom();
+        },
+      });
+
+      const ao = { ssaoStrength: 2.4, ssaoRadius: 0.11 };
+      const pushAo = (): void =>
+        post.configureEffect(ENGINE.PostProcessPass.AO, {
+          enabled: true,
+          ssaoSamples: 12,
+          luminanceInfluence: 0.6,
+          resolutionScale: 0.5,
+          ...ao,
+        });
+
+      tune.group('occlusion');
+      tune.slider({
+        label: 'strength',
+        min: 0,
+        max: 4,
+        get: () => ao.ssaoStrength,
+        set: (v) => {
+          ao.ssaoStrength = v;
+          pushAo();
+        },
+      });
+      tune.slider({
+        label: 'radius',
+        min: 0.005,
+        max: 0.4,
+        get: () => ao.ssaoRadius,
+        set: (v) => {
+          ao.ssaoRadius = v;
+          pushAo();
+        },
+      });
+    }
+
     tune.group('painterly');
     tune.slider({
       label: 'bands',
@@ -713,17 +793,58 @@ export class OmniscientRig extends ENGINE.SceneNode {
     );
   }
 
+  /**
+   * Post-processing, and a correction to §231.
+   *
+   * §231 has said since it was written that post-process effects are WebGPU-only and fail
+   * silently on WebGL. That is wrong, and it has been quietly costing this project the
+   * whole time: `.engine/src/render/postprocessing/pipelines/WebGLPipeline.ts` is a full
+   * EffectComposer pipeline, and only four effects - depth of field, pixelation, retro and
+   * SSR - actually extend WebGPUOnlyEffectBase. Bloom has in fact been running here all
+   * along. Colour grading is the one that genuinely is not available: its
+   * `createWebGLEffect` returns an empty effect list, so the enum's "WebGPU only for now"
+   * comment is accurate even though the method exists.
+   *
+   * ## Ambient occlusion is the important one
+   *
+   * This project has NO contact shadows. §231's other clause is true - shadow casting is
+   * off across the whole rig, because it spans sixty units and one directional shadow map
+   * cannot cover the workstation and the dioramas at once. So nothing in this game has
+   * ever had darkening where it meets the thing it stands on, which is the single
+   * strongest cue that an object is resting rather than hovering. A playtester reading
+   * props as "floating" is exactly the symptom that predicts.
+   *
+   * SSAO does not care how big the world is - it works in screen space, from the depth
+   * buffer, and is completely indifferent to the sixty units that defeat a shadow map.
+   * It is the one thing available here that puts a prop back on the surface under it.
+   */
   private configureLook(): void {
     const world = this.getWorld();
     if (!world?.postProcessManager) return;
+    this.post = world.postProcessManager;
 
-    // §221: RetroEffect is WebGPU-only and the project runs on WebGL for characters.
-    // Bloom carries the phosphor bleed; the CRT read comes from the canvas and CSS.
-    world.postProcessManager.configureEffect(ENGINE.PostProcessPass.Bloom, {
+    // Bloom carries the phosphor bleed off the CRT and the warm halo round the lamp
+    // filament - the halation the reference frames have around every practical.
+    this.post.configureEffect(ENGINE.PostProcessPass.Bloom, {
       enabled: true,
       strength: 0.5,
       threshold: 0.75,
       radius: 0.65,
+    });
+
+    // Short radius on purpose: this is contact darkening in the crack where two surfaces
+    // meet, not a dirt wash in every corner of the room. A long radius reads as grime and
+    // costs the §232 value structure exactly what the texture pass was careful not to.
+    this.post.configureEffect(ENGINE.PostProcessPass.AO, {
+      enabled: true,
+      // 2.4 / 0.11, settled with the F8 panel against the home shot. 1.1 / 0.05 - the
+      // first guess from the engine defaults - was invisible in a capture; 4.0 / 0.27
+      // grounds everything and starts reading as grime in the wall corners.
+      ssaoStrength: 2.4,
+      ssaoRadius: 0.11,
+      ssaoSamples: 12,
+      luminanceInfluence: 0.6,
+      resolutionScale: 0.5,
     });
   }
 

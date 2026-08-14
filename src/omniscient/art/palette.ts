@@ -1,4 +1,20 @@
 /**
+ * ## §231 AMENDED - POST-PROCESSING IS AVAILABLE ON WEBGL
+ *
+ * §231 said post-process effects are WebGPU-only and fail silently here. That is wrong,
+ * and it cost this project a whole art pass of working around a restriction that does not
+ * exist. `render/postprocessing/pipelines/WebGLPipeline.ts` is a complete EffectComposer
+ * pipeline; only depth of field, pixelation, retro and SSR extend WebGPUOnlyEffectBase.
+ * Bloom had in fact been enabled in this game the entire time.
+ *
+ * What IS unavailable: colour grading, whose `createWebGLEffect` returns an empty effect
+ * list. Grading has to stay in the palette and the lights, which is where it already is.
+ *
+ * The clause of §231 that stands is shadows: casting really is off across the rig,
+ * because sixty units cannot fit one directional shadow map. But SSAO is screen space and
+ * does not care - so contact darkening, the thing that makes a prop rest on a surface
+ * rather than hover above it, was available all along.
+ *
  * ## §230 - WHAT THE CONCEPT ART GIVES US, AND WHAT IT DOES NOT
  *
  * Three reference frames were provided. They are generated concept art, and the whole
