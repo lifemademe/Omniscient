@@ -93,6 +93,22 @@ export const TERMINAL_CSS = `
   scrollbar-width: thin;
   scrollbar-color: #2b5c39 transparent;
 }
+/**
+ * The conversation sits on the bottom of the panel and grows upward.
+ *
+ * Top-anchored, an opening line left two thirds of the console empty - a tall dark
+ * rectangle between the contact's first sentence and the reply chips, at the exact moment
+ * the player is deciding whether this game has anything in it. Every terminal and every
+ * messaging app in existence stacks from the bottom for this reason: the newest line is
+ * where the eye already is, next to where you type.
+ *
+ * Done with margin-top on the first child rather than justify-content, because flex-end
+ * on a scrolling container puts the overflow out of reach at the top - the messages you
+ * scrolled up to find would be the ones you could not reach.
+ */
+.omni-terminal__log > :first-child {
+  margin-top: auto;
+}
 .omni-line__who {
   display: block;
   font-size: 10px;
