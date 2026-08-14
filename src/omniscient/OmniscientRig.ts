@@ -122,6 +122,21 @@ const SCREEN_SHOT: CameraShot = {
 /** Seconds spent at the machine after a request resolves, before the next signal. */
 const HOME_DWELL = 5.5;
 
+/**
+ * Seconds the Contact View is held after a request resolves, before the camera leaves.
+ *
+ * This was zero. `onResolved` called `returnHome()` on the same tick the outcome landed,
+ * which hid the console and pulled the camera back to the workstation - so the contact's
+ * closing line was on screen for no frames at all, and every environment cue fired into a
+ * shot nobody was watching.
+ *
+ * Adaeze's whole request is built around one moment: the limbs come off and the shade
+ * slides off the failing rows. It has a 1.4 second animation. The player was seeing about
+ * a third of a second of it, from behind, on the way out. §176's loop is *resolve, see the
+ * consequence, go home* - the middle step needs time to happen in.
+ */
+const RESOLVE_HOLD = 4.6;
+
 @ENGINE.GameClass()
 export class OmniscientRig extends ENGINE.SceneNode {
   private knowledge = new KnowledgeStore(PLAYTHROUGH_SEED);
@@ -136,6 +151,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private queue: QueuedRequest[] = [];
   private queueIndex = 0;
   private pauseRemaining = 0;
+  /** Seconds left holding the Contact View after a resolution. Zero when not holding. */
+  private resolveHold = 0;
 
   private phase: Phase = Phase.Menu;
   private screen: Screen = Screen.Tree;
@@ -608,7 +625,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       onEnvironment: (cue) => this.applyEnvironmentCue(cue),
       onVfx: (effect) => this.fireVfx(effect),
       onKnowledgeGained: () => this.revealGrowth(),
-      onResolved: () => this.returnHome(),
+      onResolved: () => this.holdThenReturnHome(),
       onFailed: (failure) => this.onRequestLost(failure),
       onNoteRecorded: () => this.closeLostRequest(),
       onLeave: () => this.leaveContact(),
@@ -798,6 +815,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.showGlobe();
   }
 
+  /**
+   * Stay a moment before leaving.
+   *
+   * The console keeps the closing line up and the diorama keeps playing whatever the
+   * resolution set going, and then the camera goes home.
+   */
+  private holdThenReturnHome(): void {
+    this.resolveHold = RESOLVE_HOLD;
+  }
+
   private returnHome(): void {
     this.phase = Phase.Home;
     this.screen = Screen.Tree;
@@ -919,6 +946,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.tree.draw(reveal, this.pulse, this.revealFrom);
     } else {
       this.tree.draw(1, this.pulse);
+    }
+
+    // Let the resolution finish being watched before the camera leaves it.
+    if (this.resolveHold > 0) {
+      this.resolveHold -= deltaTime;
+      if (this.resolveHold <= 0) {
+        this.resolveHold = 0;
+        this.returnHome();
+      }
     }
 
     // §168: let the growth land at the machine before the globe comes back up.
