@@ -4,6 +4,7 @@ import './omniscient/art/palette.js';
 import './omniscient/content/contacts.js';
 import './omniscient/content/mission-01-transmitter.js';
 import './omniscient/content/mission-02-beacon.js';
+import './omniscient/content/mission-03-tunnel.js';
 import './omniscient/content/signals.js';
 import './omniscient/core/rng.js';
 import './omniscient/core/tween.js';

@@ -13,6 +13,7 @@ import type { Signal } from '../crt/GlobeView.js';
 /** Signal ids that map to authored missions, in queue order. */
 export const MIRELA_SIGNAL = 'mirela';
 export const TOMAS_SIGNAL = 'tomas';
+export const ADAEZE_SIGNAL = 'adaeze';
 
 /**
  * §96 caps conscious attention at five. The globe honours that: five nameable people at
@@ -57,12 +58,19 @@ export function createSignals(): Signal[] {
       state: SignalState.Waiting,
     },
     {
-      id: 'tease-lagos',
+      /**
+       * Was a tease, and is now a request. The globe promised her from the first frame of
+       * the game, which is the best possible way for a third contact to arrive: not as a
+       * new name, but as one the player has already been ignoring.
+       */
+      id: ADAEZE_SIGNAL,
       latitude: 6.5,
       longitude: 3.4,
-      name: 'Adaeze O.',
-      label: 'Lagos - urgent.',
-      state: SignalState.Waiting,
+      name: 'Adaeze Okafor',
+      label: 'Lagos - seedlings failing.',
+      // Appears once Tomas is settled. Three requests at once would make the slice a
+      // queue rather than a choice.
+      state: SignalState.Resolved,
     },
     {
       id: 'tease-toronto',

@@ -12,9 +12,10 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
-import { MIRELA, TOMAS } from './content/contacts.js';
+import { ADAEZE, MIRELA, TOMAS } from './content/contacts.js';
 import { MISSION_01 } from './content/mission-01-transmitter.js';
 import { MISSION_02 } from './content/mission-02-beacon.js';
+import { MISSION_03 } from './content/mission-03-tunnel.js';
 import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { createSignals, MIRELA_SIGNAL } from './content/signals.js';
@@ -191,6 +192,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.queue = [
       { mission: MISSION_01, contact: MIRELA },
       { mission: MISSION_02, contact: TOMAS },
+      // Adaeze is deliberately last and deliberately elsewhere: by the time the player
+      // reaches her they have solved two electrical faults in one small town, which is
+      // exactly the habit her request is built to break.
+      { mission: MISSION_03, contact: ADAEZE },
     ];
 
     this.buildScenes();

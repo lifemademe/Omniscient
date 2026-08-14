@@ -20,6 +20,7 @@ import { ACCENT, LIGHT, MAT, PERSON } from '../art/palette.js';
 import { createRng, jitter, seedFrom } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
 import { createCharacter } from '../geometry/character.js';
+import { createClump } from './../geometry/foliage.js';
 import {
   createMainsSwitch,
   createShelfStack,
@@ -694,10 +695,230 @@ function buildBeaconMast(scene: ContactScene): void {
   });
 }
 
+
+/**
+ * MISSION 03 - Adaeze's seedling tunnel.
+ *
+ * The set has to state the puzzle before a word is spoken: two banks of seedlings, one
+ * healthy and one failing, a hard shadow line down the middle of the tunnel, and the tree
+ * casting it just outside. §131 - if the player cannot see the pattern, the observation
+ * panel is describing a room that is not there, which is the mistake the first two scenes
+ * both made and both had to have fixed.
+ */
+function buildSeedlingTunnel(scene: ContactScene): void {
+  const rng = createRng(seedFrom('adaeze-tunnel'));
+
+  // -- Ground and beds ------------------------------------------------------
+  const ground = new THREE.BoxGeometry(9, 0.2, 7);
+  ground.translate(0, -0.1, 0);
+  scene.registerProp('ground', meshOf('Ground', ground, MAT.ground));
+
+  const beds: THREE.BufferGeometry[] = [];
+  for (const side of [-1, 1] as const) {
+    const bed = new THREE.BoxGeometry(1.5, 0.22, 4.4);
+    bed.translate(side * 1.05, 0.11, -0.2);
+    beds.push(bed);
+  }
+  scene.registerProp(
+    'beds',
+    meshOf('Beds', mergeGeometries(beds, false) ?? beds[0], MAT.timberDark)
+  );
+
+  /**
+   * The tunnel: hoops and a ridge, left open rather than skinned.
+   *
+   * A closed polytunnel would hide the one thing this scene exists to show. The hoops
+   * read as a tunnel from any angle and let the shadow, the rows and the tree all stay
+   * visible at once.
+   */
+  const frame: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 6; i++) {
+    const z = -2.3 + i * 0.92;
+    const hoop = new THREE.TorusGeometry(2.05, 0.022, 5, 16, Math.PI);
+    hoop.rotateY(Math.PI / 2);
+    hoop.translate(0, 0.02, z);
+    frame.push(hoop);
+  }
+  const ridge = new THREE.BoxGeometry(0.05, 0.05, 4.9);
+  ridge.translate(0, 2.05, -0.2);
+  frame.push(ridge);
+  /*
+   * Galvanised, not chrome. MAT.metal is 0.65 metalness, and under a sun bright enough to
+   * throw the shadow this request turns on, six hoops of it filled the frame with white
+   * pipes and buried the rows they are standing over.
+   */
+  scene.registerProp(
+    'tunnel',
+    meshOf('TunnelFrame', mergeGeometries(frame, false) ?? frame[0], MAT.galvanised)
+  );
+
+  // -- The seedlings, and the line between them -----------------------------
+  //
+  // Two banks from the same generator, separated only by health: full clumps on the west
+  // side, sparse and short ones on the east. Nothing else in the scene differs, which is
+  // exactly the deduction the player has to make.
+  const healthy: THREE.BufferGeometry[] = [];
+  const failing: THREE.BufferGeometry[] = [];
+
+  for (let row = 0; row < 7; row++) {
+    const z = -1.9 + row * 0.62;
+    for (let col = 0; col < 3; col++) {
+      const west = createClump(rng, {
+        count: 7,
+        length: [0.1, 0.2],
+        droop: [0.3, 1.1],
+        spread: 0.02,
+      });
+      west.forEach((part) => {
+        part.geometry.translate(0.65 + col * 0.4, 0.22, z);
+        healthy.push(part.geometry);
+      });
+
+      const east = createClump(rng, {
+        count: 4,
+        length: [0.05, 0.11],
+        droop: [0.9, 1.7],
+        spread: 0.015,
+      });
+      east.forEach((part) => {
+        part.geometry.translate(-1.45 + col * 0.4, 0.22, z);
+        failing.push(part.geometry);
+      });
+    }
+  }
+  scene.registerProp(
+    'rows-healthy',
+    meshOf('RowsHealthy', mergeGeometries(healthy, false) ?? healthy[0], MAT.leaf)
+  );
+  scene.registerProp(
+    'rows-failing',
+    meshOf('RowsFailing', mergeGeometries(failing, false) ?? failing[0], MAT.leafPale)
+  );
+
+  // -- The tree that is doing it --------------------------------------------
+  const treeRoot = ENGINE.SceneNode.create({
+    name: 'NeighbourTree',
+    position: new THREE.Vector3(-3.7, 0, -0.4),
+  });
+
+  const trunk = new THREE.CylinderGeometry(0.16, 0.26, 3.4, 8);
+  trunk.translate(0, 1.7, 0);
+  treeRoot.add(meshOf('TreeTrunk', trunk, MAT.timberDark));
+
+  // Limbs reaching back over the tunnel - the shape of the whole problem in one prop.
+  const limbs: THREE.BufferGeometry[] = [];
+  const canopy: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 5; i++) {
+    const lean = 0.5 + i * 0.16;
+    const limb = new THREE.CylinderGeometry(0.05, 0.09, 2.6, 6);
+    limb.rotateZ(lean);
+    limb.translate(0.7 + i * 0.16, 2.9 + i * 0.14, -1.1 + i * 0.55);
+    limbs.push(limb);
+
+    const leaves = new THREE.SphereGeometry(0.85 - i * 0.05, 7, 5);
+    leaves.translate(1.5 + i * 0.2, 3.3 + i * 0.12, -1.2 + i * 0.58);
+    canopy.push(leaves);
+  }
+  treeRoot.add(meshOf('TreeLimbs', mergeGeometries(limbs, false) ?? limbs[0], MAT.timberDark));
+
+  const crown = meshOf('TreeCrown', mergeGeometries(canopy, false) ?? canopy[0], MAT.leafDeep);
+  treeRoot.add(crown);
+
+  scene.registerProp('neighbour-tree', treeRoot, {
+    anchors: { default: new THREE.Vector3(1.6, 3.3, -0.4) },
+    actions: {
+      /** Cutting back: the crown lifts away and the light lands on the failing rows. */
+      clear: (tweener) => {
+        const from = crown.position.clone();
+        tweener.add(
+          (t) => {
+            crown.position.set(from.x - t * 2.4, from.y + t * 0.6, from.z);
+            crown.scale.setScalar(1 - t * 0.55);
+          },
+          {
+            duration: 1.4,
+            easing: Ease.outCubic,
+            channel: 'tree-clear',
+          }
+        );
+      },
+    },
+  });
+
+  // -- Adaeze ---------------------------------------------------------------
+  scene.registerProp(
+    'contact',
+    buildCharacter('Adaeze', {
+      seed: 'adaeze-okafor',
+      height: 1.71,
+      build: 0.42,
+      shoulders: 0.46,
+      // Crouched at the end of a row, which is where she says she is.
+      lean: 0.3,
+      reach: 0.8,
+      garment: 'apron',
+      colors: { garment: '#2f6a72', underlayer: '#d8c9a8' },
+      // Left of frame and near the camera. Mirroring the scene put her behind the
+      // conversation panel, which is a poor place for the person doing the talking.
+      position: new THREE.Vector3(-1.9, 0, 2.4),
+      rotation: new THREE.Euler(0, Math.PI * 0.1, 0),
+    })
+  );
+
+  // -- Light ----------------------------------------------------------------
+  //
+  // High and hard from the west, because the whole request turns on a shadow. A soft key
+  // would light both banks evenly and there would be nothing to see.
+  scene.registerProp(
+    'sun',
+    ENGINE.PointLightNode.create({
+      name: 'Sun',
+      position: new THREE.Vector3(5.5, 7.5, 1.5),
+      intensity: 36,
+      color: new THREE.Color('#fff0d0'),
+      distance: 26,
+      decay: 0.9,
+    })
+  );
+
+  scene.registerProp(
+    'skyfill',
+    ENGINE.PointLightNode.create({
+      name: 'SkyFill',
+      position: new THREE.Vector3(-2.5, 4.5, 3.5),
+      intensity: 13,
+      color: new THREE.Color('#9fc0d8'),
+      distance: 16,
+      decay: 1.2,
+    })
+  );
+
+  // -- Shots ----------------------------------------------------------------
+  scene.registerShot('default', {
+    // Down the tunnel, so both banks are in frame at once and the difference between
+    // them is the first thing read.
+    // Outside the mouth and above it. From inside, the nearest hoop sat across the lens
+    // and the two banks - the entire puzzle - were behind it.
+    position: new THREE.Vector3(1.1, 3.4, 7.0),
+    target: new THREE.Vector3(-1.3, 0.9, -0.6),
+  });
+  scene.registerShot('tunnel-rows', {
+    position: new THREE.Vector3(2.6, 1.6, 3.0),
+    target: new THREE.Vector3(-1.1, 0.4, -0.5),
+    duration: 2.4,
+  });
+  scene.registerShot('neighbour-tree', {
+    position: new THREE.Vector3(1.4, 2.6, 3.8),
+    target: new THREE.Vector3(-2.5, 3.0, -0.6),
+    duration: 2.4,
+  });
+}
+
 // Registered at module load. auto-imports pulls this module in, so a ContactScene node
 // placed in the editor with a matching sceneId populates itself.
 ContactScene.registerBuilder('scene-repair-shop', buildRepairShop);
 ContactScene.registerBuilder('scene-beacon-mast', buildBeaconMast);
+ContactScene.registerBuilder('scene-seedling-tunnel', buildSeedlingTunnel);
 
 /** Construct a populated diorama for a mission's sceneId, or null when none exists. */
 export function buildContactScene(sceneId: string): ContactScene | null {

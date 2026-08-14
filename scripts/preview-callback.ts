@@ -16,6 +16,7 @@
 import { MIRELA, TOMAS } from '../src/omniscient/content/contacts.js';
 import { MISSION_01 } from '../src/omniscient/content/mission-01-transmitter.js';
 import { MISSION_02 } from '../src/omniscient/content/mission-02-beacon.js';
+import { MISSION_03 } from '../src/omniscient/content/mission-03-tunnel.js';
 import { createSignals, MIRELA_SIGNAL } from '../src/omniscient/content/signals.js';
 import { GlobeView, SignalState } from '../src/omniscient/crt/GlobeView.js';
 import { layoutLabels, tickCooldowns } from '../src/omniscient/globe/GlobeScreen.js';
@@ -174,6 +175,53 @@ check('Callback did NOT fire', !m2Blind.calledBack);
 check('Still solvable blind - no dead end', m2Blind.isFinished, '§163');
 check('Blind route reaches the same truth', storeB.knows('beacon_drops_on_keyup'));
 
+// -- 3b. Mission 03, carried on the same playthrough -----------------------------------
+
+console.log('\n=== MISSION 03: the seedlings, after two electrical faults ===\n');
+
+const m3 = play(
+  MISSION_03,
+  storeA,
+  ['which rows are dying', 'look outside the tunnel', 'cut the branches back'],
+  { verbose: true }
+);
+
+console.log('');
+check('Mission 03 completes', m3.isFinished);
+check('Nothing was broken - the tree is what changed', storeA.knows('neighbour_tree_grew'));
+check(
+  'A second cross-domain connection is grafted',
+  storeA.getConnections().length === 2,
+  'Tomas and Adaeze have the same problem in different substance'
+);
+check(
+  `Three requests carry the tree to ${GrowthStage[storeA.getStage()]}`,
+  storeA.getStage() >= GrowthStage.Canopy,
+  `${storeA.getFacts().length} facts, ${storeA.getConnections().length} connections`
+);
+
+/**
+ * The trap, checked rather than asserted.
+ *
+ * The equipment routes are the ones two previous missions have trained the player to
+ * take. They have to resolve and come back clean - not punish, not dead-end - or the
+ * lesson lands as a gotcha instead of as a lesson.
+ */
+const storeTrap = new KnowledgeStore(SEED);
+const m3Trap = play(MISSION_03, storeTrap, [
+  'check the water',
+  'check the pump and fan',
+  'which rows are dying',
+  'look outside the tunnel',
+  'cut the branches back',
+]);
+check('Checking the equipment first is not punished', m3Trap.isFinished);
+check(
+  'and it teaches something on the way past',
+  storeTrap.knows('tunnel_equipment_sound'),
+  'not every failure is a broken machine'
+);
+
 // -- 4. Intent equivalence (§164) -----------------------------------------------------
 
 console.log('\n=== INTENT EQUIVALENCE ===\n');
@@ -222,7 +270,7 @@ fromHints.forEach(([hintId, text]) => {
  * an intent the current beat cannot accept, is worse than no chip at all - it teaches the
  * player that the game does not listen.
  */
-[MISSION_01, MISSION_02].forEach((mission) => {
+[MISSION_01, MISSION_02, MISSION_03].forEach((mission) => {
   const broken: string[] = [];
   const silent: string[] = [];
 
@@ -267,7 +315,7 @@ const asksClosedQuestion = (say: string): boolean => {
   return !WH.test(lastSentence);
 };
 
-[MISSION_01, MISSION_02].forEach((mission) => {
+[MISSION_01, MISSION_02, MISSION_03].forEach((mission) => {
   const unanswerable = mission.beats
     .filter((beat) => asksClosedQuestion(beat.say) && !beat.outcome && !beat.failure)
     .filter((beat) => !beat.affirmIntent || !(beat.affirmIntent in beat.on))
@@ -323,7 +371,7 @@ check(
 );
 
 /** The rule has to be the same in both missions, or it is a quirk rather than a rule. */
-[MISSION_01, MISSION_02].forEach((mission) => {
+[MISSION_01, MISSION_02, MISSION_03].forEach((mission) => {
   const unsafeLandings = mission.beats.flatMap((beat) =>
     mission.hiddenTruth.unsafeIntents
       .filter((id) => id in beat.on)
@@ -593,7 +641,7 @@ check(
  * allowed to bold nothing - but it is not allowed to bold a word the matcher shrugs at.
  * Checked across both missions, since the failure is an authoring slip, not a runtime one.
  */
-[MISSION_01, MISSION_02].forEach((mission) => {
+[MISSION_01, MISSION_02, MISSION_03].forEach((mission) => {
   const vocabulary = new Set(
     mission.intents.flatMap((intent) =>
       [...intent.requires, ...(intent.boosts ?? [])].flat().map((t) => t.toLowerCase())
@@ -669,7 +717,7 @@ check(
  * never have to decode trade vocabulary to know what is being offered.
  */
 const JARGON = /\b(mains|splice|isolator|carrier|keys? up|keyed)\b/i;
-[MISSION_01, MISSION_02].forEach((mission) => {
+[MISSION_01, MISSION_02, MISSION_03].forEach((mission) => {
   const offenders: string[] = [];
   const inspect = (where: string, text: string | undefined): void => {
     if (text && JARGON.test(text)) offenders.push(`${where}: "${JARGON.exec(text)?.[0]}"`);

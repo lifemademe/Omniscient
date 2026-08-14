@@ -151,6 +151,8 @@ export const MAT = {
    * desaturated against all that warm wood, it separates on hue as well as value.
    */
   equipment: standard('#6a7268', 0.62, 0.15),
+  /** Galvanised tube. Dull enough to stand in daylight without becoming the subject. */
+  galvanised: standard('#8a8f92', 0.78, 0.2),
   /**
    * Night sea and sky, behind Tomas's mast.
    *
@@ -164,6 +166,12 @@ export const MAT = {
   /** The same lens with nothing behind it. Its whole job is to be conspicuously off. */
   beaconDark: standard('#4a4034', 0.7),
   leaf: standard(GROWTH.leaf, 0.88),
+  /**
+   * Seedlings that are not getting enough light: paler and yellower than healthy leaf,
+   * because that is what starving for light actually looks like. The whole of Adaeze's
+   * request is the player noticing that two banks of the same plant are different colours.
+   */
+  leafPale: standard('#8f9a63', 0.9),
   leafDeep: standard(GROWTH.leafDeep, 0.92),
   stem: standard(GROWTH.stem, 0.9),
   /**

@@ -20,6 +20,12 @@ export enum KnowledgeDomain {
   Mechanical = 'mechanical',
   People = 'people',
   Place = 'place',
+  /**
+   * Things that grow. Added for the third request, and the first domain in the game whose
+   * faults are not faults at all - a plant doing exactly what plants do is still the
+   * reason somebody's crop is dying.
+   */
+  Growing = 'growing',
 }
 
 /**
@@ -72,13 +78,21 @@ export interface KnowledgeEvent {
 
 /**
  * Thresholds mapping accumulated knowledge onto §121 milestone stages.
- * Deliberately low for the Jam slice: §214 targets visible growth twice inside a
- * 10-12 minute play, which a conventional XP curve would never deliver.
+ *
+ * Deliberately low for the Jam slice: §214 wants growth the player can SEE inside a short
+ * play, which a conventional XP curve would never deliver. Retuned when the third request
+ * landed - at the old numbers a direct run through all three finished on six facts and two
+ * connections, which was still Interwoven, so Adaeze's request grew the tree by nothing at
+ * all. A request that changes the machine and does not change the picture of the machine
+ * has had its reward quietly taken away.
+ *
+ * The rule these have to satisfy: every request moves the tree exactly one stage on a
+ * direct route. Sprout, Branching, Interwoven, Canopy.
  */
 const STAGE_THRESHOLDS: ReadonlyArray<{ stage: GrowthStage; facts: number; connections: number }> = [
   { stage: GrowthStage.Transcendent, facts: 14, connections: 4 },
   { stage: GrowthStage.Overgrown, facts: 10, connections: 3 },
-  { stage: GrowthStage.Canopy, facts: 7, connections: 2 },
+  { stage: GrowthStage.Canopy, facts: 6, connections: 2 },
   { stage: GrowthStage.Interwoven, facts: 5, connections: 1 },
   { stage: GrowthStage.Branching, facts: 3, connections: 0 },
   { stage: GrowthStage.Sapling, facts: 1, connections: 0 },
