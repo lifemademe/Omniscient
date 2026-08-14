@@ -8,7 +8,7 @@
  * spring and the unit sat in it.
  *
  * THE SEED (§214). While the player is solving a connector problem, Mirela mentions in
- * passing that her set shares its antenna feed with the harbour beacon. Nothing marks
+ * passing that her shop and the harbour light are on the same supply. Nothing marks
  * this as important. It is recorded as an incidental fact - and in Mission 02 it turns
  * out that fixing her transmitter is what broke her brother's beacon.
  *
@@ -26,7 +26,7 @@ import type { MissionDefinition } from '../mission/types.js';
 export const FACT_CONNECTOR_CORROSION = 'connector_b_corrosion';
 export const FACT_WORKSHOP_FLOODS = 'workshop_floods_in_spring';
 /** The callback seed. Learned incidentally; decisive in Mission 02. */
-export const FACT_SHARED_ANTENNA_FEED = 'shared_antenna_feed';
+export const FACT_SHARED_POWER_FEED = 'shared_power_feed';
 
 export const MISSION_01: MissionDefinition = {
   id: 'm01-transmitter',
@@ -57,8 +57,8 @@ export const MISSION_01: MissionDefinition = {
       incidental: true,
     },
     {
-      id: FACT_SHARED_ANTENNA_FEED,
-      label: 'Mirela\'s set shares an antenna feed with the harbour beacon',
+      id: FACT_SHARED_POWER_FEED,
+      label: 'Mirela\'s shop and the harbour light run off the same supply',
       domain: KnowledgeDomain.Signal,
       incidental: true,
     },
@@ -91,12 +91,12 @@ export const MISSION_01: MissionDefinition = {
       cue: 'camera.push-in:transmitter',
     },
     {
-      id: 'hint-aerial',
-      summary: 'The aerial wire leaves the building',
+      id: 'hint-supply',
+      summary: 'The supply wire leaves the building',
       detail:
-        'The wire does not stop in this room. It goes out through the wall and keeps '
-        + 'going, so this set is not the only thing using it.',
-      keywords: ['aerial'],
+        'The thick wire feeding this room does not stop here. It goes out through the '
+        + 'wall and up the hill, so this shop is not the only thing on it.',
+      keywords: ['wire', 'supply'],
       cue: 'camera.push-in:transmitter',
     },
     {
@@ -118,7 +118,7 @@ export const MISSION_01: MissionDefinition = {
     REMOVE_POWER: 'Do you mean Mirela should switch the power off at the wall?',
     CLEAN_CONNECTOR: 'Do you mean Mirela should clean the green crust off the pins?',
     CLEAN_LIVE: 'Do you mean Mirela should clean it now, while the power is still on?',
-    ASK_AERIAL: 'Do you mean Mirela should say where the aerial wire goes?',
+    ASK_SUPPLY: 'Do you mean Mirela should say where the supply wire goes?',
     ASK_HISTORY: 'Do you mean Mirela should say what happened to it?',
     TEST_TRANSMIT: 'Do you mean Mirela should switch it on and see if it works?',
     ADMIT_UNCERTAINTY: 'Do you want to tell her you are not sure yet?',
@@ -161,16 +161,16 @@ export const MISSION_01: MissionDefinition = {
     },
     {
       /**
-       * Asking about the aerial. The hint points at it, so there has to be a way to act
-       * on it - and this is the route where the shared feed is stated outright rather
+       * Asking where the supply goes. The hint points at it, so there has to be a way to
+       * act on it - and this is the route where the shared line is stated outright rather
        * than mentioned in passing.
        */
-      id: 'ASK_AERIAL',
+      id: 'ASK_SUPPLY',
       requires: [
         [...TERMS.inspect, ...TERMS.describe, 'follow', 'trace', 'goes', 'go'],
         // Deliberately not 'lead' - that word belongs to TERMS.connector, and colliding
         // with INSPECT_CONNECTOR would make "look at the lead" ambiguous.
-        ['aerial', 'antenna', 'feed', 'mast'],
+        ['wire', 'supply', 'line', 'cable'],
       ],
       priority: 3,
     },
@@ -214,7 +214,7 @@ export const MISSION_01: MissionDefinition = {
           to: 'connector-found',
           environment: 'prop.rotate:transmitter-rear',
         },
-        ASK_AERIAL: { to: 'aerial', environment: 'camera.push-in:transmitter' },
+        ASK_SUPPLY: { to: 'supply', environment: 'camera.push-in:transmitter' },
         ASK_HISTORY: {
           to: 'history',
           environment: 'camera.pan:workshop-floor',
@@ -241,7 +241,7 @@ export const MISSION_01: MissionDefinition = {
       on: {
         INSPECT_UNIT: { to: 'unit-overview', environment: 'camera.push-in:transmitter' },
         INSPECT_CONNECTOR: { to: 'connector-found', environment: 'prop.rotate:transmitter-rear' },
-        ASK_AERIAL: { to: 'aerial' },
+        ASK_SUPPLY: { to: 'supply' },
         ASK_HISTORY: { to: 'history' },
         REMOVE_POWER: { to: 'power-off-early', environment: 'prop.toggle:mains-switch' },
         ADMIT_UNCERTAINTY: { to: 'uncertain' },
@@ -260,7 +260,7 @@ export const MISSION_01: MissionDefinition = {
       on: {
         INSPECT_UNIT: { to: 'unit-overview', environment: 'camera.push-in:transmitter' },
         INSPECT_CONNECTOR: { to: 'connector-found', environment: 'prop.rotate:transmitter-rear' },
-        ASK_AERIAL: { to: 'aerial' },
+        ASK_SUPPLY: { to: 'supply' },
         ASK_HISTORY: { to: 'history' },
       },
       onUnrecognised: { to: 'clarify' },
@@ -271,11 +271,11 @@ export const MISSION_01: MissionDefinition = {
       tempo: Tempo.Think,
       // THE SEED, attached to the line rather than to any exit. She says it out loud, so
       // OMNISCIENT_ has heard it - regardless of how the player phrases what comes next.
-      learn: [FACT_SHARED_ANTENNA_FEED],
+      learn: [FACT_SHARED_POWER_FEED],
       say:
         'It was my father\'s. The lamp is lit, but the needle does not move when I try to send. ' +
-        'The aerial wire runs out through the wall - it feeds the harbour light as well, ' +
-        'we split it years ago so we would not need two masts.',
+        'The supply comes in through the wall and carries on up the hill to the harbour ' +
+        'light - one line for the both of us, since my father\'s day.',
       suggest: ['look at the connectors on the back', 'turn the power off', 'what happened to it recently'],
       on: {
         INSPECT_CONNECTOR: {
@@ -294,12 +294,12 @@ export const MISSION_01: MissionDefinition = {
     {
       id: 'history',
       tempo: Tempo.Think,
-      // Her answer mentions the shared aerial too, so this route also seeds the callback.
-      learn: [FACT_WORKSHOP_FLOODS, FACT_SHARED_ANTENNA_FEED],
+      // Her answer mentions the shared supply too, so this route also seeds the callback.
+      learn: [FACT_WORKSHOP_FLOODS, FACT_SHARED_POWER_FEED],
       say:
         'Water? Every spring. The floor goes under about a hand\'s depth and I put everything on the ' +
         'high shelf. The set was on the bench though. It has been fine since, until today. ' +
-        'And the aerial is shared with the harbour light, if that matters - we split it years ago.',
+        'And we share the supply with the harbour light, if that matters - one line up the hill.',
       suggest: ['look at the connectors on the back', 'turn the power off'],
       on: {
         INSPECT_CONNECTOR: {
@@ -313,17 +313,17 @@ export const MISSION_01: MissionDefinition = {
 
     {
       /**
-       * The aerial route. The player followed the hint, so they get the shared feed
-       * stated plainly rather than in passing - and it still reads as small talk, because
-       * she has no idea it matters either.
+       * The supply route. The player followed the hint, so they get the shared line stated
+       * plainly rather than in passing - and it still reads as small talk, because she has
+       * no idea it matters either.
        */
-      id: 'aerial',
+      id: 'supply',
       tempo: Tempo.Think,
-      learn: [FACT_SHARED_ANTENNA_FEED],
+      learn: [FACT_SHARED_POWER_FEED],
       say:
-        'The wire? Out through the wall and up the hill. It feeds the harbour light too - ' +
-        'we split it years ago so we would not need two masts. It has never given us trouble. ' +
-        'Whatever is wrong is in here somewhere, I am sure of it.',
+        'The wire? Out through the wall and up the hill. It feeds the harbour light as well - ' +
+        'the same line does both of us. It has never given us trouble. Whatever is wrong is ' +
+        'in here somewhere, I am sure of it.',
       suggest: ['look at the connectors on the back', 'turn the power off'],
       on: {
         INSPECT_CONNECTOR: {
@@ -381,11 +381,11 @@ export const MISSION_01: MissionDefinition = {
       on: {
         INSPECT_CONNECTOR: {
           to: 'connector-found-safe',
-          learn: [FACT_SHARED_ANTENNA_FEED],
+          learn: [FACT_SHARED_POWER_FEED],
           environment: 'prop.rotate:transmitter-rear',
         },
         INSPECT_UNIT: { to: 'unit-overview' },
-        ASK_AERIAL: { to: 'aerial' },
+        ASK_SUPPLY: { to: 'supply' },
       },
       onUnrecognised: { to: 'clarify' },
     },

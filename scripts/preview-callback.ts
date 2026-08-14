@@ -127,8 +127,8 @@ console.log('');
 check('Mission 01 completes', m1.isFinished);
 check('Solved outcome', m1.getCurrentBeat().outcome?.kind === 'solved');
 check(
-  'Seeded the shared antenna feed incidentally',
-  storeA.knows('shared_antenna_feed'),
+  'Seeded the shared supply incidentally',
+  storeA.knows('shared_power_feed'),
   'the fact Mission 02 depends on'
 );
 check('Recorded the corroded connector', storeA.knows('connector_b_corrosion'));
@@ -202,7 +202,7 @@ check(
 const fromHints: Array<[string, string]> = [
   ['hint-floor', 'ask her about the flood water'],
   ['hint-lamp', 'have her describe the set'],
-  ['hint-aerial', 'where does the aerial go'],
+  ['hint-supply', 'where does the supply wire go'],
   ['hint-connectors', 'clean the green off the connector'],
 ];
 fromHints.forEach(([hintId, text]) => {

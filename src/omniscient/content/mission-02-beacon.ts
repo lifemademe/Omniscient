@@ -2,15 +2,16 @@
  * MISSION 02 - "It only goes at night"
  *
  * THE CALLBACK (§214). Tomas's harbour beacon started cutting out today. The cause is
- * that OMNISCIENT_ repaired his sister's transmitter this morning: both sets share one
- * antenna feed, so every time Mirela keys up, the beacon drops.
+ * that OMNISCIENT_ repaired his sister's transmitter this morning: her shop and his light
+ * are on one supply, and a transmitter pulls hard the moment it is keyed - so every time
+ * she sends, his light drops out.
  *
  * The player caused this. Nobody tells them. They work it out from a fact Mirela
  * mentioned in passing while they were busy looking at a corroded connector.
  *
  * §163: knowing the fact does not skip the mission, it changes the route through it.
- * §214 forbids a dead end, so a player who never registered the shared feed reaches the
- * same truth the slow way - by having Tomas trace the cable.
+ * §214 forbids a dead end, so a player who never registered the shared supply reaches
+ * the same truth the slow way - by having Tomas follow the wire.
  *
  * Urgency: Timed (§154). A harbour beacon that fails at night is a believable emergency,
  * and the timer starts only once the player can act fairly.
@@ -21,7 +22,7 @@ import { TERMS } from '../mission/intent.js';
 import { OutcomeKind, Tempo, Urgency } from '../mission/types.js';
 
 import { TOMAS } from './contacts.js';
-import { FACT_SHARED_ANTENNA_FEED } from './mission-01-transmitter.js';
+import { FACT_SHARED_POWER_FEED } from './mission-01-transmitter.js';
 
 import type { MissionDefinition } from '../mission/types.js';
 
@@ -38,8 +39,8 @@ export const MISSION_02: MissionDefinition = {
 
   hiddenTruth: {
     summary:
-      'The beacon and Mirela’s transmitter share one antenna feed. Since the transmitter was ' +
-      'repaired this morning, keying it collapses the beacon. The feed needs an isolator.',
+      'The light and Mirela’s shop are on one supply. Since her set was repaired this ' +
+      'morning, sending pulls enough current to drop the light. The two need separating.',
     requiredIntents: ['ASK_FEED', 'FIT_ISOLATOR'],
     unsafeIntents: ['CUT_FEED_LIVE'],
   },
@@ -47,19 +48,19 @@ export const MISSION_02: MissionDefinition = {
   knowledge: [
     {
       id: FACT_BEACON_DROPS_ON_KEYUP,
-      label: 'The harbour beacon drops whenever the Vasc transmitter keys up',
+      label: 'The harbour light drops whenever Mirela’s set transmits',
       domain: KnowledgeDomain.Signal,
     },
     {
       id: FACT_FEED_NEEDS_ISOLATOR,
-      label: 'A shared antenna feed needs an isolator to carry two transmitters',
+      label: 'One supply cannot carry the light and a transmitter without separating them',
       domain: KnowledgeDomain.Signal,
     },
   ],
 
   // The gate. Nothing else in the game reads this fact - it exists only to pay off here.
   requires: {
-    factId: FACT_SHARED_ANTENNA_FEED,
+    factId: FACT_SHARED_POWER_FEED,
     ifKnownBeatId: 'open-known',
     ifMissingBeatId: 'open-blind',
   },
@@ -94,21 +95,22 @@ export const MISSION_02: MissionDefinition = {
     },
     {
       id: 'hint-splice',
-      summary: 'The aerial cable is joined to something else',
+      summary: 'The supply is joined to something else',
       detail:
-        'The cable does not go straight to the light. There is a join on the bracket, and a '
-        + 'second cable comes off it and runs down the hill towards the town.',
-      keywords: ['cable', 'aerial', 'join'],
+        'The wire does not go straight to the light. There is a join on the bracket, and a '
+        + 'second wire comes off it and runs down the hill towards the town. Whatever is on '
+        + 'the end of that is drawing off the same supply.',
+      keywords: ['wire', 'join'],
       cue: 'prop.highlight:splice-box',
       revealedBy: 'feed-confirmed',
     },
   ],
 
   confirmations: {
-    ASK_FEED: 'Do you mean Tomas should follow the aerial cable?',
+    ASK_FEED: 'Do you mean Tomas should follow the supply wire?',
     ASK_TIMING: 'Do you mean Tomas should say when it started?',
     ASK_SISTER: 'Do you mean Tomas should tell you about Mirela?',
-    FIT_ISOLATOR: 'Do you mean Tomas should fit a box to keep the two apart?',
+    FIT_ISOLATOR: 'Do you mean Tomas should give the light its own supply?',
     CUT_FEED_LIVE: 'Do you mean Tomas should pull the cable apart while there is current in it?',
     ADMIT_UNCERTAINTY: 'Do you want to tell him you are not sure yet?',
   },
@@ -118,7 +120,7 @@ export const MISSION_02: MissionDefinition = {
       id: 'ASK_FEED',
       requires: [
         [...TERMS.inspect, ...TERMS.describe, 'trace', 'follow'],
-        ['feed', 'aerial', 'antenna', 'cable', 'lead', 'split', 'splitter', 'mast', 'join', 'joined', 'splice'],
+        ['supply', 'wire', 'line', 'cable', 'lead', 'split', 'splitter', 'mast', 'join', 'joined', 'splice'],
       ],
       priority: 3,
     },
@@ -145,7 +147,7 @@ export const MISSION_02: MissionDefinition = {
     },
     {
       id: 'CUT_FEED_LIVE',
-      requires: [[...TERMS.remove, 'cut', 'yank'], ['feed', 'cable', 'aerial', 'lead']],
+      requires: [[...TERMS.remove, 'cut', 'yank'], ['feed', 'cable', 'supply', 'wire', 'lead']],
       excludes: ['isolator', 'splitter', 'filter'],
       priority: 1,
     },
@@ -164,7 +166,7 @@ export const MISSION_02: MissionDefinition = {
         'The harbour light keeps going out. Not dimming - gone, three or four seconds, then back. ' +
         'The harbour master is asking me why and I have no answer. It has never done this. ' +
         'I am halfway up the mast now.',
-      suggest: ['follow the aerial cable', 'when did it start', 'tell me about Mirela'],
+      suggest: ['follow the supply wire', 'when did it start', 'tell me about Mirela'],
       on: {
         ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
         ASK_TIMING: { to: 'timing' },
@@ -179,7 +181,7 @@ export const MISSION_02: MissionDefinition = {
       id: 'clarify-blind',
       tempo: Tempo.Respond,
       say: 'Say again - the wind is taking it. I am holding on with one hand up here.',
-      suggest: ['follow the aerial cable', 'when did it start', 'tell me about Mirela'],
+      suggest: ['follow the supply wire', 'when did it start', 'tell me about Mirela'],
       on: {
         ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
         ASK_TIMING: { to: 'timing' },
@@ -194,7 +196,7 @@ export const MISSION_02: MissionDefinition = {
       say:
         'Started this morning. It is worse in the evening - but that is when the boats are in, so ' +
         'perhaps I only notice. It is not the weather, it was clear all day.',
-      suggest: ['follow the aerial cable', 'tell me about Mirela'],
+      suggest: ['follow the supply wire', 'tell me about Mirela'],
       on: {
         ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
         ASK_SISTER: { to: 'sister-blind' },
@@ -208,7 +210,7 @@ export const MISSION_02: MissionDefinition = {
       say:
         'Mirela? She is down the coast at Portu Vech. Her set died yesterday and something fixed it for her this ' +
         'morning, she would not stop going on about it. Why - what has that to do with my mast?',
-      suggest: ['follow the aerial cable'],
+      suggest: ['follow the supply wire'],
       on: {
         ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
       },
@@ -220,9 +222,10 @@ export const MISSION_02: MissionDefinition = {
       id: 'feed-traced-slow',
       tempo: Tempo.Think,
       say:
-        'Following the cable down... it does not go straight to the light. There is a join on the ' +
-        'bracket, and a second cable off it heading down the hill. Towards the town. Towards - ' +
-        'oh. That goes to Mirela’s shop, does it not.',
+        'Following the wire down... it does not go straight to the light. There is a join on ' +
+        'the bracket, and a second wire off it heading down the hill. Towards the town. So the ' +
+        'light and whatever is down there are pulling off the one supply. Towards - oh. That ' +
+        'goes to Mirela’s shop, does it not.',
       suggest: ['put something in to separate them'],
       on: {
         FIT_ISOLATOR: {
@@ -251,7 +254,7 @@ export const MISSION_02: MissionDefinition = {
         'The harbour light keeps going out. Not dimming - gone, three or four seconds, then back. ' +
         'Started this morning. The harbour master is asking me why and I have no answer. ' +
         'I am halfway up the mast now.',
-      suggest: ['follow the aerial cable', 'tell me about Mirela', 'when did it start'],
+      suggest: ['follow the supply wire', 'tell me about Mirela', 'when did it start'],
       on: {
         ASK_FEED: {
           to: 'feed-confirmed',
@@ -276,7 +279,7 @@ export const MISSION_02: MissionDefinition = {
       say:
         'Started this morning, first time ever. Clear weather all day, so it is not the sky. ' +
         'You sound like you already have an idea.',
-      suggest: ['follow the aerial cable', 'tell me about Mirela'],
+      suggest: ['follow the supply wire', 'tell me about Mirela'],
       on: {
         ASK_FEED: {
           to: 'feed-confirmed',
@@ -296,9 +299,10 @@ export const MISSION_02: MissionDefinition = {
       id: 'feed-confirmed',
       tempo: Tempo.Respond,
       say:
-        'The join on the bracket - yes, it is here. Second cable off it, down the hill. ' +
-        'That is Mirela’s. So every time she sends, my light goes out. It has been like that for ' +
-        'years and it never mattered, because her set has been dead for... ' +
+        'The join on the bracket - yes, it is here. Second wire off it, down the hill. That is ' +
+        'Mirela’s. One supply, the both of us. And a set like hers pulls hard the moment she ' +
+        'keys it - hard enough to take my light with it. It has been that way for years and it ' +
+        'never mattered, because her set has been dead for... ' +
         'Her set has been dead for a long time. Until this morning.',
       suggest: ['put something in to separate them'],
       on: {
@@ -334,12 +338,12 @@ export const MISSION_02: MissionDefinition = {
       on: {},
       failure: {
         summary:
-          'You told Tomas to pull a shared cable apart while there was still current in it. '
+          'You told Tomas to pull a shared supply apart while there was still current in it. '
           + 'It flashed in his hands. He came down off the mast, and the harbour light is '
           + 'still going out.',
         lesson:
-          'Two things sharing one cable have to be separated with a proper box, not pulled '
-          + 'apart while there is current in them.',
+          'Two things sharing one supply have to be separated properly, not pulled apart '
+          + 'while there is current in them.',
         cooldownSeconds: 90,
       },
     },
@@ -348,19 +352,19 @@ export const MISSION_02: MissionDefinition = {
       id: 'isolator-fitted',
       tempo: Tempo.Respond,
       say:
-        'Box is in, both ends wired up. The light is steady... still steady... ' +
-        'she must be sending by now and it has not moved once. That is it. ' +
+        'Box is in, the light is on its own feed now. Steady... still steady... she must be ' +
+        'sending by now and it has not moved once. That is it. ' +
         'I will go and tell her she owes me a mast.',
       on: {},
       outcome: {
         kind: OutcomeKind.Solved,
-        say: 'The harbour light is steady. One cable, two sets, no longer fighting.',
+        say: 'The harbour light is steady. One supply, two households, no longer fighting.',
         trust: 2,
         connects: [
           {
-            a: FACT_SHARED_ANTENNA_FEED,
+            a: FACT_SHARED_POWER_FEED,
             b: FACT_BEACON_DROPS_ON_KEYUP,
-            label: 'one feed, two transmitters',
+            label: 'one supply, two households',
           },
         ],
       },
