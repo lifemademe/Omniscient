@@ -16,6 +16,7 @@ import { ADAEZE, MIRELA, TOMAS } from './content/contacts.js';
 import { MISSION_01 } from './content/mission-01-transmitter.js';
 import { MISSION_02 } from './content/mission-02-beacon.js';
 import { MISSION_03 } from './content/mission-03-tunnel.js';
+import { createScreenGlass } from './art/glass.js';
 import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { createSignals, MIRELA_SIGNAL } from './content/signals.js';
@@ -23,7 +24,7 @@ import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
 import { GlobeView, SignalState } from './crt/GlobeView.js';
 import { KnowledgeTree } from './crt/KnowledgeTree.js';
-import { createCRTTerminal } from './geometry/hardware.js';
+import { fitSurfaceUvs, readModelParts } from './geometry/model-parts.js';
 import { createWorkstationRoom } from './geometry/room.js';
 import { KnowledgeStore } from './knowledge/KnowledgeStore.js';
 import { BroadcastTransport } from './link/BroadcastTransport.js';
@@ -291,8 +292,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * workstation is simply off-shot rather than intersecting the set.
    */
   private buildWorkstation(): void {
-    const parts = createCRTTerminal({ seed: 'omniscient-home-terminal', wear: 0.5 });
-
     const station = ENGINE.SceneNode.create({
       name: 'Workstation',
       position: WORKSTATION_ORIGIN.clone(),
@@ -304,10 +303,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
     for (const part of createWorkstationRoom()) {
       station.add(meshOf(part.name, part.geometry, MAT[part.material]));
     }
-
-    station.add(meshOf('Chassis', parts.chassis, MAT.plastic));
-    station.add(meshOf('Bezel', parts.bezel, MAT.dark));
-    station.add(meshOf('Details', parts.details, MAT.metal));
 
     this.surface = new CRTSurface({ width: 192, height: 144 });
     /**
@@ -321,11 +316,82 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.globe = new GlobeView(this.surface, this.signals);
     this.tree.draw(1);
 
-    station.add(
-      ENGINE.MeshNode.create({ name: 'Screen', geometry: parts.screen, material: this.surface.material })
-    );
+    /**
+     * The machine itself, which is now a modelled asset rather than a generated one.
+     *
+     * The procedural terminal in `geometry/hardware.ts` built this out of chamfered slabs
+     * and did an honest job, but it could not do the thing that actually sells moulded
+     * plastic: a small fillet on every single edge. This is the first object in the game
+     * where that was worth buying rather than approximating.
+     *
+     * It drops in at the same local origin the generated one used - base at y = 0, screen
+     * facing +Z, a metre wide - so the desk and the room it was built around still fit it
+     * without a single number changing.
+     */
+    const monitor = ENGINE.ModelMeshNode.create({
+      name: 'Terminal',
+      modelUrl: '@project/assets/models/CRT_TV.glb',
+      // The screen, the glass and the lamp each get their own material below, and the
+      // model ships with one shared across all four meshes.
+      useDynamicMaterials: true,
+    });
+    monitor.onMeshLoaded.add((_node, root) => this.dressTerminal(root));
+    station.add(monitor);
 
     this.add(station);
+  }
+
+  /**
+   * Mount the live parts of the terminal onto the authored anchors.
+   *
+   * Everything here is addressed by the name it was given in Blender rather than by a
+   * coordinate typed into this file, which is the whole point of the convention: the
+   * model can be re-exported, re-scaled or replaced entirely, and as long as the names
+   * survive, the screen still lands on the screen.
+   */
+  private dressTerminal(root: THREE.Object3D): void {
+    const model = readModelParts(root);
+
+    const screen = model.screens.get('main');
+    if (screen && this.surface) {
+      fitSurfaceUvs(screen);
+      screen.material = this.surface.material;
+    }
+
+    const glass = model.glass.get('screen');
+    if (glass) {
+      fitSurfaceUvs(glass);
+      glass.material = createScreenGlass({ seed: 'omniscient-terminal-glass', intensity: 0.72 });
+      // After the picture, always. The tube is opaque and the glass is a highlight on
+      // top of it, so sorting it behind would make the sheen vanish at some angles.
+      glass.renderOrder = 2;
+    }
+
+    /**
+     * The power lamp, lit because the machine is running.
+     *
+     * Real bloom is a post-process effect and those are WebGPU-only here, so the halo is
+     * done the old way: an unlit surface at full value plus a small point light that
+     * spills onto the surrounding plastic. The spill does more work than the lamp - a
+     * bright dot with no light around it reads as a painted circle.
+     */
+    const lamp = model.parts.get('powerLamp');
+    if (lamp) {
+      lamp.material = MAT.warningLamp;
+
+      const at = model.anchors.get('powerLamp');
+      if (at) {
+        const glow = ENGINE.PointLightNode.create({
+          name: 'LampGlow',
+          position: at.position.clone().add(new THREE.Vector3(0, 0, 0.02)),
+          intensity: 0.32,
+          color: new THREE.Color(ACCENT.warning),
+          distance: 0.34,
+          decay: 1.4,
+        });
+        root.parent?.add(glow);
+      }
+    }
   }
 
   private buildVfx(): void {

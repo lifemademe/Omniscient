@@ -67,15 +67,23 @@ export class CRTSurface implements PixelSurface {
     this.texture.generateMipmaps = false;
     this.texture.colorSpace = THREE.SRGBColorSpace;
 
-    // Flip vertically.
-    //
-    // Same bug as the menu module labels, which arrived upside down: as mapped onto the
-    // screen quad, canvas row 0 lands at the bottom. Left uncorrected the Knowledge Tree
-    // sprouts downward from the top of the CRT, roots in the air.
-    this.texture.wrapS = THREE.RepeatWrapping;
-    this.texture.wrapT = THREE.RepeatWrapping;
-    this.texture.repeat.set(1, -1);
-    this.texture.offset.set(0, 1);
+    /**
+     * No vertical flip.
+     *
+     * There used to be one here - `repeat.set(1, -1)`, `offset.set(0, 1)` - added when the
+     * Knowledge Tree first came up sprouting downward with its roots in the air. It was
+     * correcting for the UVs of the generated `PlaneGeometry` the screen used to be.
+     *
+     * The screen is now an authored quad in CRT_TV.glb, and `fitSurfaceUvs` rebuilds its
+     * UVs from its own geometry with v running up the way the world does. That already
+     * lands canvas row 0 at the top, so the old correction became a second flip and hung
+     * the tree from the ceiling again - the same symptom, from the opposite cause.
+     *
+     * Measured both ways rather than reasoned about, because this pipeline has three
+     * places that can flip a texture and they do not agree with each other.
+     */
+    this.texture.wrapS = THREE.ClampToEdgeWrapping;
+    this.texture.wrapT = THREE.ClampToEdgeWrapping;
 
     // Unlit: a screen emits, it is not lit by the room.
     this.material = new THREE.MeshBasicMaterial({

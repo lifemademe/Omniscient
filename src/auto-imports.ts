@@ -1,5 +1,6 @@
 import './game-data.js';
 import './omniscient/art/decals.js';
+import './omniscient/art/glass.js';
 import './omniscient/art/mesh.js';
 import './omniscient/art/noise.js';
 import './omniscient/art/palette.js';
@@ -19,6 +20,7 @@ import './omniscient/crt/PixelSurface.js';
 import './omniscient/geometry/character.js';
 import './omniscient/geometry/foliage.js';
 import './omniscient/geometry/hardware.js';
+import './omniscient/geometry/model-parts.js';
 import './omniscient/geometry/modules.js';
 import './omniscient/geometry/props.js';
 import './omniscient/geometry/room.js';
