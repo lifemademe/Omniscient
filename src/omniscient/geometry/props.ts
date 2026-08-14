@@ -118,10 +118,16 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
   fittings.push(connectorB);
 
   // Ventilation, uneven so the object looks used rather than extruded.
+  //
+  // These are fittings rather than body, and that is a texturing decision as much as a
+  // material one: the shell carries a generated map keyed to box UVs, where each face
+  // owns the whole 0..1 square. Merging a 12mm slot into the same geometry would give
+  // that slot a full copy of a texture built for a half-metre panel, and the crackle
+  // would come out the size of the vent. Kept separate, the shell stays one clean box.
   for (let i = 0; i < 5; i++) {
     const slot = new THREE.BoxGeometry(width * 0.5 * range(rng, 0.9, 1), 0.012, 0.02);
     slot.translate(0, height * (0.2 + i * 0.12), -depth / 2 + 0.01);
-    body.push(slot);
+    fittings.push(slot);
   }
 
   return {

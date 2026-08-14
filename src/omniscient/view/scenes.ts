@@ -15,8 +15,10 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
+import { createCorrosionBloom, createRatingPlate } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
 import { ACCENT, LIGHT, MAT, PERSON } from '../art/palette.js';
+import { decalMaterial, texturedFrom } from '../art/surface.js';
 import { createRng, jitter, seedFrom } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
 import { createCharacter } from '../geometry/character.js';
@@ -183,8 +185,55 @@ function buildRepairShop(scene: ContactScene): void {
     name: 'Transmitter',
     position: new THREE.Vector3(0, 0.81, -0.5),
   });
-  setRoot.add(meshOf('SetShell', set.body, MAT.equipment));
+  /**
+   * The one textured surface in the game so far.
+   *
+   * Everything else is flat colour and a roughness number, which is the right default and
+   * is staying. The Kestrel-3 gets a generated map set because it is the object the player
+   * spends an entire mission looking at, and because the mission turns on whether they
+   * believe this machine has been in one pair of hands for thirty years. Crackle enamel,
+   * paint rubbed off the arrises, grime settled in the lower half - all inside the palette's
+   * contrast budget, so the housing still sits where the value structure put it.
+   */
+  setRoot.add(
+    meshOf(
+      'SetShell',
+      set.body,
+      texturedFrom(MAT.equipment, {
+        color: '#6a7268',
+        worn: '#a9a496',
+        grime: '#3a3a2e',
+        seed: 'kestrel-3-shell',
+        wear: 0.055,
+        crackle: 88,
+      })
+    )
+  );
   setRoot.add(meshOf('SetFittings', set.fittings, MAT.metal));
+
+  // The rating plate, under the controls on the front panel.
+  const plate = createRatingPlate();
+  if (plate) {
+    const plateGeo = new THREE.PlaneGeometry(0.19, 0.06);
+    plateGeo.translate(0.105, 0.036, 0.171);
+    setRoot.add(meshOf('SetPlate', plateGeo, decalMaterial(plate, 0.55)));
+  }
+
+  /**
+   * Corrosion on the rear panel, around connector B.
+   *
+   * Kept as a live reference so cleaning the connector can take the stain with it - the
+   * texture is part of the mission's state, not scenery laid over the top of it.
+   */
+  let bloomMaterial: THREE.MeshStandardMaterial | null = null;
+  const bloom = createCorrosionBloom();
+  if (bloom) {
+    const bloomGeo = new THREE.PlaneGeometry(0.15, 0.15);
+    bloomGeo.rotateY(Math.PI);
+    bloomGeo.translate(set.anchors.connectorB.x, set.anchors.connectorB.y, -0.171);
+    bloomMaterial = decalMaterial(bloom, 0.95);
+    setRoot.add(meshOf('SetCorrosion', bloomGeo, bloomMaterial));
+  }
 
   scene.registerProp('transmitter', setRoot, {
     anchors: set.anchors,
@@ -228,9 +277,13 @@ function buildRepairShop(scene: ContactScene): void {
       /** Scrubbing: a short shudder, then the corrosion colour gives way to bright metal. */
       clean: (tweener, node) => {
         const baseX = node.position.x;
+        const bloomFrom = bloomMaterial?.opacity ?? 1;
         tweener.add(
           (t) => {
             node.position.setX(baseX + Math.sin(t * Math.PI * 8) * 0.012 * (1 - t));
+            // The stain goes with the corrosion. Scrubbing that leaves the panel filthy
+            // would read as a half-finished job, which is not what she just did.
+            if (bloomMaterial) bloomMaterial.opacity = bloomFrom * (1 - t * 0.88);
           },
           {
             duration: 1.2,
@@ -239,6 +292,7 @@ function buildRepairShop(scene: ContactScene): void {
             onComplete: () => {
               connectorMesh.material = MAT.clean;
               node.position.setX(baseX);
+              if (bloomMaterial) bloomMaterial.opacity = bloomFrom * 0.12;
             },
           }
         );

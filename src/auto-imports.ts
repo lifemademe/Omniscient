@@ -1,6 +1,9 @@
 import './game-data.js';
+import './omniscient/art/decals.js';
 import './omniscient/art/mesh.js';
+import './omniscient/art/noise.js';
 import './omniscient/art/palette.js';
+import './omniscient/art/surface.js';
 import './omniscient/content/contacts.js';
 import './omniscient/content/mission-01-transmitter.js';
 import './omniscient/content/mission-02-beacon.js';
