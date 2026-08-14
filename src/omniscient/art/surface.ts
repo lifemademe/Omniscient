@@ -267,6 +267,241 @@ export function paintedMetal(options: PaintedMetalOptions): SurfaceMaps | null {
 }
 
 /**
+ * One pixel of a generated surface.
+ *
+ * `shade` is a multiplier on the base colour and is the only thing that costs value
+ * contrast (§232), so generators keep it near 1. Everything else is free detail.
+ */
+export interface SurfaceSample {
+  /** Multiplier on the base colour. 1 is the base. */
+  shade: number;
+  /** 0 smooth, 1 completely diffuse. */
+  rough: number;
+  /** Height for the normal pass. Relative units; only gradients matter. */
+  height: number;
+  /** Optional tint to blend toward, and how much. */
+  tint?: { color: Rgb; amount: number };
+}
+
+/**
+ * Build a map set from a per-pixel sampler.
+ *
+ * Extracted so timber, plaster and anything after them do not each re-implement the
+ * packing, the Sobel and the tiling wrap. `paintedMetal` predates this and is left alone -
+ * it earns its own loop by also carrying metalness and edge-distance wear.
+ */
+function buildMaps(
+  size: number,
+  base: Rgb,
+  relief: number,
+  sample: (u: number, v: number) => SurfaceSample
+): SurfaceMaps | null {
+  if (!CAN_PAINT) return null;
+
+  const albedoCanvas = canvasOf(size);
+  const ormCanvas = canvasOf(size);
+  const normalCanvas = canvasOf(size);
+  const albedoCtx = albedoCanvas.getContext('2d');
+  const ormCtx = ormCanvas.getContext('2d');
+  const normalCtx = normalCanvas.getContext('2d');
+  if (!albedoCtx || !ormCtx || !normalCtx) return null;
+
+  const albedo = albedoCtx.createImageData(size, size);
+  const orm = ormCtx.createImageData(size, size);
+  const height = new Float32Array(size * size);
+
+  for (let y = 0; y < size; y++) {
+    const v = (y + 0.5) / size;
+    for (let x = 0; x < size; x++) {
+      const u = (x + 0.5) / size;
+      const i = y * size + x;
+      const s = sample(u, v);
+
+      let rgb: Rgb = { r: base.r * s.shade, g: base.g * s.shade, b: base.b * s.shade };
+      if (s.tint) rgb = mixRgb(rgb, s.tint.color, s.tint.amount);
+
+      const p = i * 4;
+      albedo.data[p] = clamp01(rgb.r / 255) * 255;
+      albedo.data[p + 1] = clamp01(rgb.g / 255) * 255;
+      albedo.data[p + 2] = clamp01(rgb.b / 255) * 255;
+      albedo.data[p + 3] = 255;
+
+      orm.data[p] = 255;
+      orm.data[p + 1] = clamp01(s.rough) * 255;
+      orm.data[p + 2] = 0;
+      orm.data[p + 3] = 255;
+
+      height[i] = s.height;
+    }
+  }
+
+  albedoCtx.putImageData(albedo, 0, 0);
+  ormCtx.putImageData(orm, 0, 0);
+
+  const normal = normalCtx.createImageData(size, size);
+  const at = (x: number, y: number): number =>
+    height[((y + size) % size) * size + ((x + size) % size)];
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx =
+        at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1) -
+        (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1));
+      const dy =
+        at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1) -
+        (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1));
+
+      const nx = -dx * relief;
+      const ny = -dy * relief;
+      const len = Math.hypot(nx, ny, 1);
+
+      const p = (y * size + x) * 4;
+      normal.data[p] = (nx / len * 0.5 + 0.5) * 255;
+      normal.data[p + 1] = (ny / len * 0.5 + 0.5) * 255;
+      normal.data[p + 2] = (1 / len * 0.5 + 0.5) * 255;
+      normal.data[p + 3] = 255;
+    }
+  }
+  normalCtx.putImageData(normal, 0, 0);
+
+  return {
+    map: textureOf(albedoCanvas, true),
+    normalMap: textureOf(normalCanvas, false),
+    roughnessMap: textureOf(ormCanvas, false),
+    metalnessMap: textureOf(ormCanvas, false),
+  };
+}
+
+export interface NaturalOptions {
+  color: string;
+  seed?: string;
+  size?: number;
+  /** Maximum albedo swing either side of `color`, as a fraction (§232). */
+  contrast?: number;
+  relief?: number;
+  /**
+   * How many times the tile repeats across one 0..1 UV square.
+   *
+   * §239 asks every generator to declare its scale, and this is where that is declared.
+   * Box UVs give every face the whole square whatever its size, so a wall and a mug
+   * receive identical texture coordinates - the repeat is the only thing standing between
+   * plank-sized grain on a coffee cup and thread-sized grain on a wall.
+   */
+  repeat?: [number, number];
+}
+
+function applyRepeat(maps: SurfaceMaps | null, repeat: [number, number]): SurfaceMaps | null {
+  if (!maps) return null;
+  for (const texture of [maps.map, maps.normalMap, maps.roughnessMap]) {
+    texture.repeat.set(repeat[0], repeat[1]);
+    texture.needsUpdate = true;
+  }
+  return maps;
+}
+
+/**
+ * Sawn timber.
+ *
+ * Grain is fbm stretched hard along one axis - about twenty to one - which is the whole
+ * trick: the same noise that reads as cloud at 1:1 reads as wood the moment it is pulled
+ * out sideways. Knots are sparse Worley centres, and they are what stop a plank looking
+ * like a smear.
+ */
+export function timberMaps(options: NaturalOptions): SurfaceMaps | null {
+  const {
+    color,
+    seed = color,
+    size = 256,
+    contrast = 0.13,
+    relief = 0.22,
+    repeat = [2, 1],
+  } = options;
+
+  const key = `timber:${JSON.stringify([color, seed, size, contrast, relief, repeat])}`;
+  const cached = CACHE.get(key);
+  if (cached !== undefined) return cached;
+
+  const noiseSeed = seedFrom(seed);
+  const dark = parseHex('#2a1d12');
+
+  const maps = applyRepeat(
+    buildMaps(size, parseHex(color), relief, (u, v) => {
+      // Stretched along u: the grain runs the length of the board.
+      const grain = fbm(noiseSeed, u * 0.06, v * 3.2, { frequency: 8, octaves: 4 });
+      // Fine fibre on top, so the boundaries between grain bands are not smooth curves.
+      const fibre = fbm(noiseSeed + 31, u * 0.3, v * 9, { frequency: 16, octaves: 2 });
+      // Rings: the banding that makes it read as cut through growth rather than painted.
+      // Fewer, wider rings, and the fibre pushed hard into the phase rather than added
+      // on top. Evenly spaced bands read as corduroy; wood is irregular, and the
+      // irregularity has to be inside the ring spacing, not sprinkled over it.
+      const rings = Math.abs(Math.sin((grain * 2.6 + fibre * 0.9) * Math.PI));
+      // Knots, sparse and dark.
+      const knot = 1 - smoothstep(0.0, 0.06, cellEdges(noiseSeed + 7, u, v, 3));
+      const knotMask = knot * smoothstep(0.55, 0.8, fbm(noiseSeed + 13, u, v, { frequency: 2, octaves: 2 }));
+
+      const band = rings * 0.7 + fibre * 0.3;
+      return {
+        shade: 1 + (band - 0.5) * contrast * 2,
+        // Dense late-growth bands take polish differently from the soft wood between.
+        rough: 0.82 - band * 0.16 + knotMask * 0.1,
+        height: band * 0.2 - knotMask * 0.45,
+        tint: { color: dark, amount: knotMask * 0.55 },
+      };
+    }),
+    repeat
+  );
+
+  CACHE.set(key, maps);
+  return maps;
+}
+
+/**
+ * Plaster, or any painted masonry wall.
+ *
+ * Two scales of mottle and nothing else. A wall is the largest surface in most of these
+ * frames and therefore the one where §232 bites hardest: anything with structure at this
+ * size becomes a pattern, and a patterned wall pulls the eye off whatever is standing in
+ * front of it. This is deliberately almost nothing - it exists to stop a flat fill
+ * reading as a flat fill, and it is finished the moment it does.
+ */
+export function plasterMaps(options: NaturalOptions): SurfaceMaps | null {
+  const {
+    color,
+    seed = color,
+    size = 256,
+    contrast = 0.075,
+    relief = 0.28,
+    repeat = [2, 2],
+  } = options;
+
+  const key = `plaster:${JSON.stringify([color, seed, size, contrast, relief, repeat])}`;
+  const cached = CACHE.get(key);
+  if (cached !== undefined) return cached;
+
+  const noiseSeed = seedFrom(seed);
+
+  const maps = applyRepeat(
+    buildMaps(size, parseHex(color), relief, (u, v) => {
+      const broad = fbm(noiseSeed, u, v, { frequency: 3, octaves: 3 });
+      const fine = fbm(noiseSeed + 17, u, v, { frequency: 24, octaves: 3 });
+      // A faint trowel direction, so the mottle has a hand in it rather than being noise.
+      const sweep = fbm(noiseSeed + 41, u * 0.35, v * 2.4, { frequency: 6, octaves: 2 });
+
+      const value = broad * 0.55 + sweep * 0.3 + fine * 0.15;
+      return {
+        shade: 1 + (value - 0.5) * contrast * 2,
+        rough: 0.9 + (fine - 0.5) * 0.08,
+        height: fine * 0.22 + sweep * 0.3,
+      };
+    }),
+    repeat
+  );
+
+  CACHE.set(key, maps);
+  return maps;
+}
+
+/**
  * A MeshStandardMaterial wearing a generated map set.
  *
  * Falls back to the flat material it was given when there is no canvas to paint on, so

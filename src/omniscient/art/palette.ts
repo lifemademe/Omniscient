@@ -40,6 +40,8 @@
 
 import * as THREE from 'three';
 
+import { plasterMaps, timberMaps } from './surface.js';
+
 /**
  * Human world - warm, imperfect, lived in (§9). Ordered dark to light so the value
  * structure is visible in the source rather than hidden in hex codes.
@@ -219,3 +221,50 @@ export const MAT = {
   /** Knowledge green, unlit. The cable's live end and circuit pulses. */
   knowledgeLamp: new THREE.MeshBasicMaterial({ color: ACCENT.knowledge, toneMapped: false }),
 } as const;
+
+/**
+ * §239 - the surface pass, applied to the family rather than to objects.
+ *
+ * §187 is explicit that there is one small shared material family, so texturing a wall
+ * means texturing MAT.wall, not texturing a wall. Every room in the game inherits it at
+ * once, which is the point and also the risk - so the repeats below are chosen per
+ * material rather than shared, because box UVs hand a mug and a wall the same 0..1 square
+ * and only the repeat stands between them.
+ *
+ * Applied by mutation after construction rather than at the literal, so the material
+ * family stays readable as a list of colours and roughness values - which is what it is
+ * for - and the textures are an overlay on that rather than a second way to author it.
+ *
+ * Headless callers get nothing and lose nothing: the generators return null without a
+ * canvas and this loop skips them, so the harnesses keep importing the palette.
+ */
+function dress(
+  material: THREE.MeshStandardMaterial,
+  maps: ReturnType<typeof timberMaps>
+): void {
+  if (!maps) return;
+  material.map = maps.map;
+  material.normalMap = maps.normalMap;
+  material.roughnessMap = maps.roughnessMap;
+  // The maps carry the variation now, so the scalars become multipliers and have to be
+  // neutral - a base colour left in place would tint the map on top of itself.
+  material.color = new THREE.Color('#ffffff');
+  material.roughness = 1;
+  material.needsUpdate = true;
+}
+
+// Timber runs along the board, so the repeat is asymmetric: more tiles across the length
+// than across the width, or the grain comes out square and reads as fabric.
+dress(MAT.timber, timberMaps({ color: HUMAN.timber, seed: 'timber', repeat: [2, 1] }));
+dress(MAT.timberLit, timberMaps({ color: HUMAN.timberLit, seed: 'timber-lit', repeat: [2, 1] }));
+dress(
+  MAT.timberDark,
+  timberMaps({ color: '#5a4430', seed: 'timber-dark', contrast: 0.11, repeat: [2, 1] })
+);
+// Walls get the largest repeat of anything, because they are the largest surfaces and a
+// wall whose mottle is the size of a hand reads as wallpaper.
+dress(MAT.wall, plasterMaps({ color: HUMAN.wall, seed: 'wall', repeat: [5, 3] }));
+dress(
+  MAT.ground,
+  plasterMaps({ color: HUMAN.ground, seed: 'ground', contrast: 0.09, repeat: [6, 5] })
+);
