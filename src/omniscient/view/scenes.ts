@@ -753,10 +753,49 @@ const MOONLIGHT_AT = new THREE.Vector3(-3.4, 5.5, -4.2);
  * mast and its cable run carry the composition, not clutter.
  */
 function buildBeaconMast(scene: ContactScene): void {
+  // Seeded like every other diorama (§123), so the turf is in the same place every run.
+  const rng = createRng(seedFrom('tomas-headland'));
+
   // -- The headland ---------------------------------------------------------
   const deck = new THREE.BoxGeometry(4.2, 0.2, 4.2);
   deck.translate(0, -0.1, 0);
   scene.registerProp('deck', meshOf('Deck', deck, MAT.ground));
+
+  /**
+   * The headland the mast is bolted to.
+   *
+   * The deck was a four-metre square of bare ground with a lattice standing on it, which
+   * reads as a test rig rather than as a place. Coarse tussock grass and outcrop: this is
+   * a clifftop in a wind strong enough to be part of the request, so the grass is short,
+   * dense and leaning, and the rock is close to the surface because that is why anybody
+   * put a mast here rather than somewhere softer.
+   *
+   * Kept clear of the middle, where the structure stands and where Tomas has worn a path.
+   */
+  scene.registerProp(
+    'turf',
+    meshOf(
+      'Turf',
+      grassTufts(rng, { centre: new THREE.Vector3(0, 0, 0), width: 4.0, depth: 4.0, clear: 1.15 }, {
+        count: 150,
+        height: [0.05, 0.13],
+        // Flattened. Nothing on a headland stands up straight.
+        lean: 0.9,
+      }),
+      MAT.stem
+    )
+  );
+  scene.registerProp(
+    'outcrop',
+    meshOf(
+      'Outcrop',
+      rocks(rng, { centre: new THREE.Vector3(0, 0, 0), width: 4.0, depth: 4.0, clear: 1.5 }, {
+        count: 8,
+        size: [0.1, 0.28],
+      }),
+      MAT.fieldStone
+    )
+  );
 
   /**
    * The night, in four layers (§241).
@@ -1004,7 +1043,30 @@ function buildBeaconMast(scene: ContactScene): void {
     // somewhere dangerous.
     colors: { garment: '#a8582c', underlayer: '#3f4a52' },
     position: new THREE.Vector3(0.62, platformY + 0.03, 0.55),
-    rotation: new THREE.Euler(0, -Math.PI * 0.72, 0),
+    /**
+     * Turned round to face the lens, three-quarter.
+     *
+     * At -0.72*PI he faced (-0.77, 0, -0.64) and the camera sits at (4.4, 3.9, 4.4), so
+     * the default shot was the back of a man's coat: no eyes, no face, no read on the one
+     * person in the frame. Solved rather than nudged - +0.247*PI points him exactly at the
+     * lens, and 0.40 is three quarters of the way there, which keeps a shoulder turned to
+     * the rail he is holding instead of squaring him up like a portrait.
+     */
+    /**
+     * Turned round to face the lens.
+     *
+     * At -0.72*PI he faced (-0.77, 0, -0.64) against a camera at (4.4, 3.9, 4.4), so the
+     * default shot was the back of a man's coat - no face, no eyes, no read on the only
+     * person in frame. Solved rather than nudged: +0.247*PI points him exactly at the lens
+     * and +0.20 is a hair off it, which keeps a shoulder turned toward the rail instead of
+     * squaring him up like a passport photograph.
+     *
+     * The turn had a cost and it is worth recording: it swung his shoulder away from the
+     * rail he was holding and put the old grip 11cm out of reach. Facing and reach are one
+     * problem, not two, and moving a contact without re-running scripts/dev/reach.py is
+     * how three of them ended up not touching anything in the first place.
+     */
+    rotation: new THREE.Euler(0, Math.PI * 0.2, 0),
     /**
      * Both hands on the guardrail.
      *
@@ -1023,7 +1085,7 @@ function buildBeaconMast(scene: ContactScene): void {
      * other free.
      */
     handsOn: {
-      right: new THREE.Vector3(0.92, 3.07, 0.92),
+      right: new THREE.Vector3(0.85, 3.07, 0.75),
     },
     // He is six metres up a lattice on a headland at night. The one figure in the cast
     // with weather on him gets the larger idle - still under two centimetres at the head,
@@ -1078,6 +1140,31 @@ function buildBeaconMast(scene: ContactScene): void {
   );
 
   // -- Shots ----------------------------------------------------------------
+  /**
+   * A fill on the camera side, so the man has a face.
+   *
+   * Turning him toward the lens exposed the next problem: the beacon is above him, the
+   * moon is behind him and the sea glow is off to one side, so every light in this scene
+   * reached his back or his hat brim and none of them reached his face. He read as an
+   * orange coat with a dark hole above it.
+   *
+   * Cold and weak - this is a night set and the beacon has to stay the only warm thing in
+   * it, because the whole mission is that warm light going out. Enough to separate a head
+   * from the sky behind it and no more. Same fault and same fix as Adaeze in daylight:
+   * whatever else a diorama is doing, the person in it cannot be a silhouette.
+   */
+  scene.registerProp(
+    'face-fill',
+    ENGINE.PointLightNode.create({
+      name: 'FaceFill',
+      position: new THREE.Vector3(2.6, 3.1, 2.8),
+      intensity: 5.5,
+      color: new THREE.Color('#9fb6cc'),
+      distance: 5.5,
+      decay: 1.5,
+    })
+  );
+
   scene.registerShot('default', {
     // Holds Tomas, the bracket and the light above him, at his own eye level rather than
     // hanging in space beside the mast looking at nothing.
@@ -2580,6 +2667,30 @@ function buildNightDoor(scene: ContactScene): void {
   path.translate(0, -0.05, 1.4);
   scene.registerProp('path', meshOf('Path', path, MAT.ground));
 
+  /**
+   * Weeds through the path, which is the theme doing quiet work.
+   *
+   * The jam theme is Overgrown and this is the one set where it had no presence at all - a
+   * clean path to a clean door. Grass in the joints of a front path is what happens to a
+   * house nobody has been out of for a while, which is exactly the situation: his mother
+   * has not answered since yesterday.
+   *
+   * Sparse and short. It is a path somebody still uses, not a ruin, and at this hour the
+   * porch light will catch about four of them.
+   */
+  scene.registerProp(
+    'path-weeds',
+    meshOf(
+      'PathWeeds',
+      grassTufts(rng, { centre: new THREE.Vector3(0, 0, 1.5), width: 5.4, depth: 3.4, clear: 0.9 }, {
+        count: 70,
+        height: [0.04, 0.14],
+        lean: 0.8,
+      }),
+      MAT.stem
+    )
+  );
+
   const front = new THREE.BoxGeometry(7, WALL_TOP, 0.3);
   front.translate(0, WALL_TOP / 2, -0.4);
   scene.registerProp('front', meshOf('Front', front, MAT.wall));
@@ -2881,6 +2992,36 @@ function buildMillRoad(scene: ContactScene): void {
     'verge',
     meshOf('Verge', mergeGeometries(verges, false) ?? verges[0], MAT.ground)
   );
+
+  /**
+   * Grass on the verges, both sides, all the way down.
+   *
+   * The verges were two bare strips of soil running thirty metres into the dark, and a
+   * strip of nothing beside a strip of nothing is not a roadside. Nobody has cut these
+   * since the same spring the lamps went out - which is already what the hedge says, so
+   * the verge saying it too is the set agreeing with itself.
+   *
+   * It also does something for the chase specifically: the torch pool now falls across
+   * texture rather than across a flat band, so the light has something to READ on.
+   */
+  for (const side of [-1, 1] as const) {
+    scene.registerProp(
+      `verge-grass-${side < 0 ? 'left' : 'right'}`,
+      meshOf(
+        `VergeGrass${side < 0 ? 'L' : 'R'}`,
+        grassTufts(
+          rng,
+          {
+            centre: new THREE.Vector3(side * (HALF + 0.45), 0, MID),
+            width: 1.0,
+            depth: LENGTH * 0.92,
+          },
+          { count: 220, height: [0.08, 0.26], lean: 0.6 }
+        ),
+        MAT.stem
+      )
+    );
+  }
 
   // -- The mill wall ---------------------------------------------------------
   /**
