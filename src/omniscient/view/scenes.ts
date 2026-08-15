@@ -931,8 +931,16 @@ function buildBeaconMast(scene: ContactScene): void {
      * somebody is holding it. He is watching his own light go out from two metres up a
      * lattice in the wind, and a man in that position has his hands on the rail.
      */
+    /**
+     * One hand on the rail, which is what the comment above always said.
+     *
+     * Both were authored, and the left needed 0.720 against a 0.623 arm - it could never
+     * land, and before the generator learned to fall back it drew a straight arm pointing
+     * at a rail it was not touching. Sliding the grip along the rail only bought 0.06, so
+     * the honest fix is the one the prose already described: braced with one hand, the
+     * other free.
+     */
     handsOn: {
-      left: new THREE.Vector3(0.5, 3.07, 0.92),
       right: new THREE.Vector3(0.92, 3.07, 0.92),
     },
     // He is six metres up a lattice on a headland at night. The one figure in the cast
@@ -2430,7 +2438,6 @@ function buildNightDoor(scene: ContactScene): void {
     build: 0.5,
     shoulders: 0.6,
     lean: 0.22,
-    reach: 0.85,
       // Nothing on his head and two days of beard. He came straight out.
       headgear: 'none',
       sleeve: 'long',
@@ -2441,14 +2448,20 @@ function buildNightDoor(scene: ContactScene): void {
     position: new THREE.Vector3(0.62, 0, 0.62),
     rotation: new THREE.Euler(0, -Math.PI * 0.72, 0),
     /**
-     * Both hands at the lock: the wrench in one and the pick in the other, which is what
-     * a person actually looks like doing this. Checked against arm length rather than
-     * placed by eye - see the reach audit in character.ts.
+     * No hand targets, and a raised rest instead.
+     *
+     * Both hands were authored onto the lock and both were out of reach - 0.877 and 1.007
+     * against a 0.626 arm. That is not a tuning miss: solved across a grid of positions
+     * and facings, there is NO placement that reaches that lock and still keeps him off
+     * the camera's own sightline, because the lock is 2cm of brass on a door he has to
+     * stand beside rather than in front of.
+     *
+     * So he gets a working rest: forearms up and forward, which at this distance and with
+     * the lock mostly behind his own body reads exactly as a man doing something to a door
+     * at two in the morning. The lock does not need his fingers on it; the hint highlights
+     * it and Dorin says what he is doing.
      */
-    handsOn: {
-      left: new THREE.Vector3(0.24, 1.0, -0.18),
-      right: new THREE.Vector3(0.34, 1.06, -0.14),
-    },
+    reach: 0.9,
     // Two in the morning, cold, and his mother has not answered since yesterday.
     liveliness: 1.25,
   });

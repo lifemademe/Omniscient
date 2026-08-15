@@ -379,6 +379,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   public override beginPlay(): boolean {
     if (!super.beginPlay()) return false;
 
+
+
     this.configureLook();
     void this.startSession();
 

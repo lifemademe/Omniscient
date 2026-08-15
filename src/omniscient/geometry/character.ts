@@ -528,8 +528,20 @@ export function createCharacter(params: CharacterParams): CharacterParts {
   }
 
   // -- Arms. Asymmetric pose: one arm slightly forward, as if mid-task. -------------
-  const upperArm = torsoHeight * 0.56;
-  const foreArm = torsoHeight * 0.5;
+  /**
+   * Longer again, because shortening them broke three dioramas.
+   *
+   * These were trimmed to 0.56/0.50 so a resting hand would land at the hip rather than
+   * below it - a cosmetic call, made against the cast sheet where nobody is touching
+   * anything. Every contact in the game IS touching something, and the authored hand
+   * targets were all set against the old reach. Combined with shoulders that moved
+   * outboard in the same pass, Vasile ended up in a full T-pose against his pipe run and
+   * Ileana in a mantis crouch over her table.
+   *
+   * A centimetre of extra hand droop on an idle figure is worth nothing next to that.
+   */
+  const upperArm = torsoHeight * 0.61;
+  const foreArm = torsoHeight * 0.55;
 
   /**
    * How far the forearms come up and forward, 0 hanging to 1 resting on a surface.
@@ -613,15 +625,29 @@ export function createCharacter(params: CharacterParams): CharacterParts {
      */
     const pole = new THREE.Vector3(side * 0.8, -0.5, -0.35);
 
-    const solved = target
-      ? solveArm(shoulder, target, upperArm, foreArm, pole)
-      : {
-          upper: { rotX: swing, rotZ: outward },
-          fore: { rotX: swing + elbowBend, rotZ: outward * 0.45 },
-          clamped: false,
-        };
+    /**
+     * Rest, not reach, when the target cannot be reached.
+     *
+     * `solveArm` used to clamp an out-of-range target to a fully extended arm pointing at
+     * it. That is defensible in isolation - it is what a person stretching looks like -
+     * and it is the wrong default here, because the failure is INVISIBLE as a bug and
+     * unmistakable as bad art: Vasile stood in a dead T-pose against his pipe run and read
+     * as a scarecrow, not as a man who could not quite reach.
+     *
+     * An arm at rest is never egregious. A stretched one always is. So a target that
+     * cannot be reached is dropped entirely and the side falls back to its resting pose,
+     * which loses the staging for that hand and loses nothing else. The over-reach is
+     * still reported, because the scene should be fixed rather than quietly forgiven.
+     */
+    const rest = {
+      upper: { rotX: swing, rotZ: outward },
+      fore: { rotX: swing + elbowBend, rotZ: outward * 0.45 },
+      clamped: false,
+    };
 
-    if (solved.clamped) overreached.push(side === -1 ? 'left' : 'right');
+    const attempt = target ? solveArm(shoulder, target, upperArm, foreArm, pole) : rest;
+    if (attempt.clamped) overreached.push(side === -1 ? 'left' : 'right');
+    const solved = attempt.clamped ? rest : attempt;
 
     /**
      * Sleeved.
