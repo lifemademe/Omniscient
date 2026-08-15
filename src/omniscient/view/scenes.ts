@@ -1403,6 +1403,116 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   );
 
   // -- Shots ----------------------------------------------------------------
+  /**
+   * The rest of the smallholding (§240).
+   *
+   * Everything in this set was load-bearing - two beds, the hoops, the shade cloth, the
+   * neighbour's tree - and the result was nine metres of empty field with the evidence
+   * arranged on it like exhibits. Real ground somebody works is ninety percent things that
+   * mean nothing: the tools they were using an hour ago, the bucket they have not put
+   * away, the pallet of trays they keep meaning to stack.
+   *
+   * None of this carries information and none of it can be pointed at by a hint. That is
+   * exactly its job - §131 makes the environment carry evidence, and evidence only reads
+   * AS evidence when it is not the only thing in frame.
+   */
+  const dressing: THREE.BufferGeometry[] = [];
+  const timberBits: THREE.BufferGeometry[] = [];
+
+  // A stack of seed trays by the near bed, half of them still full of compost.
+  for (let i = 0; i < 5; i++) {
+    const tray = new THREE.BoxGeometry(0.34, 0.055, 0.24);
+    tray.rotateY(jitter(rng, 0.14));
+    tray.translate(-2.55 + jitter(rng, 0.03), 0.028 + i * 0.052, 2.0 + jitter(rng, 0.03));
+    dressing.push(tray);
+  }
+
+  // A bucket, on its side because it was kicked over and nobody picked it up.
+  const bucket = new THREE.CylinderGeometry(0.13, 0.1, 0.28, 10, 1, true);
+  bucket.rotateZ(Math.PI * 0.5);
+  bucket.rotateY(0.6);
+  bucket.translate(-3.05, 0.13, 1.15);
+  dressing.push(bucket);
+
+  /**
+   * A spade and a fork, leaning where they were left.
+   *
+   * Two long diagonals, which is what this set was missing more than it was missing
+   * objects: everything in it was horizontal beds and vertical hoops, so the eye had no
+   * line to travel along. A tool leaning against something is the cheapest diagonal there
+   * is and it says a person was standing here.
+   */
+  for (const [x, z, lean, turn] of [
+    // Checked against the default shot rather than placed by eye: at x -2.3 these stood
+    // exactly behind Adaeze's head from (1.45, 3.65, 7.7) and read as two handles growing
+    // out of her hat.
+    [2.72, 1.62, 0.34, 0.5],
+    [2.86, 1.44, 0.26, -0.7],
+  ] as const) {
+    const shaft = new THREE.BoxGeometry(0.035, 1.24, 0.035);
+    shaft.rotateZ(lean);
+    shaft.rotateY(turn);
+    shaft.translate(x, 0.62, z);
+    timberBits.push(shaft);
+
+    const head = new THREE.BoxGeometry(0.19, 0.26, 0.035);
+    head.rotateZ(lean);
+    head.rotateY(turn);
+    head.translate(x - Math.sin(lean) * 0.58, 0.14, z);
+    dressing.push(head);
+  }
+
+  // A coil of hose, because there is always a hose.
+  for (let i = 0; i < 3; i++) {
+    const loop = new THREE.TorusGeometry(0.24 - i * 0.04, 0.022, 4, 14);
+    loop.rotateX(Math.PI / 2);
+    loop.translate(2.15 + jitter(rng, 0.02), 0.026 + i * 0.036, 0.34);
+    dressing.push(loop);
+  }
+
+  // A pallet nobody has moved since the delivery.
+  for (let i = 0; i < 4; i++) {
+    const plank = new THREE.BoxGeometry(0.86, 0.03, 0.11);
+    plank.translate(-2.0, 0.055, -0.62 + i * 0.16);
+    timberBits.push(plank);
+  }
+  const bearer = new THREE.BoxGeometry(0.86, 0.05, 0.06);
+  bearer.translate(-2.0, 0.02, -0.3);
+  timberBits.push(bearer);
+
+  scene.registerProp(
+    'dressing',
+    meshOf('Dressing', mergeGeometries(dressing, false) ?? dressing[0], MAT.galvanised)
+  );
+  scene.registerProp(
+    'dressing-timber',
+    meshOf('DressingTimber', mergeGeometries(timberBits, false) ?? timberBits[0], MAT.timber)
+  );
+
+  /**
+   * Weeds along the edges, thinning toward the beds.
+   *
+   * The field was one flat colour from the beds to the horizon, which reads as a golf
+   * course rather than as ground. These break the plane the way the plank seams break a
+   * floor - and they thin out near the beds, because that is the part she weeds.
+   */
+  const weeds: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 90; i++) {
+    const x = range(rng, -4.2, 4.2);
+    const z = range(rng, -3.0, 3.4);
+    // Nothing grows where she walks and works.
+    if (Math.abs(x) < 2.3 && z > -1.4 && z < 1.6) continue;
+    const h = range(rng, 0.06, 0.19);
+    const blade = new THREE.BoxGeometry(0.016, h, 0.016);
+    blade.rotateZ(jitter(rng, 0.5));
+    blade.translate(x, h / 2, z);
+    weeds.push(blade);
+  }
+  scene.registerProp(
+    'weeds',
+    meshOf('Weeds', mergeGeometries(weeds, false) ?? weeds[0], MAT.stem)
+  );
+
   scene.registerShot('default', {
     // Down the tunnel, so both banks are in frame at once and the difference between
     // them is the first thing read.
