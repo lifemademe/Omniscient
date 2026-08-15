@@ -125,12 +125,21 @@ export const PERSON = {
   hair: ['#2b211c', '#4a3428', '#7a6a58', '#1d1a19', '#8c6b45'],
   /** Workwear. Faded, practical, nothing bright. */
   garment: ['#4a5a63', '#6d5a44', '#3f4a3a', '#7a5346', '#55504a'],
-  /** Aprons, undershirts - the lighter mass that separates torso from arms. */
-  underlayer: ['#b3a58a', '#9c937f', '#c2b79c'],
+  /**
+   * Aprons, undershirts - the lighter mass that separates torso from arms.
+   *
+   * Pulled down from near-white. At the old values an apron was the brightest thing in
+   * the frame including the practical lights, so every figure wearing one read as a
+   * person holding a sheet of paper. It has to be lighter than the garment and darker
+   * than anything that is actually emitting.
+   */
+  underlayer: ['#948a74', '#8a8270', '#a2977d'],
   boot: '#2e2723',
   /** Eyes. Near-black, so they hold at any distance and in any of these rooms. */
   eye: '#241f1c',
   belt: '#4a3529',
+  /** Buckles, goggle rims, buttons. One warm-grey accent, used sparingly. */
+  hardware: '#9a9083',
 } as const;
 
 /** Warm key light, as through a coastal window late in the day. */

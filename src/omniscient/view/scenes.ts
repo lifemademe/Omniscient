@@ -562,6 +562,10 @@ function buildRepairShop(scene: ContactScene): void {
       left: new THREE.Vector3(-0.36, 0.79, -0.72),
       right: new THREE.Vector3(-0.44, 0.79, -1.1),
     },
+      // Goggles pushed up. She works on other people's electronics all day.
+      headgear: 'band',
+      sleeve: 'rolled',
+      pouch: true,
     garment: 'apron',
     /**
      * Art-directed rather than seeded. Her workshop is warm timber from wall to bench,
@@ -903,6 +907,11 @@ function buildBeaconMast(scene: ContactScene): void {
     // Braced against the mast, which is where he says he is - one hand up on it.
     lean: 0.1,
     reach: 0.55,
+      // Flat cap, rolled sleeves. Up a mast in the wind.
+      headgear: 'cap',
+      sleeve: 'rolled',
+      beard: true,
+      pouch: true,
     garment: 'coat',
     // Wet-weather orange: the only warm thing on a cold headland, and the only piece of
     // high-visibility clothing in the game, because he is the only person in it who is
@@ -1306,8 +1315,12 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     // Crouched at the end of a row, which is where she says she is.
     lean: 0.3,
     reach: 0.8,
+      // Wide brim, because she spends her days under grow lamps and glass.
+      headgear: 'brim',
+      sleeve: 'rolled',
+      pouch: true,
     garment: 'apron',
-    colors: { garment: '#2f6a72', underlayer: '#d8c9a8' },
+    colors: { garment: '#2f6a72', underlayer: '#a89878' },
     /*
      * Left of frame and near the camera. Mirroring the scene put her behind the
      * conversation panel, which is a poor place for the person doing the talking.
@@ -1902,6 +1915,11 @@ function buildClearedHouse(scene: ContactScene): void {
     // Sitting forward over the table, which is where somebody is after two days of this.
     lean: 0.34,
     reach: 0.6,
+      // Bare-headed and long-sleeved. The oldest person in the cast and the only one
+      // not dressed for a job.
+      headgear: 'none',
+      sleeve: 'long',
+      pouch: false,
     garment: 'coat',
     colors: { garment: '#4a4a52', underlayer: '#b3a58a' },
     /**
@@ -2180,6 +2198,11 @@ function buildFloodedCellar(scene: ContactScene): void {
     shoulders: 0.66,
     lean: 0.28,
     reach: 0.9,
+      // Cap and a full tool belt. Fifty years of other people's pipework.
+      headgear: 'cap',
+      sleeve: 'long',
+      beard: true,
+      pouch: true,
     garment: 'overalls',
     colors: { garment: '#3d4a53', underlayer: '#b9ad92' },
     /**
@@ -2394,6 +2417,11 @@ function buildNightDoor(scene: ContactScene): void {
     shoulders: 0.6,
     lean: 0.22,
     reach: 0.85,
+      // Nothing on his head and two days of beard. He came straight out.
+      headgear: 'none',
+      sleeve: 'long',
+      beard: true,
+      pouch: false,
     garment: 'coat',
     colors: { garment: '#2f3138', underlayer: '#8f8778' },
     position: new THREE.Vector3(0.62, 0, 0.62),
@@ -2448,7 +2476,7 @@ function buildNightDoor(scene: ContactScene): void {
     ENGINE.PointLightNode.create({
       name: 'LandingSpill',
       position: new THREE.Vector3(0.42, 3.5, 0.3),
-      intensity: 2.2,
+      intensity: 1.15,
       color: new THREE.Color('#cfe0f0'),
       distance: 4.5,
       decay: 1.5,
@@ -2712,6 +2740,10 @@ function buildMillRoad(scene: ContactScene): void {
     shoulders: 0.38,
     lean: 0.06,
     reach: 0.4,
+      // Hood up, walking home at midnight in the cold.
+      headgear: 'hood',
+      sleeve: 'long',
+      pouch: false,
     garment: 'coat',
     colors: { garment: '#40404c', underlayer: '#a8907a' },
     position: new THREE.Vector3(1.0, 0, 0.2),

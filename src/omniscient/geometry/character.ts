@@ -25,6 +25,24 @@ import type { Rng } from '../core/rng.js';
 
 export type Garment = 'apron' | 'coat' | 'overalls';
 
+/**
+ * What is on the head, and why it is a first-class parameter.
+ *
+ * On the reference sheet the single strongest identifier is headgear - a wide brim, a
+ * flat cap, a hood, a welding band. It reads before the clothes do, before the colour
+ * does, and at a distance where nothing else survives. A cast of bare heads is a cast
+ * that can only be told apart by height, which is what this one was.
+ */
+export type Headgear = 'none' | 'cap' | 'brim' | 'hood' | 'band';
+
+/**
+ * Where the sleeve ends.
+ *
+ * `rolled` leaves the forearm bare, which is what somebody working with their hands
+ * actually does and is half the reason the reference figures read as workers.
+ */
+export type Sleeve = 'long' | 'rolled';
+
 export interface CharacterParams {
   seed: number | string;
   /** Overall height in metres. */
@@ -49,6 +67,12 @@ export interface CharacterParams {
    */
   reachFor?: { left?: THREE.Vector3; right?: THREE.Vector3 };
   garment?: Garment;
+  headgear?: Headgear;
+  sleeve?: Sleeve;
+  /** A beard is a silhouette element on a blocky head, not a detail. */
+  beard?: boolean;
+  /** A satchel or tool pouch at the hip. Breaks the leg line and says "at work". */
+  pouch?: boolean;
   /**
    * Pin any of the generated colours. Omitted channels stay seeded, so this is a nudge
    * for named characters rather than a second way to author a whole person.
@@ -57,7 +81,15 @@ export interface CharacterParams {
 }
 
 /** Which of the five surfaces a piece of a body belongs to. */
-export type BodyMaterial = 'skin' | 'garment' | 'underlayer' | 'hair' | 'boots' | 'eyes';
+export type BodyMaterial =
+  | 'skin'
+  | 'garment'
+  | 'underlayer'
+  | 'hair'
+  | 'boots'
+  | 'eyes'
+  /** Buckles, buttons, goggle rims. The one bright hard accent a figure gets. */
+  | 'metal';
 
 /** One merged run of geometry, and the material it wants. Mirrors `RoomPart`. */
 export interface CharacterPiece {
@@ -87,6 +119,11 @@ export interface CharacterParts {
   lower: CharacterPiece[];
   /** Height of the hip joint above the character's feet, in metres. */
   hipHeight: number;
+  /**
+   * Sides whose authored hand target was out of reach, so the arm is extended AT it rather
+   * than resting ON it. Empty is the normal case; anything here is a scene authoring bug.
+   */
+  overreached: string[];
   colors: {
     skin: string;
     garment: string;
@@ -224,12 +261,19 @@ function solveArm(
   upperLength: number,
   foreLength: number,
   pole: THREE.Vector3
-): { upper: { rotX: number; rotZ: number }; fore: { rotX: number; rotZ: number } } {
+): {
+  upper: { rotX: number; rotZ: number };
+  fore: { rotX: number; rotZ: number };
+  /** True when the target was further than the arm is long. See `overreached`. */
+  clamped: boolean;
+} {
   const toTarget = target.clone().sub(shoulder);
   const reachable = upperLength + foreLength - 0.001;
   // Clamped rather than failed: a target out of reach becomes a fully extended arm
   // pointing at it, which is what a person does, instead of a NaN and an invisible limb.
   const distance = Math.min(Math.max(toTarget.length(), 0.001), reachable);
+  // Recorded, not just clamped. See CharacterParts.overreached.
+  const clamped = toTarget.length() > reachable;
   const axis = toTarget.clone().normalize();
 
   // Distance along the axis to the elbow's projection, and its offset from the line.
@@ -251,6 +295,7 @@ function solveArm(
   return {
     upper: aimAngles(elbow.clone().sub(shoulder)),
     fore: aimAngles(target.clone().sub(elbow)),
+    clamped,
   };
 }
 
@@ -272,9 +317,13 @@ export function createCharacter(params: CharacterParams): CharacterParts {
   const height = params.height ?? range(rng, 1.62, 1.78);
   const build = params.build ?? range(rng, 0.25, 0.75);
   const shoulders = params.shoulders ?? range(rng, 0.3, 0.8);
-  const headScale = params.headScale ?? range(rng, 0.95, 1.12);
+  const headScale = params.headScale ?? range(rng, 1.1, 1.24);
   const lean = params.lean ?? range(rng, 0.04, 0.14);
   const garment = params.garment ?? pick(rng, ['apron', 'coat', 'overalls'] as const);
+  const headgear = params.headgear ?? pick(rng, ['none', 'cap', 'brim', 'hood', 'band'] as const);
+  const sleeve = params.sleeve ?? pick(rng, ['long', 'rolled'] as const);
+  const beard = params.beard ?? rng() < 0.35;
+  const pouch = params.pouch ?? rng() < 0.5;
 
   /**
    * Seeded, but overridable per character.
@@ -299,11 +348,35 @@ export function createCharacter(params: CharacterParams): CharacterParts {
   const shoulderWidth = height * (0.20 + shoulders * 0.11);
   const hipWidth = shoulderWidth * (0.68 + build * 0.2);
   const torsoDepth = height * (0.085 + build * 0.05);
-  const limbThick = height * (0.048 + build * 0.022);
+  /**
+   * Thicker than it was, because the reference is thicker than it was.
+   *
+   * At 0.048 a 1.7m figure got an 8cm arm, which is anatomically about right and
+   * stylistically wrong - next to the reference sheet these read as wire armatures with
+   * clothes hung on them. The blocky style wants limbs that are near-cubic in section, so
+   * that every segment is a mass rather than a line.
+   */
+  const limbThick = height * (0.062 + build * 0.026);
 
   const hipY = legLength;
   const shoulderY = hipY + torsoHeight;
   const headY = shoulderY + headHeight * 0.62;
+
+  /**
+   * Hand targets the arm could not actually get to.
+   *
+   * `solveArm` clamps an out-of-reach target to a fully extended arm pointing at it, which
+   * is the right thing to draw and a terrible thing to do silently: it produces a pose that
+   * looks deliberate - somebody stretching toward a bench - while the hand is nowhere near
+   * the thing it is supposed to be touching. That shipped once already, on two contacts,
+   * and neither was caught by looking.
+   *
+   * It matters more now than it did, because the arms have just got shorter and moved
+   * outboard for the style pass, so every target authored against the old proportions is a
+   * candidate. Reported rather than thrown: a scene with one stretched arm should still
+   * load.
+   */
+  const overreached: string[] = [];
 
   // Above the hip.
   const skin: THREE.BufferGeometry[] = [];
@@ -313,6 +386,10 @@ export function createCharacter(params: CharacterParams): CharacterParts {
   // Below it, and staying where it is put.
   const legs: THREE.BufferGeometry[] = [];
   const boots: THREE.BufferGeometry[] = [];
+  /** Leather: gloves, belt, straps, hat. One dark value tying the figure together. */
+  const leather: THREE.BufferGeometry[] = [];
+  /** The single hard accent. Buckles and goggle rims, and nothing else. */
+  const metal: THREE.BufferGeometry[] = [];
 
   // -- Head. Asymmetry in the jaw is what stops faces reading as identical. ----------
   const headW = headHeight * range(rng, 0.72, 0.9);
@@ -361,9 +438,77 @@ export function createCharacter(params: CharacterParams): CharacterParts {
   waist.translate(0, hipY + torsoHeight * 0.22, 0);
   cloth.push(waist);
 
+  /**
+   * The belt, which is the horizontal every one of these figures was missing.
+   *
+   * A torso built from a chest slab and a waist slab is two similar masses stacked, and
+   * the eye reads it as one long block. Every figure on the reference sheet has a dark
+   * band cutting it at the hip, and that band is doing structural work: it separates
+   * torso from legs, gives the silhouette a waist, and puts the darkest value on the
+   * figure at the point the eye uses to judge posture.
+   */
+  const beltY = hipY + torsoHeight * 0.16;
+  const belt = slab(hipWidth * 1.1, torsoHeight * 0.2, torsoDepth * 1.06, torsoDepth * 0.12);
+  belt.rotateX(lean * 0.6);
+  belt.translate(0, beltY, 0);
+  leather.push(belt);
+
+  const buckle = slab(hipWidth * 0.17, torsoHeight * 0.1, torsoDepth * 0.12, 0.006);
+  buckle.rotateX(lean * 0.6);
+  buckle.translate(0, beltY, torsoDepth * 0.52);
+  metal.push(buckle);
+
+  /**
+   * A pouch at the hip.
+   *
+   * Reference figures are almost never a clean cylinder from waist to boot - there is a
+   * satchel, a holster, a roll of something strapped on. It costs one box and it breaks
+   * the vertical line of the leg, which is the read that says "carrying tools" rather
+   * than "wearing trousers".
+   */
+  if (pouch) {
+    const side = rng() < 0.5 ? -1 : 1;
+    const bag = slab(hipWidth * 0.3, torsoHeight * 0.3, torsoDepth * 0.34, torsoDepth * 0.1);
+    bag.translate(side * hipWidth * 0.56, beltY - torsoHeight * 0.2, torsoDepth * 0.16);
+    leather.push(bag);
+
+    const flap = slab(hipWidth * 0.32, torsoHeight * 0.09, torsoDepth * 0.36, 0.006);
+    flap.translate(side * hipWidth * 0.56, beltY - torsoHeight * 0.05, torsoDepth * 0.16);
+    under.push(flap);
+  }
+
+  /**
+   * A collar, whatever the garment.
+   *
+   * Only the coat had one, so the aprons and overalls ran neck straight into chest with
+   * nothing between. On the reference every neckline is marked - a collar, a scarf, a
+   * yoke seam - because the join between head and body is the second place after the belt
+   * where the eye looks for structure, and a blocky figure has to be told it is there.
+   */
+  const collar = slab(shoulderWidth * 0.56, torsoHeight * 0.11, torsoDepth * 1.02, torsoDepth * 0.16);
+  collar.rotateX(lean);
+  collar.translate(0, shoulderY - torsoHeight * 0.01, torsoDepth * 0.06);
+  under.push(collar);
+
+  /**
+   * A strap across the chest, for anybody carrying something.
+   *
+   * The most-repeated element on the reference sheet after the belt, and the one that does
+   * most for a plain torso: a diagonal breaks a rectangle in a way no horizontal can, and
+   * it ties the shoulder to the opposite hip so the figure reads as loaded rather than as
+   * dressed. Only on people who have a bag, so it means something.
+   */
+  if (pouch) {
+    const strap = slab(shoulderWidth * 0.12, torsoHeight * 0.92, torsoDepth * 0.11, 0.01);
+    strap.rotateZ(0.34);
+    strap.rotateX(lean * 0.6);
+    strap.translate(-shoulderWidth * 0.02, shoulderY - torsoHeight * 0.38, torsoDepth * 0.56);
+    leather.push(strap);
+  }
+
   // -- Arms. Asymmetric pose: one arm slightly forward, as if mid-task. -------------
-  const upperArm = torsoHeight * 0.62;
-  const foreArm = torsoHeight * 0.56;
+  const upperArm = torsoHeight * 0.56;
+  const foreArm = torsoHeight * 0.5;
 
   /**
    * How far the forearms come up and forward, 0 hanging to 1 resting on a surface.
@@ -384,9 +529,17 @@ export function createCharacter(params: CharacterParams): CharacterParts {
    * beside them. These three constants are that, and `reach` is added on top for somebody
    * working at a surface.
    */
-  const ARM_OUT = 0.1;
-  const ARM_FORWARD = 0.1;
-  const ELBOW_REST = 0.16;
+  /**
+   * Wider than a real rest pose, on purpose.
+   *
+   * At 0.1 radians the upper arms hang against the ribs, which is what people do and which
+   * on a blocky figure means the arm's silhouette is entirely inside the torso's. The
+   * reference sheet holds every arm noticeably clear of the body - it is a caricature of
+   * standing, and it is what lets a 1,000-triangle figure read at a distance.
+   */
+  const ARM_OUT = 0.17;
+  const ARM_FORWARD = 0.12;
+  const ELBOW_REST = 0.22;
 
   const elbowBend = ELBOW_REST + reach * 1.15;
 
@@ -398,11 +551,34 @@ export function createCharacter(params: CharacterParams): CharacterParts {
 
     // The shoulder sits inside the chest slab, so the arm reads as joined to the body
     // rather than parked alongside it.
+    /**
+     * Outboard of the garment, not inside it.
+     *
+     * The arm used to hang at `shoulderWidth/2 - limbThick*0.1`, which is inside the coat
+     * shell (that slab is 1.1x shoulder width). A sleeve the same colour as the coat,
+     * buried in the coat, is invisible: the whole cast read as torsos with gloves floating
+     * beside them, and no amount of work on the hands was going to fix an arm that was not
+     * there. The arm now hangs clear of the widest garment mass.
+     */
     const shoulder = new THREE.Vector3(
-      side * (shoulderWidth / 2 - limbThick * 0.1),
-      shoulderY - torsoHeight * 0.04,
+      side * (shoulderWidth * 0.52 + limbThick * 0.1),
+      shoulderY - torsoHeight * 0.06,
       0
     );
+
+    /**
+     * A cap over the joint.
+     *
+     * Every figure on the reference sheet has one - a pauldron, a rolled shoulder seam, a
+     * yoke. It does one specific job: it puts a DIFFERENT value at the point where arm
+     * meets torso, so the eye reads a joint there instead of reading one continuous mass.
+     * Without it a sleeve in the garment colour merges with the garment however far out it
+     * is hung.
+     */
+    const cap = slab(limbThick * 1.5, limbThick * 0.85, limbThick * 1.45, limbThick * 0.35);
+    cap.rotateZ(side * 0.12);
+    cap.translate(shoulder.x, shoulder.y + limbThick * 0.1, shoulder.z);
+    leather.push(cap);
 
     const target = side === -1 ? params.reachFor?.left : params.reachFor?.right;
 
@@ -421,10 +597,29 @@ export function createCharacter(params: CharacterParams): CharacterParts {
       : {
           upper: { rotX: swing, rotZ: outward },
           fore: { rotX: swing + elbowBend, rotZ: outward * 0.45 },
+          clamped: false,
         };
 
-    skin.push(
-      hangingLimb(limbThick, upperArm, limbThick, shoulder, solved.upper.rotZ, solved.upper.rotX)
+    if (solved.clamped) overreached.push(side === -1 ? 'left' : 'right');
+
+    /**
+     * Sleeved.
+     *
+     * These arms used to be bare skin from shoulder to fingertip, which is why the cast
+     * read as mannequins in tabards rather than as people in clothes: the garment stopped
+     * at the shoulder and the largest moving masses on the figure carried no costume at
+     * all. On the reference every arm is a sleeve, ending in a glove, and that single
+     * change does more for the style than any amount of detail on the torso.
+     */
+    cloth.push(
+      hangingLimb(
+        limbThick * 1.12,
+        upperArm,
+        limbThick * 1.12,
+        shoulder,
+        solved.upper.rotZ,
+        solved.upper.rotX
+      )
     );
 
     const elbow = shoulder
@@ -433,13 +628,30 @@ export function createCharacter(params: CharacterParams): CharacterParts {
     const foreRot = solved.fore.rotX;
     const foreOut = solved.fore.rotZ;
 
-    skin.push(hangingLimb(limbThick * 0.9, foreArm, limbThick * 0.9, elbow, foreOut, foreRot));
+    // Rolled sleeves leave the forearm bare, with a cuff where the fabric stops. That is
+    // what somebody working with their hands does, and it puts a skin value back into the
+    // middle of the figure so the arms are not one unbroken block of garment.
+    (sleeve === 'rolled' ? skin : cloth).push(
+      hangingLimb(limbThick * 1.02, foreArm, limbThick * 1.02, elbow, foreOut, foreRot)
+    );
+    if (sleeve === 'rolled') {
+      under.push(
+        hangingLimb(limbThick * 1.2, limbThick * 0.5, limbThick * 1.2, elbow, foreOut, foreRot)
+      );
+    }
 
     const wrist = elbow.clone().add(limbEnd(foreArm, foreOut, foreRot));
 
-    // Oversized hands - §185's "a mechanic may have visually dominant hands".
-    skin.push(
-      hangingLimb(limbThick * 1.25, limbThick * 1.5, limbThick * 0.8, wrist, foreOut, foreRot)
+    /**
+     * Gloves, in the boot leather.
+     *
+     * §185's "visually dominant hands", and the reference's rule that the darkest values on
+     * a figure are its extremities - boots, gloves, belt. Sharing one leather value across
+     * all three is what stops a blocky figure reading as separate parts: the dark reads as
+     * one costume element wrapping the body at four points.
+     */
+    leather.push(
+      hangingLimb(limbThick * 1.4, limbThick * 1.45, limbThick * 1.25, wrist, foreOut, foreRot)
     );
   }
 
@@ -452,23 +664,71 @@ export function createCharacter(params: CharacterParams): CharacterParts {
     // less here because a standing leg is nearly vertical, but a stance angle applied
     // about the middle of a thigh lifts the hip out of the pelvis just as visibly.
     const hip = new THREE.Vector3(outward, hipY + torsoHeight * 0.02, 0);
-    legs.push(hangingLimb(limbThick * 1.15, legLength * 0.56, limbThick * 1.15, hip, stance));
+    legs.push(hangingLimb(limbThick * 1.34, legLength * 0.56, limbThick * 1.3, hip, stance));
 
     const knee = hip.clone().add(limbEnd(legLength * 0.56, stance, 0));
-    legs.push(hangingLimb(limbThick * 1.05, legLength * 0.5, limbThick * 1.05, knee, stance * 0.4));
+    legs.push(hangingLimb(limbThick * 1.2, legLength * 0.5, limbThick * 1.18, knee, stance * 0.4));
 
-    const boot = slab(limbThick * 1.3, limbThick * 1.1, limbThick * 2.1, limbThick * 0.25);
-    boot.translate(outward, limbThick * 0.5, limbThick * 0.42);
-    boots.push(boot);
+    /**
+     * A boot in three parts, so which way it points is never in question.
+     *
+     * The old boot was one slab, deeper than it was wide, which is technically a foot
+     * pointing forward and reads as a brick. Direction has to survive a three-quarter
+     * camera at four metres, and the thing that carries it is not the box - it is the
+     * SEPARATION between an ankle mass and a toe mass that sticks out well in front of it.
+     * Ankle, foot, toe cap: the profile steps down twice going forward, and that staircase
+     * is legible from anywhere.
+     */
+    const ankle = slab(limbThick * 1.25, limbThick * 1.05, limbThick * 1.3, limbThick * 0.22);
+    ankle.translate(outward, limbThick * 0.72, -limbThick * 0.06);
+    boots.push(ankle);
+
+    const foot = slab(limbThick * 1.32, limbThick * 0.62, limbThick * 2.5, limbThick * 0.16);
+    foot.translate(outward, limbThick * 0.31, limbThick * 0.62);
+    boots.push(foot);
+
+    const toe = slab(limbThick * 1.18, limbThick * 0.46, limbThick * 0.7, limbThick * 0.14);
+    toe.translate(outward, limbThick * 0.23, limbThick * 1.72);
+    boots.push(toe);
   }
 
   // -- Garment: the mass that says what this person does ----------------------------
   switch (garment) {
     case 'apron': {
-      const apron = slab(shoulderWidth * 0.82, torsoHeight * 1.15, torsoDepth * 0.22, 0.02);
-      apron.rotateX(lean * 0.8);
-      apron.translate(0, hipY + torsoHeight * 0.42, torsoDepth * 0.52);
-      under.push(apron);
+      /**
+       * An apron, not a billboard.
+       *
+       * One slab across most of the chest was the single worst-reading element on the
+       * cast: a pale rectangle the size of a sheet of paper, taped on, flattening the
+       * torso it was supposed to describe. A real apron is narrow at the bib, wide at the
+       * skirt, and hangs from two straps over the shoulders - three masses, and the shape
+       * between them is what says apron rather than sandwich board.
+       */
+      const bib = slab(shoulderWidth * 0.38, torsoHeight * 0.34, torsoDepth * 0.14, 0.02);
+      bib.rotateX(lean * 0.9);
+      bib.translate(0, shoulderY - torsoHeight * 0.3, torsoDepth * 0.54);
+      under.push(bib);
+
+      const skirt = slab(hipWidth * 0.54, torsoHeight * 0.74, torsoDepth * 0.16, 0.02);
+      skirt.rotateX(lean * 0.4);
+      skirt.translate(0, hipY - torsoHeight * 0.04, torsoDepth * 0.54);
+      under.push(skirt);
+
+      // A tie at the waist. Without it the skirt hangs from nothing, and the join between
+      // bib and skirt is the widest unbroken pale area anywhere on the figure - which is
+      // exactly what made this read as somebody holding a clipboard.
+      const tie = slab(hipWidth * 1.02, torsoHeight * 0.08, torsoDepth * 0.14, 0.008);
+      tie.rotateX(lean * 0.5);
+      tie.translate(0, hipY + torsoHeight * 0.3, torsoDepth * 0.54);
+      leather.push(tie);
+
+      for (const side of [-1, 1] as const) {
+        const strap = slab(shoulderWidth * 0.1, torsoHeight * 0.5, torsoDepth * 0.12, 0.01);
+        strap.rotateX(lean);
+        strap.rotateZ(side * 0.12);
+        strap.translate(side * shoulderWidth * 0.2, shoulderY - torsoHeight * 0.16, torsoDepth * 0.48);
+        under.push(strap);
+      }
       break;
     }
     case 'coat': {
@@ -491,10 +751,18 @@ export function createCharacter(params: CharacterParams): CharacterParts {
        * is a placket, and it is the difference between a person facing you and a person
        * who might be facing either way.
        */
-      const placket = slab(shoulderWidth * 0.13, torsoHeight * 1.05, torsoDepth * 0.16, 0.012);
+      const placket = slab(shoulderWidth * 0.1, torsoHeight * 1.02, torsoDepth * 0.14, 0.012);
       placket.rotateX(lean * 0.8);
-      placket.translate(0, hipY + torsoHeight * 0.4, torsoDepth * 0.58);
+      placket.translate(0, hipY + torsoHeight * 0.42, torsoDepth * 0.6);
       under.push(placket);
+
+      // Three buttons down it. On the reference a coat front is never a bare strip - the
+      // hardware is what stops it reading as a seam and starts it reading as a fastening.
+      for (let i = 0; i < 3; i++) {
+        const button = slab(shoulderWidth * 0.05, shoulderWidth * 0.05, torsoDepth * 0.08, 0.004);
+        button.translate(0, hipY + torsoHeight * (0.12 + i * 0.3), torsoDepth * 0.66);
+        metal.push(button);
+      }
 
       const collar = slab(shoulderWidth * 0.42, torsoHeight * 0.12, torsoDepth * 0.3, 0.015);
       collar.rotateX(lean);
@@ -557,6 +825,100 @@ export function createCharacter(params: CharacterParams): CharacterParts {
   }
 
   /**
+   * A beard, which on a blocky head is silhouette rather than detail.
+   *
+   * It hangs below the jaw line, so it changes the outline of the head from every angle -
+   * unlike a mouth, which would only exist from the front and would break the no-face
+   * rule the style depends on.
+   */
+  if (beard) {
+    const jaw = slab(headW * 0.76, headHeight * 0.36, headHeight * 0.44, headHeight * 0.1);
+    jaw.rotateX(lean * 0.4);
+    jaw.translate(0, headY - headHeight * 0.3, torsoDepth * 0.06 + headHeight * 0.16);
+    hairPieces.push(jaw);
+  }
+
+  /**
+   * Headgear.
+   *
+   * The reference sheet's characters are told apart by what is on their heads before
+   * anything else - a brim, a flat cap, a hood, a welder's band. Each of these is two or
+   * three boxes, and each changes the silhouette above the shoulders enough that the
+   * figure is identifiable as a shape with no colour and no detail at all.
+   *
+   * They are built in garment and leather rather than in their own colour, so a hat still
+   * reads as part of one costume instead of as a prop resting on somebody.
+   */
+  const crownY = headY + headHeight * 0.42;
+  switch (headgear) {
+    case 'cap': {
+      // A flat cap: soft crown, hard peak. The peak is the bit that says which way the
+      // head is facing, which makes it worth its two triangles many times over.
+      const crown = slab(headW * 1.08, headHeight * 0.34, headHeight * 0.92, headHeight * 0.16);
+      crown.rotateX(lean * 0.4);
+      crown.translate(0, crownY, -headHeight * 0.04);
+      cloth.push(crown);
+
+      const peak = slab(headW * 0.98, headHeight * 0.07, headHeight * 0.42, headHeight * 0.03);
+      peak.rotateX(lean * 0.4 - 0.12);
+      peak.translate(0, crownY - headHeight * 0.15, headHeight * 0.6);
+      leather.push(peak);
+      break;
+    }
+    case 'brim': {
+      // The explorer's hat. A tall crown and a brim wider than the shoulders are, which
+      // is the most recognisable head shape on the whole reference sheet.
+      const crown = slab(headW * 0.9, headHeight * 0.62, headHeight * 0.86, headHeight * 0.14);
+      crown.rotateX(lean * 0.4);
+      crown.translate(0, crownY + headHeight * 0.18, -headHeight * 0.02);
+      leather.push(crown);
+
+      const brim = slab(headW * 1.9, headHeight * 0.085, headHeight * 1.8, headHeight * 0.12);
+      brim.rotateX(lean * 0.4 - 0.14);
+      brim.translate(0, crownY - headHeight * 0.13, headHeight * 0.06);
+      leather.push(brim);
+
+      const band = slab(headW * 0.94, headHeight * 0.12, headHeight * 0.9, headHeight * 0.04);
+      band.rotateX(lean * 0.4);
+      band.translate(0, crownY - headHeight * 0.02, -headHeight * 0.02);
+      cloth.push(band);
+      break;
+    }
+    case 'hood': {
+      // Up, and around. The hood is deliberately deeper than the head so the face sits
+      // inside it - the one place in this generator where covering the front is right,
+      // because a hood that does not shadow the face is a scarf.
+      const shell = slab(headW * 1.38, headHeight * 1.24, headHeight * 1.16, headHeight * 0.24);
+      shell.rotateX(lean * 0.4);
+      shell.translate(0, headY + headHeight * 0.16, -headHeight * 0.26);
+      cloth.push(shell);
+
+      const drape = slab(headW * 1.2, headHeight * 0.5, headHeight * 0.5, headHeight * 0.16);
+      drape.translate(0, shoulderY + headHeight * 0.06, -headHeight * 0.42);
+      cloth.push(drape);
+      break;
+    }
+    case 'band': {
+      // Goggles pushed up onto the forehead: a strap and two lenses. The only place a
+      // figure gets a hard metal accent above the belt, so it pulls the eye to the head.
+      const strap = slab(headW * 1.08, headHeight * 0.13, headHeight * 0.9, headHeight * 0.05);
+      strap.rotateX(lean * 0.4);
+      strap.translate(0, headY + headHeight * 0.34, -headHeight * 0.02);
+      leather.push(strap);
+
+      for (const side of [-1, 1] as const) {
+        const lens = slab(headW * 0.3, headHeight * 0.16, headHeight * 0.1, headHeight * 0.04);
+        lens.rotateX(lean * 0.4);
+        lens.translate(side * headW * 0.24, headY + headHeight * 0.34, faceZ - headHeight * 0.02);
+        metal.push(lens);
+      }
+      break;
+    }
+    case 'none':
+      break;
+  }
+
+  /**
    * The hip joint, and why it is here rather than at `hipY`.
    *
    * A body does not fold at the top of the pelvis - it pivots somewhere around the base
@@ -584,9 +946,12 @@ export function createCharacter(params: CharacterParams): CharacterParts {
       ...collect('underlayer', under, -pivotY),
       ...collect('hair', hairPieces, -pivotY),
       ...collect('eyes', eyes, -pivotY),
+      ...collect('boots', leather, -pivotY),
+      ...collect('metal', metal, -pivotY),
     ],
     lower: [...collect('garment', legs, 0), ...collect('boots', boots, 0)],
     hipHeight: pivotY,
+    overreached,
     colors,
   };
 }

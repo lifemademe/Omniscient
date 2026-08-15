@@ -166,7 +166,19 @@ function surfaceFor(
     // Fixed, never seeded. Eye colour is not a characterisation channel at this scale -
     // it is the one part of the figure that has to read as dark at any distance, and a
     // seeded roll that handed somebody pale eyes would undo the whole point of having any.
-    eyes: [PERSON.eye, 0.6],
+    // Roughness 0.6 let the eyes catch a specular. On a flat forward-facing plane under a
+    // key that is also forward, that highlight covers the whole eye and turns the darkest
+    // element on the figure into the brightest - the one thing eyes cannot be allowed to
+    // do. Fully rough: an eye at this scale is a hole, not a surface.
+    eyes: [PERSON.eye, 0.98],
+    // Buckles and goggle rims. Metalness stays low deliberately: with no environment to
+    // reflect, a high value kills the diffuse and leaves a tight specular lobe as the
+    // only response, which reads as a dark hole rather than as metal.
+    // 0.35 gave the goggle lenses a specular that covered them completely, so the one
+    // element meant to be a small hard accent became the brightest thing in the frame and
+    // out-shouted the radio the whole request is about. An accent that wins is not an
+    // accent. Rough enough to catch a highlight, not enough to become one.
+    metal: [PERSON.hardware, 0.72],
   }[material] as [string, number];
 
   // Banded like the family. The characters are chamfered slabs, and the bevel facets
@@ -216,6 +228,21 @@ export function placeCharacter(name: string, placement: CharacterPlacement): Pla
       right: placement.handsOn.right ? toLocal(placement.handsOn.right, placement) : undefined,
     },
   });
+
+  /**
+   * A hand that did not get where it was sent.
+   *
+   * Loud on purpose. An over-reached target does not look like a bug - it looks like a
+   * person stretching, and it has already shipped twice on contacts whose hands were
+   * supposed to be resting on a bench. The generator is the only place that knows the arm
+   * length, so it is the only place that can tell.
+   */
+  if (parts.overreached.length > 0) {
+    console.warn(
+      `[character] ${name}: ${parts.overreached.join(' and ')} hand target is out of reach - ` +
+        'the arm is extended toward it rather than resting on it. Move the target closer.'
+    );
+  }
 
   const root = ENGINE.SceneNode.create({
     name: 'Contact',
