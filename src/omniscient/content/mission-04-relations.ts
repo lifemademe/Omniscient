@@ -348,7 +348,8 @@ export const MISSION_04: MissionDefinition = {
         'Now put them where they go, because I cannot. If you lose track, ask me again ' +
         'and I will read them back.',
       suggest: ['go back over it'],
-      board: {
+      device: {
+        kind: 'relations',
         prompt: 'Put each of them where they belong to Ileana.',
         people: [...BOARD_PEOPLE],
         slots: [...BOARD_SLOTS],

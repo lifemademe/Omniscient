@@ -818,7 +818,7 @@ export class LocalSurface implements InterventionSurface {
     this.renderTabs(state);
     this.renderPanel(state);
     this.renderExtra(state);
-    this.board?.update(state.board);
+    this.board?.update(state.device);
 
     // While confirming or writing a note, the free-text field is not the way in.
     const typing = state.awaitingInput && !state.confirming;

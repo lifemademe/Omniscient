@@ -16,9 +16,53 @@ import { MISSION_02 } from '../src/omniscient/content/mission-02-beacon.js';
 import { MISSION_03 } from '../src/omniscient/content/mission-03-tunnel.js';
 import { MISSION_04 } from '../src/omniscient/content/mission-04-relations.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
+import { flows, wetted } from '../src/omniscient/mission/pipes.js';
+
+import type { DeviceSubmission } from '../src/omniscient/mission/device.js';
+import type { Device } from '../src/omniscient/mission/types.js';
 import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
 
 const SEED = 0x0c151e;
+
+/**
+ * The authored answer to any device, for the chip-walk.
+ *
+ * This is the RIGHT level of cheating for that test: the question it asks is whether the
+ * beat graph reaches an ending, not whether a script can solve a puzzle meant for a
+ * person. The pipe solver brute-forces rotations because the grid is small and because a
+ * stored answer would not prove the grader accepts every arrangement that works.
+ */
+function solveDevice(device: Device): DeviceSubmission {
+  if (device.kind === 'relations') {
+    return {
+      kind: 'relations',
+      links: Object.fromEntries(device.people.map((person) => [person.id, person.answer])),
+    };
+  }
+
+  const cells = device.grid.cells;
+  const turnable = cells.map((c, i) => (c.fixed ? -1 : i)).filter((i) => i >= 0);
+  const rotations = cells.map(() => 0);
+  // Greedy sweep: turn each free piece to whichever rotation wets the most of the run,
+  // repeatedly, until it flows or nothing improves.
+  for (let pass = 0; pass < 6; pass++) {
+    if (flows(device.grid, rotations)) break;
+    for (const i of turnable) {
+      let best = rotations[i];
+      let bestScore = -1;
+      for (let t = 0; t < 4; t++) {
+        rotations[i] = t;
+        const score = (flows(device.grid, rotations) ? 10 : 0) + wetted(device.grid, rotations);
+        if (score > bestScore) {
+          bestScore = score;
+          best = t;
+        }
+      }
+      rotations[i] = best;
+    }
+  }
+  return { kind: 'pipes', rotations };
+}
 let failures = 0;
 
 function check(label: string, ok: boolean, detail?: string): void {
@@ -79,19 +123,16 @@ for (const mission of [MISSION_01, MISSION_02, MISSION_03, MISSION_04]) {
 
     while (!walker.isFinished && guard++ < 40) {
       /**
-       * A board beat does not ask for a sentence, so the chip-walk has to be able to
-       * answer one or every mission with a board reads as a dead end here.
+       * A device beat does not ask for a sentence, so the chip-walk has to be able to
+       * work one, or every mission with a device reads as a dead end here.
        *
        * It submits the authored answers, which is the *right* level of cheating for this
        * test: the question being asked is whether the graph reaches an ending, not
        * whether a script can solve a puzzle meant for a person.
        */
-      const board = walker.getCurrentBeat().board;
-      if (board) {
-        const links = Object.fromEntries(
-          board.people.map((person) => [person.id, person.answer])
-        );
-        walker.submitBoard(links);
+      const device = walker.getCurrentBeat().device;
+      if (device) {
+        walker.submitDevice(solveDevice(device));
         path.push(walker.getCurrentBeat().id);
         continue;
       }
@@ -221,8 +262,9 @@ console.log('\n=== THE RELATION BOARD ===\n');
  * on a WRONG answer more important than its behaviour on a right one.
  */
 {
-  const board = MISSION_04.beats.find((beat) => beat.board)?.board;
-  check('Mission 04 has a board', board !== undefined);
+  const device = MISSION_04.beats.find((beat) => beat.device)?.device;
+  const board = device?.kind === 'relations' ? device : undefined;
+  check('Mission 04 has a relation board', board !== undefined);
 
   if (board) {
     check(
@@ -265,7 +307,7 @@ console.log('\n=== THE RELATION BOARD ===\n');
         board.people[(index + 1) % board.people.length].answer,
       ])
     );
-    const missed = wrong.submitBoard(scrambled);
+    const missed = wrong.submitDevice({ kind: 'relations', links: scrambled });
 
     check('A wrong board does not end the request', !wrong.isFinished);
     check('A wrong board leaves the board up', wrong.getCurrentBeat().id === boardBeatId);
@@ -273,23 +315,23 @@ console.log('\n=== THE RELATION BOARD ===\n');
     check('The contact says something rather than buzzing', missed.say.length > 0);
     check(
       'It reports how many were right, and nothing about which',
-      missed.boardCorrect !== undefined &&
-        missed.boardCorrect.total === board.people.length,
-      `${missed.boardCorrect?.right}/${missed.boardCorrect?.total}`
+      missed.deviceNote !== undefined && missed.deviceNote.includes('of'),
+      missed.deviceNote
     );
 
     // A partly filled board is a legitimate guess, not an error.
-    const partial = wrong.submitBoard({ [board.people[0].id]: board.people[0].answer });
-    check('A half-filled board is graded rather than rejected', partial.boardCorrect?.right === 1);
+    const partial = wrong.submitDevice({ kind: 'relations', links: { [board.people[0].id]: board.people[0].answer } });
+    check('A half-filled board is graded rather than rejected', partial.deviceNote?.startsWith('1 of') === true);
     check('...and still does not end the request', !wrong.isFinished);
 
     // And the right answer resolves it.
     const right = new MissionRuntime(MISSION_04, new KnowledgeStore(SEED));
     right.open();
     right.respond('tell me the names');
-    const solved = right.submitBoard(
-      Object.fromEntries(board.people.map((person) => [person.id, person.answer]))
-    );
+    const solved = right.submitDevice({
+      kind: 'relations',
+      links: Object.fromEntries(board.people.map((person) => [person.id, person.answer])),
+    });
     check('The right board resolves the request', right.isFinished);
     check('...with an outcome', solved.outcome !== undefined, solved.outcome?.kind);
     check(
@@ -312,7 +354,7 @@ console.log('\n=== THE RELATION BOARD ===\n');
   let reached = false;
   let guard = 0;
   while (!walker.isFinished && guard++ < 12) {
-    if (walker.getCurrentBeat().board) {
+    if (walker.getCurrentBeat().device) {
       reached = true;
       break;
     }
@@ -321,6 +363,79 @@ console.log('\n=== THE RELATION BOARD ===\n');
     walker.respond(suggestions[0]);
   }
   check('Tapping the first chip reaches the board', reached, `${guard} steps`);
+}
+
+
+console.log('\n=== THE PIPE GRID ===\n');
+
+/**
+ * The pipe device, graded on its own terms.
+ *
+ * Tested before any mission uses it, because the whole point of the device union is that
+ * a new device is logic plus a renderer - and logic that is proven before content exists
+ * cannot be quietly bent to fit the content later.
+ */
+{
+  // A straight run: source, two straights, drain. Every piece needs a quarter turn.
+  const grid = {
+    columns: 4,
+    rows: 1,
+    cells: [
+      { shape: 'straight' as const, turn: 1, fixed: true },
+      { shape: 'straight' as const },
+      { shape: 'straight' as const },
+      { shape: 'straight' as const, turn: 1, fixed: true },
+    ],
+    source: 0,
+    drain: 3,
+  };
+
+  check('An unturned run does not flow', !flows(grid, [0, 0, 0, 0]));
+  check('Turning the loose pieces makes it flow', flows(grid, [0, 1, 1, 0]));
+  check(
+    'A partial run reports how far the water got',
+    wetted(grid, [0, 1, 0, 0]) > 0 && wetted(grid, [0, 1, 0, 0]) < 1,
+    wetted(grid, [0, 1, 0, 0]).toFixed(2)
+  );
+
+  /**
+   * The property that matters most: grading is by FLOW, not by matching an answer.
+   *
+   * A straight piece is symmetric, so turning it twice changes nothing physical. A grader
+   * that compared against a stored solution would reject this and tell a correct player
+   * they were wrong.
+   */
+  check(
+    'Any arrangement that carries water is accepted, not just the authored one',
+    flows(grid, [0, 3, 3, 0]) && flows(grid, [2, 1, 3, 2])
+  );
+
+  // A bend that has to be turned to catch a run coming from the side.
+  const corner = {
+    columns: 2,
+    rows: 2,
+    cells: [
+      { shape: 'straight' as const, turn: 1, fixed: true },
+      { shape: 'bend' as const },
+      { shape: 'blank' as const },
+      { shape: 'straight' as const, fixed: true },
+    ],
+    source: 0,
+    drain: 3,
+  };
+  check('A corner needs the bend facing the right way', !flows(corner, [0, 0, 0, 0]));
+  // Turn 2, not 3: the bend's base openings are north and east, so two quarters puts it
+  // south-west - which is what catches the run coming in from the left and sends it down.
+  // The first version of this check asserted 3 and the grader was right to reject it.
+  check('...and flows once it does', flows(corner, [0, 2, 0, 0]));
+
+  check(
+    'A run with a gap in it never flows however it is turned',
+    [0, 1, 2, 3].every((a) => [0, 1, 2, 3].every((b) => !flows(
+      { ...grid, cells: [grid.cells[0], { shape: 'blank' as const }, grid.cells[2], grid.cells[3]] },
+      [0, a, b, 0]
+    )))
+  );
 }
 
 console.log(

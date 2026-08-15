@@ -13,8 +13,9 @@ import { MissionRuntime } from '../mission/MissionRuntime.js';
 import { Tempo } from '../mission/types.js';
 
 import type { KnowledgeStore } from '../knowledge/KnowledgeStore.js';
+import type { DeviceSubmission } from '../mission/device.js';
 import type {
-  BoardView,
+  DeviceView,
   HintView,
   InterventionSurface,
   RecordView,
@@ -23,6 +24,7 @@ import type {
 import type { MissionStep } from '../mission/MissionRuntime.js';
 import type {
   Contact,
+  Device,
   MissionDefinition,
   MissionFailure,
   MissionOutcome,
@@ -65,8 +67,8 @@ export class SessionController {
   private opened = new Set<string>();
   private confirming: { intentId: string; question: string } | null = null;
   private failed: MissionFailure | null = null;
-  /** Last board result, so the surface can say how many were right without re-grading. */
-  private boardScore: { right: number; total: number } | null = null;
+  /** Last device report, so the surface can show it without re-grading anything. */
+  private deviceNote: string | null = null;
 
   constructor(
     private readonly surface: InterventionSurface,
@@ -84,7 +86,7 @@ export class SessionController {
     this.opened = new Set();
     this.confirming = null;
     this.failed = null;
-    this.boardScore = null;
+    this.deviceNote = null;
 
     this.unsubscribe = this.surface.onMessage((message) => {
       switch (message.kind) {
@@ -103,8 +105,8 @@ export class SessionController {
         case 'leave':
           this.hooks.onLeave?.();
           break;
-        case 'board':
-          this.submitBoard(message.links);
+        case 'device':
+          this.submitDevice(message.submission);
           break;
         default:
           break;
@@ -142,29 +144,51 @@ export class SessionController {
    * the transcript still reads as a conversation somebody had - "Petra is your aunt" is
    * what was actually said, and `{petra: 'aunt'}` is only how it travelled.
    */
-  private submitBoard(links: Record<string, string>): void {
+  private submitDevice(submission: DeviceSubmission): void {
     if (!this.runtime || !this.contact || this.runtime.isFinished) return;
 
-    const board = this.runtime.getCurrentBeat().board;
-    if (!board) return;
-
-    const spoken = board.people
-      .filter((person) => links[person.id])
-      .map((person) => {
-        const slot = board.slots.find((entry) => entry.id === links[person.id]);
-        return `${person.name} is your ${slot?.label ?? links[person.id]}`;
-      })
-      .join('. ');
+    const device = this.runtime.getCurrentBeat().device;
+    if (!device) return;
 
     this.push({
       source: 'omniscient',
       name: 'OMNISCIENT_',
-      body: spoken ? `${spoken}.` : 'I do not have enough to place them yet.',
+      body: this.narrate(device, submission),
     });
 
-    const step = this.runtime.submitBoard(links);
-    this.boardScore = step.boardCorrect ?? null;
+    const step = this.runtime.submitDevice(submission);
+    this.deviceNote = step.deviceNote ?? null;
     this.apply(step);
+  }
+
+  /**
+   * What the transcript says the player just did.
+   *
+   * A device submission travels as ids and numbers, and the log has to keep reading as a
+   * conversation somebody had - "Petra is your aunt" is what was actually said, and
+   * `{petra: 'aunt'}` is only how it got here. Per-kind because there is no general way
+   * to put a rotated pipe grid into a sentence.
+   */
+  private narrate(device: Device, submission: DeviceSubmission): string {
+    if (device.kind === 'relations' && submission.kind === 'relations') {
+      const spoken = device.people
+        .filter((person) => submission.links[person.id])
+        .map((person) => {
+          const slot = device.slots.find((entry) => entry.id === submission.links[person.id]);
+          return `${person.name} is your ${slot?.label ?? submission.links[person.id]}`;
+        })
+        .join('. ');
+      return spoken ? `${spoken}.` : 'I do not have enough to place them yet.';
+    }
+
+    if (device.kind === 'pipes' && submission.kind === 'pipes') {
+      const turned = submission.rotations.filter((r) => r % 4 !== 0).length;
+      return turned
+        ? `Try it now - I have turned ${turned} of them.`
+        : 'Try it as it is.';
+    }
+
+    return 'Try that.';
   }
 
   /** Answer a proposed reading of the last message. */
@@ -312,24 +336,50 @@ export class SessionController {
       failure: this.failed
         ? { summary: this.failed.summary, lesson: this.failed.lesson }
         : undefined,
-      board: finished ? undefined : this.buildBoard(),
+      device: finished ? undefined : this.buildDevice(),
     });
   }
 
-  /** The current beat's board, stripped of its answers, plus the last score. */
-  private buildBoard(): BoardView | undefined {
-    const board = this.runtime?.getCurrentBeat().board;
-    if (!board) return undefined;
+  /**
+   * The current beat's device, stripped of its answers.
+   *
+   * Every field the console needs and none it could cheat with: the relation board's
+   * `answer` and the pipe grid's solved state never cross this line.
+   */
+  private buildDevice(): DeviceView | undefined {
+    const device = this.runtime?.getCurrentBeat().device;
+    if (!device) return undefined;
+    const note = this.deviceNote ?? undefined;
+
+    if (device.kind === 'relations') {
+      return {
+        kind: 'relations',
+        prompt: device.prompt,
+        people: device.people.map((person) => ({
+          id: person.id,
+          name: person.name,
+          note: person.note,
+        })),
+        slots: device.slots.map((slot) => ({ id: slot.id, label: slot.label })),
+        note,
+      };
+    }
 
     return {
-      prompt: board.prompt,
-      people: board.people.map((person) => ({
-        id: person.id,
-        name: person.name,
-        note: person.note,
-      })),
-      slots: board.slots.map((slot) => ({ id: slot.id, label: slot.label })),
-      score: this.boardScore ?? undefined,
+      kind: 'pipes',
+      prompt: device.prompt,
+      grid: {
+        columns: device.grid.columns,
+        rows: device.grid.rows,
+        cells: device.grid.cells.map((cell) => ({
+          shape: cell.shape,
+          turn: cell.turn ?? 0,
+          fixed: cell.fixed === true,
+        })),
+        source: device.grid.source,
+        drain: device.grid.drain,
+      },
+      note,
     };
   }
 

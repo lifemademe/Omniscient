@@ -69,13 +69,41 @@ export interface BoardSlotView {
   label: string;
 }
 
-export interface BoardView {
-  prompt: string;
-  people: BoardPersonView[];
-  slots: BoardSlotView[];
-  /** Set after a wrong submission: how many were right, and nothing about which. */
-  score?: { right: number; total: number };
+/** One cell of a pipe run, as the console needs to draw it. Carries no solution. */
+export interface PipeCellView {
+  shape: 'straight' | 'bend' | 'tee' | 'cross' | 'blank';
+  /** Quarter turns the piece already has, before the player touches it. */
+  turn: number;
+  /** Plumbed in - the player cannot turn this one. */
+  fixed: boolean;
 }
+
+export interface PipeView {
+  columns: number;
+  rows: number;
+  cells: PipeCellView[];
+  source: number;
+  drain: number;
+}
+
+/**
+ * Whatever device the current beat is showing.
+ *
+ * Discriminated so the panel picks a renderer rather than guessing, and carrying no
+ * answers of any kind - the surface can draw a device, let the player work it and send
+ * the result back, and still have no idea whether it is right. §157's boundary, held at
+ * the presentation layer.
+ */
+export type DeviceView =
+  | {
+      kind: 'relations';
+      prompt: string;
+      people: BoardPersonView[];
+      slots: BoardSlotView[];
+      /** Set after a wrong submission: what the device reported, in words. */
+      note?: string;
+    }
+  | { kind: 'pipes'; prompt: string; grid: PipeView; note?: string };
 
 /**
  * A proposed reading of what the player just said, awaiting yes/no.
@@ -127,8 +155,8 @@ export interface SurfaceState {
   confirming?: Confirmation;
   /** When set, the request has been lost and the player may write themselves a note. */
   failure?: { summary: string; lesson?: string };
-  /** When set, the surface shows the relation board alongside the conversation. */
-  board?: BoardView;
+  /** When set, the surface shows a device alongside the conversation. */
+  device?: DeviceView;
 }
 
 /** §160: gestures compress an instruction into an immediate machine command. */
@@ -146,8 +174,13 @@ export type PlayerMessage =
   | { kind: 'note'; text: string }
   /** Stepped back out of the request to the globe. */
   | { kind: 'leave' }
-  /** Sent the relation board: person id -> slot id, for every box they wired up. */
-  | { kind: 'board'; links: Record<string, string> };
+  /** Sent a device. The payload is discriminated to match what was being shown. */
+  | {
+      kind: 'device';
+      submission:
+        | { kind: 'relations'; links: Record<string, string> }
+        | { kind: 'pipes'; rotations: number[] };
+    };
 
 export interface InterventionSurface {
   /** Which transport this is. Diagnostics and telemetry only - gameplay must not branch on it. */

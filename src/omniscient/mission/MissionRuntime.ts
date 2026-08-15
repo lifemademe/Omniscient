@@ -12,7 +12,10 @@
 
 import { Certainty } from '../knowledge/KnowledgeStore.js';
 
+import { gradeDevice } from './device.js';
 import { readsAsYesNo, resolveIntent } from './intent.js';
+
+import type { DeviceSubmission } from './device.js';
 
 import type { KnowledgeStore } from '../knowledge/KnowledgeStore.js';
 import type {
@@ -46,13 +49,14 @@ export interface MissionStep {
    */
   confirming?: { intentId: string; question: string };
   /**
-   * How many board links were right, after a submission that was not.
+   * What the device reported after a submission that did not solve it.
    *
-   * A count and not a list, deliberately. Naming the wrong ones turns the board into a
-   * process of elimination the player can grind without listening; a count says "you have
-   * three of these" and sends them back to what she actually told them.
+   * A short phrase from the device rather than a list of what is wrong. On the relation
+   * board that is a count - naming the wrong links turns it into elimination the player
+   * can grind without listening. On the pipe grid it is how far the water got, which is
+   * what somebody at the tap can actually hear.
    */
-  boardCorrect?: { right: number; total: number };
+  deviceNote?: string;
 }
 
 export class MissionRuntime {
@@ -263,26 +267,24 @@ export class MissionRuntime {
    * simply wrong rather than an error - a partly filled board is a legitimate guess, and
    * refusing to grade it would be the game telling the player off for trying.
    */
-  public submitBoard(links: Record<string, string>): MissionStep {
-    const beat = this.getCurrentBeat();
-    const board = beat.board;
-
-    if (this.finished || !board) {
+  /**
+   * Submit whatever device the current beat is showing.
+   *
+   * One entry point for every kind: the runtime grades by kind and the transitions are
+   * the same shape either way, so a new device is a new case in `gradeDevice` and
+   * nothing else.
+   */
+  public submitDevice(submission: DeviceSubmission): MissionStep {
+    const device = this.getCurrentBeat().device;
+    if (this.finished || !device || device.kind !== submission.kind) {
       return { say: '', learned: [], clarifying: false };
     }
 
-    const right = board.people.filter((person) => links[person.id] === person.answer).length;
-    if (right === board.people.length) {
-      return this.applyTransition(board.onSolved);
-    }
+    const graded = gradeDevice(device, submission);
+    if (graded.solved) return this.applyTransition(device.onSolved);
 
-    const step = this.applyTransition(board.onWrong);
-    return {
-      ...step,
-      say: board.wrongSay,
-      clarifying: true,
-      boardCorrect: { right, total: board.people.length },
-    };
+    const step = this.applyTransition(device.onWrong);
+    return { ...step, say: device.wrongSay, clarifying: true, deviceNote: graded.note };
   }
 
   private applyTransition(transition: BeatTransition): MissionStep {

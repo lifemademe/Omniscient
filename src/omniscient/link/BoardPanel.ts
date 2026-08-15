@@ -22,7 +22,7 @@
  * elements built by hand for the same reason.
  */
 
-import type { BoardView, PlayerMessage } from './surface.js';
+import type { DeviceView, PlayerMessage } from './surface.js';
 
 const STYLE_ID = 'omniscient-board-styles';
 
@@ -142,6 +142,37 @@ const BOARD_CSS = `
   cursor: pointer;
 }
 .omni-board__send:disabled { opacity: 0.35; cursor: default; }
+/* The pipe run: a grid of pieces, each one a button that turns a quarter on click. */
+.omni-board__pipes {
+  display: grid;
+  gap: 3px;
+  justify-content: start;
+}
+.omni-board__cell {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgba(127, 224, 138, 0.28);
+  border-radius: 2px;
+  background: rgba(10, 24, 15, 0.85);
+  color: #7fe08a;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+.omni-board__cell:hover { border-color: rgba(127, 224, 138, 0.75); }
+/* Fixed pieces are already plumbed in - dimmer, and they do not take a pointer. */
+.omni-board__cell--fixed {
+  cursor: default;
+  color: rgba(127, 224, 138, 0.45);
+  border-color: rgba(127, 224, 138, 0.14);
+}
+.omni-board__cell--end {
+  border-color: #e0a24c;
+  color: #e0a24c;
+}
 `;
 
 export function injectBoardStyles(): void {
@@ -155,6 +186,28 @@ export function injectBoardStyles(): void {
 }
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+type PipeGridView = Extract<DeviceView, { kind: 'pipes' }>['grid'];
+
+/**
+ * Box-drawing characters, indexed by quarter turn.
+ *
+ * A straight piece has only two distinct orientations and a cross has one, so the tables
+ * are short and the modulo does the rest. Using the characters directly means a pipe
+ * piece needs no art, and at this size it reads better than a sprite would.
+ */
+const GLYPHS: Record<string, string[]> = {
+  straight: ['\u2503', '\u2501'],
+  bend: ['\u2517', '\u250f', '\u2513', '\u251b'],
+  tee: ['\u2523', '\u2533', '\u252b', '\u253b'],
+  cross: ['\u254b'],
+  blank: [' '],
+};
+
+function pipeGlyph(shape: string, turn: number): string {
+  const options = GLYPHS[shape] ?? [' '];
+  return options[((turn % options.length) + options.length) % options.length];
+}
 
 export class BoardPanel {
   public readonly element: HTMLDivElement;
@@ -172,7 +225,11 @@ export class BoardPanel {
 
   private personButtons = new Map<string, HTMLButtonElement>();
   private slotButtons = new Map<string, HTMLButtonElement>();
-  private view: BoardView | null = null;
+  /** Pipe cells, in grid order. */
+  private cellButtons: HTMLButtonElement[] = [];
+  private view: DeviceView | null = null;
+  /** Player quarter-turns per cell, for a pipe device. */
+  private rotations: number[] = [];
   /** Identity of the board currently rendered, so re-presenting does not wipe the work. */
   private renderedKey = '';
 
@@ -254,7 +311,7 @@ export class BoardPanel {
    * and half-finished work being wiped by an unrelated redraw is precisely the class of
    * bug that shipped in the suggestion chips.
    */
-  public update(view: BoardView | undefined): void {
+  public update(view: DeviceView | undefined): void {
     this.view = view ?? null;
     if (!view) {
       this.element.style.display = 'none';
@@ -262,11 +319,15 @@ export class BoardPanel {
     }
     this.element.style.display = '';
 
-    const key = `${view.prompt}|${view.people.map((p) => p.id).join(',')}`;
+    const key =
+      view.kind === 'relations'
+        ? `relations|${view.prompt}|${view.people.map((p) => p.id).join(',')}`
+        : `pipes|${view.prompt}|${view.grid.cells.length}`;
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       this.links.clear();
       this.armed = null;
+      this.rotations = view.kind === 'pipes' ? view.grid.cells.map(() => 0) : [];
       this.build(view);
     }
 
@@ -274,10 +335,16 @@ export class BoardPanel {
     this.refresh(view);
   }
 
-  private build(view: BoardView): void {
+  private build(view: DeviceView): void {
     this.grid.replaceChildren();
     this.personButtons.clear();
     this.slotButtons.clear();
+    this.cellButtons = [];
+
+    if (view.kind === 'pipes') {
+      this.buildPipes(view.grid);
+      return;
+    }
 
     const people = document.createElement('div');
     people.className = 'omni-board__column';
@@ -328,6 +395,50 @@ export class BoardPanel {
   }
 
   /**
+   * The pipe run.
+   *
+   * Every piece is a button that turns a quarter clockwise, which is the whole verb. No
+   * drag, no selection state, nothing to learn - the same reasoning as the relation
+   * board's click-then-click, and here it is even simpler because a piece has only one
+   * thing it can do.
+   *
+   * Glyphs rather than sprites: box-drawing characters already ARE pipe pieces, they
+   * rotate by picking a different character, and they cost no texture and no atlas. The
+   * grid is small enough that a 17px glyph reads perfectly.
+   */
+  private buildPipes(grid: PipeGridView): void {
+    const board = document.createElement('div');
+    board.className = 'omni-board__pipes';
+    board.style.gridTemplateColumns = `repeat(${grid.columns}, 34px)`;
+
+    grid.cells.forEach((cell, index) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      const ends = index === grid.source || index === grid.drain;
+      button.className = [
+        'omni-board__cell',
+        cell.fixed ? 'omni-board__cell--fixed' : '',
+        ends ? 'omni-board__cell--end' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+      if (!cell.fixed) {
+        button.addEventListener('mousedown', (event) => {
+          event.preventDefault();
+          this.rotations[index] = (this.rotations[index] + 1) % 4;
+          if (this.view) this.refresh(this.view);
+        });
+      }
+
+      this.cellButtons.push(button);
+      board.appendChild(button);
+    });
+
+    this.grid.appendChild(board);
+  }
+
+  /**
    * Tapping a person: arm it, or unlink it if it already has a wire.
    *
    * Making a linked box unlink on tap means there is no separate delete gesture to find.
@@ -351,14 +462,42 @@ export class BoardPanel {
   }
 
   private submit(): void {
-    if (!this.view || this.links.size < this.view.people.length) return;
-    this.dispatch({ kind: 'board', links: Object.fromEntries(this.links) });
+    const view = this.view;
+    if (!view) return;
+
+    if (view.kind === 'relations') {
+      if (this.links.size < view.people.length) return;
+      this.dispatch({
+        kind: 'device',
+        submission: { kind: 'relations', links: Object.fromEntries(this.links) },
+      });
+      return;
+    }
+
+    this.dispatch({
+      kind: 'device',
+      submission: { kind: 'pipes', rotations: [...this.rotations] },
+    });
   }
 
-  private refresh(view: BoardView): void {
+  private refresh(view: DeviceView): void {
     this.element.classList.toggle('omni-board--folded', this.folded);
     this.fold.textContent = this.folded ? 'Show' : 'Hide';
     if (this.folded) return;
+
+    if (view.kind === 'pipes') {
+      view.grid.cells.forEach((cell, index) => {
+        const button = this.cellButtons[index];
+        if (button) button.textContent = pipeGlyph(cell.shape, cell.turn + this.rotations[index]);
+      });
+      this.send.disabled = false;
+      this.status.className = view.note
+        ? 'omni-board__status omni-board__status--score'
+        : 'omni-board__status';
+      this.status.textContent = view.note ?? 'turn the pieces until it runs';
+      this.wires.replaceChildren();
+      return;
+    }
 
     for (const [id, button] of this.personButtons) {
       button.classList.toggle('omni-board__box--armed', this.armed === id);
@@ -374,9 +513,9 @@ export class BoardPanel {
     const total = view.people.length;
     this.send.disabled = placed < total;
 
-    if (view.score && placed === total) {
+    if (view.note && placed === total) {
       this.status.className = 'omni-board__status omni-board__status--score';
-      this.status.textContent = `${view.score.right} of ${view.score.total} were right`;
+      this.status.textContent = view.note;
     } else if (this.armed) {
       const name = view.people.find((person) => person.id === this.armed)?.name ?? '';
       this.status.className = 'omni-board__status';

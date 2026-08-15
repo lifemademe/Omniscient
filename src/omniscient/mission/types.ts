@@ -11,6 +11,7 @@
 
 import type { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import type { IntentDefinition } from './intent.js';
+import type { PipeGrid } from './pipes.js';
 
 /** §154 urgency classes. Not every request gets a countdown. */
 export enum Urgency {
@@ -111,31 +112,57 @@ export interface BoardSlot {
 }
 
 /**
- * Connect-the-boxes: a relationship the contact can describe but cannot assemble.
+ * Anything on the console solved by DOING rather than by saying.
  *
- * The conversation missions all resolve by *saying* the right thing, which is the right
- * default and gets monotonous as the only verb in the game. This is a beat that asks the
- * player to do something instead - hold five statements at once and work out the shape
- * they make - which is exactly the job the fiction says OMNISCIENT_ is for.
+ * The relation board was the first, written as a bespoke beat property with its own
+ * runtime method, surface field and player message. That is the right shape for one of
+ * something and the wrong shape for three - the plumber, the thief and the torch would
+ * each have arrived with a parallel copy of the same four hooks.
+ *
+ * So a device is a discriminated union with ONE hook at each layer: one beat property,
+ * one `submitDevice`, one message kind, one panel that picks a renderer. A fourth device
+ * is a new member and a new renderer; nothing else moves. §160 still holds - this is data
+ * walked by a shared runtime, not a script.
+ */
+export type Device = RelationBoard | PipeBoard;
+
+export interface DeviceBase {
+  /** The question, in the contact's voice. */
+  prompt: string;
+  onSolved: BeatTransition;
+  /**
+   * Where a wrong submission goes. Normally back to the same beat - the device stays up
+   * and the player tries again. §159: never a failure, always another go.
+   */
+  onWrong: BeatTransition;
+  /** What the contact says on a wrong submission, before whatever the device reports. */
+  wrongSay: string;
+}
+
+/**
+ * Connect-the-boxes: a relationship the contact can describe but cannot assemble.
  *
  * A wrong submission is never a failure (§159). The contact says how many are right and
  * nothing more, so guessing costs attention rather than progress, and the way through is
- * to go back and re-read what she actually told you.
+ * to go back and re-read what she actually said.
  */
-export interface RelationBoard {
-  /** The question, in the contact's voice. */
-  prompt: string;
+export interface RelationBoard extends DeviceBase {
+  kind: 'relations';
   people: BoardPerson[];
   /** Every slot offered, including ones nobody belongs in. */
   slots: BoardSlot[];
-  onSolved: BeatTransition;
-  /**
-   * Where a wrong submission goes. Normally back to the same beat - the board stays up
-   * and the player tries again.
-   */
-  onWrong: BeatTransition;
-  /** What the contact says on a wrong submission, before the count. */
-  wrongSay: string;
+}
+
+/**
+ * A run of pipe to be rotated until it carries water.
+ *
+ * Graded by flood fill rather than against a stored answer (see mission/pipes.ts). More
+ * than one arrangement usually works, and a puzzle that accepts only the author's is one
+ * that tells a correct player they are wrong.
+ */
+export interface PipeBoard extends DeviceBase {
+  kind: 'pipes';
+  grid: PipeGrid;
 }
 
 export interface Beat {
@@ -144,10 +171,10 @@ export interface Beat {
   say: string;
   tempo: Tempo;
   /**
-   * Present on a beat that puts the relation board up instead of asking for a sentence.
-   * The text input stays live, so a player can still talk to the contact while it is open.
+   * Present on a beat that puts a device up instead of asking for a sentence. The text
+   * input stays live, so a player can still talk to the contact while it is open.
    */
-  board?: RelationBoard;
+  device?: Device;
   /**
    * Present on a beat that ends the request badly (§155 / §163).
    *
