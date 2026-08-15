@@ -235,6 +235,22 @@ export const MAT = {
    */
   galvanised: standard('#6c7276', 0.82, 0.15),
   /**
+   * Standing water in a cellar.
+   *
+   * Unlit and translucent rather than reflective: there is no environment probe to reflect
+   * and a glossy plane with nothing to mirror renders as a black hole. What sells it is
+   * being a flat dark sheet at ankle height under a cold uplight - placement and value,
+   * not simulation.
+   */
+  floodwater: new THREE.MeshBasicMaterial({
+    color: '#1c2b31',
+    transparent: true,
+    opacity: 0.82,
+    toneMapped: false,
+  }),
+  /** Old copper, gone dull. One of the four hands that built Vasile's run. */
+  copper: standard('#8a5a3c', 0.6, 0.35),
+  /**
    * Painted structural steel - walkways, rails, anything somebody stands on outdoors.
    *
    * MAT.metal is 0.65 metalness at 0.45 roughness, which is right for a bracket catching

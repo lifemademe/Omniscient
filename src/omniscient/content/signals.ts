@@ -14,17 +14,24 @@ import type { Signal } from '../crt/GlobeView.js';
  * Signals revealed once the player has finished their first request.
  *
  * The opening globe holds exactly one point, so there is no question about where to go.
- * Everything §52 wants - a world visibly bigger than the slice, requests going unanswered
- * elsewhere, an origin that should not exist - arrives the moment the player has done a
- * thing once and knows what the globe is for.
+ * Everything §52 wants arrives the moment the player has done a thing once and knows what
+ * the globe is for.
+ *
+ * There used to be a tease here as well - a failed request in Toronto, seeded already on
+ * cooldown, which existed to make the world look bigger than four contacts and to show
+ * §31 on the globe. Five real requests do the first job better than a fake one did, and
+ * §96 caps the nameable signals at five, so the fake was the one to go. §31 is left to the
+ * real mechanism: losing Mirela puts her on a countdown, which preview-stuck walks end to
+ * end.
  */
-export const REVEALED_AFTER_FIRST = ['tease-toronto', 'anomaly'];
+export const REVEALED_AFTER_FIRST = ['anomaly'];
 
 /** Signal ids that map to authored missions, in queue order. */
 export const MIRELA_SIGNAL = 'mirela';
 export const TOMAS_SIGNAL = 'tomas';
 export const ADAEZE_SIGNAL = 'adaeze';
 export const ILEANA_SIGNAL = 'ileana';
+export const VASILE_SIGNAL = 'vasile';
 
 /**
  * §96 caps conscious attention at five. The globe honours that: five nameable people at
@@ -79,6 +86,20 @@ export function createSignals(): Signal[] {
       state: SignalState.Dormant,
       hidden: true,
     },
+    {
+      /**
+       * Inland and well clear of the coast the other four share, because five points in
+       * one bay is one point on a whole-globe view - a lesson this file has now learned
+       * three times.
+       */
+      id: VASILE_SIGNAL,
+      latitude: 40.4,
+      longitude: -3.7,
+      name: 'Vasile Crâstea',
+      label: 'The pump is running and nothing is coming out.',
+      state: SignalState.Dormant,
+      hidden: true,
+    },
     // Tease. §52: do not reveal everything, make them curious enough to look.
     //
     // There used to be a second one, in Tokyo. Ileana took its place rather than joining
@@ -98,17 +119,6 @@ export function createSignals(): Signal[] {
       // Appears once Tomas is settled. Three requests at once would make the slice a
       // queue rather than a choice.
       state: SignalState.Dormant,
-      hidden: true,
-    },
-    {
-      id: 'tease-toronto',
-      latitude: 43.7,
-      longitude: -79.4,
-      name: 'R. Lindqvist',
-      label: '"This is embarrassing..."',
-      // Demonstrates §31: this one was attempted and went wrong.
-      state: SignalState.Cooldown,
-      cooldown: 95,
       hidden: true,
     },
     // §169: an origin that should not exist. Visible for a few frames in every hundred,

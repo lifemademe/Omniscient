@@ -149,6 +149,9 @@ const BOARD_CSS = `
   justify-content: start;
 }
 .omni-board__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 34px;
   height: 34px;
   padding: 0;
@@ -164,6 +167,11 @@ const BOARD_CSS = `
 }
 .omni-board__cell:hover { border-color: rgba(127, 224, 138, 0.75); }
 /* Fixed pieces are already plumbed in - dimmer, and they do not take a pointer. */
+.omni-board__cell--blank {
+  border-color: transparent;
+  background: transparent;
+  cursor: default;
+}
 .omni-board__cell--fixed {
   cursor: default;
   color: rgba(127, 224, 138, 0.45);
@@ -288,7 +296,13 @@ export class BoardPanel {
     this.send = document.createElement('button');
     this.send.className = 'omni-board__send';
     this.send.type = 'button';
-    this.send.textContent = 'Tell her';
+    /**
+     * Neutral, because the panel does not know who it is talking to.
+     *
+     * It said "Tell her", which was written when Ileana was the only person with a device
+     * and read as a bug the moment Vasile got one. A shared panel cannot carry a pronoun.
+     */
+    this.send.textContent = 'Send it';
     this.send.addEventListener('mousedown', (event) => {
       event.preventDefault();
       this.submit();
@@ -418,12 +432,13 @@ export class BoardPanel {
       button.className = [
         'omni-board__cell',
         cell.fixed ? 'omni-board__cell--fixed' : '',
+        cell.shape === 'blank' ? 'omni-board__cell--blank' : '',
         ends ? 'omni-board__cell--end' : '',
       ]
         .filter(Boolean)
         .join(' ');
 
-      if (!cell.fixed) {
+      if (!cell.fixed && cell.shape !== 'blank') {
         button.addEventListener('mousedown', (event) => {
           event.preventDefault();
           this.rotations[index] = (this.rotations[index] + 1) % 4;
@@ -519,7 +534,7 @@ export class BoardPanel {
     } else if (this.armed) {
       const name = view.people.find((person) => person.id === this.armed)?.name ?? '';
       this.status.className = 'omni-board__status';
-      this.status.textContent = `${name} is her... (pick one on the right)`;
+      this.status.textContent = `${name} is their... (pick one on the right)`;
     } else {
       this.status.className = 'omni-board__status';
       // Says what to do next rather than reporting a score. A disabled button with
@@ -529,7 +544,7 @@ export class BoardPanel {
           ? 'pick a name, then pick what they are to her'
           : placed < total
             ? `${total - placed} still to place`
-            : 'ready - tell her';
+            : 'ready - send it';
     }
 
     this.drawWires();

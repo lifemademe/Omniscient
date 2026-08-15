@@ -12,11 +12,12 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
-import { ADAEZE, ILEANA, MIRELA, TOMAS } from './content/contacts.js';
+import { ADAEZE, ILEANA, MIRELA, TOMAS, VASILE } from './content/contacts.js';
 import { MISSION_01 } from './content/mission-01-transmitter.js';
 import { MISSION_02 } from './content/mission-02-beacon.js';
 import { MISSION_03 } from './content/mission-03-tunnel.js';
 import { MISSION_04 } from './content/mission-04-relations.js';
+import { MISSION_05 } from './content/mission-05-cellar.js';
 import { createScreenGlass } from './art/glass.js';
 import { PAINT_UNIFORMS } from './art/painterly.js';
 import { decorMesh } from './art/mesh.js';
@@ -252,6 +253,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
       // reaches her they have solved two electrical faults in one small town, which is
       // exactly the habit her request is built to break.
       { mission: MISSION_03, contact: ADAEZE },
+      /**
+       * Last, and the second device request.
+       *
+       * Ileana's board is a memory problem and this is a topology one, so putting them at
+       * opposite ends of the queue means the player meets the idea "the console is
+       * something you WORK, not only something you type into" twice, with three
+       * conversations in between to keep it from reading as a puzzle game.
+       */
+      { mission: MISSION_05, contact: VASILE },
     ];
 
     this.buildScenes();

@@ -47,7 +47,22 @@ export const ILEANA: Contact = {
   teaser: 'VADU SEC - "there is nobody left who knows"',
 };
 
-export const CONTACTS: readonly Contact[] = [MIRELA, ILEANA, TOMAS, ADAEZE];
+/**
+ * The fifth, and the second person whose problem is that nobody wrote something down.
+ *
+ * Vasile is not out of his depth as a plumber - he is a far better one than OMNISCIENT_
+ * will ever be. What he cannot do is see the whole run at once, because it is behind three
+ * walls and under a floor and four people built it across fifty years. He has the hands
+ * and the trade; the machine has the only thing missing.
+ */
+export const VASILE: Contact = {
+  id: 'vasile',
+  name: 'Vasile Crâstea',
+  location: 'School cellar, Iarna',
+  teaser: 'IARNA - "the pump is running and nothing is coming out"',
+};
+
+export const CONTACTS: readonly Contact[] = [MIRELA, ILEANA, TOMAS, ADAEZE, VASILE];
 
 export function getContact(id: string): Contact | null {
   return CONTACTS.find((contact) => contact.id === id) ?? null;

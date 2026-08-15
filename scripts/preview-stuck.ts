@@ -15,6 +15,7 @@ import { MISSION_01 } from '../src/omniscient/content/mission-01-transmitter.js'
 import { MISSION_02 } from '../src/omniscient/content/mission-02-beacon.js';
 import { MISSION_03 } from '../src/omniscient/content/mission-03-tunnel.js';
 import { MISSION_04 } from '../src/omniscient/content/mission-04-relations.js';
+import { MISSION_05 } from '../src/omniscient/content/mission-05-cellar.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
 import { flows, wetted } from '../src/omniscient/mission/pipes.js';
 
@@ -111,7 +112,7 @@ console.log('\n=== FOLLOWING THE SUGGESTIONS ===\n');
  * points at the answer. Mission 01 had exactly that - unit-overview to history to
  * power-off-early and back - and only walking it in every position exposed it.
  */
-for (const mission of [MISSION_01, MISSION_02, MISSION_03, MISSION_04]) {
+for (const mission of [MISSION_01, MISSION_02, MISSION_03, MISSION_04, MISSION_05]) {
   const widest = Math.max(...mission.beats.map((beat) => beat.suggest?.length ?? 0));
 
   for (let slot = 0; slot < widest; slot++) {
@@ -166,7 +167,7 @@ console.log('\n=== TYPOS ARE NOT PUNISHED ===\n');
  * message produces a clarification, not a punishment, and a physical cue on that path
  * breaks it just as badly as a red X would.
  */
-[MISSION_01, MISSION_02, MISSION_03, MISSION_04].forEach((mission) => {
+[MISSION_01, MISSION_02, MISSION_03, MISSION_04, MISSION_05].forEach((mission) => {
   const harmful = mission.beats
     .filter((beat) => {
       const path = beat.onUnrecognised;
@@ -182,7 +183,7 @@ console.log('\n=== TYPOS ARE NOT PUNISHED ===\n');
 });
 
 // And the beat you land on after an unrecognised message must still offer a way out.
-[MISSION_01, MISSION_02, MISSION_03, MISSION_04].forEach((mission) => {
+[MISSION_01, MISSION_02, MISSION_03, MISSION_04, MISSION_05].forEach((mission) => {
   const byId = new Map(mission.beats.map((beat) => [beat.id, beat]));
   const dead = mission.beats
     .filter((beat) => beat.onUnrecognised)

@@ -2002,12 +2002,254 @@ function buildClearedHouse(scene: ContactScene): void {
   });
 }
 
+/**
+ * MISSION 05 - the school cellar, filling.
+ *
+ * §131: the room has to carry the request. Three things do it here and everything else is
+ * mass - the water on the floor, the three open inspection covers with junction boxes in
+ * them, and the chalk marks on the wall that say this has happened before and somebody has
+ * been keeping score.
+ *
+ * The pipework is the set. It runs along the wall and disappears into the floor in four
+ * visibly different materials, because Vasile's whole line is that four people built this
+ * across fifty years - and a player who can SEE lead give way to copper give way to
+ * plastic has been told that before he says it.
+ */
+function buildFloodedCellar(scene: ContactScene): void {
+  const rng = createRng(seedFrom('vasile-cellar'));
+
+  const WALL_TOP = 2.4;
+
+  const floor = new THREE.BoxGeometry(8, 0.1, 6);
+  floor.translate(0, -0.05, 0);
+  scene.registerProp('floor', meshOf('Floor', floor, MAT.ground));
+
+  const backWall = new THREE.BoxGeometry(8, WALL_TOP, 0.18);
+  backWall.translate(0, WALL_TOP / 2, -2.2);
+  scene.registerProp('wall', meshOf('Wall', backWall, MAT.wall));
+
+  const sideWall = new THREE.BoxGeometry(0.18, WALL_TOP, 4.6);
+  sideWall.translate(-3.4, WALL_TOP / 2, 0.2);
+  scene.registerProp('side-wall', meshOf('SideWall', sideWall, MAT.wall));
+
+  /**
+   * The water.
+   *
+   * A single unlit plane a few centimetres up, dark and slightly reflective in colour
+   * rather than in fact - there is no reflection to be had without a probe, and a flat
+   * dark sheet at ankle height reads as standing water because of WHERE it is, not because
+   * of what it does. §241: value and placement, not simulation.
+   */
+  const waterGeo = new THREE.PlaneGeometry(7.6, 5.6);
+  waterGeo.rotateX(-Math.PI / 2);
+  waterGeo.translate(0, 0.06, 0);
+  const waterMesh = meshOf('Water', waterGeo, MAT.floodwater);
+  scene.registerProp('water', waterMesh, {
+    anchors: { default: new THREE.Vector3(0, 0.06, 0) },
+    actions: {
+      /** It drains: the sheet drops and thins away. */
+      clear: (tweener) => {
+        const material = waterMesh.material as THREE.MeshBasicMaterial;
+        const from = material.opacity;
+        tweener.add(
+          (t) => {
+            waterMesh.position.setY(-t * 0.055);
+            material.opacity = from * (1 - t * 0.85);
+          },
+          { duration: 2.6, easing: Ease.outCubic, channel: 'cellar-drain' }
+        );
+      },
+    },
+  });
+
+  /**
+   * The run, in four materials.
+   *
+   * Lead, copper, plastic, and the length Vasile put in himself - laid end to end along
+   * the wall so the joins between them are visible. This is the mission's premise as
+   * geometry.
+   */
+  const runY = 1.35;
+  const spans: Array<[number, number, 'metal' | 'copper' | 'plastic' | 'steel']> = [
+    [-3.1, -1.6, 'metal'],
+    [-1.6, -0.2, 'copper'],
+    [-0.2, 1.4, 'plastic'],
+    [1.4, 3.1, 'steel'],
+  ];
+  for (const [from, to, material] of spans) {
+    const pipe = new THREE.CylinderGeometry(0.055, 0.055, to - from, 8);
+    pipe.rotateZ(Math.PI / 2);
+    pipe.translate((from + to) / 2, runY + jitter(rng, 0.02), -2.0);
+    scene.registerProp(
+      `run-${material}`,
+      meshOf(`Run-${material}`, pipe, MAT[material])
+    );
+
+    // A collar at every join - the place where one person's work met the next one's.
+    const collar = new THREE.CylinderGeometry(0.072, 0.072, 0.06, 8);
+    collar.rotateZ(Math.PI / 2);
+    collar.translate(to, runY, -2.0);
+    scene.registerProp(`join-${material}`, meshOf(`Join-${material}`, collar, MAT.metal));
+  }
+
+  // The drop into the floor, and the outfall through the wall.
+  const drop = new THREE.CylinderGeometry(0.055, 0.055, runY, 8);
+  drop.translate(-3.05, runY / 2, -2.0);
+  scene.registerProp('drop', meshOf('Drop', drop, MAT.metal));
+
+  const outfall = new THREE.CylinderGeometry(0.07, 0.07, 0.5, 8);
+  outfall.rotateX(Math.PI / 2);
+  outfall.translate(3.05, runY, -2.15);
+  scene.registerProp('outfall', meshOf('Outfall', outfall, MAT.steel));
+
+  /**
+   * Three inspection covers, up.
+   *
+   * Lifted and leaning against the wall beside their own openings, because a cover lying
+   * flat beside a hole reads as a hole with a lid near it, and a cover propped up reads as
+   * somebody having got it up and gone in.
+   */
+  const openings: THREE.BufferGeometry[] = [];
+  const lids: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 3; i++) {
+    const x = -1.5 + i * 1.5;
+    const hole = new THREE.BoxGeometry(0.52, 0.04, 0.52);
+    hole.translate(x, 0.02, -0.9);
+    openings.push(hole);
+
+    const lid = new THREE.BoxGeometry(0.54, 0.05, 0.54);
+    lid.rotateX(-1.15 + jitter(rng, 0.1));
+    lid.translate(x + jitter(rng, 0.06), 0.26, -1.32);
+    lids.push(lid);
+  }
+  scene.registerProp(
+    'covers',
+    meshOf('Covers', mergeGeometries(openings, false) ?? openings[0], MAT.dark),
+    { anchors: { default: new THREE.Vector3(0, 0.3, -0.9) } }
+  );
+  scene.registerProp('lids', meshOf('Lids', mergeGeometries(lids, false) ?? lids[0], MAT.steel));
+
+  /**
+   * The chalk marks. Four springs, four heights, and the highest one dated.
+   *
+   * §240 - real content, and it is the quietest piece of storytelling in the room: this
+   * building floods, everybody knows it floods, and somebody has been standing here with a
+   * piece of chalk every year instead of anybody fixing it.
+   */
+  const marks: THREE.BufferGeometry[] = [];
+  for (const height of [0.42, 0.66, 0.81, 0.98] as const) {
+    const mark = new THREE.BoxGeometry(0.3, 0.018, 0.02);
+    mark.rotateZ(jitter(rng, 0.03));
+    mark.translate(-2.4 + jitter(rng, 0.08), height, -2.1);
+    marks.push(mark);
+  }
+  scene.registerProp(
+    'marks',
+    meshOf('Marks', mergeGeometries(marks, false) ?? marks[0], MAT.paper)
+  );
+
+  // The sump and its pump, in the corner the run drops into.
+  const sump = new THREE.CylinderGeometry(0.34, 0.34, 0.5, 12);
+  sump.translate(-2.6, 0.25, -1.5);
+  scene.registerProp('sump', meshOf('Sump', sump, MAT.dark));
+
+  const pump = new THREE.CylinderGeometry(0.13, 0.15, 0.34, 10);
+  pump.translate(-2.6, 0.62, -1.5);
+  scene.registerProp('pump', meshOf('Pump', pump, MAT.equipment));
+
+  addContact(scene, 'Vasile', {
+    seed: 'vasile-crastea',
+    height: 1.78,
+    build: 0.62,
+    shoulders: 0.66,
+    lean: 0.28,
+    reach: 0.9,
+    garment: 'overalls',
+    colors: { garment: '#3d4a53', underlayer: '#b9ad92' },
+    /**
+     * Back against the wall by the run, not in the middle of the floor.
+     *
+     * He was at (0.55, 0, -0.05), which put him two thirds of the way along the camera's
+     * own sightline to its target - a 1.78m man filling the frame from behind, with the
+     * water, the covers and the four-material run all behind him. The whole room was
+     * hidden by the person describing it.
+     */
+    position: new THREE.Vector3(-1.15, 0, -1.6),
+    rotation: new THREE.Euler(0, 0.7, 0),
+    /**
+     * One hand on the pipe he is talking about.
+     *
+     * Not on an inspection cover: those are at floor level and a standing man cannot
+     * reach one - measured, 0.68 against an arm that is 0.63. The run along the wall at
+     * 1.35 is chest height and is the thing his whole opening line is about.
+     */
+    handsOn: {
+      left: new THREE.Vector3(-1.45, 1.35, -1.95),
+    },
+    liveliness: 1.15,
+  });
+
+  // -- Light -----------------------------------------------------------------
+  // One bulkhead lamp on the wall and a cold spill off the water. A cellar has no windows,
+  // so this is the only room in the game lit entirely by its own fittings.
+  const lampAt = new THREE.Vector3(-0.4, 2.05, -2.0);
+  const shade = new THREE.SphereGeometry(0.12, 10, 8);
+  shade.translate(lampAt.x, lampAt.y, lampAt.z + 0.1);
+  scene.registerProp('bulkhead', meshOf('Bulkhead', shade, MAT.lamp));
+
+  scene.registerProp(
+    'lamp',
+    ENGINE.PointLightNode.create({
+      name: 'Bulkhead',
+      position: lampAt.clone().add(new THREE.Vector3(0, 0, 0.2)),
+      intensity: 11,
+      color: new THREE.Color('#ffdcae'),
+      distance: 7,
+      decay: 1.3,
+    })
+  );
+
+  /**
+   * Bounce off the water.
+   *
+   * A cold uplight from below, which is the one lighting cue that says "there is water on
+   * this floor" without drawing a single ripple - it is what a flooded room actually looks
+   * like, and it costs one point light.
+   */
+  scene.registerProp(
+    'waterbounce',
+    ENGINE.PointLightNode.create({
+      name: 'WaterBounce',
+      position: new THREE.Vector3(0.2, 0.25, -0.4),
+      intensity: 3.4,
+      color: new THREE.Color('#8fb6c4'),
+      distance: 5,
+      decay: 1.6,
+    })
+  );
+
+  scene.registerShot('default', {
+    // Along the run, so the four materials and the three open covers are all in frame and
+    // the water reads as a plane rather than as a dark floor.
+    // Pulled back and swung right so the covers, the run and the water are all in frame
+    // with Vasile at the left edge rather than in the middle of the lens.
+    position: new THREE.Vector3(3.3, 1.8, 3.5),
+    target: new THREE.Vector3(-0.3, 0.6, -1.35),
+  });
+  scene.registerShot('covers', {
+    position: new THREE.Vector3(0.9, 1.15, 1.1),
+    target: new THREE.Vector3(-0.4, 0.2, -1.0),
+    duration: 2.2,
+  });
+}
+
 // Registered at module load. auto-imports pulls this module in, so a ContactScene node
 // placed in the editor with a matching sceneId populates itself.
 ContactScene.registerBuilder('scene-repair-shop', buildRepairShop);
 ContactScene.registerBuilder('scene-beacon-mast', buildBeaconMast);
 ContactScene.registerBuilder('scene-seedling-tunnel', buildSeedlingTunnel);
 ContactScene.registerBuilder('scene-cleared-house', buildClearedHouse);
+ContactScene.registerBuilder('scene-flooded-cellar', buildFloodedCellar);
 
 /** Construct a populated diorama for a mission's sceneId, or null when none exists. */
 export function buildContactScene(sceneId: string): ContactScene | null {

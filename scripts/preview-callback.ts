@@ -524,14 +524,14 @@ check(
   );
   check(
     'Everything else is waiting off-globe, including the tease and the anomaly',
-    ['tomas', 'adaeze', 'ileana', 'tease-toronto', 'anomaly'].every(
+    ['tomas', 'adaeze', 'ileana', 'vasile', 'anomaly'].every(
       (id) => signals.find((s) => s.id === id)?.hidden === true
     )
   );
 }
 check(
-  'A failed request is on cooldown with a countdown (§31)',
-  signals.some((s) => s.state === SignalState.Cooldown && (s.cooldown ?? 0) > 0)
+  'No signal is seeded already failed - a cooldown has to be earned',
+  signals.every((s) => s.state !== SignalState.Cooldown)
 );
 check(
   'The anomaly has no name and is not a request (§169)',
