@@ -413,6 +413,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.seaLife = createSeaLife(WINDOW_VIEW);
     station.add(this.seaLife.root);
 
+    /**
+     * The facility plate.
+     *
+     * The machine's own mark, screwed to the wall under the pinboard, the way any piece of
+     * institutional equipment carries the name of the thing that installed it. The wordmark
+     * and the motto are already written in the game's own voice - KNOWLEDGE IS CONNECTION,
+     * CONNECTION IS POWER is exactly what an organisation that built this would put on a
+     * wall, and exactly the sentiment the player spends the game complicating.
+     *
+     * This is where the mark lives instead of on the CRT. It was a boot sequence on the
+     * tube first, which is a better idea and cost the machine its screen: a title that owns
+     * the hero object can also break it, and it did - the tube froze on one dark frame and
+     * stayed there. On a wall it is static geometry with a texture, it cannot stall a tick,
+     * and if the image never loads there is simply nothing hanging there.
+     */
+    void this.hangFacilityPlate(station);
+
     this.surface = new CRTSurface({ width: 192, height: 144 });
     /**
      * The menu screen shows the REAL knowledge state, at every stage including an empty
@@ -424,6 +441,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.tree = new KnowledgeTree(this.surface, this.knowledge.toTreeState());
     this.globe = new GlobeView(this.surface, this.signals);
     this.tree.draw(1);
+
 
     /**
      * The chair, at the transform the generated one worked out.
@@ -999,6 +1017,66 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   // -- Session -----------------------------------------------------------------------
+
+  /**
+   * Load the mark and hang it on the wall. Never throws into the caller.
+   *
+   * Async because the texture comes off disk, and the room is built synchronously - so the
+   * plate appears a frame or two after everything else, which nobody will see and which is
+   * the price of not blocking world construction on a file read.
+   */
+  private async hangFacilityPlate(station: ENGINE.SceneNode): Promise<void> {
+    try {
+      const texture = await ENGINE.resourceManager.loadTexture(
+        ENGINE.AssetPath.fromString('@project/assets/textures/Omniscientlogo.png')
+      );
+      if (!texture) return;
+
+
+      // The logo is 2.5:1. Sized off the pinboard above it so the two read as a set.
+      const WIDTH = 0.62;
+      const plate = new THREE.PlaneGeometry(WIDTH, WIDTH / 2.5);
+
+      /**
+       * Flip the UVs, not the texture.
+       *
+       * The engine uploads with flipY OFF, so an image mapped straight onto a quad arrives
+       * upside down - the same trap the decals fell into. Setting `texture.flipY = true`
+       * after loading does nothing, because by then it is already on the GPU and the flag
+       * is only read at upload; that was tried first and changed nothing at all, which is
+       * the most misleading possible result.
+       *
+       * Rewriting v on the geometry cannot be ignored by anything downstream. Worth
+       * knowing that a flipped wordmark reads as MIRRORED rather than as upside down,
+       * which sends you hunting for a winding-order bug that was never there.
+       */
+      const uv = plate.getAttribute('uv');
+      for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
+      uv.needsUpdate = true;
+
+      plate.translate(-0.34, 1.2, -2.005);
+
+      /**
+       * Unlit, and slightly under full brightness.
+       *
+       * The mark is pure acid green on black and the room is warm and dim; lit normally it
+       * would sit in shadow and read as a grey smudge, and at full unlit brightness it
+       * would out-shout the CRT, which is the one thing in this frame that has to win.
+       * Just bright enough to read from the menu shot, and no brighter.
+       */
+      const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0.72,
+        toneMapped: false,
+        depthWrite: false,
+      });
+
+      station.add(decorMesh('FacilityPlate', plate, material));
+    } catch (error) {
+      console.warn('[omniscient] facility plate not hung', error);
+    }
+  }
 
   private async startSession(): Promise<void> {
     const world = this.getWorld();
