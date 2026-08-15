@@ -232,12 +232,20 @@ export const FLOOR_Y = -0.76;
  * band, and reachable by somebody standing at the desk - which is the test for a board
  * people actually pin things to.
  *
- * Also 20cm right, into the gap between the menu column and the window. That span was the
- * largest empty area in the home shot and the board was the only thing available to fill
- * it; where it was, it fought the plates for the left third and left the middle bare. It
- * now sits above and slightly behind the machine, which is where both references put it.
+ * On x it has been both ways and this is the settlement. At -0.34 it fought the menu
+ * column for the left third and left the middle of the frame bare; pushed to -0.14 to fill
+ * that gap it ran over the window, whose left jamb is at x 0.51 against a board edge at
+ * 0.54. At -0.42 the right edge sits at 0.26 - a quarter of a metre of clear wall before
+ * the glass - and the dead area it was moved to fill is now covered by the machine itself,
+ * which the camera move brought up into it.
+ *
+ * The lesson, since this is the second time: on a wall this narrow, a prop cannot be
+ * positioned against ONE neighbour. The plates are at -1.325..-0.575 and the window starts
+ * at 0.51, which leaves 1.085 of free wall for a board 1.36 wide. Something has to overlap,
+ * and it should be the thing in front (the plates, which read as depth) rather than the
+ * thing behind (the window, which reads as a mistake).
  */
-const BOARD = { x: -0.14, y: 1.12, width: 1.36, height: 0.88 } as const;
+const BOARD = { x: -0.42, y: 1.12, width: 1.36, height: 0.88 } as const;
 
 /**
  * How far the whole desk group sits back from where it used to.

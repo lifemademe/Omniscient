@@ -25,6 +25,7 @@ import { PAINT_UNIFORMS } from './art/painterly.js';
 import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { audio } from './audio/ConsoleAudio.js';
+import { installCursor } from './art/cursor.js';
 import { createSeaLife } from './geometry/seaLife.js';
 import { WINDOW_VIEW } from './geometry/room.js';
 import { createSignals, MIRELA_SIGNAL, REVEALED_AFTER_FIRST } from './content/signals.js';
@@ -380,6 +381,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (!super.beginPlay()) return false;
 
 
+
+    /**
+     * Before anything else draws.
+     *
+     * The pointer is the only thing on this screen that was not made by this game, and it
+     * also goes missing the moment the player clicks into the window. Declaring it here
+     * covers every screen from the first frame - menu, globe and contact view - rather
+     * than waiting for a session that has not started yet.
+     */
+    installCursor();
 
     this.configureLook();
     void this.startSession();
