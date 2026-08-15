@@ -60,7 +60,22 @@ export class CableCursor {
      * in this shot that must never be occluded. Tucked behind, the cable reads as slack
      * hanging off the back of the desk until the player reaches for a module.
      */
-    this.restingTip.copy(anchor).add(new THREE.Vector3(0.22, -0.18, -0.26));
+    /**
+     * Behind the tube, not beside it.
+     *
+     * It was +0.22 in x, which put the loose end 25cm to the RIGHT of a chassis that ends
+     * at 0.27 - so the plug lay on open desk with nothing in front of it, a black bar
+     * stopping in the middle of the frame with no explanation. The old comment claims the
+     * end is tucked behind the machine, and it was true when written; the machine has
+     * since been rescaled to 0.54 and moved back with the desk, and the offset did not
+     * follow it.
+     *
+     * Now -0.12 in x and -0.34 in z, which puts the tip inside the chassis's width and
+     * past its back face. Checked against the home camera rather than assumed: the ray
+     * from the lens to the tip passes through the tube's own bounding box, so the plug is
+     * occluded rather than merely nearby.
+     */
+    this.restingTip.copy(anchor).add(new THREE.Vector3(-0.12, -0.16, -0.34));
     this.targetTip.copy(this.restingTip);
 
     // Spread the initial points along the rest direction. Starting them all coincident

@@ -153,7 +153,7 @@ export class MainMenu {
      * rests further back still (see CableCursor's idle target), so at rest the whole cable
      * is behind the tube and only comes forward when the player reaches for a module.
      */
-    const anchor = new THREE.Vector3(0.3, 0.22, -0.58 + DESK_SHIFT);
+    const anchor = new THREE.Vector3(0.24, 0.2, -0.62 + DESK_SHIFT);
     this.cable = new CableCursor(anchor);
     this.root.add(this.cable.root);
 

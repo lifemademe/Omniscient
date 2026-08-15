@@ -133,8 +133,13 @@ const HOME_SHOT: CameraShot = {
   // fifth of frame. Both reference images sit much closer: the CRT is a third of the
   // width on its own and the menu fills the left column. 2.6 units, swung slightly left
   // so the stack is not clipped, and the aim dropped between the stack and the tube.
-  position: new THREE.Vector3(0.96, 1.62, -58.62),
-  target: new THREE.Vector3(-0.16, 1.02, -61.0),
+  //
+  // Lower and squarer again. Both references look at this desk from roughly the height of
+  // somebody sitting at it, nearly front-on to the back wall; this shot was 1.62 high and
+  // swung 1.12 to the right, which is a standing three-quarter. Dropping to 1.30 and
+  // halving the swing puts the lens where the chair is, and closes the distance to 2.24.
+  position: new THREE.Vector3(0.62, 1.31, -59.2),
+  target: new THREE.Vector3(-0.22, 0.92, -61.0),
   duration: 2.0,
 };
 
@@ -185,7 +190,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private lightRig: {
     key: ENGINE.DirectionalLightNode;
     sky: ENGINE.HemisphereLightNode;
-    lamp: ENGINE.PointLightNode;
+    /** A spot since the fixture grew a shade - see buildLighting. */
+    lamp: ENGINE.SpotLightNode;
     windowKey: ENGINE.SpotLightNode;
     bounce: ENGINE.PointLightNode;
     glow: ENGINE.PointLightNode;
@@ -795,13 +801,29 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // A practical over the desk. §187 asks for one key plus controlled practicals - this
     // is what stops the machine reading as an object on a plane and starts it reading as
     // an object somebody sits at.
-    const lamp = ENGINE.PointLightNode.create({
+    const lampAt = WORKSTATION_ORIGIN.clone().add(
+      new THREE.Vector3(LAMP.bulb.x, LAMP.bulb.y + 0.03, LAMP.bulb.z)
+    );
+
+    /**
+     * A spot, because the fixture has a shade on it.
+     *
+     * This was a point light, which throws in every direction - including straight up into
+     * the menu plates hanging above and behind it. That is not what a lamp with a hood
+     * does, and it is why moving the fixture never fully solved the wash: the geometry had
+     * a shade and the light did not.
+     *
+     * Aimed at the desk a little in front of the foot, wide and very soft, so it reads as
+     * spill under a hood rather than as a stage light. The plates above it now receive
+     * nothing from it at all.
+     */
+    const lamp = ENGINE.SpotLightNode.create({
         name: 'DeskLamp',
+        angle: 1.02,
+        penumbra: 0.92,
         // Inside the shade of the fixture that now exists, rather than hanging in the air
         // above the desk with nothing there to be emitting it.
-        position: WORKSTATION_ORIGIN.clone().add(
-          new THREE.Vector3(LAMP.bulb.x, LAMP.bulb.y + 0.03, LAMP.bulb.z)
-        ),
+        position: lampAt.clone(),
         // Warmer and tighter than before. It is a bulb under a shade half a metre from
         // the desk, so it should fall off hard and own a small area completely.
         /**
@@ -817,11 +839,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
          * A lamp is still allowed to be the warmest thing in the room. It is not allowed
          * to be the brightest.
          */
-        intensity: 2.5,
+        intensity: 5.4,
         color: new THREE.Color('#ffcf96'),
-        distance: 2.3,
-        decay: 1.9,
+        distance: 2.4,
+        decay: 1.7,
       });
+    lamp.castShadow = false;
+    lamp.lookAt(lampAt.clone().add(new THREE.Vector3(0.16, -1, 0.22)));
     this.add(lamp);
 
     /**

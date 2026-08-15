@@ -220,7 +220,24 @@ export const FLOOR_Y = -0.76;
  * The pinboard: above the machine, in the gap between the menu stack and the window.
  * Narrow, because that gap is narrow - at full width it ran over the window's left jamb.
  */
-const BOARD = { x: -0.34, y: 1.82, width: 1.36, height: 0.88 } as const;
+/**
+ * Lowered off the ceiling, and moved into the dead wall.
+ *
+ * At y 1.82 the board spanned 2.14m to 3.02m above the floor - its top nearly at the 3.4
+ * ceiling and a good half metre above the head of a window a person is supposed to see
+ * out of. Two rectangles on one wall at wildly different heights read as an accident, and
+ * from a low camera it looked pinned to the cornice.
+ *
+ * At 1.12 it spans 1.40m to 2.28m: above the desk, above the machine, inside the window's
+ * band, and reachable by somebody standing at the desk - which is the test for a board
+ * people actually pin things to.
+ *
+ * Also 20cm right, into the gap between the menu column and the window. That span was the
+ * largest empty area in the home shot and the board was the only thing available to fill
+ * it; where it was, it fought the plates for the left third and left the middle bare. It
+ * now sits above and slightly behind the machine, which is where both references put it.
+ */
+const BOARD = { x: -0.14, y: 1.12, width: 1.36, height: 0.88 } as const;
 
 /**
  * How far the whole desk group sits back from where it used to.
@@ -342,7 +359,19 @@ export const LAMP = {
    * never be occluded. So it stays left and gets shorter - the whole fixture now tops out
    * at y 0.38, four centimetres under the lowest plate, and sits 0.2 forward of the stack.
    */
-  base: new THREE.Vector3(-1.34, 0, -0.60 + DESK_SHIFT),
+  /**
+   * Moved forward, off the menu.
+   *
+   * Keeping it short stopped the shade INTERSECTING the bottom plate, but the light still
+   * washed it - SHUT DOWN read at value 233 while the top plate sat at 143, five controls
+   * at five legibilities. Bringing the whole fixture 30cm toward the player puts its pool
+   * on the front-left desk where a working lamp would actually be aimed, and leaves the
+   * plates to the fill that now exists for them.
+   *
+   * It still cannot move right: the home camera sits at +x and a lamp on that side puts
+   * its arm between the lens and the screen.
+   */
+  base: new THREE.Vector3(-1.28, 0, -0.30 + DESK_SHIFT),
   /**
    * Centre of the shade opening. The point light goes here.
    *
