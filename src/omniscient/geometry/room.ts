@@ -48,6 +48,23 @@ export interface RoomPart {
 const WINDOW = { x: 1.16, width: 1.3, sill: 1.05, head: 2.3 } as const;
 
 /**
+ * Where the view sits, published so the things moving in it can be placed against it.
+ *
+ * The gulls and the boat live in their own module because they need a per-frame update
+ * and the room is static geometry, but they have to agree with the window about where the
+ * waterline is to within a few millimetres. Exporting the numbers is how they agree.
+ */
+export const WINDOW_VIEW = {
+  x: WINDOW.x,
+  width: WINDOW.width,
+  sill: WINDOW.sill,
+  head: WINDOW.head,
+  /** Same plane as the town roofs, which are the furthest thing anything drifts past. */
+  z: -2.14,
+  horizonY: WINDOW.sill + (WINDOW.head - WINDOW.sill) * (1 - 0.62),
+} as const;
+
+/**
  * The window: glazing, frame, mullion and sill.
  *
  * The glazing is deliberately unlit and above the tone-mapped range. A window painted at

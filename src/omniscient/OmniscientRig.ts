@@ -25,6 +25,8 @@ import { PAINT_UNIFORMS } from './art/painterly.js';
 import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { audio } from './audio/ConsoleAudio.js';
+import { createSeaLife } from './geometry/seaLife.js';
+import { WINDOW_VIEW } from './geometry/room.js';
 import { createSignals, MIRELA_SIGNAL, REVEALED_AFTER_FIRST } from './content/signals.js';
 import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
@@ -171,6 +173,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private tune: TunePanel | null = null;
   /** Held from configureLook so the F8 panel can re-configure effects live. */
   private post: ENGINE.PostProcessManager | null = null;
+  /** Gulls and a boat in the window. Driven from the tick; see createSeaLife. */
+  private seaLife: ReturnType<typeof createSeaLife> | null = null;
   /** The workstation lights, kept so the panel can reach them. */
   private lightRig: {
     key: ENGINE.DirectionalLightNode;
@@ -392,6 +396,22 @@ export class OmniscientRig extends ENGINE.SceneNode {
       const surface = typeof part.material === 'string' ? MAT[part.material] : part.material;
       station.add(meshOf(part.name, part.geometry, surface));
     }
+
+    /**
+     * Life outside the window.
+     *
+     * The player looks at this room more than at any diorama - it is the menu, the home
+     * shot, and where the game returns between every request - and until now the view
+     * through the window was a still image. A view that never changes stops being a view
+     * within about ten seconds and becomes a poster.
+     *
+     * Nothing out there carries information or can be interacted with, which is the point:
+     * it is the only place in the game whose job is to say the world is not waiting for
+     * the player. The boat takes four minutes to cross, so noticing it means noticing that
+     * time has passed - the only clock in the room, and it has no numbers on it.
+     */
+    this.seaLife = createSeaLife(WINDOW_VIEW);
+    station.add(this.seaLife.root);
 
     this.surface = new CRTSurface({ width: 192, height: 144 });
     /**
@@ -1358,6 +1378,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
   public override tickPrePhysics(deltaTime: number): void {
     super.tickPrePhysics(deltaTime);
     this.cameraTweener.update(deltaTime);
+    // Runs in every phase, including while the player is inside a request. The world does
+    // not stop because somebody is on the line, and coming back from a call to a boat that
+    // has moved is most of what the boat is for.
+    this.seaLife?.update(deltaTime);
     if (this.picker) this.menu?.update(deltaTime, this.picker);
     this.globeScreen?.update(deltaTime);
 
