@@ -9,6 +9,7 @@
  * should not also need to know how water finds a drain.
  */
 
+import { workLock } from './lock.js';
 import { flows, wetted } from './pipes.js';
 
 import type { Device } from './types.js';
@@ -16,7 +17,8 @@ import type { Device } from './types.js';
 /** What the player sent up from the console. Discriminated to match the device. */
 export type DeviceSubmission =
   | { kind: 'relations'; links: Record<string, string> }
-  | { kind: 'pipes'; rotations: number[] };
+  | { kind: 'pipes'; rotations: number[] }
+  | { kind: 'lock'; order: string[] };
 
 export interface DeviceResult {
   solved: boolean;
@@ -49,6 +51,17 @@ export function gradeDevice(device: Device, submission: DeviceSubmission): Devic
       // How far down the run the water got, which is what a person at the tap can hear.
       const reach = Math.round(wetted(device.grid, submission.rotations) * 100);
       return { solved: false, note: `water reaches about ${reach}% of the run` };
+    }
+
+    case 'lock': {
+      if (submission.kind !== 'lock') return { solved: false };
+      const reading = workLock(device.lock, submission.order);
+      return {
+        solved: reading.solved,
+        // The contact's own words, in the order they felt them, ending at the pin that
+        // would not go. That last line is the whole clue.
+        note: reading.felt.join(' '),
+      };
     }
 
     default: {

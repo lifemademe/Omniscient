@@ -11,6 +11,7 @@
 
 import type { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import type { IntentDefinition } from './intent.js';
+import type { LockSpec } from './lock.js';
 import type { PipeGrid } from './pipes.js';
 
 /** §154 urgency classes. Not every request gets a countdown. */
@@ -124,7 +125,7 @@ export interface BoardSlot {
  * is a new member and a new renderer; nothing else moves. §160 still holds - this is data
  * walked by a shared runtime, not a script.
  */
-export type Device = RelationBoard | PipeBoard;
+export type Device = RelationBoard | PipeBoard | LockBoard;
 
 export interface DeviceBase {
   /** The question, in the contact's voice. */
@@ -163,6 +164,18 @@ export interface RelationBoard extends DeviceBase {
 export interface PipeBoard extends DeviceBase {
   kind: 'pipes';
   grid: PipeGrid;
+}
+
+/**
+ * A lock, worked by somebody else's hands.
+ *
+ * Deduction rather than dexterity - see mission/lock.ts. The player names an order and the
+ * contact reports what they feel; the player never touches a pin, because OMNISCIENT_ has
+ * no hands and the entire premise is that this is the half it CAN do.
+ */
+export interface LockBoard extends DeviceBase {
+  kind: 'lock';
+  lock: LockSpec;
 }
 
 export interface Beat {

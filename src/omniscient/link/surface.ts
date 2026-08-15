@@ -103,7 +103,14 @@ export type DeviceView =
       /** Set after a wrong submission: what the device reported, in words. */
       note?: string;
     }
-  | { kind: 'pipes'; prompt: string; grid: PipeView; note?: string };
+  | { kind: 'pipes'; prompt: string; grid: PipeView; note?: string }
+  | {
+      kind: 'lock';
+      prompt: string;
+      /** Pins in their physical order along the lock. Carries no binding order. */
+      pins: Array<{ id: string; label: string }>;
+      note?: string;
+    };
 
 /**
  * A proposed reading of what the player just said, awaiting yes/no.
@@ -179,7 +186,8 @@ export type PlayerMessage =
       kind: 'device';
       submission:
         | { kind: 'relations'; links: Record<string, string> }
-        | { kind: 'pipes'; rotations: number[] };
+        | { kind: 'pipes'; rotations: number[] }
+        | { kind: 'lock'; order: string[] };
     };
 
 export interface InterventionSurface {

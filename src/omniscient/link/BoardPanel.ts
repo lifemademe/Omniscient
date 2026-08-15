@@ -181,6 +181,35 @@ const BOARD_CSS = `
   border-color: #e0a24c;
   color: #e0a24c;
 }
+/* The lock: a row of pins, each carrying the position it has been given in the order. */
+.omni-board__pins { display: flex; gap: 8px; flex-wrap: wrap; }
+.omni-board__pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 52px;
+  padding: 8px 0 6px;
+  border: 1px solid rgba(127, 224, 138, 0.34);
+  border-radius: 3px;
+  background: rgba(10, 24, 15, 0.85);
+  color: #cfe9d2;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.omni-board__pin:hover { border-color: rgba(127, 224, 138, 0.8); }
+.omni-board__pin--picked {
+  border-color: #7fe08a;
+  background: rgba(20, 52, 28, 0.95);
+}
+/* The number is the whole readout: a pin's place in the order the player is proposing. */
+.omni-board__pin-order {
+  min-height: 15px;
+  font-size: 13px;
+  color: #e0a24c;
+  letter-spacing: 0.04em;
+}
 `;
 
 export function injectBoardStyles(): void {
@@ -235,6 +264,10 @@ export class BoardPanel {
   private slotButtons = new Map<string, HTMLButtonElement>();
   /** Pipe cells, in grid order. */
   private cellButtons: HTMLButtonElement[] = [];
+  /** Lock pins, by id. */
+  private pinButtons = new Map<string, { button: HTMLButtonElement; order: HTMLSpanElement }>();
+  /** The order the player is proposing, pin ids front to back. */
+  private order: string[] = [];
   private view: DeviceView | null = null;
   /** Player quarter-turns per cell, for a pipe device. */
   private rotations: number[] = [];
@@ -336,12 +369,16 @@ export class BoardPanel {
     const key =
       view.kind === 'relations'
         ? `relations|${view.prompt}|${view.people.map((p) => p.id).join(',')}`
-        : `pipes|${view.prompt}|${view.grid.cells.length}`;
+        : view.kind === 'pipes'
+          ? `pipes|${view.prompt}|${view.grid.cells.length}`
+          : `lock|${view.prompt}|${view.pins.length}`;
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       this.links.clear();
       this.armed = null;
       this.rotations = view.kind === 'pipes' ? view.grid.cells.map(() => 0) : [];
+      this.order = [];
+      this.pinButtons.clear();
       this.build(view);
     }
 
@@ -357,6 +394,11 @@ export class BoardPanel {
 
     if (view.kind === 'pipes') {
       this.buildPipes(view.grid);
+      return;
+    }
+
+    if (view.kind === 'lock') {
+      this.buildLock(view.pins);
       return;
     }
 
@@ -454,6 +496,46 @@ export class BoardPanel {
   }
 
   /**
+   * The lock: a row of pins, tapped into an order.
+   *
+   * Tap a pin to add it to the sequence, tap it again to take it and everything after it
+   * back off - because a lock is worked in order and undoing the third pin necessarily
+   * undoes the fourth and fifth. Making the control behave the way the mechanism behaves
+   * is cheaper to learn than any label explaining it would be.
+   */
+  private buildLock(pins: Array<{ id: string; label: string }>): void {
+    const row = document.createElement('div');
+    row.className = 'omni-board__pins';
+
+    for (const pin of pins) {
+      const button = document.createElement('button');
+      button.className = 'omni-board__pin';
+      button.type = 'button';
+
+      const order = document.createElement('span');
+      order.className = 'omni-board__pin-order';
+      button.appendChild(order);
+
+      const label = document.createElement('span');
+      label.textContent = pin.label;
+      button.appendChild(label);
+
+      button.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        const at = this.order.indexOf(pin.id);
+        if (at >= 0) this.order.length = at;
+        else this.order.push(pin.id);
+        if (this.view) this.refresh(this.view);
+      });
+
+      this.pinButtons.set(pin.id, { button, order });
+      row.appendChild(button);
+    }
+
+    this.grid.appendChild(row);
+  }
+
+  /**
    * Tapping a person: arm it, or unlink it if it already has a wire.
    *
    * Making a linked box unlink on tap means there is no separate delete gesture to find.
@@ -480,6 +562,15 @@ export class BoardPanel {
     const view = this.view;
     if (!view) return;
 
+    if (view.kind === 'lock') {
+      if (!this.order.length) return;
+      this.dispatch({
+        kind: 'device',
+        submission: { kind: 'lock', order: [...this.order] },
+      });
+      return;
+    }
+
     if (view.kind === 'relations') {
       if (this.links.size < view.people.length) return;
       this.dispatch({
@@ -499,6 +590,22 @@ export class BoardPanel {
     this.element.classList.toggle('omni-board--folded', this.folded);
     this.fold.textContent = this.folded ? 'Show' : 'Hide';
     if (this.folded) return;
+
+    if (view.kind === 'lock') {
+      for (const [id, parts] of this.pinButtons) {
+        const at = this.order.indexOf(id);
+        parts.button.classList.toggle('omni-board__pin--picked', at >= 0);
+        parts.order.textContent = at >= 0 ? String(at + 1) : '';
+      }
+      this.send.disabled = this.order.length === 0;
+      this.status.className = view.note
+        ? 'omni-board__status omni-board__status--score'
+        : 'omni-board__status';
+      this.status.textContent =
+        view.note ?? 'name the order they should be set in';
+      this.wires.replaceChildren();
+      return;
+    }
 
     if (view.kind === 'pipes') {
       view.grid.cells.forEach((cell, index) => {

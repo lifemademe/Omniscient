@@ -32,6 +32,7 @@ export const TOMAS_SIGNAL = 'tomas';
 export const ADAEZE_SIGNAL = 'adaeze';
 export const ILEANA_SIGNAL = 'ileana';
 export const VASILE_SIGNAL = 'vasile';
+export const DORIN_SIGNAL = 'dorin';
 
 /**
  * §96 caps conscious attention at five. The globe honours that: five nameable people at
@@ -97,6 +98,20 @@ export function createSignals(): Signal[] {
       longitude: -3.7,
       name: 'Vasile Crâstea',
       label: 'The pump is running and nothing is coming out.',
+      state: SignalState.Dormant,
+      hidden: true,
+    },
+    {
+      /**
+       * North and inland, clear of the other five. Six signals now share this globe and
+       * the spacing check in preview-callback is the only reason none of them collide -
+       * it has caught this three times.
+       */
+      id: DORIN_SIGNAL,
+      latitude: 58.6,
+      longitude: 16.2,
+      name: 'Dorin Apostol',
+      label: 'She always picks up.',
       state: SignalState.Dormant,
       hidden: true,
     },

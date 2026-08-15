@@ -181,6 +181,13 @@ export class SessionController {
       return spoken ? `${spoken}.` : 'I do not have enough to place them yet.';
     }
 
+    if (device.kind === 'lock' && submission.kind === 'lock') {
+      const named = submission.order
+        .map((id) => device.lock.pins.findIndex((pin) => pin.id === id) + 1)
+        .filter((n) => n > 0);
+      return named.length ? `Try ${named.join(', then ')}.` : 'Try it.';
+    }
+
     if (device.kind === 'pipes' && submission.kind === 'pipes') {
       const turned = submission.rotations.filter((r) => r % 4 !== 0).length;
       return turned
@@ -361,6 +368,16 @@ export class SessionController {
           note: person.note,
         })),
         slots: device.slots.map((slot) => ({ id: slot.id, label: slot.label })),
+        note,
+      };
+    }
+
+    if (device.kind === 'lock') {
+      return {
+        kind: 'lock',
+        prompt: device.prompt,
+        // Physical order along the lock, never the binding order - that is the answer.
+        pins: device.lock.pins.map((pin, i) => ({ id: pin.id, label: `pin ${i + 1}` })),
         note,
       };
     }

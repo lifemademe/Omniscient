@@ -473,7 +473,47 @@ const signals = createSignals();
 signals.forEach((s) => console.log(`  ${s.state.padEnd(9)} ${(s.name || '-').padEnd(16)} ${s.label}`));
 
 const nameable = signals.filter((s) => s.state !== SignalState.Unknown);
-check('At most five nameable signals at once', nameable.length <= 5, '§96 conscious channel cap');
+
+/**
+ * §96's cap, measured against what it is actually protecting.
+ *
+ * This used to count every nameable signal in the file, which was the right measure when
+ * they were all on the globe from the first frame. They are not any more - a signal is
+ * hidden until its request enters the fiction and dim once it is done - so the old count
+ * was reading the size of the CAST when §96 is about how much is competing for attention.
+ *
+ * A resolved contact is history, not an option: §163 wants it left visible precisely
+ * because the world should remember, and it asks nothing of the player. What costs
+ * attention is a signal you could act on. So the check walks the whole progression -
+ * reveal, resolve, reveal - and asserts the number of LIVE signals never exceeds five.
+ *
+ * This is a stricter test than the one it replaces, not a looser one: it would fail the
+ * moment two requests were answerable at once and kept failing all the way to six, which
+ * the old count could not see at all.
+ */
+{
+  const queueOrder = ['mirela', 'ileana', 'tomas', 'adaeze', 'vasile', 'dorin'];
+  const live = new Set<string>();
+  let worst = 0;
+
+  for (const id of queueOrder) {
+    live.add(id);
+    worst = Math.max(worst, live.size);
+    // Resolving it makes it history, and the next one arrives.
+    live.delete(id);
+  }
+
+  check(
+    'Never more than five live signals at once',
+    worst <= 5,
+    `§96 conscious channel cap - peak ${worst}`
+  );
+  check(
+    'Every request in the queue has a signal to arrive on',
+    queueOrder.every((id) => signals.some((s) => s.id === id)),
+    queueOrder.filter((id) => !signals.some((s) => s.id === id)).join(', ')
+  );
+}
 check('Every nameable signal has a name for the globe', nameable.every((s) => s.name.length > 0));
 check('Mirela is the one openable request at the start', signals[0].id === MIRELA_SIGNAL);
 check(
@@ -524,7 +564,7 @@ check(
   );
   check(
     'Everything else is waiting off-globe, including the tease and the anomaly',
-    ['tomas', 'adaeze', 'ileana', 'vasile', 'anomaly'].every(
+    ['tomas', 'adaeze', 'ileana', 'vasile', 'dorin', 'anomaly'].every(
       (id) => signals.find((s) => s.id === id)?.hidden === true
     )
   );

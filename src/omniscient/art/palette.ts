@@ -248,6 +248,26 @@ export const MAT = {
     opacity: 0.82,
     toneMapped: false,
   }),
+  /**
+   * Night, several shades above black.
+   *
+   * A pure black background makes a night scene read as an unfinished one - there is
+   * nothing for a roofline to be a silhouette against. This is the value that turns dark
+   * into distance.
+   */
+  nightAir: new THREE.MeshBasicMaterial({ color: '#141b26', toneMapped: false, fog: false }),
+  /** Worn brass. Dark, because a lock older than its door has stopped being yellow. */
+  brass: standard('#8f7a3e', 0.55, 0.6),
+  /**
+   * The frosted panel in a front door, lit from a hall nobody is standing in.
+   *
+   * Unlit and dim: the house is dark inside, so this is nearly the same value as the door
+   * around it. That is the point - it reads as glass only because it is slightly wrong,
+   * which is exactly how a dark house looks from the step.
+   */
+  doorGlass: new THREE.MeshBasicMaterial({ color: '#2c3138', toneMapped: false }),
+  /** The landing light upstairs. The only other lit thing on the street. */
+  landingLight: new THREE.MeshBasicMaterial({ color: '#e8d6ad', toneMapped: false }),
   /** Old copper, gone dull. One of the four hands that built Vasile's run. */
   copper: standard('#8a5a3c', 0.6, 0.35),
   /**

@@ -12,12 +12,13 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
-import { ADAEZE, ILEANA, MIRELA, TOMAS, VASILE } from './content/contacts.js';
+import { ADAEZE, DORIN, ILEANA, MIRELA, TOMAS, VASILE } from './content/contacts.js';
 import { MISSION_01 } from './content/mission-01-transmitter.js';
 import { MISSION_02 } from './content/mission-02-beacon.js';
 import { MISSION_03 } from './content/mission-03-tunnel.js';
 import { MISSION_04 } from './content/mission-04-relations.js';
 import { MISSION_05 } from './content/mission-05-cellar.js';
+import { MISSION_06 } from './content/mission-06-lock.js';
 import { createScreenGlass } from './art/glass.js';
 import { PAINT_UNIFORMS } from './art/painterly.js';
 import { decorMesh } from './art/mesh.js';
@@ -262,6 +263,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * conversations in between to keep it from reading as a puzzle game.
        */
       { mission: MISSION_05, contact: VASILE },
+      /**
+       * Last, and the only request with a clock on it.
+       *
+       * §154 reserves Timed for when the fiction genuinely requires a decision in a
+       * window, and five Calm-to-Soft requests have earned the game the right to use it
+       * once. It also lands after the player has met two devices, so the third arrives as
+       * "another thing the console does" rather than as a new idea under pressure.
+       */
+      { mission: MISSION_06, contact: DORIN },
     ];
 
     this.buildScenes();

@@ -1,4 +1,20 @@
 /**
+ * ## CONTACT FRAMING - measure this, do not eyeball it
+ *
+ * A diorama's default shot has to hold the contact AND the thing the request is about, and
+ * the failure mode is always the same one: the person ends up ON the camera's sightline to
+ * its own target, which puts a 1.7m figure exactly over the evidence. It has happened in
+ * three scenes now - Vasile at 0.00 off axis, Dorin at 0.02, Ileana cropped at the crown -
+ * and every time it looked fine while the numbers were being typed.
+ *
+ * The number to check is the contact's PERPENDICULAR distance from the line between camera
+ * position and camera target. Below about 0.35m they occlude the subject; 0.45 to 0.9 puts
+ * them in frame beside it, which is what these shots want.
+ *
+ *     const d = target - position, u = normalise(d)
+ *     const r = contact - position
+ *     perp = |r - (r . u) u|
+ *
  * Contact View dioramas.
  *
  * One builder per mission `sceneId`. Each assembles procedural props, registers the
@@ -19,7 +35,7 @@ import { createBoxLabel, createCorrosionBloom, createRatingPlate } from '../art/
 import { decorMesh } from '../art/mesh.js';
 import { ACCENT, LIGHT, MAT } from '../art/palette.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
-import { createRng, jitter, seedFrom } from '../core/rng.js';
+import { createRng, jitter, range, seedFrom } from '../core/rng.js';
 
 import type { Rng } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
@@ -2243,6 +2259,223 @@ function buildFloodedCellar(scene: ContactScene): void {
   });
 }
 
+/**
+ * MISSION 06 - his mother's front door, at night.
+ *
+ * The smallest set in the game and deliberately so. Everything the request is about
+ * happens inside a lock the player never sees, so the room's job is not to carry evidence
+ * (§131 is served by the hints and by Dorin) - it is to carry the FEELING that a man is
+ * standing at a door at two in the morning doing something he swore he would never do.
+ *
+ * That is one pool of porch light, a lit landing window above it that he keeps looking at,
+ * and a great deal of dark. §241: the depth is layers and value, and here the outermost
+ * layer is simply night.
+ */
+function buildNightDoor(scene: ContactScene): void {
+  const rng = createRng(seedFrom('dorin-door'));
+
+  const WALL_TOP = 5.2;
+
+  // The path, and the house front. Nothing behind them but night.
+  const path = new THREE.BoxGeometry(6, 0.1, 4);
+  path.translate(0, -0.05, 1.4);
+  scene.registerProp('path', meshOf('Path', path, MAT.ground));
+
+  const front = new THREE.BoxGeometry(7, WALL_TOP, 0.3);
+  front.translate(0, WALL_TOP / 2, -0.4);
+  scene.registerProp('front', meshOf('Front', front, MAT.wall));
+
+  /**
+   * Night, as one unlit plane a long way back.
+   *
+   * Not fog and not a skybox - a flat sheet at the far edge of the set, several shades
+   * above black so the roofline has something to be a silhouette against. A pure black
+   * background makes a night scene read as an unfinished one.
+   */
+  const night = new THREE.PlaneGeometry(60, 30);
+  night.translate(0, 8, -22);
+  scene.registerProp('night', meshOf('Night', night, MAT.nightAir));
+
+  // A neighbouring roofline, so the house is on a street rather than in a void.
+  const roofs: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 7; i++) {
+    const w = range(rng, 2.2, 4.4);
+    const h = range(rng, 3.4, 5.6);
+    const roof = new THREE.PlaneGeometry(w, h);
+    roof.translate(-14 + i * 4.2 + jitter(rng, 0.8), h / 2, -14);
+    roofs.push(roof);
+  }
+  scene.registerProp(
+    'street',
+    meshOf('Street', mergeGeometries(roofs, false) ?? roofs[0], MAT.viewTown)
+  );
+
+  // -- The door -------------------------------------------------------------
+  const DOOR = { w: 0.92, h: 2.02, x: -0.15 };
+
+  const leaf = new THREE.BoxGeometry(DOOR.w, DOOR.h, 0.06);
+  leaf.translate(DOOR.x, DOOR.h / 2, -0.26);
+  const doorMesh = meshOf('Door', leaf, MAT.timberDark);
+
+  const doorRoot = ENGINE.SceneNode.create({
+    name: 'DoorRoot',
+    // Hinged on the left edge, so opening it swings rather than slides.
+    position: new THREE.Vector3(DOOR.x - DOOR.w / 2, 0, -0.26),
+  });
+  leaf.translate(-(DOOR.x - DOOR.w / 2), 0, 0.26);
+  doorRoot.add(doorMesh);
+  scene.registerProp('door', doorRoot, {
+    anchors: { default: new THREE.Vector3(DOOR.w / 2, 1.0, 0) },
+    actions: {
+      /** It opens. Slowly - he is not barging in, he is going in to find her. */
+      open: (tweener, node) => {
+        tweener.add((t) => node.rotation.set(0, -t * 1.5, 0), {
+          duration: 2.2,
+          easing: Ease.outCubic,
+          channel: 'door-open',
+        });
+      },
+    },
+  });
+
+  // The glass panel he is being tempted to put in.
+  const pane = new THREE.PlaneGeometry(DOOR.w * 0.62, DOOR.h * 0.3);
+  pane.translate(DOOR.x, DOOR.h * 0.68, -0.22);
+  scene.registerProp('pane', meshOf('Pane', pane, MAT.doorGlass));
+
+  const frame: THREE.BufferGeometry[] = [];
+  for (const [w, h, x, y] of [
+    [DOOR.w + 0.16, 0.08, DOOR.x, DOOR.h + 0.04],
+    [0.08, DOOR.h + 0.08, DOOR.x - DOOR.w / 2 - 0.04, DOOR.h / 2],
+    [0.08, DOOR.h + 0.08, DOOR.x + DOOR.w / 2 + 0.04, DOOR.h / 2],
+  ] as const) {
+    const piece = new THREE.BoxGeometry(w, h, 0.14);
+    piece.translate(x, y, -0.3);
+    frame.push(piece);
+  }
+  scene.registerProp(
+    'door-frame',
+    meshOf('DoorFrame', mergeGeometries(frame, false) ?? frame[0], MAT.timber)
+  );
+
+  /**
+   * The lock. Two centimetres of brass, and the entire mission.
+   *
+   * Registered as its own prop so `prop.highlight:lock` has something to point at - the
+   * hint about the keyway is the only place the player is told that pins bind by wear
+   * rather than by position, and it needs the environment to point at.
+   */
+  const lockRoot = ENGINE.SceneNode.create({
+    name: 'Lock',
+    position: new THREE.Vector3(DOOR.x + DOOR.w / 2 - 0.11, 1.02, -0.22),
+  });
+  const escutcheon = new THREE.CylinderGeometry(0.035, 0.035, 0.012, 12);
+  escutcheon.rotateX(Math.PI / 2);
+  lockRoot.add(meshOf('Escutcheon', escutcheon, MAT.brass));
+  const keyway = new THREE.BoxGeometry(0.008, 0.026, 0.014);
+  keyway.translate(0, 0, 0.008);
+  lockRoot.add(meshOf('Keyway', keyway, MAT.dark));
+  scene.registerProp('lock', lockRoot, { anchors: { default: new THREE.Vector3(0, 0, 0.06) } });
+
+  // -- The landing window he keeps looking at -------------------------------
+  const upperFrame = new THREE.BoxGeometry(0.94, 1.16, 0.08);
+  upperFrame.translate(0.42, 3.5, -0.28);
+  scene.registerProp('upper-frame', meshOf('UpperFrame', upperFrame, MAT.timber));
+
+  const upperGlass = new THREE.PlaneGeometry(0.8, 1.02);
+  upperGlass.translate(0.42, 3.5, -0.24);
+  scene.registerProp('landing', meshOf('Landing', upperGlass, MAT.landingLight));
+
+  // -- Dorin ----------------------------------------------------------------
+  addContact(scene, 'Dorin', {
+    seed: 'dorin-apostol',
+    height: 1.8,
+    build: 0.5,
+    shoulders: 0.6,
+    lean: 0.22,
+    reach: 0.85,
+    garment: 'coat',
+    colors: { garment: '#2f3138', underlayer: '#8f8778' },
+    position: new THREE.Vector3(0.62, 0, 0.62),
+    rotation: new THREE.Euler(0, -Math.PI * 0.72, 0),
+    /**
+     * Both hands at the lock: the wrench in one and the pick in the other, which is what
+     * a person actually looks like doing this. Checked against arm length rather than
+     * placed by eye - see the reach audit in character.ts.
+     */
+    handsOn: {
+      left: new THREE.Vector3(0.24, 1.0, -0.18),
+      right: new THREE.Vector3(0.34, 1.06, -0.14),
+    },
+    // Two in the morning, cold, and his mother has not answered since yesterday.
+    liveliness: 1.25,
+  });
+
+  // -- Light -----------------------------------------------------------------
+  /**
+   * One porch bulb over the door and nothing else.
+   *
+   * The tightest light in the game on purpose: distance 5 with a hard decay, so the pool
+   * dies a couple of metres out and the path, the street and everything past it fall away.
+   * §230 took a warm pool in a cold frame from all three reference images and this is the
+   * most literal use of it - a man in a small circle of yellow with a town of blue behind.
+   */
+  const porchAt = new THREE.Vector3(DOOR.x, 2.42, -0.18);
+  const bulb = new THREE.SphereGeometry(0.055, 8, 6);
+  bulb.translate(porchAt.x, porchAt.y, porchAt.z + 0.05);
+  scene.registerProp('porch-bulb', meshOf('PorchBulb', bulb, MAT.lamp));
+
+  const hood = new THREE.CylinderGeometry(0.1, 0.13, 0.07, 10);
+  hood.translate(porchAt.x, porchAt.y + 0.07, porchAt.z + 0.05);
+  scene.registerProp('porch-hood', meshOf('PorchHood', hood, MAT.metal));
+
+  scene.registerProp(
+    'porch',
+    ENGINE.PointLightNode.create({
+      name: 'Porch',
+      position: porchAt.clone().add(new THREE.Vector3(0, 0, 0.25)),
+      intensity: 9,
+      color: new THREE.Color('#ffd49a'),
+      distance: 5,
+      decay: 1.7,
+    })
+  );
+
+  // A cold spill from the landing window above - the only other light on the street, and
+  // the reason he keeps looking up.
+  scene.registerProp(
+    'landing-spill',
+    ENGINE.PointLightNode.create({
+      name: 'LandingSpill',
+      position: new THREE.Vector3(0.42, 3.5, 0.3),
+      intensity: 2.2,
+      color: new THREE.Color('#cfe0f0'),
+      distance: 4.5,
+      decay: 1.5,
+    })
+  );
+
+  scene.registerShot('default', {
+    /**
+     * Swung round so he is beside the door rather than in front of it.
+     *
+     * At (2.05, 1.5, 2.35) he stood 2cm off the camera's own sightline, two thirds of the
+     * way to the target - a 1.8m man exactly filling the lens with the door, the lock and
+     * the lit window all behind him. See CONTACT FRAMING at the top of this file: this is
+     * the third scene to make that mistake and the first to have a number attached to it.
+     * From here his perpendicular offset is 0.46m and he reads in profile against the
+     * porch light, which is the composition the scene wanted anyway.
+     */
+    position: new THREE.Vector3(3.0, 1.86, 1.9),
+    target: new THREE.Vector3(0.1, 1.62, -0.28),
+  });
+  scene.registerShot('lock', {
+    position: new THREE.Vector3(0.85, 1.2, 0.75),
+    target: new THREE.Vector3(0.1, 1.02, -0.24),
+    duration: 2.0,
+  });
+}
+
 // Registered at module load. auto-imports pulls this module in, so a ContactScene node
 // placed in the editor with a matching sceneId populates itself.
 ContactScene.registerBuilder('scene-repair-shop', buildRepairShop);
@@ -2250,6 +2483,7 @@ ContactScene.registerBuilder('scene-beacon-mast', buildBeaconMast);
 ContactScene.registerBuilder('scene-seedling-tunnel', buildSeedlingTunnel);
 ContactScene.registerBuilder('scene-cleared-house', buildClearedHouse);
 ContactScene.registerBuilder('scene-flooded-cellar', buildFloodedCellar);
+ContactScene.registerBuilder('scene-night-door', buildNightDoor);
 
 /** Construct a populated diorama for a mission's sceneId, or null when none exists. */
 export function buildContactScene(sceneId: string): ContactScene | null {

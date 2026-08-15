@@ -62,7 +62,24 @@ export const VASILE: Contact = {
   teaser: 'IARNA - "the pump is running and nothing is coming out"',
 };
 
-export const CONTACTS: readonly Contact[] = [MIRELA, ILEANA, TOMAS, ADAEZE, VASILE];
+/**
+ * The sixth, and the only one with a record.
+ *
+ * The brief asked for a thief. What makes one work in this game is the stakes rather than
+ * the crime: every other request is somebody in trouble who needs the one thing the
+ * machine can do, and a burglary would be the first time OMNISCIENT_'s help made a
+ * stranger's night worse. So the door Dorin is standing at is his mother's, he has not
+ * touched a lock in eleven years, and it is the last place in the world he wants his hands
+ * to be.
+ */
+export const DORIN: Contact = {
+  id: 'dorin',
+  name: 'Dorin Apostol',
+  location: 'A front door at night, Rasca',
+  teaser: 'RASCA - "she always picks up"',
+};
+
+export const CONTACTS: readonly Contact[] = [MIRELA, ILEANA, TOMAS, ADAEZE, VASILE, DORIN];
 
 export function getContact(id: string): Contact | null {
   return CONTACTS.find((contact) => contact.id === id) ?? null;
