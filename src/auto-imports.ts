@@ -33,6 +33,7 @@ import './omniscient/geometry/foliage.js';
 import './omniscient/geometry/hardware.js';
 import './omniscient/geometry/model-parts.js';
 import './omniscient/geometry/modules.js';
+import './omniscient/geometry/outdoors.js';
 import './omniscient/geometry/props.js';
 import './omniscient/geometry/room.js';
 import './omniscient/geometry/seaLife.js';

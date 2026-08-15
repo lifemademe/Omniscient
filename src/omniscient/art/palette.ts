@@ -291,6 +291,30 @@ export const MAT = {
    * followed wants.
    */
   hillNight: new THREE.MeshBasicMaterial({ color: '#1d2733', toneMapped: false, fog: false }),
+  /**
+   * Glasshouse glazing, seen from outside on an overcast day.
+   *
+   * Barely tinted and barely opaque. Glass at this distance is not transparent - it is a
+   * pale sheen that hides what is behind it, and painting it clear would make the frame
+   * read as a skeleton with nothing on it. Depth writing stays ON, unlike the CRT's glass,
+   * because this one is a building rather than a highlight and things really are behind it.
+   */
+  greenhouseGlass: new THREE.MeshStandardMaterial({
+    color: '#cfe0dc',
+    roughness: 0.32,
+    metalness: 0,
+    transparent: true,
+    opacity: 0.42,
+  }),
+  /** Painted glasshouse frame - the pale grey-green of every old horticultural building. */
+  greenhouseFrame: standard('#8d9a90', 0.75),
+  /**
+   * Field stone. Cool and desaturated, so a rock never competes with a crop.
+   *
+   * Warmer stone was tried and the field turned into a beach: rocks the colour of the soil
+   * beside them stop reading as rocks and start reading as lumps in the ground.
+   */
+  fieldStone: standard('#6f6f68', 0.94),
   /** Worn brass. Dark, because a lock older than its door has stopped being yellow. */
   brass: standard('#8f7a3e', 0.55, 0.6),
   /**

@@ -597,10 +597,24 @@ export function fieldSkyTexture(sun: THREE.Vector3): THREE.CanvasTexture | null 
 export function fieldTexture(): THREE.CanvasTexture | null {
   return createDecal(256, 256, (ctx, w, h) => {
     const gradient = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.5);
-    gradient.addColorStop(0, '#6b6a45');
-    gradient.addColorStop(0.18, '#71714b');
-    gradient.addColorStop((HEDGE_RADIUS / 70) * 0.5, '#8b937b');
-    gradient.addColorStop(1, '#a3aa96');
+    /**
+     * Greener, and it matters more than it sounds.
+     *
+     * These were olive-greys - 0x6b6a45 at the centre out to a near-neutral 0xa3aa96 - and
+     * with the sky above them at a similar value the whole scene sat in a ten-point band of
+     * desaturated grey-green. Nothing was wrong with any single colour; the problem was
+     * that the field, the hills and the sky were all the SAME colour at slightly different
+     * brightnesses, so there was no depth to read and nothing for a person standing on it
+     * to be a different colour from.
+     *
+     * Saturated near the camera and desaturating with distance, which is what aerial
+     * perspective actually does, and now the far end genuinely reads as far rather than as
+     * a slightly lighter version of the near end.
+     */
+    gradient.addColorStop(0, '#5c6b32');
+    gradient.addColorStop(0.18, '#66753a');
+    gradient.addColorStop((HEDGE_RADIUS / 70) * 0.5, '#84906a');
+    gradient.addColorStop(1, '#a2ac95');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, w, h);
   });

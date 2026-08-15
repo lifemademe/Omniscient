@@ -41,6 +41,7 @@ import type { Rng } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
 import { createFieldBackdrop, createNightBackdrop } from '../geometry/backdrop.js';
 import { createClump } from './../geometry/foliage.js';
+import { grassTufts, greenhouse, rocks } from '../geometry/outdoors.js';
 import {
   createMainsSwitch,
   createShelfStack,
@@ -430,6 +431,51 @@ function buildRepairShop(scene: ContactScene): void {
     setRoot.add(meshOf('SetCorrosion', bloomGeo, bloomMaterial));
   }
 
+  /**
+   * The corrosion, as matter rather than as a picture of matter.
+   *
+   * It was a decal - a stain painted on the panel - and cleaning it faded the stain out.
+   * That is accurate and it has no weight: the single most physical act in the whole game,
+   * a woman scraping crud off a contact with a blade, resolved as a texture getting more
+   * transparent.
+   *
+   * These are beads. Low-poly, faceted, slightly flattened against the panel because a
+   * bloom of verdigris creeps rather than sits, and clustered tight around the connector
+   * with a few strays further out - corrosion spreads from the fault, so its DENSITY is
+   * the evidence. The decal stays underneath them as the stain they have grown out of.
+   *
+   * They come off one at a time. See the clean action below for why the stagger matters
+   * more than anything else here.
+   */
+  const beads: ENGINE.SceneNode[] = [];
+  const beadRoot = ENGINE.SceneNode.create({ name: 'Corrosion', position: set.anchors.connectorB.clone() });
+  for (let i = 0; i < 16; i++) {
+    // Tight around the connector, thinning outward. sqrt keeps the sample area-uniform,
+    // so the cluster does not end up a ring with a hole in the middle.
+    const angle = range(rng, 0, Math.PI * 2);
+    const radius = 0.022 + Math.sqrt(rng()) * 0.055;
+    const size = range(rng, 0.006, 0.016) * (1 - radius * 4);
+
+    const bead = new THREE.IcosahedronGeometry(Math.max(0.004, size), 0);
+    // Flattened onto the panel and turned, so sixteen beads are not one bead sixteen times.
+    bead.scale(1, 1, 0.55);
+    bead.rotateX(jitter(rng, 1.2));
+    bead.rotateY(jitter(rng, 1.2));
+
+    const node = ENGINE.SceneNode.create({
+      name: `Bead${i}`,
+      position: new THREE.Vector3(
+        Math.cos(angle) * radius,
+        Math.sin(angle) * radius,
+        -0.014 - Math.abs(jitter(rng, 0.004))
+      ),
+    });
+    node.add(meshOf(`BeadMesh${i}`, bead, MAT.corroded));
+    beadRoot.add(node);
+    beads.push(node);
+  }
+  setRoot.add(beadRoot);
+
   scene.registerProp('transmitter', setRoot, {
     // Inked: Mirela's set - the thing on the bench that stopped working.
     inked: true,
@@ -475,6 +521,42 @@ function buildRepairShop(scene: ContactScene): void {
       clean: (tweener, node) => {
         const baseX = node.position.x;
         const bloomFrom = bloomMaterial?.opacity ?? 1;
+
+        /**
+         * The beads come off one at a time, and the stagger is the whole effect.
+         *
+         * Sixteen beads vanishing together is a layer being switched off. Sixteen beads
+         * leaving over eight tenths of a second, each one flicking away from the connector
+         * and dropping, is somebody SCRAPING - the eye reads a sequence as an action and a
+         * simultaneous change as a state.
+         *
+         * They are flung outward from the connector rather than straight down, because
+         * that is where the blade is pushing them; gravity only takes over once they are
+         * clear of the panel. Nothing is pooled or collected at the bottom: they are gone
+         * by the time anybody looks, which is also what happens.
+         */
+        beads.forEach((bead, i) => {
+          const from = bead.position.clone();
+          const away = new THREE.Vector3(from.x, from.y, 0).normalize().multiplyScalar(0.05);
+          tweener.add(
+            (t) => {
+              bead.position.set(
+                from.x + away.x * t,
+                from.y + away.y * t - t * t * 0.09,
+                from.z - t * 0.02
+              );
+              bead.scale.setScalar(Math.max(0.001, 1 - t));
+            },
+            {
+              duration: 0.34,
+              delay: i * 0.05,
+              easing: Ease.linear,
+              channel: `bead-${i}`,
+              onComplete: () => { bead.visible = false; },
+            }
+          );
+        });
+
         tweener.add(
           (t) => {
             node.position.setX(baseX + Math.sin(t * Math.PI * 8) * 0.012 * (1 - t));
@@ -1394,8 +1476,20 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     'skyfill',
     ENGINE.PointLightNode.create({
       name: 'SkyFill',
-      position: new THREE.Vector3(-0.6, 3.6, 6.2),
-      intensity: 15,
+      /**
+       * Brought closer and up, and strengthened.
+       *
+       * Sampled off the default shot, Adaeze read (44, 49, 41) against a field at (101,
+       * 108, 88) - the one person in the scene was the DARKEST thing in it, on ground more
+       * than twice her brightness. That is the fault the whole lighting pass is about: a
+       * contact is the subject of their own diorama and cannot be a silhouette in daylight.
+       *
+       * The sun is out past her, so this is the only light her front ever sees. It now
+       * sits where the camera does, which is the only place a fill can be if the job is
+       * making a face readable.
+       */
+      position: new THREE.Vector3(-0.9, 3.0, 5.0),
+      intensity: 26,
       color: new THREE.Color('#9fc0d8'),
       distance: 18,
       decay: 1.15,
@@ -1490,27 +1584,79 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   );
 
   /**
-   * Weeds along the edges, thinning toward the beds.
+   * Ground cover, and the difference between a field and a plane.
    *
-   * The field was one flat colour from the beds to the horizon, which reads as a golf
-   * course rather than as ground. These break the plane the way the plank seams break a
-   * floor - and they thin out near the beds, because that is the part she weeds.
+   * The first pass here was ninety single blades, which broke the flat colour and did not
+   * look like grass - a blade is invisible at four metres and a scatter of them reads as
+   * stubble. These are TUFTS: three or four tapered blades from one root, leaning apart,
+   * so each one has a silhouette. See geometry/outdoors.ts for why they are geometry
+   * rather than alpha cards.
+   *
+   * Density carries the meaning. Thick out at the boundary, thinning as it approaches the
+   * beds, and bald in the strip she actually walks - which says somebody weeds here
+   * without a single object having to be placed by hand.
    */
-  const weeds: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < 90; i++) {
-    const x = range(rng, -4.2, 4.2);
-    const z = range(rng, -3.0, 3.4);
-    // Nothing grows where she walks and works.
-    if (Math.abs(x) < 2.3 && z > -1.4 && z < 1.6) continue;
-    const h = range(rng, 0.06, 0.19);
-    const blade = new THREE.BoxGeometry(0.016, h, 0.016);
-    blade.rotateZ(jitter(rng, 0.5));
-    blade.translate(x, h / 2, z);
-    weeds.push(blade);
-  }
   scene.registerProp(
-    'weeds',
-    meshOf('Weeds', mergeGeometries(weeds, false) ?? weeds[0], MAT.stem)
+    'grass',
+    meshOf(
+      'Grass',
+      grassTufts(rng, { centre: new THREE.Vector3(0, 0, 0.2), width: 9.4, depth: 7.2, clear: 2.6 }, {
+        count: 260,
+        height: [0.08, 0.24],
+      }),
+      MAT.stem
+    )
+  );
+
+  // A second, shorter, paler pass right up against the beds - the bit she keeps down.
+  scene.registerProp(
+    'grass-near',
+    meshOf(
+      'GrassNear',
+      grassTufts(rng, { centre: new THREE.Vector3(0.2, 0, 0.1), width: 5.4, depth: 4.4, clear: 1.5 }, {
+        count: 90,
+        height: [0.04, 0.1],
+        lean: 0.7,
+      }),
+      MAT.leafPale
+    )
+  );
+
+  // Field stone, half-buried. Cool grey so it never competes with a crop.
+  scene.registerProp(
+    'rocks',
+    meshOf(
+      'Rocks',
+      rocks(rng, { centre: new THREE.Vector3(-0.4, 0, -0.6), width: 8.6, depth: 6.4, clear: 3.0 }, {
+        count: 11,
+        size: [0.09, 0.3],
+      }),
+      MAT.fieldStone
+    )
+  );
+
+  /**
+   * The glasshouse, in the middle distance.
+   *
+   * Not where the mission happens - the two beds under the hoops are still the puzzle,
+   * because the tree shading one bank and not the other is the entire question. This is
+   * behind and to the left, doing two jobs the beds cannot: it puts something BUILT on a
+   * horizon that was bare hills, and it explains the smallholding. A person with two
+   * seedling beds and a poly tunnel has a glasshouse; a person with only two beds in an
+   * empty field has a diorama.
+   */
+  const glass = greenhouse(rng, {
+    at: new THREE.Vector3(-5.6, 0, -4.4),
+    width: 3.4,
+    length: 5.8,
+    wall: 1.75,
+    ridge: 2.7,
+  });
+  scene.registerProp('glasshouse-base', meshOf('GlasshouseBase', glass.base, MAT.wall));
+  scene.registerProp('glasshouse', meshOf('Glasshouse', glass.frame, MAT.greenhouseFrame));
+  scene.registerProp(
+    'glasshouse-glazing',
+    meshOf('GlasshouseGlazing', glass.glass, MAT.greenhouseGlass)
   );
 
   scene.registerShot('default', {
