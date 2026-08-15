@@ -571,10 +571,26 @@ export function createCharacter(params: CharacterParams): CharacterParts {
    * standing, and it is what lets a 1,000-triangle figure read at a distance.
    */
   const ARM_OUT = 0.17;
-  const ARM_FORWARD = 0.12;
-  const ELBOW_REST = 0.22;
+  /**
+   * NEGATIVE is forward, and this was wrong from the beginning.
+   *
+   * `hangingLimb` rotates a limb hanging down -Y about +X, so a POSITIVE rotX sends the
+   * far end to -Z - backwards. `aimAngles`, which the IK solver uses, agrees: a target
+   * dead in front gives `asin(-1)`, a negative angle. The rest pose used positive values
+   * with names that said FORWARD, so every contact not reaching for something had their
+   * arms swung behind them.
+   *
+   * It hid because the numbers were small. At 0.12 an upper arm sits a few degrees back
+   * and reads as a relaxed shoulder. It stopped hiding the moment Dorin lost his hand
+   * targets and fell back to `reach: 0.9`, which put his forearms seventy-two degrees
+   * BEHIND him - a man apparently trying to pick a lock with his elbows.
+   */
+  const ARM_FORWARD = -0.12;
+  const ELBOW_REST = -0.22;
 
-  const elbowBend = ELBOW_REST + reach * 1.15;
+  // Also negative, so more reach bends the forearm further FORWARD rather than further
+  // back. Signs have to agree all the way down or the two terms fight each other.
+  const elbowBend = ELBOW_REST - reach * 1.15;
 
   for (const side of [-1, 1] as const) {
     // Asymmetry, but small. It is the difference between two people and the difference
@@ -704,8 +720,16 @@ export function createCharacter(params: CharacterParams): CharacterParts {
 
   // -- Legs and boots ---------------------------------------------------------------
   for (const side of [-1, 1] as const) {
-    const outward = side * hipWidth * 0.26;
-    const stance = side * range(rng, 0.0, 0.05);
+    /**
+     * Feet closer together.
+     *
+     * At 0.26 of hip width plus up to 0.05 radians of splay, a 1.8m contact stood with
+     * about 27cm of air between boots that are 18cm wide each - a stance somewhere between
+     * bracing for a wave and waiting to be searched. People at rest stand narrower than
+     * that, and a blocky figure exaggerates whatever it is given.
+     */
+    const outward = side * hipWidth * 0.19;
+    const stance = side * range(rng, 0.0, 0.03);
 
     // Legs hang from the hip for the same reason arms hang from the shoulder. It matters
     // less here because a standing leg is nearly vertical, but a stance angle applied

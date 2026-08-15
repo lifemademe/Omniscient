@@ -1179,7 +1179,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       // Left edges flush with the plate stack. The plates are 0.75 wide centred on
       // x -0.95, so their left edge is -1.325; a 0.86-wide logo sharing that edge centres
       // on -0.895. Ragged-left was the single thing making the two read as unrelated.
-      plate.translate(-0.895, 1.69, -0.35 + DESK_SHIFT);
+      plate.translate(-0.895, 1.55, -0.35 + DESK_SHIFT);
 
       /**
        * Unlit, and slightly under full brightness.

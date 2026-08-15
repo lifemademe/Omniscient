@@ -2313,11 +2313,25 @@ function buildClearedHouse(scene: ContactScene): void {
     'daylight',
     ENGINE.PointLightNode.create({
       name: 'Daylight',
-      position: new THREE.Vector3(-0.2, 2.1, -1.5),
-      intensity: 16,
+      /**
+       * Pulled back and softened, because it was clipping her.
+       *
+       * Sampled off the default shot her face read 172 against a room at 69-82 - two and a
+       * half times its surroundings, and a white blob with two dots on it rather than a
+       * face. She stands almost directly under this light and inside the bulb's fill as
+       * well, so the two stacked on the one surface in the scene that has no tolerance for
+       * it: skin is already the lightest material a contact wears, and it clips first.
+       *
+       * The other reason the number was wrong: this is the light from a window, and a
+       * window three metres away does not fall off like a bulb. Longer distance and a
+       * gentler decay give a flatter wash across the whole room instead of a hotspot on
+       * whoever happens to be standing under it.
+       */
+      position: new THREE.Vector3(-0.35, 2.35, -1.7),
+      intensity: 10.5,
       color: new THREE.Color('#cfe0f0'),
-      distance: 9,
-      decay: 1.1,
+      distance: 12,
+      decay: 0.85,
     })
   );
 
@@ -2363,10 +2377,12 @@ function buildClearedHouse(scene: ContactScene): void {
       // Halved from 13: it used to be four metres from her and is now two, and a fill that
       // moved closer without coming down would have brightened the person while the §243
       // note about scenes getting darker looked the other way.
-      intensity: 7,
+      // Down again, for the same reason as the daylight above: she stands under both, and
+      // two fills that are each defensible alone add up on her face.
+      intensity: 4.4,
       color: new THREE.Color('#ffd0a0'),
-      distance: 5.5,
-      decay: 1.3,
+      distance: 5.0,
+      decay: 1.5,
     })
   );
 
@@ -3189,10 +3205,16 @@ function buildMillRoad(scene: ContactScene): void {
    * body and the practical light move together if it is ever re-posed. It points down the
    * road, which is where she has it when the call starts and where the chase begins from.
    */
+  /**
+   * The body of the torch, turned to match its own beam.
+   *
+   * A prop pointing one way while its light goes another is the kind of mistake nobody can
+   * name and everybody can see. The yaw here is the same swing the spot above got.
+   */
   const torchRoot = ENGINE.SceneNode.create({
     name: 'Torch',
     position: TORCH_AT.clone(),
-    rotation: new THREE.Euler(-0.12, 0, 0),
+    rotation: new THREE.Euler(-0.1, -0.52, 0),
   });
 
   const barrel = new THREE.CylinderGeometry(0.031, 0.028, 0.21, 10);
@@ -3350,10 +3372,20 @@ function buildMillRoad(scene: ContactScene): void {
       decay: 1.4,
     })
   );
-  // Aimed at the tarmac a few metres ahead, not at infinity. Pointed down the road at a
-  // shallow angle the pool landed past the end of the set and the road under her stayed
-  // black, which left the figure standing on nothing.
-  torchLight.lookAt(new THREE.Vector3(0.35, 0, -3.4));
+  /**
+   * Across the frame, not straight away from the lens.
+   *
+   * It pointed at (0.35, 0, -3.4) - directly down the road, which is where the follower is
+   * and is correct in the fiction. It reads wrong: she faces the camera, the beam leaves
+   * along the camera's own axis, and a beam pointing away from the viewer has no visible
+   * length. All the player saw was a lit woman with darkness behind her and nothing to
+   * explain what the torch was for.
+   *
+   * Swung toward the hedge side. The pool now lies ACROSS the road inside the frame, so
+   * the beam has a direction that can be read, and it still falls well short of the
+   * follower - which is the shot saying he is out of reach before she says it.
+   */
+  torchLight.lookAt(new THREE.Vector3(2.5, 0, -3.9));
   scene.registerProp('torch-light', torchLight);
 
   // -- Shots -----------------------------------------------------------------
