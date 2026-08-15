@@ -38,6 +38,13 @@ export class CableCursor {
   private readonly anchor = new THREE.Vector3();
   /** Where the tip is being pulled toward. */
   private readonly targetTip = new THREE.Vector3();
+  /**
+   * Where the loose end lies when nobody is reaching for a module.
+   *
+   * Public so the menu can send the connector back to it: the cable is slack hanging off
+   * the machine until the player approaches the plates, not a cursor with a wire on it.
+   */
+  public readonly restingTip = new THREE.Vector3();
   /** Set while seated in a socket, so the tip stops following the mouse. */
   private seated: THREE.Vector3 | null = null;
   /** True from the moment a plug starts until it seats or is cancelled. */
@@ -45,7 +52,16 @@ export class CableCursor {
 
   constructor(anchor: THREE.Vector3) {
     this.anchor.copy(anchor);
-    this.targetTip.copy(anchor).add(new THREE.Vector3(0.3, -0.1, 0.2));
+    /**
+     * Resting place: behind and below, not out in front.
+     *
+     * It used to idle at +0.2 in z, which put the loose end of the cable in FRONT of the
+     * machine - a bright green connector floating over the screen, which is the one thing
+     * in this shot that must never be occluded. Tucked behind, the cable reads as slack
+     * hanging off the back of the desk until the player reaches for a module.
+     */
+    this.restingTip.copy(anchor).add(new THREE.Vector3(0.22, -0.18, -0.26));
+    this.targetTip.copy(this.restingTip);
 
     // Spread the initial points along the rest direction. Starting them all coincident
     // produces a degenerate TubeGeometry, which the physics layer then fails to build a

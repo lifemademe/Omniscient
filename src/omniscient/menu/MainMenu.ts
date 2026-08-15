@@ -140,9 +140,20 @@ export class MainMenu {
 
     MODULES.forEach((spec, index) => this.buildModule(spec, index));
 
-    // The cable emerges from the machine itself, to the right of the stack, and reaches
-    // across to whichever module the player points at.
-    const anchor = new THREE.Vector3(-0.62, 0.62, -0.28);
+    /**
+     * The cable emerges from the machine, and now actually does.
+     *
+     * This was at z -0.28, which was behind the set when the desk stood in the middle of
+     * the room and is a metre in FRONT of it since DESK_SHIFT moved the group back to the
+     * wall. The anchor was left where it was, so the cable rose out of thin air over the
+     * desk edge and looped across the screen - the one thing in this shot that must never
+     * be occluded.
+     *
+     * Level with the machine's right shoulder and slightly behind it: the loose end then
+     * rests further back still (see CableCursor's idle target), so at rest the whole cable
+     * is behind the tube and only comes forward when the player reaches for a module.
+     */
+    const anchor = new THREE.Vector3(0.3, 0.22, -0.58 + DESK_SHIFT);
     this.cable = new CableCursor(anchor);
     this.root.add(this.cable.root);
 
@@ -264,10 +275,29 @@ export class MainMenu {
       this.plugTarget = null;
     }
 
+    /**
+     * The connector reaches for the plates, and coils at the machine otherwise.
+     *
+     * It used to follow the pointer anywhere in the room, which meant the loose end spent
+     * most of its life somewhere nobody had asked it to be - hanging in the air over the
+     * desk, or looped across the front of the screen, depending on where the mouse
+     * happened to be resting. A cable that goes wherever the cursor goes is a cursor with
+     * a cable drawn on it; a cable that reaches out when you approach the plates and falls
+     * back when you leave is a cable.
+     *
+     * The reach zone is the plate stack's own bounds with a margin, so it turns on exactly
+     * where the thing it can plug into is.
+     */
     if (this.enabled && !this.cable.isSeated) {
       const point = picker.projectOntoPlane(this.cablePlane, this.scratch);
-      // The pointer projection is in world space; the cable lives in menu-local space.
-      if (point) this.cable.setTarget(point.sub(this.root.position));
+      if (point) {
+        const local = point.sub(this.root.position);
+        const nearPlates =
+          local.x < STACK_ORIGIN.x + MODULE_PLATE.width * 0.9 &&
+          local.y > STACK_ORIGIN.y - PITCH * 4 - MODULE_PLATE.height &&
+          local.y < STACK_ORIGIN.y + MODULE_PLATE.height;
+        this.cable.setTarget(nearPlates ? local : this.cable.restingTip);
+      }
     }
     this.cable.update(deltaTime);
   }

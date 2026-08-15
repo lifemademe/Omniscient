@@ -1859,8 +1859,19 @@ function buildClearedHouse(scene: ContactScene): void {
 
   // The lower chair, and the upper one sitting down into it: its short legs end at the
   // lower seat's surface, which is exactly where a stacked chair's feet go.
+  /**
+   * Two whole chairs, the upper one nested into the lower.
+   *
+   * The first fix gave the upper chair 12cm legs so it would perch on the lower seat, and
+   * that produced exactly what a playtester described: half a chair sitting on a chair.
+   * A stacked chair is not a shortened chair - it is a complete one whose legs have gone
+   * down INSIDE the frame below it, which is why a stack of them is barely taller than one.
+   *
+   * So both are full chairs, and the upper simply starts below the lower one's seat and
+   * intersects it. That intersection is the stack.
+   */
   addChair(new THREE.Vector3(1.75, 0, -1.5), 0.1 + jitter(rng, 0.06), 0.44);
-  addChair(new THREE.Vector3(1.72, 0.465, -1.46), -0.22 + jitter(rng, 0.06), 0.12);
+  addChair(new THREE.Vector3(1.72, 0.4, -1.46), -0.22 + jitter(rng, 0.06), 0.44);
 
   scene.registerProp(
     'chairs',

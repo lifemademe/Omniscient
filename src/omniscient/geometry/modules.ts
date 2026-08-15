@@ -34,20 +34,27 @@ export interface ModuleBuild {
 }
 
 /**
- * Plate size, corrected against a real rack panel.
+ * Plate size, corrected against a real rack panel - and applied as a SCALE rather than as
+ * new constants, which is a bug fix as much as a tidy-up.
  *
- * These were 1.34m wide - a control plate the size of a door - and the CRT beside them was
- * a metre across. Both were about twice life size, and because they were wrong TOGETHER
- * they looked right together: the only thing in the frame at true scale was the chair, and
- * a chair is easy not to compare against.
+ * These were 1.34m wide, a control plate the size of a door, and the CRT beside them was a
+ * metre across. Both were about twice life size, and because they were wrong together they
+ * looked right together.
  *
- * A 19-inch rack panel is 0.48m. These are 0.75m, which is generous for a piece of
- * equipment but reads as a substantial console rather than as furniture, and that is what
- * this machine should be.
+ * The first correction simply rewrote these three numbers, and that broke every plate:
+ * every piece of hardware below - the boards, the reels, the knob, the cartridge, the
+ * socket collar - is authored in ABSOLUTE metres, tuned against a 1.34m plate. Shrinking
+ * the plate underneath them left a 0.34m circuit board sitting on a 0.75m panel, covering
+ * the label it was meant to sit beside. NEW GAME was unreadable.
+ *
+ * So the whole module is authored at its original size and scaled once on the way out.
+ * Everything on it - plate, hardware, socket position - goes through the same multiply,
+ * and a future change to PLATE_SCALE cannot desynchronise them.
  */
-const PLATE_W = 0.75;
-const PLATE_H = 0.168;
-const PLATE_D = 0.062;
+const PLATE_SCALE = 0.56;
+const PLATE_W = 1.34;
+const PLATE_H = 0.3;
+const PLATE_D = 0.11;
 
 /** Chamfered plate, shared by every module so the stack reads as one machine. */
 function plateGeometry(chamfer = 0.02): THREE.BufferGeometry {
@@ -212,13 +219,24 @@ export function createModule(kind: ModuleKind, seedKey: string): ModuleBuild {
   bore.translate(socketAt.x, socketAt.y, face + 0.001);
   details.push({ geometry: bore, material: 'dark' });
 
+  // Everything down to life size in one place. See PLATE_SCALE.
+  const plate = plateGeometry();
+  plate.scale(PLATE_SCALE, PLATE_SCALE, PLATE_SCALE);
+  for (const detail of details) {
+    detail.geometry.scale(PLATE_SCALE, PLATE_SCALE, PLATE_SCALE);
+  }
+
   return {
-    plate: plateGeometry(),
+    plate,
     details,
     // The cable seats in the collar at the right-hand end, clear of whatever hardware
     // that module carries on the left.
-    socket: socketAt,
+    socket: socketAt.multiplyScalar(PLATE_SCALE),
   };
 }
 
-export const MODULE_PLATE = { width: PLATE_W, height: PLATE_H, depth: PLATE_D };
+export const MODULE_PLATE = {
+  width: PLATE_W * PLATE_SCALE,
+  height: PLATE_H * PLATE_SCALE,
+  depth: PLATE_D * PLATE_SCALE,
+};

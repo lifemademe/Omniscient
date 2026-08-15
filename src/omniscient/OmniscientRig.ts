@@ -462,7 +462,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const glass = model.glass.get('screen');
     if (glass) {
       fitSurfaceUvs(glass);
-      glass.material = createScreenGlass({ seed: 'omniscient-terminal-glass', intensity: 0.72 });
+      glass.material = createScreenGlass({
+        seed: 'omniscient-terminal-glass',
+        // Pulled from 0.72. It was tuned before the room had banded light, occlusion or a
+        // sky in the window, and against those it reads as paint on the tube rather than
+        // as a reflection in it. Glass is most convincing when you are not sure you saw it.
+        intensity: 0.3,
+      });
       // After the picture, always. The tube is opaque and the glass is a highlight on
       // top of it, so sorting it behind would make the sheen vanish at some angles.
       glass.renderOrder = 2;
