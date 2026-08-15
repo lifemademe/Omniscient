@@ -256,6 +256,32 @@ export const MAT = {
    * into distance.
    */
   nightAir: new THREE.MeshBasicMaterial({ color: '#141b26', toneMapped: false, fog: false }),
+  /**
+   * The mill wall.
+   *
+   * MAT.wall is an INTERIOR value, chosen so that everything in a lit room reads against
+   * it. Outdoors at midnight it made six metres of blank stone the lightest large mass in
+   * frame, and the eye went to a wall with nothing on it instead of down the road. This is
+   * the same stone several stops down, which is what unlit stone is.
+   */
+  millStone: standard('#3b352f', 0.95),
+  /**
+   * Old tarmac, patched more times than it has been resurfaced.
+   *
+   * Darker and greyer than MAT.ground, which is soil. A road wants to be the lowest value
+   * in an outdoor set so that anything standing on it - a kerb, a lamp column, a person -
+   * has something to be lighter than.
+   */
+  tarmac: standard('#494740', 0.97),
+  /**
+   * A hillside at midnight - one step above the sky and no more.
+   *
+   * The far layer of a night set has exactly one job, which is to stop the horizon being
+   * the same value as the void behind it. Anything lighter and the eye leaves the subject
+   * and goes to the distance, which is the opposite of what a scene about somebody being
+   * followed wants.
+   */
+  hillNight: new THREE.MeshBasicMaterial({ color: '#1d2733', toneMapped: false, fog: false }),
   /** Worn brass. Dark, because a lock older than its door has stopped being yellow. */
   brass: standard('#8f7a3e', 0.55, 0.6),
   /**

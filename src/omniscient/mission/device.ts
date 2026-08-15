@@ -9,6 +9,7 @@
  * should not also need to know how water finds a drain.
  */
 
+import { replayBeam } from './beam.js';
 import { workLock } from './lock.js';
 import { flows, wetted } from './pipes.js';
 
@@ -18,7 +19,9 @@ import type { Device } from './types.js';
 export type DeviceSubmission =
   | { kind: 'relations'; links: Record<string, string> }
   | { kind: 'pipes'; rotations: number[] }
-  | { kind: 'lock'; order: string[] };
+  | { kind: 'lock'; order: string[] }
+  /** Every call the player made, and when. The runtime replays them (§157). */
+  | { kind: 'beam'; calls: Array<{ at: number; to: number }> };
 
 export interface DeviceResult {
   solved: boolean;
@@ -62,6 +65,16 @@ export function gradeDevice(device: Device, submission: DeviceSubmission): Devic
         // would not go. That last line is the whole clue.
         note: reading.felt.join(' '),
       };
+    }
+
+    case 'beam': {
+      if (submission.kind !== 'beam') return { solved: false };
+      const ending = replayBeam(device.beam, submission.calls);
+      if (ending.blinded) return { solved: true };
+      // How long the light was actually on him. The only useful thing to say, because the
+      // player already watched the whole thing happen.
+      const held = ending.held.toFixed(1);
+      return { solved: false, note: `you had the light on him for ${held} seconds` };
     }
 
     default: {

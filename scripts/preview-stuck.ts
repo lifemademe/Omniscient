@@ -17,7 +17,9 @@ import { MISSION_03 } from '../src/omniscient/content/mission-03-tunnel.js';
 import { MISSION_04 } from '../src/omniscient/content/mission-04-relations.js';
 import { MISSION_05 } from '../src/omniscient/content/mission-05-cellar.js';
 import { MISSION_06 } from '../src/omniscient/content/mission-06-lock.js';
+import { MISSION_07 } from '../src/omniscient/content/mission-07-torch.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
+import { followerAt } from '../src/omniscient/mission/beam.js';
 import { flows, wetted } from '../src/omniscient/mission/pipes.js';
 
 import type { DeviceSubmission } from '../src/omniscient/mission/device.js';
@@ -52,6 +54,22 @@ function solveDevice(device: Device): DeviceSubmission {
         .sort((a, b) => a.order - b.order)
         .map((pin) => pin.id),
     };
+  }
+
+  if (device.kind === 'beam') {
+    /**
+     * A chase the walker can actually win, by LEADING.
+     *
+     * Not the authored answer - there isn't one - so this calls the follower's position a
+     * little into the future at a steady cadence, which is the strategy the beat is built
+     * to teach. If this ever stops solving it, the beat has become untuneable rather than
+     * merely hard, and that is worth a failing check.
+     */
+    const calls: Array<{ at: number; to: number }> = [];
+    for (let t = 0; t < device.beam.patience; t += 0.25) {
+      calls.push({ at: t, to: followerAt(device.beam, t + 0.55) });
+    }
+    return { kind: 'beam', calls };
   }
 
   const cells = device.grid.cells;
@@ -125,7 +143,15 @@ console.log('\n=== FOLLOWING THE SUGGESTIONS ===\n');
  * points at the answer. Mission 01 had exactly that - unit-overview to history to
  * power-off-early and back - and only walking it in every position exposed it.
  */
-for (const mission of [MISSION_01, MISSION_02, MISSION_03, MISSION_04, MISSION_05, MISSION_06]) {
+for (const mission of [
+  MISSION_01,
+  MISSION_02,
+  MISSION_03,
+  MISSION_04,
+  MISSION_05,
+  MISSION_06,
+  MISSION_07,
+]) {
   const widest = Math.max(...mission.beats.map((beat) => beat.suggest?.length ?? 0));
 
   for (let slot = 0; slot < widest; slot++) {
@@ -180,7 +206,15 @@ console.log('\n=== TYPOS ARE NOT PUNISHED ===\n');
  * message produces a clarification, not a punishment, and a physical cue on that path
  * breaks it just as badly as a red X would.
  */
-[MISSION_01, MISSION_02, MISSION_03, MISSION_04, MISSION_05, MISSION_06].forEach((mission) => {
+[
+  MISSION_01,
+  MISSION_02,
+  MISSION_03,
+  MISSION_04,
+  MISSION_05,
+  MISSION_06,
+  MISSION_07,
+].forEach((mission) => {
   const harmful = mission.beats
     .filter((beat) => {
       const path = beat.onUnrecognised;
@@ -196,7 +230,15 @@ console.log('\n=== TYPOS ARE NOT PUNISHED ===\n');
 });
 
 // And the beat you land on after an unrecognised message must still offer a way out.
-[MISSION_01, MISSION_02, MISSION_03, MISSION_04, MISSION_05, MISSION_06].forEach((mission) => {
+[
+  MISSION_01,
+  MISSION_02,
+  MISSION_03,
+  MISSION_04,
+  MISSION_05,
+  MISSION_06,
+  MISSION_07,
+].forEach((mission) => {
   const byId = new Map(mission.beats.map((beat) => [beat.id, beat]));
   const dead = mission.beats
     .filter((beat) => beat.onUnrecognised)

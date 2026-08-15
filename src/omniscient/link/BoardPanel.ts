@@ -22,6 +22,9 @@
  * elements built by hand for the same reason.
  */
 
+import { initialBeam, stepBeam } from '../mission/beam.js';
+
+import type { BeamState } from '../mission/beam.js';
 import type { DeviceView, PlayerMessage } from './surface.js';
 
 const STYLE_ID = 'omniscient-board-styles';
@@ -210,6 +213,51 @@ const BOARD_CSS = `
   color: #e0a24c;
   letter-spacing: 0.04em;
 }
+/* The chase: one track, clicked to call. */
+.omni-board__track {
+  position: relative;
+  height: 74px;
+  border: 1px solid rgba(127, 224, 138, 0.3);
+  border-radius: 3px;
+  background: rgba(6, 14, 9, 0.9);
+  cursor: crosshair;
+  overflow: hidden;
+}
+/* The beam is a soft wedge, because that is what a torch is. */
+.omni-board__beam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 74px;
+  margin-left: -37px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 226, 160, 0.5),
+    rgba(255, 226, 160, 0.12) 55%,
+    transparent 72%
+  );
+  pointer-events: none;
+}
+.omni-board__follower {
+  position: absolute;
+  top: 22px;
+  width: 14px;
+  height: 30px;
+  margin-left: -7px;
+  border-radius: 2px;
+  background: #d8d2c4;
+  pointer-events: none;
+}
+/* Lit: he throws an arm up and stops being a silhouette. */
+.omni-board__follower--lit { background: #fff3d4; }
+.omni-board__hold {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: #7fe08a;
+  pointer-events: none;
+}
 `;
 
 export function injectBoardStyles(): void {
@@ -268,6 +316,17 @@ export class BoardPanel {
   private pinButtons = new Map<string, { button: HTMLButtonElement; order: HTMLSpanElement }>();
   /** The order the player is proposing, pin ids front to back. */
   private order: string[] = [];
+  /** Live chase state, while a beam device is up. */
+  private chase: BeamState | null = null;
+  /** Every call the player has made, with its timestamp. */
+  private calls: Array<{ at: number; to: number }> = [];
+  private beamParts: {
+    track: HTMLDivElement;
+    beam: HTMLDivElement;
+    follower: HTMLDivElement;
+    hold: HTMLDivElement;
+  } | null = null;
+  private frame: number | null = null;
   private view: DeviceView | null = null;
   /** Player quarter-turns per cell, for a pipe device. */
   private rotations: number[] = [];
@@ -371,7 +430,9 @@ export class BoardPanel {
         ? `relations|${view.prompt}|${view.people.map((p) => p.id).join(',')}`
         : view.kind === 'pipes'
           ? `pipes|${view.prompt}|${view.grid.cells.length}`
-          : `lock|${view.prompt}|${view.pins.length}`;
+          : view.kind === 'lock'
+            ? `lock|${view.prompt}|${view.pins.length}`
+            : `beam|${view.prompt}|${view.spec.patience}`;
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       this.links.clear();
@@ -379,6 +440,12 @@ export class BoardPanel {
       this.rotations = view.kind === 'pipes' ? view.grid.cells.map(() => 0) : [];
       this.order = [];
       this.pinButtons.clear();
+      if (this.frame !== null) {
+        cancelAnimationFrame(this.frame);
+        this.frame = null;
+      }
+      this.chase = null;
+      this.beamParts = null;
       this.build(view);
     }
 
@@ -399,6 +466,11 @@ export class BoardPanel {
 
     if (view.kind === 'lock') {
       this.buildLock(view.pins);
+      return;
+    }
+
+    if (view.kind === 'beam') {
+      this.buildBeam();
       return;
     }
 
@@ -496,6 +568,105 @@ export class BoardPanel {
   }
 
   /**
+   * The chase.
+   *
+   * One track. Click where you want the light and the beam swings there at the speed a
+   * frightened hand can move it, which is the entire mechanic - a player who clicks ON the
+   * follower is always behind him, and a player who clicks where he is GOING holds him.
+   *
+   * The loop runs here because a live beat needs frames and the runtime does not have any.
+   * It does not decide anything: every click is recorded with its timestamp and the whole
+   * list goes up at the end for the runtime to replay (§157).
+   */
+  private buildBeam(): void {
+    const track = document.createElement('div');
+    track.className = 'omni-board__track';
+
+    const beam = document.createElement('div');
+    beam.className = 'omni-board__beam';
+    track.appendChild(beam);
+
+    const follower = document.createElement('div');
+    follower.className = 'omni-board__follower';
+    track.appendChild(follower);
+
+    const hold = document.createElement('div');
+    hold.className = 'omni-board__hold';
+    track.appendChild(hold);
+
+    track.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      if (!this.chase || this.chase.blinded || this.chase.caught) return;
+      const rect = track.getBoundingClientRect();
+      const to = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      this.calls.push({ at: this.chase.elapsed, to });
+      this.chase = { ...this.chase, aim: Math.max(-1, Math.min(1, to)) };
+    });
+
+    this.grid.appendChild(track);
+    this.beamParts = { track, beam, follower, hold };
+    this.chase = initialBeam();
+    this.calls = [];
+    this.startChase();
+  }
+
+  /**
+   * Drive the chase until somebody wins, then submit.
+   *
+   * Frame time is clamped: a stall - a rebuild, a dropped frame, the window losing focus -
+   * must not hand the follower half a second of free movement, which would lose a chase
+   * the player was winning for reasons on nobody's screen.
+   */
+  private startChase(): void {
+    if (this.frame !== null) cancelAnimationFrame(this.frame);
+    let last = performance.now();
+
+    const tick = (now: number): void => {
+      const view = this.view;
+      const state = this.chase;
+      if (!view || view.kind !== 'beam' || !state) return;
+
+      const delta = Math.min((now - last) / 1000, 1 / 20);
+      last = now;
+
+      const next = stepBeam(view.spec, state, delta);
+      this.chase = next;
+      this.paintChase(view.spec.holdToBlind, view.spec.width);
+
+      if (next.blinded || next.caught) {
+        this.frame = null;
+        this.dispatch({ kind: 'device', submission: { kind: 'beam', calls: this.calls } });
+        return;
+      }
+      this.frame = requestAnimationFrame(tick);
+    };
+
+    this.frame = requestAnimationFrame(tick);
+  }
+
+  private paintChase(holdToBlind: number, width: number): void {
+    const parts = this.beamParts;
+    const state = this.chase;
+    if (!parts || !state) return;
+
+    const place = (value: number): string => `${((value + 1) / 2) * 100}%`;
+    parts.beam.style.left = place(state.beam);
+    parts.follower.style.left = place(state.follower);
+    parts.follower.classList.toggle(
+      'omni-board__follower--lit',
+      Math.abs(state.beam - state.follower) <= width
+    );
+    parts.hold.style.width = `${Math.min(1, state.held / holdToBlind) * 100}%`;
+
+    this.status.className = 'omni-board__status';
+    this.status.textContent = state.blinded
+      ? 'he has turned away'
+      : state.caught
+        ? 'he has reached her'
+        : 'click where the light should go';
+  }
+
+  /**
    * The lock: a row of pins, tapped into an order.
    *
    * Tap a pin to add it to the sequence, tap it again to take it and everything after it
@@ -590,6 +761,14 @@ export class BoardPanel {
     this.element.classList.toggle('omni-board--folded', this.folded);
     this.fold.textContent = this.folded ? 'Show' : 'Hide';
     if (this.folded) return;
+
+    if (view.kind === 'beam') {
+      // The frame loop owns this one; refresh must not fight it.
+      this.send.disabled = true;
+      this.paintChase(view.spec.holdToBlind, view.spec.width);
+      this.wires.replaceChildren();
+      return;
+    }
 
     if (view.kind === 'lock') {
       for (const [id, parts] of this.pinButtons) {

@@ -79,7 +79,30 @@ export const DORIN: Contact = {
   teaser: 'RASCA - "she always picks up"',
 };
 
-export const CONTACTS: readonly Contact[] = [MIRELA, ILEANA, TOMAS, ADAEZE, VASILE, DORIN];
+/**
+ * The seventh, and the only one with no time to think.
+ *
+ * Sanda is not in trouble with a machine or a building - she is being followed, and what
+ * she needs is not diagnosis but timing. She has the torch, the nerve and the road; the
+ * one thing she cannot do while frightened is decide where a heavy light should be
+ * pointing a second from now.
+ */
+export const SANDA: Contact = {
+  id: 'sanda',
+  name: 'Sanda Petrescu',
+  location: 'The mill road, after midnight',
+  teaser: 'MILL ROAD - "there is a man behind me"',
+};
+
+export const CONTACTS: readonly Contact[] = [
+  MIRELA,
+  ILEANA,
+  TOMAS,
+  ADAEZE,
+  VASILE,
+  DORIN,
+  SANDA,
+];
 
 export function getContact(id: string): Contact | null {
   return CONTACTS.find((contact) => contact.id === id) ?? null;

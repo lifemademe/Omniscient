@@ -1,3 +1,5 @@
+import type { BeamSpec } from '../mission/beam.js';
+
 /**
  * The intervention surface - OMNISCIENT_'s phone.
  *
@@ -110,6 +112,20 @@ export type DeviceView =
       /** Pins in their physical order along the lock. Carries no binding order. */
       pins: Array<{ id: string; label: string }>;
       note?: string;
+    }
+  | {
+      kind: 'beam';
+      prompt: string;
+      /**
+       * The chase, in full.
+       *
+       * This one DOES carry its own rules, unavoidably: the console has to run the
+       * simulation live or the player cannot see what they are doing. It stays honest
+       * because the console does not get to decide the outcome - it sends up the calls it
+       * recorded and the runtime replays them (§157).
+       */
+      spec: BeamSpec;
+      note?: string;
     };
 
 /**
@@ -187,7 +203,8 @@ export type PlayerMessage =
       submission:
         | { kind: 'relations'; links: Record<string, string> }
         | { kind: 'pipes'; rotations: number[] }
-        | { kind: 'lock'; order: string[] };
+        | { kind: 'lock'; order: string[] }
+        | { kind: 'beam'; calls: Array<{ at: number; to: number }> };
     };
 
 export interface InterventionSurface {

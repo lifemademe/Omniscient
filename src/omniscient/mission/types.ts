@@ -11,6 +11,7 @@
 
 import type { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import type { IntentDefinition } from './intent.js';
+import type { BeamSpec } from './beam.js';
 import type { LockSpec } from './lock.js';
 import type { PipeGrid } from './pipes.js';
 
@@ -125,7 +126,7 @@ export interface BoardSlot {
  * is a new member and a new renderer; nothing else moves. §160 still holds - this is data
  * walked by a shared runtime, not a script.
  */
-export type Device = RelationBoard | PipeBoard | LockBoard;
+export type Device = RelationBoard | PipeBoard | LockBoard | BeamBoard;
 
 export interface DeviceBase {
   /** The question, in the contact's voice. */
@@ -176,6 +177,18 @@ export interface PipeBoard extends DeviceBase {
 export interface LockBoard extends DeviceBase {
   kind: 'lock';
   lock: LockSpec;
+}
+
+/**
+ * A torch, aimed by somebody running.
+ *
+ * The game's one real-time beat. The player does not aim - they CALL, and a frightened
+ * hand swings toward it at a human rate, which turns tracking into prediction. See
+ * mission/beam.ts for why that distinction is what keeps this a conversation game.
+ */
+export interface BeamBoard extends DeviceBase {
+  kind: 'beam';
+  beam: BeamSpec;
 }
 
 export interface Beat {

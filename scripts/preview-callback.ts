@@ -492,7 +492,7 @@ const nameable = signals.filter((s) => s.state !== SignalState.Unknown);
  * the old count could not see at all.
  */
 {
-  const queueOrder = ['mirela', 'ileana', 'tomas', 'adaeze', 'vasile', 'dorin'];
+  const queueOrder = ['mirela', 'ileana', 'tomas', 'adaeze', 'vasile', 'dorin', 'sanda'];
   const live = new Set<string>();
   let worst = 0;
 
@@ -564,7 +564,7 @@ check(
   );
   check(
     'Everything else is waiting off-globe, including the tease and the anomaly',
-    ['tomas', 'adaeze', 'ileana', 'vasile', 'dorin', 'anomaly'].every(
+    ['tomas', 'adaeze', 'ileana', 'vasile', 'dorin', 'sanda', 'anomaly'].every(
       (id) => signals.find((s) => s.id === id)?.hidden === true
     )
   );

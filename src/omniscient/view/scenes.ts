@@ -2476,6 +2476,456 @@ function buildNightDoor(scene: ContactScene): void {
   });
 }
 
+/**
+ * MISSION 07 - the mill road, and the only set with no lights in it.
+ *
+ * Every other diorama in the game is built around a source: a bench lamp, a porch bulb, a
+ * bulkhead over a flooded floor. This one is built around the ABSENCE of one, because that
+ * is the request. The lamps have been out since spring, the mill has no windows on this
+ * side, and the four hundred metres of road she is standing on is lit by exactly one thing,
+ * which is in her hand and is the mission.
+ *
+ * §131 wants the environment to carry evidence rather than decoration, and here that is
+ * literal: the four dead lamp columns are the reason the request exists. A player who looks
+ * at this set and asks why it is so dark has already found the answer standing in it.
+ *
+ * §241, layers and value: night plane at the back, mill wall and hedge as the two walls of
+ * a corridor, the road as the floor, and one warm cone cutting down it. The follower is a
+ * silhouette on the hedge side where the corridor is darkest, which is where he put
+ * himself.
+ */
+function buildMillRoad(scene: ContactScene): void {
+  const rng = createRng(seedFrom('sanda-mill-road'));
+
+  /** The road runs down -Z, away from the camera. Everything here is in metres. */
+  const HALF = 2.6;
+  const NEAR = 7;
+  const FAR = -32;
+  const LENGTH = NEAR - FAR;
+  const MID = (NEAR + FAR) / 2;
+  /** Inner faces of the corridor. */
+  const MILL_X = -3.1;
+  const HEDGE_X = 3.25;
+  /** The gap he leaves through. Named because three things have to agree about it. */
+  const CUT = { z: -12.4, width: 2.6 };
+
+  // -- Night, the outermost layer -------------------------------------------
+  // Same trick as Dorin's door: one unlit plane several shades above black, so the mill
+  // roofline and the hedge have something to be a silhouette against. A night set on pure
+  // black reads as an unfinished one.
+  const night = new THREE.PlaneGeometry(90, 44);
+  night.translate(0, 12, FAR - 6);
+  scene.registerProp('night', meshOf('Night', night, MAT.nightAir));
+
+  // A hillside behind the mill, one value up. It is what she is being told to walk toward.
+  const hill: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 5; i++) {
+    const w = range(rng, 14, 26);
+    const h = range(rng, 4, 9);
+    const slab = new THREE.PlaneGeometry(w, h);
+    slab.translate(-24 + i * 12 + jitter(rng, 3), h / 2, FAR - 2);
+    hill.push(slab);
+  }
+  // `nightAir` rather than `viewTown`: viewTown is a DAYLIGHT value, and on a road lit by
+  // one torch it made the far hillside the brightest thing in frame - the eye went to the
+  // horizon instead of to the woman with the light. A hill at midnight is a silhouette
+  // one step above the sky, and one step is all it gets.
+  scene.registerProp('hill', meshOf('Hill', mergeGeometries(hill, false) ?? hill[0], MAT.hillNight));
+
+  // -- The road --------------------------------------------------------------
+  const road = new THREE.BoxGeometry(HALF * 2, 0.12, LENGTH);
+  road.translate(0, -0.06, MID);
+  scene.registerProp('road', meshOf('Road', road, MAT.tarmac));
+
+  /**
+   * Patches, and the verges.
+   *
+   * The flat pass took the noise off every surface in the game, and a thirty-metre plane
+   * is where that bill comes due hardest - unbroken tarmac reads as a missing texture. The
+   * fix is the same one the floorboards got: break the plane with the thing that actually
+   * divides a real road, which is the repairs. These are slabs laid a couple of millimetres
+   * proud rather than recesses, because the project casts no shadows and a recess is
+   * invisible.
+   */
+  const patches: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 9; i++) {
+    const w = range(rng, 0.7, 2.3);
+    const l = range(rng, 1.1, 3.4);
+    const patch = new THREE.BoxGeometry(w, 0.006, l);
+    patch.translate(range(rng, -HALF + w / 2, HALF - w / 2), 0.003, range(rng, FAR + 2, NEAR - 2));
+    patches.push(patch);
+  }
+  scene.registerProp(
+    'patches',
+    meshOf('Patches', mergeGeometries(patches, false) ?? patches[0], MAT.dark)
+  );
+
+  const verges: THREE.BufferGeometry[] = [];
+  for (const side of [-1, 1]) {
+    const verge = new THREE.BoxGeometry(0.9, 0.16, LENGTH);
+    verge.translate(side * (HALF + 0.45), -0.08, MID);
+    verges.push(verge);
+  }
+  scene.registerProp(
+    'verge',
+    meshOf('Verge', mergeGeometries(verges, false) ?? verges[0], MAT.ground)
+  );
+
+  // -- The mill wall ---------------------------------------------------------
+  /**
+   * Four hundred metres of nothing, in two runs with a gap.
+   *
+   * The gap is the cut she says he walks into, so it has to be real geometry before the
+   * success beat can refer to it - otherwise "he has gone into the cut by the mill" is a
+   * line of dialogue about a place that does not exist, which is the failure §131 is
+   * about.
+   */
+  const WALL_H = 6.4;
+  const wall: THREE.BufferGeometry[] = [];
+  for (const [from, to] of [
+    [NEAR, CUT.z + CUT.width / 2],
+    [CUT.z - CUT.width / 2, FAR],
+  ] as const) {
+    const run = new THREE.BoxGeometry(0.7, WALL_H, from - to);
+    run.translate(MILL_X - 0.35, WALL_H / 2, (from + to) / 2);
+    wall.push(run);
+  }
+
+  // Pilasters. A blank six-metre wall is a value with no shape in it; these give the light
+  // something to fall off, which is all a wall this dark needs.
+  for (let z = NEAR - 2; z > FAR; z -= 3.6) {
+    if (Math.abs(z - CUT.z) < CUT.width) continue;
+    const pier = new THREE.BoxGeometry(0.22, WALL_H * 0.88, 0.5);
+    pier.translate(MILL_X + 0.11, (WALL_H * 0.88) / 2, z + jitter(rng, 0.3));
+    wall.push(pier);
+  }
+  scene.registerProp('mill', meshOf('Mill', mergeGeometries(wall, false) ?? wall[0], MAT.millStone));
+
+  // Bricked-up windows, high and long since filled. Set slightly proud so they read.
+  const blind: THREE.BufferGeometry[] = [];
+  for (let z = NEAR - 4; z > FAR + 3; z -= 5.4) {
+    if (Math.abs(z - CUT.z) < CUT.width) continue;
+    const pane = new THREE.BoxGeometry(0.06, 1.5, 0.9);
+    pane.translate(MILL_X + 0.03, 3.9, z);
+    blind.push(pane);
+  }
+  scene.registerProp(
+    'windows',
+    meshOf('Windows', mergeGeometries(blind, false) ?? blind[0], MAT.timberDark)
+  );
+
+  /**
+   * The cut itself - a dark slot, registered so the success beat has somewhere to send him.
+   *
+   * A plane rather than a volume: what has to read is that the wall stops and something
+   * blacker than the wall is behind it, and one unlit quad does that for the cost of one
+   * quad.
+   */
+  const cutFace = new THREE.PlaneGeometry(CUT.width, WALL_H * 0.7);
+  cutFace.translate(0, (WALL_H * 0.7) / 2, 0);
+  cutFace.rotateY(Math.PI / 2);
+  cutFace.translate(MILL_X - 0.9, 0, CUT.z);
+  scene.registerProp('cut', meshOf('Cut', cutFace, MAT.nightAir));
+
+  // -- The hedge -------------------------------------------------------------
+  /**
+   * The dark side, and where he chose to walk.
+   *
+   * Overlapping boxes at wandering heights rather than a single run, because a hedge is a
+   * lumpy thing and one long box is a fence. `leafDeep` rather than `leaf`: at night the
+   * hedge is a value, not a colour, and the paler green fought the road for attention.
+   */
+  const hedge: THREE.BufferGeometry[] = [];
+  for (let z = NEAR; z > FAR; z -= 1.3) {
+    const h = range(rng, 1.55, 2.15);
+    const d = range(rng, 0.85, 1.35);
+    const block = new THREE.BoxGeometry(d, h, 1.5);
+    block.translate(HEDGE_X + d / 2 + jitter(rng, 0.12), h / 2, z);
+    hedge.push(block);
+  }
+  scene.registerProp(
+    'hedge',
+    meshOf('Hedge', mergeGeometries(hedge, false) ?? hedge[0], MAT.leafDeep)
+  );
+
+  // Whips breaking out of the top - nobody has cut this since spring either, which is the
+  // same spring the lamps went out. §230's overgrowth, doing one job in the background.
+  const whips: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 40; i++) {
+    const h = range(rng, 0.3, 0.85);
+    const whip = new THREE.BoxGeometry(0.03, h, 0.03);
+    whip.rotateZ(jitter(rng, 0.45));
+    whip.translate(HEDGE_X + range(rng, 0.2, 1.3), range(rng, 1.6, 2.1) + h / 2, range(rng, FAR, NEAR));
+    whips.push(whip);
+  }
+  scene.registerProp('whips', meshOf('Whips', mergeGeometries(whips, false) ?? whips[0], MAT.stem));
+
+  // -- The dead lamps --------------------------------------------------------
+  /**
+   * The reason for the whole request, standing in a row.
+   *
+   * Four columns with unlit heads. This is the one piece of set dressing in the scene that
+   * is not dressing at all: the hint about the lamps, the fact that her torch is the only
+   * light, and the entire premise of a chase decided by where a beam is pointing all rest
+   * on these being out, and a player can see that they are out from the default shot.
+   */
+  const columns: THREE.BufferGeometry[] = [];
+  const heads: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 4; i++) {
+    const z = -1.5 - i * 7.4;
+    const column = new THREE.CylinderGeometry(0.07, 0.1, 4.3, 8);
+    column.translate(MILL_X + 0.55, 2.15, z);
+    columns.push(column);
+
+    // The bracket, reaching out over the road it is not lighting.
+    const arm = new THREE.BoxGeometry(0.9, 0.07, 0.07);
+    arm.translate(MILL_X + 0.55 + 0.45, 4.28, z);
+    columns.push(arm);
+
+    const lantern = new THREE.BoxGeometry(0.3, 0.22, 0.26);
+    lantern.translate(MILL_X + 0.55 + 0.86, 4.16, z);
+    heads.push(lantern);
+  }
+  scene.registerProp(
+    'lamps',
+    meshOf('Lamps', mergeGeometries(columns, false) ?? columns[0], MAT.metal)
+  );
+  scene.registerProp(
+    'lamp-heads',
+    meshOf('LampHeads', mergeGeometries(heads, false) ?? heads[0], MAT.dark)
+  );
+
+  // -- Sanda -----------------------------------------------------------------
+  /**
+   * On the phone with her left hand and holding her father's torch in her right.
+   *
+   * Turned back over her shoulder rather than facing the way she is walking, which is the
+   * pose of somebody who has stopped pretending she has not noticed. Her offset from the
+   * camera's own sightline is 0.79m - see CONTACT FRAMING at the top of this file - so she
+   * sits beside the road rather than on top of it.
+   */
+  const TORCH_AT = new THREE.Vector3(1.33, 1.12, -0.16);
+  addContact(scene, 'Sanda', {
+    seed: 'sanda-petrescu',
+    height: 1.66,
+    build: 0.4,
+    shoulders: 0.38,
+    lean: 0.06,
+    reach: 0.4,
+    garment: 'coat',
+    colors: { garment: '#40404c', underlayer: '#a8907a' },
+    position: new THREE.Vector3(1.0, 0, 0.2),
+    rotation: new THREE.Euler(0, Math.PI * 0.14, 0),
+    handsOn: {
+      // At her ear. She is on the phone; the player is the call.
+      left: new THREE.Vector3(0.83, 1.45, 0.16),
+      right: TORCH_AT,
+    },
+    // Frightened, and holding something heavy at arm's length. §236's budget, near its top.
+    liveliness: 1.4,
+  });
+
+  // -- The torch -------------------------------------------------------------
+  /**
+   * Her father's, from the yard - heavy, and the mission.
+   *
+   * Its own node so `prop.highlight:torch` has something to pulse, and so the beam, the
+   * body and the practical light move together if it is ever re-posed. It points down the
+   * road, which is where she has it when the call starts and where the chase begins from.
+   */
+  const torchRoot = ENGINE.SceneNode.create({
+    name: 'Torch',
+    position: TORCH_AT.clone(),
+    rotation: new THREE.Euler(-0.12, 0, 0),
+  });
+
+  const barrel = new THREE.CylinderGeometry(0.031, 0.028, 0.21, 10);
+  barrel.rotateX(Math.PI / 2);
+  barrel.translate(0, 0, 0.02);
+  torchRoot.add(meshOf('TorchBody', barrel, MAT.metal));
+
+  const bell = new THREE.CylinderGeometry(0.052, 0.032, 0.08, 12);
+  bell.rotateX(-Math.PI / 2);
+  bell.translate(0, 0, -0.12);
+  torchRoot.add(meshOf('TorchBell', bell, MAT.dark));
+
+  const lens = new THREE.CircleGeometry(0.048, 12);
+  lens.rotateY(Math.PI);
+  lens.translate(0, 0, -0.161);
+  torchRoot.add(meshOf('TorchLens', lens, MAT.lamp));
+
+  /**
+   * No cone.
+   *
+   * There was one - an additive open cylinder, the usual way to make a torch beam visible
+   * in air. It cannot work here. The default shot looks DOWN the road, which means it also
+   * looks down the beam's own axis, and a double-sided additive cone seen end-on is not a
+   * beam at all: it is a filled pale disc hanging in the air behind her, both walls of the
+   * cone summing into the same pixels. It read as a hole in the set.
+   *
+   * A beam in air is a side-on effect. This shot is not side-on and never will be, because
+   * the composition the scene needs is the corridor receding. So the torch is shown the
+   * way a torch is actually shown in a film lit like this one - by what it puts on the
+   * ground - and the light below does that job alone.
+   */
+
+  scene.registerProp('torch', torchRoot, {
+    anchors: { default: new THREE.Vector3(0, 0, -0.2) },
+  });
+
+  // -- The follower ----------------------------------------------------------
+  /**
+   * Twenty metres back, on the hedge side, where it is darkest.
+   *
+   * A full figure rather than a shape, but unlit and dressed in two greys - at this
+   * distance with no light on him he resolves to a silhouette, which is precisely what she
+   * describes and what the player should be able to read direction from and nothing else.
+   * He gets no face because from here nobody has one.
+   */
+  const follower = placeCharacter('Follower', {
+    seed: 'the-man-behind',
+    height: 1.86,
+    build: 0.55,
+    shoulders: 0.66,
+    lean: 0.14,
+    reach: 0.1,
+    garment: 'coat',
+    colors: { garment: '#1b1d22', underlayer: '#1b1d22', skin: '#3a3238', hair: '#15161a' },
+    position: new THREE.Vector3(2.05, 0, -9.5),
+    rotation: new THREE.Euler(0, Math.PI * 0.02, 0),
+    liveliness: 0.8,
+  });
+
+  scene.registerProp('follower', follower.root, {
+    idle: follower.idle,
+    actions: {
+      /**
+       * He breaks off.
+       *
+       * Not a fade and not a delete: he crosses the road to the mill side and walks into
+       * the cut, which is exactly what she narrates. A contact describing something the
+       * player can watch happen is the difference between an ending and a caption.
+       */
+      clear: (tweener, node) => {
+        const from = node.position.clone();
+        const to = new THREE.Vector3(MILL_X - 0.6, 0, CUT.z - 1.2);
+        tweener.add(
+          (t) => {
+            node.position.lerpVectors(from, to, t);
+            // Turning away as he goes, so the last thing visible is his back.
+            node.rotation.set(0, Math.PI * 0.02 + t * Math.PI * 0.78, 0);
+          },
+          { duration: 3.2, easing: Ease.inOutCubic, channel: 'follower-away' }
+        );
+      },
+    },
+  });
+
+  // -- Light -----------------------------------------------------------------
+  /**
+   * One practical, and a moon that is barely there.
+   *
+   * The hemisphere is set low enough that the road is nearly black and the wall is a value
+   * rather than a surface; everything the eye actually reads is inside the torch's pool.
+   * §230's warm pool in a cold frame, with the frame turned down as far as it will go
+   * before the set stops being legible at all.
+   */
+  scene.registerProp(
+    'moon',
+    ENGINE.HemisphereLightNode.create({
+      name: 'Moon',
+      position: new THREE.Vector3(0, 12, -6),
+      // 0.5 left the mill wall at value 19 and the road at 3 - not dark, invisible.
+      intensity: 1.9,
+      color: new THREE.Color('#5f7591'),
+      groundColor: new THREE.Color('#20222a'),
+    })
+  );
+
+  /**
+   * The torch, as a light.
+   *
+   * A spot, not a point. A point light hung a circle of yellow on the tarmac at her feet,
+   * which reads as a streetlamp - and a working streetlamp is the one thing this road is
+   * defined by not having. A spot aimed down the corridor puts a long narrowing wedge on
+   * the road instead, which is what a torch does and what the whole request is about.
+   *
+   * Tight distance: it has to die well before the follower, or the chase is already won
+   * before the player has said anything.
+   */
+  const torchLight = ENGINE.SpotLightNode.create({
+    name: 'TorchLight',
+    position: TORCH_AT.clone().add(new THREE.Vector3(0, 0, -0.2)),
+    /**
+     * Numbers arrived at by measuring, not by eye.
+     *
+     * The first pass looked atmospheric on screen and was not: sampling the frame put the
+     * whole set between 1 and 51 out of 255, with the road under the beam at (1,1,3). A
+     * viewer brightens a dark image and the eye goes along with it, so a night scene is
+     * the one place a screenshot cannot be trusted and the pixels have to be read.
+     */
+    intensity: 90,
+    color: new THREE.Color('#ffd9a0'),
+    // Narrow, with a soft edge. A hard cone edge on a hand-held torch reads as a prop.
+    angle: 0.4,
+    penumbra: 0.7,
+    distance: 14,
+    decay: 1.0,
+  });
+  torchLight.castShadow = false;
+
+  /**
+   * The spill, and the reason she is not a silhouette.
+   *
+   * A torch does not only light what it is pointed at - the wash off the road and off her
+   * own hands is what makes the person holding one visible at all, and the spot alone left
+   * her a black shape in front of a lit road. Small, close and warm.
+   */
+  scene.registerProp(
+    'torch-spill',
+    ENGINE.PointLightNode.create({
+      name: 'TorchSpill',
+      position: TORCH_AT.clone().add(new THREE.Vector3(-0.1, 0.05, 0.1)),
+      intensity: 5,
+      color: new THREE.Color('#ffcf90'),
+      distance: 2.6,
+      decay: 1.4,
+    })
+  );
+  // Aimed at the tarmac a few metres ahead, not at infinity. Pointed down the road at a
+  // shallow angle the pool landed past the end of the set and the road under her stayed
+  // black, which left the figure standing on nothing.
+  torchLight.lookAt(new THREE.Vector3(0.35, 0, -3.4));
+  scene.registerProp('torch-light', torchLight);
+
+  // -- Shots -----------------------------------------------------------------
+  scene.registerShot('default', {
+    /**
+     * Ahead of her and slightly across, looking back down the road.
+     *
+     * The one composition that holds all three things the request is about at once: Sanda
+     * near, the corridor of wall and hedge receding, and a shape standing in it. Her
+     * perpendicular offset from the camera-to-target line is 0.79m, inside the 0.45-0.9
+     * band the rule at the top of this file asks for, so she frames the road rather than
+     * blocking it.
+     */
+    position: new THREE.Vector3(2.15, 1.78, 5.6),
+    target: new THREE.Vector3(0.15, 1.05, -6.5),
+  });
+  scene.registerShot('road', {
+    // Down the corridor. Nothing in frame but four dead lamps and the distance.
+    position: new THREE.Vector3(0.1, 1.5, 1.6),
+    target: new THREE.Vector3(-0.4, 2.4, -18),
+    duration: 2.4,
+  });
+  scene.registerShot('follower', {
+    // As close as the game ever gets to him, which is not close.
+    position: new THREE.Vector3(0.9, 1.6, -3.4),
+    target: new THREE.Vector3(2.0, 1.2, -9.3),
+    duration: 2.0,
+  });
+}
+
 // Registered at module load. auto-imports pulls this module in, so a ContactScene node
 // placed in the editor with a matching sceneId populates itself.
 ContactScene.registerBuilder('scene-repair-shop', buildRepairShop);
@@ -2484,6 +2934,7 @@ ContactScene.registerBuilder('scene-seedling-tunnel', buildSeedlingTunnel);
 ContactScene.registerBuilder('scene-cleared-house', buildClearedHouse);
 ContactScene.registerBuilder('scene-flooded-cellar', buildFloodedCellar);
 ContactScene.registerBuilder('scene-night-door', buildNightDoor);
+ContactScene.registerBuilder('scene-mill-road', buildMillRoad);
 
 /** Construct a populated diorama for a mission's sceneId, or null when none exists. */
 export function buildContactScene(sceneId: string): ContactScene | null {

@@ -12,13 +12,14 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
-import { ADAEZE, DORIN, ILEANA, MIRELA, TOMAS, VASILE } from './content/contacts.js';
+import { ADAEZE, DORIN, ILEANA, MIRELA, SANDA, TOMAS, VASILE } from './content/contacts.js';
 import { MISSION_01 } from './content/mission-01-transmitter.js';
 import { MISSION_02 } from './content/mission-02-beacon.js';
 import { MISSION_03 } from './content/mission-03-tunnel.js';
 import { MISSION_04 } from './content/mission-04-relations.js';
 import { MISSION_05 } from './content/mission-05-cellar.js';
 import { MISSION_06 } from './content/mission-06-lock.js';
+import { MISSION_07 } from './content/mission-07-torch.js';
 import { createScreenGlass } from './art/glass.js';
 import { PAINT_UNIFORMS } from './art/painterly.js';
 import { decorMesh } from './art/mesh.js';
@@ -272,6 +273,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * "another thing the console does" rather than as a new idea under pressure.
        */
       { mission: MISSION_06, contact: DORIN },
+      /**
+       * Last, and the only beat in the game that runs in real time.
+       *
+       * §153 wants a game to move between tempos and this is the only Tempo.Act request
+       * there is. It arrives seventh on purpose: by now the player has met three devices
+       * and knows the console is something you work, so a live one lands as a spike rather
+       * than as the game changing genre in front of them.
+       */
+      { mission: MISSION_07, contact: SANDA },
     ];
 
     this.buildScenes();

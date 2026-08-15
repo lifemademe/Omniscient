@@ -181,6 +181,12 @@ export class SessionController {
       return spoken ? `${spoken}.` : 'I do not have enough to place them yet.';
     }
 
+    if (device.kind === 'beam' && submission.kind === 'beam') {
+      return submission.calls.length
+        ? `${submission.calls.length} calls.`
+        : 'I did not tell him anything.';
+    }
+
     if (device.kind === 'lock' && submission.kind === 'lock') {
       const named = submission.order
         .map((id) => device.lock.pins.findIndex((pin) => pin.id === id) + 1)
@@ -370,6 +376,10 @@ export class SessionController {
         slots: device.slots.map((slot) => ({ id: slot.id, label: slot.label })),
         note,
       };
+    }
+
+    if (device.kind === 'beam') {
+      return { kind: 'beam', prompt: device.prompt, spec: device.beam, note };
     }
 
     if (device.kind === 'lock') {

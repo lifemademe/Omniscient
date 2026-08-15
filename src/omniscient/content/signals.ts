@@ -33,6 +33,7 @@ export const ADAEZE_SIGNAL = 'adaeze';
 export const ILEANA_SIGNAL = 'ileana';
 export const VASILE_SIGNAL = 'vasile';
 export const DORIN_SIGNAL = 'dorin';
+export const SANDA_SIGNAL = 'sanda';
 
 /**
  * §96 caps conscious attention at five. The globe honours that: five nameable people at
@@ -112,6 +113,16 @@ export function createSignals(): Signal[] {
       longitude: 16.2,
       name: 'Dorin Apostol',
       label: 'She always picks up.',
+      state: SignalState.Dormant,
+      hidden: true,
+    },
+    {
+      /** South and west of everything else, clear of the other six. */
+      id: SANDA_SIGNAL,
+      latitude: 27.2,
+      longitude: -12.6,
+      name: 'Sanda Petrescu',
+      label: 'There is a man behind me.',
       state: SignalState.Dormant,
       hidden: true,
     },
