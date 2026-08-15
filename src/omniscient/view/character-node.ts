@@ -8,6 +8,7 @@
 
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { applyPaintBanding } from '../art/painterly.js';
 
@@ -186,6 +187,74 @@ function surfaceFor(
   return applyPaintBanding(new THREE.MeshStandardMaterial({ color, roughness, metalness: 0 }));
 }
 
+/**
+ * The ink line on people, done as geometry rather than as a post-process.
+ *
+ * ObjectOutline gave the evidence props a proper edge, and it cannot give one to the
+ * cast: in this WebGL pipeline it ignores occlusion, so a contact standing behind a bench
+ * has their hidden legs inked straight through it. Every contact in this game stands
+ * behind something.
+ *
+ * An inverted hull has no such problem, because it IS geometry - a slightly inflated copy
+ * of the figure, rendered back-faces-only in near-black. Where the copy is not covered by
+ * the original you see a rim; where something is in front of it, the depth buffer hides it
+ * like anything else. It also costs nothing per frame beyond the extra triangles.
+ *
+ * ## The corner problem, and why the vertices are merged first
+ *
+ * Pushing each vertex along its own normal is the standard way to inflate a hull, and on
+ * hard-edged geometry it tears: a box corner carries three coincident vertices with three
+ * different face normals, so they fly apart in three directions and leave a gap you can
+ * see through. `mergeVertices` welds them into one, and recomputing normals afterwards
+ * gives that single vertex the AVERAGE of the three faces - which points diagonally out of
+ * the corner, exactly where the inflated corner needs to be. This whole cast is boxes, so
+ * without that weld the outline would be a cage of disconnected panels.
+ */
+function outlineHull(geometry: THREE.BufferGeometry, thickness: number): THREE.BufferGeometry {
+  const hull = mergeVertices(geometry.clone(), 1e-4);
+  hull.computeVertexNormals();
+
+  const position = hull.getAttribute('position');
+  const normal = hull.getAttribute('normal');
+  for (let i = 0; i < position.count; i++) {
+    position.setXYZ(
+      i,
+      position.getX(i) + normal.getX(i) * thickness,
+      position.getY(i) + normal.getY(i) * thickness,
+      position.getZ(i) + normal.getZ(i) * thickness
+    );
+  }
+  position.needsUpdate = true;
+  hull.computeBoundingSphere();
+  return hull;
+}
+
+/**
+ * Near-black, unlit, and only the back faces.
+ *
+ * Shared across every piece and every contact - one material, so the line is one line.
+ * Not pure black: at this value it reads as a drawn edge, and at 0 it reads as a hole
+ * punched in the figure whenever it crosses something dark.
+ */
+const INK = new THREE.MeshBasicMaterial({
+  color: '#141210',
+  side: THREE.BackSide,
+  toneMapped: false,
+  fog: false,
+});
+
+/**
+ * How far the hull is inflated, in metres.
+ *
+ * Constant rather than proportional to the figure: an outline is a property of the
+ * DRAWING, not of the person. Scaling it by height would give the tall contacts heavier
+ * lines than the short ones, which is the opposite of how ink works.
+ */
+const INK_THICKNESS = 0.007;
+
+/** Small accents the hull would swallow rather than edge. */
+const NO_INK: ReadonlySet<BodyMaterial> = new Set<BodyMaterial>(['eyes', 'metal']);
+
 function addPieces(
   into: ENGINE.SceneNode,
   pieces: CharacterPiece[],
@@ -194,6 +263,13 @@ function addPieces(
   for (const piece of pieces) {
     // Capitalised for the outliner, which is the only place these names are read.
     const name = piece.material[0].toUpperCase() + piece.material.slice(1);
+
+    // The line goes in first, so it is behind its own figure in the draw order as well as
+    // in depth. The eyes and the hardware are too small to edge - a 7mm hull on a 4mm eye
+    // is not an outline, it is a blob.
+    if (!NO_INK.has(piece.material)) {
+      into.add(decorMesh(`${name}Ink`, outlineHull(piece.geometry, INK_THICKNESS), INK));
+    }
     into.add(decorMesh(name, piece.geometry, surfaceFor(piece.material, colors)));
   }
 }
