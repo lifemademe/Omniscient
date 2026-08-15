@@ -45,7 +45,22 @@ export interface RoomPart {
  * which is the strongest separation available for the hero object, and the key rakes
  * right-to-left across the desk into the darker side rather than flattening it.
  */
-const WINDOW = { x: 1.16, width: 1.3, sill: 1.05, head: 2.3 } as const;
+/**
+ * The window, at a height a person could actually look out of.
+ *
+ * It was sill 1.05, head 2.30. With the desk top at y=0 and the floor at -0.76, that put
+ * the sill 1.81 METRES above the floor - above standing eye height, in a room whose whole
+ * purpose is somebody sitting at a desk. Nobody would put a window there and nobody sitting
+ * in that chair could see out of it. It read as high because it WAS high; the number just
+ * had never been checked against the floor, which arrived later.
+ *
+ * Now 1.06m to the sill and 2.46m to the head - a tall industrial window whose bottom edge
+ * clears the desk by a hand's width, which is what both reference frames have. It also
+ * costs nothing and gains a lot compositionally: a window at desk height puts sky BEHIND
+ * the machine instead of above it, so the tube is silhouetted against the brightest thing
+ * in the room rather than floating in front of a dark wall.
+ */
+const WINDOW = { x: 1.16, width: 1.3, sill: 0.3, head: 1.7 } as const;
 
 /**
  * Where the view sits, published so the things moving in it can be placed against it.

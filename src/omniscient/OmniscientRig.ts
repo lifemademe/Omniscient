@@ -127,8 +127,14 @@ const HOME_SHOT: CameraShot = {
   // spare. At 3.0 there is margin for a window that is not the shape mine is, and the aim
   // sits at the centre of that span rather than left of it, which is what was cropping the
   // window off the right edge.
-  position: new THREE.Vector3(1.18, 1.62, -58.05),
-  target: new THREE.Vector3(0.16, 1.0, -60.95),
+  //
+  // Brought in again, to the reference's framing. At 3.14 units back the shot held the
+  // whole room and the two things it is FOR - the menu and the tube - were each about a
+  // fifth of frame. Both reference images sit much closer: the CRT is a third of the
+  // width on its own and the menu fills the left column. 2.6 units, swung slightly left
+  // so the stack is not clipped, and the aim dropped between the stack and the tube.
+  position: new THREE.Vector3(0.96, 1.62, -58.62),
+  target: new THREE.Vector3(-0.16, 1.02, -61.0),
   duration: 2.0,
 };
 
@@ -798,12 +804,50 @@ export class OmniscientRig extends ENGINE.SceneNode {
         ),
         // Warmer and tighter than before. It is a bulb under a shade half a metre from
         // the desk, so it should fall off hard and own a small area completely.
-        intensity: 4.2,
+        /**
+         * Pulled down, because it was clipping.
+         *
+         * Sampled off the home shot the desk under the shade read (240, 200, 153) - all
+         * but blown - against a CRT face at (6, 13, 5). The hero object of the entire game
+         * was TWENTY TIMES darker than a patch of empty desk, and the eye goes to the
+         * brightest thing in a frame whatever the composition says it should do. Both
+         * reference images put the screen at the top of the value range and everything
+         * else below it.
+         *
+         * A lamp is still allowed to be the warmest thing in the room. It is not allowed
+         * to be the brightest.
+         */
+        intensity: 2.5,
         color: new THREE.Color('#ffcf96'),
-        distance: 2.6,
-        decay: 1.7,
+        distance: 2.3,
+        decay: 1.9,
       });
     this.add(lamp);
+
+    /**
+     * A little light on the menu itself.
+     *
+     * The plates hang in the air a metre from the desk lamp, so the bottom two were washed
+     * by it and the top three fell away into the wall - five controls at five different
+     * legibilities, in the one shot whose entire job is letting somebody read and press
+     * them. Neither reference image has that problem, because in both the menu is UI and
+     * carries its own light.
+     *
+     * Cool rather than warm, and weak: enough to lift the labels off the plate faces
+     * evenly, not enough to look like a second lamp nobody can see. It sits in front of
+     * the stack rather than above it so the plate faces catch it and the room behind does
+     * not.
+     */
+    this.add(
+      ENGINE.PointLightNode.create({
+        name: 'MenuFill',
+        position: WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(-0.72, 1.0, -0.42)),
+        intensity: 2.4,
+        color: new THREE.Color('#cfe0ee'),
+        distance: 1.9,
+        decay: 1.6,
+      })
+    );
 
     /**
      * Daylight through the workstation window.
@@ -821,10 +865,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     const windowKey = ENGINE.SpotLightNode.create({
       name: 'WindowKey',
-      position: WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(1.16, 2.2, -3.0)),
+      // Follows the window down (see WINDOW in room.ts). It used to sit at y 2.2, which
+      // was level with the old aperture; leaving it there with the window at 1.7 would put
+      // the room's key light above a wall rather than through the glass, and the give-away
+      // is a shaft that rakes DOWN the desk instead of across it.
+      position: WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(1.16, 1.35, -3.0)),
       // Pulled back from 26: at full strength it lit the side wall as brightly as the
       // desk, turning the left third of frame into a pale field that fought the machine.
-      intensity: 17,
+      /**
+       * Down from 17, because the window came down 1.4 metres.
+       *
+       * The same light through a lower aperture rakes ACROSS the desk instead of down onto
+       * the wall behind it, so the desk top went from bright to clipping - sampled at
+       * (227, 194, 152) with the CRT face at (10, 22, 11). Lowering the lamp alone barely
+       * moved it, which is the tell that the key and not the practical was doing the
+       * damage.
+       */
+      intensity: 11,
       color: new THREE.Color(LIGHT.key),
       // Wide and very soft. A hard-edged pool on the floor would read as a stage light;
       // the penumbra is doing the work of a window's diffuse spill.
@@ -935,8 +992,22 @@ export class OmniscientRig extends ENGINE.SceneNode {
       // - and at that threshold only the CRT ever crossed it. Dropping the threshold lets
       // the lamp filament and the lit sky bleed too, which is the halation every one of
       // the reference frames has around its practicals.
-      strength: 0.87,
-      threshold: 0.6,
+      /**
+       * Threshold raised, because bloom was undoing the lighting.
+       *
+       * The desk under the lamp sampled (240, 200, 153). The lamp came down 40%, the
+       * window key came down 35%, and it moved to (226, 195, 155) - almost nothing. That
+       * is the signature of a bloom threshold sitting below the value of LIT SURFACES
+       * rather than of emitters: every reduction in light was immediately re-added as
+       * halo, so the exposure could not be controlled at all from the lights.
+       *
+       * At 0.78 the desk and the paper fall below the line and stop glowing, while the CRT
+       * face, the lamp filament and the window keep the halation the reference frames
+       * have. Bloom should be a property of things that EMIT, not of everything the lamp
+       * happens to be pointing at.
+       */
+      strength: 0.8,
+      threshold: 0.78,
       radius: 0.65,
     });
 
@@ -1033,8 +1104,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
       if (!texture) return;
 
 
-      // The logo is 2.5:1. Sized off the pinboard above it so the two read as a set.
-      const WIDTH = 0.62;
+      // The logo is 2.5:1. Sized to the plate stack it now heads, so the two read as one
+      // control panel rather than as a sign near some buttons.
+      const WIDTH = 0.86;
       const plate = new THREE.PlaneGeometry(WIDTH, WIDTH / 2.5);
 
       /**
@@ -1054,7 +1126,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
       for (let i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i));
       uv.needsUpdate = true;
 
-      plate.translate(-0.34, 1.2, -2.005);
+      /**
+       * At the head of the menu, not on the wall behind it.
+       *
+       * It was screwed to the wall under the pinboard, which is where a facility plate
+       * would really be and which is compositionally wrong: it sat in the dead centre of
+       * frame between the two things the shot is about, so it competed with both. Both
+       * reference frames put the wordmark hard top-left with the menu stack directly
+       * beneath it, and that is not a coincidence - the eye enters at the title and falls
+       * straight down the list.
+       *
+       * Aligned to STACK_ORIGIN's x and z (see MainMenu) rather than to the wall, so it
+       * travels with the plates if they are ever moved again.
+       */
+      // Left edges flush with the plate stack. The plates are 0.75 wide centred on
+      // x -0.95, so their left edge is -1.325; a 0.86-wide logo sharing that edge centres
+      // on -0.895. Ragged-left was the single thing making the two read as unrelated.
+      plate.translate(-0.895, 1.69, -0.35 + DESK_SHIFT);
 
       /**
        * Unlit, and slightly under full brightness.

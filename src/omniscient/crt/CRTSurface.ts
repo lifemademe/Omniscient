@@ -124,8 +124,18 @@ export class CRTSurface implements PixelSurface {
       height * 0.56,
       Math.max(width, height) * 0.62
     );
-    glow.addColorStop(0, 'rgba(90, 190, 120, 0.30)');
-    glow.addColorStop(0.55, 'rgba(50, 130, 78, 0.13)');
+    /**
+     * Raised, so an empty tube still reads as a POWERED one.
+     *
+     * A new save has almost nothing on this screen - by design, because showing a full
+     * canopy on a save that has learned nothing would tell the player the screen is
+     * decoration. But at 0.30 the raster was so faint that a fresh game opened on what
+     * looked like a switched-off television, which is a worse lie than the one being
+     * avoided. The glow is the phosphor, not the content: it should say the set is on
+     * before anything has been drawn on it.
+     */
+    glow.addColorStop(0, 'rgba(96, 200, 128, 0.46)');
+    glow.addColorStop(0.55, 'rgba(54, 140, 84, 0.2)');
     glow.addColorStop(1, 'rgba(0, 0, 0, 0)');
     this.ctx.fillStyle = glow;
     this.ctx.fillRect(0, 0, width, height);
