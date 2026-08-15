@@ -109,8 +109,23 @@ export function stepBeam(spec: BeamSpec, state: BeamState, deltaTime: number): B
   const step = Math.min(Math.abs(gap), spec.swing * deltaTime) * Math.sign(gap);
   const beam = state.beam + step;
 
+  /**
+   * Continuous, not accumulated - and this is the whole beat.
+   *
+   * `held` used to keep counting across gaps, so light that landed on him for a second
+   * here and a second there eventually added up. That made the chase winnable by DOING
+   * NOTHING: leaving the beam at its starting aim of 0 let his authored path wander back
+   * and forth through it, and the total passed 1.5s about four seconds in. Watching it run
+   * for the first time, the request solved itself while I made no calls at all - which no
+   * harness caught, because every test made calls.
+   *
+   * Resetting on the first frame he is out of the beam changes the ask from "get some
+   * light on him" to "KEEP the light on him", which is what the fiction says - he has to
+   * believe he has been seen properly - and is the only version that cannot be beaten by
+   * standing still.
+   */
   const lit = Math.abs(beam - follower) <= spec.width;
-  const held = lit ? state.held + deltaTime : state.held;
+  const held = lit ? state.held + deltaTime : 0;
 
   return {
     ...state,

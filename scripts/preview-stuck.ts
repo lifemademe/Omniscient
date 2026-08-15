@@ -19,7 +19,7 @@ import { MISSION_05 } from '../src/omniscient/content/mission-05-cellar.js';
 import { MISSION_06 } from '../src/omniscient/content/mission-06-lock.js';
 import { MISSION_07 } from '../src/omniscient/content/mission-07-torch.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
-import { followerAt } from '../src/omniscient/mission/beam.js';
+import { followerAt, replayBeam } from '../src/omniscient/mission/beam.js';
 import { flows, wetted } from '../src/omniscient/mission/pipes.js';
 
 import type { DeviceSubmission } from '../src/omniscient/mission/device.js';
@@ -66,8 +66,11 @@ function solveDevice(device: Device): DeviceSubmission {
      * merely hard, and that is worth a failing check.
      */
     const calls: Array<{ at: number; to: number }> = [];
-    for (let t = 0; t < device.beam.patience; t += 0.25) {
-      calls.push({ at: t, to: followerAt(device.beam, t + 0.55) });
+    // 0.35s of lead on a 0.4s cadence. The old 0.55 stopped working when the hold became
+    // continuous and the follower quicker - overshooting is now as bad as trailing,
+    // because the light has to stay ON him rather than merely cross him.
+    for (let t = 0; t < device.beam.patience; t += 0.4) {
+      calls.push({ at: t, to: followerAt(device.beam, t + 0.35) });
     }
     return { kind: 'beam', calls };
   }
@@ -492,6 +495,49 @@ console.log('\n=== THE PIPE GRID ===\n');
       [0, a, b, 0]
     )))
   );
+}
+
+/**
+ * THE CHASE, AND THE ONE CASE EVERY OTHER TEST MISSED
+ *
+ * Watching mission 07 run for the first time, the request solved itself while no calls
+ * were made at all. The follower's authored path wandered back and forth through a beam
+ * that had never moved, and the light accumulated past the threshold about four seconds in.
+ *
+ * No harness caught it, and the reason is worth stating: every test of a device makes a
+ * SUBMISSION. The walker leads the follower; the device tests solve or deliberately fail.
+ * None of them tried the one input a confused player produces first, which is nothing at
+ * all. A real-time beat has a null strategy, and the null strategy has to lose.
+ */
+{
+  console.log('\n=== THE CHASE ===');
+
+  const chase = MISSION_07.beats.find((beat) => beat.device?.kind === 'beam')?.device;
+  if (!chase || chase.kind !== 'beam') {
+    check('mission 07 still has a beam device', false);
+  } else {
+    check('doing nothing loses the chase', !replayBeam(chase.beam, []).blinded);
+
+    /**
+     * And parking it anywhere loses too.
+     *
+     * Doing nothing is one aim - the beam's own start. A player who clicks once and then
+     * watches is the same failure at a different offset, and the danger is the TURNING
+     * POINTS: a beam parked just inside an extreme catches his whole excursion out and back.
+     */
+    let parked: number | null = null;
+    for (let aim = -1; aim <= 1.0001; aim += 0.05) {
+      if (replayBeam(chase.beam, [{ at: 0, to: aim }]).blinded) parked = aim;
+    }
+    check('parking the beam loses from every angle', parked === null);
+
+    // And it must still be winnable, or the beat is impossible rather than hard.
+    const led: Array<{ at: number; to: number }> = [];
+    for (let t = 0; t < chase.beam.patience; t += 0.4) {
+      led.push({ at: t, to: followerAt(chase.beam, t + 0.35) });
+    }
+    check('leading the follower wins it', replayBeam(chase.beam, led).blinded);
+  }
 }
 
 console.log(

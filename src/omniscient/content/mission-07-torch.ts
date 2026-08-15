@@ -51,13 +51,30 @@ const FOLLOWING: BeamSpec = {
   holdToBlind: 1.5,
   patience: 12,
   swing: 1.4,
-  width: 0.22,
+  /**
+   * Narrower than it was, and he is quicker.
+   *
+   * Both numbers exist to make one thing impossible: winning without playing. With a 0.22
+   * beam and a follower ambling at 0.4 units a second, a beam left at its starting aim
+   * caught him for an unbroken 1.87 seconds - more than the 1.5 he needs - so the request
+   * solved itself while the player did nothing. That was invisible to every harness,
+   * because a harness that tests the device always makes calls.
+   *
+   * The dangerous case is not the middle of a leg, it is the TURNING POINTS: a beam parked
+   * just inside an extreme catches his whole excursion out and back, which is twice the
+   * width divided by his speed. Solved over every parked position from -1 to +1, this
+   * path's worst unbroken run is 0.97s against the 1.5 he needs. Standing still cannot
+   * win; at 0.8 units a second against a beam that swings at 1.4, leading him can.
+   */
+  width: 0.16,
   path: [
-    { at: 0, to: -0.7 },
-    { at: 2.4, to: 0.55 },
-    { at: 5.1, to: -0.5 },
-    { at: 8.0, to: 0.7 },
-    { at: 12, to: -0.2 },
+    { at: 0, to: -0.76 },
+    { at: 1.9, to: 0.74 },
+    { at: 3.7, to: -0.72 },
+    { at: 5.6, to: 0.76 },
+    { at: 7.4, to: -0.7 },
+    { at: 9.4, to: 0.78 },
+    { at: 12, to: -0.74 },
   ],
 };
 
