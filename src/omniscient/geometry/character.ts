@@ -136,8 +136,29 @@ export interface CharacterParts {
  * A chamfered slab. Every mass in the body is one of these - it gives a faceted edge
  * that catches the key light, which is what stops the figure reading as a box.
  */
+/**
+ * How much of a requested chamfer actually gets cut.
+ *
+ * One number, and it is the difference between this cast and the reference sheet.
+ *
+ * Every call below asks for a chamfer as a FRACTION of the piece - `headHeight * 0.18` on
+ * a head, `torsoDepth * 0.3` on a chest. Those were chosen to give each slab a rim for the
+ * key light to catch, and they do, but at that size the cut is no longer an edge treatment:
+ * it is a rounding. A head with an eighteen percent chamfer is a pebble. Put these figures
+ * next to a row of Synty characters and the difference that reads first is not detail or
+ * proportion, it is that theirs have CORNERS and mine were soft everywhere.
+ *
+ * The rim was worth having and is still here, at about a quarter strength - enough that a
+ * bevel facet catches a different light band from the face beside it, which with
+ * `applyPaintBanding` is what makes a blocky figure look painted. Below roughly 0.2 the
+ * bevel stops registering at all and the figures go flat and cheap. This is the number to
+ * move if the cast ever needs to be softer or harder as a whole; do not go back to editing
+ * forty call sites.
+ */
+const CHAMFER_SCALE = 0.26;
+
 function slab(w: number, h: number, d: number, chamfer = 0.02): THREE.BufferGeometry {
-  const c = Math.min(chamfer, w * 0.35, h * 0.35, d * 0.35);
+  const c = Math.min(chamfer * CHAMFER_SCALE, w * 0.35, h * 0.35, d * 0.35);
   const shape = new THREE.Shape();
   const hw = w / 2;
   const hh = h / 2;
@@ -800,27 +821,60 @@ export function createCharacter(params: CharacterParams): CharacterParts {
    * the blocky style is asking for.
    */
   const hairPieces: THREE.BufferGeometry[] = [];
-  const cap = slab(headW * 1.02, headHeight * 0.5, headHeight * 0.56, headHeight * 0.16);
-  cap.rotateX(lean * 0.4);
-  cap.translate(0, headY + headHeight * 0.31, -headHeight * 0.25);
-  hairPieces.push(cap);
 
-  // Sideburns down past the ear line, so the bare front reads as a face rather than as a
-  // hat sitting too far back.
+  /**
+   * The hairline, and the correction to a correction.
+   *
+   * The cap here used to be DEEPER than the head and centred on it, so it wrapped the face
+   * as completely as the crown and every figure read as seen from behind. The fix was to
+   * push it back and make it shallower - and it went too far, by a measurable amount.
+   *
+   * The numbers, because this is the kind of thing that has to be measured rather than
+   * looked at. In head-heights, with the head centred at 0: the head's front face sits at
+   * +0.42 and its top at +0.50. The old cap spanned z -0.53 to +0.03 and started at y
+   * +0.06, which is just above the EYELINE. So the entire front half of the skull, from the
+   * eyebrows to the crown, was bare skin. That is not "hair pushed back". That is a lid on
+   * the back of a bald head, and it is exactly what it looked like.
+   *
+   * A real hairline crosses the top of the forehead and comes DOWN at the temples. So the
+   * crown now reaches forward to +0.30 - short of the face plane at +0.42, which is what
+   * keeps the front readable as a face - and a separate fringe piece drops in front of it.
+   * The face plane stays bare; the skull stops being.
+   */
+  const crown = slab(headW * 1.04, headHeight * 0.46, headHeight * 0.86, headHeight * 0.2);
+  crown.rotateX(lean * 0.4);
+  crown.translate(0, headY + headHeight * 0.3, -headHeight * 0.06);
+  hairPieces.push(crown);
+
+  // The fringe: a shallow band across the top of the forehead. This is the piece that was
+  // missing, and on its own it is most of the difference between bald and not.
+  const fringe = slab(headW * 0.98, headHeight * 0.2, headHeight * 0.16, headHeight * 0.06);
+  fringe.rotateX(lean * 0.4);
+  fringe.translate(0, headY + headHeight * 0.27, torsoDepth * 0.06 + headHeight * 0.36);
+  hairPieces.push(fringe);
+
+  /**
+   * Temples, down past the ear line.
+   *
+   * Wider and further forward than the sideburns they replace. A hairline that is level
+   * all the way round reads as a swimming cap; bringing it down at the sides is what makes
+   * the bare patch in the middle read as a FACE rather than as the top of a head.
+   */
   for (const side of [-1, 1] as const) {
-    const temple = slab(headW * 0.13, headHeight * 0.38, headHeight * 0.42, headHeight * 0.09);
-    temple.translate(side * headW * 0.45, headY + headHeight * 0.05, -headHeight * 0.16);
+    const temple = slab(headW * 0.18, headHeight * 0.46, headHeight * 0.62, headHeight * 0.1);
+    temple.rotateX(lean * 0.4);
+    temple.translate(side * headW * 0.44, headY + headHeight * 0.02, -headHeight * 0.02);
     hairPieces.push(temple);
   }
 
-  // A tied-back mass or a fringe, chosen by seed - cheap variation with a big read.
+  // A tied-back mass or a fall down the neck, chosen by seed - cheap variation, big read.
   if (rng() < 0.5) {
-    const bun = slab(headHeight * 0.34, headHeight * 0.34, headHeight * 0.34, headHeight * 0.12);
-    bun.translate(jitter(rng, 0.02), headY + headHeight * 0.32, -headHeight * 0.5);
+    const bun = slab(headHeight * 0.38, headHeight * 0.38, headHeight * 0.38, headHeight * 0.14);
+    bun.translate(jitter(rng, 0.02), headY + headHeight * 0.28, -headHeight * 0.54);
     hairPieces.push(bun);
   } else {
-    const back = slab(headW * 0.9, headHeight * 0.62, headHeight * 0.3, headHeight * 0.12);
-    back.translate(0, headY - headHeight * 0.06, -headHeight * 0.42);
+    const back = slab(headW * 0.94, headHeight * 0.66, headHeight * 0.34, headHeight * 0.14);
+    back.translate(0, headY - headHeight * 0.1, -headHeight * 0.44);
     hairPieces.push(back);
   }
 

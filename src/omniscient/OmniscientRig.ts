@@ -902,6 +902,66 @@ export class OmniscientRig extends ENGINE.SceneNode {
       radius: 0.65,
     });
 
+    /**
+     * The outline, and the other half of cel shading.
+     *
+     * §231's correction did not go far enough. Only four effects are genuinely WebGPU-only
+     * - depth of field, pixelation, retro and SSR - and ObjectOutline is not among them:
+     * it ships a complete WebGL implementation with its own object-ID pass and edge
+     * detection shader. It was written off along with the rest and never tried.
+     *
+     * That mattered, because this project already had HALF of a toon look and did not know
+     * it. `applyPaintBanding` quantises the lighting on every standard material in the
+     * game, which is the shading half. What was missing was the line, and it is the line
+     * that makes an image read as drawn rather than as rendered - banded shading on its own
+     * just looks like a cheap gradient.
+     *
+     * ## Why the selection is the evidence and NOT the contact
+     *
+     * It was going to be both. It cannot be, and the reason is worth writing down so it is
+     * not attempted again: in this WebGL pipeline the outline does not respect occlusion.
+     * The effect renders a scene depth pass and its shader linearises depth to find
+     * occlusion seams, but the result on screen is that a selected object's silhouette is
+     * inked THROUGH whatever is in front of it. Mirela stands behind a bench, so her legs
+     * and boots were drawn as a thin line running down over the bench and looping round a
+     * crate on the shelf below - a stray contour in the middle of the frame with no object
+     * under it. Confirmed with `useRootGrouping` both on and off; it is not the grouping.
+     *
+     * Every contact in this game stands at a bench, a table, a run of pipe or a door, so
+     * this is not an edge case, it is the normal case. The evidence props do not have the
+     * problem: they sit on top of the surfaces they belong to and nothing occludes them.
+     *
+     * Losing the contact outline costs less than it sounds. The contact is already the
+     * focal point of every shot by framing, by lighting and by being the only thing in the
+     * room that moves. What the outline adds that nothing else does is pointing at the
+     * OBJECT, which has no light on it and does not move - which is exactly what it is
+     * still doing.
+     *
+     * ## Why the selection is evidence and not everything
+     *
+     * A full-scene outline is the strongest possible style commitment and the wrong one
+     * here. Every one of these sets is a room where exactly one or two things matter, and
+     * §186 has been about directing the eye to them since the first diorama. An outline is
+     * the loudest tool available for that: edging the contact and the thing their request
+     * is about, and nothing else, means the two things the player must look at are the two
+     * things drawn in ink. Edge the walls as well and that advantage is spent on a floor.
+     */
+    this.post.configureEffect(ENGINE.PostProcessPass.ObjectOutline, {
+      enabled: true,
+      // Thin and dark rather than thick and coloured. A heavy line eats a 1.7m figure at
+      // four metres, and a coloured one competes with §9's semantic accents - the acid
+      // green means knowledge and must not start meaning "outlined".
+      edgeStrength: 3.2,
+      edgeThickness: 1.4,
+      visibleEdgeColor: 0x141210,
+      edgeBlur: 0,
+      // Per-actor IDs, so a character built from eleven merged meshes gets one silhouette
+      // rather than a line around every glove and boot. Internal edges on a figure this
+      // blocky read as cracks.
+      useRootGrouping: true,
+      resolutionScale: 1,
+    });
+
     // Short radius on purpose: this is contact darkening in the crack where two surfaces
     // meet, not a dirt wash in every corner of the room. A long radius reads as grime and
     // costs the §232 value structure exactly what the texture pass was careful not to.
@@ -1036,6 +1096,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     audio.play('disconnect');
     audio.setOnAir(false);
+    this.post?.clearOutlineSelection();
 
     this.session?.end();
     this.scene?.deactivate();
@@ -1228,6 +1289,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.scene = next;
     this.scene?.activate();
+
+    /**
+     * Hand the outline pass this room's subject.
+     *
+     * Rebuilt per mount rather than accumulated: the selection is a set of live nodes, and
+     * a diorama that has been deactivated still has nodes. Leaving the previous request's
+     * contact in the set would put an outline round somebody who is no longer in the
+     * scene, which the effect would happily draw against whatever is at those pixels now.
+     */
+    this.post?.clearOutlineSelection();
+    const inked = next?.inkedProps() ?? [];
+    if (inked.length > 0) this.post?.setOutlineSelection(inked);
 
     const opening = next?.getShot('default');
     if (opening) this.cutTo(opening);

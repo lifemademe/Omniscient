@@ -41,6 +41,8 @@ export interface RegisteredProp {
   anchors: Record<string, THREE.Vector3>;
   /** Per-frame behaviour the world performs on its own. See registerProp. */
   idle?: (deltaTime: number, node: ENGINE.SceneNode) => void;
+  /** Drawn in ink by the outline pass. See registerProp's `inked`. */
+  inked?: boolean;
 }
 
 /** Populates a scene with its props, shots and actions. Registered by content modules. */
@@ -172,6 +174,19 @@ export class ContactScene extends ENGINE.SceneNode {
        * for a cue. A symptom that only appears when you ask about it is not a symptom.
        */
       idle?: (deltaTime: number, node: ENGINE.SceneNode) => void;
+      /**
+       * Draw this prop with an outline.
+       *
+       * Deliberately opt-in and deliberately rare. The outline pass is the loudest tool
+       * this project has for directing the eye, and §186 has been about pointing at the
+       * one thing that matters in each room since the first diorama. Ink the contact and
+       * the object their request is about; ink a third thing and the first two stop
+       * meaning anything.
+       *
+       * The contact is inked automatically - see `inkedProps`. This flag is for the
+       * evidence: the radio, the beacon, the run of pipe, the lock.
+       */
+      inked?: boolean;
     } = {}
   ): void {
     this.add(node);
@@ -180,7 +195,25 @@ export class ContactScene extends ENGINE.SceneNode {
       actions: options.actions ?? {},
       anchors: options.anchors ?? {},
       idle: options.idle,
+      inked: options.inked,
     });
+  }
+
+  /**
+   * The nodes this scene wants drawn in ink.
+   *
+   * Props registered `inked`, and deliberately NOT the contact - see the outline block in
+   * OmniscientRig.configureLook for why a person standing behind a bench cannot be
+   * outlined in this pipeline. Returned rather than pushed, because the outline effect
+   * belongs to the rig's post-process manager and a diorama has no business knowing that a
+   * render pipeline exists.
+   */
+  public inkedProps(): ENGINE.SceneNode[] {
+    const out: ENGINE.SceneNode[] = [];
+    for (const prop of this.props.values()) {
+      if (prop.inked) out.push(prop.node);
+    }
+    return out;
   }
 
   public registerShot(id: string, shot: CameraShot): void {

@@ -431,6 +431,8 @@ function buildRepairShop(scene: ContactScene): void {
   }
 
   scene.registerProp('transmitter', setRoot, {
+    // Inked: Mirela's set - the thing on the bench that stopped working.
+    inked: true,
     anchors: set.anchors,
     actions: {
       /** Mirela turns the set round so the camera can see the connectors. */
@@ -799,6 +801,8 @@ function buildBeaconMast(scene: ContactScene): void {
    */
   let beaconClock = 0;
   scene.registerProp('beacon', beaconRoot, {
+    // Inked: The beacon head. It is going out and coming back the whole time.
+    inked: true,
     anchors: { default: new THREE.Vector3(0, beaconY, 0) },
     idle: (deltaTime) => {
       beaconClock = (beaconClock + deltaTime) % 11;
@@ -1280,6 +1284,8 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   treeRoot.add(crown);
 
   scene.registerProp('neighbour-tree', treeRoot, {
+    // Inked: The tree on the other side of the glass.
+    inked: true,
     anchors: { default: new THREE.Vector3(1.6, 3.3, -0.4) },
     actions: {
       /** Cutting back: the crown lifts away and the light lands on the failing rows. */
@@ -1820,6 +1826,8 @@ function buildClearedHouse(scene: ContactScene): void {
   }
   boxRoot.add(meshOf('Photographs', mergeGeometries(prints, false) ?? prints[0], MAT.paper));
   scene.registerProp('photo-box', boxRoot, {
+    // Inked: The box of photographs the whole request is a search through.
+    inked: true,
     anchors: { default: new THREE.Vector3(0, 0.14, 0) },
   });
 
@@ -2159,7 +2167,11 @@ function buildFloodedCellar(scene: ContactScene): void {
   scene.registerProp(
     'covers',
     meshOf('Covers', mergeGeometries(openings, false) ?? openings[0], MAT.dark),
-    { anchors: { default: new THREE.Vector3(0, 0.3, -0.9) } }
+    {
+      // Inked: the three lifted covers. What the request is a search along.
+      inked: true,
+      anchors: { default: new THREE.Vector3(0, 0.3, -0.9) },
+    }
   );
   scene.registerProp('lids', meshOf('Lids', mergeGeometries(lids, false) ?? lids[0], MAT.steel));
 
@@ -2398,7 +2410,9 @@ function buildNightDoor(scene: ContactScene): void {
   const keyway = new THREE.BoxGeometry(0.008, 0.026, 0.014);
   keyway.translate(0, 0, 0.008);
   lockRoot.add(meshOf('Keyway', keyway, MAT.dark));
-  scene.registerProp('lock', lockRoot, { anchors: { default: new THREE.Vector3(0, 0, 0.06) } });
+  scene.registerProp('lock', lockRoot, {
+    // Inked: Two centimetres of brass, and the entire mission.
+    inked: true, anchors: { default: new THREE.Vector3(0, 0, 0.06) } });
 
   // -- The landing window he keeps looking at -------------------------------
   const upperFrame = new THREE.BoxGeometry(0.94, 1.16, 0.08);
@@ -2802,6 +2816,8 @@ function buildMillRoad(scene: ContactScene): void {
    */
 
   scene.registerProp('torch', torchRoot, {
+    // Inked: Her father's torch. The only light on the road.
+    inked: true,
     anchors: { default: new THREE.Vector3(0, 0, -0.2) },
   });
 
