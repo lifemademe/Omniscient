@@ -24,6 +24,7 @@ import { createScreenGlass } from './art/glass.js';
 import { PAINT_UNIFORMS } from './art/painterly.js';
 import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
+import { audio } from './audio/ConsoleAudio.js';
 import { createSignals, MIRELA_SIGNAL, REVEALED_AFTER_FIRST } from './content/signals.js';
 import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
@@ -948,9 +949,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.session = new SessionController(surfaces, this.knowledge, {
       onEnvironment: (cue) => this.applyEnvironmentCue(cue),
       onVfx: (effect) => this.fireVfx(effect),
-      onKnowledgeGained: () => this.revealGrowth(),
-      onResolved: () => this.holdThenReturnHome(),
-      onFailed: (failure) => this.onRequestLost(failure),
+      /**
+       * A fact recorded is the only moment in the game where the machine GAINS something,
+       * and it is also the only pleasant sound in it. That is not a coincidence - the
+       * whole progression is the tree, and the tree only moves here.
+       */
+      onKnowledgeGained: () => {
+        audio.play('learn');
+        this.revealGrowth();
+      },
+      onResolved: () => {
+        audio.play('solved');
+        this.holdThenReturnHome();
+      },
+      onFailed: (failure) => {
+        audio.play('failed');
+        this.onRequestLost(failure);
+      },
       onNoteRecorded: () => this.closeLostRequest(),
       onLeave: () => this.leaveContact(),
     });
@@ -988,6 +1003,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // does more than the player currently needs it to.
     if (action !== 'new-game') return;
 
+    /**
+     * The first gesture the game gets, and therefore the only place audio can start.
+     *
+     * Browsers refuse to start an AudioContext outside a user gesture, and one created at
+     * load sits `suspended` forever while every cue silently does nothing - a failure mode
+     * with no symptom except silence, which is indistinguishable from having no audio at
+     * all. Hanging it off NEW GAME means it cannot be missed.
+     */
+    audio.unlock();
+
     this.menu?.setEnabled(false);
     this.showGlobe();
   }
@@ -1008,6 +1033,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.openable.add(contactId);
       this.queueIndex -= 1;
     }
+
+    audio.play('disconnect');
+    audio.setOnAir(false);
 
     this.session?.end();
     this.scene?.deactivate();
@@ -1046,6 +1074,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private openSignal(signalId: string): void {
     const index = this.queue.findIndex((request) => request.mission.contactId === signalId);
     if (index < 0 || !this.session) return;
+
+    // Squelch breaks and the carrier comes up. This is the moment a screen change becomes
+    // a connection to somewhere.
+    audio.play('connect');
+    audio.setOnAir(true);
 
     this.setSignalState(signalId, SignalState.Active);
     this.openable.delete(signalId);
@@ -1153,6 +1186,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   private returnHome(): void {
+    // The carrier falls away as the camera pulls back. Solving a request and leaving one
+    // should sound the same from here on: the difference was in the verdict cue, and the
+    // link closing is the link closing.
+    audio.setOnAir(false);
+
     this.phase = Phase.Home;
     this.screen = Screen.Tree;
     this.phone?.setVisible(false);

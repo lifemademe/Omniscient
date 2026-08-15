@@ -8,6 +8,7 @@ import './omniscient/art/painterly.js';
 import './omniscient/art/palette.js';
 import './omniscient/art/sky.js';
 import './omniscient/art/surface.js';
+import './omniscient/audio/ConsoleAudio.js';
 import './omniscient/content/contacts.js';
 import './omniscient/content/mission-01-transmitter.js';
 import './omniscient/content/mission-02-beacon.js';

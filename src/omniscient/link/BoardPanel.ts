@@ -23,6 +23,7 @@
  */
 
 import { initialBeam, stepBeam } from '../mission/beam.js';
+import { audio } from '../audio/ConsoleAudio.js';
 
 import type { BeamState } from '../mission/beam.js';
 import type { DeviceView, PlayerMessage } from './surface.js';
@@ -396,6 +397,7 @@ export class BoardPanel {
      */
     this.send.textContent = 'Send it';
     this.send.addEventListener('mousedown', (event) => {
+      audio.play('transmit');
       event.preventDefault();
       this.submit();
     });
@@ -493,6 +495,7 @@ export class BoardPanel {
       // mousedown, not click: a redraw between press and release swallows a click.
       box.addEventListener('mousedown', (event) => {
         event.preventDefault();
+        audio.play('tap');
         this.tapPerson(person.id);
       });
 
@@ -514,6 +517,7 @@ export class BoardPanel {
       box.textContent = slot.label;
       box.addEventListener('mousedown', (event) => {
         event.preventDefault();
+        audio.play('seat');
         this.tapSlot(slot.id);
       });
       this.slotButtons.set(slot.id, box);
@@ -555,6 +559,7 @@ export class BoardPanel {
       if (!cell.fixed && cell.shape !== 'blank') {
         button.addEventListener('mousedown', (event) => {
           event.preventDefault();
+          audio.play('seat');
           this.rotations[index] = (this.rotations[index] + 1) % 4;
           if (this.view) this.refresh(this.view);
         });
@@ -599,6 +604,7 @@ export class BoardPanel {
       if (!this.chase || this.chase.blinded || this.chase.caught) return;
       const rect = track.getBoundingClientRect();
       const to = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      audio.play('tap');
       this.calls.push({ at: this.chase.elapsed, to });
       this.chase = { ...this.chase, aim: Math.max(-1, Math.min(1, to)) };
     });
@@ -694,6 +700,9 @@ export class BoardPanel {
       button.addEventListener('mousedown', (event) => {
         event.preventDefault();
         const at = this.order.indexOf(pin.id);
+        // Un-setting a pin is not the same gesture as setting one, and the lock is the one
+        // device where the player is listening for a difference.
+        audio.play(at >= 0 ? 'reject' : 'seat');
         if (at >= 0) this.order.length = at;
         else this.order.push(pin.id);
         if (this.view) this.refresh(this.view);

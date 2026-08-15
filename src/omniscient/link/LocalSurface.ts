@@ -20,6 +20,7 @@
  */
 
 import { injectConsoleChrome } from './console-chrome.js';
+import { audio } from '../audio/ConsoleAudio.js';
 
 import type {
   HintView,
@@ -116,6 +117,24 @@ export const TERMINAL_CSS = `
   text-transform: uppercase;
   margin-bottom: 2px;
   opacity: 0.75;
+}
+/**
+ * A line arriving.
+ *
+ * Under 200ms, which is the window where a movement is felt but not watched. Longer and
+ * the player is waiting for the interface; shorter and it may as well not be there. The
+ * small lift is doing more work than the fade - text that appears at its final position
+ * pops, and text that rises into it reads as being placed.
+ */
+@keyframes omni-line-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+.omni-line--arriving {
+  /* The both fill-mode matters: without it a line carrying an animation-delay is drawn at
+     its FINAL opacity until the delay elapses, which is the one thing the delay exists to
+     prevent. */
+  animation: omni-line-in 170ms ease-out both;
 }
 .omni-line--contact { color: #cfe6c4; }
 .omni-line--contact .omni-line__who { color: #8fbe93; }
@@ -560,10 +579,22 @@ export class LocalSurface implements InterventionSurface {
 
     // Enter-to-submit. ENGINE.Input has onChange but no submit event, which is one of
     // the reasons this surface is hand-built.
+    /**
+     * The keyer.
+     *
+     * The only thing in this game that answers a single keystroke. Typing into a silent
+     * box is typing into a form; typing into a box that ticks is transmitting, and the
+     * whole conceit of the console rests on the player believing the second thing.
+     *
+     * Printable keys and backspace only - a click on Shift or on an arrow key is the
+     * detail that turns a keyer into a rattle.
+     */
     input.addEventListener('keydown', (event) => {
+      if (event.key === 'Backspace' || event.key.length === 1) audio.play('key');
       if (event.key !== 'Enter') return;
       const text = input.value.trim();
       if (!text) return;
+      audio.play('transmit');
       input.value = '';
       // After a loss the field is for the player's own note, not for the contact.
       this.dispatch(
@@ -745,6 +776,7 @@ export class LocalSurface implements InterventionSurface {
         if (event.button !== 0) return;
         event.preventDefault();
         if (this.inputElement) this.inputElement.value = text;
+        audio.play('tap');
         this.dispatch({ kind: 'text', text });
         if (this.inputElement) this.inputElement.value = '';
       });
@@ -805,8 +837,49 @@ export class LocalSurface implements InterventionSurface {
       this.logElement.replaceChildren();
       this.renderedCount = 0;
     }
+    /**
+     * One blip per line that arrives, and a stagger so they do not all land at once.
+     *
+     * A beat often adds two or three lines in the same frame - the contact's reply plus a
+     * system note. Appending them together and blipping once reads as a single event; the
+     * point of the sound is that a PERSON is speaking, one thought at a time, so the lines
+     * come in on a short cadence and each one is announced.
+     *
+     * The stagger is presentation only. The transcript state already contains every line
+     * by the time this runs, so nothing downstream waits on it and §157 is untouched - the
+     * console is deciding when to draw, not what is true.
+     */
+    let delay = 0;
     for (let i = this.renderedCount; i < state.transcript.length; i++) {
-      this.logElement.appendChild(this.renderLine(state.transcript[i]));
+      const entry = state.transcript[i];
+      const element = this.renderLine(entry);
+
+      /**
+       * The player's own words echo instantly. Everybody else takes a moment.
+       *
+       * This is the single largest thing that was wrong with how the game felt. A beat
+       * resolves in the same frame the player presses Enter, so the reply from somebody
+       * standing on an unlit road twenty metres ahead of a man following her arrived with
+       * exactly the latency of a spreadsheet recalculating. It read as a lookup, because
+       * that is what zero latency reads as.
+       *
+       * ANSWER_GAP is not a loading pause and must not become one - it is short enough
+       * that a player who is reading has not finished the line above it, and the input
+       * field stays live throughout, so nobody is ever waiting on it. It buys the one
+       * thing a conversation needs and a database does not, which is a beat.
+       */
+      const ANSWER_GAP = 340;
+      const STAGGER = 150;
+      if (entry.source !== 'omniscient') {
+        delay = delay === 0 ? ANSWER_GAP : delay + STAGGER;
+      }
+
+      if (delay > 0) element.style.animationDelay = `${delay}ms`;
+      this.logElement.appendChild(element);
+
+      if (entry.source === 'contact') {
+        window.setTimeout(() => audio.play('receive'), delay);
+      }
     }
     this.renderedCount = state.transcript.length;
 
@@ -1050,7 +1123,7 @@ export class LocalSurface implements InterventionSurface {
 
   private renderLine(entry: TranscriptEntry): HTMLElement {
     const line = document.createElement('div');
-    line.className = `omni-line omni-line--${entry.source}`;
+    line.className = `omni-line omni-line--${entry.source} omni-line--arriving`;
 
     if (entry.source !== 'system') {
       const who = document.createElement('span');
