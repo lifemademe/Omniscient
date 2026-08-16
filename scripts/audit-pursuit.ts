@@ -1,0 +1,121 @@
+/**
+ * Prove mission 08's camera chase before anything renders it.
+ *
+ * Phase two asks the player to predict which camera picks the car up next. For that to be
+ * a deduction rather than a coin flip, two things have to hold at every hop:
+ *
+ *   ONE ANSWER   - exactly one offered camera is consistent with the last sighting.
+ *   HONEST DECOYS - every other option fails for the single reason it claims to, so a
+ *                   wrong pick can be answered with a sentence instead of a buzzer.
+ *
+ * A hop with two consistent cameras is a coin flip wearing a deduction's clothes. A hop
+ * with one option is not a question at all. Both are invisible by inspection and obvious
+ * to a loop, which is what this is.
+ *
+ * Audited across several districts, not just the shipped one: the guarantee is supposed to
+ * come from the construction, and if only the authored seed passes then it is a
+ * coincidence and the next change will break it. That check caught a real bug on the trace
+ * board the first time it ran.
+ *
+ *   npx tsx scripts/audit-pursuit.ts
+ */
+
+import { createRng, seedFrom } from '../src/omniscient/core/rng.js';
+import { wireCity } from '../src/omniscient/geometry/wireCity.js';
+import { auditPursuit, classify, planPursuit } from '../src/omniscient/mission/pursuit.js';
+import { planFleet } from '../src/omniscient/mission/traces.js';
+
+const SIZE = 24;
+
+let failed = 0;
+const check = (label: string, ok: boolean, detail = ''): void => {
+  if (!ok) failed++;
+  console.log(`  [${ok ? 'PASS' : 'FAIL'}] ${label}${detail ? ` - ${detail}` : ''}`);
+};
+
+console.log('=== THE CHASE THROUGH DISTRICT 07 ===');
+
+for (const seed of ['district-07', 'district-07-alt', 'district-11', 'nightshift']) {
+  const rng = createRng(seedFrom(seed));
+  const city = wireCity(rng, { size: SIZE });
+  /**
+   * The chase starts where the SUSPECT is, taken from the fleet rather than retyped.
+   *
+   * It was a hand-copied literal here, so moving the suspect west to give the pursuit a
+   * district to cross changed nothing this script could see and it went on reporting zero
+   * hops against a position the game no longer used. Two copies of a coordinate is the
+   * same bug as two copies of a colour, and it hides for exactly as long.
+   */
+  const { suspect, evidence } = planFleet(rng, 180, SIZE);
+  const pursuit = planPursuit(rng, {
+    cameras: city.cameras,
+    start: suspect.cell,
+    heading: evidence.heading ?? 'east',
+    size: SIZE,
+  });
+  const audit = auditPursuit(pursuit);
+
+  console.log(
+    `\n  "${seed}": ${city.cameras.length} cameras, ${audit.hops} hops, ` +
+      `trail ends at ${pursuit.lost.x},${pursuit.lost.y} heading ${pursuit.lostHeading}`
+  );
+
+  check(`  the chase has hops to play`, audit.hops >= 1, `${audit.hops}`);
+  check(
+    `  every hop has exactly one consistent camera`,
+    audit.singleAnswer === audit.hops,
+    `${audit.singleAnswer} of ${audit.hops}`
+  );
+  check(
+    `  every decoy fails the way it claims`,
+    audit.honestDecoys === audit.hops,
+    `${audit.honestDecoys} of ${audit.hops}`
+  );
+  check(`  no hop is a single option`, audit.thin === 0, `${audit.thin} thin`);
+
+  /**
+   * The trail must actually run out.
+   *
+   * Phase three exists because coverage thins at the district edge, which the city
+   * generator does on purpose. If a chase ever ran to the hop limit with cameras still
+   * available, the breadcrumb phase would never be reached and a whole third of the
+   * mission would be unreachable content.
+   */
+  check(
+    `  the trail goes cold because the network ran out`,
+    pursuit.ranDry,
+    pursuit.ranDry
+      ? `${pursuit.hops.length} hops, then no camera ahead`
+      : `hit the hop cap after ${pursuit.hops.length} - the chase was interrupted, not ended`
+  );
+}
+
+/**
+ * The classifier itself, on cases chosen by hand.
+ *
+ * `auditPursuit` uses `classify` to check the hops, so if the classifier is wrong the
+ * audit agrees with it and both are wrong together. These are the cases that pin it down
+ * independently.
+ */
+console.log('\n  the classifier:');
+const from = { x: 10, y: 10 };
+check(
+  '  straight ahead and reachable is the answer',
+  classify(from, 'east', 6, { x: 16, y: 10 }) === null
+);
+check('  back the way it came is behind', classify(from, 'east', 6, { x: 6, y: 10 }) === 'behind');
+check(
+  '  too far for the time is unreachable',
+  classify(from, 'east', 6, { x: 23, y: 10 }) === 'unreachable'
+);
+check(
+  '  three streets over is off-route',
+  classify(from, 'east', 6, { x: 14, y: 13 }) === 'off-route'
+);
+check(
+  '  one street over is still on the road',
+  classify(from, 'east', 6, { x: 14, y: 11 }) === null
+);
+
+console.log(failed === 0 ? '\nALL CHECKS PASSED' : `\n${failed} CHECK(S) FAILED`);
+process.exit(failed === 0 ? 0 : 1);

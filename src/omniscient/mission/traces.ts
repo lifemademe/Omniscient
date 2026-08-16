@@ -260,7 +260,16 @@ export function planFleet(rng: Rng, count: number, gridSize: number): FleetPlan 
     heading: 'east',
     plate: plate(rng),
     brokenLight: true,
-    cell: { x: Math.floor(gridSize * 0.72), y: Math.floor(gridSize * 0.38) },
+    /**
+     * West side, because the evidence says it is heading EAST.
+     *
+     * It sat at 0.72 across, six cells from the far edge, and phase two's chase audited at
+     * zero hops on two of four districts: the car left the map before a single camera saw
+     * it. A suspect's last known position is not free set dressing once something has to
+     * follow it - starting it upwind of the covered middle is what gives the pursuit a
+     * district to cross.
+     */
+    cell: { x: Math.floor(gridSize * 0.18), y: Math.floor(gridSize * 0.55) },
   };
 
   const evidence: Evidence = {
