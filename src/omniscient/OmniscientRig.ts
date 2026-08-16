@@ -1061,6 +1061,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.post.configureEffect(ENGINE.PostProcessPass.ToneMapping, {
       enabled: true,
       mode: THREE.ACESFilmicToneMapping,
+    /**
      * 0.62, and the number was measured rather than picked.
      *
      * At 1.25 every mid-tone in the game roughly doubled - the far hills went 36 to 78, the
