@@ -57,6 +57,7 @@ import './omniscient/menu/labels.js';
 import './omniscient/menu/MainMenu.js';
 import './omniscient/menu/SystemPanel.js';
 import './omniscient/mission/beam.js';
+import './omniscient/mission/breadcrumbs.js';
 import './omniscient/mission/device.js';
 import './omniscient/mission/intent.js';
 import './omniscient/mission/lock.js';
