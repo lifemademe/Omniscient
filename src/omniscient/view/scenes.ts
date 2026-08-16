@@ -45,6 +45,7 @@ import { DISTRICT_CITY, DISTRICT_FLEET, DISTRICT_SIZE } from '../content/distric
 import { CELL, cellToWorld } from '../geometry/wireCity.js';
 import { createClump } from './../geometry/foliage.js';
 import { grassTufts, greenhouse, rocks } from '../geometry/outdoors.js';
+import { rows, scatter } from '../geometry/planting.js';
 import {
   createMainsSwitch,
   createShelfStack,
@@ -1812,6 +1813,109 @@ function buildSeedlingTunnel(scene: ContactScene): void {
       }),
       MAT.leafPale
     )
+  );
+
+  /**
+   * -- Modelled planting, where the camera can see a plant ------------------------------
+   *
+   * The generated tufts above stay exactly as they are and keep doing the job they are
+   * good at: filling the field at distance, where a tuft is a silhouette and a silhouette
+   * is all that reads. These sit in front of them, near the lens, where the difference
+   * between a modelled blade and four crossed cylinders is the difference between a field
+   * and a diagram of one.
+   *
+   * Three grass species rather than one, because a single repeated asset is recognisable
+   * as a single repeated asset within about two seconds of looking at it.
+   */
+  /**
+   * Measured, not guessed - and the numbers matter here more than usual.
+   *
+   * The assets are bigger than a field weed: SM_WildGrass_01 is 1.48m tall in the file and
+   * SM_WildCarrot_01 is a full metre. Scattered at 0.7-1.35 they were waist-high grass and
+   * hydrangeas. The scales below bring them to rough-grass and cow-parsley height.
+   *
+   * The keep-out was also doing far too much. At 3.0m it cleared the entire middle of the
+   * frame, so the only planting that survived was in the near foreground where most of it
+   * fell off the bottom of the shot - a field that measured as planted and looked bald.
+   */
+  const KEEP_CLEAR = [
+    // The worked beds and the path she stands on. Nothing grows where somebody weeds.
+    { centre: new THREE.Vector3(0, 0, -0.2), radius: 1.9 },
+    // The neighbour's tree, which is the mission and must not be hidden at its base.
+    { centre: new THREE.Vector3(-3.7, 0, -0.4), radius: 1.4 },
+  ];
+
+  /**
+   * Whole paths, written out, because the build reads them.
+   *
+   * These were built from a species name with a template literal, which is tidy source and
+   * broke the game: the asset pipeline scans for literal `@project/...` strings to decide
+   * what to copy into .dist, a constructed path is invisible to it, and all three grasses
+   * 404'd at load while the corn and the carrot - whose paths I happened to type out -
+   * loaded fine. AGENTS.md says never construct a project path programmatically; this is
+   * what that rule is protecting against.
+   */
+  for (const [i, modelUrl] of [
+    '@project/assets/models/Plants/SM_WildGrass_01.glb',
+    '@project/assets/models/Plants/SM_WildGrass_04.glb',
+    '@project/assets/models/Plants/SM_WildGrass_06.glb',
+  ].entries()) {
+    scene.registerProp(
+      `planting-grass-${i}`,
+      scatter(rng, {
+        modelUrl,
+        at: new THREE.Vector3(0.2, 0, 0.6),
+        width: 11.0,
+        depth: 7.6,
+        count: 110,
+        scale: [0.3, 0.6],
+        clear: KEEP_CLEAR,
+        y: 0.01,
+      })
+    );
+    void i;
+  }
+
+  // A little wild carrot at the margins - the one flowering thing, and sparse enough that
+  // it reads as a weed she has not got to rather than as planting.
+  scene.registerProp(
+    'planting-carrot',
+    scatter(rng, {
+      modelUrl: '@project/assets/models/Plants/SM_WildCarrot_01.glb',
+      at: new THREE.Vector3(1.0, 0, 1.2),
+      width: 9.4,
+      depth: 5.4,
+      count: 11,
+      scale: [0.32, 0.5],
+      clear: KEEP_CLEAR,
+      y: 0.01,
+    })
+  );
+
+  /**
+   * Corn, in rows, off to the side.
+   *
+   * The one regular thing in the frame, and that is its whole purpose. Everything else in
+   * this field grows however it likes; a block of corn set out with a line and a stick is
+   * the evidence that somebody works here - and it gives the seedling beds a CONTEXT, which
+   * they did not have. Adaeze is not tending a science experiment in an empty field, she is
+   * tending the part of a smallholding that has gone wrong.
+   *
+   * Placed to the right, away from the tree and the tunnel, so it never competes with the
+   * shade line the whole mission is about.
+   */
+  scene.registerProp(
+    'planting-corn',
+    rows(rng, {
+      modelUrl: '@project/assets/models/Plants/SM_Corn_01.glb',
+      at: new THREE.Vector3(2.9, 0, -2.6),
+      rows: 5,
+      perRow: 8,
+      rowGap: 0.5,
+      plantGap: 0.42,
+      scale: [0.85, 1.1],
+      turn: -0.12,
+    })
   );
 
   // Field stone, half-buried. Cool grey so it never competes with a crop.
