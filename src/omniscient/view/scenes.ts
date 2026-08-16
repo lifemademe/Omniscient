@@ -3134,6 +3134,8 @@ function buildNightDoor(scene: ContactScene): void {
   const rng = createRng(seedFrom('dorin-door'));
 
   const WALL_TOP = 5.2;
+  /** Where the door is. Hoisted, because the step and everything on it is placed off it. */
+  const DOOR_X = -0.15;
 
   // The path, and the house front. Nothing behind them but night.
   const path = new THREE.BoxGeometry(6, 0.1, 4);
@@ -3169,6 +3171,124 @@ function buildNightDoor(scene: ContactScene): void {
   scene.registerProp('front', meshOf('Front', front, MAT.wall));
 
   /**
+   * -- The step, and what lives on it ---------------------------------------------------
+   *
+   * The door met the path directly, which is the detail that quietly stopped this being a
+   * house. Every front door in the country this set is pretending to be stands one course
+   * above its path, and the step is worth more than its geometry: it is a horizontal band
+   * of lit stone directly under the one light in the scene, so it separates the door from
+   * the ground instead of letting them share an edge.
+   *
+   * Everything on it belongs to somebody who has lived here forty years and has not been
+   * out since yesterday - which is Dorin's whole problem, told without a line of dialogue.
+   */
+  const step = new THREE.BoxGeometry(1.7, 0.14, 0.66);
+  step.translate(DOOR_X, 0.07, -0.08);
+  scene.registerProp('step', meshOf('Step', step, MAT.wall));
+
+  const stoop: THREE.BufferGeometry[] = [];
+  const stoopDark: THREE.BufferGeometry[] = [];
+
+  /**
+   * Two pots flanking the door, one of them finished.
+   *
+   * The pair is the point. One pot is a pot; two pots either side of a door is somebody's
+   * arrangement, and an arrangement that has been kept up for years and has just started
+   * to go is a much better description of this house than either a tidy one or a ruin.
+   */
+  // Pulled in to 0.62 from 0.72: at 0.72 the right-hand pot stood 0.35m from Dorin's feet
+  // and its stems came up through his boots.
+  for (const [i, px] of [DOOR_X - 0.62, DOOR_X + 0.62].entries()) {
+    const pot = new THREE.CylinderGeometry(0.13, 0.1, 0.22, 10);
+    pot.translate(px, 0.11, 0.2);
+    stoopDark.push(pot);
+    const rim = new THREE.CylinderGeometry(0.145, 0.145, 0.03, 10);
+    rim.translate(px, 0.215, 0.2);
+    stoopDark.push(rim);
+
+    // The near one still has something in it; the far one is stems.
+    const alive = i === 0;
+    for (let b = 0; b < (alive ? 7 : 4); b++) {
+      const h = alive ? range(rng, 0.16, 0.28) : range(rng, 0.2, 0.34);
+      const stem = new THREE.CylinderGeometry(0.006, 0.011, h, 4);
+      stem.translate(0, h / 2, 0);
+      stem.rotateX(jitter(rng, alive ? 0.4 : 0.75));
+      stem.rotateZ(jitter(rng, alive ? 0.4 : 0.75));
+      stem.translate(px + jitter(rng, 0.06), 0.23, 0.2 + jitter(rng, 0.06));
+      stoop.push(stem);
+    }
+  }
+
+  /**
+   * Boots by the door, and the smallest true thing in the set.
+   *
+   * A pair left outside says a person who works outdoors and takes them off before going
+   * in, which is who this house belongs to. Turned to face the wall the way boots end up
+   * when they are stepped out of rather than placed.
+   */
+  for (const side of [-1, 1] as const) {
+    const boot = new THREE.BoxGeometry(0.11, 0.3, 0.15);
+    boot.translate(0, 0.15, 0);
+    const foot = new THREE.BoxGeometry(0.11, 0.07, 0.26);
+    foot.translate(0, 0.035, 0.05);
+    for (const part of [boot, foot]) {
+      part.rotateY(0.34 + side * 0.16);
+      part.translate(DOOR_X + 0.95 + side * 0.14, 0, 0.16);
+      stoopDark.push(part);
+    }
+  }
+
+  /**
+   * A bin against the house, off to the side.
+   *
+   * Bulk, in the one place the frame had nothing: a 5.2m wall with a single door in it and
+   * a lamp above that. §241 wants depth from layers, and a knee-high box standing proud of
+   * the wall is the cheapest possible mid-ground.
+   */
+  const bin = new THREE.BoxGeometry(0.54, 0.92, 0.5);
+  bin.rotateY(-0.11);
+  bin.translate(DOOR_X + 2.15, 0.46, 0.05);
+  stoopDark.push(bin);
+  const binLid = new THREE.BoxGeometry(0.58, 0.06, 0.54);
+  binLid.rotateY(-0.11);
+  binLid.translate(DOOR_X + 2.15, 0.95, 0.05);
+  // Into stoopDark, not stoop. `stoop` is MAT.stem - the material the plant stems use -
+  // so the lid rendered as a slab of bright green on top of a dark bin, which was the one
+  // thing in the frame that looked like a mistake because it was one.
+  stoopDark.push(binLid);
+
+  /**
+   * Stone edging down both sides of the path.
+   *
+   * The same kit the field and the headland got. It gives the path an EDGE - it was a grey
+   * rectangle ending in nothing - and at this hour the porch light picks out the near half
+   * of it, which pulls the eye up the path to the door.
+   */
+  for (const [side, ex] of [['left', -2.35], ['right', 2.35]] as const) {
+    scene.registerProp(
+      `edging-${side}`,
+      meshOf(
+        `Edging-${side}`,
+        rocks(
+          rng,
+          { centre: new THREE.Vector3(ex, 0.01, 1.5), width: 0.5, depth: 3.4 },
+          { count: 11, size: [0.05, 0.15] }
+        ),
+        MAT.millStone
+      )
+    );
+  }
+
+  scene.registerProp(
+    'stoop',
+    meshOf('Stoop', mergeGeometries(stoop, false) ?? stoop[0], MAT.stem)
+  );
+  scene.registerProp(
+    'stoop-dark',
+    meshOf('StoopDark', mergeGeometries(stoopDark, false) ?? stoopDark[0], MAT.timberDark)
+  );
+
+  /**
    * Night, as one unlit plane a long way back.
    *
    * Not fog and not a skybox - a flat sheet at the far edge of the set, several shades
@@ -3194,7 +3314,7 @@ function buildNightDoor(scene: ContactScene): void {
   );
 
   // -- The door -------------------------------------------------------------
-  const DOOR = { w: 0.92, h: 2.02, x: -0.15 };
+  const DOOR = { w: 0.92, h: 2.02, x: DOOR_X };
 
   const leaf = new THREE.BoxGeometry(DOOR.w, DOOR.h, 0.06);
   leaf.translate(DOOR.x, DOOR.h / 2, -0.26);
@@ -3606,6 +3726,34 @@ function buildMillRoad(scene: ContactScene): void {
     'verge',
     meshOf('Verge', mergeGeometries(verges, false) ?? verges[0], MAT.ground)
   );
+
+  /**
+   * Stones along both verges, and the reason they earn their place at night.
+   *
+   * Every other outdoor set got rocks and this one did not, on the reasoning that a road
+   * at midnight is too dark to show them. That was backwards. This is the one scene with a
+   * MOVING light in it, and the thing a swinging beam most needs is something with relief
+   * for it to cross - a flat verge under a torch is a flat verge whichever way it points.
+   * Now the pool rakes over stone as it travels, which is what makes the sweep legible as
+   * movement rather than as a patch of tarmac changing brightness.
+   *
+   * Small and sparse. A country road has grit and the odd fallen stone at the edge; a line
+   * of boulders would read as a rockery somebody built along a lane.
+   */
+  for (const [side, x] of [['mill', MILL_X + 0.8], ['hedge', HEDGE_X - 0.75]] as const) {
+    scene.registerProp(
+      `stones-${side}`,
+      meshOf(
+        `Stones-${side}`,
+        rocks(
+          rng,
+          { centre: new THREE.Vector3(x, 0.01, -7), width: 0.95, depth: 26 },
+          { count: 16, size: [0.05, 0.19] }
+        ),
+        MAT.millStone
+      )
+    );
+  }
 
   /**
    * Grass on the verges, both sides, all the way down.
