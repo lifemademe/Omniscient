@@ -650,6 +650,8 @@ function buildRepairShop(scene: ContactScene): void {
       headgear: 'band',
       sleeve: 'rolled',
       pouch: true,
+    // Occupied. Her weight is over her own bench and has been all morning.
+    temperament: 'working',
     garment: 'apron',
     /**
      * Art-directed rather than seeded. Her workshop is warm timber from wall to bench,
@@ -1091,6 +1093,9 @@ function buildBeaconMast(scene: ContactScene): void {
       sleeve: 'rolled',
       beard: true,
       pouch: true,
+    // Moved by weather rather than by breathing. Six metres up a lattice in a wind
+    // strong enough to be part of the request.
+    temperament: 'weathered',
     garment: 'coat',
     // Wet-weather orange: the only warm thing on a cold headland, and the only piece of
     // high-visibility clothing in the game, because he is the only person in it who is
@@ -1556,6 +1561,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
       headgear: 'brim',
       sleeve: 'rolled',
       pouch: true,
+    temperament: 'working',
     garment: 'apron',
     colors: { garment: '#2f6a72', underlayer: '#a89878' },
     /*
@@ -2342,6 +2348,9 @@ function buildClearedHouse(scene: ContactScene): void {
       headgear: 'none',
       sleeve: 'long',
       pouch: false,
+    // Unhurried and deep. The oldest person in the cast, standing in her own house,
+    // in no hurry at all - and the only one whose slowness is not exhaustion.
+    temperament: 'settled',
     garment: 'coat',
     colors: { garment: '#4a4a52', underlayer: '#b3a58a' },
     /**
@@ -2645,6 +2654,7 @@ function buildFloodedCellar(scene: ContactScene): void {
       sleeve: 'long',
       beard: true,
       pouch: true,
+    temperament: 'working',
     garment: 'overalls',
     colors: { garment: '#3d4a53', underlayer: '#b9ad92' },
     /**
@@ -2931,6 +2941,8 @@ function buildNightDoor(scene: ContactScene): void {
       sleeve: 'long',
       beard: true,
       pouch: false,
+    // Slow but uneven. Two in the morning, cold, and he has not slept.
+    temperament: 'tired',
     garment: 'coat',
     colors: { garment: '#2f3138', underlayer: '#8f8778' },
     position: new THREE.Vector3(0.62, 0, 0.62),
@@ -3289,6 +3301,8 @@ function buildMillRoad(scene: ContactScene): void {
       headgear: 'hood',
       sleeve: 'long',
       pouch: false,
+    // Fast and shallow, with a catch in it. Somebody is twenty metres behind her.
+    temperament: 'frightened',
     garment: 'coat',
     colors: { garment: '#40404c', underlayer: '#a8907a' },
     position: new THREE.Vector3(1.0, 0, 0.2),

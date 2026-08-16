@@ -40,6 +40,15 @@ export interface CharacterPlacement extends CharacterParams {
    * somebody standing somewhere that is moving them, which on this cast means Tomas.
    */
   liveliness?: number;
+  /**
+   * How this particular person stands still - see Temperament.
+   *
+   * Distinct from `liveliness`, and the distinction is the point: amplitude says how much
+   * somebody moves, temperament says what KIND of stillness it is. Turning the amplitude
+   * up on a frightened woman does not make her frightened; it makes her breathe like a
+   * calm person having a bigger breath.
+   */
+  temperament?: Temperament;
 }
 
 export interface PlacedCharacter {
@@ -123,30 +132,101 @@ function breathCurve(phase: number): number {
  * The returned closure owns its own clock rather than reading a global one, so two
  * figures built from different seeds are genuinely out of step and stay that way.
  */
-function breathe(torso: ENGINE.SceneNode, seed: string, liveliness: number): (dt: number) => void {
+/**
+ * How a particular person stands still.
+ *
+ * §236 gives the idle a budget of about one centimetre of head travel, and the whole cast
+ * has been spending it the same way: one breath curve, one sway, one number for amplitude.
+ * That gives seven people who are all equally alive and identical in temperament, which is
+ * the thing `liveliness` alone can never fix - turning the amplitude up on a frightened
+ * woman does not make her frightened, it makes her breathe like a calm person having a
+ * bigger breath.
+ *
+ * What actually distinguishes people standing still is RATE and STEADINESS, and neither
+ * costs a millimetre of the budget. A frightened person breathes fast and shallow; an
+ * exhausted one slowly and unevenly; somebody on a headland in a wind is moved by
+ * something other than their own lungs. Same displacement, completely different person.
+ */
+export type Temperament =
+  /** Unhurried and deep. Somebody at rest in their own house. */
+  | 'settled'
+  /** Occupied. Short sway, because their weight is over their work. */
+  | 'working'
+  /** Moved by weather rather than by breathing. Long, large sway. */
+  | 'weathered'
+  /** Fast and shallow, with a catch in it. */
+  | 'frightened'
+  /** Slow but irregular - somebody who has not slept. */
+  | 'tired';
+
+interface Temper {
+  /** Multiplier on breathing rate. */
+  rate: number;
+  /** Multiplier on the slow weight-shift period. Bigger is slower. */
+  swayPeriod: number;
+  /** Multiplier on sway amplitude, within the §236 budget. */
+  sway: number;
+  /**
+   * How unevenly the rate wanders. `drift` is the baseline wander every person has; this
+   * scales it, and above about 2 it stops reading as natural variation and starts reading
+   * as somebody not in control of their own breathing - which is the point for two of
+   * these.
+   */
+  unsteady: number;
+}
+
+const TEMPERAMENTS: Record<Temperament, Temper> = {
+  settled: { rate: 0.78, swayPeriod: 1.35, sway: 0.9, unsteady: 0.7 },
+  working: { rate: 1.0, swayPeriod: 0.8, sway: 0.75, unsteady: 1.0 },
+  /**
+   * Sway 1.25, not the 2.1 it was first given.
+   *
+   * Temperament multiplies with `liveliness`, and Tomas already carries 1.7 for being six
+   * metres up in the wind. 1.7 x 2.1 put nearly 18mm of lateral travel on his head against
+   * a §236 budget of about 10 - so two individually reasonable numbers, chosen in
+   * different files months apart, combined into a man swaying like a metronome. Checked
+   * arithmetically rather than by watching him, because at 240fps a slow sway that is
+   * twice too big still looks like a sway.
+   *
+   * At 1.25 he lands near 10.5mm: comfortably the most-moved figure in the cast, which is
+   * correct, without leaving the rule behind.
+   */
+  weathered: { rate: 1.05, swayPeriod: 0.55, sway: 1.25, unsteady: 1.4 },
+  frightened: { rate: 1.62, swayPeriod: 0.5, sway: 1.2, unsteady: 2.6 },
+  tired: { rate: 0.82, swayPeriod: 1.1, sway: 1.0, unsteady: 2.2 },
+};
+
+function breathe(
+  torso: ENGINE.SceneNode,
+  seed: string,
+  liveliness: number,
+  temperament: Temperament = 'working'
+): (dt: number) => void {
+  const temper = TEMPERAMENTS[temperament];
   // Deterministic per-character phase, so nobody in the cast breathes in unison and the
   // same contact breathes the same way in every session.
   const rng = createRng(seedFrom(`${seed}-idle`));
   let breath = rng();
   let slow = rng() * BREATH.rollPeriod;
-  const rate = 0.94 + rng() * 0.12;
+  const rate = (0.94 + rng() * 0.12) * temper.rate;
 
   return (deltaTime: number) => {
     slow += deltaTime;
     // Integrated phase: the rate wanders, the wave never jumps.
-    const wander = 1 + Math.sin((slow / BREATH.driftPeriod) * Math.PI * 2) * BREATH.drift;
+    const wander =
+      1 + Math.sin((slow / BREATH.driftPeriod) * Math.PI * 2) * BREATH.drift * temper.unsteady;
     breath += (deltaTime / BREATH.period) * rate * wander;
 
     const lung = breathCurve(breath) * 2 - 1;
-    const shift = Math.sin((slow / BREATH.rollPeriod) * Math.PI * 2);
-    const turn = Math.sin((slow / BREATH.yawPeriod) * Math.PI * 2);
+    const shift = Math.sin((slow / (BREATH.rollPeriod * temper.swayPeriod)) * Math.PI * 2);
+    const turn = Math.sin((slow / (BREATH.yawPeriod * temper.swayPeriod)) * Math.PI * 2);
 
     torso.rotation.set(
       // Leaning back a fraction as the chest fills is what a breath does to a standing
       // body, so pitch runs against the rise rather than with it.
       -lung * BREATH.pitch * liveliness,
       turn * BREATH.yaw * liveliness,
-      shift * BREATH.roll * liveliness
+      shift * BREATH.roll * liveliness * temper.sway
     );
     // Vertical only. A uniform scale would make the shoulders wider as well as higher,
     // and a body that changes width is a balloon.
@@ -338,6 +418,6 @@ export function placeCharacter(name: string, placement: CharacterPlacement): Pla
 
   return {
     root,
-    idle: breathe(torso, String(placement.seed), placement.liveliness ?? 1),
+    idle: breathe(torso, String(placement.seed), placement.liveliness ?? 1, placement.temperament),
   };
 }
