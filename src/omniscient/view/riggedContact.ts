@@ -57,6 +57,8 @@ function boneKey(name: string): string {
 }
 
 export interface RiggedOptions {
+  /** Name of the clip to play, or true for the first one the file happens to carry. */
+  clip?: string | true;
   modelUrl: string;
   position: THREE.Vector3;
   rotation?: THREE.Euler;
@@ -115,6 +117,24 @@ export function reachFor(
   const hand = bones[handName];
   if (!upper || !fore || !hand) return Number.NaN;
 
+  /**
+   * Start from arms-down, not from the bind pose.
+   *
+   * CCD converges to whichever solution is nearest where it started, and a Mixamo bind
+   * pose starts with the arm straight out sideways - so the shoulder was as likely to
+   * swing BACKWARDS to the target as forwards, and it did: the hand arrived at the right
+   * point with the wrist tucked behind her back. The target alone does not pick an elbow;
+   * a two-bone chain has a whole circle of solutions and something has to say which.
+   *
+   * Seeding the arm hanging down and slightly forward is the cheapest thing that does. It
+   * costs two rotations and it means the solver finishes in the half of the circle a
+   * person's arm actually lives in.
+   */
+  const inward = side === 'left' ? 1 : -1;
+  upper.rotation.set(0.35, 0, inward * 1.25);
+  fore.rotation.set(0.55, 0, 0);
+  upper.updateMatrixWorld(true);
+
   for (let pass = 0; pass < passes; pass++) {
     swingToward(fore, hand, target);
     swingToward(upper, hand, target);
@@ -153,15 +173,25 @@ export interface RiggedContact {
   root: ENGINE.SceneNode;
   /** Resolved once the mesh has loaded. Empty before that. */
   bones: Record<string, THREE.Object3D>;
+  /**
+   * Advance the clip, then put the hands back.
+   *
+   * Registered as a prop idle. The ORDER is the entire point: a clip writes every bone it
+   * animates, every frame, so IK solved once at load is gone by the next tick. Posing on
+   * top of the clip rather than instead of it is what lets a character breathe and still
+   * be holding something.
+   */
+  idle: (deltaTime: number) => void;
 }
 
 /**
- * Load a rigged character, stand it at a height, and put its hands where it was told.
+ * Load a rigged character, stand it at a height, play its clip, and put its hands where
+ * they were told to be - in that order, every frame.
  *
- * Deliberately does NOT play the model's animation clip. A clip writes bone rotations
- * every frame and would overwrite the pose on the next tick - reconciling the two is a
- * real piece of work (evaluate the clip, then apply IK on top) and doing it before knowing
- * whether the pose lands at all would be building the second half of a bridge first.
+ * The clip and the pose are not alternatives. A Mixamo idle knows how a person stands and
+ * nothing about where the photo box is; this game's hand targets know where the box is and
+ * nothing about breathing. Running the mixer first and solving the arms afterwards gives
+ * both: the body has weight and the hands stay put.
  */
 export function placeRigged(name: string, options: RiggedOptions): RiggedContact {
   const root = ENGINE.SceneNode.create({
@@ -177,7 +207,37 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
   });
   root.add(model);
 
-  const contact: RiggedContact = { root, bones: {} };
+  let mixer: THREE.AnimationMixer | null = null;
+  /**
+   * Which of the rig's arms goes to which target, decided by measurement at load.
+   *
+   * "Left" is not a fact about a skeleton, it is a label somebody typed. This rig's arms
+   * came out crossed - the bone called LeftArm reaching the target called left, and the
+   * two ending up on opposite sides of her body - and that can happen for several
+   * unrelated reasons: an auto-rigger mirroring a mesh, a generator whose left means the
+   * viewer's left, a model authored facing the other way.
+   *
+   * Rather than pick one explanation and hardcode a swap that is wrong for the next
+   * character, the assignment is chosen by which shoulder is actually nearer which target.
+   * That is right for every one of those cases and needs no convention to be agreed.
+   */
+  let sideFor: { left: 'left' | 'right'; right: 'left' | 'right' } = {
+    left: 'left',
+    right: 'right',
+  };
+
+  const contact: RiggedContact = {
+    root,
+    bones: {},
+    idle: (deltaTime: number) => {
+      if (mixer) mixer.update(deltaTime);
+      // Then the hands, on top of whatever the clip just did to the arms.
+      for (const named of ['left', 'right'] as const) {
+        const target = options.handsOn?.[named];
+        if (target) reachFor(contact.bones, sideFor[named], target, 4);
+      }
+    },
+  };
 
   if (options.showTargets) {
     /**
@@ -249,15 +309,50 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
       loaded.updateMatrixWorld(true);
     }
 
+    if (options.clip) {
+      const clips = model.getAnimations();
+      const wanted =
+        options.clip === true
+          ? clips[0]
+          : clips.find((candidate) => candidate.name === options.clip);
+      if (wanted) {
+        mixer = new THREE.AnimationMixer(loaded);
+        mixer.clipAction(wanted).play();
+      }
+      console.log(`[rigged] ${name} clips: ${clips.map((c) => c.name).join(', ') || 'none'}`);
+    }
+
+    /**
+     * Pair each target with the nearer shoulder before solving anything.
+     *
+     * Two possible assignments, so this is a comparison rather than a search: whichever
+     * pairing gives the smaller total shoulder-to-target distance is the one where the
+     * arms do not cross the body.
+     */
+    const shoulders = {
+      left: armReach(contact.bones, 'left')?.shoulderAt,
+      right: armReach(contact.bones, 'right')?.shoulderAt,
+    };
+    const wantLeft = options.handsOn?.left;
+    const wantRight = options.handsOn?.right;
+    if (shoulders.left && shoulders.right && wantLeft && wantRight) {
+      const straight =
+        shoulders.left.distanceTo(wantLeft) + shoulders.right.distanceTo(wantRight);
+      const crossed =
+        shoulders.right.distanceTo(wantLeft) + shoulders.left.distanceTo(wantRight);
+      if (crossed < straight) sideFor = { left: 'right', right: 'left' };
+    }
+
     const reached: string[] = [];
-    for (const side of ['left', 'right'] as const) {
-      const target = options.handsOn?.[side];
+    for (const named of ['left', 'right'] as const) {
+      const target = options.handsOn?.[named];
       if (!target) continue;
+      const side = sideFor[named];
       const arm = armReach(contact.bones, side);
       const miss = reachFor(contact.bones, side, target);
       const need = arm ? arm.shoulderAt.distanceTo(target) : Number.NaN;
       reached.push(
-        `${side} ${miss.toFixed(2)}off arm${(arm?.reach ?? 0).toFixed(2)} need${need.toFixed(2)}`
+        `${named}->${side} ${miss.toFixed(2)}off arm${(arm?.reach ?? 0).toFixed(2)}`
       );
     }
     if (reached.length) {

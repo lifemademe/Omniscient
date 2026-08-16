@@ -65,8 +65,16 @@ const meshOf = decorMesh;
  * Every diorama registers its person the same way and under the same prop id, so this is
  * one line rather than four repetitions of the same three.
  */
-function addContact(scene: ContactScene, name: string, placement: CharacterPlacement): void {
+function addContact(
+  scene: ContactScene,
+  name: string,
+  placement: CharacterPlacement,
+  options: { hidden?: boolean } = {}
+): void {
   const contact = placeCharacter(name, placement);
+  // Hidden rather than skipped: the prop stays registered so cues that highlight or move
+  // the contact still resolve, and switching back is one flag rather than an edit.
+  contact.root.visible = !options.hidden;
   scene.registerProp('contact', contact.root, { idle: contact.idle });
 }
 
@@ -2393,39 +2401,31 @@ function buildClearedHouse(scene: ContactScene): void {
   );
 
   /**
-   * TEMP-RIG: the Mixamo Ileana, standing beside the generated one.
+   * TEMP-RIG: the Mixamo Ileana, standing exactly where the generated one stood.
    *
-   * Same height, same facing, and the same hand targets shifted by the same offset, so the
-   * two are reaching for equivalent points and the comparison is like for like. Markers
-   * are drawn at the targets because "did the hand arrive" is not answerable from a picture
-   * of somebody standing near a table.
+   * Same position, same facing, and the SAME hand targets - not shifted copies. The
+   * generated Ileana is hidden rather than deleted, so the two can be swapped back and
+   * forth by one flag while this is being judged.
+   *
+   * Her clip runs and the hands are solved on top of it every frame. That ordering is the
+   * whole experiment: a Mixamo idle writes every bone it animates on every tick, so a pose
+   * applied once at load is gone immediately, and posing AFTER the mixer is what lets her
+   * breathe and still be holding the box.
    */
-  /**
-   * Stood 12cm closer to the table than the generated Ileana.
-   *
-   * Not a fudge - a calibration, and the number came from measuring. Her Mixamo arm is
-   * 0.53m against the generated character's 0.578, and her shoulder sits further back, so
-   * the same authored targets were 0.60-0.64m away from a 0.53m arm. The solver did the
-   * only correct thing with that, which is extend fully and come up short.
-   *
-   * Every rigged character will need a number like this, because a real skeleton has real
-   * proportions and this game's hand targets were authored against a generator whose arms
-   * are a function of height. It is one measurement per character, not a redesign.
-   */
-  const RIG_AT = new THREE.Vector3(-1.99, 0, -1.52);
-  const RIG_SHIFT = new THREE.Vector3(-1.05, 0, 0);
+  const RIG_AT = new THREE.Vector3(-1.0, 0, -1.72);
   const riggedIleana = placeRigged('IleanaRigged', {
     modelUrl: '@project/assets/models/Ileana.glb',
     position: RIG_AT,
     rotation: new THREE.Euler(0, Math.PI * 0.2, 0),
     height: 1.66,
+    clip: true,
     handsOn: {
-      left: new THREE.Vector3(-1.02, 0.79, -1.47).add(RIG_SHIFT),
-      right: new THREE.Vector3(-0.8, 0.79, -1.5).add(RIG_SHIFT),
+      left: new THREE.Vector3(-1.02, 0.79, -1.47),
+      right: new THREE.Vector3(-0.8, 0.79, -1.5),
     },
     showTargets: true,
   });
-  scene.registerProp('ileana-rigged', riggedIleana.root);
+  scene.registerProp('ileana-rigged', riggedIleana.root, { idle: riggedIleana.idle });
 
   addContact(scene, 'Ileana', {
     seed: 'ileana-marku',
@@ -2469,7 +2469,7 @@ function buildClearedHouse(scene: ContactScene): void {
     // photographs for two days; the difference between her idle and Mirela's is the only
     // characterisation available without faces.
     liveliness: 0.7,
-  });
+  }, { hidden: true }); // TEMP-RIG: the block Ileana is out while the GLB is tested
 
   // -- Light -----------------------------------------------------------------
   // One window and one fill. A house with the curtains taken down and half the power off.
