@@ -26,6 +26,7 @@ import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { audio } from './audio/ConsoleAudio.js';
 import { installCursor } from './art/cursor.js';
+import { SystemPanel } from './menu/SystemPanel.js';
 import { createSeaLife } from './geometry/seaLife.js';
 import { WINDOW_VIEW } from './geometry/room.js';
 import { createSignals, MIRELA_SIGNAL, REVEALED_AFTER_FIRST } from './content/signals.js';
@@ -185,6 +186,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private tune: TunePanel | null = null;
   /** Held from configureLook so the F8 panel can re-configure effects live. */
   private post: ENGINE.PostProcessManager | null = null;
+  /** Settings and credits, over the menu. Built on first use. */
+  private systemPanel: SystemPanel | null = null;
   /** Gulls and a boat in the window. Driven from the tick; see createSeaLife. */
   private seaLife: ReturnType<typeof createSeaLife> | null = null;
   /** The workstation lights, kept so the panel can reach them. */
@@ -1282,8 +1285,33 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   private onMenuAction(action: MenuAction): void {
-    // Only NEW GAME is wired for the Jam slice. §103 wants the machine to look like it
-    // does more than the player currently needs it to.
+    /**
+     * Every plate that is lit now does something.
+     *
+     * CONTINUE is the exception and it is honest about it - it is drawn `disabled`,
+     * because there is no save system, so it reads as present and cold rather than as
+     * present and broken. The other three were lit and hooked to nothing, which is a
+     * different thing entirely: §103 wants the MACHINE to look like it does more than you
+     * are using, and that argument does not extend to the front door.
+     */
+    if (action === 'shutdown') {
+      audio.play('disconnect');
+      audio.setOnAir(false);
+      // Left to settle so the squelch is heard rather than cut off by the window going.
+      window.setTimeout(() => this.shutDown(), 420);
+      return;
+    }
+
+    if (action === 'settings' || action === 'credits') {
+      audio.play('tap');
+      const world = this.getWorld();
+      const container = world?.gameContainer;
+      if (!container) return;
+      this.systemPanel ??= new SystemPanel(container);
+      this.systemPanel.open(action);
+      return;
+    }
+
     if (action !== 'new-game') return;
 
     /**
@@ -1298,6 +1326,37 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.menu?.setEnabled(false);
     this.showGlobe();
+  }
+
+  /**
+   * Put the machine to sleep.
+   *
+   * Electron closes on `window.close()`; a browser tab mostly will not, because a page
+   * that did not open itself is not allowed to close itself. So there is a fallback, and
+   * it is deliberately not a blank screen: a game that says SHUT DOWN and then shows
+   * nothing looks like it crashed on the way out. The last thing the player sees is the
+   * machine agreeing that it has stopped.
+   */
+  private shutDown(): void {
+    try {
+      window.close();
+    } catch {
+      // Nothing to do - the fallback below covers it either way.
+    }
+
+    window.setTimeout(() => {
+      if (document.hidden) return;
+      const body = document.body;
+      if (!body) return;
+      body.style.background = '#04100a';
+      const said = document.createElement('div');
+      said.style.cssText =
+        'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;' +
+        "font-family:'Courier New',monospace;color:#4f9a5e;letter-spacing:0.3em;" +
+        'font-size:13px;background:#04100a;z-index:9999;';
+      said.textContent = 'OMNISCIENT_ // OFFLINE';
+      body.appendChild(said);
+    }, 260);
   }
 
   /**

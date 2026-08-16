@@ -38,6 +38,29 @@
 const MASTER = 0.34;
 
 /**
+ * Where the player's volume choice is kept.
+ *
+ * A setting that does not survive the window closing is not a setting, it is a slider.
+ * Volume in particular: somebody who turns a game down has decided something about it, and
+ * asking them to decide again every launch is the kind of small rudeness that gets a game
+ * muted permanently at the operating system instead.
+ */
+const VOLUME_KEY = 'omniscient.volume';
+
+function storedVolume(): number {
+  try {
+    const raw = window.localStorage?.getItem(VOLUME_KEY);
+    if (raw === null || raw === undefined) return 1;
+    const value = Number(raw);
+    return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 1;
+  } catch {
+    // Private mode, a sandbox, a host that has no storage - none of which is a reason to
+    // start silent or to crash on the way to the menu.
+    return 1;
+  }
+}
+
+/**
  * The named cues. Anything that makes a sound in this game makes one of these.
  *
  * A closed set on purpose: the alternative is call sites inventing frequencies, and within
@@ -143,6 +166,8 @@ export class ConsoleAudio {
   private carrier: GainNode | null = null;
   private noise: AudioBuffer | null = null;
   private enabled = true;
+  /** 0 to 1, the player's own setting. Multiplies the master ceiling. */
+  private volume = storedVolume();
 
   /**
    * Start the audio context.
@@ -165,7 +190,7 @@ export class ConsoleAudio {
 
     const ctx = new Ctor();
     const master = ctx.createGain();
-    master.gain.value = MASTER;
+    master.gain.value = MASTER * this.volume;
     master.connect(ctx.destination);
 
     this.ctx = ctx;
@@ -176,9 +201,34 @@ export class ConsoleAudio {
 
   public setEnabled(enabled: boolean): void {
     this.enabled = enabled;
-    if (this.master && this.ctx) {
-      this.master.gain.setTargetAtTime(enabled ? MASTER : 0, this.ctx.currentTime, 0.05);
+    this.applyGain();
+  }
+
+  public getVolume(): number {
+    return this.volume;
+  }
+
+  /**
+   * Set and remember the player's level.
+   *
+   * Ramped rather than assigned: a gain node written directly mid-tone clicks, and the
+   * carrier bed is a continuous tone by definition - so dragging a slider on a silent
+   * build is fine and dragging it while a call is up would pop on every pixel of travel.
+   */
+  public setVolume(volume: number): void {
+    this.volume = Math.min(1, Math.max(0, volume));
+    try {
+      window.localStorage?.setItem(VOLUME_KEY, String(this.volume));
+    } catch {
+      // Not being able to remember it is not a reason to refuse to set it.
     }
+    this.applyGain();
+  }
+
+  private applyGain(): void {
+    if (!this.master || !this.ctx) return;
+    const target = this.enabled ? MASTER * this.volume : 0;
+    this.master.gain.setTargetAtTime(target, this.ctx.currentTime, 0.05);
   }
 
   /**
