@@ -1,0 +1,271 @@
+/**
+ * A rigged character, posed onto this game's authored hand targets.
+ *
+ * ## What this is testing
+ *
+ * Every contact in OMNISCIENT_ is POSED rather than animated. Mirela's hand is on the
+ * connector, Vasile's on the pipe run, Sanda grips a torch that swings and carries its own
+ * light - and those are world-space coordinates the missions author, checked against arm
+ * length by scripts/dev/reach.py. The procedural character generator solves arms to them.
+ *
+ * A Mixamo clip knows none of that. It knows how a person stands, not where the connector
+ * is. So the question that decides whether external characters are usable here is narrow
+ * and answerable: can a rigged skeleton be bent so its hand lands on a coordinate this
+ * game already authors?
+ *
+ * ## Why there is a solver in here at all
+ *
+ * Because the engine has none. There is a full animation stack - Mixamo skeleton profiles,
+ * retargeting, clip caching - and no inverse kinematics anywhere in it. That is not an
+ * oversight; clips and IK solve different problems. But it does mean posing a rigged arm
+ * is code somebody has to write, and this is the smallest honest version of it.
+ *
+ * ## Why CCD rather than an analytic two-bone solve
+ *
+ * The closed-form solution is exact and needs the bind-pose axes to be known and correct.
+ * Cyclic coordinate descent needs nothing but positions: point the last joint at the
+ * target, then its parent, and repeat. For a two-bone chain it converges in a handful of
+ * passes, it degrades sensibly when the target is out of reach (the arm simply extends
+ * towards it), and - the deciding reason - it cannot silently produce a plausible-looking
+ * wrong answer because of a bone-orientation assumption that happened not to hold for this
+ * particular export.
+ */
+
+import * as ENGINE from '@gnsx/genesys.js';
+import * as THREE from 'three';
+
+/**
+ * Mixamo names its bones consistently. three.js then renames them.
+ *
+ * The rig ships `mixamorig:LeftArm`, and GLTFLoader runs every node name through
+ * `PropertyBinding.sanitizeNodeName`, whose reserved set is `[].:/ ` - so the colon is
+ * STRIPPED and the bone arrives as `mixamorigLeftArm`. Matching on the name as authored
+ * finds nothing, the solver gets no chain, and the character stands in its bind pose
+ * looking for all the world like an IK bug.
+ *
+ * So everything is compared with punctuation and case removed. That also survives the next
+ * exporter, which will have its own opinion about separators.
+ */
+const CHAIN = {
+  left: ['leftarm', 'leftforearm', 'lefthand'],
+  right: ['rightarm', 'rightforearm', 'righthand'],
+} as const;
+
+/** Strip everything that is not a letter or digit, and lower-case what is left. */
+function boneKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^mixamorig/, '');
+}
+
+export interface RiggedOptions {
+  modelUrl: string;
+  position: THREE.Vector3;
+  rotation?: THREE.Euler;
+  /** Metres. The model is scaled to this so it stands beside the procedural cast. */
+  height: number;
+  /** The same world-space targets the procedural generator is given. */
+  handsOn?: { left?: THREE.Vector3; right?: THREE.Vector3 };
+  /** Draw a marker at each target, so a screenshot shows whether the hand arrived. */
+  showTargets?: boolean;
+}
+
+/**
+ * Swing one joint so the end of its chain points at the target.
+ *
+ * The whole of CCD, in one function. Everything is done in world space and converted back
+ * through the parent's inverse - a joint's local rotation means nothing without knowing
+ * what it hangs off, and getting that conversion wrong is the classic way an IK rig ends
+ * up looking almost right.
+ */
+function swingToward(joint: THREE.Object3D, effector: THREE.Object3D, target: THREE.Vector3): void {
+  const jointAt = joint.getWorldPosition(new THREE.Vector3());
+  const effectorAt = effector.getWorldPosition(new THREE.Vector3());
+
+  const toEffector = effectorAt.sub(jointAt).normalize();
+  const toTarget = target.clone().sub(jointAt).normalize();
+  if (toEffector.lengthSq() === 0 || toTarget.lengthSq() === 0) return;
+
+  const swing = new THREE.Quaternion().setFromUnitVectors(toEffector, toTarget);
+  const worldQuaternion = joint.getWorldQuaternion(new THREE.Quaternion());
+  const wanted = swing.multiply(worldQuaternion);
+
+  const parentQuaternion = joint.parent
+    ? joint.parent.getWorldQuaternion(new THREE.Quaternion())
+    : new THREE.Quaternion();
+  joint.quaternion.copy(parentQuaternion.invert().multiply(wanted));
+  joint.updateMatrixWorld(true);
+}
+
+/**
+ * Put a hand on a point.
+ *
+ * Iterated from the wrist inwards, which is the order that matters: the forearm is a
+ * smaller correction than the shoulder, so solving it first means the shoulder is only
+ * asked for the swing that is genuinely left over, and the elbow does not fly out to meet
+ * a target the wrist could have reached by itself.
+ */
+export function reachFor(
+  bones: Record<string, THREE.Object3D>,
+  side: 'left' | 'right',
+  target: THREE.Vector3,
+  passes = 8
+): number {
+  const [upperName, foreName, handName] = CHAIN[side];
+  const upper = bones[upperName];
+  const fore = bones[foreName];
+  const hand = bones[handName];
+  if (!upper || !fore || !hand) return Number.NaN;
+
+  for (let pass = 0; pass < passes; pass++) {
+    swingToward(fore, hand, target);
+    swingToward(upper, hand, target);
+  }
+
+  // How far off it finished. Reported rather than assumed - an IK solver that quietly
+  // stops short is exactly the failure this test exists to detect.
+  return hand.getWorldPosition(new THREE.Vector3()).distanceTo(target);
+}
+
+/**
+ * Is the target even inside this arm's reach?
+ *
+ * The distinction that decides whether a miss is a bug or a fact. CCD on a two-bone chain
+ * converges to under a millimetre when the target is reachable, so a solver that settles
+ * at thirteen centimetres is either broken or being asked for something the arm cannot do -
+ * and those want completely different responses. Measuring the arm answers it outright.
+ */
+export function armReach(
+  bones: Record<string, THREE.Object3D>,
+  side: 'left' | 'right'
+): { reach: number; shoulderAt: THREE.Vector3 } | null {
+  const [upperName, foreName, handName] = CHAIN[side];
+  const upper = bones[upperName];
+  const fore = bones[foreName];
+  const hand = bones[handName];
+  if (!upper || !fore || !hand) return null;
+
+  const a = upper.getWorldPosition(new THREE.Vector3());
+  const b = fore.getWorldPosition(new THREE.Vector3());
+  const c = hand.getWorldPosition(new THREE.Vector3());
+  return { reach: a.distanceTo(b) + b.distanceTo(c), shoulderAt: a };
+}
+
+export interface RiggedContact {
+  root: ENGINE.SceneNode;
+  /** Resolved once the mesh has loaded. Empty before that. */
+  bones: Record<string, THREE.Object3D>;
+}
+
+/**
+ * Load a rigged character, stand it at a height, and put its hands where it was told.
+ *
+ * Deliberately does NOT play the model's animation clip. A clip writes bone rotations
+ * every frame and would overwrite the pose on the next tick - reconciling the two is a
+ * real piece of work (evaluate the clip, then apply IK on top) and doing it before knowing
+ * whether the pose lands at all would be building the second half of a bridge first.
+ */
+export function placeRigged(name: string, options: RiggedOptions): RiggedContact {
+  const root = ENGINE.SceneNode.create({
+    name,
+    position: options.position.clone(),
+    rotation: options.rotation ?? new THREE.Euler(),
+  });
+
+  const model = ENGINE.ModelMeshNode.create({
+    name: `${name}Model`,
+    modelUrl: options.modelUrl,
+    useDynamicMaterials: true,
+  });
+  root.add(model);
+
+  const contact: RiggedContact = { root, bones: {} };
+
+  if (options.showTargets) {
+    /**
+     * A marker at every target.
+     *
+     * The entire question is "did the hand arrive", and that is not answerable from a
+     * screenshot of a person standing near a table. Two small spheres make it a yes or no.
+     */
+    for (const target of [options.handsOn?.left, options.handsOn?.right]) {
+      if (!target) continue;
+      const marker = new THREE.Mesh(
+        new THREE.SphereGeometry(0.03, 8, 6),
+        new THREE.MeshBasicMaterial({ color: new THREE.Color('#e0a24c') })
+      );
+      marker.position.copy(target).sub(options.position);
+      root.add(marker);
+    }
+  }
+
+  model.onMeshLoaded.add(() => {
+    // The node IS the loaded subtree's root - `getModel()` is deprecated in favour of
+    // using the ModelMeshNode directly, and it is the same object either way.
+    const loaded: THREE.Object3D = model;
+
+    /**
+     * Scale to the height this game uses, measured rather than guessed.
+     *
+     * Exporters disagree about units - centimetres, metres, whatever the source tool
+     * happened to use - so a hard-coded 0.01 is a coin flip. The bounding box is a fact.
+     */
+    const box = new THREE.Box3().setFromObject(loaded);
+    const measured = box.max.y - box.min.y;
+    if (measured > 0.001) {
+      const scale = options.height / measured;
+      loaded.scale.multiplyScalar(scale);
+    }
+    loaded.updateMatrixWorld(true);
+
+    loaded.traverse((child) => {
+      if (child.type === 'Bone' || /mixamorig/i.test(child.name)) {
+        contact.bones[boneKey(child.name)] = child;
+      }
+    });
+
+    /**
+     * Stand it on the floor, and stand it where it was PUT.
+     *
+     * Two different corrections and the second is the one that mattered. Vertically the
+     * feet go on the ground, which any bounding box gives you. Horizontally the mesh has
+     * no obligation to be centred on its own origin - this one is not, and generated
+     * meshes rarely are - so the figure was offset from the node it hangs off and every
+     * hand target was measured from the wrong body. The arm then came up 13cm short of a
+     * point it should have reached comfortably, which reads exactly like a broken solver.
+     *
+     * The hips are the honest centre of a Mixamo rig: they are the skeleton's root, they
+     * do not move when the arms do, and unlike a bounding box they are not thrown off by a
+     * figure standing with one arm out.
+     */
+    const standing = new THREE.Box3().setFromObject(loaded);
+    loaded.position.y -= standing.min.y - root.position.y;
+    loaded.updateMatrixWorld(true);
+
+    const hips = contact.bones['hips'];
+    if (hips) {
+      const hipsAt = hips.getWorldPosition(new THREE.Vector3());
+      const rootAt = root.getWorldPosition(new THREE.Vector3());
+      loaded.position.x -= hipsAt.x - rootAt.x;
+      loaded.position.z -= hipsAt.z - rootAt.z;
+      loaded.updateMatrixWorld(true);
+    }
+
+    const reached: string[] = [];
+    for (const side of ['left', 'right'] as const) {
+      const target = options.handsOn?.[side];
+      if (!target) continue;
+      const arm = armReach(contact.bones, side);
+      const miss = reachFor(contact.bones, side, target);
+      const need = arm ? arm.shoulderAt.distanceTo(target) : Number.NaN;
+      reached.push(
+        `${side} ${miss.toFixed(2)}off arm${(arm?.reach ?? 0).toFixed(2)} need${need.toFixed(2)}`
+      );
+    }
+    if (reached.length) {
+      // Printed on purpose: the result of this experiment is a number, and a number that
+      // only exists inside the running game is a number nobody can act on.
+      console.log(`[rigged] ${name} bones=${Object.keys(contact.bones).length} ${reached.join(', ')}`);
+    }
+  });
+
+  return contact;
+}

@@ -33,6 +33,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { createBoxLabel, createCorrosionBloom, createRatingPlate } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
+import { placeRigged } from './riggedContact.js';
 import { ACCENT, LIGHT, MAP, MAT } from '../art/palette.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
 import { createRng, jitter, range, seedFrom } from '../core/rng.js';
@@ -2390,6 +2391,41 @@ function buildClearedHouse(scene: ContactScene): void {
     'chairs',
     meshOf('Chairs', mergeGeometries(stack, false) ?? stack[0], MAT.timberDark)
   );
+
+  /**
+   * TEMP-RIG: the Mixamo Ileana, standing beside the generated one.
+   *
+   * Same height, same facing, and the same hand targets shifted by the same offset, so the
+   * two are reaching for equivalent points and the comparison is like for like. Markers
+   * are drawn at the targets because "did the hand arrive" is not answerable from a picture
+   * of somebody standing near a table.
+   */
+  /**
+   * Stood 12cm closer to the table than the generated Ileana.
+   *
+   * Not a fudge - a calibration, and the number came from measuring. Her Mixamo arm is
+   * 0.53m against the generated character's 0.578, and her shoulder sits further back, so
+   * the same authored targets were 0.60-0.64m away from a 0.53m arm. The solver did the
+   * only correct thing with that, which is extend fully and come up short.
+   *
+   * Every rigged character will need a number like this, because a real skeleton has real
+   * proportions and this game's hand targets were authored against a generator whose arms
+   * are a function of height. It is one measurement per character, not a redesign.
+   */
+  const RIG_AT = new THREE.Vector3(-1.99, 0, -1.52);
+  const RIG_SHIFT = new THREE.Vector3(-1.05, 0, 0);
+  const riggedIleana = placeRigged('IleanaRigged', {
+    modelUrl: '@project/assets/models/Ileana.glb',
+    position: RIG_AT,
+    rotation: new THREE.Euler(0, Math.PI * 0.2, 0),
+    height: 1.66,
+    handsOn: {
+      left: new THREE.Vector3(-1.02, 0.79, -1.47).add(RIG_SHIFT),
+      right: new THREE.Vector3(-0.8, 0.79, -1.5).add(RIG_SHIFT),
+    },
+    showTargets: true,
+  });
+  scene.registerProp('ileana-rigged', riggedIleana.root);
 
   addContact(scene, 'Ileana', {
     seed: 'ileana-marku',
