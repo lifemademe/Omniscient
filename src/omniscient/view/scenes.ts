@@ -1456,8 +1456,21 @@ function buildSeedlingTunnel(scene: ContactScene): void {
 
   const lower = section(0.21, 0.34, 1.85, 0.09, new THREE.Vector3(0, 0.05, 0));
   trunkParts.push(lower.geometry);
-  // Started a little inside the section below, so the joint is a taper rather than a step.
-  const upper = section(0.115, 0.22, 1.5, 0.23, lower.top.clone().add(new THREE.Vector3(-0.02, -0.1, 0.04)));
+  /**
+   * The joint, straightened.
+   *
+   * It used to go from 0.09 of tilt to 0.23 and step sideways by 2cm as it did it - eight
+   * degrees of bend and a lateral offset at the same point, which is the difference between
+   * a trunk that leans and a trunk that has been broken and badly set. A tree does change
+   * angle up its length, but across a joint you can see, not at one.
+   *
+   * 0.15 keeps the lean the silhouette wanted and halves the kink; the offset is now purely
+   * vertical, so the sections overlap into each other instead of beside each other.
+   */
+  const upperFrom = lower.top.clone().add(new THREE.Vector3(0, -0.12, 0));
+  const UPPER_BASE = 0.22;
+  const UPPER_TOP = 0.115;
+  const upper = section(UPPER_TOP, UPPER_BASE, 1.5, 0.15, upperFrom);
   trunkParts.push(upper.geometry);
   treeRoot.add(
     meshOf('TreeTrunk', mergeGeometries(trunkParts, false) ?? flare, MAT.timberDark)
@@ -1493,7 +1506,28 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     // geometry.rotateZ then .rotateY composes as Ry * Rz, so the direction has to be
     // built in the same order or the foliage lands somewhere the branch never went.
     const dir = UP.clone().applyAxisAngle(Z_AXIS, lean).applyAxisAngle(Y_AXIS, swing);
-    const from = new THREE.Vector3(0.42 + i * 0.03, 2.78 + i * 0.08, 0.03);
+
+    /**
+     * Each limb leaves the trunk on the side it is heading for.
+     *
+     * All six used to start inside a 15cm span on the trunk's own centre line, which builds
+     * an umbrella: six ribs from one point, spreading only at the tips. A tree does the
+     * opposite - branches leave at different heights and each one leaves from the side of
+     * the trunk it grows towards, so the join reads as a fork rather than as a socket.
+     *
+     * Both numbers are now derived from the trunk rather than typed next to it: the height
+     * is a fraction along the upper section, and the radial offset uses that section's own
+     * taper at that height. The limb cannot start inside the wood or float off it, and it
+     * cannot drift if the trunk is ever re-proportioned.
+     */
+    const up = 0.34 + i * 0.12;
+    const girth = UPPER_BASE + (UPPER_TOP - UPPER_BASE) * up;
+    // The limb's horizontal heading, which is where on the trunk it should emerge.
+    const out = new THREE.Vector3(Math.cos(swing), 0, -Math.sin(swing));
+    const from = upperFrom
+      .clone()
+      .lerp(upper.top, up)
+      .addScaledVector(out, girth * 0.72);
 
     const limb = new THREE.CylinderGeometry(0.045, 0.1, length, 6);
     limb.rotateZ(lean);
@@ -1793,7 +1827,27 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * empty field has a diorama.
    */
   const glass = greenhouse(rng, {
-    at: new THREE.Vector3(-5.6, 0, -4.4),
+    /**
+     * Moved left and further back, off the tree.
+     *
+     * At (-5.6, -4.4) its near edge sat at x=-3.9 and the trunk stands at x=-3.7, so from
+     * this camera the tree came down through the middle of the glasshouse and cut it in
+     * two. Neither object was wrong; they were simply on the same line of sight, which is
+     * the kind of thing that is invisible while you are placing one of them and obvious the
+     * moment both are lit.
+     *
+     * The tree could not move - it has to be where it shades the tunnel, which is the
+     * mission - so the dressing did.
+     *
+     * The first attempt moved it left AND back and barely helped, because moving something
+     * further away slides it towards the vanishing point, which here is towards the tree.
+     * So this is solved rather than nudged: projecting both through the shot's own camera
+     * basis put the glasshouse's right edge at -0.252 and the trunk at -0.222 in tangent
+     * units - three hundredths apart, which was never going to clear. At x=-8.4 the edge
+     * lands at -0.333 against a trunk edge of -0.242, and the whole building is still
+     * comfortably inside a horizontal half-angle of 0.87.
+     */
+    at: new THREE.Vector3(-8.4, 0, -5.8),
     width: 3.4,
     length: 5.8,
     wall: 1.75,
