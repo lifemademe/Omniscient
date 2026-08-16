@@ -2795,6 +2795,195 @@ function buildFloodedCellar(scene: ContactScene): void {
   pump.translate(-2.6, 0.62, -1.5);
   scene.registerProp('pump', meshOf('Pump', pump, MAT.equipment));
 
+  /**
+   * -- Dressing, and the one idea behind all of it --------------------------------------
+   *
+   * This was the barest room in the game: seventeen props, every one of them structure or
+   * a light. A wall, a floor, a run of pipe and nothing that anybody had ever put down.
+   *
+   * The organising idea is not "add clutter", it is EVERYTHING IN HERE IS UP. Boxes on a
+   * pallet, timber on blocks, tins on a shelf above the run, a bucket upside down so it
+   * does not fill. That is what a cellar looks like when it floods every spring, and it
+   * tells the player what the room does before Vasile says a word - §131, the environment
+   * carrying its own evidence rather than illustrating dialogue that already exists.
+   *
+   * The exception is the argument. One box was left on the floor, once, and it is still
+   * there: dark to well above the current waterline, collapsed at the bottom. Everything
+   * else in the room is a decision somebody made because of that box.
+   *
+   * Merged per material and registered as four props rather than twenty, because §187
+   * wants one material family and the draw call cost of a lived-in room should be the cost
+   * of the room, not of each thing in it.
+   */
+  const dressTimber: THREE.BufferGeometry[] = [];
+  const dressMetal: THREE.BufferGeometry[] = [];
+  const dressCard: THREE.BufferGeometry[] = [];
+
+  /** A pallet: three bearers and five deck boards, which is enough to read as one. */
+  const pallet = (x: number, z: number, turn: number): number => {
+    const parts: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < 3; i++) {
+      const bearer = new THREE.BoxGeometry(1.1, 0.09, 0.09);
+      bearer.translate(0, 0.045, -0.38 + i * 0.38);
+      parts.push(bearer);
+    }
+    for (let i = 0; i < 5; i++) {
+      const board = new THREE.BoxGeometry(1.1, 0.022, 0.13);
+      board.translate(0, 0.1, -0.4 + i * 0.2);
+      parts.push(board);
+    }
+    for (const part of parts) {
+      part.rotateY(turn);
+      part.translate(x, 0, z);
+      dressTimber.push(part);
+    }
+    return 0.111; // deck height, so callers can stand things on it
+  };
+
+  // Against the back wall, right of the run where the frame was emptiest.
+  const deck = pallet(2.25, -1.72, jitter(rng, 0.09));
+
+  /**
+   * Three boxes up on the pallet, and one left on the floor.
+   *
+   * Stacked slightly out of square and turned a few degrees off each other - a stack that
+   * is perfectly aligned reads as a rendering of boxes rather than as boxes somebody put
+   * there in a hurry with wet hands.
+   */
+  for (let i = 0; i < 3; i++) {
+    const w = range(rng, 0.38, 0.52);
+    const h = range(rng, 0.26, 0.34);
+    const box = new THREE.BoxGeometry(w, h, range(rng, 0.34, 0.46));
+    box.rotateY(jitter(rng, 0.22));
+    box.translate(2.25 + jitter(rng, 0.11), deck + h / 2 + i * 0.31, -1.72 + jitter(rng, 0.1));
+    dressCard.push(box);
+  }
+
+  /**
+   * The one on the floor, which is the point of the other three.
+   *
+   * Squashed on its vertical axis rather than modelled as collapsed - a box that has been
+   * wet to halfway and then dried sits down into itself, and 0.6 of its own height reads
+   * as that from across the room. Given the tide stain material, so it carries the mark of
+   * a flood higher than the one currently in the room.
+   */
+  const ruined = new THREE.BoxGeometry(0.46, 0.3, 0.4);
+  ruined.scale(1.06, 0.6, 1.06);
+  ruined.rotateY(0.31);
+  ruined.translate(1.15, 0.09, -1.1);
+  scene.registerProp('ruined-box', meshOf('RuinedBox', ruined, MAT.tideStain));
+
+  /**
+   * Timber on blocks, along the left of the back wall.
+   *
+   * Long and low, which is the shape the room needed - the wall was two big flat values
+   * with a pipe across it, and a horizontal stack at knee height gives the eye something
+   * between the floor and the run. §241: depth out of layers.
+   */
+  for (const bx of [-2.85, -1.35] as const) {
+    const block = new THREE.BoxGeometry(0.2, 0.19, 0.24);
+    block.translate(bx, 0.095, -1.86);
+    dressTimber.push(block);
+  }
+  for (let i = 0; i < 7; i++) {
+    const length = range(rng, 1.75, 1.95);
+    const plank = new THREE.BoxGeometry(length, 0.045, range(rng, 0.11, 0.15));
+    plank.rotateY(jitter(rng, 0.02));
+    plank.translate(-2.1 + jitter(rng, 0.06), 0.21 + i * 0.048, -1.86 + jitter(rng, 0.05));
+    dressTimber.push(plank);
+  }
+
+  /**
+   * A shelf above the run, and what is on it.
+   *
+   * Deliberately ABOVE the pipes. It is the highest thing in the room and the only place
+   * that has never been under water, which is why the tins are there and not on the floor.
+   * It also puts a third horizontal band on a wall that had one.
+   */
+  const shelfBoard = new THREE.BoxGeometry(1.6, 0.04, 0.26);
+  shelfBoard.translate(2.3, 1.86, -1.98);
+  dressTimber.push(shelfBoard);
+  for (const bx of [1.65, 2.95] as const) {
+    const bracket = new THREE.BoxGeometry(0.04, 0.2, 0.22);
+    bracket.translate(bx, 1.76, -1.98);
+    dressTimber.push(bracket);
+  }
+  for (let i = 0; i < 5; i++) {
+    const r = range(rng, 0.045, 0.07);
+    const tin = new THREE.CylinderGeometry(r, r, range(rng, 0.1, 0.16), 9);
+    tin.translate(1.78 + i * 0.26 + jitter(rng, 0.03), 1.95, -1.97 + jitter(rng, 0.04));
+    dressMetal.push(tin);
+  }
+
+  /**
+   * A bucket, upside down.
+   *
+   * The single most efficient object in the room. Right way up it is a bucket; upside down
+   * it is somebody who has learned not to leave anything hollow standing in a cellar that
+   * fills. Same twelve triangles, completely different sentence.
+   */
+  // Capped, not open. Built open-ended first, which made it a length of pipe you could
+  // see straight through - an upturned bucket is only legible if it has a bottom on top.
+  const bucket = new THREE.CylinderGeometry(0.13, 0.16, 0.28, 10);
+  bucket.translate(-0.55, 0.2, -0.35);
+  dressMetal.push(bucket);
+
+  // The mop that goes with it, stood in the corner rather than left in the water.
+  const handle = new THREE.CylinderGeometry(0.018, 0.018, 1.5, 6);
+  handle.rotateZ(0.13);
+  handle.translate(-3.05, 0.78, -1.55);
+  dressTimber.push(handle);
+  const head = new THREE.BoxGeometry(0.16, 0.2, 0.09);
+  head.rotateZ(0.13);
+  head.translate(-3.14, 0.12, -1.55);
+  dressCard.push(head);
+
+  /**
+   * A stepladder against the side wall.
+   *
+   * Leaning rather than open, because an open stepladder in the middle of a floor is a
+   * thing being used and this room is a thing being lived with. It is also the tallest
+   * object on the left, which stops the side wall being a blank the eye slides off.
+   */
+  const LEAN = 0.16;
+  for (const side of [-1, 1] as const) {
+    const rail = new THREE.BoxGeometry(0.05, 1.72, 0.05);
+    rail.rotateZ(LEAN);
+    rail.translate(-3.12 + Math.sin(LEAN) * 0.86, 0.86, 0.55 + side * 0.2);
+    dressTimber.push(rail);
+  }
+  for (let i = 0; i < 5; i++) {
+    const rung = new THREE.BoxGeometry(0.05, 0.035, 0.44);
+    const y = 0.24 + i * 0.34;
+    rung.translate(-3.12 + Math.sin(LEAN) * (0.86 - y) + 0.14, y, 0.55);
+    dressTimber.push(rung);
+  }
+
+  scene.registerProp(
+    'dress-timber',
+    meshOf('DressTimber', mergeGeometries(dressTimber, false) ?? dressTimber[0], MAT.timberDark)
+  );
+  scene.registerProp(
+    'dress-metal',
+    meshOf('DressMetal', mergeGeometries(dressMetal, false) ?? dressMetal[0], MAT.steel)
+  );
+  /**
+   * Cardboard stays on MAT.timber, having been moved off it and put back.
+   *
+   * They looked like the brightest thing in the frame, so I darkened them to timberDark -
+   * and measured luma 14 against a lit wall at 149. Not subordinate, gone. The eye had
+   * been reporting "warm and near the camera", which is not the same as "brighter than its
+   * surroundings", and this project's whole discipline is that the second one is a number.
+   *
+   * The measured order is what composition actually wants: the run at 181, the lamp at
+   * 144, the wall at 149, the boxes level with the wall they stand against. The mission is
+   * still the brightest object in the room.
+   */
+  scene.registerProp(
+    'dress-card',
+    meshOf('DressCard', mergeGeometries(dressCard, false) ?? dressCard[0], MAT.timber)
+  );
+
   addContact(scene, 'Vasile', {
     seed: 'vasile-crastea',
     height: 1.78,
