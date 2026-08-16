@@ -27,6 +27,7 @@ import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { audio } from './audio/ConsoleAudio.js';
 import { installCursor } from './art/cursor.js';
+import { playWarp } from './art/warp.js';
 import { SystemPanel } from './menu/SystemPanel.js';
 import { createSeaLife } from './geometry/seaLife.js';
 import { WINDOW_VIEW } from './geometry/room.js';
@@ -1611,6 +1612,22 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // should sound the same from here on: the difference was in the verdict cue, and the
     // link closing is the link closing.
     audio.setOnAir(false);
+
+    /**
+     * The pull back into the machine.
+     *
+     * Fired here rather than at the outcome, because this is the moment the CAMERA starts
+     * moving - the effect is the room rushing past, and it has nothing to be past until
+     * the shot begins. Matched to the home move's own duration so the green is gone by the
+     * time the workstation settles rather than hanging over it.
+     *
+     * It also does a job beyond looking good. The cut from somebody's cellar to a desk
+     * sixty units away is the hardest edit in the game, and until now it was a straight
+     * camera move between two unrelated rooms. Green at the edges says who is doing the
+     * moving.
+     */
+    const warpContainer = this.getWorld()?.gameContainer;
+    if (warpContainer) playWarp(warpContainer, HOME_SHOT.duration ?? 2.0);
 
     this.phase = Phase.Home;
     this.screen = Screen.Tree;
