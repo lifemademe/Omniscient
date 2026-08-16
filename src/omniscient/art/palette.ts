@@ -212,6 +212,8 @@ export const MAT = {
    * member rather than a per-object override.
    */
   floorboard: standard('#6a5136', 0.9),
+  /** Worked earth. Darker and redder than MAT.ground, which is a track somebody walks on. */
+  soil: standard('#5a4028', 0.98),
   metal: standard(HUMAN.metal, 0.45, 0.65),
   plastic: standard(HUMAN.plastic, 0.72, 0.03),
   dark: standard(HUMAN.dark, 0.6, 0.1),

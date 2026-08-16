@@ -229,7 +229,18 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
     position.set(x, y, z);
     quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), range(rng, 0, Math.PI * 2));
     const tall = range(rng, low, high) * (0.45 + 0.55 * lush);
-    scale.set(range(rng, 0.7, 1.1) * 0.055, tall, 1);
+    /**
+     * Z scales with height, and this was the bug that made the field look mown flat.
+     *
+     * The blade's forward curl is baked into the geometry as 0.34 at the tip of a UNIT
+     * blade. With a Z scale of 1 that stayed 0.34 METRES however short the blade was - so a
+     * 14cm blade had its tip 34cm downwind, bent to nearly two and a half times its own
+     * height and lying along the ground. Grass arches; it does not do that.
+     *
+     * Scaling depth with height keeps the curl proportional, so a short blade arches a
+     * little and a tall one arches more, which is what actually happens in a field.
+     */
+    scale.set(range(rng, 0.7, 1.1) * 0.07, tall, tall);
     matrix.compose(position, quaternion, scale);
 
     // Thin, dry blades where the field is sparse - the same reason the soil shows there.

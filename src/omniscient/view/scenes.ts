@@ -1302,15 +1302,70 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * field IS the ground now, the same call the sea gets on the headland.
    */
 
-  const beds: THREE.BufferGeometry[] = [];
+  /**
+   * Raised beds somebody built, rather than two rectangles of soil.
+   *
+   * They were a single box of MAT.timberDark each - brown slabs sitting on the field, which
+   * reads as a texture swap rather than as a thing that was made. A bed is FOUR BOARDS AND
+   * FOUR POSTS, and the soil sits down inside it a hand's width below the rim. That gap is
+   * most of the effect: it is what tells you the frame is holding the earth in, which is
+   * the entire reason a raised bed exists.
+   *
+   * It also costs almost nothing to say who made it. The posts stand a little proud of the
+   * boards, the way they do when somebody cuts them from what they have and does not go
+   * back to trim the tops.
+   */
+  const BED_W = 1.5;
+  const BED_D = 4.4;
+  const BED_H = 0.24;
+  const BOARD = 0.055;
+  const BED_SOIL_TOP = 0.19;
+
+  const bedFrame: THREE.BufferGeometry[] = [];
+  const bedSoil: THREE.BufferGeometry[] = [];
+
   for (const side of [-1, 1] as const) {
-    const bed = new THREE.BoxGeometry(1.5, 0.22, 4.4);
-    bed.translate(side * 1.05, 0.11, -0.2);
-    beds.push(bed);
+    const cx = side * 1.05;
+    const cz = -0.2;
+
+    // The long boards, running with the rows.
+    for (const sx of [-1, 1] as const) {
+      const board = new THREE.BoxGeometry(BOARD, BED_H, BED_D);
+      board.translate(cx + sx * (BED_W / 2 - BOARD / 2), BED_H / 2, cz);
+      bedFrame.push(board);
+    }
+    // The ends.
+    for (const sz of [-1, 1] as const) {
+      const board = new THREE.BoxGeometry(BED_W, BED_H, BOARD);
+      board.translate(cx, BED_H / 2, cz + sz * (BED_D / 2 - BOARD / 2));
+      bedFrame.push(board);
+    }
+    // Corner posts, standing proud.
+    for (const sx of [-1, 1] as const) {
+      for (const sz of [-1, 1] as const) {
+        const post = new THREE.BoxGeometry(0.085, BED_H + 0.06, 0.085);
+        post.translate(
+          cx + sx * (BED_W / 2 - 0.042),
+          (BED_H + 0.06) / 2,
+          cz + sz * (BED_D / 2 - 0.042)
+        );
+        bedFrame.push(post);
+      }
+    }
+
+    // The earth, inset and sitting below the rim.
+    const soil = new THREE.BoxGeometry(BED_W - BOARD * 2, BED_SOIL_TOP, BED_D - BOARD * 2);
+    soil.translate(cx, BED_SOIL_TOP / 2, cz);
+    bedSoil.push(soil);
   }
+
   scene.registerProp(
     'beds',
-    meshOf('Beds', mergeGeometries(beds, false) ?? beds[0], MAT.timberDark)
+    meshOf('Beds', mergeGeometries(bedFrame, false) ?? bedFrame[0], MAT.timber)
+  );
+  scene.registerProp(
+    'bed-soil',
+    meshOf('BedSoil', mergeGeometries(bedSoil, false) ?? bedSoil[0], MAT.soil)
   );
 
   /**
@@ -1362,7 +1417,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   const BED_ROWS = 7;
   const BED_COLS = 3;
   const BED_Z = -1.9;
-  const BED_TOP = 0.22;
+  const BED_TOP = BED_SOIL_TOP;
 
   scene.registerProp(
     'rows-healthy',
@@ -1959,7 +2014,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
       at: new THREE.Vector3(0.2, 0, 0.4),
       width: 15,
       depth: 11,
-      count: 26000,
+      count: 34000,
       // Ankle height. At 0.4 she was standing waist-deep in a hay meadow rather than in a
       // worked field somebody walks across every day.
       height: [0.07, 0.2],
@@ -1970,6 +2025,63 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     // The gust, advanced once a frame. Registered here rather than globally so it only
     // runs while this diorama is the one on screen.
     { idle: (deltaTime) => stepWind(deltaTime) }
+  );
+
+  /**
+   * -- A boundary, because a field without one just stops --------------------------------
+   *
+   * The complaint was that the set looks empty, and the emptiness is not a shortage of
+   * objects near the camera - it is that the ground runs away to a horizon with nothing
+   * between the beds and the hills. The eye has no edge to stop at, so it reads the whole
+   * middle distance as unfinished.
+   *
+   * A hedge and a fence fix that for very little. They also say what the field IS: a
+   * smallholding has a boundary, somebody put it there, and the neighbour whose tree is
+   * causing all this trouble is on the other side of it. That last part is the mission -
+   * the tree belongs to somebody else, and until now nothing in the scene said so.
+   */
+  const hedge: THREE.BufferGeometry[] = [];
+  const fence: THREE.BufferGeometry[] = [];
+  const HEDGE_Z = -9.4;
+
+  for (let i = 0; i < 46; i++) {
+    const x = -19 + i * 0.85;
+    // Overlapping lumps of varying size, so the top line wanders the way a hedge does
+    // rather than running level like a wall.
+    const size = range(rng, 0.62, 1.0);
+    const blob = new THREE.IcosahedronGeometry(size, 0);
+    blob.scale(range(rng, 1.1, 1.5), range(rng, 0.85, 1.25), range(rng, 0.9, 1.2));
+    blob.rotateY(range(rng, 0, Math.PI * 2));
+    blob.translate(x + jitter(rng, 0.2), size * range(rng, 0.75, 1.0), HEDGE_Z + jitter(rng, 0.35));
+    hedge.push(blob);
+  }
+  scene.registerProp(
+    'hedge',
+    meshOf('Hedge', mergeGeometries(hedge, false) ?? hedge[0], MAT.leafDeep)
+  );
+
+  /**
+   * Posts and two wires, on this side of the hedge.
+   *
+   * The fence is hers and the hedge is the boundary itself - which is why the posts stand
+   * in front of it. It is also the only straight line in the middle distance, and one
+   * straight line is what makes everything around it read as grown rather than built.
+   */
+  for (let i = 0; i < 17; i++) {
+    const x = -16 + i * 2.0;
+    const post = new THREE.BoxGeometry(0.09, 1.05, 0.09);
+    post.rotateZ(jitter(rng, 0.04));
+    post.translate(x, 0.52, HEDGE_Z + 0.9);
+    fence.push(post);
+  }
+  for (const y of [0.42, 0.82] as const) {
+    const wire = new THREE.BoxGeometry(32, 0.015, 0.015);
+    wire.translate(0, y, HEDGE_Z + 0.9);
+    fence.push(wire);
+  }
+  scene.registerProp(
+    'fence',
+    meshOf('Fence', mergeGeometries(fence, false) ?? fence[0], MAT.timberDark)
   );
 
   // Field stone, half-buried. Cool grey so it never competes with a crop.
@@ -2027,6 +2139,63 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   scene.registerProp(
     'glasshouse-glazing',
     meshOf('GlasshouseGlazing', glass.glass, MAT.greenhouseGlass)
+  );
+
+  /**
+   * Inside the glasshouse, which was a lit empty box.
+   *
+   * A glasshouse with nothing in it is a shed made of glass, and this one is transparent -
+   * so the emptiness was not hidden the way it would be behind a wall, it was the first
+   * thing the eye found on the left of the frame. Staging down both sides with trays on it
+   * fixes that for about forty boxes, and it says something the scene wanted anyway: she
+   * raises things under glass and moves them out to the beds, which is exactly why a bank
+   * of seedlings failing outdoors is worth a phone call.
+   *
+   * Simple boxes on purpose. It sits eleven metres from the lens behind two panes of
+   * glazing, and anything finer would be paying for what the glass takes away.
+   */
+  const houseAt = new THREE.Vector3(-8.4, 0, -5.8);
+  const staging: THREE.BufferGeometry[] = [];
+  const trays: THREE.BufferGeometry[] = [];
+  const underGlass: THREE.BufferGeometry[] = [];
+
+  for (const side of [-1, 1] as const) {
+    const bx = houseAt.x + side * 1.02;
+
+    const top = new THREE.BoxGeometry(0.62, 0.05, 4.6);
+    top.translate(bx, 0.78, houseAt.z);
+    staging.push(top);
+
+    for (let i = 0; i < 4; i++) {
+      const leg = new THREE.BoxGeometry(0.07, 0.78, 0.07);
+      leg.translate(bx, 0.39, houseAt.z - 2.0 + i * 1.33);
+      staging.push(leg);
+    }
+
+    // Trays in a run, with gaps where she has already taken some out to the beds.
+    for (let i = 0; i < 7; i++) {
+      if (rng() < 0.22) continue;
+      const tray = new THREE.BoxGeometry(0.5, 0.07, 0.5);
+      tray.translate(bx + jitter(rng, 0.03), 0.84, houseAt.z - 1.95 + i * 0.62);
+      trays.push(tray);
+
+      const green = new THREE.BoxGeometry(0.42, range(rng, 0.05, 0.14), 0.42);
+      green.translate(bx + jitter(rng, 0.03), 0.91, houseAt.z - 1.95 + i * 0.62);
+      underGlass.push(green);
+    }
+  }
+
+  scene.registerProp(
+    'house-staging',
+    meshOf('HouseStaging', mergeGeometries(staging, false) ?? staging[0], MAT.timberDark)
+  );
+  scene.registerProp(
+    'house-trays',
+    meshOf('HouseTrays', mergeGeometries(trays, false) ?? trays[0], MAT.soil)
+  );
+  scene.registerProp(
+    'house-seedlings',
+    meshOf('HouseSeedlings', mergeGeometries(underGlass, false) ?? underGlass[0], MAT.leaf)
   );
 
   scene.registerShot('default', {
