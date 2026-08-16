@@ -23,9 +23,11 @@
  */
 
 import { initialBeam, stepBeam } from '../mission/beam.js';
+import { narrow } from '../mission/traces.js';
 import { audio } from '../audio/ConsoleAudio.js';
 
 import type { BeamState } from '../mission/beam.js';
+import type { ClueId, Evidence } from '../mission/traces.js';
 import type { DeviceView, PlayerMessage } from './surface.js';
 
 const STYLE_ID = 'omniscient-board-styles';
@@ -133,6 +135,100 @@ const BOARD_CSS = `
 }
 .omni-board__status { font-size: 11px; color: rgba(159, 216, 168, 0.8); }
 .omni-board__status--score { color: #e0a24c; }
+
+/* -- The surveillance board -----------------------------------------------------------
+   The count is deliberately the largest element on the panel. It is the only number in
+   this game that the player watches fall, and the mission is that fall. */
+.omni-trace {
+  display: flex;
+  flex-direction: column;
+  /* The board grid is grid-template-columns: 1fr auto 1fr, built for the relations board's
+     two columns and a spine. Left alone this panel sat in the first 1fr - a third of the
+     width - which wrapped the switches one per line and ellipsed every row. It is not a
+     two-column device, so it spans all three.
+     (No backticks in here - this whole block is a template literal, and one closes it.) */
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.omni-trace__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.omni-trace__count {
+  font-size: 40px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  color: #7fe08a;
+}
+.omni-trace__caption { font-size: 11px; color: rgba(159, 216, 168, 0.72); }
+.omni-trace__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 9px;
+}
+/* Off by default and visibly so: an unapplied fact is something the player has been given
+   and has not used yet, which is exactly the state the puzzle wants them thinking about. */
+.omni-trace__fact {
+  padding: 4px 9px;
+  border: 1px solid rgba(127, 224, 138, 0.28);
+  border-radius: 3px;
+  background: transparent;
+  color: rgba(159, 216, 168, 0.65);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+.omni-trace__fact:hover { border-color: rgba(127, 224, 138, 0.6); }
+.omni-trace__fact--on {
+  border-color: #7fe08a;
+  background: rgba(127, 224, 138, 0.14);
+  color: #cfe9d2;
+}
+.omni-trace__list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.omni-trace__row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 5px 9px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: rgba(10, 24, 15, 0.7);
+  color: #cfe9d2;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.omni-trace__row:hover { border-color: rgba(127, 224, 138, 0.5); }
+.omni-trace__row--picked {
+  border-color: #7fe08a;
+  background: rgba(127, 224, 138, 0.16);
+}
+.omni-trace__plate { letter-spacing: 0.16em; color: #e0a24c; }
+.omni-trace__detail {
+  color: rgba(159, 216, 168, 0.78);
+  font-size: 11px;
+  /* One line. The rows are a list to scan, and a row that reflows to four lines when the
+     panel narrows stops being scannable at exactly the moment there are most of them. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.omni-trace__more {
+  padding: 5px 9px;
+  font-size: 11px;
+  color: rgba(159, 216, 168, 0.6);
+}
 .omni-board__send {
   padding: 5px 16px;
   border: 1px solid rgba(127, 224, 138, 0.6);
@@ -295,6 +391,45 @@ function pipeGlyph(shape: string, turn: number): string {
   return options[((turn % options.length) + options.length) % options.length];
 }
 
+/** Minutes past midnight as a clock reading. */
+function clock(minutes: number): string {
+  const h = Math.floor(minutes / 60) % 24;
+  const m = minutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/**
+ * A fact, as the police would say it out loud.
+ *
+ * Returns null for anything the officer does not have, so the panel draws switches for
+ * what he actually gave the player rather than for every field the type allows.
+ */
+function clueLabel(clue: ClueId, evidence: Evidence): string | null {
+  switch (clue) {
+    case 'colour':
+      return evidence.colour ? evidence.colour.toUpperCase() : null;
+    case 'body':
+      return evidence.body ? evidence.body.toUpperCase() : null;
+    case 'heading':
+      return evidence.heading ? `HEADING ${evidence.heading.toUpperCase()}` : null;
+    case 'brokenLight':
+      return evidence.brokenLight === undefined
+        ? null
+        : evidence.brokenLight
+          ? 'ONE LIGHT OUT'
+          : 'LIGHTS OK';
+    case 'seenBetween':
+      return evidence.seenBetween
+        ? `${clock(evidence.seenBetween[0])}-${clock(evidence.seenBetween[1])}`
+        : null;
+    case 'plate':
+      // Dots where the camera read nothing, so the shape of what they have is visible.
+      return evidence.plate
+        ? `PLATE ${evidence.plate.map((ch) => ch ?? '·').join('')}`
+        : null;
+  }
+}
+
 export class BoardPanel {
   public readonly element: HTMLDivElement;
 
@@ -407,6 +542,13 @@ export class BoardPanel {
     this.promptElement = prompt;
   }
 
+  /** Which of the officer's facts the player has applied. The narrowing IS the puzzle. */
+  private traceFilters = new Set<ClueId>();
+  /** The trace the player is pointing at, if any. */
+  private picked: string | null = null;
+  private traceParts: { count: HTMLElement; caption: HTMLElement; list: HTMLElement } | null =
+    null;
+
   private readonly promptElement: HTMLDivElement;
   private readonly fold: HTMLButtonElement;
   private folded = false;
@@ -478,16 +620,10 @@ export class BoardPanel {
       return;
     }
 
-    /**
-     * The surveillance board has no panel yet.
-     *
-     * Deliberately a hard return rather than a fall-through: everything below this line
-     * assumes a relations board and would have read `view.people` off a trace board. The
-     * mission is not in the queue, so this is unreachable in play - and when the filter UI
-     * lands it replaces this return rather than being bolted onto the relations layout,
-     * which is a different shape of thing entirely.
-     */
-    if (view.kind === 'traces') return;
+    if (view.kind === 'traces') {
+      this.buildTraces(view.fleet.length, view.evidence, view.reveal);
+      return;
+    }
 
     const people = document.createElement('div');
     people.className = 'omni-board__column';
@@ -596,6 +732,188 @@ export class BoardPanel {
    * It does not decide anything: every click is recorded with its timestamp and the whole
    * list goes up at the end for the runtime to replay (§157).
    */
+  /**
+   * The surveillance board: six switches and a number falling.
+   *
+   * ## Why the count is the biggest thing on the panel
+   *
+   * The mission is not "spot the car", it is "watch a city become one car". That only
+   * lands if the number is the loudest element - a player who flips COLOUR and sees 180
+   * become 40 has learned the whole verb in one click, without a tutorial line. Everything
+   * else on this panel is subordinate to that readout.
+   *
+   * ## Why the facts are switches rather than applied automatically
+   *
+   * Because turning one OFF is how you understand it. The property this puzzle is built on
+   * is that every clue is load-bearing - drop any one and two cars fit - and the only way
+   * to feel that rather than be told it is to drop one and watch the count refuse to reach
+   * 1. The switches make the design of the puzzle playable.
+   *
+   * ## Safe UI
+   *
+   * textContent throughout. Plates, colours and body types all come off the wire, and this
+   * panel follows the same rule as every other: no innerHTML, ever.
+   */
+  private buildTraces(total: number, evidence: Evidence, reveal: ClueId[]): void {
+    this.traceFilters = new Set();
+    this.picked = null;
+
+    /**
+     * Its own column, because the shared board grid is a row.
+     *
+     * The relations board puts two columns of boxes side by side and the grid is built for
+     * that. Appending the head, the switches and the list straight into it laid them out
+     * horizontally and squeezed the caption into a one-word-wide sliver down the side of
+     * the count. A device whose layout is vertical has to bring its own container.
+     */
+    const panel = document.createElement('div');
+    panel.className = 'omni-trace';
+
+    const head = document.createElement('div');
+    head.className = 'omni-trace__head';
+
+    const count = document.createElement('div');
+    count.className = 'omni-trace__count';
+    count.textContent = String(total);
+
+    const caption = document.createElement('div');
+    caption.className = 'omni-trace__caption';
+    caption.textContent = `of ${total} tracked`;
+
+    head.append(count, caption);
+    panel.appendChild(head);
+
+    /**
+     * One switch per fact the police actually have.
+     *
+     * Driven by `reveal` rather than by iterating the evidence object, because the ORDER
+     * is authored - the big drops come first so the player learns that filtering works
+     * before they hit the part where it stops being enough.
+     */
+    const facts = document.createElement('div');
+    facts.className = 'omni-trace__facts';
+    for (const clue of reveal) {
+      const label = clueLabel(clue, evidence);
+      if (!label) continue;
+
+      const toggle = document.createElement('button');
+      toggle.className = 'omni-trace__fact';
+      toggle.type = 'button';
+      toggle.textContent = label;
+      toggle.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        audio.play('tap');
+        if (this.traceFilters.has(clue)) this.traceFilters.delete(clue);
+        else this.traceFilters.add(clue);
+        // Narrowing can remove the car the player had selected, and a selection that is no
+        // longer on screen would submit something they cannot see.
+        this.picked = null;
+        this.refreshTraces();
+      });
+      facts.appendChild(toggle);
+    }
+    panel.appendChild(facts);
+
+    const list = document.createElement('div');
+    list.className = 'omni-trace__list';
+    panel.appendChild(list);
+    this.grid.appendChild(panel);
+
+    this.traceParts = { count, caption, list };
+    this.refreshTraces();
+  }
+
+  /** The number of survivors the panel is allowed to draw before it asks for more filters. */
+  private static readonly TRACE_PAGE = 36;
+
+  /**
+   * Recompute the survivors and redraw.
+   *
+   * The list is capped and SAYS SO. A silent truncation would read as "these are all the
+   * cars that fit", which is the one lie this panel must not tell - a player who picks
+   * from a list they believe is complete has been cheated by the interface rather than
+   * beaten by the puzzle.
+   */
+  private refreshTraces(): void {
+    const view = this.view;
+    if (!view || view.kind !== 'traces' || !this.traceParts) return;
+
+    const applied = [...this.traceFilters];
+    const survivors = narrow(view.fleet, view.evidence, applied);
+    const { count, caption, list } = this.traceParts;
+
+    count.textContent = String(survivors.length);
+    caption.textContent =
+      applied.length === 0
+        ? `of ${view.fleet.length} tracked`
+        : `of ${view.fleet.length} tracked, on ${applied.length} of ${view.reveal.length} facts`;
+
+    // The switches carry state too - a fact that is on has to look on, or the player
+    // cannot tell which of the officer's facts they have actually spent.
+    const toggles = this.grid.querySelectorAll('.omni-trace__fact');
+    view.reveal
+      .filter((clue) => clueLabel(clue, view.evidence) !== null)
+      .forEach((clue, i) => {
+        toggles[i]?.classList.toggle('omni-trace__fact--on', this.traceFilters.has(clue));
+      });
+
+    for (const button of Array.from(list.children)) button.remove();
+
+    const shown = survivors.slice(0, BoardPanel.TRACE_PAGE);
+    for (const trace of shown) {
+      const row = document.createElement('button');
+      row.className = 'omni-trace__row';
+      row.type = 'button';
+      if (trace.id === this.picked) row.classList.add('omni-trace__row--picked');
+
+      const plate = document.createElement('span');
+      plate.className = 'omni-trace__plate';
+      plate.textContent = trace.plate;
+
+      const detail = document.createElement('span');
+      detail.className = 'omni-trace__detail';
+      // Everything the network knows about it, in the order the officer listed things.
+      detail.textContent = [
+        trace.colour,
+        trace.body,
+        clock(trace.lastSeen),
+        trace.heading,
+        trace.brokenLight ? 'one light out' : 'lights ok',
+      ].join('  ');
+
+      row.append(plate, detail);
+      row.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        audio.play('seat');
+        this.picked = trace.id;
+        this.refreshTraces();
+      });
+      list.appendChild(row);
+    }
+
+    if (survivors.length > shown.length) {
+      const more = document.createElement('div');
+      more.className = 'omni-trace__more';
+      more.textContent = `${survivors.length - shown.length} more - keep narrowing`;
+      list.appendChild(more);
+    }
+
+    if (survivors.length === 0) {
+      const none = document.createElement('div');
+      none.className = 'omni-trace__more';
+      // Reachable: the facts are consistent, but a player can switch on a filter set the
+      // panel has already narrowed past. Says what to do rather than reporting an error.
+      none.textContent = 'nothing matches all of that - take a fact back off';
+      list.appendChild(none);
+    }
+
+    this.send.disabled = this.picked === null;
+    if (view.note) {
+      this.status.className = 'omni-board__status omni-board__status--score';
+      this.status.textContent = view.note;
+    }
+  }
+
   private buildBeam(): void {
     const track = document.createElement('div');
     track.className = 'omni-board__track';
@@ -764,6 +1082,12 @@ export class BoardPanel {
         kind: 'device',
         submission: { kind: 'lock', order: [...this.order] },
       });
+      return;
+    }
+
+    if (view.kind === 'traces') {
+      if (!this.picked) return;
+      this.dispatch({ kind: 'device', submission: { kind: 'traces', traceId: this.picked } });
       return;
     }
 

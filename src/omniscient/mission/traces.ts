@@ -177,6 +177,30 @@ function plate(rng: Rng): string {
  */
 function nearMiss(rng: Rng, base: Trace, clue: ClueId, id: string, evidence: Evidence): Trace {
   const miss: Trace = { ...base, id, cell: { ...base.cell } };
+
+  /**
+   * Its own plate, in the characters nobody read.
+   *
+   * A near miss is a copy of the suspect with one attribute changed, which meant it also
+   * carried the suspect's plate - so the board showed two cars with identical plates, and
+   * a surveillance network that reports duplicate registrations has a bug in it, not a
+   * puzzle. Only the slots the camera actually read have to match; the rest are free.
+   *
+   * That is also a better description of why a partial plate is not enough on its own.
+   * Several cars in the district share the two characters somebody got at night in the
+   * rain, and now they visibly do.
+   */
+  if (clue !== 'plate') {
+    const known = evidence.plate ?? [];
+    miss.plate = base.plate
+      .split('')
+      .map((ch, i) => {
+        if (known[i] != null) return ch;
+        const alphabet = i < 2 ? PLATE_LETTERS : PLATE_DIGITS;
+        return pick(rng, alphabet.split('').filter((c) => c !== ch));
+      })
+      .join('');
+  }
   switch (clue) {
     case 'colour':
       miss.colour = pick(rng, COLOURS.filter((c) => c !== base.colour));
