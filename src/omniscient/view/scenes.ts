@@ -2245,21 +2245,30 @@ function buildClearedHouse(scene: ContactScene): void {
     stack.push(chair);
   };
 
-  // The lower chair, and the upper one sitting down into it: its short legs end at the
-  // lower seat's surface, which is exactly where a stacked chair's feet go.
   /**
-   * Two whole chairs, the upper one nested into the lower.
+   * Two chairs, genuinely nested - third attempt, and the arithmetic is the fix.
    *
-   * The first fix gave the upper chair 12cm legs so it would perch on the lower seat, and
-   * that produced exactly what a playtester described: half a chair sitting on a chair.
-   * A stacked chair is not a shortened chair - it is a complete one whose legs have gone
-   * down INSIDE the frame below it, which is why a stack of them is barely taller than one.
+   * Attempt one gave the upper chair 12cm legs so it would perch on the lower seat, which
+   * read as HALF a chair on a chair. Attempt two made both of them whole, which was the
+   * right idea and stopped there: the upper one was placed at y 0.40 with 0.44 legs, so
+   * its seat landed 40cm above the lower seat. That is not a stack. That is a chair
+   * hovering over a chair, which is exactly what it looked like and exactly what got
+   * reported - twice.
    *
-   * So both are full chairs, and the upper simply starts below the lower one's seat and
-   * intersects it. That intersection is the stack.
+   * A real stack of dining chairs is barely taller than one chair, because the upper one's
+   * legs go down INSIDE the frame below and its seat ends up a hand's width above the seat
+   * under it. Measured: lower seat top is 0.49, so the upper origin wants to be about 0.10,
+   * not 0.40. Its legs then run 0.10 to 0.54 and pass straight through the lower seat -
+   * that intersection IS the stack, and it is what makes the legs disappear the way they
+   * do on a real one.
+   *
+   * They are also nearly aligned in yaw now. Chairs only nest when they are facing the
+   * same way; the old pair were 18 degrees apart, which is another reason they read as two
+   * objects that happened to be near each other rather than as one stack.
    */
-  addChair(new THREE.Vector3(1.75, 0, -1.5), 0.1 + jitter(rng, 0.06), 0.44);
-  addChair(new THREE.Vector3(1.72, 0.4, -1.46), -0.22 + jitter(rng, 0.06), 0.44);
+  const chairTurn = 0.1 + jitter(rng, 0.06);
+  addChair(new THREE.Vector3(1.75, 0, -1.5), chairTurn, 0.44);
+  addChair(new THREE.Vector3(1.762, 0.1, -1.487), chairTurn + jitter(rng, 0.05), 0.44);
 
   scene.registerProp(
     'chairs',
@@ -2643,6 +2652,48 @@ function buildFloodedCellar(scene: ContactScene): void {
       color: new THREE.Color('#8fb6c4'),
       distance: 5,
       decay: 1.6,
+    })
+  );
+
+  /**
+   * Two lights the cellar was missing, both found by sampling rather than by looking.
+   *
+   * Off the default shot: bulkhead lamp 166, his face 57, THE PIPE RUN 43, back wall 41.
+   * Two things wrong with that, and the second is worse.
+   *
+   * His face sat sixteen points above the wall behind it, which is not separation - it is
+   * a man the same colour as his own cellar. And the run, which is the evidence, the thing
+   * every hint points at and the reason the request exists, was at 43 against a wall at
+   * 41. Identical. The outline pass is the only reason it could be found at all, and an
+   * outline is meant to sharpen something the eye has already located, not to do the
+   * locating.
+   *
+   * So: a cold fill on the camera side for him, and a warm wash along the run. The wash is
+   * motivated - the bulkhead is above and behind it, so light reaching the pipes from that
+   * direction is exactly what the fitting would do; it was simply never strong enough to
+   * survive the distance.
+   */
+  scene.registerProp(
+    'face-fill',
+    ENGINE.PointLightNode.create({
+      name: 'FaceFill',
+      position: new THREE.Vector3(1.9, 1.7, 1.4),
+      intensity: 4.6,
+      color: new THREE.Color('#a8c0d4'),
+      distance: 4.4,
+      decay: 1.5,
+    })
+  );
+
+  scene.registerProp(
+    'run-wash',
+    ENGINE.PointLightNode.create({
+      name: 'RunWash',
+      position: new THREE.Vector3(0.4, 1.5, -1.1),
+      intensity: 5.2,
+      color: new THREE.Color('#ffd8b0'),
+      distance: 5.2,
+      decay: 1.4,
     })
   );
 
