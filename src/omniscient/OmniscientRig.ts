@@ -1034,6 +1034,51 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (!world?.postProcessManager) return;
     this.post = world.postProcessManager;
 
+    /**
+     * Tone mapping, and it should have been the first thing here.
+     *
+     * The renderer defaults to NoToneMapping and this project never set anything else, so
+     * every scene has been rendering LINEAR: values clip flat at white and there is no
+     * headroom above it at all. That is why the light in this game has read as "present"
+     * rather than as light. A lit wall and a blazing filament both arrive as 1.0 and
+     * therefore both arrive as the same colour.
+     *
+     * It is also why bloom never did what it was asked to. Bloom takes what is over its
+     * threshold and bleeds it - but nothing can GET meaningfully over the threshold when
+     * white is a hard ceiling, so it was scraping at whatever happened to sit near the top
+     * of the range instead of blooming things that are genuinely bright. Every argument
+     * about bloom strength in this file was an argument about the wrong effect.
+     *
+     * ACES Filmic because it is the one that rolls highlights off warmly - a bright warm
+     * source desaturates towards white the way film does, rather than clipping to a flat
+     * primary. AgX is flatter and more neutral, which is a fine look and not this one; this
+     * game has practical lamps, sunsets and a phosphor screen, and all three want shoulder.
+     *
+     * Exposure above 1 is the point of doing it. It lets the key lights be genuinely
+     * overbright and the tone curve bring them back, which is what puts energy above the
+     * bloom threshold and gives the highlights somewhere to go.
+     */
+    this.post.configureEffect(ENGINE.PostProcessPass.ToneMapping, {
+      enabled: true,
+      mode: THREE.ACESFilmicToneMapping,
+     * 0.62, and the number was measured rather than picked.
+     *
+     * At 1.25 every mid-tone in the game roughly doubled - the far hills went 36 to 78, the
+     * grass 53 to 104 - because eight scenes had been graded by eye against a linear
+     * pipeline, and lighting them properly meant they were all suddenly over-exposed. The
+     * evening in Adaeze's field turned into an afternoon.
+     *
+     * At 0.62 the mid-tones land back within a few values of where they were authored
+     * (hills 44, grass 63) while the top end keeps its new shoulder - the sun core
+     * compresses from 197 to 208 instead of clipping flat. Night is unaffected: the mill
+     * road still reads sky 4, road 9, hedge 3, so nothing has gone milky.
+     *
+     * That is the whole point of doing this. The scenes look as they were meant to and now
+     * have headroom above white, which is what bloom needed all along.
+     */
+    exposure: 0.62,
+    });
+
     // Bloom carries the phosphor bleed off the CRT and the warm halo round the lamp
     // filament - the halation the reference frames have around every practical.
     this.post.configureEffect(ENGINE.PostProcessPass.Bloom, {
