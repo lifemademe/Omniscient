@@ -69,12 +69,60 @@ const meshOf = decorMesh;
  * Every diorama registers its person the same way and under the same prop id, so this is
  * one line rather than four repetitions of the same three.
  */
+/**
+ * The cast, as modelled assets.
+ *
+ * Written out one literal path per line, and that is not laziness about a loop: the asset
+ * pipeline scans source for literal `@project/...` strings to decide what to publish, so a
+ * path built from a name is invisible to it and 404s at runtime in a build that compiles
+ * and lints clean. That already cost an afternoon over three grass models.
+ *
+ * A name missing from this map falls back to the generator, which is what keeps the swap
+ * reversible per character rather than all or nothing.
+ */
+const RIGGED_CAST: Record<string, string> = {
+  Mirela: '@project/assets/models/Mirela.glb',
+  Tomas: '@project/assets/models/Tomas.glb',
+  Adaeze: '@project/assets/models/Adaeze.glb',
+  Ileana: '@project/assets/models/Ileana.glb',
+  Vasile: '@project/assets/models/Vasile.glb',
+  Dorin: '@project/assets/models/Dorin.glb',
+  Sanda: '@project/assets/models/Sanda.glb',
+};
+
+/**
+ * Place a contact - modelled if there is one for them, generated otherwise.
+ *
+ * The two paths deliberately take the SAME placement. Height, facing and hand targets were
+ * authored against the generator and every one of them still means what it meant; a rigged
+ * character is a different way of drawing the person, not a different person. That is also
+ * what makes this reversible: delete a line from RIGGED_CAST and the generated one comes
+ * back, in the same place, holding the same thing.
+ */
 function addContact(
   scene: ContactScene,
   name: string,
   placement: CharacterPlacement,
   options: { hidden?: boolean } = {}
 ): void {
+  const modelUrl = RIGGED_CAST[name];
+  if (modelUrl && !options.hidden) {
+    const rigged = placeRigged(name, {
+      modelUrl,
+      position: placement.position,
+      rotation: placement.rotation,
+      // The generator treats height as optional and defaults it; a modelled character has
+      // to be scaled to something, so the same default is applied here rather than left to
+      // whatever size the exporter happened to produce.
+      height: placement.height ?? 1.7,
+      // The longest clip in the file - see riggedContact.ts for why not the first.
+      clip: true,
+      handsOn: placement.handsOn,
+    });
+    scene.registerProp('contact', rigged.root, { idle: rigged.idle });
+    return;
+  }
+
   const contact = placeCharacter(name, placement);
   // Hidden rather than skipped: the prop stays registered so cues that highlight or move
   // the contact still resolve, and switching back is one flag rather than an edit.
@@ -2702,33 +2750,6 @@ function buildClearedHouse(scene: ContactScene): void {
     meshOf('Chairs', mergeGeometries(stack, false) ?? stack[0], MAT.timberDark)
   );
 
-  /**
-   * TEMP-RIG: the Mixamo Ileana, standing exactly where the generated one stood.
-   *
-   * Same position, same facing, and the SAME hand targets - not shifted copies. The
-   * generated Ileana is hidden rather than deleted, so the two can be swapped back and
-   * forth by one flag while this is being judged.
-   *
-   * Her clip runs and the hands are solved on top of it every frame. That ordering is the
-   * whole experiment: a Mixamo idle writes every bone it animates on every tick, so a pose
-   * applied once at load is gone immediately, and posing AFTER the mixer is what lets her
-   * breathe and still be holding the box.
-   */
-  const RIG_AT = new THREE.Vector3(-1.0, 0, -1.72);
-  const riggedIleana = placeRigged('IleanaRigged', {
-    modelUrl: '@project/assets/models/Ileana.glb',
-    position: RIG_AT,
-    rotation: new THREE.Euler(0, Math.PI * 0.2, 0),
-    height: 1.66,
-    clip: true,
-    handsOn: {
-      left: new THREE.Vector3(-1.02, 0.79, -1.47),
-      right: new THREE.Vector3(-0.8, 0.79, -1.5),
-    },
-    showTargets: true,
-  });
-  scene.registerProp('ileana-rigged', riggedIleana.root, { idle: riggedIleana.idle });
-
   addContact(scene, 'Ileana', {
     seed: 'ileana-marku',
     height: 1.66,
@@ -2771,7 +2792,7 @@ function buildClearedHouse(scene: ContactScene): void {
     // photographs for two days; the difference between her idle and Mirela's is the only
     // characterisation available without faces.
     liveliness: 0.7,
-  }, { hidden: true }); // TEMP-RIG: the block Ileana is out while the GLB is tested
+  });
 
   // -- Light -----------------------------------------------------------------
   // One window and one fill. A house with the curtains taken down and half the power off.
@@ -4451,18 +4472,25 @@ function buildMillRoad(scene: ContactScene): void {
    * describes and what the player should be able to read direction from and nothing else.
    * He gets no face because from here nobody has one.
    */
-  const follower = placeCharacter('Follower', {
-    seed: 'the-man-behind',
-    height: 1.86,
-    build: 0.55,
-    shoulders: 0.66,
-    lean: 0.14,
-    reach: 0.1,
-    garment: 'coat',
-    colors: { garment: '#1b1d22', underlayer: '#1b1d22', skin: '#3a3238', hair: '#15161a' },
+  /**
+   * The Stalker, modelled - and he keeps his hands to himself.
+   *
+   * No handsOn, which is the whole point of him. Every other contact in this game is
+   * touching something the mission cares about; he is twenty metres back in the dark doing
+   * nothing at all, and that is what Sanda is frightened of. Giving him a hand target would
+   * be inventing a reason for him to be there.
+   *
+   * He also gets no ink and no light. At this distance with nothing on him he resolves to a
+   * silhouette, which is exactly what she describes and all the player should be able to
+   * read - direction, and nothing else. He has never had a face and must not get one now
+   * just because the mesh has one.
+   */
+  const follower = placeRigged('Follower', {
+    modelUrl: '@project/assets/models/Stalker.glb',
     position: new THREE.Vector3(2.05, 0, -9.5),
     rotation: new THREE.Euler(0, Math.PI * 0.02, 0),
-    liveliness: 0.8,
+    height: 1.86,
+    clip: true,
   });
 
   scene.registerProp('follower', follower.root, {
