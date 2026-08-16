@@ -59,6 +59,7 @@ import './omniscient/mission/intent.js';
 import './omniscient/mission/lock.js';
 import './omniscient/mission/MissionRuntime.js';
 import './omniscient/mission/pipes.js';
+import './omniscient/mission/traces.js';
 import './omniscient/mission/types.js';
 import './omniscient/OmniscientRig.js';
 import './omniscient/session/SessionController.js';
