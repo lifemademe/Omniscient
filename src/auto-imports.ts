@@ -41,6 +41,7 @@ import './omniscient/geometry/planting.js';
 import './omniscient/geometry/props.js';
 import './omniscient/geometry/room.js';
 import './omniscient/geometry/seaLife.js';
+import './omniscient/geometry/shore.js';
 import './omniscient/geometry/water.js';
 import './omniscient/geometry/wireCity.js';
 import './omniscient/globe/GlobeScreen.js';

@@ -40,6 +40,8 @@ import * as THREE from 'three';
 
 import { range } from '../core/rng.js';
 
+import { SHORE_GLSL, shoreDepth } from './shore.js';
+
 import type { Rng } from '../core/rng.js';
 
 /**
@@ -184,6 +186,8 @@ export interface MeadowOptions {
   height?: [number, number];
   /** Below this the ground is bare. Raise it for a worn field, lower it for rough meadow. */
   bareBelow?: number;
+  /** Metres inland of the waterline before anything will grow. Omit where there is no water. */
+  keepOffBeach?: number;
   /** Circles nothing grows in - paths, beds, the base of a tree. */
   clear?: Array<{ centre: THREE.Vector3; radius: number }>;
   y?: number;
@@ -222,6 +226,19 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
      * below `bareBelow` there is no grass at all, and just above it the blades are short.
      * That is what gives a bald patch a fringe instead of a cut line.
      */
+    /**
+     * Nothing grows on a beach.
+     *
+     * Grass ran straight down into the water, which is the single most obvious thing that
+     * can be wrong with a shoreline - it stops being a shore and becomes a lawn that has
+     * flooded. The margin is generous and RANDOMISED at its inner edge, because a real
+     * treeline against sand is ragged; a clean arc would just be a different wrong line.
+     */
+    if (options.keepOffBeach !== undefined) {
+      const inland = -shoreDepth(x, z);
+      if (inland < options.keepOffBeach * range(rng, 0.55, 1.45)) continue;
+    }
+
     const field = density(x, z);
     if (field < bareBelow) continue;
     const lush = (field - bareBelow) / Math.max(0.001, 1 - bareBelow);
@@ -328,6 +345,10 @@ export interface GroundOptions {
   grass: string;
   /** Colour where it is bare. This is the one the player reads as "ground". */
   soil: string;
+  /** Wet sand at the waterline, if this ground meets water. */
+  sand?: string;
+  /** Dry sand further up the beach. */
+  drySand?: string;
 }
 
 /**
@@ -361,6 +382,8 @@ export function meadowGround(options: GroundOptions): THREE.MeshBasicMaterial {
 
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uSoil = { value: soil };
+    shader.uniforms.uSand = { value: new THREE.Color(options.sand ?? options.soil) };
+    shader.uniforms.uDrySand = { value: new THREE.Color(options.drySand ?? options.soil) };
 
     // World position, carried across by hand. Three only provides one when something else
     // in the material happens to need it, which is not a thing to depend on.
@@ -374,9 +397,15 @@ export function meadowGround(options: GroundOptions): THREE.MeshBasicMaterial {
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
-        ['#include <common>', 'varying vec3 vMeadowAt;', 'uniform vec3 uSoil;', GROUND_NOISE_GLSL].join(
-          '\n'
-        )
+        [
+          '#include <common>',
+          'varying vec3 vMeadowAt;',
+          'uniform vec3 uSoil;',
+          'uniform vec3 uSand;',
+          'uniform vec3 uDrySand;',
+          GROUND_NOISE_GLSL,
+          SHORE_GLSL,
+        ].join('\n')
       )
       .replace(
         '#include <color_fragment>',
@@ -388,6 +417,22 @@ export function meadowGround(options: GroundOptions): THREE.MeshBasicMaterial {
           '  float lush = mdw_density(vMeadowAt.xz);',
           '  float bare = smoothstep(0.52, 0.30, lush);',
           '  diffuseColor.rgb = mix(diffuseColor.rgb, uSoil, bare * 0.9);',
+          '',
+          /*
+           * The beach, and why it is two colours rather than one.
+           *
+           * Sand does not stop at the water and it does not stop at the grass - it is wet
+           * and dark right at the line, dries out and pales going up the beach, and then
+           * loses to the grass somewhere further back. Three bands, so the eye reads a
+           * gradient of DRYNESS rather than a stripe somebody painted.
+           *
+           * Driven by the same shoreDepth the water and the grass use, which is the only
+           * reason the sand follows the bays instead of cutting across them.
+           */
+          '  float toWater = shoreDepth(vMeadowAt.xz);',
+          '  float beach = 1.0 - smoothstep(-9.0, 0.6, toWater);',
+          '  vec3 sand = mix(uSand, uDrySand, smoothstep(-5.5, -0.4, toWater));',
+          '  diffuseColor.rgb = mix(sand, diffuseColor.rgb, beach);',
           '}',
         ].join('\n')
       );

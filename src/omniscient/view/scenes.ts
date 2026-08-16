@@ -1587,9 +1587,23 @@ function buildSeedlingTunnel(scene: ContactScene): void {
      * and had been quietly disagreeing with the branches holding them since the scene was
      * written; nobody could see it against a black background.
      */
-    const lean = -(0.52 + i * 0.12);
-    const swing = -0.62 + i * 0.26;
-    const length = 2.45 - i * 0.1;
+    /**
+     * Round the trunk, not all down one side.
+     *
+     * The swing used to run -0.62 to +0.68 - about seventy degrees of spread - and the lean
+     * was negative for every limb, so all six went the same way and the crown hung off one
+     * shoulder like a windsock. A tree puts branches all the way round; that is what makes
+     * a trunk look like it is holding something up rather than leaning under it.
+     *
+     * The bias is kept, though, and deliberately: limbs pointing towards the beds are
+     * longer, so the crown still reaches over the tunnel. That overhang is the mission - the
+     * shade on the failing bank comes from THIS tree - and a perfectly symmetrical canopy
+     * would quietly delete the reason for the whole request.
+     */
+    const swing = (i / 6) * Math.PI * 2 + jitter(rng, 0.3);
+    const lean = -(0.44 + range(rng, 0, 0.24));
+    const towardBeds = Math.max(0, Math.cos(swing));
+    const length = (2.0 + towardBeds * 0.85) * range(rng, 0.92, 1.06);
 
     // geometry.rotateZ then .rotateY composes as Ry * Rz, so the direction has to be
     // built in the same order or the foliage lands somewhere the branch never went.
@@ -2020,14 +2034,15 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   scene.registerProp(
     'meadow',
     meadow(rng, {
-      at: new THREE.Vector3(0.2, 0, 0.4),
-      width: 15,
-      depth: 11,
-      count: 34000,
+      at: new THREE.Vector3(0.2, 0, -3.5),
+      width: 26,
+      depth: 22,
+      count: 48000,
       // Ankle height. At 0.4 she was standing waist-deep in a hay meadow rather than in a
       // worked field somebody walks across every day.
       height: [0.07, 0.2],
       bareBelow: 0.44,
+      keepOffBeach: 3.2,
       clear: KEEP_CLEAR,
       y: 0,
     }),
@@ -2051,7 +2066,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    */
   const hedge: THREE.BufferGeometry[] = [];
   const fence: THREE.BufferGeometry[] = [];
-  const HEDGE_Z = -9.4;
+  const HEDGE_Z = -7.4;
 
   /**
    * The hedge runs the right of the field and stops.
@@ -2062,8 +2077,8 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * does something else. Ending it opens the left of the frame onto the lake and the sun,
    * which is the half of the picture worth looking at.
    */
-  for (let i = 0; i < 30; i++) {
-    const x = -3.5 + i * 0.85;
+  for (let i = 0; i < 24; i++) {
+    const x = 2.2 + i * 0.85;
     // Overlapping lumps of varying size, so the top line wanders the way a hedge does
     // rather than running level like a wall.
     const size = range(rng, 0.62, 1.0);
@@ -2085,16 +2100,16 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * in front of it. It is also the only straight line in the middle distance, and one
    * straight line is what makes everything around it read as grown rather than built.
    */
-  for (let i = 0; i < 12; i++) {
-    const x = -3.0 + i * 2.0;
+  for (let i = 0; i < 9; i++) {
+    const x = 2.6 + i * 2.0;
     const post = new THREE.BoxGeometry(0.09, 1.05, 0.09);
     post.rotateZ(jitter(rng, 0.04));
     post.translate(x, 0.52, HEDGE_Z + 0.9);
     fence.push(post);
   }
   for (const y of [0.42, 0.82] as const) {
-    const wire = new THREE.BoxGeometry(22, 0.015, 0.015);
-    wire.translate(7.5, y, HEDGE_Z + 0.9);
+    const wire = new THREE.BoxGeometry(17, 0.015, 0.015);
+    wire.translate(10.5, y, HEDGE_Z + 0.9);
     fence.push(wire);
   }
   scene.registerProp(
@@ -2125,19 +2140,29 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * find it.
    */
   const LAKE_SUN_X = -36;
-  const lake = new THREE.PlaneGeometry(120, 70);
+  /**
+   * Subdivided, because the swell is real displacement now.
+   *
+   * A two-triangle plane has nothing to lift. 90 by 60 segments is 5,400 quads for a lake
+   * this size - about one vertex every metre and a half, which is finer than the wavelength
+   * and therefore enough. The plane also starts well in front of the waterline and is
+   * discarded per-pixel where the shore says there is no water, which is what lets the
+   * water's edge wander without the geometry having to.
+   */
+  const lake = new THREE.PlaneGeometry(150, 90, 90, 60);
   lake.rotateX(-Math.PI / 2);
-  lake.translate(-34, 0.04, -44);
+  lake.translate(-18, 0.05, -50);
   scene.registerProp(
     'lake',
     meshOf(
       'Lake',
       lake,
       stylisedWater({
-        deep: '#2f4a63',
-        shallow: '#4d6f7d',
-        crest: '#86a8ad',
-        glint: '#ffcf95',
+        deep: '#27506b',
+        shallow: '#4e9aa1',
+        crest: '#8fc4c2',
+        glint: '#ffd7a2',
+        foam: '#e8f0ea',
         sunX: LAKE_SUN_X,
         sunWidth: 11,
         // The same clock the grass runs on, so one gust moves the whole scene.
@@ -2287,16 +2312,38 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   );
 
   scene.registerShot('default', {
-    // Down the tunnel, so both banks are in frame at once and the difference between
-    // them is the first thing read.
-    // Outside the mouth and above it. From inside, the nearest hoop sat across the lens
-    // and the two banks - the entire puzzle - were behind it.
-    //
-    // Tilted up and pulled back once there was a sky to tilt into. The neighbour's tree
-    // is the cause of the whole request and its crown was cropped by the top edge, so the
-    // player could see the shade on the failing rows and not the thing casting it.
-    position: new THREE.Vector3(1.45, 3.65, 7.7),
-    target: new THREE.Vector3(-1.4, 1.3, -0.6),
+    /*
+     * Down the tunnel, so both banks are in frame at once and the difference between them
+     * is the first thing read. Outside the mouth rather than inside it - from inside, the
+     * nearest hoop sat across the lens and the two banks, the entire puzzle, were behind
+     * it. Tilted up once there was a sky to tilt into, because the neighbour's tree is the
+     * cause of the whole request and its crown was being cropped by the top edge.
+     *
+     * ## And then down to the waterline
+     *
+     * At 3.65m this looked down ON the smallholding: a plan of a field with things arranged
+     * on it. Dropping to 1.9m puts the lens at the height of somebody standing in the
+     * field, which does three things at once. The water gets a horizon instead of being a
+     * shape lying on the ground. The tree gets its height back. And the beds are seen along
+     * their length rather than from above, so the two banks read as rows rather than as
+     * rectangles. An evening is only worth having if the camera is low enough to be in it.
+     */
+    /*
+     * Back to 7.4m from her, because low is not the same as close.
+     *
+     * The first drop put the lens 4.4m from Adaeze while its subject was 13m away, and a
+     * 1.71m person at four metres fills a frame - she stopped being someone standing in a
+     * field and became a wall on the left of it. Height and distance are separate
+     * decisions and I had changed both at once.
+     *
+     * Her perpendicular offset is 1.64m, wider than the 0.45-0.9 band at the top of this
+     * file. That band was written for a camera looking down at a nine-metre set; with a
+     * horizon, a lake and a sunset in shot she wants to be further out of the middle, not
+     * less. The rule's purpose - that the contact frames the subject rather than blocking
+     * it - is better served here by breaking its number.
+     */
+    position: new THREE.Vector3(2.4, 2.0, 9.2),
+    target: new THREE.Vector3(-2.0, 1.5, -6.5),
   });
   scene.registerShot('tunnel-rows', {
     position: new THREE.Vector3(2.6, 1.6, 3.0),
