@@ -35,8 +35,7 @@
  */
 
 import { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
-import { createRng, seedFrom } from '../core/rng.js';
-import { planFleet } from '../mission/traces.js';
+import { DISTRICT_FLEET, DISTRICT_PURSUIT } from './district-07.js';
 import { OutcomeKind, Tempo, Urgency } from '../mission/types.js';
 
 import type { MissionDefinition } from '../mission/types.js';
@@ -46,13 +45,13 @@ export const FACT_COVERAGE_THINS = 'coverage-thins-at-the-edge';
 export const FACT_PARTIAL_PLATE = 'partial-plate-district-07';
 
 /**
- * The district, generated once at module load from a fixed seed.
+ * The district, imported rather than built here.
  *
- * §123: deterministic, so the officer's numbers are the same every run and a bug in the
- * puzzle can be reproduced. The evidence comes back from the same call that builds the
- * traffic - see mission/traces.ts for why the two cannot be authored separately.
+ * It used to call planFleet itself, which produced a DIFFERENT district from the one the
+ * diorama drew - same seed, different order of draws from a shared stream. See
+ * content/district-07.ts.
  */
-const DISTRICT = planFleet(createRng(seedFrom('district-07')), 180, 24);
+const DISTRICT = DISTRICT_FLEET;
 
 export const MISSION_08: MissionDefinition = {
   id: 'mission-08-district',
@@ -326,10 +325,49 @@ export const MISSION_08: MissionDefinition = {
     },
 
     {
+      /**
+       * Identified, and immediately not enough.
+       *
+       * The obvious version of this mission ends here - name the car, cut to the arrest.
+       * That would make the whole district a lookup table. Knowing WHICH car it is does not
+       * tell anybody where it is going, and the gap between those two is the part that
+       * feels like being a surveillance system rather than a search box.
+       */
       id: 'found',
       say:
-        'That is the one. That is our plate. He is on the ring road heading for the bridge '
-        + '- I can be on the bridge before he is.',
+        'That is the one. That is our plate. Now where is he going? I have units I can move '
+        + 'but I can only put them in one place.',
+      tempo: Tempo.Think,
+      device: {
+        kind: 'pursuit',
+        prompt:
+          'FOLLOWING // He is only visible where a camera is. Pick the one that picks him '
+          + 'up next - how far he has got, which way he was pointed, how long ago.',
+        hops: DISTRICT_PURSUIT.hops,
+        onSolved: { to: 'ahead-of-him', learn: [FACT_COVERAGE_THINS] },
+        onWrong: { to: 'found' },
+        wrongSay: 'Nothing on that one. We have lost time -',
+      },
+      suggest: ['stop every red car in the district'],
+      on: {
+        STOP_EVERY_RED_CAR: { to: 'sweep' },
+      },
+      onUnrecognised: { to: 'found' },
+    },
+
+    {
+      /**
+       * The trail ends, and the mission says so out loud.
+       *
+       * Not a failure and not a twist - the network genuinely stops at the edge of the
+       * district, which the city generator does deliberately and which the player has been
+       * told twice by now. Ending phase two on the machine running out of sight is what
+       * earns the last instruction being a guess made by a person.
+       */
+      id: 'ahead-of-him',
+      say:
+        'That is the last camera. Past the ring there is nothing until the bridge. '
+        + 'You have got him going one way and I have got one car. I am going to the bridge.',
       tempo: Tempo.Respond,
       suggest: [],
       on: {},

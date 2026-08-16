@@ -11,6 +11,7 @@ import './omniscient/art/sky.js';
 import './omniscient/art/surface.js';
 import './omniscient/audio/ConsoleAudio.js';
 import './omniscient/content/contacts.js';
+import './omniscient/content/district-07.js';
 import './omniscient/content/mission-01-transmitter.js';
 import './omniscient/content/mission-02-beacon.js';
 import './omniscient/content/mission-03-tunnel.js';

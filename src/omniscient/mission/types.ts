@@ -14,6 +14,7 @@ import type { IntentDefinition } from './intent.js';
 import type { BeamSpec } from './beam.js';
 import type { LockSpec } from './lock.js';
 import type { PipeGrid } from './pipes.js';
+import type { Hop } from './pursuit.js';
 import type { ClueId, Evidence, Trace } from './traces.js';
 
 /** §154 urgency classes. Not every request gets a countdown. */
@@ -127,7 +128,13 @@ export interface BoardSlot {
  * is a new member and a new renderer; nothing else moves. §160 still holds - this is data
  * walked by a shared runtime, not a script.
  */
-export type Device = RelationBoard | PipeBoard | LockBoard | BeamBoard | TraceBoard;
+export type Device =
+  | RelationBoard
+  | PipeBoard
+  | LockBoard
+  | BeamBoard
+  | TraceBoard
+  | PursuitBoard;
 
 export interface DeviceBase {
   /** The question, in the contact's voice. */
@@ -214,6 +221,19 @@ export interface TraceBoard extends DeviceBase {
    * Authored so the drama is designed rather than incidental - the big drops come first.
    */
   reveal: ClueId[];
+}
+
+/**
+ * The camera chase: a sequence of hops, played through in one sitting.
+ *
+ * One device rather than one per hop, which is a real choice. A chase broken into separate
+ * beats would put a line of dialogue between every guess and turn a pursuit into a
+ * conversation about a pursuit. Here the panel runs the whole thing and submits the picks
+ * at the end, the way the beam board plays a chase in real time and reports afterwards.
+ */
+export interface PursuitBoard extends DeviceBase {
+  kind: 'pursuit';
+  hops: Hop[];
 }
 
 export interface Beat {

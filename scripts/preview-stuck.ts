@@ -88,6 +88,12 @@ function solveDevice(device: Device): DeviceSubmission {
    * for the player by design - it is a deduction, and scripts/audit-traces.ts proves it
    * separately.
    */
+  if (device.kind === 'pursuit') {
+    // Every hop answered correctly. The question this walk asks is whether the graph
+    // reaches an ending, not whether a script can predict a car.
+    return { kind: 'pursuit', picks: device.hops.map((hop) => hop.answer) };
+  }
+
   if (device.kind === 'traces') {
     /**
      * Answered from the evidence, not from a stored id.

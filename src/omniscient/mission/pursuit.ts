@@ -311,6 +311,42 @@ function shuffle<T>(rng: Rng, items: T[]): T[] {
   return out;
 }
 
+/**
+ * Where a camera is, in the words somebody would actually use on a radio.
+ *
+ * The player is not doing coordinate arithmetic; they are deciding whether a junction is
+ * plausibly where the car has got to. "Nine blocks ahead" against six seconds is a
+ * judgement anybody can make, and "(23, 9)" is not - the numbers would turn a question
+ * about pursuit into a question about subtraction.
+ *
+ * This deliberately does NOT hide the geometry. A player who reads "two blocks back" and
+ * rules it out has understood the mechanic, which is the point; the difficulty lives in
+ * combining three facts under time pressure, not in decoding the interface.
+ */
+export function describe(from: Cell, heading: Heading, cell: Cell): string {
+  const forward = ahead(from, heading, cell);
+  const sideways = across(from, heading, cell);
+  const blocks = (n: number): string => `${n} block${n === 1 ? '' : 's'}`;
+
+  if (forward <= 0) {
+    return `${blocks(Math.abs(forward))} back the way he came`;
+  }
+  if (sideways === 0) return `${blocks(forward)} straight ahead`;
+
+  // Which side, said as a compass direction rather than as left/right - the player is
+  // looking at a map from above and has no idea which way the driver is facing.
+  const step = STEP[heading];
+  const cross = (cell.x - from.x) * step.y - (cell.y - from.y) * step.x;
+  const side: Record<Heading, [string, string]> = {
+    north: ['east', 'west'],
+    south: ['west', 'east'],
+    east: ['south', 'north'],
+    west: ['north', 'south'],
+  };
+  const which = cross > 0 ? side[heading][0] : side[heading][1];
+  return `${blocks(forward)} ahead, ${blocks(sideways)} to the ${which}`;
+}
+
 export interface PursuitAudit {
   hops: number;
   /** Hops where exactly one option is consistent. Should equal `hops`. */

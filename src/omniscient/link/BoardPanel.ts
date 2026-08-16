@@ -23,6 +23,7 @@
  */
 
 import { initialBeam, stepBeam } from '../mission/beam.js';
+import { describe } from '../mission/pursuit.js';
 import { narrow } from '../mission/traces.js';
 import { audio } from '../audio/ConsoleAudio.js';
 
@@ -224,6 +225,28 @@ const BOARD_CSS = `
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.omni-hop__sighting {
+  margin-bottom: 10px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: #e0a24c;
+}
+.omni-hop__options { display: flex; flex-direction: column; gap: 4px; }
+.omni-hop__option {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 8px 10px;
+  border: 1px solid rgba(127, 224, 138, 0.32);
+  border-radius: 3px;
+  background: rgba(10, 24, 15, 0.7);
+  color: #cfe9d2;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.omni-hop__option:hover { border-color: rgba(127, 224, 138, 0.75); }
 .omni-trace__more {
   padding: 5px 9px;
   font-size: 11px;
@@ -549,6 +572,11 @@ export class BoardPanel {
   private traceParts: { count: HTMLElement; caption: HTMLElement; list: HTMLElement } | null =
     null;
 
+  /** The chase, hop by hop: which one we are on and what has been picked so far. */
+  private hopIndex = 0;
+  private picks: string[] = [];
+  private pursuitParts: { sighting: HTMLElement; options: HTMLElement } | null = null;
+
   private readonly promptElement: HTMLDivElement;
   private readonly fold: HTMLButtonElement;
   private folded = false;
@@ -578,7 +606,9 @@ export class BoardPanel {
             ? `lock|${view.prompt}|${view.pins.length}`
             : view.kind === 'beam'
               ? `beam|${view.prompt}|${view.spec.patience}`
-              : `traces|${view.prompt}|${view.fleet.length}`;
+              : view.kind === 'traces'
+                ? `traces|${view.prompt}|${view.fleet.length}`
+                : `pursuit|${view.prompt}|${view.hops.length}`;
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       this.links.clear();
@@ -622,6 +652,11 @@ export class BoardPanel {
 
     if (view.kind === 'traces') {
       this.buildTraces(view.fleet.length, view.evidence, view.reveal);
+      return;
+    }
+
+    if (view.kind === 'pursuit') {
+      this.buildPursuit();
       return;
     }
 
@@ -914,6 +949,99 @@ export class BoardPanel {
     }
   }
 
+  /**
+   * The chase: one sighting, and the junctions it could reach.
+   *
+   * Played locally rather than a beat per hop. A chase interrupted by a line of dialogue
+   * between every guess is a conversation ABOUT a pursuit; this runs the sequence and
+   * reports at the end, the way the beam board does.
+   *
+   * The options are described in words - "four blocks straight ahead", "two blocks back the
+   * way he came" - because the player is judging whether a junction is plausibly where the
+   * car has got to, and coordinates would turn that into a subtraction problem. It does not
+   * hide the geometry on purpose: a player who reads "back the way he came" and rules it out
+   * has understood the mechanic, and the difficulty is meant to live in weighing three facts
+   * at once rather than in decoding the panel.
+   */
+  private buildPursuit(): void {
+    this.hopIndex = 0;
+    this.picks = [];
+
+    const panel = document.createElement('div');
+    panel.className = 'omni-trace';
+
+    const sighting = document.createElement('div');
+    sighting.className = 'omni-hop__sighting';
+
+    const options = document.createElement('div');
+    options.className = 'omni-hop__options';
+
+    panel.append(sighting, options);
+    this.grid.appendChild(panel);
+    this.pursuitParts = { sighting, options };
+    this.refreshPursuit();
+  }
+
+  private refreshPursuit(): void {
+    const view = this.view;
+    if (!view || view.kind !== 'pursuit' || !this.pursuitParts) return;
+
+    const { sighting, options } = this.pursuitParts;
+    for (const child of Array.from(options.children)) child.remove();
+
+    const hop = view.hops[this.hopIndex];
+    if (!hop) {
+      // Every hop answered. The picks go up and the runtime decides what they were worth.
+      sighting.textContent = 'TRAIL ENDS - no camera ahead of him';
+      this.send.disabled = false;
+      return;
+    }
+
+    /**
+     * The speed is stated, because otherwise the question is not fair.
+     *
+     * The player is asked to rule out a junction eleven blocks away on five seconds of
+     * travel, which is only a judgement if they know roughly how fast he is going. Without
+     * it the first hop is a guess and every hop after it is inference from that guess.
+     * A dispatcher would say it, so he says it.
+     */
+    sighting.textContent =
+      `LAST CONFIRMED - heading ${hop.heading}, ${hop.seconds}s ago, doing about a block a `
+      + `second. Which one picks him up?`;
+
+    for (const option of hop.options) {
+      const row = document.createElement('button');
+      row.className = 'omni-hop__option';
+      row.type = 'button';
+
+      const id = document.createElement('span');
+      id.className = 'omni-trace__plate';
+      // Stable per hop, so a player can refer to one out loud while thinking.
+      id.textContent = `CAM ${String(200 + this.hopIndex * 10 + hop.options.indexOf(option))}`;
+
+      const where = document.createElement('span');
+      where.className = 'omni-trace__detail';
+      where.textContent = describe(hop.from, hop.heading, option.cell);
+
+      row.append(id, where);
+      row.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        audio.play('seat');
+        this.picks.push(option.id);
+        this.hopIndex++;
+        this.refreshPursuit();
+      });
+      options.appendChild(row);
+    }
+
+    // Nothing to send until the chase has been played out.
+    this.send.disabled = true;
+    if (view.note) {
+      this.status.className = 'omni-board__status omni-board__status--score';
+      this.status.textContent = view.note;
+    }
+  }
+
   private buildBeam(): void {
     const track = document.createElement('div');
     track.className = 'omni-board__track';
@@ -1082,6 +1210,12 @@ export class BoardPanel {
         kind: 'device',
         submission: { kind: 'lock', order: [...this.order] },
       });
+      return;
+    }
+
+    if (view.kind === 'pursuit') {
+      if (this.picks.length !== view.hops.length) return;
+      this.dispatch({ kind: 'device', submission: { kind: 'pursuit', picks: [...this.picks] } });
       return;
     }
 

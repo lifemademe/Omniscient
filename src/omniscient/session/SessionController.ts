@@ -414,6 +414,10 @@ export class SessionController {
      * The narrowing IS the gameplay, so the panel has to be able to do it, which means it
      * needs everything the machine can see and the same partial facts the officer gave.
      */
+    if (device.kind === 'pursuit') {
+      return { kind: 'pursuit', prompt: device.prompt, hops: device.hops, note };
+    }
+
     if (device.kind === 'traces') {
       return {
         kind: 'traces',

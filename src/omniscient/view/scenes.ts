@@ -40,8 +40,8 @@ import { createRng, jitter, range, seedFrom } from '../core/rng.js';
 import type { Rng } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
 import { createFieldBackdrop, createNightBackdrop } from '../geometry/backdrop.js';
-import { planFleet } from '../mission/traces.js';
-import { CELL, cellToWorld, wireCity } from '../geometry/wireCity.js';
+import { DISTRICT_CITY, DISTRICT_FLEET, DISTRICT_SIZE } from '../content/district-07.js';
+import { CELL, cellToWorld } from '../geometry/wireCity.js';
 import { createClump } from './../geometry/foliage.js';
 import { grassTufts, greenhouse, rocks } from '../geometry/outdoors.js';
 import {
@@ -4336,13 +4336,20 @@ function buildMillRoad(scene: ContactScene): void {
  * presentation is not allowed to know something the player has not deduced.
  */
 function buildWireCity(scene: ContactScene): void {
-  const rng = createRng(seedFrom('district-07'));
-  const SIZE = 24;
+  /**
+   * Imported, not generated.
+   *
+   * This used to build its own city and its own traffic from the seed, and the mission
+   * built its own traffic from the same seed - which is not the same district, because the
+   * generators share a random stream and the two called them in different orders. The
+   * suspect was in one place on this map and another in the evidence. See district-07.ts.
+   */
+  const SIZE = DISTRICT_SIZE;
+  const city = DISTRICT_CITY;
+  const rng = createRng(seedFrom('district-07-dressing'));
 
   // No air between the camera and a database. See ContactScene.atmosphere.
   scene.atmosphere = false;
-
-  const city = wireCity(rng, { size: SIZE });
 
   /**
    * Three depths of the same colour, which is the whole palette.
@@ -4415,7 +4422,7 @@ function buildWireCity(scene: ContactScene): void {
    * IS a moving point, and pretending otherwise would claim a resolution the network does
    * not have.
    */
-  const { fleet } = planFleet(rng, 180, SIZE);
+  const { fleet } = DISTRICT_FLEET;
   const cars: number[] = [];
   for (const trace of fleet) {
     const at = cellToWorld(SIZE, trace.cell.x, trace.cell.y, 0.6);

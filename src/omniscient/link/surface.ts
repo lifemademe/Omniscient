@@ -1,4 +1,5 @@
 import type { BeamSpec } from '../mission/beam.js';
+import type { Hop } from '../mission/pursuit.js';
 import type { ClueId, Evidence, Trace } from '../mission/traces.js';
 
 /**
@@ -115,6 +116,15 @@ export type DeviceView =
    * which means it needs everything the network can see plus the partial facts the police
    * actually have. Filtering server-side would be sending the answer.
    */
+  /**
+   * The chase. Hops cross whole, including which option is the answer.
+   *
+   * The panel needs it: it plays the sequence locally, hop by hop, so it has to know when
+   * contact was kept in order to show the next sighting. The runtime still grades the
+   * submitted picks - §157 - so the console knowing the route changes nothing about who
+   * decides whether the player got it right.
+   */
+  | { kind: 'pursuit'; prompt: string; hops: Hop[]; note?: string }
   | {
       kind: 'traces';
       prompt: string;
@@ -235,7 +245,8 @@ export type PlayerMessage =
         | { kind: 'pipes'; rotations: number[] }
         | { kind: 'lock'; order: string[] }
         | { kind: 'beam'; calls: Array<{ at: number; to: number }> }
-        | { kind: 'traces'; traceId: string };
+        | { kind: 'traces'; traceId: string }
+        | { kind: 'pursuit'; picks: string[] };
     };
 
 export interface InterventionSurface {

@@ -25,7 +25,9 @@ export type DeviceSubmission =
   /** Every call the player made, and when. The runtime replays them (§157). */
   | { kind: 'beam'; calls: Array<{ at: number; to: number }> }
   /** The trace the player says it is. One id, not a filter state. */
-  | { kind: 'traces'; traceId: string };
+  | { kind: 'traces'; traceId: string }
+  /** One camera id per hop, in order. */
+  | { kind: 'pursuit'; picks: string[] };
 
 export interface DeviceResult {
   solved: boolean;
@@ -37,6 +39,12 @@ export interface DeviceResult {
    * grid tells the player nothing they can act on.
    */
   note?: string;
+}
+
+/** 1st, 2nd, 3rd. Small, but "on the 1 hop" reads as a bug in the writing. */
+function ordinal(n: number): string {
+  const tail = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th';
+  return `${n}${tail}`;
 }
 
 export function gradeDevice(device: Device, submission: DeviceSubmission): DeviceResult {
@@ -117,6 +125,32 @@ export function gradeDevice(device: Device, submission: DeviceSubmission): Devic
           : 'that one has both tail lights',
       };
       return { solved: false, note: wrong ? reason[wrong] : 'that is not the one' };
+    }
+
+    case 'pursuit': {
+      if (submission.kind !== 'pursuit') return { solved: false };
+      if (submission.picks.length !== device.hops.length) return { solved: false };
+
+      const wrongAt = device.hops.findIndex((hop, i) => submission.picks[i] !== hop.answer);
+      if (wrongAt === -1) return { solved: true };
+
+      /**
+       * Names the FIRST mistake, and why, and nothing after it.
+       *
+       * Everything past the first wrong turn is downstream of a car the player was no
+       * longer following, so reporting those too would be blaming them for consequences of
+       * a mistake they have not been told about yet. And the reason is the whole value of
+       * the classifier: "he had already passed it" is a correction, "wrong" is a buzzer.
+       */
+      const hop = device.hops[wrongAt];
+      const chosen = hop.options.find((option) => option.id === submission.picks[wrongAt]);
+      const why: Record<string, string> = {
+        behind: 'he had already passed it',
+        unreachable: 'he could not have got that far in the time',
+        'off-route': 'that is not on the road he was on',
+      };
+      const reason = chosen?.fails ? why[chosen.fails] : 'nothing came through';
+      return { solved: false, note: `on the ${ordinal(wrongAt + 1)} hop - ${reason}` };
     }
 
     default: {
