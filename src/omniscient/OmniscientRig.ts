@@ -1627,7 +1627,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * moving.
      */
     const warpContainer = this.getWorld()?.gameContainer;
-    if (warpContainer) playWarp(warpContainer, HOME_SHOT.duration ?? 2.0);
+    /**
+     * Its own duration, and deliberately longer than the camera move.
+     *
+     * Matching the shot exactly sounded right and played wrong: two seconds is not long
+     * enough to register as an event, so it read as a flash. Running past the end of the
+     * move means the machine is still pulling as the desk settles, which is the right way
+     * round - the arrival should finish under it rather than the other way about.
+     */
+    if (warpContainer) playWarp(warpContainer);
 
     this.phase = Phase.Home;
     this.screen = Screen.Tree;

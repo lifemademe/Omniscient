@@ -114,7 +114,7 @@ interface MenuModule {
   labelLit: THREE.MeshBasicMaterial;
   labelIdle: THREE.MeshBasicMaterial;
   labelMesh: ENGINE.MeshNode;
-  /** World-space socket the cable plugs into. */
+  /** Where the socket sits ON the plate. Add the plate's position to place it. */
   socket: THREE.Vector3;
   baseZ: number;
 }
@@ -198,9 +198,19 @@ export class MainMenu {
       labelIdle,
       labelLit,
       labelMesh,
-      // Local to the menu root - the cable's points live in that space too, and mixing
-      // the two sends the tip sixty units off into the world.
-      socket: node.position.clone().add(build.socket),
+      /**
+       * The socket's offset ON the plate, not its position in the room.
+       *
+       * It used to be resolved to a position here, once, from where the plate was resting -
+       * and hovering pushes the plate 4.5cm towards the player. So by the time anybody
+       * clicked, the plate had come forward and its socket had not, and the connector
+       * travelled to a point that was now BEHIND the face it was supposed to plug into.
+       *
+       * Kept as an offset and resolved at plug time instead, so it follows the plate
+       * wherever the plate has got to. Local to the menu root, because the cable's points
+       * live in that space too and mixing the two sends the tip sixty units into the world.
+       */
+      socket: build.socket.clone(),
       baseZ: node.position.z,
     });
   }
@@ -255,7 +265,10 @@ export class MainMenu {
     if (!module || module.spec.disabled) return;
 
     this.plugTarget = id;
-    this.cable.plugInto(module.socket, () => {
+    // Resolved now, against where the plate actually is - it is pushed forward while
+    // hovered, and it is always hovered at the moment it is clicked.
+    const socketAt = module.node.position.clone().add(module.socket);
+    this.cable.plugInto(socketAt, () => {
       this.plugTarget = null;
       this.handlers.forEach((handler) => handler(id));
     });

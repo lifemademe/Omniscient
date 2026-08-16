@@ -85,7 +85,7 @@ const CSS = `
  * around hidden, because a permanently mounted full-screen element is a permanently
  * composited layer, and this happens eight times in a playthrough.
  */
-export function playWarp(container: HTMLElement, seconds = 1.9): void {
+export function playWarp(container: HTMLElement, seconds = 3.4): void {
   if (!document.getElementById(STYLE_ID)) {
     const style = document.createElement('style');
     style.id = STYLE_ID;
@@ -112,24 +112,37 @@ export function playWarp(container: HTMLElement, seconds = 1.9): void {
    * fade reads as a dissolve between two shots rather than as something happening. A fifth
    * of the time coming in, the rest easing out under the camera move.
    */
+  /**
+   * Longer, and never at full strength.
+   *
+   * The first version ran two seconds and peaked at opacity 1, and it read as a flash
+   * rather than as an event - over before anybody could register it had started, and bright
+   * enough while it lasted to bleach the shot it is supposed to be pulling away from.
+   *
+   * Now it comes up over a third of a second, HOLDS while the camera travels, and leaves
+   * slowly. The hold is what makes it read as a thing happening rather than a cut. Peak is
+   * 0.62, because this is a veil over the room and not a curtain across it.
+   */
   const rush = root.animate(
     [
       { opacity: 0 },
-      { opacity: 1, offset: 0.18 },
-      { opacity: 0.85, offset: 0.55 },
+      { opacity: 0.62, offset: 0.11 },
+      { opacity: 0.55, offset: 0.62 },
       { opacity: 0 },
     ],
-    { duration: seconds * 1000, easing: 'ease-out', fill: 'forwards' }
+    { duration: seconds * 1000, easing: 'ease-in-out', fill: 'forwards' }
   );
 
   // The streaks accelerate outward. Starting under 1 and ending well past it is what sells
   // the direction of travel; the rotation is small and stops it being a static starburst.
   streaks.animate(
     [
-      { transform: 'scale(0.55) rotate(0deg)' },
-      { transform: 'scale(2.6) rotate(7deg)' },
+      { transform: 'scale(0.5) rotate(0deg)' },
+      { transform: 'scale(3.2) rotate(11deg)' },
     ],
-    { duration: seconds * 1000, easing: 'cubic-bezier(0.2, 0.7, 0.35, 1)', fill: 'forwards' }
+    // Still accelerating outward, but over the longer run - the streaks should keep moving
+    // for the whole hold rather than arriving and stopping.
+    { duration: seconds * 1000, easing: 'cubic-bezier(0.3, 0.55, 0.4, 1)', fill: 'forwards' }
   );
 
   rush.addEventListener('finish', () => root.remove());
