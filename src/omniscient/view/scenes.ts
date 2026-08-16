@@ -708,6 +708,60 @@ function buildRepairShop(scene: ContactScene): void {
 
   // Shots. The default frame establishes the room: bench, contact, and enough of the
   // shelf to read as somebody's workshop (§186 - composition before clutter).
+  /**
+   * The last of the seven, and the same fault as the other six.
+   *
+   * Sampled off the default shot: pegboard wall 66, her torso 64, THE RADIO 58, her face
+   * 46. Both the person and the object are BELOW the background they sit against, which
+   * means the wall is the brightest large thing in a frame whose entire job is a woman
+   * looking at a broken set.
+   *
+   * Her face was the worst of it. The work lamp is over the bench and slightly behind the
+   * radio, so it lights the bench, the radio's top and the pegboard - and reaches her
+   * chin and no further. She read as a lit coat with a dark head.
+   *
+   * Two lights, and both are things that are really there. The face fill is the doorway
+   * she is standing near, which already exists as `DoorLight` and simply never carried far
+   * enough into the room. The bench bounce is the bench itself: a pale timber top directly
+   * under a work lamp throws a great deal back up, and that upward bounce is what actually
+   * lights somebody leaning over their own work.
+   */
+  scene.registerProp(
+    'face-fill',
+    ENGINE.PointLightNode.create({
+      name: 'FaceFill',
+      /**
+       * Brought in to 1.2m, because at 2.4m it was doing nothing.
+       *
+       * First placement sat at (-0.4, 1.72, 1.35), which is 2.4 metres from her head - and
+       * with a 1.4 decay that is most of the light gone before it arrives. Her face moved
+       * 46 to 54 while the radio went to 79, so the pass fixed the object and left the
+       * person exactly where she was. Inverse-square is unforgiving about this: halving
+       * the distance is worth more than doubling the intensity, and it does not wash the
+       * wall behind her on the way.
+       */
+      position: new THREE.Vector3(-0.55, 1.7, 0.15),
+      intensity: 4.5,
+      color: new THREE.Color('#cfd8e4'),
+      distance: 3.2,
+      decay: 1.4,
+    })
+  );
+
+  scene.registerProp(
+    'bench-bounce',
+    ENGINE.PointLightNode.create({
+      name: 'BenchBounce',
+      // Just above the bench top and in front of the set, so it throws up onto the radio's
+      // face and onto hers rather than washing the wall behind them.
+      position: new THREE.Vector3(0.1, 0.98, 0.45),
+      intensity: 3.4,
+      color: new THREE.Color('#ffd9ae'),
+      distance: 2.6,
+      decay: 1.6,
+    })
+  );
+
   scene.registerShot('default', {
     // Target raised to chest height rather than bench height, so she is in the frame
     // instead of cropped at the shoulders by a camera aimed at the furniture.
