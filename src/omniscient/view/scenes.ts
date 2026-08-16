@@ -33,7 +33,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { createBoxLabel, createCorrosionBloom, createRatingPlate } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
-import { ACCENT, LIGHT, MAT } from '../art/palette.js';
+import { ACCENT, LIGHT, MAP, MAT } from '../art/palette.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
 import { createRng, jitter, range, seedFrom } from '../core/rng.js';
 
@@ -4363,8 +4363,23 @@ function buildWireCity(scene: ContactScene): void {
     return node;
   };
 
-  scene.registerProp('lattice', layer('Lattice', city.lattice, wire('#2f6d4a', 0.5)));
-  scene.registerProp('towers', layer('Towers', city.towers, wire('#3f8f63', 0.62)));
+  /**
+   * The city is the MAP's blue; only the network is green.
+   *
+   * Both were green at first and the frame had nothing to separate. §9 already assigns
+   * these: cold cyan is data, acid green is knowledge and machine activity - so the
+   * district, which is a reconstruction of a place, is the same cyan as the land on the
+   * console globe, and the roads and traffic, which are what OMNISCIENT_ is actually
+   * reasoning over, are the green.
+   *
+   * That also makes the two views one instrument. A player who has spent six missions
+   * picking signals off a blue wireframe globe arrives here and recognises the material
+   * before they have read a word: this is the same machine looking at the same world,
+   * closer in. The colours come from the shared MAP palette rather than being typed here,
+   * so they cannot drift apart.
+   */
+  scene.registerProp('lattice', layer('Lattice', city.lattice, wire(MAP.grid, 0.85)));
+  scene.registerProp('towers', layer('Towers', city.towers, wire(MAP.land, 0.7)));
   scene.registerProp('roads', layer('Roads', city.roads, wire(ACCENT.knowledge, 0.85)));
 
   /**

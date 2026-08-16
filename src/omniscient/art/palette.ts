@@ -103,6 +103,25 @@ export const ACCENT = {
 } as const;
 
 /**
+ * The map, wherever the machine draws one.
+ *
+ * The globe on the console and the surveillance city in mission 08 are the same act: the
+ * machine looking at the world from outside it and rendering what it has been told. They
+ * are drawn at wildly different scales - a planet in a CRT and a district at street level -
+ * and they have to read as the same instrument, which means the colours cannot be two
+ * copies of a hex that drift apart the first time either is adjusted.
+ *
+ * Cold cyan throughout, per §9: this is data, not a place.
+ */
+export const MAP = {
+  /** The graticule. Scaffolding, and deliberately dim - it must not compete. */
+  grid: '#153845',
+  gridBright: '#26607a',
+  /** Land, and buildings. The brightest structure the map itself draws. */
+  land: '#3f8fa8',
+} as const;
+
+/**
  * Living green. Deliberately separated from ACCENT.corrosion - the theme is Overgrown,
  * and the plant escaping its pot must not read as the same substance as the fault eating
  * Mirela's connector. Cooler and more saturated than the corrosion green.

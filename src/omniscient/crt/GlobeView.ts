@@ -11,6 +11,8 @@
  * asks the globe to keep teasing the next request without revealing everything.
  */
 
+import { MAP } from '../art/palette.js';
+
 import { COASTLINES } from './coastlines.js';
 
 import type { PixelSurface } from './PixelSurface.js';
@@ -75,10 +77,11 @@ const PALETTE = {
   /** Cold cyan = data / scanning (§9). */
   // Dimmed. The graticule is scaffolding, and at full strength it competed with the
   // coastlines and the signals, which are the two things the player is actually reading.
-  grid: '#153845',
-  gridBright: '#26607a',
+  // From the shared map palette - the globe and the surveillance city are one instrument.
+  grid: MAP.grid,
+  gridBright: MAP.gridBright,
   /** Land. The brightest thing on the globe except the signals themselves. */
-  land: '#3f8fa8',
+  land: MAP.land,
   waiting: '#7fe08a',
   active: '#d8ffb0',
   resolved: '#2f6b3a',
