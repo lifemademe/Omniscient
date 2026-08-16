@@ -98,18 +98,39 @@ function swingToward(joint: THREE.Object3D, effector: THREE.Object3D, target: TH
 }
 
 /**
- * Put a hand on a point.
+ * Put a hand on a point, with the elbow where an elbow goes.
  *
- * Iterated from the wrist inwards, which is the order that matters: the forearm is a
- * smaller correction than the shoulder, so solving it first means the shoulder is only
- * asked for the swing that is genuinely left over, and the elbow does not fly out to meet
- * a target the wrist could have reached by itself.
+ * ## Why this is not CCD any more
+ *
+ * Cyclic descent finds A solution and has no opinion about which. A two-bone chain reaching
+ * a point has a whole CIRCLE of them - the elbow can be anywhere on a ring around the
+ * shoulder-to-target axis - and CCD lands on whichever is nearest where it started. That
+ * produced exactly what you would predict once the rigs arrived: Vasile facing the camera
+ * with his hand pointing behind him, Mirela's elbows bent backwards, Sanda's torch arm
+ * aimed the opposite way to her body.
+ *
+ * The seeding made it worse rather than better. It set rotations in the BONE's local space,
+ * and a Mixamo arm bone's local axes depend on how the rig was bound - so the same numbers
+ * meant a different pose on every character, and the solver was being started from a
+ * different random place each time.
+ *
+ * ## The pole is the fix
+ *
+ * Solved analytically instead. Given both bone lengths and the distance to the target, the
+ * law of cosines gives the elbow angle exactly; the remaining freedom - where on the ring
+ * the elbow sits - is resolved by a POLE, a world-space direction the elbow is asked to
+ * favour. Human elbows hang down and slightly away from the body, so that is the hint, and
+ * because it is expressed in world space it means the same thing on every skeleton
+ * regardless of how its bones were bound.
+ *
+ * Everything is computed as positions and applied through the same swing used before, so no
+ * assumption about bind axes survives anywhere in here.
  */
 export function reachFor(
   bones: Record<string, THREE.Object3D>,
   side: 'left' | 'right',
   target: THREE.Vector3,
-  passes = 8
+  pole?: THREE.Vector3
 ): number {
   const [upperName, foreName, handName] = CHAIN[side];
   const upper = bones[upperName];
@@ -117,41 +138,74 @@ export function reachFor(
   const hand = bones[handName];
   if (!upper || !fore || !hand) return Number.NaN;
 
+  const shoulderAt = upper.getWorldPosition(new THREE.Vector3());
+  const elbowAt = fore.getWorldPosition(new THREE.Vector3());
+  const handAt = hand.getWorldPosition(new THREE.Vector3());
+
+  const upperLength = shoulderAt.distanceTo(elbowAt);
+  const foreLength = elbowAt.distanceTo(handAt);
+  if (upperLength < 1e-5 || foreLength < 1e-5) return Number.NaN;
+
+  const toTarget = target.clone().sub(shoulderAt);
+  const straightLine = toTarget.length();
+  if (straightLine < 1e-5) return Number.NaN;
+  const axis = toTarget.clone().divideScalar(straightLine);
+
   /**
-   * Start from arms-down, not from the bind pose.
+   * Clamped just inside the arm's limits.
    *
-   * CCD converges to whichever solution is nearest where it started, and a Mixamo bind
-   * pose starts with the arm straight out sideways - so the shoulder was as likely to
-   * swing BACKWARDS to the target as forwards, and it did: the hand arrived at the right
-   * point with the wrist tucked behind her back. The target alone does not pick an elbow;
-   * a two-bone chain has a whole circle of solutions and something has to say which.
-   *
-   * Seeding the arm hanging down and slightly forward is the cheapest thing that does. It
-   * costs two rotations and it means the solver finishes in the half of the circle a
-   * person's arm actually lives in.
+   * Exactly straight is a singularity - the elbow ring collapses to a point and the pole
+   * stops meaning anything - and beyond reach there is no triangle at all. Staying a
+   * hair inside keeps the solve stable and lets an out-of-range target read the way it
+   * should: the arm simply extends towards it.
    */
-  const inward = side === 'left' ? 1 : -1;
-  upper.rotation.set(0.35, 0, inward * 1.25);
-  fore.rotation.set(0.55, 0, 0);
-  upper.updateMatrixWorld(true);
+  const span = Math.min(
+    Math.max(straightLine, Math.abs(upperLength - foreLength) + 1e-3),
+    upperLength + foreLength - 1e-3
+  );
 
-  for (let pass = 0; pass < passes; pass++) {
-    swingToward(fore, hand, target);
-    swingToward(upper, hand, target);
+  // Law of cosines: the angle between the upper arm and the line to the target.
+  const cosShoulder =
+    (upperLength * upperLength + span * span - foreLength * foreLength) / (2 * upperLength * span);
+  const shoulderAngle = Math.acos(Math.min(1, Math.max(-1, cosShoulder)));
+
+  /**
+   * The pole, made perpendicular to the reach axis.
+   *
+   * Any component along the axis is useless - it cannot say where on the ring the elbow
+   * goes - so it is projected out. If what is left is degenerate, because the arm happens
+   * to be pointing straight down the pole, a world-forward fallback keeps the elbow
+   * somewhere sane rather than wherever floating point lands.
+   */
+  const hint = (pole ?? new THREE.Vector3(0, -1, 0)).clone();
+  const along = axis.clone().multiplyScalar(hint.dot(axis));
+  let bend = hint.sub(along);
+  if (bend.lengthSq() < 1e-6) {
+    bend = new THREE.Vector3(0, 0, 1).sub(axis.clone().multiplyScalar(axis.z));
   }
+  bend.normalize();
 
-  // How far off it finished. Reported rather than assumed - an IK solver that quietly
-  // stops short is exactly the failure this test exists to detect.
+  const elbowGoal = shoulderAt
+    .clone()
+    .addScaledVector(axis, Math.cos(shoulderAngle) * upperLength)
+    .addScaledVector(bend, Math.sin(shoulderAngle) * upperLength);
+
+  // Upper arm points at where the elbow should be, then the forearm points at the target.
+  swingToward(upper, fore, elbowGoal);
+  swingToward(fore, hand, target);
+
+  // How far off it finished. Reported rather than assumed - a solver that quietly stops
+  // short is exactly the failure this is here to detect.
   return hand.getWorldPosition(new THREE.Vector3()).distanceTo(target);
 }
 
 /**
  * Is the target even inside this arm's reach?
  *
- * The distinction that decides whether a miss is a bug or a fact. CCD on a two-bone chain
- * converges to under a millimetre when the target is reachable, so a solver that settles
- * at thirteen centimetres is either broken or being asked for something the arm cannot do -
- * and those want completely different responses. Measuring the arm answers it outright.
+ * The distinction that decides whether a miss is a bug or a fact. The solve is exact when
+ * the target is reachable, so anything left over is either a rig whose arm is shorter than
+ * the one the targets were authored against, or a target somewhere an arm cannot go - and
+ * those want completely different responses. Measuring the arm answers it outright.
  */
 export function armReach(
   bones: Record<string, THREE.Object3D>,
@@ -167,6 +221,23 @@ export function armReach(
   const b = fore.getWorldPosition(new THREE.Vector3());
   const c = hand.getWorldPosition(new THREE.Vector3());
   return { reach: a.distanceTo(b) + b.distanceTo(c), shoulderAt: a };
+}
+
+/**
+ * Where this character's elbows should hang, in world space.
+ *
+ * Down, and a little out to the side and behind - which is where a person's elbow goes
+ * when they reach for something in front of them. Derived from the node's own facing, so a
+ * contact turned to face a different way gets elbows that turn with them rather than a
+ * hint that only happened to be right for one rotation.
+ */
+function poleFor(root: ENGINE.SceneNode, side: 'left' | 'right'): THREE.Vector3 {
+  const facing = root.getWorldDirection(new THREE.Vector3());
+  const outward = new THREE.Vector3(0, 1, 0).cross(facing).normalize();
+  return new THREE.Vector3(0, -1, 0)
+    .addScaledVector(outward, side === 'left' ? 0.45 : -0.45)
+    .addScaledVector(facing, -0.3)
+    .normalize();
 }
 
 export interface RiggedContact {
@@ -234,7 +305,7 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
       // Then the hands, on top of whatever the clip just did to the arms.
       for (const named of ['left', 'right'] as const) {
         const target = options.handsOn?.[named];
-        if (target) reachFor(contact.bones, sideFor[named], target, 4);
+        if (target) reachFor(contact.bones, sideFor[named], target, poleFor(root, sideFor[named]));
       }
     },
   };
@@ -366,7 +437,7 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
       if (!target) continue;
       const side = sideFor[named];
       const arm = armReach(contact.bones, side);
-      const miss = reachFor(contact.bones, side, target);
+      const miss = reachFor(contact.bones, side, target, poleFor(root, side));
       const need = arm ? arm.shoulderAt.distanceTo(target) : Number.NaN;
       reached.push(
         `${named}->${side} ${miss.toFixed(2)}off arm${(arm?.reach ?? 0).toFixed(2)}`
