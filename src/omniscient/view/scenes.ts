@@ -45,6 +45,7 @@ import { DISTRICT_CITY, DISTRICT_FLEET, DISTRICT_SIZE } from '../content/distric
 import { CELL, cellToWorld } from '../geometry/wireCity.js';
 import { createClump } from './../geometry/foliage.js';
 import { grassTufts, greenhouse, rocks } from '../geometry/outdoors.js';
+import { meadow, meadowGround, stepWind } from '../geometry/meadow.js';
 import { rows, scatter } from '../geometry/planting.js';
 import {
   createMainsSwitch,
@@ -1788,32 +1789,15 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * Density carries the meaning. Thick out at the boundary, thinning as it approaches the
    * beds, and bald in the strip she actually walks - which says somebody weeds here
    * without a single object having to be placed by hand.
+   *
+   * ## Replaced by the meadow, below
+   *
+   * All of the above was true and it was still green paper. The tufts were scattered
+   * evenly over a flat plane, so nothing about the ground explained itself - a bald patch
+   * was a gap in a carpet rather than earth. See the meadow block after the planting: one
+   * density field now decides where grass is, how tall it is and what colour the soil is
+   * underneath, and that correlation is what the eye reads as ground.
    */
-  scene.registerProp(
-    'grass',
-    meshOf(
-      'Grass',
-      grassTufts(rng, { centre: new THREE.Vector3(0, 0, 0.2), width: 9.4, depth: 7.2, clear: 2.6 }, {
-        count: 260,
-        height: [0.08, 0.24],
-      }),
-      MAT.stem
-    )
-  );
-
-  // A second, shorter, paler pass right up against the beds - the bit she keeps down.
-  scene.registerProp(
-    'grass-near',
-    meshOf(
-      'GrassNear',
-      grassTufts(rng, { centre: new THREE.Vector3(0.2, 0, 0.1), width: 5.4, depth: 4.4, clear: 1.5 }, {
-        count: 90,
-        height: [0.04, 0.1],
-        lean: 0.7,
-      }),
-      MAT.leafPale
-    )
-  );
 
   /**
    * -- Modelled planting, where the camera can see a plant ------------------------------
@@ -1916,6 +1900,53 @@ function buildSeedlingTunnel(scene: ContactScene): void {
       scale: [0.85, 1.1],
       turn: -0.12,
     })
+  );
+
+  /**
+   * -- The meadow, and the ground it grows out of ---------------------------------------
+   *
+   * The near ground gets its own patch rather than borrowing the 140m backdrop plane. The
+   * backdrop is unlit and flat on purpose - it is scenery forty metres out and should stay
+   * cheap - while soil mottling only means anything where the camera can resolve it.
+   *
+   * The blades and the soil read the SAME density field, which is the entire effect. Where
+   * the field is thin the grass is short and sparse and the ground browns off underneath
+   * it, so a bald patch is bare earth with a reason rather than a hole in a carpet.
+   */
+  /**
+   * Big enough that its edge is over the horizon.
+   *
+   * The first version was a 34x26 patch, and the seam where it met the backdrop's own
+   * ground read as a rectangle drawn on the field - the two greens could not match because
+   * one is lit and the other is deliberately unlit scenery. Rather than chase a colour
+   * match between a lit plane and a flat one, this simply covers everything the camera can
+   * see. The mottling is still only legible up close; at distance it is under a pixel.
+   */
+  const groundPatch = new THREE.PlaneGeometry(130, 130);
+  groundPatch.rotateX(-Math.PI / 2);
+  groundPatch.translate(0.2, -0.012, -1.0);
+  scene.registerProp(
+    'ground',
+    meshOf('Ground', groundPatch, meadowGround({ grass: '#5c6b32', soil: '#6f6047' }))
+  );
+
+  scene.registerProp(
+    'meadow',
+    meadow(rng, {
+      at: new THREE.Vector3(0.2, 0, 0.4),
+      width: 15,
+      depth: 11,
+      count: 26000,
+      // Ankle height. At 0.4 she was standing waist-deep in a hay meadow rather than in a
+      // worked field somebody walks across every day.
+      height: [0.07, 0.2],
+      bareBelow: 0.44,
+      clear: KEEP_CLEAR,
+      y: 0,
+    }),
+    // The gust, advanced once a frame. Registered here rather than globally so it only
+    // runs while this diorama is the one on screen.
+    { idle: (deltaTime) => stepWind(deltaTime) }
   );
 
   // Field stone, half-buried. Cool grey so it never competes with a crop.
