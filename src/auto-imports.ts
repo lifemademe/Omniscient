@@ -18,6 +18,7 @@ import './omniscient/content/mission-04-relations.js';
 import './omniscient/content/mission-05-cellar.js';
 import './omniscient/content/mission-06-lock.js';
 import './omniscient/content/mission-07-torch.js';
+import './omniscient/content/mission-08-district.js';
 import './omniscient/content/signals.js';
 import './omniscient/core/rng.js';
 import './omniscient/core/tween.js';

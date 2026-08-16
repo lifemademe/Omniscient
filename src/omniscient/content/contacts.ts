@@ -94,6 +94,21 @@ export const SANDA: Contact = {
   teaser: 'MILL ROAD - "there is a man behind me"',
 };
 
+/**
+ * The first contact who is not asking for advice.
+ *
+ * Everybody else brings the machine something they cannot understand. Lucian understands
+ * his problem perfectly - he simply cannot see the city, and OMNISCIENT_ can. He is here
+ * so the eighth request can be about ACCESS rather than about diagnosis, and so the line
+ * "your system" can be said by somebody with a warrant card.
+ */
+export const LUCIAN: Contact = {
+  id: 'lucian',
+  name: 'Lucian Barbu',
+  location: 'District 07, city dispatch',
+  teaser: 'DISTRICT 07 - POLICE - "we have lost a vehicle"',
+};
+
 export const CONTACTS: readonly Contact[] = [
   MIRELA,
   ILEANA,
@@ -102,6 +117,7 @@ export const CONTACTS: readonly Contact[] = [
   VASILE,
   DORIN,
   SANDA,
+  LUCIAN,
 ];
 
 export function getContact(id: string): Contact | null {

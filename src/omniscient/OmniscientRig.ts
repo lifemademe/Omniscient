@@ -12,7 +12,7 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
-import { ADAEZE, DORIN, ILEANA, MIRELA, SANDA, TOMAS, VASILE } from './content/contacts.js';
+import { ADAEZE, DORIN, ILEANA, LUCIAN, MIRELA, SANDA, TOMAS, VASILE } from './content/contacts.js';
 import { MISSION_01 } from './content/mission-01-transmitter.js';
 import { MISSION_02 } from './content/mission-02-beacon.js';
 import { MISSION_03 } from './content/mission-03-tunnel.js';
@@ -20,6 +20,7 @@ import { MISSION_04 } from './content/mission-04-relations.js';
 import { MISSION_05 } from './content/mission-05-cellar.js';
 import { MISSION_06 } from './content/mission-06-lock.js';
 import { MISSION_07 } from './content/mission-07-torch.js';
+import { MISSION_08 } from './content/mission-08-district.js';
 import { createScreenGlass } from './art/glass.js';
 import { PAINT_UNIFORMS } from './art/painterly.js';
 import { decorMesh } from './art/mesh.js';
@@ -307,6 +308,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * than as the game changing genre in front of them.
        */
       { mission: MISSION_07, contact: SANDA },
+      /**
+       * Eighth, and the only request that is not somebody asking for help.
+       *
+       * It has to come last for a reason that is about the player rather than about
+       * difficulty: seven people have now trusted this machine with a problem, and the
+       * eighth arrival is a policeman who has been given a terminal. The unease only works
+       * if the player has already spent the whole game being useful.
+       */
+      { mission: MISSION_08, contact: LUCIAN },
     ];
 
     this.buildScenes();

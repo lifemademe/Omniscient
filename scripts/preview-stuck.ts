@@ -18,6 +18,8 @@ import { MISSION_04 } from '../src/omniscient/content/mission-04-relations.js';
 import { MISSION_05 } from '../src/omniscient/content/mission-05-cellar.js';
 import { MISSION_06 } from '../src/omniscient/content/mission-06-lock.js';
 import { MISSION_07 } from '../src/omniscient/content/mission-07-torch.js';
+import { MISSION_08 } from '../src/omniscient/content/mission-08-district.js';
+import { narrow } from '../src/omniscient/mission/traces.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
 import { followerAt, replayBeam } from '../src/omniscient/mission/beam.js';
 import { flows, wetted } from '../src/omniscient/mission/pipes.js';
@@ -86,8 +88,17 @@ function solveDevice(device: Device): DeviceSubmission {
    * for the player by design - it is a deduction, and scripts/audit-traces.ts proves it
    * separately.
    */
-  if (device.kind !== 'pipes') {
-    throw new Error(`no solver for device kind "${device.kind}" - see audit-traces.ts`);
+  if (device.kind === 'traces') {
+    /**
+     * Answered from the evidence, not from a stored id.
+     *
+     * The same reasoning as the grader: ask `narrow` who fits what the police said and
+     * submit that. If the fleet and the evidence ever stopped agreeing, this walk would
+     * submit nothing and the mission would read as a dead end here - which is the failure
+     * mode worth catching, and one that comparing against a remembered id would hide.
+     */
+    const found = narrow(device.fleet, device.evidence)[0];
+    return { kind: 'traces', traceId: found?.id ?? 'none' };
   }
 
   const cells = device.grid.cells;
@@ -169,6 +180,7 @@ for (const mission of [
   MISSION_05,
   MISSION_06,
   MISSION_07,
+  MISSION_08,
 ]) {
   const widest = Math.max(...mission.beats.map((beat) => beat.suggest?.length ?? 0));
 

@@ -34,6 +34,7 @@ export const ILEANA_SIGNAL = 'ileana';
 export const VASILE_SIGNAL = 'vasile';
 export const DORIN_SIGNAL = 'dorin';
 export const SANDA_SIGNAL = 'sanda';
+export const LUCIAN_SIGNAL = 'lucian';
 
 /**
  * §96 caps conscious attention at five. The globe honours that: five nameable people at
