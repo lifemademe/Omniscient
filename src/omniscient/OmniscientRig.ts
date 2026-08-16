@@ -778,6 +778,19 @@ export class OmniscientRig extends ENGINE.SceneNode {
         position: new THREE.Vector3(0.36, 0.11, 0.46),
       });
       node.setName(name);
+      /**
+       * Hidden until it is fired.
+       *
+       * autoStart is false, but a VFX node that is not emitting is still a node in the
+       * scene - and these are all parked at one fixed spot near the origin, which in a
+       * diorama is on the floor next to whatever the contact is standing at. That is the
+       * green disc under Mirela's bench and the white one on the edge of the transmitter:
+       * two effects sitting where they were built, waiting, in full view.
+       *
+       * Nothing here should be visible until something makes it happen, so they start
+       * hidden and fireVfx shows them.
+       */
+      node.visible = false;
       this.vfxNodes.set(name, node);
       this.add(node);
     }
@@ -1493,7 +1506,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     const request = this.queue[index];
     this.mountScene(request.mission.sceneId);
-    this.vfxNodes.get('DustVFX')?.startEmitting();
+    // Dust is the exception - it runs continuously, so it is the one that gets to be seen
+    // without being fired.
+    const dustNode = this.vfxNodes.get('DustVFX');
+    if (dustNode) {
+      dustNode.visible = true;
+      dustNode.startEmitting();
+    }
     this.session.start(request.mission, request.contact);
   }
 
@@ -1686,6 +1705,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
       node.position.copy(this.pendingEffectPosition);
       this.pendingEffectPosition = null;
     }
+    // Shown only now. See buildVfx for why they are hidden the rest of the time.
+    node.visible = true;
     node.startEmitting();
   }
 
