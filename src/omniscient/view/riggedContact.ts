@@ -232,7 +232,12 @@ export function armReach(
  * hint that only happened to be right for one rotation.
  */
 function poleFor(root: ENGINE.SceneNode, side: 'left' | 'right'): THREE.Vector3 {
-  const facing = root.getWorldDirection(new THREE.Vector3());
+  /*
+   * Negated, because the model was turned. getWorldDirection gives the node's +Z and the
+   * character inside it now looks the other way; a pole built from the wrong forward puts
+   * the elbows in front of the body instead of behind it.
+   */
+  const facing = root.getWorldDirection(new THREE.Vector3()).negate();
   const outward = new THREE.Vector3(0, 1, 0).cross(facing).normalize();
   return new THREE.Vector3(0, -1, 0)
     .addScaledVector(outward, side === 'left' ? 0.45 : -0.45)
@@ -369,6 +374,23 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
      */
     const standing = new THREE.Box3().setFromObject(loaded);
     loaded.position.y -= standing.min.y - root.position.y;
+    loaded.updateMatrixWorld(true);
+
+    /**
+     * Turned to face the way this game's characters face.
+     *
+     * The generator builds people looking down -Z and every placement in the project was
+     * authored against that: rotations, hand targets, which way somebody is turned over
+     * their shoulder. A Mixamo character looks down +Z. So each rigged contact arrived
+     * backwards, and because the hand targets did NOT move with them, every one ended up
+     * reaching behind itself - Sanda facing the camera with her arms bent back towards the
+     * stalker, Vasile facing out with his hand pointing away, Mirela's elbows inverted.
+     *
+     * It read as three separate posing bugs and was one convention mismatch. The half turn
+     * is applied to the model inside its node, so the node's own rotation still means what
+     * the scene author wrote.
+     */
+    loaded.rotation.y += Math.PI;
     loaded.updateMatrixWorld(true);
 
     const hips = contact.bones['hips'];
