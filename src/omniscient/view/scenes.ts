@@ -1669,25 +1669,78 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   //
   // High and hard from the west, because the whole request turns on a shadow. A soft key
   // would light both banks evenly and there would be nothing to see.
-  scene.registerProp(
-    'sun',
-    ENGINE.PointLightNode.create({
+  const sunLight = ENGINE.DirectionalLightNode.create({
       name: 'Sun',
+      /**
+       * Directional, and this is the change that makes it read as sunlight.
+       *
+       * It was a PointLight with a 26m range, and everything wrong with the light in this
+       * scene followed from that. A point light radiates from a spot, so its DIRECTION
+       * changes across the field and its brightness falls away with distance - and falloff
+       * with distance is the single most reliable cue the eye has for artificial light. It
+       * also meant nothing past the ring was lit at all, which is why the ground and the
+       * lake had to be made unlit to stop them going black.
+       *
+       * The sun is 150 million kilometres away. Its rays are parallel, every surface with
+       * the same orientation gets the same light wherever it stands, and it does not
+       * attenuate over a smallholding. A DirectionalLightNode is that, exactly.
+       */
       position: SUNLIGHT_AT.clone(),
       /**
-       * Warmer and a little softer, to match a sun that is now on the horizon.
+       * Intensity in a completely different currency now.
        *
-       * This lamp is not the sun the player can see - that is a disc sixty metres out over
-       * the water. This is the thing lighting Adaeze and the beds, and its job is to agree
-       * with the sky rather than to be physically where the sun is. Low evening light is
-       * orange and less of it.
+       * A point light's 30 was 30 at its own position falling to nothing by 26 metres. A
+       * directional light's number is what every lit surface gets, everywhere, so it is a
+       * much smaller figure - and this is a low evening sun, which is weak as well as warm.
        */
-      intensity: 30,
-      color: new THREE.Color('#ffc98a'),
-      distance: 26,
-      decay: 0.9,
+      intensity: 2.1,
+      color: new THREE.Color('#ffb473'),
+    })
+
+  /**
+   * Aimed from the sun the player can actually see.
+   *
+   * This is the correction that matters as much as the light type. The old lamp sat up and
+   * to the RIGHT at (5.5, 7.5, 1.5) while the visible disc is far left and far back over
+   * the water - so every object in the scene was lit from one side while the sun was
+   * plainly on the other. Nobody could have named it and everybody would have felt it.
+   *
+   * A directional light's position does not affect its brightness, only its direction, so
+   * this sits on the line between the scene and the disc and looks at the beds. The
+   * elevation works out at about seven degrees, which is a sun on the horizon rather than
+   * the fifty degrees the point lamp was firing from - and low light travelling almost
+   * horizontally is what rakes across a field instead of falling onto it.
+   */
+  /**
+   * Skylight, which a low sun cannot do without.
+   *
+   * A sun seven degrees above the horizon strikes level ground at grazing incidence - the
+   * cosine works out around 0.12 - so the field, the beds and the paths receive almost
+   * nothing from it however bright it is. That is physically right and it left the ground
+   * reading at 44 where it had been over 100.
+   *
+   * The answer is not to crank the sun, which would blow out everything vertical while the
+   * ground stayed dark. It is that at sunset half the light in the world comes from the
+   * SKY - a huge warm dome overhead - and this scene had no such thing. A hemisphere lights
+   * upward-facing surfaces from above, which is exactly the set of surfaces the low sun
+   * cannot reach.
+   */
+  scene.registerProp(
+    'skylight',
+    ENGINE.HemisphereLightNode.create({
+      name: 'Skylight',
+      position: new THREE.Vector3(0, 14, -6),
+      intensity: 1.5,
+      // The sky as it actually is overhead in this shot, and the ground bouncing back.
+      color: new THREE.Color('#e5a98a'),
+      groundColor: new THREE.Color('#3a3a2c'),
     })
   );
+
+  sunLight.position.set(-20, 3.6, -23);
+  sunLight.lookAt(new THREE.Vector3(0, 0.6, 0));
+  scene.registerProp('sun', sunLight);
+;
 
   /**
    * Sky fill, moved round to the camera side.
@@ -1715,9 +1768,17 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * sits where the camera does, which is the only place a fill can be if the job is
        * making a face readable.
        */
+      /**
+       * Cooler, because the key is now genuinely warm.
+       *
+       * Most of what sells an hour of the day is the SPLIT: a warm key against a cool fill,
+       * the fill being skylight rather than sunlight. With a neutral fill the warm key had
+       * nothing to be warm against and the whole frame just read as tinted. This is the
+       * blue of the sky overhead at the moment the sun is orange on the horizon.
+       */
       position: new THREE.Vector3(-0.9, 3.0, 5.0),
-      intensity: 26,
-      color: new THREE.Color('#9fc0d8'),
+      intensity: 22,
+      color: new THREE.Color('#7d9ecc'),
       distance: 18,
       decay: 1.15,
     })
