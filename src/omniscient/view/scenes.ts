@@ -45,7 +45,8 @@ import { DISTRICT_CITY, DISTRICT_FLEET, DISTRICT_SIZE } from '../content/distric
 import { CELL, cellToWorld } from '../geometry/wireCity.js';
 import { createClump } from './../geometry/foliage.js';
 import { grassTufts, greenhouse, rocks } from '../geometry/outdoors.js';
-import { meadow, meadowGround, stepWind } from '../geometry/meadow.js';
+import { meadow, meadowGround, stepWind, WIND } from '../geometry/meadow.js';
+import { stylisedWater } from '../geometry/water.js';
 import { rows, scatter } from '../geometry/planting.js';
 import {
   createMainsSwitch,
@@ -1771,8 +1772,16 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     ENGINE.PointLightNode.create({
       name: 'Sun',
       position: SUNLIGHT_AT.clone(),
-      intensity: 36,
-      color: new THREE.Color('#fff0d0'),
+      /**
+       * Warmer and a little softer, to match a sun that is now on the horizon.
+       *
+       * This lamp is not the sun the player can see - that is a disc sixty metres out over
+       * the water. This is the thing lighting Adaeze and the beds, and its job is to agree
+       * with the sky rather than to be physically where the sun is. Low evening light is
+       * orange and less of it.
+       */
+      intensity: 30,
+      color: new THREE.Color('#ffc98a'),
       distance: 26,
       decay: 0.9,
     })
@@ -2044,8 +2053,17 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   const fence: THREE.BufferGeometry[] = [];
   const HEDGE_Z = -9.4;
 
-  for (let i = 0; i < 46; i++) {
-    const x = -19 + i * 0.85;
+  /**
+   * The hedge runs the right of the field and stops.
+   *
+   * It used to cross the whole width, which walled the shot off - and once there was water
+   * behind it, walled the water off too. A boundary that runs out is also more true: a
+   * hedge is grown along the side somebody needed a boundary on, and it ends where the land
+   * does something else. Ending it opens the left of the frame onto the lake and the sun,
+   * which is the half of the picture worth looking at.
+   */
+  for (let i = 0; i < 30; i++) {
+    const x = -3.5 + i * 0.85;
     // Overlapping lumps of varying size, so the top line wanders the way a hedge does
     // rather than running level like a wall.
     const size = range(rng, 0.62, 1.0);
@@ -2067,22 +2085,92 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * in front of it. It is also the only straight line in the middle distance, and one
    * straight line is what makes everything around it read as grown rather than built.
    */
-  for (let i = 0; i < 17; i++) {
-    const x = -16 + i * 2.0;
+  for (let i = 0; i < 12; i++) {
+    const x = -3.0 + i * 2.0;
     const post = new THREE.BoxGeometry(0.09, 1.05, 0.09);
     post.rotateZ(jitter(rng, 0.04));
     post.translate(x, 0.52, HEDGE_Z + 0.9);
     fence.push(post);
   }
   for (const y of [0.42, 0.82] as const) {
-    const wire = new THREE.BoxGeometry(32, 0.015, 0.015);
-    wire.translate(0, y, HEDGE_Z + 0.9);
+    const wire = new THREE.BoxGeometry(22, 0.015, 0.015);
+    wire.translate(7.5, y, HEDGE_Z + 0.9);
     fence.push(wire);
   }
   scene.registerProp(
     'fence',
     meshOf('Fence', mergeGeometries(fence, false) ?? fence[0], MAT.timberDark)
   );
+
+  /**
+   * -- The lake, and the evening on it ---------------------------------------------------
+   *
+   * Adaeze's is the only set in the game with a horizon, which makes it the only one that
+   * can hold a sky - and a sky is wasted without something to put underneath it. The water
+   * sits past the end of the hedge, on the left, so it opens out from behind the glasshouse
+   * exactly where the frame had nothing in it.
+   *
+   * It is a long way back on purpose. Near water would want a shoreline, reeds, a reason
+   * somebody has not walked into it; at thirty metres it is a band of light between the
+   * field and the hills, which is all it needs to be and all this scene has room for.
+   */
+  /**
+   * Solved, not nudged.
+   *
+   * The camera looks along -X as well as -Z, so a distant object at x=-15 sits almost
+   * exactly on the view axis and the sun kept landing dead centre behind the tree. Working
+   * it through the shot's own camera basis - right vector (0.946, 0, -0.325), forward
+   * normalised - a screen position a third of the way from the left edge needs x = -36.
+   * Two hundredths of screen space per metre at this distance; guessing was never going to
+   * find it.
+   */
+  const LAKE_SUN_X = -36;
+  const lake = new THREE.PlaneGeometry(120, 70);
+  lake.rotateX(-Math.PI / 2);
+  lake.translate(-34, 0.04, -44);
+  scene.registerProp(
+    'lake',
+    meshOf(
+      'Lake',
+      lake,
+      stylisedWater({
+        deep: '#2f4a63',
+        shallow: '#4d6f7d',
+        crest: '#86a8ad',
+        glint: '#ffcf95',
+        sunX: LAKE_SUN_X,
+        sunWidth: 11,
+        // The same clock the grass runs on, so one gust moves the whole scene.
+        time: WIND.uTime,
+      })
+    )
+  );
+
+  /**
+   * The sun itself, as an object low over the water.
+   *
+   * Separate from the light that illuminates the set, and it has to be. The scene's key is
+   * a PointLight with a 26m range - it exists to light Adaeze and the beds, and it cannot
+   * be moved to the horizon without the whole foreground going dark. So the thing the
+   * player reads as the sun is a disc in the distance, and the thing doing the lighting is
+   * a lamp near the subject wearing the same colour. Every set in this game is lit that way
+   * once you look; this is the first one where the audience can see the sun as well.
+   */
+  /**
+   * In front of the hills, not behind them.
+   *
+   * At z=-62 it was beyond the backdrop's hill line and simply never appeared - a sun
+   * hidden by the landscape it is meant to be setting over. Pulled forward to sit just
+   * above the ridge, which is where a low sun actually reads from, and raised so it clears
+   * the water rather than sitting in it.
+   */
+  const disc = new THREE.CircleGeometry(2.6, 24);
+  disc.translate(LAKE_SUN_X, 6.4, -42);
+  scene.registerProp('sun-disc', meshOf('SunDisc', disc, MAT.sunDisc));
+
+  const halo = new THREE.CircleGeometry(6.0, 24);
+  halo.translate(LAKE_SUN_X, 6.4, -42.4);
+  scene.registerProp('sun-halo', meshOf('SunHalo', halo, MAT.sunHalo));
 
   // Field stone, half-buried. Cool grey so it never competes with a crop.
   scene.registerProp(

@@ -214,6 +214,20 @@ export const MAT = {
   floorboard: standard('#6a5136', 0.9),
   /** Worked earth. Darker and redder than MAT.ground, which is a track somebody walks on. */
   soil: standard('#5a4028', 0.98),
+  /**
+   * The sun, seen. Unlit and unfogged - it is 60m out, past everything that lights or hazes,
+   * and it has to be the brightest thing in the frame by a clear margin or it reads as a
+   * pale moon.
+   */
+  sunDisc: new THREE.MeshBasicMaterial({ color: new THREE.Color('#fff1c9'), fog: false }),
+  /** The bloom around it. Transparent, so the sky keeps showing through the edge. */
+  sunHalo: new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#ffbe86'),
+    transparent: true,
+    opacity: 0.42,
+    fog: false,
+    depthWrite: false,
+  }),
   metal: standard(HUMAN.metal, 0.45, 0.65),
   plastic: standard(HUMAN.plastic, 0.72, 0.03),
   dark: standard(HUMAN.dark, 0.6, 0.1),

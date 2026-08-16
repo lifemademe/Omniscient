@@ -523,13 +523,27 @@ export function fieldSkyTexture(sun: THREE.Vector3): THREE.CanvasTexture | null 
 
   const texture = createDecal(512, 512, (ctx, w, h) => {
     const sky = ctx.createLinearGradient(0, h, 0, 0);
+    /**
+     * Evening, not afternoon.
+     *
+     * This scene is the one with a horizon in it - every other set is a room or a road with
+     * something across the end of it - so it is the only one that can carry a sky. The
+     * gradient does the work: hot near the ground where the sun is, through amber and a
+     * rose band, into a blue that is already going violet at the top.
+     *
+     * Six stops rather than four, and they are close together low down. A sunset is not a
+     * smooth ramp from orange to blue; almost all of the colour happens in the ten degrees
+     * above the horizon, and spacing the stops evenly is what makes a sky look like a
+     * gradient somebody applied.
+     */
     const stops: ReadonlyArray<readonly [number, string]> = [
-      [FIELD_SKY_BOTTOM, '#cbcdc2'],
-      [0, '#c6cbc4'],
-      [6, '#adbcc4'],
-      [18, '#8ba6c0'],
-      [36, '#7191b6'],
-      [FIELD_SKY_TOP, '#6484ad'],
+      [FIELD_SKY_BOTTOM, '#ffd9a0'],
+      [0, '#ffc98a'],
+      [4, '#f5a973'],
+      [10, '#dd8b74'],
+      [20, '#a87a92'],
+      [36, '#6f6d9e'],
+      [FIELD_SKY_TOP, '#41527f'],
     ];
     for (const [y, color] of stops) sky.addColorStop(fieldSkyV(y), color);
     ctx.fillStyle = sky;
@@ -611,7 +625,9 @@ export function fieldTexture(): THREE.CanvasTexture | null {
      * perspective actually does, and now the far end genuinely reads as far rather than as
      * a slightly lighter version of the near end.
      */
-    gradient.addColorStop(0, '#5c6b32');
+    // Evening green: cooler and darker, because the light is coming from the side now and
+    // the field is mostly in its own shadow. See the sky stops above.
+    gradient.addColorStop(0, '#4a5a2d');
     gradient.addColorStop(0.18, '#66753a');
     gradient.addColorStop((HEDGE_RADIUS / 70) * 0.5, '#84906a');
     gradient.addColorStop(1, '#a2ac95');
