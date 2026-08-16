@@ -1220,24 +1220,53 @@ function buildBeaconMast(scene: ContactScene): void {
   // Cold moonlight from behind, so the mast and Tomas read as silhouettes with a cool
   // rim, and the beacon's amber is the only warm source in the scene. When it drops,
   // everything goes cold - which is the mission, said in light rather than words.
+  /**
+   * Directional, because the moon is as far away as the sun is.
+   *
+   * It was a PointLight with a 34 metre range, which makes moonlight that falls off across
+   * a headland and arrives from a different angle at each end of it. The moon is a quarter
+   * of a million miles away; its light is parallel and it does not get dimmer as you walk
+   * down a cliff. The same argument as the sun in Adaeze's field, and the same fix.
+   *
+   * Intensity is in a different currency now - a directional light's number is what every
+   * lit surface receives, everywhere, rather than a value at a point that decays.
+   *
+   * The reason it has to be strong at all is unchanged and worth keeping: the beacon is out
+   * for three and a half seconds in every eleven, and a screenshot of the lit phase says
+   * nothing about the dark one. Played back, the scene used to go almost black for a third
+   * of the time the player spends with Tomas. The moon carries the set whenever the light
+   * drops, which is precisely when the player is looking hardest.
+   */
+  const moonLight = ENGINE.DirectionalLightNode.create({
+    name: 'Moonlight',
+    intensity: 1.9,
+    color: new THREE.Color('#93b0cf'),
+  });
+  moonLight.position.copy(MOONLIGHT_AT);
+  // Aimed at the deck rather than left pointing down its own default axis - the whole
+  // point of the change is that the direction is deliberate.
+  moonLight.lookAt(new THREE.Vector3(0, 0.5, 0));
+  scene.registerProp('moon', moonLight);
+
+  /**
+   * Night sky, for the surfaces the moon rakes past.
+   *
+   * Same reason Adaeze's field needed one. The moon is low and behind, so it lights
+   * silhouettes beautifully and leaves everything facing upward - the deck, the turf, the
+   * tops of the outcrops - receiving almost nothing. A hemisphere is the sky itself, which
+   * on a clear night is genuinely the second light source in the world.
+   *
+   * Very cold and very weak. This is not moonlight, it is the difference between a night
+   * with stars in it and a black hole with objects in it.
+   */
   scene.registerProp(
-    'moon',
-    ENGINE.PointLightNode.create({
-      name: 'Moonlight',
-      position: MOONLIGHT_AT.clone(),
-      /**
-       * Raised twice, the second time off a recording rather than a still.
-       *
-       * The beacon is out for three and a half seconds in every eleven, and a screenshot
-       * of the lit phase says nothing about the dark one. Played back, the scene went
-       * almost black for a third of the time the player spends with Tomas - not
-       * atmospheric, unreadable. The moon has to carry the scene on its own whenever the
-       * light drops, because that is precisely when the player is looking hardest.
-       */
-      intensity: 30,
-      color: new THREE.Color('#93b0cf'),
-      distance: 34,
-      decay: 0.9,
+    'skylight',
+    ENGINE.HemisphereLightNode.create({
+      name: 'NightSky',
+      position: new THREE.Vector3(0, 16, -4),
+      intensity: 0.9,
+      color: new THREE.Color('#3f5570'),
+      groundColor: new THREE.Color('#14181c'),
     })
   );
 
