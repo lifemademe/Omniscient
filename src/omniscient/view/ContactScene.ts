@@ -216,6 +216,29 @@ export class ContactScene extends ENGINE.SceneNode {
     return out;
   }
 
+  /**
+   * A live value the console feeds the world, mid-beat.
+   *
+   * The cue system is the normal channel and it is the wrong shape for this: a cue is a
+   * discrete instruction with a name, fired when a beat changes, and what the chase needs
+   * is a continuous number arriving many times a second while one beat is running.
+   *
+   * Deliberately narrow. A scene may register at most one of these and only mission 07
+   * does; if a second real-time beat ever wants one it should say so in its own terms
+   * rather than turning this into a general message bus, which is how a clean cue system
+   * becomes a soup of untyped strings.
+   */
+  private aimHandler: ((to: number) => void) | null = null;
+
+  public onAim(handler: (to: number) => void): void {
+    this.aimHandler = handler;
+  }
+
+  /** Drive whatever this scene aims. No-op for the six that aim nothing. */
+  public aim(to: number): void {
+    this.aimHandler?.(to);
+  }
+
   public registerShot(id: string, shot: CameraShot): void {
     this.shots.set(id, shot);
   }

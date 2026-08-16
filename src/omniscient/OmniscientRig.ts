@@ -383,8 +383,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
   public override beginPlay(): boolean {
     if (!super.beginPlay()) return false;
 
-
-
     /**
      * Before anything else draws.
      *
@@ -1240,6 +1238,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * and it is also the only pleasant sound in it. That is not a coincidence - the
        * whole progression is the tree, and the tree only moves here.
        */
+      // Presentation only, and it never touches mission state - see PlayerMessage's `aim`.
+      onAim: (to) => this.scene?.aim(to),
       onKnowledgeGained: () => {
         audio.play('learn');
         this.revealGrowth();

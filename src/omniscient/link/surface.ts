@@ -197,6 +197,19 @@ export type PlayerMessage =
   | { kind: 'note'; text: string }
   /** Stepped back out of the request to the globe. */
   | { kind: 'leave' }
+  /**
+   * Where the player has just told the contact to point something.
+   *
+   * Presentation, not truth, and the distinction matters because §157 is strict about the
+   * console never deciding an outcome. It does not: the chase's result is still the list
+   * of calls, replayed by the runtime at the end. This is the same information arriving
+   * early so the WORLD can act on it - Sanda's actual torch swings when the player calls
+   * it, instead of the beam existing only as a wedge on a panel while the diorama behind
+   * shows a woman holding a light that never moves.
+   *
+   * §209 is the rule being served: the environment performs the instruction.
+   */
+  | { kind: 'aim'; to: number }
   /** Sent a device. The payload is discriminated to match what was being shown. */
   | {
       kind: 'device';

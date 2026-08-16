@@ -36,6 +36,10 @@ export interface SessionHooks {
   onEnvironment?: (cue: string) => void;
   /** VFX library effect name to fire. */
   onVfx?: (effect: string) => void;
+  /**
+   * The player has called the light somewhere. Presentation only - see PlayerMessage.
+   */
+  onAim?: (to: number) => void;
   /** Fired when facts were recorded, so the CRT can reveal growth. */
   onKnowledgeGained?: (factIds: string[]) => void;
   /** Fired once the request resolves. */
@@ -107,6 +111,17 @@ export class SessionController {
           break;
         case 'device':
           this.submitDevice(message.submission);
+          break;
+        /**
+         * Straight through to the world, without touching mission state.
+         *
+         * Deliberately not routed through the runtime: an aim is not an answer and must
+         * never advance a beat, learn a fact or count toward anything. It is the console
+         * telling the diorama where the player has just pointed, and the only correct
+         * response is for a torch to move.
+         */
+        case 'aim':
+          this.hooks.onAim?.(message.to);
           break;
         default:
           break;

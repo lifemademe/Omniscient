@@ -3330,10 +3330,19 @@ function buildMillRoad(scene: ContactScene): void {
    * A prop pointing one way while its light goes another is the kind of mistake nobody can
    * name and everybody can see. The yaw here is the same swing the spot above got.
    */
+  /**
+   * Tilted to where the pool actually lands.
+   *
+   * The barrel used to sit at -0.1 while the beam was separately aimed at a point 3.9m down
+   * the road, which is a slope of -0.28 - so the body was held nearly level above a pool of
+   * light thrown from something pointing over it. Nobody could have named that and everybody
+   * would have felt it. Now the barrel IS the slope, and the light is hung off it.
+   */
+  const TORCH_REST = -0.3;
   const torchRoot = ENGINE.SceneNode.create({
     name: 'Torch',
     position: TORCH_AT.clone(),
-    rotation: new THREE.Euler(-0.1, -0.52, 0),
+    rotation: new THREE.Euler(-0.28, TORCH_REST, 0),
   });
 
   const barrel = new THREE.CylinderGeometry(0.031, 0.028, 0.21, 10);
@@ -3366,10 +3375,48 @@ function buildMillRoad(scene: ContactScene): void {
    * ground - and the light below does that job alone.
    */
 
+  /**
+   * The torch swings when the player calls the light.
+   *
+   * Until now the chase happened entirely on a panel - a wedge and a pale rectangle moving
+   * on a track - while the diorama behind it showed a woman holding a light that did not
+   * move for twelve seconds. The two halves of the same beat were not connected, which is
+   * exactly what §209 exists to prevent: the environment performs the instruction.
+   *
+   * The body and its spot really are one node now - the light is a child of this root - so
+   * turning it turns both, and they cannot drift apart the way they did before.
+   *
+   * Swung, never snapped, at 1.4 radians a second - the same rate the chase spec gives her
+   * hand. The lag IS the mechanic: what the player has to learn is that the light arrives
+   * late, and a torch that jumped to each call would teach exactly the wrong lesson.
+   */
+  let torchAim = TORCH_REST;
+  scene.onAim((to) => {
+    /**
+     * Negated, and it matters.
+     *
+     * The camera looks back down the road, so world +X is screen right, and a yaw INCREASE
+     * swings the barrel towards -X. Without the sign the player dragged the marker right
+     * and watched the beam go left - measured, not guessed: the aim at +0.9 put the pool's
+     * centre of mass at x=953 and the aim at -0.9 put it at x=1356.
+     *
+     * 0.45 rather than the 0.62 this started at. At 0.62 the far end threw the pool off the
+     * tarmac and onto the verge, which dropped the lit area by 60% - and a torch that dims
+     * as you aim it teaches the player something that is not true.
+     */
+    torchAim = TORCH_REST - Math.max(-1, Math.min(1, to)) * 0.45;
+  });
+
   scene.registerProp('torch', torchRoot, {
     // Inked: Her father's torch. The only light on the road.
     inked: true,
     anchors: { default: new THREE.Vector3(0, 0, -0.2) },
+    idle: (deltaTime, node) => {
+      const gap = torchAim - node.rotation.y;
+      if (Math.abs(gap) < 0.0005) return;
+      const step = Math.min(Math.abs(gap), 1.4 * deltaTime) * Math.sign(gap);
+      node.rotation.set(node.rotation.x, node.rotation.y + step, node.rotation.z);
+    },
   });
 
   // -- The follower ----------------------------------------------------------
@@ -3454,7 +3501,8 @@ function buildMillRoad(scene: ContactScene): void {
    */
   const torchLight = ENGINE.SpotLightNode.create({
     name: 'TorchLight',
-    position: TORCH_AT.clone().add(new THREE.Vector3(0, 0, -0.2)),
+    // At the lens, in the torch's own space - see the parenting note below.
+    position: new THREE.Vector3(0, 0, -0.2),
     /**
      * Numbers arrived at by measuring, not by eye.
      *
@@ -3479,33 +3527,76 @@ function buildMillRoad(scene: ContactScene): void {
    * A torch does not only light what it is pointed at - the wash off the road and off her
    * own hands is what makes the person holding one visible at all, and the spot alone left
    * her a black shape in front of a lit road. Small, close and warm.
+   *
+   * Raised from 5 after measuring instead of looking. Her coat came out at value 21 and her
+   * face at 12 against a road at 36 and a beam pool at 157 - she was DARKER than everything
+   * behind her, which is the same fault the lighting pass found in all seven views and the
+   * last place it would have been noticed, because a woman alone in the dark is exactly
+   * what this scene is about and a silhouette reads as intentional right up until you
+   * realise you cannot see her face at the moment she is frightened.
    */
   scene.registerProp(
     'torch-spill',
     ENGINE.PointLightNode.create({
       name: 'TorchSpill',
-      position: TORCH_AT.clone().add(new THREE.Vector3(-0.1, 0.05, 0.1)),
-      intensity: 5,
+      /**
+       * On the camera's side of her, and deliberately short.
+       *
+       * Two mistakes in one number, both visible the moment it was measured. It sat at
+       * z=0.06 while she stands at z=0.2 - the FAR side of her from the camera, so it lit
+       * the hedge and the road past her shoulder and left the half of her we actually see
+       * as black as it started. She is turned away down the road; the surfaces in frame are
+       * her back and the side of her hood, and a fill has to be where the camera is to
+       * reach them.
+       *
+       * The reach is 1.35 rather than 3.1 because a point light at chest height with a
+       * three metre radius puts a soft circle on the tarmac around her feet - a second
+       * light source, from nothing, in a scene whose entire premise is that her torch is
+       * the only one. Stopping it just above the road removes the pool and keeps the woman.
+       */
+      position: new THREE.Vector3(0.98, 1.24, 0.95),
+      /**
+       * 3, not 7, and measured at both ends.
+       *
+       * 7 put her coat at luma 160 with a red channel of 202 - over the 0.78 bloom
+       * threshold, so the one figure in the frame would have started glowing at the edges
+       * like the hat brim and the goggles did. Her background is the road at 34. Sitting
+       * her in the 70s clears it comfortably without asking the bloom pass a question.
+       *
+       * The reach went out to 1.7 because at 1.35 the falloff ended at her knees: lit to
+       * the waist and black below, which is worse than uniformly dark.
+       */
+      intensity: 3,
       color: new THREE.Color('#ffcf90'),
-      distance: 2.6,
-      decay: 1.4,
+      distance: 1.7,
+      decay: 1.3,
     })
   );
   /**
-   * Across the frame, not straight away from the lens.
+   * A child of the torch, turned to face the way the torch faces.
    *
-   * It pointed at (0.35, 0, -3.4) - directly down the road, which is where the follower is
-   * and is correct in the fiction. It reads wrong: she faces the camera, the beam leaves
-   * along the camera's own axis, and a beam pointing away from the viewer has no visible
-   * length. All the player saw was a lit woman with darkness behind her and nothing to
-   * explain what the torch was for.
+   * ## Why parented
    *
-   * Swung toward the hedge side. The pool now lies ACROSS the road inside the frame, so
-   * the beam has a direction that can be read, and it still falls well short of the
-   * follower - which is the shot saying he is out of reach before she says it.
+   * It was a sibling, aimed in world space at (2.5, 0, -3.9) by its own `lookAt`. That is
+   * survivable while nothing moves and it is a bug the moment anything does: the direction
+   * of the light and the direction of the torch were two numbers that happened to agree,
+   * and the first sweep of the aim turned the body while the beam stayed where it was.
+   *
+   * ## Why the extra half turn
+   *
+   * A spot light does NOT point down its own -Z. `LightNode.updateMatrixWorld` sets the
+   * three.js target to `worldPosition + getWorldDirection() * d`, and `getWorldDirection`
+   * on an ordinary node is the +Z column - so a SpotLightNode fires down +Z. The barrel,
+   * bell and lens here are all built along -Z. Parenting with no rotation therefore aimed
+   * the beam backwards through the woman holding it, which measured as nine warm pixels in
+   * the whole frame - not a dim beam, no beam.
+   *
+   * `Math.PI` on Y is the whole fix, and it is the only place in this file that has to know
+   * which way a light faces. Everything else follows from the torch's own transform: one
+   * number, and a body that cannot point somewhere its light does not.
    */
-  torchLight.lookAt(new THREE.Vector3(2.5, 0, -3.9));
-  scene.registerProp('torch-light', torchLight);
+  torchLight.rotation.set(0, Math.PI, 0);
+  torchRoot.add(torchLight);
 
   // -- Shots -----------------------------------------------------------------
   scene.registerShot('default', {

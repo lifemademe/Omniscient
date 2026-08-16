@@ -605,6 +605,9 @@ export class BoardPanel {
       const rect = track.getBoundingClientRect();
       const to = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       audio.play('tap');
+      // Straight up to the world as well as into the local simulation, so the torch in the
+      // diorama swings at the same moment the wedge on this panel does.
+      this.dispatch({ kind: 'aim', to: Math.max(-1, Math.min(1, to)) });
       this.calls.push({ at: this.chase.elapsed, to });
       this.chase = { ...this.chase, aim: Math.max(-1, Math.min(1, to)) };
     });
