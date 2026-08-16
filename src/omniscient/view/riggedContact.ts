@@ -481,6 +481,55 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
       if (crossed < straight) sideFor = { left: 'right', right: 'left' };
     }
 
+    /**
+     * Stand where the work is.
+     *
+     * Every hand target in this game was authored against the generator, whose arm length
+     * is a function of height. A real skeleton has real proportions - these come out about
+     * 8% shorter in the arm with the shoulder in a different place - so a target that the
+     * generated contact reached comfortably can be simply out of range for the modelled
+     * one. Vasile's hands hung at his sides while the pipe run he is supposed to be working
+     * on sat a hand's width beyond them.
+     *
+     * The obvious fix is to nudge each of the seven by hand until it looks right. That is
+     * seven numbers found by eye, and every one of them silently wrong again the next time
+     * a model is re-exported or a bench moves.
+     *
+     * So it is measured instead: how far short is the worst arm, and step that far towards
+     * the work. A person who cannot quite reach something does exactly this, which is why
+     * it does not read as a fudge - it reads as somebody standing at a bench.
+     *
+     * Clamped, because a large step means the placement is wrong rather than the
+     * proportions, and quietly walking a contact across their own set would hide a real
+     * authoring mistake behind a plausible-looking pose.
+     */
+    const STEP_LIMIT = 0.4;
+    let shortfall = 0;
+    const wanted = new THREE.Vector3();
+    let wantedCount = 0;
+
+    for (const named of ['left', 'right'] as const) {
+      const target = options.handsOn?.[named];
+      if (!target) continue;
+      const arm = armReach(contact.bones, sideFor[named]);
+      if (!arm) continue;
+      shortfall = Math.max(shortfall, arm.shoulderAt.distanceTo(target) - arm.reach);
+      wanted.add(target);
+      wantedCount++;
+    }
+
+    if (shortfall > 0.01 && wantedCount > 0) {
+      wanted.divideScalar(wantedCount);
+      // Horizontal only. Sinking a character into the floor to reach a high shelf, or
+      // floating them to reach a low one, would be a worse answer than not reaching.
+      const step = wanted.clone().sub(root.position);
+      step.y = 0;
+      if (step.lengthSq() > 1e-6) {
+        root.position.addScaledVector(step.normalize(), Math.min(shortfall + 0.02, STEP_LIMIT));
+        root.updateMatrixWorld(true);
+      }
+    }
+
     const reached: string[] = [];
     for (const named of ['left', 'right'] as const) {
       const target = options.handsOn?.[named];
@@ -496,7 +545,11 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
     if (reached.length) {
       // Printed on purpose: the result of this experiment is a number, and a number that
       // only exists inside the running game is a number nobody can act on.
-      console.log(`[rigged] ${name} bones=${Object.keys(contact.bones).length} ${reached.join(', ')}`);
+      console.log(
+        `[rigged] ${name} bones=${Object.keys(contact.bones).length} ` +
+          `stepped=${shortfall > 0.01 ? Math.min(shortfall + 0.02, STEP_LIMIT).toFixed(2) : '0'} ` +
+          reached.join(', ')
+      );
     }
   });
 
