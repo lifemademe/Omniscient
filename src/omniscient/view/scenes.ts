@@ -1568,17 +1568,65 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     limb.translate(mid.x, mid.y, mid.z);
     limbs.push(limb);
 
-    // Two blobs per limb, one at the tip and one back along it, so the crown has an
-    // interior instead of being a ring of separate balls.
-    for (const [t, radius] of [
-      [1.0, 0.78 - i * 0.03],
-      [0.68, 0.6 - i * 0.02],
-    ] as const) {
-      const blob = new THREE.SphereGeometry(radius, 8, 6);
-      const at = from.clone().addScaledVector(dir, length * t);
-      blob.translate(at.x, at.y - 0.06, at.z);
+    /**
+     * Secondary forks, and clusters where they end.
+     *
+     * The tree used to be six limbs with two spheres each, and it read as a lollipop -
+     * because that is what it was. A tree is recognisable from its FORKS: a limb that
+     * divides, and divides again, with foliage only at the ends. Smooth spheres hung along
+     * a straight branch cannot suggest that however many you add.
+     *
+     * So each limb splits near its end into two shorter, thinner branches, and the leaves
+     * hang off those instead. Faceted clusters rather than spheres - a 20-triangle
+     * icosahedron, non-uniformly scaled and turned - which gives the chunky angular
+     * silhouette this game's whole art direction is built on and costs less than the
+     * spheres it replaces.
+     */
+    const forkAt = from.clone().addScaledVector(dir, length * 0.62);
+
+    const leafCluster = (centre: THREE.Vector3, radius: number): void => {
+      const blob = new THREE.IcosahedronGeometry(radius, 0);
+      // Squashed and turned, so eighteen clusters are not eighteen copies of one ball.
+      blob.scale(range(rng, 0.85, 1.25), range(rng, 0.7, 0.95), range(rng, 0.85, 1.25));
+      blob.rotateY(range(rng, 0, Math.PI * 2));
+      blob.rotateX(jitter(rng, 0.5));
+      blob.translate(centre.x, centre.y, centre.z);
       canopy.push(blob);
+    };
+
+    for (const side of [-1, 1] as const) {
+      // Opening out and lifting: a secondary branch is always closer to horizontal than
+      // the limb it came off, which is what makes a crown spread rather than spike.
+      const lean2 = lean - side * range(rng, 0.16, 0.34) - 0.1;
+      const swing2 = swing + side * range(rng, 0.34, 0.6);
+      const length2 = length * range(rng, 0.38, 0.52);
+      const dir2 = UP.clone().applyAxisAngle(Z_AXIS, lean2).applyAxisAngle(Y_AXIS, swing2);
+
+      const twig = new THREE.CylinderGeometry(0.022, 0.045, length2, 5);
+      twig.rotateZ(lean2);
+      twig.rotateY(swing2);
+      const mid2 = forkAt.clone().addScaledVector(dir2, length2 / 2);
+      twig.translate(mid2.x, mid2.y, mid2.z);
+      limbs.push(twig);
+
+      /**
+       * Two clusters per secondary, not one.
+       *
+       * With foliage only at the very tips the crown came out thin and rode up above the
+       * frame - a ring of separate lumps on the ends of sticks, with sky between them. A
+       * canopy needs an interior. The second cluster sits back along the branch so the
+       * crown has mass between its edges, which is also what stops the light finding gaps
+       * straight through it.
+       */
+      leafCluster(forkAt.clone().addScaledVector(dir2, length2 * 1.02), 0.66 - i * 0.02);
+      leafCluster(forkAt.clone().addScaledVector(dir2, length2 * 0.5), 0.54 - i * 0.02);
     }
+
+    // And one at the end of the limb itself, so the fork is inside the crown rather than
+    // poking out of the front of it.
+    leafCluster(from.clone().addScaledVector(dir, length * 1.04), 0.76 - i * 0.03);
+    // And one at the fork itself, which is where a real crown is thickest.
+    leafCluster(forkAt.clone().addScaledVector(dir, 0.12), 0.6 - i * 0.02);
   }
   treeRoot.add(meshOf('TreeLimbs', mergeGeometries(limbs, false) ?? limbs[0], MAT.timberDark));
 
