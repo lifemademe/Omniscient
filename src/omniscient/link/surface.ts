@@ -1,4 +1,5 @@
 import type { BeamSpec } from '../mission/beam.js';
+import type { ClueId, Evidence, Trace } from '../mission/traces.js';
 
 /**
  * The intervention surface - OMNISCIENT_'s phone.
@@ -106,6 +107,22 @@ export type DeviceView =
       note?: string;
     }
   | { kind: 'pipes'; prompt: string; grid: PipeView; note?: string }
+  /**
+   * The surveillance board.
+   *
+   * The whole fleet crosses the link, unfiltered. That is deliberate and it is the one
+   * device where it is: the narrowing is the gameplay, so the panel must be able to do it,
+   * which means it needs everything the network can see plus the partial facts the police
+   * actually have. Filtering server-side would be sending the answer.
+   */
+  | {
+      kind: 'traces';
+      prompt: string;
+      fleet: Trace[];
+      evidence: Evidence;
+      reveal: ClueId[];
+      note?: string;
+    }
   | {
       kind: 'lock';
       prompt: string;
@@ -217,7 +234,8 @@ export type PlayerMessage =
         | { kind: 'relations'; links: Record<string, string> }
         | { kind: 'pipes'; rotations: number[] }
         | { kind: 'lock'; order: string[] }
-        | { kind: 'beam'; calls: Array<{ at: number; to: number }> };
+        | { kind: 'beam'; calls: Array<{ at: number; to: number }> }
+        | { kind: 'traces'; traceId: string };
     };
 
 export interface InterventionSurface {

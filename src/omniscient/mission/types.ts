@@ -14,6 +14,7 @@ import type { IntentDefinition } from './intent.js';
 import type { BeamSpec } from './beam.js';
 import type { LockSpec } from './lock.js';
 import type { PipeGrid } from './pipes.js';
+import type { ClueId, Evidence, Trace } from './traces.js';
 
 /** §154 urgency classes. Not every request gets a countdown. */
 export enum Urgency {
@@ -126,7 +127,7 @@ export interface BoardSlot {
  * is a new member and a new renderer; nothing else moves. §160 still holds - this is data
  * walked by a shared runtime, not a script.
  */
-export type Device = RelationBoard | PipeBoard | LockBoard | BeamBoard;
+export type Device = RelationBoard | PipeBoard | LockBoard | BeamBoard | TraceBoard;
 
 export interface DeviceBase {
   /** The question, in the contact's voice. */
@@ -189,6 +190,30 @@ export interface LockBoard extends DeviceBase {
 export interface BeamBoard extends DeviceBase {
   kind: 'beam';
   beam: BeamSpec;
+}
+
+/**
+ * The surveillance board: a district of traffic, and the facts the police have.
+ *
+ * The only device in the game where the player's answer is an IDENTIFICATION rather than
+ * an arrangement. The other four ask for a configuration - which pipes, which order, where
+ * to point - and are graded by simulating it. This one asks "which of these is it", and is
+ * graded by the same predicate that generated the puzzle, so the device cannot disagree
+ * with its own evidence.
+ *
+ * The fleet is not stored here as an answer. It is stored as data, and mission/traces.ts
+ * decides what matches - §157 in its strongest form, since the whole point is that the
+ * player is doing the deciding.
+ */
+export interface TraceBoard extends DeviceBase {
+  kind: 'traces';
+  fleet: Trace[];
+  evidence: Evidence;
+  /**
+   * The order the officer hands the facts over, which is the order the count collapses in.
+   * Authored so the drama is designed rather than incidental - the big drops come first.
+   */
+  reveal: ClueId[];
 }
 
 export interface Beat {

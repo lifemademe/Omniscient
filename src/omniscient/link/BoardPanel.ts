@@ -434,7 +434,9 @@ export class BoardPanel {
           ? `pipes|${view.prompt}|${view.grid.cells.length}`
           : view.kind === 'lock'
             ? `lock|${view.prompt}|${view.pins.length}`
-            : `beam|${view.prompt}|${view.spec.patience}`;
+            : view.kind === 'beam'
+              ? `beam|${view.prompt}|${view.spec.patience}`
+              : `traces|${view.prompt}|${view.fleet.length}`;
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       this.links.clear();
@@ -475,6 +477,17 @@ export class BoardPanel {
       this.buildBeam();
       return;
     }
+
+    /**
+     * The surveillance board has no panel yet.
+     *
+     * Deliberately a hard return rather than a fall-through: everything below this line
+     * assumes a relations board and would have read `view.people` off a trace board. The
+     * mission is not in the queue, so this is unreachable in play - and when the filter UI
+     * lands it replaces this return rather than being bolted onto the relations layout,
+     * which is a different shape of thing entirely.
+     */
+    if (view.kind === 'traces') return;
 
     const people = document.createElement('div');
     people.className = 'omni-board__column';
@@ -821,6 +834,8 @@ export class BoardPanel {
     for (const [id, button] of this.slotButtons) {
       button.classList.toggle('omni-board__box--linked', used.has(id));
     }
+
+    if (view.kind !== 'relations') return;
 
     const placed = this.links.size;
     const total = view.people.length;

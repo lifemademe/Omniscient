@@ -75,6 +75,21 @@ function solveDevice(device: Device): DeviceSubmission {
     return { kind: 'beam', calls };
   }
 
+  /**
+   * Narrowed explicitly rather than by elimination.
+   *
+   * This used to fall through to the pipe grid on the grounds that nothing else was left,
+   * which held until mission 08 added a fifth device kind and the compiler started seeing
+   * `PipeBoard | TraceBoard` here. Falling through is the bug that a new device would
+   * otherwise inherit silently: a solver that thinks everything it has not recognised is a
+   * pipe board. The trace board is identified by evidence, which this script cannot solve
+   * for the player by design - it is a deduction, and scripts/audit-traces.ts proves it
+   * separately.
+   */
+  if (device.kind !== 'pipes') {
+    throw new Error(`no solver for device kind "${device.kind}" - see audit-traces.ts`);
+  }
+
   const cells = device.grid.cells;
   const turnable = cells.map((c, i) => (c.fixed ? -1 : i)).filter((i) => i >= 0);
   const rotations = cells.map(() => 0);

@@ -407,6 +407,24 @@ export class SessionController {
       };
     }
 
+    /**
+     * The trace board, which the console renders as a filter rather than as a shape.
+     *
+     * Sent as the raw fleet and the evidence the police have - not as a pre-filtered list.
+     * The narrowing IS the gameplay, so the panel has to be able to do it, which means it
+     * needs everything the machine can see and the same partial facts the officer gave.
+     */
+    if (device.kind === 'traces') {
+      return {
+        kind: 'traces',
+        prompt: device.prompt,
+        fleet: device.fleet,
+        evidence: device.evidence,
+        reveal: device.reveal,
+        note,
+      };
+    }
+
     return {
       kind: 'pipes',
       prompt: device.prompt,
