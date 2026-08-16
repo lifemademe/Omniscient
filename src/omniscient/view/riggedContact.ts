@@ -130,7 +130,8 @@ export function reachFor(
   bones: Record<string, THREE.Object3D>,
   side: 'left' | 'right',
   target: THREE.Vector3,
-  pole?: THREE.Vector3
+  pole?: THREE.Vector3,
+  rest?: Record<string, THREE.Quaternion>
 ): number {
   const [upperName, foreName, handName] = CHAIN[side];
   const upper = bones[upperName];
@@ -194,6 +195,23 @@ export function reachFor(
   swingToward(upper, fore, elbowGoal);
   swingToward(fore, hand, target);
 
+  /**
+   * And the wrist goes back to rest.
+   *
+   * The clip writes the hand's local rotation every frame for a pose where the arm hangs
+   * at the side. Once the forearm has been re-aimed, that same angle is nonsense - it was
+   * relative to an arm that is no longer there - and it showed up as Sanda's hand folded
+   * back on itself at ninety degrees.
+   *
+   * Restoring the file's own rest rotation makes the hand simply continue the forearm,
+   * which is what a wrist does when somebody is holding something rather than gesturing.
+   */
+  const restHand = rest?.[handName];
+  if (restHand) {
+    hand.quaternion.copy(restHand);
+    hand.updateMatrixWorld(true);
+  }
+
   // How far off it finished. Reported rather than assumed - a solver that quietly stops
   // short is exactly the failure this is here to detect.
   return hand.getWorldPosition(new THREE.Vector3()).distanceTo(target);
@@ -246,6 +264,15 @@ export interface RiggedContact {
   root: ENGINE.SceneNode;
   /** Resolved once the mesh has loaded. Empty before that. */
   bones: Record<string, THREE.Object3D>;
+  /**
+   * Each bone's local rotation as the file shipped it, captured before any clip has run.
+   *
+   * Needed for the wrist. The arm solve re-aims the forearm, but the hand's own rotation
+   * keeps coming from the idle clip - which authored it for an arm hanging at the side.
+   * Applied to a forearm pointing somewhere else that angle is a right-angle kink, which
+   * is exactly what it looked like on Sanda.
+   */
+  rest: Record<string, THREE.Quaternion>;
   /**
    * Advance the clip, then put the hands back.
    *
@@ -302,12 +329,15 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
   const contact: RiggedContact = {
     root,
     bones: {},
+    rest: {},
     idle: (deltaTime: number) => {
       if (mixer) mixer.update(deltaTime);
       // Then the hands, on top of whatever the clip just did to the arms.
       for (const named of ['left', 'right'] as const) {
         const target = options.handsOn?.[named];
-        if (target) reachFor(contact.bones, sideFor[named], target, poleFor(root, sideFor[named]));
+        if (target) {
+          reachFor(contact.bones, sideFor[named], target, poleFor(root, sideFor[named]), contact.rest);
+        }
       }
     },
   };
@@ -351,7 +381,10 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
 
     loaded.traverse((child) => {
       if (child.type === 'Bone' || /mixamorig/i.test(child.name)) {
-        contact.bones[boneKey(child.name)] = child;
+        const key = boneKey(child.name);
+        contact.bones[key] = child;
+        // Before the mixer exists, so this is the file's own rest pose.
+        contact.rest[key] = child.quaternion.clone();
       }
     });
 
@@ -454,7 +487,7 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
       if (!target) continue;
       const side = sideFor[named];
       const arm = armReach(contact.bones, side);
-      const miss = reachFor(contact.bones, side, target, poleFor(root, side));
+      const miss = reachFor(contact.bones, side, target, poleFor(root, side), contact.rest);
       const need = arm ? arm.shoulderAt.distanceTo(target) : Number.NaN;
       reached.push(
         `${named}->${side} ${miss.toFixed(2)}off arm${(arm?.reach ?? 0).toFixed(2)}`
