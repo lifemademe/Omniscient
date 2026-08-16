@@ -2525,11 +2525,79 @@ function buildFloodedCellar(scene: ContactScene): void {
   waterGeo.rotateX(-Math.PI / 2);
   waterGeo.translate(0, 0.06, 0);
   const waterMesh = meshOf('Water', waterGeo, MAT.floodwater);
+
+  /**
+   * The run, as something that can be seen to carry water.
+   *
+   * Filled by the span loop below and read by the drain cue, which fires later - so the
+   * array being empty at this point in the file is fine and the closure gets the real one.
+   */
+  interface RunPart {
+    material: THREE.MeshStandardMaterial;
+    dry: THREE.Color;
+    dryRoughness: number;
+    dryMetalness: number;
+    /** Where along the wall it sits, which is what the wetting front is compared against. */
+    x: number;
+  }
+  const runParts: RunPart[] = [];
+  let runIsWet = false;
+
   scene.registerProp('water', waterMesh, {
     anchors: { default: new THREE.Vector3(0, 0.06, 0) },
     actions: {
-      /** It drains: the sheet drops and thins away. */
+      /**
+       * The room performs the answer.
+       *
+       * The puzzle is topology - which pipe connects to what - and it used to resolve as a
+       * dark plane quietly fading out. That tells the player the flood went away. It does
+       * not tell them THEY ROUTED IT, which is the entire thing they just did.
+       *
+       * So the wetting runs first and travels: a front crossing the wall from the sump end
+       * to the outfall over a second and a half, darkening each length of pipe as the water
+       * reaches it. Four materials laid end to end by four different people across fifty
+       * years, wetting in the order the water actually passes through them. Then the flood
+       * drops, half a beat behind, because the water has to be going SOMEWHERE before the
+       * floor is allowed to reappear.
+       */
       clear: (tweener) => {
+        tweener.add(
+          (t) => {
+            // Sump end to outfall end, with a little overshoot at each end so the first and
+            // last spans get a full wetting rather than half of one.
+            const front = -3.6 + t * 7.2;
+            for (const part of runParts) {
+              // Half a metre of transition, so a span darkens across itself rather than
+              // switching. A hard front would read as four lights coming on.
+              const wet = Math.max(0, Math.min(1, (front - part.x) / 0.5));
+              part.material.color.copy(part.dry).multiplyScalar(1 - wet * 0.42);
+              part.material.roughness = part.dryRoughness * (1 - wet * 0.55);
+              /**
+               * Metalness down as well, which is both correct and necessary.
+               *
+               * A metal's colour only reaches the eye through the diffuse term, scaled by
+               * (1 - metalness) - so at 0.65 the lead and steel spans darkened by a third
+               * of what the plastic did, and measured as no change at all: 33 before, 33
+               * after, while the copper next to them went 27 to 15. Half the run sat out
+               * its own cue.
+               *
+               * A film of water on metal is a dielectric layer over it, so it should read
+               * as less metallic, not more. The fix and the physics are the same fix.
+               */
+              part.material.metalness = part.dryMetalness * (1 - wet * 0.5);
+            }
+          },
+          {
+            duration: 1.5,
+            easing: Ease.linear,
+            channel: 'cellar-wet',
+            onComplete: () => {
+              runIsWet = true;
+            },
+          }
+        );
+
+        /** It drains: the sheet drops and thins away. */
         const material = waterMesh.material as THREE.MeshBasicMaterial;
         const from = material.opacity;
         tweener.add(
@@ -2537,7 +2605,7 @@ function buildFloodedCellar(scene: ContactScene): void {
             waterMesh.position.setY(-t * 0.055);
             material.opacity = from * (1 - t * 0.85);
           },
-          { duration: 2.6, easing: Ease.outCubic, channel: 'cellar-drain' }
+          { duration: 2.6, delay: 0.7, easing: Ease.outCubic, channel: 'cellar-drain' }
         );
       },
     },
@@ -2557,31 +2625,116 @@ function buildFloodedCellar(scene: ContactScene): void {
     [-0.2, 1.4, 'plastic'],
     [1.4, 3.1, 'steel'],
   ];
+  /**
+   * Cloned, not shared.
+   *
+   * MAT is one family built once and used by all seven dioramas - so darkening MAT.metal
+   * to show water in this cellar would also wet Sanda's torch, the mill lamps and every
+   * bracket in the repair shop. The clone is per length of pipe, which is also what lets
+   * the front cross the run instead of the whole thing changing at once.
+   */
+  const wettable = (base: THREE.Material, x: number): THREE.MeshStandardMaterial => {
+    const clone = (base as THREE.MeshStandardMaterial).clone();
+    runParts.push({
+      material: clone,
+      dry: clone.color.clone(),
+      dryRoughness: clone.roughness,
+      dryMetalness: clone.metalness,
+      x,
+    });
+    return clone;
+  };
+
+  const joins: THREE.Vector3[] = [];
   for (const [from, to, material] of spans) {
     const pipe = new THREE.CylinderGeometry(0.055, 0.055, to - from, 8);
     pipe.rotateZ(Math.PI / 2);
     pipe.translate((from + to) / 2, runY + jitter(rng, 0.02), -2.0);
     scene.registerProp(
       `run-${material}`,
-      meshOf(`Run-${material}`, pipe, MAT[material])
+      meshOf(`Run-${material}`, pipe, wettable(MAT[material], (from + to) / 2))
     );
 
     // A collar at every join - the place where one person's work met the next one's.
     const collar = new THREE.CylinderGeometry(0.072, 0.072, 0.06, 8);
     collar.rotateZ(Math.PI / 2);
     collar.translate(to, runY, -2.0);
-    scene.registerProp(`join-${material}`, meshOf(`Join-${material}`, collar, MAT.metal));
+    scene.registerProp(
+      `join-${material}`,
+      meshOf(`Join-${material}`, collar, wettable(MAT.metal, to))
+    );
+    joins.push(new THREE.Vector3(to, runY - 0.07, -2.0));
   }
 
-  // The drop into the floor, and the outfall through the wall.
+  /**
+   * What fifty years of other people's joins look like once they are working.
+   *
+   * Not a failure. A run this old weeps a little at every collar and always has - Vasile
+   * knows that and would not thank anybody for calling it out. It is here because a pipe
+   * that carries water and never shows any is a drawing of a pipe, and because the drip is
+   * the smallest possible thing that keeps the room alive after the cue has finished:
+   * §131, the environment carrying its own evidence.
+   *
+   * Only after the front has passed - beads on a dry run would be the leak the mission
+   * explicitly does not have.
+   */
+  const drips = ENGINE.SceneNode.create({ name: 'RunDrips', position: new THREE.Vector3() });
+  const dripBodies = joins.map((at, i) => {
+    const bead = new THREE.SphereGeometry(0.019, 6, 5);
+    // Slightly egg-shaped. A perfect sphere reads as a ball bearing, not as water.
+    bead.scale(1, 1.35, 1);
+    const node = meshOf(`Drip${i}`, bead, MAT.floodwater);
+    node.position.copy(at);
+    node.visible = false;
+    drips.add(node);
+    return { node, at, phase: range(rng, 0, 3.2) };
+  });
+
+  const DRIP_PERIOD = 3.2;
+  const WATER_Y = 0.06;
+  scene.registerProp('run-drips', drips, {
+    idle: (deltaTime) => {
+      if (!runIsWet) return;
+      for (const drip of dripBodies) {
+        drip.phase += deltaTime;
+        const t = (drip.phase % DRIP_PERIOD) / DRIP_PERIOD;
+        drip.node.visible = t < 0.94;
+        if (t < 0.76) {
+          // Swelling at the collar. It hangs far longer than it falls, which is what makes
+          // a drip read as a drip rather than as rain.
+          const swell = 0.25 + (t / 0.76) * 0.75;
+          drip.node.scale.set(swell, swell, swell);
+          drip.node.position.copy(drip.at);
+        } else {
+          const fall = (t - 0.76) / 0.18;
+          drip.node.scale.set(1, 1, 1);
+          // Accelerating, because a drop falling at constant speed looks like it is being
+          // lowered on a wire.
+          drip.node.position.set(
+            drip.at.x,
+            drip.at.y - (drip.at.y - WATER_Y) * fall * fall,
+            drip.at.z
+          );
+        }
+      }
+    },
+  });
+
+  /**
+   * The drop into the floor and the outfall through the wall - both in the sweep.
+   *
+   * Left out of it at first, which put a dry length of pipe at each end of a wet run and
+   * stopped the front short of both walls. They are the two ends of the thing the player
+   * just connected; if anything should be seen to carry water it is those.
+   */
   const drop = new THREE.CylinderGeometry(0.055, 0.055, runY, 8);
   drop.translate(-3.05, runY / 2, -2.0);
-  scene.registerProp('drop', meshOf('Drop', drop, MAT.metal));
+  scene.registerProp('drop', meshOf('Drop', drop, wettable(MAT.metal, -3.05)));
 
   const outfall = new THREE.CylinderGeometry(0.07, 0.07, 0.5, 8);
   outfall.rotateX(Math.PI / 2);
   outfall.translate(3.05, runY, -2.15);
-  scene.registerProp('outfall', meshOf('Outfall', outfall, MAT.steel));
+  scene.registerProp('outfall', meshOf('Outfall', outfall, wettable(MAT.steel, 3.05)));
 
   /**
    * Three inspection covers, up.
@@ -2865,13 +3018,60 @@ function buildNightDoor(scene: ContactScene): void {
   });
   leaf.translate(-(DOOR.x - DOOR.w / 2), 0, 0.26);
   doorRoot.add(doorMesh);
+  /** The turning part of the lock, built below and driven by the door's own cue. */
+  let lockPlug: ENGINE.SceneNode | null = null;
+
   scene.registerProp('door', doorRoot, {
     anchors: { default: new THREE.Vector3(DOOR.w / 2, 1.0, 0) },
     actions: {
-      /** It opens. Slowly - he is not barging in, he is going in to find her. */
+      /**
+       * The lock gives, and then it opens.
+       *
+       * The whole mission is that the pins in this lock bind by WEAR rather than by
+       * position - fifty years of the same key - and the answer is a way of turning it that
+       * works with that. It used to resolve as a door swinging open, which is the result
+       * with the reason removed.
+       *
+       * A person standing at a door cannot see pins. What they can see is the cylinder
+       * moving in stages: a little turn, a stop where it catches, another, another stop,
+       * and then the whole thing going round at once when the last one drops. That IS the
+       * mission, visible from outside, and it needs no cutaway to explain itself.
+       *
+       * Two full seconds before the door begins to move, because the lock giving is the
+       * beat the player earned and the door opening is only its consequence.
+       */
       open: (tweener, node) => {
+        // Turn, catch, turn, catch, give. Each pair is a pin binding and then dropping.
+        const STAIRS: Array<[at: number, to: number]> = [
+          [0, 0],
+          [0.22, 0.2],
+          [0.36, 0.2],
+          [0.56, 0.46],
+          [0.68, 0.46],
+          [1, Math.PI / 2],
+        ];
+        tweener.add(
+          (t) => {
+            if (!lockPlug) return;
+            let angle = 0;
+            for (let i = 1; i < STAIRS.length; i++) {
+              const [at, to] = STAIRS[i];
+              const [prevAt, prevTo] = STAIRS[i - 1];
+              if (t > at) continue;
+              const span = (t - prevAt) / (at - prevAt);
+              angle = prevTo + (to - prevTo) * span;
+              break;
+            }
+            if (t >= 1) angle = Math.PI / 2;
+            lockPlug.rotation.set(0, 0, -angle);
+          },
+          { duration: 1.9, easing: Ease.linear, channel: 'lock-turn' }
+        );
+
+        /** It opens. Slowly - he is not barging in, he is going in to find her. */
         tweener.add((t) => node.rotation.set(0, -t * 1.5, 0), {
           duration: 2.2,
+          delay: 2.0,
           easing: Ease.outCubic,
           channel: 'door-open',
         });
@@ -2913,9 +3113,25 @@ function buildNightDoor(scene: ContactScene): void {
   const escutcheon = new THREE.CylinderGeometry(0.035, 0.035, 0.012, 12);
   escutcheon.rotateX(Math.PI / 2);
   lockRoot.add(meshOf('Escutcheon', escutcheon, MAT.brass));
+
+  /**
+   * The plug, separated from the plate it sits in.
+   *
+   * These were one node, which was fine while the lock never moved and wrong the moment it
+   * had to: turning the whole thing would rotate the escutcheon as well, and a brass plate
+   * that spins with the key is the sort of detail that makes a door stop being a door.
+   * Only the cylinder turns.
+   */
+  const plug = ENGINE.SceneNode.create({ name: 'Plug', position: new THREE.Vector3() });
+  const face = new THREE.CylinderGeometry(0.022, 0.022, 0.014, 12);
+  face.rotateX(Math.PI / 2);
+  face.translate(0, 0, 0.004);
+  plug.add(meshOf('PlugFace', face, MAT.brass));
   const keyway = new THREE.BoxGeometry(0.008, 0.026, 0.014);
   keyway.translate(0, 0, 0.008);
-  lockRoot.add(meshOf('Keyway', keyway, MAT.dark));
+  plug.add(meshOf('Keyway', keyway, MAT.dark));
+  lockRoot.add(plug);
+  lockPlug = plug;
   scene.registerProp('lock', lockRoot, {
     // Inked: Two centimetres of brass, and the entire mission.
     inked: true, anchors: { default: new THREE.Vector3(0, 0, 0.06) } });
@@ -2996,6 +3212,64 @@ function buildNightDoor(scene: ContactScene): void {
     })
   );
 
+  /**
+   * The sky, which this scene did not have.
+   *
+   * Every other diorama has a hemisphere and this one had two point lights and nothing
+   * else, so any surface facing away from both rendered at exactly zero - not dark, ABSENT.
+   * Dorin measured luma 0 across his coat, his arm and his legs while the wall behind him
+   * sat at 10, which is not a man in shadow, it is a hole in the frame shaped like a man.
+   *
+   * It hid because the old camera happened to sit on the porch light's side of him. Moving
+   * round to where the door reads square-on put the unlit half towards the lens and turned
+   * a missing light into an obvious one. That is the argument for changing framing and
+   * lighting in the same pass: each was covering for the other.
+   *
+   * Kept very low and cold. A street at two in the morning has a sky over it, and that is
+   * all this is - enough that a shadow is a value rather than a void.
+   */
+  scene.registerProp(
+    'sky',
+    ENGINE.HemisphereLightNode.create({
+      name: 'NightSky',
+      position: new THREE.Vector3(0, 8, 2),
+      intensity: 1.05,
+      color: new THREE.Color('#4c5c72'),
+      groundColor: new THREE.Color('#1b1712'),
+    })
+  );
+
+  /**
+   * The doorstep bounce, and the only reason Dorin has a face.
+   *
+   * The sky above got the walls off zero and did nothing for him, which is the useful
+   * result: a hemisphere reaches a vertical surface with half sky and half ground, and half
+   * of a night sky against a coat at #2f3138 is still almost nothing. He measured 0 before
+   * and 0 after.
+   *
+   * The porch light is real and it is in the wrong place for this camera - it sits above
+   * and behind him, so it rims his shoulders and leaves every surface the lens can see in
+   * shadow. Rather than move a practical that is correctly positioned for the DOOR, this is
+   * the light coming back up off the step and the path in front of it, which is where the
+   * porch light is actually landing. Short reach, warm, and low enough to lift a face
+   * looking down at a lock.
+   */
+  scene.registerProp(
+    'step-bounce',
+    ENGINE.PointLightNode.create({
+      name: 'StepBounce',
+      // Dropped to 1.15 and widened to 2.1 on the second pass: at chest height with a
+      // 1.75 reach his coat and face read and his legs sat at 9 against a path at 12, so
+      // he faded into the ground he was standing on. A bounce off a step comes from low
+      // down anyway - it was at the wrong height as well as the wrong radius.
+      position: new THREE.Vector3(0.12, 1.15, 1.18),
+      intensity: 3.4,
+      color: new THREE.Color('#ffc98d'),
+      distance: 2.1,
+      decay: 1.3,
+    })
+  );
+
   // A cold spill from the landing window above - the only other light on the street, and
   // the reason he keeps looking up.
   scene.registerProp(
@@ -3020,9 +3294,27 @@ function buildNightDoor(scene: ContactScene): void {
      * the third scene to make that mistake and the first to have a number attached to it.
      * From here his perpendicular offset is 0.46m and he reads in profile against the
      * porch light, which is the composition the scene wanted anyway.
+     *
+     * ## Then moved to the other side of the path, and further round
+     *
+     * The offset rule was satisfied and the shot was still wrong, which is worth writing
+     * down: 0.46m of lateral clearance does not help when the man is 2.7m from the lens and
+     * his subject is 3.6m behind him. He read as a dark mass filling the left half of the
+     * frame. Measured rather than judged - the lock, which is the whole mission, moved by
+     * 2,700 of difference across a 90 degree turn of its own cylinder, against 79,000 when
+     * the door swung. It was not small, it was invisible.
+     *
+     * The old camera also sat 3.15m to the SIDE of a door 2.2m in front of it - 55 degrees
+     * off the door's face, so the one object the request is about was seen edge-on. From
+     * here it is 26 degrees, the door reads as a door, and he is 3.26m out against a target
+     * at 3.68m so he stands in the scene rather than in front of it. His perpendicular
+     * offset is 0.89m, at the top of the band instead of the bottom.
+     *
+     * Crossing to -x also puts him between the camera and the porch light rather than
+     * beside it, so he keeps the profile the original note was right to want.
      */
-    position: new THREE.Vector3(3.0, 1.86, 1.9),
-    target: new THREE.Vector3(0.1, 1.62, -0.28),
+    position: new THREE.Vector3(-1.55, 1.7, 3.05),
+    target: new THREE.Vector3(0.05, 1.3, -0.26),
   });
   scene.registerShot('lock', {
     position: new THREE.Vector3(0.85, 1.2, 0.75),
