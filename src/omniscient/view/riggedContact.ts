@@ -311,9 +311,26 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
 
     if (options.clip) {
       const clips = model.getAnimations();
+      /**
+       * The LONGEST clip, not the first.
+       *
+       * This file carries two: `mixamo.com` at 2 keyframes and 0.07s, and
+       * `mixamo.com.001` at 181 keyframes and 6.03s. The first is the T-pose that comes
+       * with a character downloaded without an animation, and taking clips[0] played it
+       * perfectly - a two-frame clip of somebody standing still, looping forever.
+       *
+       * Mixamo names every clip `mixamo.com` and a round trip through Blender
+       * disambiguates by appending .001, so the name carries no information about which
+       * one anybody wants. Duration does: a rest pose is a couple of frames and an
+       * animation is seconds.
+       */
       const wanted =
         options.clip === true
-          ? clips[0]
+          ? clips.reduce<THREE.AnimationClip | undefined>(
+              (best, candidate) =>
+                !best || candidate.duration > best.duration ? candidate : best,
+              undefined
+            )
           : clips.find((candidate) => candidate.name === options.clip);
       if (wanted) {
         mixer = new THREE.AnimationMixer(loaded);
