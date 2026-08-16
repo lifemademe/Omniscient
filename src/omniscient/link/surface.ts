@@ -1,4 +1,5 @@
 import type { BeamSpec } from '../mission/beam.js';
+import type { Trail } from '../mission/breadcrumbs.js';
 import type { Hop } from '../mission/pursuit.js';
 import type { ClueId, Evidence, Trace } from '../mission/traces.js';
 
@@ -125,6 +126,8 @@ export type DeviceView =
    * decides whether the player got it right.
    */
   | { kind: 'pursuit'; prompt: string; hops: Hop[]; note?: string }
+  /** The cold trail. The pool crosses whole; deciding which of it matters is the game. */
+  | { kind: 'trail'; prompt: string; trail: Trail; note?: string }
   | {
       kind: 'traces';
       prompt: string;
@@ -246,7 +249,8 @@ export type PlayerMessage =
         | { kind: 'lock'; order: string[] }
         | { kind: 'beam'; calls: Array<{ at: number; to: number }> }
         | { kind: 'traces'; traceId: string }
-        | { kind: 'pursuit'; picks: string[] };
+        | { kind: 'pursuit'; picks: string[] }
+        | { kind: 'trail'; picks: string[] };
     };
 
 export interface InterventionSurface {

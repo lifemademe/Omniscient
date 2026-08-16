@@ -18,6 +18,7 @@ import { bestSets, isCoherent, planTrail } from '../src/omniscient/mission/bread
 import { planPursuit } from '../src/omniscient/mission/pursuit.js';
 import { planFleet } from '../src/omniscient/mission/traces.js';
 import { wireCity } from '../src/omniscient/geometry/wireCity.js';
+import { DISTRICT_TRAIL } from '../src/omniscient/content/district-07.js';
 
 const SIZE = 24;
 
@@ -81,6 +82,31 @@ for (const seed of ['district-07', 'district-07-alt', 'district-11', 'nightshift
   check('  no decoy can be added to the real chain', impostors.length === 0,
     impostors.length ? impostors.map((f) => f.id).join(', ') : 'none');
 }
+
+/**
+ * The district people actually play, checked as itself.
+ *
+ * Everything above rebuilds a trail from the same generators. This imports the one the
+ * mission ships, and they should agree - if they ever stop agreeing it will be because the
+ * shared random stream in district-07.ts was reordered, which is precisely the failure that
+ * once put the suspect in two places at once and went unnoticed for three commits.
+ */
+console.log('\n  the shipped district:');
+const shipped = bestSets(DISTRICT_TRAIL);
+console.log(
+  `    ${DISTRICT_TRAIL.fragments.length} fragments, ${DISTRICT_TRAIL.chain.length} of them him`
+);
+check('  DISTRICT_TRAIL has exactly one answer', shipped.length === 1, `${shipped.length}`);
+check(
+  '  and it is the authored chain',
+  shipped.length === 1 &&
+    [...shipped[0]].sort().join() === [...DISTRICT_TRAIL.chain].sort().join()
+);
+check(
+  '  it has decoys to reject',
+  DISTRICT_TRAIL.fragments.length > DISTRICT_TRAIL.chain.length,
+  `${DISTRICT_TRAIL.fragments.length - DISTRICT_TRAIL.chain.length} decoys`
+);
 
 console.log('\n  the reachability rule:');
 const trail = planTrail(createRng(seedFrom('district-07')), {

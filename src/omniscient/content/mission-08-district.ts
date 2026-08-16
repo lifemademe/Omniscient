@@ -35,7 +35,7 @@
  */
 
 import { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
-import { DISTRICT_FLEET, DISTRICT_PURSUIT } from './district-07.js';
+import { DISTRICT_FLEET, DISTRICT_PURSUIT, DISTRICT_TRAIL } from './district-07.js';
 import { OutcomeKind, Tempo, Urgency } from '../mission/types.js';
 
 import type { MissionDefinition } from '../mission/types.js';
@@ -366,8 +366,39 @@ export const MISSION_08: MissionDefinition = {
        */
       id: 'ahead-of-him',
       say:
-        'That is the last camera. Past the ring there is nothing until the bridge. '
-        + 'You have got him going one way and I have got one car. I am going to the bridge.',
+        'That is the last camera. Past the ring there is nothing - no cameras, no network, '
+        + 'nothing but whatever happened to get written down. Where does he come out?',
+      tempo: Tempo.Think,
+      learn: [FACT_COVERAGE_THINS],
+      device: {
+        kind: 'trail',
+        prompt:
+          'NO COVERAGE // Nine things happened out there tonight. Some of them are him. '
+          + 'One car, in time order, at about a block a second - which of these is a journey?',
+        trail: DISTRICT_TRAIL,
+        onSolved: { to: 'bridge' },
+        onWrong: { to: 'ahead-of-him' },
+        wrongSay: 'We went and looked. Nothing there -',
+      },
+      suggest: ['stop every red car in the district'],
+      on: {
+        STOP_EVERY_RED_CAR: { to: 'sweep' },
+      },
+      onUnrecognised: { to: 'ahead-of-him' },
+    },
+
+    {
+      /**
+       * The last instruction is a place, and a person goes there.
+       *
+       * The machine has spent three phases turning a city into one road, and the whole of
+       * that resolves into a sentence somebody acts on. Nothing here reaches into the car.
+       * §157 held all the way down: the console never touched anything, it only ever knew.
+       */
+      id: 'bridge',
+      say:
+        'The bridge. He is going to the bridge - that is the only thing at the end of that '
+        + 'road. I can be there in four minutes and he cannot turn round on it.',
       tempo: Tempo.Respond,
       suggest: [],
       on: {},

@@ -9,6 +9,7 @@
  * should not also need to know how water finds a drain.
  */
 
+import { bestSets, isCoherent } from './breadcrumbs.js';
 import { CLUES, matches, satisfies } from './traces.js';
 import { replayBeam } from './beam.js';
 import { workLock } from './lock.js';
@@ -27,7 +28,9 @@ export type DeviceSubmission =
   /** The trace the player says it is. One id, not a filter state. */
   | { kind: 'traces'; traceId: string }
   /** One camera id per hop, in order. */
-  | { kind: 'pursuit'; picks: string[] };
+  | { kind: 'pursuit'; picks: string[] }
+  /** The fragments the player says are the same car. Order does not matter - time decides. */
+  | { kind: 'trail'; picks: string[] };
 
 export interface DeviceResult {
   solved: boolean;
@@ -151,6 +154,36 @@ export function gradeDevice(device: Device, submission: DeviceSubmission): Devic
       };
       const reason = chosen?.fails ? why[chosen.fails] : 'nothing came through';
       return { solved: false, note: `on the ${ordinal(wrongAt + 1)} hop - ${reason}` };
+    }
+
+    case 'trail': {
+      if (submission.kind !== 'trail') return { solved: false };
+      const chosen = submission.picks;
+
+      /**
+       * Graded by the rule, in two parts, and the second part is the whole puzzle.
+       *
+       * COHERENT - could one car have driven between these, in time order, and arrived?
+       * MAXIMAL  - and is this all of them, or did the player leave some of him behind?
+       *
+       * Coherence alone is not enough and that is not a detail: dropping a fragment from
+       * the middle hands the next jump all of the skipped time, so every subset of a real
+       * route is itself coherent. Without maximality a player could submit two pings and
+       * be right, which is how the first version of this device had fifteen answers.
+       */
+      if (!isCoherent(device.trail, chosen)) {
+        return {
+          solved: false,
+          note: 'those are not one car - somewhere in there it would have had to be in two places',
+        };
+      }
+
+      const biggest = bestSets(device.trail)[0]?.length ?? chosen.length;
+      if (chosen.length < biggest) {
+        // Says that something is missing, never which - naming it would solve the rest.
+        return { solved: false, note: 'that holds together, but there is more of him out there' };
+      }
+      return { solved: true };
     }
 
     default: {

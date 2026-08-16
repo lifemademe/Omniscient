@@ -26,6 +26,7 @@
 
 import { createRng, seedFrom } from '../core/rng.js';
 import { wireCity } from '../geometry/wireCity.js';
+import { planTrail } from '../mission/breadcrumbs.js';
 import { planPursuit } from '../mission/pursuit.js';
 import { planFleet } from '../mission/traces.js';
 
@@ -55,9 +56,23 @@ export const DISTRICT_FLEET = planFleet(rng, TRAFFIC, DISTRICT_SIZE);
  * Read off the fleet rather than retyped - the audit script learned that the hard way,
  * having gone on reporting zero hops against a coordinate the game had stopped using.
  */
-export const DISTRICT_PURSUIT = planPursuit(rng, {
+export const DISTRICT_PURSUIT: ReturnType<typeof planPursuit> = planPursuit(rng, {
   cameras: DISTRICT_CITY.cameras,
   start: DISTRICT_FLEET.suspect.cell,
   heading: DISTRICT_FLEET.evidence.heading ?? 'east',
+  size: DISTRICT_SIZE,
+});
+
+/**
+ * The cold trail, starting exactly where the cameras gave out.
+ *
+ * Phase three is not a new situation, it is the consequence of phase two - so its starting
+ * point is read off the pursuit rather than authored beside it. If the chase ever ends
+ * somewhere else, the breadcrumbs move with it and cannot be left describing a corner of
+ * the district the car never reached.
+ */
+export const DISTRICT_TRAIL = planTrail(rng, {
+  from: DISTRICT_PURSUIT.lost,
+  heading: DISTRICT_PURSUIT.lostHeading,
   size: DISTRICT_SIZE,
 });

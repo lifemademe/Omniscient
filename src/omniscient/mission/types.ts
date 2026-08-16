@@ -14,6 +14,7 @@ import type { IntentDefinition } from './intent.js';
 import type { BeamSpec } from './beam.js';
 import type { LockSpec } from './lock.js';
 import type { PipeGrid } from './pipes.js';
+import type { Trail } from './breadcrumbs.js';
 import type { Hop } from './pursuit.js';
 import type { ClueId, Evidence, Trace } from './traces.js';
 
@@ -134,7 +135,8 @@ export type Device =
   | LockBoard
   | BeamBoard
   | TraceBoard
-  | PursuitBoard;
+  | PursuitBoard
+  | TrailBoard;
 
 export interface DeviceBase {
   /** The question, in the contact's voice. */
@@ -234,6 +236,19 @@ export interface TraceBoard extends DeviceBase {
 export interface PursuitBoard extends DeviceBase {
   kind: 'pursuit';
   hops: Hop[];
+}
+
+/**
+ * The cold trail: a pool of fragments, and the question of which are one car.
+ *
+ * Carries the whole Trail rather than a list of ids, because the grader works from the
+ * reachability rule rather than from a stored answer - see mission/breadcrumbs.ts. The
+ * device cannot disagree with its own evidence if it never holds an answer to disagree
+ * with.
+ */
+export interface TrailBoard extends DeviceBase {
+  kind: 'trail';
+  trail: Trail;
 }
 
 export interface Beat {

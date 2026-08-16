@@ -19,6 +19,7 @@ import { MISSION_05 } from '../src/omniscient/content/mission-05-cellar.js';
 import { MISSION_06 } from '../src/omniscient/content/mission-06-lock.js';
 import { MISSION_07 } from '../src/omniscient/content/mission-07-torch.js';
 import { MISSION_08 } from '../src/omniscient/content/mission-08-district.js';
+import { bestSets } from '../src/omniscient/mission/breadcrumbs.js';
 import { narrow } from '../src/omniscient/mission/traces.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
 import { followerAt, replayBeam } from '../src/omniscient/mission/beam.js';
@@ -88,6 +89,11 @@ function solveDevice(device: Device): DeviceSubmission {
    * for the player by design - it is a deduction, and scripts/audit-traces.ts proves it
    * separately.
    */
+  if (device.kind === 'trail') {
+    // The maximal coherent set, found the same way the grader finds it.
+    return { kind: 'trail', picks: bestSets(device.trail)[0] ?? [] };
+  }
+
   if (device.kind === 'pursuit') {
     // Every hop answered correctly. The question this walk asks is whether the graph
     // reaches an ending, not whether a script can predict a car.

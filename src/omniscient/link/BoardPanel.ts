@@ -216,6 +216,9 @@ const BOARD_CSS = `
   background: rgba(127, 224, 138, 0.16);
 }
 .omni-trace__plate { letter-spacing: 0.16em; color: #e0a24c; }
+.omni-trace__row--wrap { align-items: flex-start; }
+.omni-trace__row--wrap .omni-trace__detail { white-space: normal; overflow: visible; }
+.omni-trace__row--wrap .omni-trace__plate { flex: 0 0 auto; }
 .omni-trace__detail {
   color: rgba(159, 216, 168, 0.78);
   font-size: 11px;
@@ -577,6 +580,10 @@ export class BoardPanel {
   private picks: string[] = [];
   private pursuitParts: { sighting: HTMLElement; options: HTMLElement } | null = null;
 
+  /** Which fragments the player is claiming are the same car. */
+  private claimed = new Set<string>();
+  private trailParts: { headline: HTMLElement; list: HTMLElement } | null = null;
+
   private readonly promptElement: HTMLDivElement;
   private readonly fold: HTMLButtonElement;
   private folded = false;
@@ -608,7 +615,9 @@ export class BoardPanel {
               ? `beam|${view.prompt}|${view.spec.patience}`
               : view.kind === 'traces'
                 ? `traces|${view.prompt}|${view.fleet.length}`
-                : `pursuit|${view.prompt}|${view.hops.length}`;
+                : view.kind === 'pursuit'
+                  ? `pursuit|${view.prompt}|${view.hops.length}`
+                  : `trail|${view.prompt}|${view.trail.fragments.length}`;
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       this.links.clear();
@@ -657,6 +666,11 @@ export class BoardPanel {
 
     if (view.kind === 'pursuit') {
       this.buildPursuit();
+      return;
+    }
+
+    if (view.kind === 'trail') {
+      this.buildTrail();
       return;
     }
 
@@ -1042,6 +1056,100 @@ export class BoardPanel {
     }
   }
 
+  /**
+   * The cold trail: everything the network caught, and a question about which of it matters.
+   *
+   * A checklist rather than a sequence, because the player is not being asked to order
+   * anything - time already orders it. They are being asked which of nine things that
+   * happened in the same corner of the night are the same vehicle, and that is a judgement
+   * made by looking at all of them at once.
+   *
+   * Sorted by time, always. It is the axis the reasoning runs along: a fragment only means
+   * anything relative to the one before it, and a list in any other order would force the
+   * player to do the sorting in their head before they could start.
+   */
+  private buildTrail(): void {
+    const view = this.view;
+    if (!view || view.kind !== 'trail') return;
+    this.claimed = new Set();
+
+    const panel = document.createElement('div');
+    panel.className = 'omni-trace';
+
+    const headline = document.createElement('div');
+    headline.className = 'omni-hop__sighting';
+
+    const list = document.createElement('div');
+    list.className = 'omni-trace__list';
+
+    const ordered = [...view.trail.fragments].sort((a, b) => a.at - b.at);
+    for (const fragment of ordered) {
+      const row = document.createElement('button');
+      // --wrap: these rows carry a position AND a source, and one line ellipsed the source
+      // away entirely - which threw out the only writing that gives this phase its texture
+      // while keeping the arithmetic. Both fit if the row is allowed two lines.
+      row.className = 'omni-trace__row omni-trace__row--wrap';
+      row.type = 'button';
+
+      const when = document.createElement('span');
+      when.className = 'omni-trace__plate';
+      when.textContent = `+${fragment.at}s`;
+
+      const what = document.createElement('span');
+      what.className = 'omni-trace__detail';
+      /**
+       * WHERE, not only what.
+       *
+       * The rule the player is applying is whether a car could have got from one of these
+       * to the next in the time between them - and the first version of this panel printed
+       * the time and the source and nothing else, which makes that question unanswerable.
+       * A list of nine things with no positions is not a deduction, it is nine coin flips
+       * with atmosphere.
+       *
+       * Described relative to where the cameras lost him, in the same words the chase uses,
+       * because it is the same reasoning continued past the edge of the network.
+       */
+      what.textContent =
+        `${describe(view.trail.from, view.trail.heading, fragment.cell)}  -  ${fragment.detail}`;
+
+      row.append(when, what);
+      row.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        audio.play('tap');
+        if (this.claimed.has(fragment.id)) this.claimed.delete(fragment.id);
+        else this.claimed.add(fragment.id);
+        this.refreshTrail();
+      });
+      list.appendChild(row);
+    }
+
+    panel.append(headline, list);
+    this.grid.appendChild(panel);
+    this.trailParts = { headline, list };
+    this.refreshTrail();
+  }
+
+  private refreshTrail(): void {
+    const view = this.view;
+    if (!view || view.kind !== 'trail' || !this.trailParts) return;
+
+    this.trailParts.headline.textContent =
+      `LAST SEEN heading ${view.trail.heading} - ${this.claimed.size} of `
+      + `${view.trail.fragments.length} claimed as him`;
+
+    const ordered = [...view.trail.fragments].sort((a, b) => a.at - b.at);
+    Array.from(this.trailParts.list.children).forEach((row, i) => {
+      row.classList.toggle('omni-trace__row--picked', this.claimed.has(ordered[i].id));
+    });
+
+    // Two is the fewest that can describe a journey, so anything less is not a claim yet.
+    this.send.disabled = this.claimed.size < 2;
+    if (view.note) {
+      this.status.className = 'omni-board__status omni-board__status--score';
+      this.status.textContent = view.note;
+    }
+  }
+
   private buildBeam(): void {
     const track = document.createElement('div');
     track.className = 'omni-board__track';
@@ -1210,6 +1318,12 @@ export class BoardPanel {
         kind: 'device',
         submission: { kind: 'lock', order: [...this.order] },
       });
+      return;
+    }
+
+    if (view.kind === 'trail') {
+      if (this.claimed.size < 2) return;
+      this.dispatch({ kind: 'device', submission: { kind: 'trail', picks: [...this.claimed] } });
       return;
     }
 
