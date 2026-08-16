@@ -1346,43 +1346,62 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   // Two banks from the same generator, separated only by health: full clumps on the west
   // side, sparse and short ones on the east. Nothing else in the scene differs, which is
   // exactly the deduction the player has to make.
-  const healthy: THREE.BufferGeometry[] = [];
-  const failing: THREE.BufferGeometry[] = [];
+  /**
+   * Two banks of the same crop, and the difference between them is the mission.
+   *
+   * Modelled plants now, not generated clumps - but the rule they were built under has not
+   * changed and could not: the ONLY thing that differs between these beds is health.
+   * Nothing else in the scene varies across that line, which is exactly the deduction the
+   * player has to make, and §131 says the environment has to carry it rather than the
+   * dialogue. So the contrast is deliberately stronger than realism strictly needs.
+   *
+   * Same rows, same spacing, same species. West is twice the size and properly green; east
+   * is stunted and yellowing. A player who looks at the beds should be able to point at the
+   * line without being told there is one.
+   */
+  const BED_ROWS = 7;
+  const BED_COLS = 3;
+  const BED_Z = -1.9;
+  const BED_TOP = 0.22;
 
-  for (let row = 0; row < 7; row++) {
-    const z = -1.9 + row * 0.62;
-    for (let col = 0; col < 3; col++) {
-      const west = createClump(rng, {
-        count: 7,
-        length: [0.1, 0.2],
-        droop: [0.3, 1.1],
-        spread: 0.02,
-      });
-      west.forEach((part) => {
-        part.geometry.translate(0.65 + col * 0.4, 0.22, z);
-        healthy.push(part.geometry);
-      });
-
-      const east = createClump(rng, {
-        count: 4,
-        length: [0.05, 0.11],
-        droop: [0.9, 1.7],
-        spread: 0.015,
-      });
-      east.forEach((part) => {
-        part.geometry.translate(-1.45 + col * 0.4, 0.22, z);
-        failing.push(part.geometry);
-      });
-    }
-  }
   scene.registerProp(
     'rows-healthy',
-    meshOf('RowsHealthy', mergeGeometries(healthy, false) ?? healthy[0], MAT.leaf)
+    rows(rng, {
+      modelUrl: '@project/assets/models/Plants/SM_WildCarrot_01.glb',
+      at: new THREE.Vector3(0.65, BED_TOP, BED_Z),
+      rows: BED_ROWS,
+      perRow: BED_COLS,
+      rowGap: 0.62,
+      plantGap: 0.4,
+      // The asset is a metre tall; this is a seedling bed.
+      scale: [0.26, 0.34],
+    })
   );
-  scene.registerProp(
-    'rows-failing',
-    meshOf('RowsFailing', mergeGeometries(failing, false) ?? failing[0], MAT.leafPale)
-  );
+
+  const failing = rows(rng, {
+    modelUrl: '@project/assets/models/Plants/SM_WildCarrot_01.glb',
+    at: new THREE.Vector3(-1.45, BED_TOP, BED_Z),
+    rows: BED_ROWS,
+    perRow: BED_COLS,
+    rowGap: 0.62,
+    plantGap: 0.4,
+    /**
+     * Stunted, not absent.
+     *
+     * Half the size read as no size at all. The shade plane over this bed darkens whatever
+     * is under it, so plants at 0.15 disappeared into it and the bed said "nothing was ever
+     * planted here" - a different request from Adaeze's, and the wrong one.
+     *
+     * So the difference is carried by colour and vigour rather than by scale. That is also
+     * the truthful version: a seedling in shade goes pale and leggy, it does not shrink to
+     * a tenth of its neighbour. Three quarters the size, visibly yellow, clearly worse.
+     */
+    scale: [0.2, 0.26],
+  });
+  // Yellowing as well as stunted. Two signals, because the player reads this across four
+  // metres of set at a shallow angle and through the shade that is causing it.
+  failing.colors = new THREE.Color('#cfc47e');
+  scene.registerProp('rows-failing', failing);
 
   /**
    * The shade itself, as a real object.
@@ -1808,8 +1827,11 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * between a modelled blade and four crossed cylinders is the difference between a field
    * and a diagram of one.
    *
-   * Three grass species rather than one, because a single repeated asset is recognisable
-   * as a single repeated asset within about two seconds of looking at it.
+   * The modelled grass and the corn that used to be here are gone. The meadow below does
+   * the grass far better - it is denser, it moves, and it is tied to the ground underneath
+   * it - and three clumps of a repeated asset standing in real grass read as props. What
+   * is left is the one thing the meadow does not do: a flowering plant, sparse enough to be
+   * a weed she has not got to.
    */
   /**
    * Measured, not guessed - and the numbers matter here more than usual.
@@ -1839,27 +1861,6 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * loaded fine. AGENTS.md says never construct a project path programmatically; this is
    * what that rule is protecting against.
    */
-  for (const [i, modelUrl] of [
-    '@project/assets/models/Plants/SM_WildGrass_01.glb',
-    '@project/assets/models/Plants/SM_WildGrass_04.glb',
-    '@project/assets/models/Plants/SM_WildGrass_06.glb',
-  ].entries()) {
-    scene.registerProp(
-      `planting-grass-${i}`,
-      scatter(rng, {
-        modelUrl,
-        at: new THREE.Vector3(0.2, 0, 0.6),
-        width: 11.0,
-        depth: 7.6,
-        count: 110,
-        scale: [0.3, 0.6],
-        clear: KEEP_CLEAR,
-        y: 0.01,
-      })
-    );
-    void i;
-  }
-
   // A little wild carrot at the margins - the one flowering thing, and sparse enough that
   // it reads as a weed she has not got to rather than as planting.
   scene.registerProp(
@@ -1873,32 +1874,6 @@ function buildSeedlingTunnel(scene: ContactScene): void {
       scale: [0.32, 0.5],
       clear: KEEP_CLEAR,
       y: 0.01,
-    })
-  );
-
-  /**
-   * Corn, in rows, off to the side.
-   *
-   * The one regular thing in the frame, and that is its whole purpose. Everything else in
-   * this field grows however it likes; a block of corn set out with a line and a stick is
-   * the evidence that somebody works here - and it gives the seedling beds a CONTEXT, which
-   * they did not have. Adaeze is not tending a science experiment in an empty field, she is
-   * tending the part of a smallholding that has gone wrong.
-   *
-   * Placed to the right, away from the tree and the tunnel, so it never competes with the
-   * shade line the whole mission is about.
-   */
-  scene.registerProp(
-    'planting-corn',
-    rows(rng, {
-      modelUrl: '@project/assets/models/Plants/SM_Corn_01.glb',
-      at: new THREE.Vector3(2.9, 0, -2.6),
-      rows: 5,
-      perRow: 8,
-      rowGap: 0.5,
-      plantGap: 0.42,
-      scale: [0.85, 1.1],
-      turn: -0.12,
     })
   );
 
