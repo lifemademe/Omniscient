@@ -228,6 +228,18 @@ export class ContactScene extends ENGINE.SceneNode {
    * rather than turning this into a general message bus, which is how a clean cue system
    * becomes a soup of untyped strings.
    */
+  /**
+   * Whether this diorama has air in it.
+   *
+   * Every scene so far is a place - a shop, a cellar, a road - and the rig's linear fog
+   * gives them depth. The surveillance city is not a place; it is a reconstruction from a
+   * road network and a camera register, and there is nothing between the camera and it to
+   * scatter light. Fog there is not atmosphere, it is a bug: at fogFar 26 against a
+   * district 192m across, every line rendered at 100% haze colour and the whole city came
+   * out a uniform blue-grey with its brightest pixel at 58 against a background of 30.
+   */
+  public atmosphere = true;
+
   private aimHandler: ((to: number) => void) | null = null;
 
   public onAim(handler: (to: number) => void): void {

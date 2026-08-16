@@ -172,6 +172,10 @@ const HOME_DWELL = 5.5;
  */
 const RESOLVE_HOLD = 4.6;
 
+/** The diorama atmosphere. Tuned to a room, not to a world - see mountScene. */
+const FOG_NEAR = 3.5;
+const FOG_FAR = 26;
+
 @ENGINE.GameClass()
 export class OmniscientRig extends ENGINE.SceneNode {
   private knowledge = new KnowledgeStore(PLAYTHROUGH_SEED);
@@ -980,15 +984,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     // Depth. Near/far are tuned to the diorama, not the world - the workstation sits
     // 60 units away and must not be fogged out of existence.
-    this.add(
-      ENGINE.FogNode.create({
-        name: 'Atmosphere',
-        fogMode: ENGINE.FogMode.Linear,
-        fogColor: new THREE.Color(LIGHT.haze),
-        fogNear: 3.5,
-        fogFar: 26,
-      })
-    );
+    this.fog = ENGINE.FogNode.create({
+      name: 'Atmosphere',
+      fogMode: ENGINE.FogMode.Linear,
+      fogColor: new THREE.Color(LIGHT.haze),
+      fogNear: FOG_NEAR,
+      fogFar: FOG_FAR,
+    });
+    this.add(this.fog);
   }
 
   /**
@@ -1560,6 +1563,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
   }
 
+  /** The shared atmosphere, retuned per diorama - see mountScene. */
+  private fog: ENGINE.FogNode | null = null;
+
   /** Swap the diorama. One scene is live at a time - §133 foregrounds a single contact. */
   private mountScene(sceneId: string): void {
     this.scene?.deactivate();
@@ -1571,6 +1577,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.scene = next;
     this.scene?.activate();
+
+    /**
+     * Air, or the absence of it.
+     *
+     * Pushed out of the way rather than switched off, because the fog node is shared and a
+     * scene that turns a global feature off has to be able to turn it back on for the next
+     * one - retuning is one number in each direction and cannot leak.
+     */
+    if (this.fog) {
+      const airless = next?.atmosphere === false;
+      this.fog.setFogNear(airless ? 4000 : FOG_NEAR).setFogFar(airless ? 8000 : FOG_FAR);
+    }
 
     /**
      * Hand the outline pass this room's subject.

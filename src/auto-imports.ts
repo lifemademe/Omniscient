@@ -37,6 +37,7 @@ import './omniscient/geometry/outdoors.js';
 import './omniscient/geometry/props.js';
 import './omniscient/geometry/room.js';
 import './omniscient/geometry/seaLife.js';
+import './omniscient/geometry/wireCity.js';
 import './omniscient/globe/GlobeScreen.js';
 import './omniscient/input/Picker.js';
 import './omniscient/knowledge/KnowledgeStore.js';

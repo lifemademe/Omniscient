@@ -40,6 +40,8 @@ import { createRng, jitter, range, seedFrom } from '../core/rng.js';
 import type { Rng } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
 import { createFieldBackdrop, createNightBackdrop } from '../geometry/backdrop.js';
+import { planFleet } from '../mission/traces.js';
+import { CELL, cellToWorld, wireCity } from '../geometry/wireCity.js';
 import { createClump } from './../geometry/foliage.js';
 import { grassTufts, greenhouse, rocks } from '../geometry/outdoors.js';
 import {
@@ -4311,6 +4313,131 @@ function buildMillRoad(scene: ContactScene): void {
 
 // Registered at module load. auto-imports pulls this module in, so a ContactScene node
 // placed in the editor with a matching sceneId populates itself.
+/**
+ * MISSION 08 - District 07, as the machine sees it.
+ *
+ * The first diorama in this game that is not a place. The other six are somebody's shop or
+ * cellar or doorstep, lit by a lamp that is actually in the room; this is a reconstruction
+ * assembled out of a road network, a camera register and a stream of vehicle pings, and it
+ * is drawn as outlines because outlines are what the machine has.
+ *
+ * ## Everything here is unlit, on purpose
+ *
+ * There is not a single light node in this builder and there should never be one. A light
+ * implies a source, a source implies a room, and this is not a room - it is a picture of a
+ * database. `LineBasicMaterial` ignores lighting entirely, which for once is exactly the
+ * behaviour wanted rather than a limitation worked around.
+ *
+ * ## And the traces are all identical
+ *
+ * Not one of them is marked. The suspect is in here, and finding it is the mission; a
+ * highlight on the right car would hand over the answer that the entire evidence device in
+ * mission/traces.ts exists to make the player earn. §157, in its strongest form - the
+ * presentation is not allowed to know something the player has not deduced.
+ */
+function buildWireCity(scene: ContactScene): void {
+  const rng = createRng(seedFrom('district-07'));
+  const SIZE = 24;
+
+  // No air between the camera and a database. See ContactScene.atmosphere.
+  scene.atmosphere = false;
+
+  const city = wireCity(rng, { size: SIZE });
+
+  /**
+   * Three depths of the same colour, which is the whole palette.
+   *
+   * §241 asks for depth from value rather than from detail, and a wireframe has no detail
+   * to spend - so the lattice sits just above black, the towers read as a mass, and the
+   * roads are the brightest thing because the roads are what the mission is about. A player
+   * who looks at this frame should find the network before they find the skyline.
+   */
+  const wire = (colour: string, opacity: number): THREE.LineBasicMaterial =>
+    new THREE.LineBasicMaterial({ color: new THREE.Color(colour), transparent: true, opacity });
+
+  const layer = (name: string, geometry: THREE.BufferGeometry, material: THREE.Material): ENGINE.SceneNode => {
+    const node = ENGINE.SceneNode.create({ name, position: new THREE.Vector3() });
+    // A raw three.js object rather than a MeshNode: these are LineSegments, and the engine's
+    // mesh node would build a collider for geometry that has no faces to collide with.
+    node.add(new THREE.LineSegments(geometry, material));
+    return node;
+  };
+
+  scene.registerProp('lattice', layer('Lattice', city.lattice, wire('#2f6d4a', 0.5)));
+  scene.registerProp('towers', layer('Towers', city.towers, wire('#3f8f63', 0.62)));
+  scene.registerProp('roads', layer('Roads', city.roads, wire(ACCENT.knowledge, 0.85)));
+
+  /**
+   * Cameras, as the thing they are: a point of view.
+   *
+   * Drawn as a short cone of sight rather than as an icon of a camera, because what the
+   * player needs to read is not "there is a camera here" but "this is what it can see" -
+   * the second phase of the mission is predicting which one the car crosses next, and that
+   * is a question about coverage, not about hardware.
+   */
+  const sight: number[] = [];
+  for (const at of city.cameras) {
+    const head = cellToWorld(SIZE, at.x, at.y, 6);
+    const facing = range(rng, 0, Math.PI * 2);
+    for (const spread of [-0.42, 0.42] as const) {
+      const reach = CELL * 1.7;
+      sight.push(
+        head.x, head.y, head.z,
+        head.x + Math.cos(facing + spread) * reach, 0.1, head.z + Math.sin(facing + spread) * reach
+      );
+    }
+    // A stub of mast, so it hangs off something.
+    sight.push(head.x, head.y, head.z, head.x, head.y + 1.4, head.z);
+  }
+  const sightGeometry = new THREE.BufferGeometry();
+  sightGeometry.setAttribute('position', new THREE.Float32BufferAttribute(sight, 3));
+  scene.registerProp('cameras', layer('Cameras', sightGeometry, wire(ACCENT.amber, 0.6)));
+
+  /**
+   * The traffic. Every car in the district, and one of them did it.
+   *
+   * Small enough that they read as a swarm rather than as vehicles - at this altitude a car
+   * IS a moving point, and pretending otherwise would claim a resolution the network does
+   * not have.
+   */
+  const { fleet } = planFleet(rng, 180, SIZE);
+  const cars: number[] = [];
+  for (const trace of fleet) {
+    const at = cellToWorld(SIZE, trace.cell.x, trace.cell.y, 0.6);
+    // A cross rather than a box: two segments instead of twelve, and at this size a box
+    // resolves to a smudge anyway while a cross keeps a readable centre.
+    const r = 1.15;
+    cars.push(at.x - r, at.y, at.z, at.x + r, at.y, at.z);
+    cars.push(at.x, at.y, at.z - r, at.x, at.y, at.z + r);
+  }
+  const carGeometry = new THREE.BufferGeometry();
+  carGeometry.setAttribute('position', new THREE.Float32BufferAttribute(cars, 3));
+  scene.registerProp('traffic', layer('Traffic', carGeometry, wire('#bfe9c8', 0.9)));
+
+  scene.registerShot('default', {
+    /**
+     * High and off one corner, looking down the diagonal.
+     *
+     * A plan view would be a map and a low view would be a skyline; the mission needs both
+     * at once - the network to reason about and the buildings to give it depth. Tilted far
+     * enough that the towers read as height rather than as clutter on a chart.
+     *
+     * Dropped from 96m to 34m after measuring nothing wrong and looking at everything
+     * wrong. From up there the height variation - which runs from 3m at the edge to 40m
+     * downtown - foreshortened into a flat lattice, so the district read as a circuit board
+     * rather than as a city. The tallest thing in the frame has to be able to occlude
+     * something behind it or there is no third dimension in the picture at all.
+     */
+    position: new THREE.Vector3(92, 34, 118),
+    target: new THREE.Vector3(-10, 14, -18),
+  });
+  scene.registerShot('downtown', {
+    position: new THREE.Vector3(34, 40, 58),
+    target: new THREE.Vector3(-4, 8, -6),
+    duration: 2.6,
+  });
+}
+
 ContactScene.registerBuilder('scene-repair-shop', buildRepairShop);
 ContactScene.registerBuilder('scene-beacon-mast', buildBeaconMast);
 ContactScene.registerBuilder('scene-seedling-tunnel', buildSeedlingTunnel);
@@ -4318,6 +4445,7 @@ ContactScene.registerBuilder('scene-cleared-house', buildClearedHouse);
 ContactScene.registerBuilder('scene-flooded-cellar', buildFloodedCellar);
 ContactScene.registerBuilder('scene-night-door', buildNightDoor);
 ContactScene.registerBuilder('scene-mill-road', buildMillRoad);
+ContactScene.registerBuilder('scene-wire-city', buildWireCity);
 
 /** Construct a populated diorama for a mission's sceneId, or null when none exists. */
 export function buildContactScene(sceneId: string): ContactScene | null {
