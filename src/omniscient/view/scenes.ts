@@ -75,6 +75,16 @@ import {
   FACT_SHARED_POWER_FEED,
   FACT_WORKSHOP_FLOODS,
 } from '../content/mission-01-transmitter.js';
+import {
+  FACT_EQUIPMENT_FINE,
+  FACT_SHADE_LINE,
+  FACT_TREE_GREW,
+} from '../content/mission-03-tunnel.js';
+import {
+  FACT_CELLAR_RUN,
+  FACT_PIECEMEAL_PLUMBING,
+  FACT_PUMP_IS_FINE,
+} from '../content/mission-05-cellar.js';
 
 import { placeCharacter } from './character-node.js';
 import { ContactScene } from './ContactScene.js';
@@ -2917,8 +2927,14 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     ['dressing-timber', CERTAINTY.DESCRIBED],
     ['glasshouse', CERTAINTY.DESCRIBED],
     ['glasshouse-base', CERTAINTY.DESCRIBED],
-    ['house-staging', CERTAINTY.DESCRIBED],
-    ['house-trays', CERTAINTY.DESCRIBED],
+    /*
+     * The glasshouse is a glasshouse; what is on the staging inside it is not something
+     * anybody has mentioned. Both were DESCRIBED, which left this room with nothing below
+     * SHAPED anywhere in it - and a room with no guesses in it cannot ever perform §3,
+     * because the resolve is drawn by a tier-1 volume retreating.
+     */
+    ['house-staging', CERTAINTY.SUSPECTED],
+    ['house-trays', CERTAINTY.SUSPECTED],
     // The reason she called.
     ['rows-failing', CERTAINTY.KNOWN],
     ['rows-healthy', CERTAINTY.KNOWN],
@@ -2941,6 +2957,37 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     scene.setCertainty(id, certainty);
   }
 
+  /**
+   * What Adaeze can tell the machine, and what it makes visible.
+   *
+   * The subject of the call stays warm from the first frame - the tree, the shade and the
+   * failing rows are what she rang about, and the note above is right that tiering them by
+   * distance rather than by what the request is ABOUT is the one mistake this system
+   * exists to prevent. So none of these reveals touch them.
+   *
+   * They reveal what she is ASKED. Which is the other half of the same idea: the warm
+   * things are the ones somebody has spoken about, and the player earns the rest by
+   * asking.
+   */
+  // The kit inside the glasshouse is sound, which is the fact that rules out equipment as
+  // the cause - and the first time anybody says what is on the staging at all. This is the
+  // room's one resolve sweep, and it happens inside the glasshouse, in frame.
+  scene.revealOn(FACT_EQUIPMENT_FINE, 'house-staging', CERTAINTY.DESCRIBED);
+  scene.revealOn(FACT_EQUIPMENT_FINE, 'house-trays', CERTAINTY.DESCRIBED);
+  /*
+   * Where the line falls is the deduction, and it falls across the beds. The machine knows
+   * their shape from the start - they are obviously raised beds - and knows nothing about
+   * their state until she describes the shadow crossing them.
+   */
+  scene.revealOn(FACT_SHADE_LINE, 'beds', CERTAINTY.DESCRIBED);
+  scene.revealOn(FACT_SHADE_LINE, 'bed-soil', CERTAINTY.DESCRIBED);
+  /*
+   * And the boundary. The tree growing over years is only a problem because it is somebody
+   * else's tree, so learning that is what makes the fence and the hedge worth drawing
+   * properly - they stop being scenery at the horizon and become the property line.
+   */
+  scene.revealOn(FACT_TREE_GREW, 'fence', CERTAINTY.DESCRIBED);
+  scene.revealOn(FACT_TREE_GREW, 'hedge', CERTAINTY.DESCRIBED);
 }
 
 
@@ -4276,6 +4323,78 @@ function buildFloodedCellar(scene: ContactScene): void {
     target: new THREE.Vector3(-0.4, 0.2, -1.0),
     duration: 2.2,
   });
+
+  /**
+   * -- What the machine knows about Vasile's cellar, and what he can tell it -------------
+   *
+   * This room had no certainty authored at all, which meant every prop in it defaulted to
+   * SHAPED and the scale did nothing here. Six of the eight rooms were in that state.
+   *
+   * The opening position is what a man says in the first ten seconds: my cellar is full of
+   * water. That is the water and the room around it, and nothing else. He has not mentioned
+   * a pump, or where the run goes, or what is in the boxes - and until he does, the machine
+   * has no business drawing any of it as fact.
+   */
+  for (const [id, certainty] of [
+    // The flood is why he called. It is the one thing warm from the first frame.
+    ['water', CERTAINTY.KNOWN],
+    // A cellar. He said so, and it is a shape before it is anything else.
+    ['floor', CERTAINTY.SHAPED],
+    ['wall', CERTAINTY.SHAPED],
+    ['side-wall', CERTAINTY.SHAPED],
+    ['ceiling', CERTAINTY.SHAPED],
+    ['joists', CERTAINTY.SHAPED],
+    ['light-fitting', CERTAINTY.SHAPED],
+    ['bulb', CERTAINTY.SHAPED],
+    // The chalk marks are evidence the machine can see for itself once it is drawing the
+    // wall - somebody has been measuring this flood for years, and that reads without
+    // anybody saying it.
+    ['marks', CERTAINTY.SHAPED],
+    ['lids', CERTAINTY.SHAPED],
+    // The run is the mission. He has said there is pipework; he has not said what it is
+    // made of, which is the whole diagnosis.
+    ['run-metal', CERTAINTY.SHAPED],
+    ['run-copper', CERTAINTY.SHAPED],
+    ['run-plastic', CERTAINTY.SHAPED],
+    ['run-steel', CERTAINTY.SHAPED],
+    /*
+     * Below SHAPED, and these are what make the room perform.
+     *
+     * Nobody has mentioned a pump. Nobody has said where the run goes. Nobody has said what
+     * is in the boxes stacked against the far wall. Three guesses standing in a flooded
+     * cellar, and two of them resolve when he is asked the right question.
+     */
+    ['pump', CERTAINTY.SUSPECTED],
+    ['sump', CERTAINTY.SUSPECTED],
+    ['outfall', CERTAINTY.SUSPECTED],
+    ['drop', CERTAINTY.SUSPECTED],
+    ['ruined-box', CERTAINTY.SUSPECTED],
+  ] as [string, number][]) {
+    scene.setCertainty(id, certainty);
+  }
+
+  // The pump works, which is the fact that rules out the obvious culprit - and the first
+  // time anybody says there is a pump down here at all. It stands in frame at his elbow,
+  // so this is the room's resolve.
+  scene.revealOn(FACT_PUMP_IS_FINE, 'pump', CERTAINTY.DESCRIBED);
+  scene.revealOn(FACT_PUMP_IS_FINE, 'sump', CERTAINTY.DESCRIBED);
+  // Where the water is supposed to go. The outfall is at the far end of the run and the
+  // drop is where it leaves - neither means anything until he traces it.
+  scene.revealOn(FACT_CELLAR_RUN, 'outfall', CERTAINTY.DESCRIBED);
+  scene.revealOn(FACT_CELLAR_RUN, 'drop', CERTAINTY.DESCRIBED);
+  /*
+   * Four materials laid end to end by four different people across fifty years. This is
+   * the fact the puzzle turns on, and it is the only one that warms the run itself - which
+   * is right, because until he says what the spans are made of, a pipe is a pipe.
+   */
+  for (const span of ['run-metal', 'run-copper', 'run-plastic', 'run-steel']) {
+    scene.revealOn(FACT_PIECEMEAL_PLUMBING, span, CERTAINTY.KNOWN);
+  }
+  /*
+   * The boxes never resolve, and that is the point of having them. A room where everything
+   * the player asks about goes warm and nothing else exists is a checklist; a room that
+   * still has guesses in it when the call ends is a place the machine only partly saw.
+   */
 
   /**
    * Everything standing in the flood gets wet at the line.
