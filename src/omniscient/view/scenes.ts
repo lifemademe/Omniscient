@@ -2401,7 +2401,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * It costs nothing measurable because the whole field is one InstancedMesh: the extra
        * blades are extra matrices in a buffer, not extra draw calls.
        */
-      count: 105000,
+      count: 150000,
       /**
        * Up from 0.07-0.2, which was mown lawn.
        *
@@ -2410,8 +2410,37 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * garden - and this is rough grass round a worked smallholding, which comes to mid
        * shin. The clump spread does the work that height used to be doing.
        */
-      height: [0.16, 0.34],
-      bareBelow: 0.34,
+      /*
+       * Up again, and this time the number that mattered was not the height.
+       *
+       * Measured, because the field looked sparse at a hundred thousand blades and that is
+       * the kind of claim worth checking: blade tips came out at luma 149 against bare
+       * ground at 134. Fifteen values. This file's own note about the last time that
+       * happened says it plainly - six values apart and the field dissolves into a single
+       * hazy mat - and the fix then was to move the blades. It cannot be the fix now,
+       * because the ground under THIS scene is pale on purpose (calm is a value decision,
+       * see the ground call above) and dragging it down would trade the room's whole
+       * intent for a texture.
+       *
+       * So the grass covers it instead. Fewer blades per crown spreads the same budget over
+       * half again as many crowns, and a lower bare threshold stops the thin areas being
+       * culled to nothing - which together close the gaps the pale soil was showing
+       * through. Knee height rather than shin, because nobody has cut this since the
+       * lamps... since the spring, and the theme of the jam is Overgrown.
+       */
+      height: [0.24, 0.52],
+      bladesPerClump: [4, 8],
+      bareBelow: 0.26,
+      /**
+       * And the layer above it.
+       *
+       * The field's silhouette was a flat fuzzy line however many blades were in it,
+       * because every blade is the same kind of thing at the same sort of height. A
+       * twentieth as many stalks gone to seed, standing clear of the mass, is what makes it
+       * read as long rather than as thick - and a mown lawn has none by definition, which
+       * is the theme stated in one prop.
+       */
+      seedHeads: { share: 0.05, height: [0.62, 0.95] },
       keepOffBeach: 3.2,
       clear: KEEP_CLEAR,
       y: 0,

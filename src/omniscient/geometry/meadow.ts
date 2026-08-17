@@ -204,6 +204,96 @@ function bladeGeometry(segments = 4): THREE.BufferGeometry {
   return geometry;
 }
 
+/**
+ * A seed head: one stalk, arching, with a spindle on the end.
+ *
+ * ## Why the field needed a second shape at all
+ *
+ * Because a meadow made only of blades has a flat top. Every blade is the same kind of
+ * thing at roughly the same height, so the field's silhouette is a fuzzy horizontal line
+ * however many of them there are - and §4.1 puts silhouette before everything, including
+ * the count. What makes long grass read as LONG is the layer above it: a scatter of stalks
+ * that have gone to seed, standing well clear of the mass and nodding at a different rate.
+ *
+ * It is also the difference between grass and grass that nobody has cut, which is the
+ * entire jam theme in one prop. A mown lawn has no seed heads by definition - that is what
+ * mowing is for.
+ *
+ * ## One strip, not a stem and a head
+ *
+ * The width profile does the work: near-constant and very thin for the first four fifths,
+ * then a sine bulge for the last fifth. That is a stalk with a spindle on it, in one piece
+ * of geometry with one draw, and at any distance the player will ever see it there is
+ * nothing a separate head mesh would add.
+ *
+ * Arches harder than a blade - 0.5 against 0.34 - because a seed head is carrying weight at
+ * the far end and a straight one reads as an aerial.
+ */
+/*
+ * The widths below are in METRES at unit scale, and getting that wrong the first time
+ * produced the exact failure this file already records for the blades. A stalk at 1.1cm
+ * with a 13cm spindle on it is not a seed head, it is a flag: the field came out scattered
+ * with flat tan lozenges catching the sun broadside, and at a squint they read as leaves
+ * blowing about. Real seed heads are a few millimetres across and ten times longer than
+ * they are wide, and the stylised references exaggerate the LENGTH.
+ *
+ * §4.1 again, and it is remarkable how often it is the answer: silhouette first. No colour
+ * or count would have rescued the wrong width.
+ */
+function seedHeadGeometry(segments = 9): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const indices: number[] = [];
+
+  /**
+   * Straw at the top, and the reason it is not brighter.
+   *
+   * The head is the only part of this field that sits above the grass line, so it is the
+   * part that establishes where the top of the field IS - which means it has to be lighter
+   * than the mass below it or it does nothing. It must not be lighter than the sky, and on
+   * the smallholding the ground is already deliberately pale (calm is a value decision, see
+   * the tunnel's own ground) - so this is a dry straw pulled well back from white rather
+   * than the bleached colour real seed heads go.
+   */
+  const stalk = new THREE.Color('#5c6b38');
+  const head = new THREE.Color('#b3a771');
+
+  for (let i = 0; i < segments; i++) {
+    const t = i / segments;
+    // Thin stalk, then a spindle in the last quarter. Sine so it swells and tapers again
+    // rather than stepping out to a rectangle. The spindle is long, not fat - a quarter of
+    // the stalk's length and 1.6cm across, which on a 0.8m stalk is 20cm by 16mm.
+    const swell = t < 0.75 ? 0 : Math.sin(((t - 0.75) / 0.25) * Math.PI) * 0.008;
+    const halfWidth = 0.0025 + swell;
+    // The same arc as a blade. At 0.5 the tip travelled 45cm downwind of its own root and
+    // the heads read as detached from the stalks carrying them.
+    const lean = t * t * 0.34;
+    // The colour change is tied to the swell, not to height, so the straw arrives exactly
+    // where the head does however the profile is retuned later.
+    const shade = stalk.clone().lerp(head, Math.min(1, swell / 0.005));
+
+    positions.push(-halfWidth, t, lean, halfWidth, t, lean);
+    colors.push(shade.r, shade.g, shade.b, shade.r, shade.g, shade.b);
+  }
+
+  positions.push(0, 1, 0.34);
+  colors.push(head.r, head.g, head.b);
+  const tipIndex = segments * 2;
+
+  for (let i = 0; i < segments - 1; i++) {
+    const a = i * 2;
+    indices.push(a, a + 1, a + 3, a, a + 3, a + 2);
+  }
+  indices.push((segments - 1) * 2, (segments - 1) * 2 + 1, tipIndex);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 // -- The field --------------------------------------------------------------------------
 
 export interface MeadowOptions {
@@ -222,6 +312,29 @@ export interface MeadowOptions {
   /** Circles nothing grows in - paths, beds, the base of a tree. */
   clear?: Array<{ centre: THREE.Vector3; radius: number }>;
   y?: number;
+  /**
+   * Blades per crown.
+   *
+   * Worth an option rather than a constant because it is really a COVERAGE control, and
+   * that was not obvious until a field looked sparse at a hundred thousand blades. With a
+   * fixed budget, blades and crowns trade against each other: gathering the same blades
+   * into fewer, fatter tufts leaves more bare ground between them. A trodden verge wants
+   * fat tufts and gaps; a field nobody has cut wants the crowns close enough to touch.
+   */
+  bladesPerClump?: [number, number];
+  /**
+   * Stalks gone to seed, standing above the grass line. Omit for anything mown or walked.
+   *
+   * A fraction of the blade count rather than an absolute, so retuning the density does not
+   * silently turn a meadow into a cornfield. Around a twentieth reads as a field nobody has
+   * cut this year; a tenth starts to read as a crop.
+   */
+  seedHeads?: {
+    /** As a fraction of `count`. */
+    share: number;
+    /** Height range in metres. Should clear the blades, or there is no point. */
+    height: [number, number];
+  };
 }
 
 /**
@@ -242,6 +355,7 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
   const scale = new THREE.Vector3();
   const position = new THREE.Vector3();
   const dry = new THREE.Color('#b9b177');
+  const UP = new THREE.Vector3(0, 1, 0);
 
   /**
    * Grass grows in TUFTS, and this is the change that matters most.
@@ -276,45 +390,52 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
   let clumpLeft = 0;
   let clumpHeight = 1;
 
+  /**
+   * Whether anything is allowed to grow at a point, and how well - or null for bare.
+   *
+   * Pulled out of the blade loop so the seed heads can ask the same question. Two passes
+   * scattering over the same ground with two copies of these rules is two passes that will
+   * eventually disagree, and the way that shows up is a stalk standing in the middle of the
+   * path, which is worse than no stalk at all.
+   *
+   * `lush` is remapped so `bareBelow` is a real edge rather than a fade to nothing: below it
+   * there is no grass, and just above it the blades are short. That is what gives a bald
+   * patch a fringe instead of a cut line.
+   *
+   * The beach margin is generous and RANDOMISED at its inner edge, because a real treeline
+   * against sand is ragged; a clean arc would only be a different wrong line. It consumes
+   * from the shared stream, which is why this is a closure over `rng` rather than a pure
+   * function of position.
+   */
+  const lushAt = (x: number, z: number): number | null => {
+    if (options.clear?.some((zone) => Math.hypot(x - zone.centre.x, z - zone.centre.z) < zone.radius)) {
+      return null;
+    }
+    if (options.keepOffBeach !== undefined) {
+      const inland = -shoreDepth(x, z);
+      if (inland < options.keepOffBeach * range(rng, 0.55, 1.45)) return null;
+    }
+    const field = density(x, z);
+    if (field < bareBelow) return null;
+    return (field - bareBelow) / Math.max(0.001, 1 - bareBelow);
+  };
+
   for (let i = 0; i < count; i++) {
     if (clumpLeft <= 0) {
       clumpX = at.x + range(rng, -width / 2, width / 2);
       clumpZ = at.z + range(rng, -depth / 2, depth / 2);
       // More blades per crown, since they now occupy a fraction of the footprint.
-      clumpLeft = 6 + Math.floor(rng() * 7);
+      const [fewest, most] = options.bladesPerClump ?? [6, 12];
+      clumpLeft = fewest + Math.floor(rng() * (most - fewest + 1));
       clumpHeight = range(rng, 0.75, 1.25);
     }
     clumpLeft--;
 
     const x = clumpX + range(rng, -CLUMP_SPREAD, CLUMP_SPREAD);
     const z = clumpZ + range(rng, -CLUMP_SPREAD, CLUMP_SPREAD);
-    if (options.clear?.some((zone) => Math.hypot(x - zone.centre.x, z - zone.centre.z) < zone.radius)) {
-      continue;
-    }
 
-    /**
-     * Height first, culling second.
-     *
-     * `lush` is remapped so the threshold is a real edge rather than a fade to nothing:
-     * below `bareBelow` there is no grass at all, and just above it the blades are short.
-     * That is what gives a bald patch a fringe instead of a cut line.
-     */
-    /**
-     * Nothing grows on a beach.
-     *
-     * Grass ran straight down into the water, which is the single most obvious thing that
-     * can be wrong with a shoreline - it stops being a shore and becomes a lawn that has
-     * flooded. The margin is generous and RANDOMISED at its inner edge, because a real
-     * treeline against sand is ragged; a clean arc would just be a different wrong line.
-     */
-    if (options.keepOffBeach !== undefined) {
-      const inland = -shoreDepth(x, z);
-      if (inland < options.keepOffBeach * range(rng, 0.55, 1.45)) continue;
-    }
-
-    const field = density(x, z);
-    if (field < bareBelow) continue;
-    const lush = (field - bareBelow) / Math.max(0.001, 1 - bareBelow);
+    const lush = lushAt(x, z);
+    if (lush === null) continue;
 
     position.set(x, y, z);
     quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), range(rng, 0, Math.PI * 2));
@@ -350,6 +471,47 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
     // Thin, dry blades where the field is sparse - the same reason the soil shows there.
     const tint = new THREE.Color(1, 1, 1).lerp(dry, (1 - lush) * 0.55);
     placements.push({ matrix: matrix.clone(), tint });
+  }
+
+  /**
+   * The seed heads, scattered independently of the crowns.
+   *
+   * Independently on purpose. A stalk is not one of the blades in a tuft grown tall - it
+   * comes up between them - so tying it to a crown centre would line the heads up with the
+   * clumps and give the field a regularity at exactly the scale the eye is best at
+   * spotting. Scattered freely over the same density field, they land where the grass is
+   * thick without repeating its rhythm.
+   *
+   * Only in the lush third. A seed head standing in a bald patch is a stalk with nothing
+   * under it, which reads as a weed rather than as a field going over.
+   *
+   * The height is scaled far less by `lush` than the blades are (0.7-1.0 against
+   * 0.45-1.0), because a stalk's whole job is to break the top line of the grass and one
+   * that shortens with the field cannot.
+   */
+  const heads: Array<{ matrix: THREE.Matrix4; tint: THREE.Color }> = [];
+  if (options.seedHeads) {
+    const wanted = Math.round(count * options.seedHeads.share);
+    const [headLow, headHigh] = options.seedHeads.height;
+
+    for (let i = 0; i < wanted; i++) {
+      const x = at.x + range(rng, -width / 2, width / 2);
+      const z = at.z + range(rng, -depth / 2, depth / 2);
+      const lush = lushAt(x, z);
+      if (lush === null || lush < 0.35) continue;
+
+      position.set(x, y, z);
+      quaternion.setFromAxisAngle(UP, range(rng, 0, Math.PI * 2));
+      const tall = range(rng, headLow, headHigh) * (0.7 + 0.3 * lush);
+      // X is NOT scaled down the way a blade's is: seedHeadGeometry is authored at real
+      // width already, so a stalk is 1.1cm and its spindle 6.6cm without help.
+      scale.set(range(rng, 0.8, 1.2), tall, tall);
+      matrix.compose(position, quaternion, scale);
+      heads.push({
+        matrix: matrix.clone(),
+        tint: new THREE.Color(1, 1, 1).lerp(dry, (1 - lush) * 0.4),
+      });
+    }
   }
 
   const material = new THREE.MeshStandardMaterial({
@@ -409,19 +571,32 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
       );
   };
 
-  const mesh = new THREE.InstancedMesh(bladeGeometry(), material, Math.max(1, placements.length));
-  placements.forEach((placement, i) => {
-    mesh.setMatrixAt(i, placement.matrix);
-    mesh.setColorAt(i, placement.tint);
-  });
-  mesh.instanceMatrix.needsUpdate = true;
-  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-  // Every blade is inside the patch; the automatic bounds would be computed from the base
-  // geometry alone and cull the whole field the moment the patch centre left the frustum.
-  mesh.frustumCulled = false;
+  /**
+   * One InstancedMesh per shape, sharing the material.
+   *
+   * Sharing it is what keeps the seed heads in the same weather - the gust is uniforms on
+   * that one material, so a second material would be a second field blowing on its own
+   * clock, and two grasses moving out of step is more obviously wrong than either being
+   * still. The colour difference lives in the vertex colours of the geometry instead,
+   * which costs nothing.
+   */
+  function instance(geometry: THREE.BufferGeometry, of: typeof placements): THREE.InstancedMesh {
+    const mesh = new THREE.InstancedMesh(geometry, material, Math.max(1, of.length));
+    of.forEach((placement, i) => {
+      mesh.setMatrixAt(i, placement.matrix);
+      mesh.setColorAt(i, placement.tint);
+    });
+    mesh.instanceMatrix.needsUpdate = true;
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    // Every blade is inside the patch; the automatic bounds would be computed from the base
+    // geometry alone and cull the whole field the moment the patch centre left the frustum.
+    mesh.frustumCulled = false;
+    return mesh;
+  }
 
   const node = ENGINE.SceneNode.create({ name: 'Meadow', position: new THREE.Vector3() });
-  node.add(mesh);
+  node.add(instance(bladeGeometry(), placements));
+  if (heads.length > 0) node.add(instance(seedHeadGeometry(), heads));
   return node;
 }
 
