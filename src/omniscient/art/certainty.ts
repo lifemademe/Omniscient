@@ -148,6 +148,29 @@ function ensureShader(material: THREE.Material): CertaintyUniforms {
           '  diffuseColor.rgb = mix(diffuseColor.rgb, uCertCold, certCold * 0.5);',
           '  diffuseColor.rgb = mix(diffuseColor.rgb, uCertWarm, certWarm * 0.15);',
           '  diffuseColor.rgb = mix(vec3(certLuma), diffuseColor.rgb, 1.0 + certWarm * 0.6);',
+          /*
+           * And put the value back where the palette had it.
+           *
+           * Both warm steps move luminance as a side effect, and on a light material that
+           * is a small tint nobody would notice. On a DARK one it is most of the colour:
+           * ACCENT.amber is a bright saturated orange, so mixing 15% of it into a near-black
+           * albedo is a large relative lift, and the chroma boost that follows then
+           * exaggerates the hue it just introduced.
+           *
+           * The flooded cellar is where that bill came due. Its three inspection covers are
+           * MAT.dark and they are `inked`, so the law took them to KNOWN and they came out
+           * as saturated orange tiles lying on the water - reading as sheets of plastic
+           * rather than as the open holes they are. A hole that somebody has described is
+           * still a hole.
+           *
+           * §2 asks the warm end for chroma and hue, and it is right to. It does not ask for
+           * value, and it must not take it: value is the palette's, and the one thing tier 4
+           * is allowed to do to brightness is the small emissive lift in applyToMaterial -
+           * which is deliberately weak, only appears above 0.9, and is a decision made once
+           * rather than a side effect of a colour mix.
+           */
+          '  float certWarmed = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));',
+          '  diffuseColor.rgb *= mix(1.0, certLuma / max(certWarmed, 1e-4), step(0.0001, certWarm));',
           '}',
         ].join('\n')
       );
@@ -264,7 +287,19 @@ function applyToMaterial(material: THREE.Material, certainty: number): void {
    * glowing, and anything stronger turns evidence into a power-up.
    */
   if (standard.emissive) {
-    const lift = Math.max(0, (certainty - 0.9) / 0.1) * 0.16;
+    /*
+     * 0.24, up from 0.16, and the extra is money the colour law used to be spending without
+     * saying so. Once the warm branch stopped moving luminance (see the shader), the
+     * Kestrel-3 fell from 144 to 131 and its margin over the scenery behind it halved. That
+     * lift was real and wanted; it was simply arriving as a side effect of a hue mix, which
+     * meant it scaled with how bright the material already was in the wrong direction and
+     * turned MAT.dark props orange on the way.
+     *
+     * Here it is proportional to the authored colour instead, which is the behaviour the
+     * palette wants: a light hero lifts a lot, and the flooded cellar's near-black
+     * inspection covers lift by almost nothing and stay the holes they are.
+     */
+    const lift = Math.max(0, (certainty - 0.9) / 0.1) * 0.24;
     standard.emissive.copy(standard.certaintyBase).multiplyScalar(lift);
   }
 
