@@ -2675,6 +2675,53 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     target: new THREE.Vector3(-2.5, 3.0, -0.6),
     duration: 2.4,
   });
+  /**
+   * Adaeze is standing in it, describing it.
+   *
+   * The blanket SHAPED default is right for a room somebody is phoning from and wrong for a
+   * field somebody is walking through: it cooled the whole afternoon to a green-grey and
+   * turned the calmest image in the game (§5) into the least inviting one. Measured at
+   * R−B −17, when the intent is warm, still and long-shadowed.
+   *
+   * So the ground she is standing on and the beds she is talking about are DESCRIBED, and
+   * the seedlings themselves - the entire subject of the request - are KNOWN. What stays
+   * cool is what she has genuinely not mentioned: the far hedge, the neighbour's trees, the
+   * water. The warm/cool split lands on the horizon, which is where a field's does anyway.
+   */
+  for (const [id, certainty] of [
+    ['ground', CERTAINTY.DESCRIBED],
+    ['meadow', CERTAINTY.DESCRIBED],
+    ['beds', CERTAINTY.DESCRIBED],
+    ['bed-soil', CERTAINTY.DESCRIBED],
+    ['tunnel', CERTAINTY.DESCRIBED],
+    ['dressing', CERTAINTY.DESCRIBED],
+    ['dressing-timber', CERTAINTY.DESCRIBED],
+    ['glasshouse', CERTAINTY.DESCRIBED],
+    ['glasshouse-base', CERTAINTY.DESCRIBED],
+    ['house-staging', CERTAINTY.DESCRIBED],
+    ['house-trays', CERTAINTY.DESCRIBED],
+    // The reason she called.
+    ['rows-failing', CERTAINTY.KNOWN],
+    ['rows-healthy', CERTAINTY.KNOWN],
+    ['house-seedlings', CERTAINTY.KNOWN],
+    ['planting-carrot', CERTAINTY.KNOWN],
+    // The neighbour's tree is the reason she called - it is the thing throwing the shade -
+    // so it belongs at the warm end with the beds, not out past the fence with the
+    // scenery. Tiering it by distance rather than by what the request is ABOUT put the
+    // subject of the mission in the cold half, which is the one mistake this system
+    // exists to make impossible.
+    ['neighbour-tree', CERTAINTY.KNOWN],
+    ['shade', CERTAINTY.KNOWN],
+    ['shore-tree', CERTAINTY.DESCRIBED],
+    // Genuinely unmentioned. This is where the frame goes cold, and a field's warm/cool
+    // break sits on the horizon in any case.
+    ['hedge', CERTAINTY.SHAPED],
+    ['rocks', CERTAINTY.SHAPED],
+    ['fence', CERTAINTY.SHAPED],
+  ] as [string, number][]) {
+    scene.setCertainty(id, certainty);
+  }
+
 }
 
 

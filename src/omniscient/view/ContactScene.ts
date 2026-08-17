@@ -22,7 +22,7 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
-import { applyCertainty } from '../art/certainty.js';
+import { applyCertainty, CERTAINTY } from '../art/certainty.js';
 
 import { Ease, Tweener } from '../core/tween.js';
 
@@ -269,11 +269,24 @@ export class ContactScene extends ENGINE.SceneNode {
     if (this.visible) this.applyCertainties();
   }
 
-  /** Push every recorded certainty onto its prop. Cheap, idempotent, safe to repeat. */
+  /**
+   * Push every recorded certainty onto its prop. Cheap, idempotent, safe to repeat.
+   *
+   * Anything a builder has not spoken for gets SHAPED, and anything marked `inked` gets
+   * KNOWN. That default is not a shortcut - it is the correct reading. The machine knows
+   * the shape of the room it is looking at and almost nothing about the contents, and the
+   * one object it has been told about in detail is precisely the one each request is
+   * about, which is what `inked` has always meant.
+   *
+   * It also means the law reaches all eight rooms without eight hand-authored tables,
+   * which is the difference between a system and a demo. A builder that knows better -
+   * that the shelf is a mystery, that the bench is not - still overrides per prop.
+   */
   private applyCertainties(): void {
     for (const prop of this.props.values()) {
-      if (prop.certainty === undefined) continue;
-      applyCertainty(prop.node as unknown as THREE.Object3D, prop.certainty);
+      const certainty =
+        prop.certainty ?? (prop.inked ? CERTAINTY.KNOWN : CERTAINTY.SHAPED);
+      applyCertainty(prop.node as unknown as THREE.Object3D, certainty);
     }
   }
 
