@@ -3737,17 +3737,33 @@ function buildNightDoor(scene: ContactScene): void {
    * Sparse and short. It is a path somebody still uses, not a ruin, and at this hour the
    * porch light will catch about four of them.
    */
+  /*
+   * On the meadow system now, rather than the older loose-tuft one.
+   *
+   * The upgrade that matters is CLUMPING - these grow in tufts with bare ground between,
+   * which is what makes grass read as grass instead of as bristles - plus the density field
+   * thinning them where the path is walked. The blades are lit MeshStandardMaterial, so they
+   * take the porch light and the step bounce exactly as the old ones did.
+   *
+   * What deliberately does NOT come across is meadowGround. That material is unlit by
+   * design, which is right under Adaeze's directional sun and completely wrong here: it
+   * would draw the soil at full authored brightness with no falloff, and the pool of porch
+   * light is the entire reason this shot works. The ground stays lit.
+   */
   scene.registerProp(
     'path-weeds',
-    meshOf(
-      'PathWeeds',
-      grassTufts(rng, { centre: new THREE.Vector3(0, 0, 1.5), width: 5.4, depth: 3.4, clear: 0.9 }, {
-        count: 70,
-        height: [0.04, 0.14],
-        lean: 0.8,
-      }),
-      MAT.stem
-    )
+    meadow(rng, {
+      at: new THREE.Vector3(0, 0, 1.5),
+      width: 5.4,
+      depth: 3.4,
+      // Still sparse and still short - a path somebody uses, not a ruin.
+      count: 520,
+      height: [0.07, 0.17],
+      bareBelow: 0.52,
+      clear: [{ centre: new THREE.Vector3(0, 0, 1.5), radius: 0.9 }],
+      y: 0,
+    }),
+    { idle: (deltaTime) => stepWind(deltaTime) }
   );
 
   const front = new THREE.BoxGeometry(7, WALL_TOP, 0.3);
