@@ -491,6 +491,35 @@ Three previous attempts guessed, and all three were wrong.
 
 ---
 
+### 224. CALIBRATE THE INSTRUMENT BEFORE YOU TRUST IT
+
+Screen capture on this machine resamples 1.5x — the play window renders a 1280x720 buffer and Windows
+scales it to 1920x1080. That imprints a **regular ~4.5px horizontal structure on every capture**,
+including captures of the editor chrome and of the bare desktop. It is strongest wherever the image
+has fine detail to beat against, so a busy diorama shows it at 12% and a smooth menu at 2%.
+
+This cost most of an afternoon. A CRT pass had just gone in, a 4.5px raster was measured on a
+diorama that was supposed to have none, and every subsequent test was an attempt to explain an
+artefact of the measuring instrument. The theory got as far as "a full-window DOM overlay" — which
+even survived a check that seemed decisive, because the pattern appeared *inside an opaque HTML
+panel* that a fragment shader cannot reach. It was consistent with the evidence. It was also wrong.
+
+**The rule: before measuring a periodic artefact, measure something that cannot have it.** A frame
+from before the feature existed, a screenshot of the desktop, a capture of a different application.
+If the signal is in the control it is in the instrument, and everything downstream of it is noise.
+
+This is §253 wearing a different coat. There, the test was written loosely enough to pass a broken
+build; here, the test measured a real signal that had nothing to do with the thing under test. Both
+failures come from the same place — not asking what the test would report if the feature were absent.
+
+**What actually settled it** was a measurement the instrument could not fake. The `world` preset has
+`curve: 0` and `console` has `0.010`, and curvature leaves a dark border where the tube pulls the
+picture in from beyond the buffer. The menu's left edge read `0, 0, 0, 1.3, 3.7, 7.9 ... 24.9`; the
+diorama's read a flat `24.5` all the way to column 0. One number, no ambiguity, and it took thirty
+seconds. **Prefer the measurement with a known-zero baseline over the one with a known-good pattern.**
+
+---
+
 ### 219. V4.9 FINAL DIRECTIVE
 
 **THE DESIGN IS NOT THE CONSTRAINT. THE SCHEDULE IS.** Every capability this game needs is confirmed
