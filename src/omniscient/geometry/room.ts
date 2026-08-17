@@ -576,15 +576,27 @@ function createDeskLamp(rng: Rng): RoomPart[] {
    * down over its own foot like a tent and the lamp disappeared inside its own shade.
    * Overcorrecting a silhouette is still getting the silhouette wrong.
    */
+  /*
+   * A dome rather than a cone, and in the arm's own metal rather than plastic.
+   *
+   * The cone read as a paper party hat on a stick: a hard point at the top, straight
+   * sides, and a pale plastic against a dark metal arm that made the shade look like a
+   * separate object balanced on the lamp. A pressed-steel half sphere is what a desk lamp
+   * of this vintage actually has, and it gives the fixture one continuous silhouette from
+   * foot to shade instead of two shapes meeting at a joint.
+   *
+   * Open at the bottom still - the lit interior is most of what says the light comes from
+   * here, and it is one flag.
+   */
   const aimDown = new THREE.Vector3(0.34, -1, 0.24).normalize();
-  const shade = new THREE.ConeGeometry(0.095, 0.13, 16, 1, true);
-  shade.translate(0, -0.065, 0);
+  const shade = new THREE.SphereGeometry(0.105, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2);
+  shade.translate(0, -0.012, 0);
   shade.applyQuaternion(
     new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), aimDown)
   );
   shade.rotateY(jitter(rng, 0.05));
   shade.translate(head.x, head.y, head.z);
-  parts.push({ name: 'LampShade', geometry: shade, material: 'plastic' });
+  parts.push({ name: 'LampShade', geometry: shade, material: 'metal' });
 
   // The bulb, unlit, sitting up inside the shade so it glows in the cone's mouth rather
   // than hanging under it like a berry.

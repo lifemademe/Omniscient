@@ -459,19 +459,63 @@ function buildRepairShop(scene: ContactScene): void {
   }
   // Round the corner and onto the shelf's legs, so it reads as a level the whole room
   // sat under rather than a stripe painted on one wall.
+  /*
+   * Slim again. Fattening these into 22cm blocks with pale caps made them read as two
+   * capped bollards standing in the corner - asked about as "what are these two blue
+   * rectangles supposed to be", which is a fair question about a shelf leg. A mark on a
+   * leg has to stay a mark ON the leg; the moment it has its own silhouette it stops being
+   * a stain and becomes an object.
+   */
   for (const x of [-2.35, -1.85]) {
-    const post = new THREE.BoxGeometry(0.085, 0.22, 0.085);
-    post.translate(x, 0.13, -1.28);
+    const post = new THREE.BoxGeometry(0.086, 0.09, 0.086);
+    post.translate(x, 0.195, -1.28);
     tideMarks.push(post);
 
-    const collar = new THREE.BoxGeometry(0.09, 0.02, 0.09);
-    collar.translate(x, 0.24, -1.28);
+    const collar = new THREE.BoxGeometry(0.088, 0.014, 0.088);
+    collar.translate(x, 0.242, -1.28);
     tideSilt.push(collar);
   }
   scene.registerProp(
     'tide-silt',
     meshOf('TideSilt', mergeGeometries(tideSilt, false) ?? tideSilt[0], MAT.tideSilt)
   );
+
+  /**
+   * The puddle, which is what should have been here in the first place.
+   *
+   * Two rounds of making the tidemark legible - widening the stain, adding a silt crust,
+   * reframing the camera twice - and the answer to "where is the water" was still that
+   * there was none. A stain is a record of water; a puddle IS water, and the question was
+   * always the literal one.
+   *
+   * It does not contradict her. She says it floods every spring and has been fine since:
+   * this is not a flood, it is the damp that never quite leaves a stone floor below the
+   * waterline, lying in the low corner under the shelf where it would actually collect.
+   * That is also why it is in THAT corner rather than under the bench - the evidence and
+   * the tidemark belong to the same place, so one camera holds both.
+   *
+   * The same shader as Vasile's cellar, at a fifth of the ripple's business, because
+   * standing water in a corner moves when the room does and not otherwise.
+   */
+  const puddle = createFloodwater('#1a2428');
+  const puddleGeo = new THREE.CircleGeometry(0.62, 20);
+  puddleGeo.rotateX(-Math.PI / 2);
+  puddleGeo.scale(1.35, 1, 0.85);
+  puddleGeo.translate(-1.95, 0.004, -1.16);
+  scene.registerProp('puddle', meshOf('Puddle', puddleGeo, puddle.material), {
+    idle: (deltaTime) => puddle.update(deltaTime * 0.2),
+  });
+
+  /*
+   * A damp fringe round it. Water on stone does not have an edge - it has a margin where
+   * the floor is dark and wet without anything standing on it, and that margin is most of
+   * what stops a puddle reading as a sheet of glass laid on the ground.
+   */
+  const damp = new THREE.CircleGeometry(0.78, 20);
+  damp.rotateX(-Math.PI / 2);
+  damp.scale(1.35, 1, 0.85);
+  damp.translate(-1.95, 0.002, -1.16);
+  scene.registerProp('puddle-damp', meshOf('PuddleDamp', damp, MAT.tideStain));
   scene.registerProp(
     'tide-line',
     meshOf('TideLine', mergeGeometries(tideMarks, false) ?? tideMarks[0], MAT.tideStain)
