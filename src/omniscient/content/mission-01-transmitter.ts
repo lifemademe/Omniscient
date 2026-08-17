@@ -221,7 +221,7 @@ export const MISSION_01: MissionDefinition = {
         },
         INSPECT_CONNECTOR: {
           to: 'connector-found',
-          environment: 'prop.rotate:transmitter-rear,prop.point:contact',
+          environment: 'camera.push-in:transmitter,prop.rotate:transmitter-rear,prop.point:contact',
         },
         ASK_SUPPLY: {
           to: 'supply',
@@ -233,7 +233,7 @@ export const MISSION_01: MissionDefinition = {
         },
         REMOVE_POWER: {
           to: 'power-off-early',
-          environment: 'prop.toggle:mains-switch,prop.point:contact',
+          environment: 'camera.pan:default,prop.toggle:mains-switch,prop.point:contact',
         },
         ADMIT_UNCERTAINTY: { to: 'uncertain', environment: 'prop.point:contact' },
       },
@@ -252,10 +252,10 @@ export const MISSION_01: MissionDefinition = {
       ],
       on: {
         INSPECT_UNIT: { to: 'unit-overview', environment: 'camera.push-in:transmitter' },
-        INSPECT_CONNECTOR: { to: 'connector-found', environment: 'prop.rotate:transmitter-rear' },
+        INSPECT_CONNECTOR: { to: 'connector-found', environment: 'camera.push-in:transmitter,prop.rotate:transmitter-rear' },
         ASK_SUPPLY: { to: 'supply' },
         ASK_HISTORY: { to: 'history' },
-        REMOVE_POWER: { to: 'power-off-early', environment: 'prop.toggle:mains-switch' },
+        REMOVE_POWER: { to: 'power-off-early', environment: 'camera.pan:default,prop.toggle:mains-switch' },
         ADMIT_UNCERTAINTY: { to: 'uncertain' },
       },
       onUnrecognised: { to: 'clarify' },
@@ -271,7 +271,7 @@ export const MISSION_01: MissionDefinition = {
       suggest: ['look at the back of the set', 'describe the set to me', 'what happened to it recently'],
       on: {
         INSPECT_UNIT: { to: 'unit-overview', environment: 'camera.push-in:transmitter' },
-        INSPECT_CONNECTOR: { to: 'connector-found', environment: 'prop.rotate:transmitter-rear' },
+        INSPECT_CONNECTOR: { to: 'connector-found', environment: 'camera.push-in:transmitter,prop.rotate:transmitter-rear' },
         ASK_SUPPLY: { to: 'supply' },
         ASK_HISTORY: { to: 'history' },
       },
@@ -292,12 +292,12 @@ export const MISSION_01: MissionDefinition = {
       on: {
         INSPECT_CONNECTOR: {
           to: 'connector-found',
-          environment: 'prop.rotate:transmitter-rear',
+          environment: 'camera.push-in:transmitter,prop.rotate:transmitter-rear',
         },
         ASK_HISTORY: { to: 'history' },
         REMOVE_POWER: {
           to: 'power-off-early',
-          environment: 'prop.toggle:mains-switch',
+          environment: 'camera.pan:default,prop.toggle:mains-switch',
         },
       },
       onUnrecognised: { to: 'clarify' },
@@ -316,9 +316,9 @@ export const MISSION_01: MissionDefinition = {
       on: {
         INSPECT_CONNECTOR: {
           to: 'connector-found',
-          environment: 'prop.rotate:transmitter-rear',
+          environment: 'camera.push-in:transmitter,prop.rotate:transmitter-rear',
         },
-        REMOVE_POWER: { to: 'power-off-early', environment: 'prop.toggle:mains-switch' },
+        REMOVE_POWER: { to: 'power-off-early', environment: 'camera.pan:default,prop.toggle:mains-switch' },
       },
       onUnrecognised: { to: 'clarify' },
     },
@@ -340,11 +340,11 @@ export const MISSION_01: MissionDefinition = {
       on: {
         INSPECT_CONNECTOR: {
           to: 'connector-found',
-          environment: 'prop.rotate:transmitter-rear',
+          environment: 'camera.push-in:transmitter,prop.rotate:transmitter-rear',
         },
         INSPECT_UNIT: { to: 'unit-overview', environment: 'camera.push-in:transmitter' },
         ASK_HISTORY: { to: 'history' },
-        REMOVE_POWER: { to: 'power-off-early', environment: 'prop.toggle:mains-switch' },
+        REMOVE_POWER: { to: 'power-off-early', environment: 'camera.pan:default,prop.toggle:mains-switch' },
       },
       onUnrecognised: { to: 'clarify' },
     },
@@ -367,12 +367,12 @@ export const MISSION_01: MissionDefinition = {
         REMOVE_POWER: {
           to: 'power-off',
           learn: [FACT_CONNECTOR_CORROSION],
-          environment: 'prop.toggle:mains-switch',
+          environment: 'camera.pan:default,prop.toggle:mains-switch',
         },
         CLEAN_LIVE: {
           to: 'arc',
           learn: [FACT_CONNECTOR_CORROSION],
-          environment: 'prop.spark:connector-b',
+          environment: 'camera.push-in:transmitter,prop.spark:connector-b',
           vfx: 'SparkVFX',
         },
         ASK_HISTORY: { to: 'history' },
@@ -394,7 +394,7 @@ export const MISSION_01: MissionDefinition = {
         INSPECT_CONNECTOR: {
           to: 'connector-found-safe',
           learn: [FACT_SHARED_POWER_FEED],
-          environment: 'prop.rotate:transmitter-rear',
+          environment: 'camera.push-in:transmitter,prop.rotate:transmitter-rear',
         },
         INSPECT_UNIT: { to: 'unit-overview' },
         ASK_SUPPLY: { to: 'supply' },
@@ -414,7 +414,7 @@ export const MISSION_01: MissionDefinition = {
         CLEAN_CONNECTOR: {
           to: 'cleaned',
           learn: [FACT_CONNECTOR_CORROSION],
-          environment: 'prop.clean:connector-b',
+          environment: 'camera.push-in:transmitter,prop.clean:connector-b',
         },
       },
       onUnrecognised: { to: 'clarify' },
@@ -465,7 +465,7 @@ export const MISSION_01: MissionDefinition = {
       on: {
         CLEAN_CONNECTOR: {
           to: 'cleaned',
-          environment: 'prop.clean:connector-b',
+          environment: 'camera.push-in:transmitter,prop.clean:connector-b',
         },
       },
       onUnrecognised: { to: 'clarify' },
@@ -486,7 +486,7 @@ export const MISSION_01: MissionDefinition = {
          */
         TEST_TRANSMIT: {
           to: 'solved',
-          environment: 'prop.toggle:mains-switch,prop.nod:contact',
+          environment: 'camera.pan:default,prop.toggle:mains-switch,prop.nod:contact',
           vfx: 'CircuitPulseVFX',
         },
       },

@@ -531,6 +531,18 @@ export class ContactScene extends ENGINE.SceneNode {
    * A camera cue among them still returns its shot, because the caller needs one result -
    * the LAST one wins, which is the only sane rule when a beat asks for two shots and also
    * the one that never comes up, since no beat has a reason to.
+   *
+   * ## A prop cue is not a camera cue, and nothing brings the camera back on its own
+   *
+   * Worth stating because it shipped. `prop.rotate:transmitter-rear` turns the set round
+   * and says nothing about where anybody is looking; from the opening beat that is fine,
+   * because the camera is already on the set. Reached from the beat that panned to the
+   * floor, it rotated the radio out of shot and left the player looking at a puddle - for
+   * the rest of the mission, because no later transition aimed the camera either.
+   *
+   * The camera stays where it was last sent. So a transition that acts on a prop the
+   * player has to SEE must carry the shot that holds it, in the same cue. That is most of
+   * what the comma is for.
    */
   public applyCue(cue: string): CueResult {
     if (cue.includes(',')) {
