@@ -284,6 +284,20 @@ export const MAT = {
    */
   tideStain: standard('#41453a', 0.98),
   /**
+   * The dried silt at a high-water line - the pale half of a tidemark.
+   *
+   * `MAT.tideStain` is 32 luma below `MAT.wall` in albedo, which is a real difference on
+   * paper and none at all in Mirela's back corner, where the work lamp does not reach and
+   * both collapse to near-black. Asked about directly: the camera was finally pointed at
+   * the flood evidence and there was still nothing to see.
+   *
+   * Dark-on-dark cannot be rescued by framing, so the mark gains its other half. A real
+   * tidemark is a stain BELOW the line and a crust of dried silt AT it, and the crust is
+   * the part that reads: pale against a dark wall works at any light level, which is the
+   * whole reason to reach for it rather than for another lamp.
+   */
+  tideSilt: standard('#c0b49a', 0.99),
+  /**
    * Equipment housings - the crackle-finish grey-green of every field radio ever made.
    *
    * §187 requires the hero prop to stay legible against its environment. The transmitter

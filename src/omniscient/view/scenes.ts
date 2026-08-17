@@ -437,21 +437,41 @@ function buildRepairShop(scene: ContactScene): void {
    * more than one high-water mark and they never land in the same place twice.
    */
   const tideMarks: THREE.BufferGeometry[] = [];
-  for (const [height, thickness] of [
-    [0.26, 0.035],
-    [0.19, 0.02],
+  const tideSilt: THREE.BufferGeometry[] = [];
+  /*
+   * A broad stain UNDER each line rather than a thin band at it. Water that stands a
+   * hand's depth for a week discolours everything it covered, and a 3.5cm stripe reads as
+   * a stripe somebody painted - which is what it looked like, on the rare occasions the
+   * camera was pointed at it at all.
+   */
+  for (const [height, depth] of [
+    [0.26, 0.2],
+    [0.19, 0.13],
   ] as const) {
-    const back = new THREE.BoxGeometry(8, thickness, 0.02);
-    back.translate(0, height, -1.815);
-    tideMarks.push(back);
+    const stain = new THREE.BoxGeometry(8, depth, 0.02);
+    stain.translate(0, height - depth / 2, -1.815);
+    tideMarks.push(stain);
+
+    // And the crust at the top of it, which is the part that actually reads.
+    const silt = new THREE.BoxGeometry(8, 0.022, 0.024);
+    silt.translate(0, height, -1.813);
+    tideSilt.push(silt);
   }
   // Round the corner and onto the shelf's legs, so it reads as a level the whole room
   // sat under rather than a stripe painted on one wall.
   for (const x of [-2.35, -1.85]) {
-    const post = new THREE.BoxGeometry(0.08, 0.03, 0.02);
-    post.translate(x, 0.24, -1.28);
+    const post = new THREE.BoxGeometry(0.085, 0.22, 0.085);
+    post.translate(x, 0.13, -1.28);
     tideMarks.push(post);
+
+    const collar = new THREE.BoxGeometry(0.09, 0.02, 0.09);
+    collar.translate(x, 0.24, -1.28);
+    tideSilt.push(collar);
   }
+  scene.registerProp(
+    'tide-silt',
+    meshOf('TideSilt', mergeGeometries(tideSilt, false) ?? tideSilt[0], MAT.tideSilt)
+  );
   scene.registerProp(
     'tide-line',
     meshOf('TideLine', mergeGeometries(tideMarks, false) ?? tideMarks[0], MAT.tideStain)
@@ -1283,8 +1303,18 @@ function buildRepairShop(scene: ContactScene): void {
    * the bench's near face the sightline is at x -1.37, clear of its -1.2 edge.
    */
   scene.registerShot('workshop-floor', {
-    position: new THREE.Vector3(-0.6, 0.95, 1.15),
-    target: new THREE.Vector3(-2.3, 0.26, -1.5),
+    /*
+     * Closer and lower, once the reframe was checked on screen. At 2.9 units back the
+     * evidence was two small posts in the upper third and the lower sixty per cent of the
+     * frame was bare floor - the camera was pointed at the right corner and still mostly
+     * showing nothing. 1.8 units puts the soaked posts across the middle of the shot.
+     *
+     * The wall bands are not in this view and cannot be: the shelf stands at z -1.6 to
+     * -1.2 directly in front of the wall at -1.815. The posts on its legs ARE the evidence
+     * from this angle, which is why they got the silt crust too.
+     */
+    position: new THREE.Vector3(-1.45, 0.6, 0.25),
+    target: new THREE.Vector3(-2.15, 0.24, -1.35),
     duration: 2.4,
   });
   /**
@@ -3569,15 +3599,27 @@ function buildClearedHouse(scene: ContactScene): void {
 
   // The same water, the same height, matched to the repair shop on purpose. Two bands,
   // because a room that floods every spring has more than one high-water mark.
+  // Same treatment as the repair shop's: a broad stain under each line and a pale crust
+  // at it. Dark-on-dark is invisible in a room lit by one bulb, and this mark is the
+  // reason the records are gone.
   const tide: THREE.BufferGeometry[] = [];
-  for (const [height, thickness] of [
-    [0.26, 0.035],
-    [0.19, 0.02],
+  const tideCrust: THREE.BufferGeometry[] = [];
+  for (const [height, depth] of [
+    [0.26, 0.2],
+    [0.19, 0.13],
   ] as const) {
-    const band = new THREE.BoxGeometry(7, thickness, 0.02);
-    band.translate(0, height, -2.015);
+    const band = new THREE.BoxGeometry(7, depth, 0.02);
+    band.translate(0, height - depth / 2, -2.015);
     tide.push(band);
+
+    const crust = new THREE.BoxGeometry(7, 0.022, 0.024);
+    crust.translate(0, height, -2.013);
+    tideCrust.push(crust);
   }
+  scene.registerProp(
+    'tide-silt',
+    meshOf('TideSilt', mergeGeometries(tideCrust, false) ?? tideCrust[0], MAT.tideSilt)
+  );
   scene.registerProp(
     'tide-line',
     meshOf('TideLine', mergeGeometries(tide, false) ?? tide[0], MAT.tideStain)
