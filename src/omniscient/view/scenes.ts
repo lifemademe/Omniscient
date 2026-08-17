@@ -629,6 +629,10 @@ function buildRepairShop(scene: ContactScene): void {
     )
   );
   setRoot.add(meshOf('SetFittings', set.fittings, MAT.metal));
+  // The vents, in the darkest thing the palette has. See PropParts.recesses: a slot only
+  // reads as a hole while it is darker than the panel around it, and the certainty law
+  // pulls this whole prop warm once the player has been told what it is.
+  if (set.recesses) setRoot.add(meshOf('SetVents', set.recesses, MAT.dark));
 
   // The rating plate, under the controls on the front panel.
   const plate = createRatingPlate();

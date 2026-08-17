@@ -19,6 +19,17 @@ export interface PropParts {
   /** Secondary material: metal fittings, brackets, cable. */
   fittings: THREE.BufferGeometry;
   /**
+   * Optional third part, for anything that has to stay DARK.
+   *
+   * Two materials were enough while every prop sat at its authored colour. They stopped
+   * being enough once the certainty law started pulling `inked` props warm: on the
+   * Kestrel-3 the case, the connectors and the ventilation slots all arrive at the same
+   * warm brown, and a slot that is the colour of the panel around it is not a slot, it is
+   * a bar. A hole reads as a hole because it is darker than everything near it, and the
+   * only way to keep that through a hue pull is to start much further down.
+   */
+  recesses?: THREE.BufferGeometry;
+  /**
    * Named anchor points in local space, so cue handlers can attach effects or move
    * sub-objects without hard-coding coordinates in mission content.
    */
@@ -117,22 +128,66 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
   connectorB.translate(width * 0.16 + jitter(rng, 0.01), height * 0.5, -depth / 2 - 0.025);
   fittings.push(connectorB);
 
-  // Ventilation, uneven so the object looks used rather than extruded.
-  //
-  // These are fittings rather than body, and that is a texturing decision as much as a
-  // material one: the shell carries a generated map keyed to box UVs, where each face
-  // owns the whole 0..1 square. Merging a 12mm slot into the same geometry would give
-  // that slot a full copy of a texture built for a half-metre panel, and the crackle
-  // would come out the size of the vent. Kept separate, the shell stays one clean box.
-  for (let i = 0; i < 5; i++) {
-    const slot = new THREE.BoxGeometry(width * 0.5 * range(rng, 0.9, 1), 0.012, 0.02);
-    slot.translate(0, height * (0.2 + i * 0.12), -depth / 2 + 0.01);
-    fittings.push(slot);
+  /**
+   * Ventilation, uneven so the object looks used rather than extruded.
+   *
+   * These are fittings rather than body, and that is a texturing decision as much as a
+   * material one: the shell carries a generated map keyed to box UVs, where each face
+   * owns the whole 0..1 square. Merging a 12mm slot into the same geometry would give
+   * that slot a full copy of a texture built for a half-metre panel, and the crackle
+   * would come out the size of the vent. Kept separate, the shell stays one clean box.
+   *
+   * ## They were inside the box
+   *
+   * Built at `-depth/2 + 0.01` and 20mm deep, which puts the outer face exactly coplanar
+   * with the shell's rear face and the rest of the slot buried in it. Coplanar faces
+   * z-fight, and the depth test settled in favour of the shell, so the only surface detail
+   * on the back of the Kestrel-3 has never been drawn. It cost nothing to render and
+   * showed nothing, which is why nobody caught it: there is no failure to see.
+   *
+   * That matters more than it sounds. Two beats into the mission the camera goes to an
+   * inspection shot of this exact face - the player is asked to look at the back of the
+   * set, and the back of the set was a bare panel with two plugs on it.
+   *
+   * Now they stand 4mm proud. Proud rather than recessed for the reason the mill road's
+   * repairs are laid on top of the tarmac rather than cut into it: this project casts no
+   * shadows, and a recess with no shadow in it is not a recess, it is a slightly different
+   * colour. In `MAT.metal` against the pale case they read as slots.
+   *
+   * Moved above the connectors as well. Centred on the panel they ran straight through
+   * both plugs - the geometry intersected, so the one feature the mission turns on was
+   * growing out of a louvre.
+   */
+  const recesses: THREE.BufferGeometry[] = [];
+  const VENTS = 6;
+  for (let i = 0; i < VENTS; i++) {
+    const slot = new THREE.BoxGeometry(width * 0.46 * range(rng, 0.92, 1), 0.005, 0.010);
+    slot.translate(jitter(rng, 0.004), height * (0.62 + i * 0.055), -depth / 2 - 0.003);
+    recesses.push(slot);
+  }
+
+  /**
+   * The screws the back cover came off with.
+   *
+   * `set-panel` in the repair shop is that cover, unscrewed and propped against the bench,
+   * and Mirela's first line is that she has the back off already. The set it came off had
+   * no fixings anywhere on it. Four captive screws at the corners of the rear face is the
+   * whole fix, and it does the same job the empty curtain rail does in the cleared house:
+   * it makes a thing that is missing legible by showing what it was attached to.
+   */
+  for (const sx of [-1, 1] as const) {
+    for (const sy of [0.16, 0.84] as const) {
+      const screw = new THREE.CylinderGeometry(0.005, 0.005, 0.006, 6);
+      screw.rotateX(Math.PI / 2);
+      screw.translate(sx * width * 0.44, height * sy, -depth / 2 - 0.002);
+      fittings.push(screw);
+    }
   }
 
   return {
     body: mergeGeometries(body, false) ?? shell,
     fittings: mergeGeometries(fittings, false) ?? connectorB,
+    recesses: mergeGeometries(recesses, false) ?? undefined,
     anchors: {
       connectorB: new THREE.Vector3(width * 0.16, height * 0.5, -depth / 2 - 0.05),
       meter: new THREE.Vector3(-width * 0.22, height * 0.55, depth / 2 + 0.02),
