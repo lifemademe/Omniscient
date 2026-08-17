@@ -185,6 +185,41 @@ export const MISSION_08: MissionDefinition = {
       boosts: [['every', 'all', 'each', 'red', 'sedan']],
       priority: 5,
     },
+
+    /*
+     * The intervention menu at the bridge.
+     *
+     * Priorities above STOP_EVERY_RED_CAR's 5, because these are far more specific and
+     * several of them share verbs with it - "stop the car with the lights" must not be read
+     * as "stop every car". Specific beats general when both match.
+     */
+    {
+      id: 'CHANGE_THE_LIGHTS',
+      requires: [['light', 'lights', 'signal', 'signals', 'traffic light', 'red light']],
+      boosts: [['change', 'turn', 'hold', 'switch', 'bridge', 'junction']],
+      priority: 6,
+    },
+    {
+      id: 'CALL_HIS_PHONE',
+      requires: [['call', 'phone', 'ring', 'dial', 'number', 'text', 'message']],
+      boosts: [['his', 'him', 'file', 'mobile']],
+      // Above the lights, because "call and tell him the light is red" is a call.
+      priority: 7,
+    },
+    {
+      /**
+       * Doing nothing, phrased as an action.
+       *
+       * It has to be on the menu as an option somebody chooses, not as the absence of a
+       * choice - a player who types nothing has not decided anything, and this beat is
+       * entirely about deciding. It is also the only one of the three that describes what
+       * the machine is actually going to do either way.
+       */
+      id: 'WATCH_ONLY',
+      requires: [['watch', 'nothing', 'wait', 'follow', 'observe', 'tell him', 'where']],
+      boosts: [['just', 'only', 'do not', 'dont', 'leave', 'let']],
+      priority: 8,
+    },
   ],
 
   openingBeatId: 'call',
@@ -400,13 +435,64 @@ export const MISSION_08: MissionDefinition = {
         'The bridge. He is going to the bridge - that is the only thing at the end of that '
         + 'road. I can be there in four minutes and he cannot turn round on it.',
       tempo: Tempo.Respond,
+      /**
+       * The menu, which is the point of the whole mission.
+       *
+       * Lucian is four minutes away and the machine is already there - it has been riding
+       * the cameras ahead of him for three phases. So for four minutes the machine is the
+       * only thing watching a car it could, technically, interfere with. And here is a list
+       * of ways it could.
+       *
+       * Every one of them is real. The lights are on the same municipal network the cameras
+       * are on. The number is in the file Lucian read out. None of them are bluffs, and that
+       * is what makes the moment work: the horror is not that the machine might do something
+       * it should not, it is that a menu of things it COULD do exists at all, offered as
+       * casually as every other suggestion this console has made all game.
+       *
+       * They all lead to the same place, because none of them are what stops the car.
+       */
+      suggest: [
+        'change the lights at the bridge',
+        'call the number in his file',
+        'just watch, and tell him where',
+      ],
+      on: {
+        CHANGE_THE_LIGHTS: { to: 'arrival' },
+        CALL_HIS_PHONE: { to: 'arrival' },
+        WATCH_ONLY: { to: 'arrival' },
+        // Still reachable at the last beat, because §163 does not get switched off for the
+        // ending. A person who has been told to sweep the district can still say it here.
+        STOP_EVERY_RED_CAR: { to: 'sweep' },
+      },
+      onUnrecognised: { to: 'bridge' },
+    },
+
+    {
+      /**
+       * The machine arrives, and only decides.
+       *
+       * Whatever was chosen, the console did not do it - and the beat does not scold anybody
+       * for choosing. §159: no red X. The answer to "change the lights" is not "you monster",
+       * it is the flat mechanical truth that this console has no hands, which is the sentence
+       * the whole game has been building toward and the first time it has ever mattered that
+       * it is true.
+       *
+       * §157 all the way down: four minutes of unsupervised access to a city changed nothing
+       * about how this mission resolves. The car stops because a man drove to a bridge.
+       */
+      id: 'arrival',
+      say:
+        'Are you still on it? ... Four minutes. Alright. Talk to me - what is it doing? '
+        + 'Is he still moving?',
+      tempo: Tempo.Respond,
       suggest: [],
       on: {},
       outcome: {
         kind: OutcomeKind.Solved,
         say:
           'Target stopped. We have him. One car, one stop, nobody else touched. '
-          + '... I did not know your system could do that.',
+          + '... You were on that bridge before I was. Four minutes, and you just watched. '
+          + 'I did not know your system could do that. Either of those things.',
         trust: 2,
         connects: [
           {
