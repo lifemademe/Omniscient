@@ -1861,7 +1861,20 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     if (this.fog) {
       const airless = next?.atmosphere === false;
-      this.fog.setFogNear(airless ? 4000 : FOG_NEAR).setFogFar(airless ? 8000 : FOG_FAR);
+      /**
+       * A scene's own air, when it has stated one. See ContactScene.air.
+       *
+       * Restored to the shared values rather than left where the last scene put them, for
+       * the same reason the near/far are pushed instead of switched: the fog node is global
+       * and a room that retunes it owes the next room the default back. A scene that sets
+       * dark air and then hands over to Mirela's shop must not take the shop's daylight
+       * haze with it.
+       */
+      const air = next?.air ?? null;
+      this.fog
+        .setFogColor(new THREE.Color(air?.color ?? LIGHT.haze))
+        .setFogNear(airless ? 4000 : (air?.near ?? FOG_NEAR))
+        .setFogFar(airless ? 8000 : (air?.far ?? FOG_FAR));
     }
 
     /**

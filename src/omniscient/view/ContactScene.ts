@@ -369,6 +369,19 @@ export class ContactScene extends ENGINE.SceneNode {
     this.finishers.push(finish);
   }
 
+  /**
+   * The node registered under an id, or null if nothing claimed it.
+   *
+   * For finishers that need to touch SOME of a room rather than all of it. The alternative
+   * - capturing every node in a local variable on the way past - means a builder holding
+   * twenty references it does not otherwise use, and a finisher that silently misses a prop
+   * somebody added later. Asking by id fails loudly instead: the id is right there in the
+   * registerProp call above it.
+   */
+  public nodeFor(id: string): ENGINE.SceneNode | null {
+    return this.props.get(id)?.node ?? null;
+  }
+
   public scanTargets(): { id: string; node: ENGINE.SceneNode }[] {
     const out: { id: string; node: ENGINE.SceneNode }[] = [];
     for (const [id, prop] of this.props) {
@@ -400,6 +413,25 @@ export class ContactScene extends ENGINE.SceneNode {
    * out a uniform blue-grey with its brightest pixel at 58 against a background of 30.
    */
   public atmosphere = true;
+
+  /**
+   * This diorama's own air, when the shared one is the wrong air.
+   *
+   * The rig's haze is `#4c525c` reaching full strength at 26 metres, and it was tuned for
+   * rooms - at that scale it is depth and it is right. On the mill road it is the single
+   * worst thing in the frame, and measuring rather than looking is what found it: the
+   * palest large mass in a midnight scene came out at luma 48 against a wall at 7, and it
+   * was not a surface at all. It was thirteen metres of fog, at a daylight value, painted
+   * over exactly the part of the road the machine knows least about.
+   *
+   * A boolean could not fix that. `atmosphere = false` pushes the fog to 4000 and takes the
+   * depth with it, which on a thirty-nine metre corridor is the other failure - the far end
+   * arrives at the same value as the near end and the road stops receding. What a night
+   * scene needs is not less fog, it is fog the colour of the night.
+   *
+   * Null means the shared air, which is still correct for six of the eight.
+   */
+  public air: { color: string; near: number; far: number } | null = null;
 
   private aimHandler: ((to: number) => void) | null = null;
 

@@ -35,6 +35,7 @@ import { createBoxLabel, createCorrosionBloom, createRatingPlate } from '../art/
 import { decorMesh } from '../art/mesh.js';
 import { CERTAINTY } from '../art/certainty.js';
 import { createFloodwater } from '../art/floodwater.js';
+import { createTorchlight } from '../art/torchlight.js';
 import { applyWaterline } from '../art/waterline.js';
 import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { placeRigged } from './riggedContact.js';
@@ -4743,6 +4744,17 @@ function buildMillRoad(scene: ContactScene): void {
   // Same trick as Dorin's door: one unlit plane several shades above black, so the mill
   // roofline and the hedge have something to be a silhouette against. A night set on pure
   // black reads as an unfinished one.
+  /**
+   * Air the colour of the night, reaching further.
+   *
+   * The shared haze is a daylight grey at full strength by 26 metres, which on a corridor
+   * this long put a pale wall across the far half of every shot - measured at luma 48
+   * against a mill wall at 7, and it was not the wall, it was the fog on top of it. See
+   * ContactScene.air. Slightly darker than the night plane behind it, so the distance
+   * still recedes and does so into the dark rather than into a screen of grey.
+   */
+  scene.air = { color: '#0d131c', near: 6, far: 42 };
+
   const night = new THREE.PlaneGeometry(90, 44);
   night.translate(0, 12, FAR - 6);
   scene.registerProp('night', meshOf('Night', night, MAT.nightAir));
@@ -5121,15 +5133,53 @@ function buildMillRoad(scene: ContactScene): void {
     torchAim = TORCH_REST - Math.max(-1, Math.min(1, to)) * 0.45;
   });
 
+  /**
+   * The guess, aimed by the same node that aims the light.
+   *
+   * ART_DIRECTION §5 asks for everything outside the beam to be tier 1 by diegetic right,
+   * and art/torchlight.ts is that: outside the cone the set drains to the tier-1 fill and
+   * picks up a metre grid in cyan. Which means aiming the torch is now the act that decides
+   * what the machine knows, not just what is lit.
+   *
+   * The cone is wider than the light's own 0.4 - see the note in createTorchlight about why
+   * the two edges must not land on the same pixel - and the range is longer than the light's
+   * 14, because what she can make out at the edge of a beam carries further than what the
+   * beam actually illuminates.
+   */
+  const guess = createTorchlight({ angle: 0.56, penumbra: 0.55, range: 17 });
+
+  const beamFrom = new THREE.Vector3();
+  const beamDir = new THREE.Vector3();
+  const TORCH_LENS = new THREE.Vector3(0, 0, -0.2);
+
   scene.registerProp('torch', torchRoot, {
     // Inked: Her father's torch. The only light on the road.
     inked: true,
     anchors: { default: new THREE.Vector3(0, 0, -0.2) },
     idle: (deltaTime, node) => {
       const gap = torchAim - node.rotation.y;
-      if (Math.abs(gap) < 0.0005) return;
-      const step = Math.min(Math.abs(gap), 1.4 * deltaTime) * Math.sign(gap);
-      node.rotation.set(node.rotation.x, node.rotation.y + step, node.rotation.z);
+      if (Math.abs(gap) > 0.0005) {
+        const step = Math.min(Math.abs(gap), 1.4 * deltaTime) * Math.sign(gap);
+        node.rotation.set(node.rotation.x, node.rotation.y + step, node.rotation.z);
+      }
+
+      /**
+       * Read off the torch's own matrix rather than rebuilt from `torchAim`.
+       *
+       * The aim is a target the body is still travelling toward, so driving the shader
+       * from it would put the guess where the beam is GOING while the light is still on
+       * its way - the two would disagree for the whole of the swing, which is the only
+       * time anybody is looking at either. Taking both from the matrix means they cannot
+       * disagree by construction.
+       *
+       * -Z because that is the way the barrel is built and the way the light was rotated a
+       * half turn to face. One frame stale, since matrixWorld is settled during render and
+       * this is a tick - which at 1.4 rad/s is under a tenth of a degree.
+       */
+      const object = node as unknown as THREE.Object3D;
+      beamFrom.copy(TORCH_LENS).applyMatrix4(object.matrixWorld);
+      beamDir.set(0, 0, -1).transformDirection(object.matrixWorld);
+      guess.aim(beamFrom, beamDir);
     },
   });
 
@@ -5163,8 +5213,36 @@ function buildMillRoad(scene: ContactScene): void {
     clip: true,
   });
 
+  /**
+   * He arrives after the finisher has already run.
+   *
+   * `placeRigged` loads a GLB, so his root is empty for the first few frames and a
+   * traversal of it claims nothing. Everything else in this room is geometry built in the
+   * builder and is there by the time the pass runs; he is the one prop that is not, and he
+   * is also the one the effect exists for - a shape twenty metres back that she cannot see
+   * is the whole reason the machine is guessing at anything.
+   *
+   * So the claim waits for his bones, which `placeRigged` fills in only once the mesh has
+   * really loaded, and then runs once.
+   *
+   * Waiting on the CLAIM COUNT instead was the obvious version and it was wrong - it
+   * reported success and did nothing, which is the failure mode worth writing down. The
+   * model node owns an empty mesh from the moment it is created, so the very first traversal
+   * found one material, returned 1, latched the flag and never looked again. The skinned
+   * meshes turned up half a second later to a pass that had already declared itself
+   * finished. A count is evidence that something was claimed; it is not evidence that the
+   * thing you wanted was.
+   */
+  let followerClaimed = false;
+
   scene.registerProp('follower', follower.root, {
-    idle: follower.idle,
+    idle: (deltaTime, node) => {
+      follower.idle(deltaTime);
+      if (!followerClaimed && Object.keys(follower.bones).length > 0) {
+        guess.claim(node as unknown as THREE.Object3D);
+        followerClaimed = true;
+      }
+    },
     actions: {
       /**
        * He breaks off.
@@ -5344,6 +5422,42 @@ function buildMillRoad(scene: ContactScene): void {
     position: new THREE.Vector3(0.9, 1.6, -3.4),
     target: new THREE.Vector3(2.0, 1.2, -9.3),
     duration: 2.0,
+  });
+
+  /**
+   * What the machine is allowed to be sure of, and what it is only inferring.
+   *
+   * A list rather than the whole scene, and the exclusions are the argument:
+   *
+   *   - **Sanda** is on the phone. Everything the machine knows about this road it knows
+   *     because she is describing it, so the one thing it is not guessing at is her.
+   *   - **The torch** is the instrument. Grading the light source by its own light is a
+   *     loop, and a torch that dims itself when it looks away is a bug with a rationale.
+   *   - **The follower** is deliberately IN the list, and he is the reason the effect
+   *     earns its place. He is the thing she cannot see, so he is the thing the machine
+   *     has only her word for - a grid-marked shape twenty metres back that resolves into
+   *     a man when, and only when, the beam finds him.
+   *   - **Night and hill** are unlit and skipped by the pass itself. The sky is not a
+   *     surface anybody is guessing at.
+   *
+   * The grid is turned down on the verge grass rather than off. It is a thousand instanced
+   * blades a couple of centimetres wide, and a metre grid across them lands as a line on
+   * roughly one blade in forty - which is not a grid, it is a sparkle. The drain still
+   * applies at full strength there, which is the half that matters: unlit grass going dark
+   * behind the beam is what makes the pool read as travelling.
+   */
+  scene.registerFinisher(() => {
+    for (const id of [
+      'road', 'patches', 'verge', 'stones-mill', 'stones-hedge',
+      'mill', 'windows', 'cut', 'hedge', 'whips', 'lamps', 'lamp-heads', 'follower',
+    ]) {
+      const node = scene.nodeFor(id);
+      if (node) guess.claim(node as unknown as THREE.Object3D);
+    }
+    for (const id of ['verge-grass-left', 'verge-grass-right']) {
+      const node = scene.nodeFor(id);
+      if (node) guess.claim(node as unknown as THREE.Object3D, { grid: 0.25 });
+    }
   });
 }
 

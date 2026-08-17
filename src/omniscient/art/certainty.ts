@@ -203,6 +203,25 @@ export function cloneKeepingShader(material: THREE.Material): THREE.Material {
       uniforms;
   }
 
+  /**
+   * Every other pass's claim, carried too.
+   *
+   * The passes that inject shader code all mark the material they own so they never do it
+   * twice, and the whole point of this function is that a clone keeps the injected code -
+   * so a clone that keeps the CODE and drops the CLAIM is the worst of both. The next run
+   * of that pass sees an unmarked material carrying its own shader, injects a second copy,
+   * and declares the same uniform twice.
+   *
+   * That failure does not show up at build and it does not show up on the first frame; it
+   * shows up as a room that will not compile a shader, mid-conversation, only where two
+   * passes overlap. It has already been paid for once - see the note on this function's own
+   * bookkeeping above - and the fix is to enumerate the marks rather than to remember.
+   */
+  for (const mark of ['waterlineOwned', 'waterlineLevel', 'torchlightOwned'] as const) {
+    const value = (material as unknown as Record<string, unknown>)[mark];
+    if (value !== undefined) (clone as unknown as Record<string, unknown>)[mark] = value;
+  }
+
   return clone;
 }
 
