@@ -55,26 +55,105 @@ export const CERTAINTY = {
 } as const;
 
 const COLD = new THREE.Color(ACCENT.data);
+/** The warm end of the law. Practical-lamp amber, not orange - see ACCENT. */
+const WARM = new THREE.Color(ACCENT.amber);
 
 interface Marked {
   certaintyBase?: THREE.Color;
   certaintyOwned?: boolean;
   certainty?: number;
+  /** Authored values, kept so repeated calls compute from the original and never drift. */
+  certaintyRoughness?: number;
+  certaintyMetalness?: number;
 }
 
 /**
- * How far a material is pulled toward cold, and how much saturation it keeps.
+ * Signed. Positive pulls cold, negative pulls warm, zero is the authored colour.
  *
- * Not linear. A prop at SHAPED (0.45) should read as clearly *machine* rather than as
- * slightly-off human, so the pull is biased toward cold in the lower half and releases
- * quickly in the upper: the moment somebody describes an object it should visibly warm.
- * `1 - c` alone made 0.45 look merely dull, which reads as bad lighting rather than as
- * missing knowledge - and "looks like a mistake" is the failure mode this whole direction
- * exists to avoid.
+ * The first version only ever cooled, and taken to its conclusion the whole room went grey:
+ * frame saturation fell to 0.248 and the radio - the one object at KNOWN, the one thing the
+ * player is here for - came out a pale box, because "not cooled" is not the same as warm.
+ * A law with only one direction cannot make a focal point; it can only fail to destroy one.
+ *
+ * So the scale has a neutral point at 0.7 and travels both ways from it. Below, colour
+ * drains and slides toward `ACCENT.data`. Above, it saturates and leans warm. An object
+ * somebody has just described does not merely stop being blue - it visibly comes to life,
+ * which is the reward the whole direction is built to pay.
+ *
+ * The 0.72 exponent shapes the cold half only: it keeps the SHAPED tier around 0.47 rather
+ * than 0.65, which was the difference between a cool room and a colourless one.
  */
-function pull(certainty: number): number {
+const NEUTRAL = 0.7;
+
+function signedPull(certainty: number): number {
   const c = Math.min(1, Math.max(0, certainty));
-  return Math.pow(1 - c, 0.72);
+  if (c <= NEUTRAL) return Math.pow(1 - c / NEUTRAL, 0.72);
+  return -((c - NEUTRAL) / (1 - NEUTRAL));
+}
+
+interface CertaintyUniforms {
+  uCertAmount: { value: number };
+  uCertCold: { value: THREE.Color };
+  uCertWarm: { value: THREE.Color };
+}
+
+/**
+ * Install the law into the material's shader, once.
+ *
+ * It has to happen here rather than on `material.color`, because colour is a *multiplier*
+ * on the map. Desaturating it cannot desaturate a texture - it can only dim it. The
+ * pegboard is the proof: at SHAPED its colour was halved in saturation and pulled a third
+ * of the way to cyan, and it came out the same amber, merely darker, still the largest
+ * warm mass in the frame while representing something the machine has not been told about.
+ *
+ * Injected after `map_fragment`, which is the first point where `diffuseColor` holds base
+ * colour times texture. Everything downstream - lighting, shadow, tone mapping - then sees
+ * the corrected albedo, so a cooled surface also bounces cool light, which multiplying a
+ * colour could never have done.
+ *
+ * Any existing `onBeforeCompile` is chained rather than replaced: the painterly pass uses
+ * one, and clobbering it would silently strip a whole other effect.
+ */
+function ensureShader(material: THREE.Material): CertaintyUniforms {
+  const marked = material as THREE.Material & { certaintyUniforms?: CertaintyUniforms };
+  if (marked.certaintyUniforms) return marked.certaintyUniforms;
+
+  const uniforms: CertaintyUniforms = {
+    uCertAmount: { value: 0 },
+    uCertCold: { value: COLD.clone() },
+    uCertWarm: { value: WARM.clone() },
+  };
+  marked.certaintyUniforms = uniforms;
+
+  const previous = material.onBeforeCompile?.bind(material);
+  material.onBeforeCompile = (shader, renderer) => {
+    previous?.(shader, renderer);
+    shader.uniforms.uCertAmount = uniforms.uCertAmount;
+    shader.uniforms.uCertCold = uniforms.uCertCold;
+    shader.uniforms.uCertWarm = uniforms.uCertWarm;
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        'void main() {',
+        'uniform float uCertAmount;\nuniform vec3 uCertCold;\nuniform vec3 uCertWarm;\nvoid main() {'
+      )
+      .replace(
+        '#include <map_fragment>',
+        [
+          '#include <map_fragment>',
+          '{',
+          '  float certCold = max(0.0, uCertAmount);',
+          '  float certWarm = max(0.0, -uCertAmount);',
+          '  float certLuma = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));',
+          '  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(certLuma), certCold * 0.55);',
+          '  diffuseColor.rgb = mix(diffuseColor.rgb, uCertCold, certCold * 0.5);',
+          '  diffuseColor.rgb = mix(diffuseColor.rgb, uCertWarm, certWarm * 0.15);',
+          '  diffuseColor.rgb = mix(vec3(certLuma), diffuseColor.rgb, 1.0 + certWarm * 0.6);',
+          '}',
+        ].join('\n')
+      );
+  };
+  material.needsUpdate = true;
+  return uniforms;
 }
 
 function applyToMaterial(material: THREE.Material, certainty: number): void {
@@ -82,18 +161,11 @@ function applyToMaterial(material: THREE.Material, certainty: number): void {
   if (!standard.color) return;
 
   standard.certaintyBase ??= standard.color.clone();
-  const base = standard.certaintyBase;
-  const amount = pull(certainty);
+  const amount = signedPull(certainty);
 
-  /*
-   * Desaturate first, then cool. The other order pulls toward cold and then bleeds the
-   * blue back out of it, so a fully-unknown object lands grey rather than cyan and the
-   * whole language stops reading.
-   */
-  const hsl = { h: 0, s: 0, l: 0 };
-  base.getHSL(hsl);
-  standard.color.setHSL(hsl.h, hsl.s * (1 - amount * 0.8), hsl.l);
-  standard.color.lerp(COLD, amount * 0.55);
+  // The colour law lives in the shader now - see ensureShader. The authored colour is left
+  // exactly as written, which also means this stays idempotent for free.
+  ensureShader(material).uCertAmount.value = amount;
 
   /*
    * Unknown things are matte. A specular highlight is information about a surface, and an
@@ -102,10 +174,10 @@ function applyToMaterial(material: THREE.Material, certainty: number): void {
    * most specific a shape can look while meaning nothing.
    */
   if (standard.roughness !== undefined) {
-    standard.roughness = Math.min(1, standard.roughness + amount * 0.35);
+    standard.roughness = Math.min(1, (standard.certaintyRoughness ??= standard.roughness) + Math.max(0, amount) * 0.35);
   }
   if (standard.metalness !== undefined) {
-    standard.metalness *= 1 - amount;
+    standard.metalness = (standard.certaintyMetalness ??= standard.metalness) * (1 - Math.max(0, amount));
   }
 
   /*
@@ -124,7 +196,7 @@ function applyToMaterial(material: THREE.Material, certainty: number): void {
    */
   if (standard.emissive) {
     const lift = Math.max(0, (certainty - 0.9) / 0.1) * 0.16;
-    standard.emissive.copy(base).multiplyScalar(lift);
+    standard.emissive.copy(standard.certaintyBase).multiplyScalar(lift);
   }
 
   /* Flat shading below SHAPED: this is the 90s CG tier and it should look like it. */
@@ -136,7 +208,6 @@ function applyToMaterial(material: THREE.Material, certainty: number): void {
 
   standard.certainty = certainty;
 }
-
 
 /**
  * The THREE.Mesh that actually draws, which on this engine is not the node you traversed.

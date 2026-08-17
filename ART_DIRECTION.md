@@ -82,8 +82,17 @@ The machine has no reason to believe it exists. Not rendered at all.
 
 **Warm is known. Cold is inferred.**
 
-Cold reference is `ACCENT.data` `#2f7391`. Every material lerps its base colour toward it by
-`(1 − certainty)`, and desaturates by the same amount. Nothing else needs to encode progress:
+The scale is **signed**, with a neutral point at certainty **0.7**. Below it, colour drains
+and slides toward `ACCENT.data`. Above it, chroma comes up and the colour leans toward
+`ACCENT.amber`. An object somebody has just described does not merely stop being blue — it
+visibly comes to life, which is the reward this whole direction exists to pay. A law with
+only one direction cannot build a focal point; it can only fail to destroy one.
+
+It is applied **in the shader**, after `map_fragment`, not on `material.color`. Colour is a
+multiplier on the texture: it can dim a map, never desaturate one. The pegboard proved it —
+halved in saturation and pulled a third toward cyan, it came out the same amber, merely
+darker. Injecting after the map means lighting, shadow and tone mapping all see the
+corrected albedo, so a cooled surface also bounces cool light. Nothing else needs to encode progress:
 the player's eye goes to the warmest thing in frame, and the warmest thing in frame is what
 they have earned.
 
