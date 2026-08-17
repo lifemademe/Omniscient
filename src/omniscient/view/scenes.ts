@@ -600,10 +600,31 @@ function buildRepairShop(scene: ContactScene): void {
       set.body,
       texturedFrom(MAT.equipment, {
         color: '#6a7268',
-        worn: '#a9a496',
+        /**
+         * Widened and lifted, for the shot the mission is actually spent in.
+         *
+         * The room-scale view is not where the player looks at this object. Two beats in,
+         * the camera goes to an inspection shot where the Kestrel-3 fills a third of the
+         * frame, and there it read as a plain cream box - the one prop in the game with a
+         * generated map on it, and no surface to speak of at the only distance anybody
+         * examines it from.
+         *
+         * The map was not broken, which is worth recording because it looked exactly like
+         * it was. Painting the base magenta and the wear band green put a clean green line
+         * along every arris: the texture, the UVs and the async material assignment were
+         * all fine. What was wrong was the amount. At `wear: 0.055` the band is about five
+         * percent of a face - correct at room scale, invisible at arm's length.
+         *
+         * surface.ts's own rule says wear is authored as a SHAPE, "a defined band with a
+         * ragged but clean boundary, which you can point at and call rubbed". You could
+         * not point at it. Now you can, and it is still a shape rather than grain - which
+         * is the line that keeps this inside the flat pass rather than sliding back into
+         * the crackle-enamel version that was deleted.
+         */
+        worn: '#bdb7a8',
         grime: '#3a3a2e',
         seed: 'kestrel-3-shell',
-        wear: 0.055,
+        wear: 0.085,
       })
     )
   );
