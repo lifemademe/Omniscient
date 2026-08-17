@@ -29,6 +29,7 @@ import { audio } from './audio/ConsoleAudio.js';
 import { installCursor } from './art/cursor.js';
 import { installRetro, setRetroLook } from './art/retro.js';
 import { ScanTargets } from './link/ScanTargets.js';
+import { installSceneJump } from './dev/SceneJump.js';
 import { playWarp } from './art/warp.js';
 import { applyShadowPolicy } from './art/shadows.js';
 import { SystemPanel } from './menu/SystemPanel.js';
@@ -432,6 +433,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
     installCursor();
 
     this.configureLook();
+
+    /*
+     * The way in to every room. See dev/SceneJump - this replaces the practice of editing
+     * the game to reach a scene, which has twice shipped a debug hook by accident.
+     */
+    const jumpContainer = this.getWorld()?.gameContainer;
+    if (jumpContainer) this.disposeSceneJump = installSceneJump(this, jumpContainer);
+
     void this.startSession();
 
     return true;
@@ -1798,6 +1807,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   /** False until the retro pass is confirmed registered - see tickPrePhysics. */
   private retroMounted = false;
+
+  private disposeSceneJump: (() => void) | null = null;
+
+  /**
+   * Mount a diorama and look at it, with none of the game in front of it.
+   *
+   * Deliberately not a session: no mission advances, no trust moves, nothing is marked
+   * answered. The console is hidden because the point is the room. A beat that only reads
+   * when jumped to is not a beat that reads.
+   */
+  public jumpToScene(sceneId: string): void {
+    this.phase = Phase.Contact;
+    this.globeScreen?.detach();
+    this.phone?.setVisible(false);
+    this.menu?.setEnabled(false);
+    this.mountScene(sceneId);
+  }
 
   /** The machine's own annotations over the diorama. Built on the first request. */
   private scan: ScanTargets | null = null;
