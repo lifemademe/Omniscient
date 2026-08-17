@@ -36,8 +36,29 @@ arrives as a **reward for listening**.
 
 ## 1. The certainty scale
 
-Every prop carries `certainty` in 0–1. It is authored per beat by the mission content, not
-guessed. Five tiers, and each one is a complete specification — no "somewhere between".
+Every prop carries `certainty` in 0–1. Five tiers, and each one is a complete specification
+— no "somewhere between".
+
+**How it rises, and where that is authored.** This said "authored per beat by the mission
+content" for months and no mission ever did it — a grep across all eight found zero
+references, so every room was graded once at build and never moved. The whole scale was
+static, tier 1 was permanent, and §3 could not fire in play.
+
+It is authored in the **scene**, not the mission. `SessionController` already reports what
+was learned; `ContactScene.learn` raises whatever those facts reveal, and the builder
+declares the mapping with `revealOn(factId, propId, tier)`. The writing is done and art
+serves it: a mission says what was learned, the room decides what that makes visible. Two
+rules hold it together — certainty only ever goes **up** (§163: the world remembers), and
+fact ids are **imported constants**, never typed strings, so a rename is a build error
+rather than a room that quietly stops warming.
+
+**A prop must start below where it will end.** The repair shop opened its connector and
+wall switch at DESCRIBED, which is the state they should *reach* — so the room was as warm
+on its first frame as it would ever get, and "it should look lonely" was true of nowhere.
+
+**Only a prop below SHAPED can sweep.** The resolve is drawn by the tier-1 volume
+retreating, so a prop that opens at SHAPED or above changes colour and nothing more. If a
+beat is meant to feel like a reveal, the thing it reveals has to start as a guess.
 
 ### Tier 0 — ABSENT · `0`
 The machine has no reason to believe it exists. Not rendered at all.
