@@ -256,7 +256,21 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
    * So a clump centre is chosen, then a handful of blades are placed within a few
    * centimetres of it, SHARING its height - because blades from one root are the same age.
    */
-  const CLUMP_SPREAD = 0.075;
+  /**
+   * Tight. A tuft comes out of ONE crown, not out of a patch.
+   *
+   * This was 0.075 - blades scattered anywhere in a 15cm square around the clump centre -
+   * and that is not a tuft, it is a loose handful. Grass grows from a crown: the stems leave
+   * the ground within a couple of centimetres of each other and splay as they rise, which is
+   * why a real tuft is a dense point at the base opening into a fan at the top.
+   *
+   * At 0.022 the bases nearly touch and the height variation does the spreading instead, so
+   * the silhouette gets the fan without the roots wandering. It also sharpens the gaps: the
+   * same number of blades gathered into tighter groups leaves more bare ground visible
+   * between them, and that alternation of dense and bare is most of what makes a field read
+   * as a field rather than as a texture.
+   */
+  const CLUMP_SPREAD = 0.022;
   let clumpX = 0;
   let clumpZ = 0;
   let clumpLeft = 0;
@@ -266,7 +280,8 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
     if (clumpLeft <= 0) {
       clumpX = at.x + range(rng, -width / 2, width / 2);
       clumpZ = at.z + range(rng, -depth / 2, depth / 2);
-      clumpLeft = 3 + Math.floor(rng() * 4);
+      // More blades per crown, since they now occupy a fraction of the footprint.
+      clumpLeft = 6 + Math.floor(rng() * 7);
       clumpHeight = range(rng, 0.75, 1.25);
     }
     clumpLeft--;
