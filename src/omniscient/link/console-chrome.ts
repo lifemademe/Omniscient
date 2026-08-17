@@ -94,10 +94,17 @@ export const CONSOLE_CHROME_CSS = `
  * which is the machine's limit rather than the room's. Same reasoning as the scan sights,
  * one scale up - and the same colour, because they are the same instrument talking.
  *
- * Drawn as eight background gradients rather than as elements, so the globe screen gets it
- * from the shared stylesheet without either screen having to build any DOM for it.
+ * Drawn as eight background gradients rather than as elements, so neither screen has to
+ * build DOM for it.
+ *
+ * Scoped away from the globe, though. The two screens use the same class for different
+ * things: on the Contact View __stage is the hole the diorama shows through, and on the
+ * globe it is the left readout column - so inheriting this put a viewport frame around
+ * three status cards and left two bracket corners floating in the middle of the screen.
+ * The globe's own frame goes on .omni-globe__stage, in the globe's own file, which is
+ * what this module's header says should happen to anything screen-specific.
  */
-.omni-cv__stage {
+.omni-cv:not(.omni-cv--globe) .omni-cv__stage {
   position: relative;
   display: flex;
   flex-direction: column;

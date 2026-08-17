@@ -520,6 +520,26 @@ seconds. **Prefer the measurement with a known-zero baseline over the one with a
 
 ---
 
+### 225. NO BACKTICKS INSIDE A TEMPLATE LITERAL
+
+This project keeps its GLSL and its CSS in tagged template literals, and writes long prose
+comments inside them. A backtick in that prose — `--r`, `.omni-globe__stage`, the ordinary
+markdown habit of quoting an identifier — **closes the string**. The compiler then reports a
+syntax error some lines later, at whatever the parser choked on next, which is never where
+the backtick is.
+
+It happened three times in one afternoon: once in the retro shader, twice in the console
+stylesheet. Each cost a build cycle, and the second one was fixed and immediately reintroduced
+two lines further down because the error moved rather than went away.
+
+**Quote identifiers in embedded CSS and GLSL with nothing at all.** `--r` becomes --r,
+`.omni-cv__stage` becomes .omni-cv__stage. It reads fine and it cannot break the file.
+
+The check that catches it is one line, and worth running after editing any of these files:
+the body between the opening backtick and the closing one must contain no backtick.
+
+---
+
 ### 219. V4.9 FINAL DIRECTIVE
 
 **THE DESIGN IS NOT THE CONSTRAINT. THE SCHEDULE IS.** Every capability this game needs is confirmed

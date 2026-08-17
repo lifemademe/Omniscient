@@ -152,6 +152,11 @@ const GLOBE_CSS = `
  * that chrome never eats a press meant for the world - and wrapping the globe in that
  * frame silently made the globe chrome too. Nothing was selectable at all.
  */
+/*
+ * The globe gets the same viewport brackets the Contact View has, on the element that is
+ * actually its viewport. See the note in console-chrome: the shared class means something
+ * different on each screen, so the frame has to be applied per screen rather than inherited.
+ */
 .omni-globe__stage {
   position: relative;
   align-self: center;
@@ -257,10 +262,42 @@ const GLOBE_CSS = `
     rgba(0,0,0,0.20) 2px, rgba(0,0,0,0.20) 3px);
   mix-blend-mode: multiply;
 }
+/*
+ * Vignette and viewport brackets on the same layer, because it is the only one above the
+ * canvas.
+ *
+ * The stage has an opaque canvas filling it, so a background on the stage itself is
+ * painted and then covered - the brackets went on there first and were invisible for
+ * exactly that reason. Both pseudo-elements are already spoken for (this one and the
+ * scanlines), so the frame joins the vignette rather than asking for a third.
+ *
+ * Bracket layers come first in the list and therefore paint on top of the vignette, which
+ * is right: the frame belongs to the instrument and the vignette belongs to the tube.
+ */
 .omni-globe__stage::before {
   content: "";
-  position: absolute; inset: -2%; pointer-events: none; z-index: 2;
-  background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.65) 100%);
+  position: absolute; inset: -10px; pointer-events: none; z-index: 2;
+  --bk: 22px;
+  --bc: #2f7391;
+  background-image:
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
+    radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.65) 100%);
+  background-repeat: no-repeat;
+  background-size:
+    var(--bk) 1px, 1px var(--bk),
+    var(--bk) 1px, 1px var(--bk),
+    var(--bk) 1px, 1px var(--bk),
+    var(--bk) 1px, 1px var(--bk),
+    100% 100%;
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom,
+    center;
 }
 `;
 
