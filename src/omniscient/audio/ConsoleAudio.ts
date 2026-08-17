@@ -81,6 +81,8 @@ export type Cue =
   | 'tap'
   /** A fact recorded - the tree grows. The only pleasant sound in the game. */
   | 'learn'
+  /** A prop's certainty rises and the sweep crosses it. ART_DIRECTION §3. */
+  | 'resolve'
   /** A device accepted a piece: a pin set, a pipe seated, a wire joined. */
   | 'seat'
   /** A device rejected a piece. */
@@ -139,6 +141,30 @@ const CUES: Record<Cue, Voice[]> = {
   learn: [
     { hz: 587, length: 0.1, level: 0.075, type: 'sine' },
     { hz: 880, length: 0.22, level: 0.06, type: 'sine', delay: 0.07 },
+  ],
+  /**
+   * The resolve sweep landing. ART_DIRECTION §3 asks for one cue, dry and short, and is
+   * specific that it must not be a sci-fi swell - so this is deliberately the least
+   * musical thing in the table.
+   *
+   * Two rules from the design above pull in opposite directions here and both are obeyed.
+   * A resolve is the machine DOING something, which puts it in the sine range; it is also
+   * mechanical, a contact closing on a fact, which asks for filtered noise. So it is both,
+   * in that order: the tick is the event and the tone is only there to give it a pitch, at
+   * a sixth of the tick's level.
+   *
+   * No sweep between two frequencies, and that is the whole difference between this and
+   * the thing §3 forbids. A rising tone announces; a tick reports. What is on screen is
+   * already spending six tenths of a second announcing, and the sound's job is to give
+   * that motion a hard edge to start against, not to narrate it a second time.
+   *
+   * 62ms total, shorter than every cue except the keyer. It fires once per prop, staggered
+   * by the same 180ms the sweeps are, so three resolving props read as three ticks rather
+   * than as a chord.
+   */
+  resolve: [
+    { hz: null, band: 1900, length: 0.022, level: 0.3 },
+    { hz: 698, length: 0.05, level: 0.05, type: 'sine', delay: 0.012 },
   ],
   seat: [{ hz: null, band: 900, length: 0.045, level: 0.42 }],
   reject: [{ hz: 220, to: 180, length: 0.11, level: 0.1, type: 'sawtooth' }],

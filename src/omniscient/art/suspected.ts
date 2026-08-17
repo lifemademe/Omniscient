@@ -46,6 +46,7 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { audio } from '../audio/ConsoleAudio.js';
 import { createRng, type Rng } from '../core/rng.js';
 
 import { renderTargetOf } from './certainty.js';
@@ -304,6 +305,8 @@ export function createSuspicion(root: THREE.Object3D, seed: number): Suspicion |
   /** Seconds into the resolve, or null while the machine is still guessing. */
   let resolving: number | null = null;
   let delay = 0;
+  /** Whether the cue has been struck. Once per sweep, at the top of it. */
+  let struck = false;
 
   return {
     get resolving(): boolean {
@@ -334,6 +337,17 @@ export function createSuspicion(root: THREE.Object3D, seed: number): Suspicion |
       if (resolving !== null) {
         resolving += deltaTime;
         if (resolving < delay) return true;
+
+        /*
+         * The cue goes here rather than in resolve(), because resolve() is called for every
+         * prop in the same frame and the stagger is what keeps three of them from becoming
+         * a chord. Struck at the top of this prop's own sweep, the sound arrives with the
+         * line it belongs to.
+         */
+        if (!struck) {
+          struck = true;
+          audio.play('resolve');
+        }
 
         const t = Math.min(1, (resolving - delay) / RESOLVE_SECONDS);
         /*
