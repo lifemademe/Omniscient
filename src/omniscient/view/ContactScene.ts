@@ -217,6 +217,23 @@ export class ContactScene extends ENGINE.SceneNode {
   }
 
   /**
+   * The same props, with the ids they were registered under.
+   *
+   * The scan overlay needs to write a name next to each reticle, and `inkedProps` throws
+   * that away - it was shaped for the outline pass, which only ever needed the node. Kept
+   * as a second method rather than widening the first because the two callers want
+   * genuinely different things and one of them is on its way out: the outline is disabled,
+   * and the reticles are what replaced it.
+   */
+  public scanTargets(): { id: string; node: ENGINE.SceneNode }[] {
+    const out: { id: string; node: ENGINE.SceneNode }[] = [];
+    for (const [id, prop] of this.props) {
+      if (prop.inked) out.push({ id, node: prop.node });
+    }
+    return out;
+  }
+
+  /**
    * A live value the console feeds the world, mid-beat.
    *
    * The cue system is the normal channel and it is the wrong shape for this: a cue is a

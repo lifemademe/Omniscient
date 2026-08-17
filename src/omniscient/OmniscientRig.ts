@@ -28,6 +28,7 @@ import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { audio } from './audio/ConsoleAudio.js';
 import { installCursor } from './art/cursor.js';
 import { installRetro, setRetroLook } from './art/retro.js';
+import { ScanTargets } from './link/ScanTargets.js';
 import { playWarp } from './art/warp.js';
 import { applyShadowPolicy } from './art/shadows.js';
 import { SystemPanel } from './menu/SystemPanel.js';
@@ -1798,6 +1799,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
   /** False until the retro pass is confirmed registered - see tickPrePhysics. */
   private retroMounted = false;
 
+  /** The machine's own annotations over the diorama. Built on the first request. */
+  private scan: ScanTargets | null = null;
+
   /** Swap the diorama. One scene is live at a time - §133 foregrounds a single contact. */
   private mountScene(sceneId: string): void {
     this.scene?.deactivate();
@@ -1845,6 +1849,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.post?.clearOutlineSelection();
     const inked = next?.inkedProps() ?? [];
     if (inked.length > 0) this.post?.setOutlineSelection(inked);
+
+    /**
+     * Point the machine at this room's evidence.
+     *
+     * Same set of props the outline used to draw, which is the point - the outline is off
+     * because a hard black line round every clue read as a cartoon, and that left the one
+     * object the request is ABOUT with no treatment at all. The reticles put it back in
+     * the observer's layer instead of the world's. See `link/ScanTargets`.
+     *
+     * Built lazily because the game container does not exist during construction, and
+     * rebuilt per mount for the same reason the outline selection is: the previous room's
+     * nodes are still alive, and a reticle tracking one of them would sit on screen
+     * pointing at a transmitter that is sixty units away in a scene nobody is looking at.
+     */
+    const container = this.getWorld()?.gameContainer;
+    if (container) this.scan ??= new ScanTargets(container);
+    this.scan?.setTargets(next?.scanTargets() ?? []);
 
     const opening = next?.getShot('default');
     if (opening) this.cutTo(opening);
@@ -1920,6 +1941,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
 
     this.cameraTweener.update(deltaTime);
+
+    // Re-pin after the camera has moved, never before: the reticles are screen positions
+    // derived from it, and updating them first puts every annotation one frame behind the
+    // thing it is annotating - which is invisible while the camera is still and reads as
+    // the labels sliding off their objects during every push-in.
+    this.scan?.setVisible(this.phase === Phase.Contact);
+    if (this.phase === Phase.Contact) this.scan?.update(this.camera?.getCamera() ?? null);
     // Runs in every phase, including while the player is inside a request. The world does
     // not stop because somebody is on the line, and coming back from a call to a boat that
     // has moved is most of what the boat is for.

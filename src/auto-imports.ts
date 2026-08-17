@@ -58,6 +58,7 @@ import './omniscient/link/console-chrome.js';
 import './omniscient/link/LocalSurface.js';
 import './omniscient/link/PhoneClient.js';
 import './omniscient/link/RemoteSurface.js';
+import './omniscient/link/ScanTargets.js';
 import './omniscient/link/surface.js';
 import './omniscient/link/SurfaceGroup.js';
 import './omniscient/link/transport.js';
