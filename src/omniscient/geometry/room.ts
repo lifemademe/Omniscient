@@ -589,8 +589,14 @@ function createDeskLamp(rng: Rng): RoomPart[] {
    * here, and it is one flag.
    */
   const aimDown = new THREE.Vector3(0.34, -1, 0.24).normalize();
-  const shade = new THREE.SphereGeometry(0.105, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2);
-  shade.translate(0, -0.012, 0);
+  /*
+   * Bigger, so the head actually covers its own bulb. At 0.105 the dome sat on top of the
+   * glass rather than over it and the bulb showed as a bright bead at the rim from most of
+   * the frame. 0.145 with the dome dropped a little further down the aim closes over it,
+   * which is what a desk lamp does - you see the light it throws, not the lamp in it.
+   */
+  const shade = new THREE.SphereGeometry(0.145, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2);
+  shade.translate(0, -0.042, 0);
   shade.applyQuaternion(
     new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), aimDown)
   );

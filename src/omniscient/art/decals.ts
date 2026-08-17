@@ -96,6 +96,82 @@ export function createMeterFace(): THREE.CanvasTexture | null {
   });
 }
 
+/**
+ * A puddle, drawn rather than simulated.
+ *
+ * Four attempts at a lit, shaded pool failed for one reason: this corner has nothing to
+ * reflect. Measured, a real specular is not even available - bouncing the flood camera off
+ * a horizontal pool at (-1.95, -1.16) puts the required light a metre behind the back wall.
+ * So the reflection is PAINTED, which is both the only thing that works and the honest
+ * choice for a game whose water elsewhere is a stylised shader rather than a mirror.
+ *
+ * Bean-shaped, because a circle reads as a decal and a puddle is a shape water found rather
+ * than a shape somebody drew. The outline is one closed bezier with uneven control points -
+ * a kidney with a bite out of one side.
+ *
+ * The streaks are the whole effect. Two or three pale, soft, elongated smears lying along
+ * the long axis read as something bright reflected in still water, and they carry the read
+ * on their own in a corner where nothing is lit. Unlit and un-tone-mapped when applied, so
+ * the darkness of the room cannot take them away.
+ */
+export function createPuddleSurface(): THREE.CanvasTexture | null {
+  return createDecal(320, 220, (ctx, w, h) => {
+    ctx.clearRect(0, 0, w, h);
+
+    // The bean. Drawn once as a path and reused as a clip, so the streaks inside can be
+    // painted freely without any of them escaping the water.
+    const bean = new Path2D();
+    bean.moveTo(w * 0.14, h * 0.52);
+    bean.bezierCurveTo(w * 0.1, h * 0.2, w * 0.42, h * 0.08, w * 0.58, h * 0.2);
+    bean.bezierCurveTo(w * 0.62, h * 0.46, w * 0.76, h * 0.12, w * 0.92, h * 0.32);
+    bean.bezierCurveTo(w * 1.0, h * 0.46, w * 0.86, h * 0.82, w * 0.62, h * 0.86);
+    bean.bezierCurveTo(w * 0.38, h * 0.9, w * 0.19, h * 0.82, w * 0.14, h * 0.52);
+    bean.closePath();
+
+    ctx.save();
+    ctx.clip(bean);
+
+    // Standing water over a dark floor: deep, slightly cool, and not black.
+    ctx.fillStyle = '#20323a';
+    ctx.fillRect(0, 0, w, h);
+
+    /*
+     * The reflections. Long, soft, and off-parallel - two of them catching whatever is
+     * above and a third shorter one breaking the pair up so it does not read as a pattern.
+     */
+    for (const [x0, y0, x1, y1, width, alpha] of [
+      [w * 0.2, h * 0.62, w * 0.82, h * 0.38, 15, 0.5],
+      [w * 0.26, h * 0.75, w * 0.7, h * 0.55, 9, 0.34],
+      [w * 0.52, h * 0.28, w * 0.86, h * 0.24, 6, 0.26],
+    ] as const) {
+      const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+      grad.addColorStop(0, 'rgba(190,214,224,0)');
+      grad.addColorStop(0.45, `rgba(190,214,224,${alpha})`);
+      grad.addColorStop(1, 'rgba(190,214,224,0)');
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+
+    /*
+     * A wet margin round the edge rather than a hard cut. Water on stone soaks outward, and
+     * the fringe is most of what stops a puddle reading as a sheet of glass on the ground.
+     */
+    ctx.save();
+    ctx.clip(bean);
+    ctx.strokeStyle = 'rgba(14,22,26,0.42)';
+    ctx.lineWidth = 9;
+    ctx.stroke(bean);
+    ctx.restore();
+  });
+}
+
 export function createRatingPlate(): THREE.CanvasTexture | null {
   return createDecal(512, 160, (ctx, w, h) => {
     // Plate: brushed alloy, a shade lighter than the housing so it separates without

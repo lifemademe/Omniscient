@@ -35,6 +35,7 @@ import {
   createBoxLabel,
   createCorrosionBloom,
   createMeterFace,
+  createPuddleSurface,
   createRatingPlate,
 } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
@@ -460,21 +461,17 @@ function buildRepairShop(scene: ContactScene): void {
   // Round the corner and onto the shelf's legs, so it reads as a level the whole room
   // sat under rather than a stripe painted on one wall.
   /*
-   * Slim again. Fattening these into 22cm blocks with pale caps made them read as two
-   * capped bollards standing in the corner - asked about as "what are these two blue
-   * rectangles supposed to be", which is a fair question about a shelf leg. A mark on a
-   * leg has to stay a mark ON the leg; the moment it has its own silhouette it stops being
-   * a stain and becomes an object.
+   * The marks on the shelf legs are gone.
+   *
+   * Twice reported as "two blue rectangles with white tops" and twice not understood,
+   * which is a complete answer about a prop: they were the shelf's own legs wearing a
+   * tidemark, and at that size and value nobody read them as either. A detail that has to
+   * be explained is not carrying evidence, it is asking for attention it cannot repay.
+   *
+   * The wall bands stay - they are broad, they are where a tidemark belongs, and they are
+   * not pretending to be objects. The puddle carries the rest.
    */
-  for (const x of [-2.35, -1.85]) {
-    const post = new THREE.BoxGeometry(0.086, 0.09, 0.086);
-    post.translate(x, 0.195, -1.28);
-    tideMarks.push(post);
 
-    const collar = new THREE.BoxGeometry(0.088, 0.014, 0.088);
-    collar.translate(x, 0.242, -1.28);
-    tideSilt.push(collar);
-  }
   scene.registerProp(
     'tide-silt',
     meshOf('TideSilt', mergeGeometries(tideSilt, false) ?? tideSilt[0], MAT.tideSilt)
@@ -514,25 +511,45 @@ function buildRepairShop(scene: ContactScene): void {
    * thing it has to work with is whatever it can throw back - and a pool of pale sheen on
    * a dark stone floor is what that looks like in every photograph of a wet floor at night.
    */
-  const puddle = createFloodwater('#5d7480');
-  const puddleGeo = new THREE.CircleGeometry(0.62, 20);
-  puddleGeo.rotateX(-Math.PI / 2);
-  puddleGeo.scale(1.35, 1, 0.85);
-  puddleGeo.translate(-1.95, 0.004, -1.16);
-  scene.registerProp('puddle', meshOf('Puddle', puddleGeo, puddle.material), {
-    idle: (deltaTime) => puddle.update(deltaTime * 0.2),
-  });
-
-  /*
-   * A damp fringe round it. Water on stone does not have an edge - it has a margin where
-   * the floor is dark and wet without anything standing on it, and that margin is most of
-   * what stops a puddle reading as a sheet of glass laid on the ground.
+  /**
+   * The puddle: a bean-shaped plane with a painted reflection.
+   *
+   * Four goes at a lit, shaded pool and none of them read, for a reason that is now
+   * measured rather than guessed - this corner has nothing to reflect, and a real specular
+   * is not even geometrically available from the flood camera. See createPuddleSurface.
+   *
+   * So it is drawn. Unlit and un-tone-mapped, so the darkest corner in the shop cannot
+   * take it away; bean-shaped, because a circle reads as a decal; and carrying its own
+   * highlights, because the reflection is the thing that says water rather than paint.
    */
-  const damp = new THREE.CircleGeometry(0.82, 20);
-  damp.rotateX(-Math.PI / 2);
-  damp.scale(1.35, 1, 0.85);
-  damp.translate(-1.95, 0.002, -1.16);
-  scene.registerProp('puddle-damp', meshOf('PuddleDamp', damp, MAT.tideStain));
+  const puddleTexture = createPuddleSurface();
+  if (puddleTexture) {
+    /*
+     * Smaller and further into the corner. At 1.55 by 1.05 centred on -1.1 the pool ran off
+     * the bottom right of the flood shot and read as a large dark ellipse with its shape
+     * cropped away - a bean nobody can see the whole of is just a curve.
+     */
+    const puddleGeo = new THREE.PlaneGeometry(1.02, 0.72);
+    puddleGeo.rotateX(-Math.PI / 2);
+    puddleGeo.translate(-2.12, 0.006, -1.3);
+    scene.registerProp(
+      'puddle',
+      meshOf(
+        'Puddle',
+        puddleGeo,
+        new THREE.MeshBasicMaterial({
+          map: puddleTexture,
+          transparent: true,
+          toneMapped: false,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -3,
+          polygonOffsetUnits: -3,
+        })
+      )
+    );
+  }
+
 
   /**
    * And something for it to be lit by.
