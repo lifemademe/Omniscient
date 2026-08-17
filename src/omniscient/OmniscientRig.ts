@@ -49,6 +49,14 @@ import { Picker } from './input/Picker.js';
 import { MainMenu } from './menu/MainMenu.js';
 import { SessionController } from './session/SessionController.js';
 import { VFX_LIBRARY } from './vfx/library.js';
+
+/**
+ * Where effects wait.
+ *
+ * Far enough under the diorama that no camera in the game can frame it, and far enough that
+ * a stray particle drifting up from it would die of distance before it arrived.
+ */
+const VFX_PARKED = new THREE.Vector3(0, -1000, 0);
 import { buildContactScene } from './view/scenes.js';
 
 import type { Signal } from './crt/GlobeView.js';
@@ -791,16 +799,32 @@ export class OmniscientRig extends ENGINE.SceneNode {
        *
        * Nothing here should be visible until something makes it happen, so they start
        * hidden and fireVfx shows them.
+       *
+       * ## visible = false was not enough
+       *
+       * That is the obvious fix and it does not work: the disc under Mirela's bench survived
+       * it. A VFXNode owns renderables it manages itself, and clearing the flag on the node
+       * does not reliably reach them - so the effect went on drawing while the thing that
+       * was supposed to be hiding it reported success.
+       *
+       * They are PARKED instead, a kilometre under the floor, which no flag and no internal
+       * re-show can argue with. The position each one is meant to play at is remembered here
+       * and restored at the moment it fires. Belt and braces: the flag is still cleared, so
+       * anything that does respect it is hidden twice over.
        */
       node.visible = false;
+      this.vfxHome.set(name, node.position.clone());
+      node.position.copy(VFX_PARKED);
       this.vfxNodes.set(name, node);
       this.add(node);
     }
 
     // Dust runs continuously over the diorama - §186's cheap painterly depth.
-    const dust = this.vfxNodes.get('DustVFX');
-    if (dust) dust.position.set(0, 0, -0.4);
+    this.vfxHome.set('DustVFX', new THREE.Vector3(0, 0, -0.4));
   }
+
+  /** Where each effect plays, held while the node itself waits out of the world. */
+  private vfxHome = new Map<string, THREE.Vector3>();
 
   /**
    * §187: one strong key direction plus controlled practicals, not many weak lights.
@@ -1534,6 +1558,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // without being fired.
     const dustNode = this.vfxNodes.get('DustVFX');
     if (dustNode) {
+      // Also parked until now, so it needs bringing back like any other effect.
+      const home = this.vfxHome.get('DustVFX');
+      if (home) dustNode.position.copy(home);
       dustNode.visible = true;
       dustNode.startEmitting();
     }
@@ -1752,6 +1779,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (this.pendingEffectPosition) {
       node.position.copy(this.pendingEffectPosition);
       this.pendingEffectPosition = null;
+    } else {
+      // Back from the parking spot under the floor. See buildVfx.
+      const home = this.vfxHome.get(effect);
+      if (home) node.position.copy(home);
     }
     // Shown only now. See buildVfx for why they are hidden the rest of the time.
     node.visible = true;
