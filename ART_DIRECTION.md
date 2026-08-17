@@ -147,8 +147,14 @@ These are not stylistic preferences. They are the difference between an asset an
    tier 2 the flat colour needs a light-facing and a shadow-facing value.
 3. **No two instances identical.** Seeded per instance from the scene's RNG (§295 — never
    `Math.random`).
-4. **Every tier-3+ material carries base colour, roughness and normal.** `surface.ts` has the
-   slots and they have been `null` since the day they were written. Fill them.
+4. ~~**Every tier-3+ material carries base colour, roughness and normal.**~~ **Withdrawn.**
+   `surface.ts` deleted its normal maps deliberately and the argument in that file wins:
+   micro-relief under six lights is a realism cue that pulls against the stylisation, and
+   removing it is most of the distance to a flat style on its own. It also lets the light
+   banding read at full strength, because nothing grainy is left softening the band edges.
+   The rule that replaced it is better and is stated there: **texture earns its place by
+   being evidence, not by being material.** Wear along an arris is an event; crackle enamel
+   only says "this is enamel". A `null` slot here is a decision, and the slots stay empty.
 5. **Texel density is consistent within a room.** A crate and a wall at wildly different
    densities read as a collage.
 6. **Unlit is a decision, not a default.** 47 `MeshBasicMaterial` against 35
@@ -169,11 +175,26 @@ One sentence each. If a change does not serve the sentence, it is the wrong chan
 | `scene-cleared-house` | Emptied, not abandoned. Clean rectangles on the walls where things used to hang. |
 | `scene-flooded-cellar` | Everything below the line is another material. Reflection does the work. **Built — lit water, `art/waterline.ts`, and a ceiling.** |
 | `scene-night-door` | One practical, one hand, and a lot of black. The most contrast in the game. |
-| `scene-mill-road` | A torch beam is the only volume. Everything outside it is tier 1 by *diegetic* right — she genuinely cannot see it either. |
+| `scene-mill-road` | A torch beam is the only volume. Everything outside it is tier 1 by *diegetic* right — she genuinely cannot see it either. **Built — `art/torchlight.ts`.** |
 | `scene-wire-city` | Tier 2 forever, on purpose. The machine has never been here and never will be. Full CRT. |
 
 `scene-mill-road` is the direction's best joke and should be built with care: there, the
 uncertainty is *hers*, not the machine's, and they render identically.
+
+**What building it taught.** Tier 1 is authored per prop and this could not be, because
+what is knowable here changes every time the player moves the beam — so the boundary has to
+live where the beam does, which is per pixel. That turned out to be the more interesting
+version of the whole direction: §3's resolve is a reward you are *given*, and this is one
+you *hold*. Any future scene whose uncertainty is a place rather than an object should reach
+for `torchlight.ts` rather than for a certainty tier.
+
+**And a rule about air.** The room's worst fault was not a surface, it was the fog on top of
+one: a daylight haze at full strength by 26 metres, painted across the far half of a
+midnight corridor. It measured at luma 48 against a wall at 7 and it looked, at a squint,
+exactly like a badly lit wall. **A night scene needs fog the colour of the night, not less
+fog** — turning atmosphere off takes the depth with it, and on a corridor the depth is the
+composition. Scenes state their own air now; the other three night sets are worth checking
+against this before anything else in them is touched.
 
 ---
 
