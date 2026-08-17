@@ -28,6 +28,7 @@ import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { audio } from './audio/ConsoleAudio.js';
 import { installCursor } from './art/cursor.js';
 import { playWarp } from './art/warp.js';
+import { applyShadowPolicy } from './art/shadows.js';
 import { SystemPanel } from './menu/SystemPanel.js';
 import { createSeaLife } from './geometry/seaLife.js';
 import { WINDOW_VIEW } from './geometry/room.js';
@@ -398,6 +399,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
       if (!scene) continue;
 
       scene.visible = false;
+      /**
+       * Shadow flags applied here, once, for every diorama.
+       *
+       * Not at the prop call sites: there are several hundred of them and not one had a
+       * shadow flag, so opting each in would be several hundred chances to miss one - and
+       * the missed prop is the one that floats. See art/shadows.ts for the policy, which is
+       * simply that lit materials cast and receive and unlit ones do neither.
+       *
+       * Rigged contacts arrive from a GLB after this runs, so they re-apply it themselves
+       * once their model is in the tree.
+       */
+      applyShadowPolicy(scene as unknown as THREE.Object3D);
       this.scenes.set(sceneId, scene);
       this.add(scene);
     }

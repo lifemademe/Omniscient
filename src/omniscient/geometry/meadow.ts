@@ -397,23 +397,32 @@ export interface GroundOptions {
  * cellar floors and repair-shop concrete, and injecting a meadow into the family would put
  * soil mottling under Vasile's pipe run.
  */
-export function meadowGround(options: GroundOptions): THREE.MeshBasicMaterial {
+export function meadowGround(options: GroundOptions): THREE.MeshStandardMaterial {
   /**
-   * Unlit and unfogged, which is not a shortcut - it is the only thing that can work here.
+   * LIT now, and the reason it was not is gone.
    *
-   * The outdoor "sun" in these scenes is a PointLight with a distance of 26 metres, so a
-   * ground plane big enough to reach the horizon is simply outside the light past its near
-   * edge. Lit, it faded to black across the middle of the shot and grew a dark band where
-   * it met the backdrop. The rig's fog is tuned to a room as well - fogFar 26 - and did the
-   * same thing again in haze colour.
+   * This was a MeshBasicMaterial, and the comment here used to explain why at length: the
+   * outdoor sun was a PointLight with a 26 metre range, so a ground plane big enough to
+   * reach the horizon fell outside the light past its near edge, faded to black across the
+   * middle of the shot, and grew a dark band where it met the backdrop. All true, and all
+   * true of a point light. The sun is a DirectionalLightNode now - parallel rays, no
+   * falloff, every surface with the same orientation lit identically wherever it stands -
+   * so the entire argument for unlit expired when that changed and nobody came back for it.
    *
-   * And nothing is lost. A flat plane has one normal, so lighting it produces a single
-   * brightness across the whole surface; lit and unlit differ only by a constant, and the
-   * constant is easier to pick than to fight. The backdrop's own ground made this bargain
-   * long ago and this has to sit against it.
+   * The old note also claimed nothing was lost, because a flat plane has one normal and
+   * lighting it only differs from not lighting it by a constant. That was right until
+   * shadows: a constant cannot have a tree in it. This is the one surface in the game that
+   * must receive shadows, because everything else in the scene stands ON it, and an object
+   * with no shadow under it is an object that is not touching the ground.
+   *
+   * Still unfogged - the rig's fog is tuned to a room at fogFar 26 and would haze the field
+   * out from the middle distance.
    */
-  const material = new THREE.MeshBasicMaterial({
+  const material = new THREE.MeshStandardMaterial({
     color: new THREE.Color(options.grass),
+    // Soil and grass are about as diffuse as surfaces get. No specular story to tell here.
+    roughness: 0.96,
+    metalness: 0,
     fog: false,
   });
 

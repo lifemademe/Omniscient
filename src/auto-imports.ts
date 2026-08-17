@@ -7,6 +7,7 @@ import './omniscient/art/noise.js';
 import './omniscient/art/obn.js';
 import './omniscient/art/painterly.js';
 import './omniscient/art/palette.js';
+import './omniscient/art/shadows.js';
 import './omniscient/art/sky.js';
 import './omniscient/art/surface.js';
 import './omniscient/art/warp.js';

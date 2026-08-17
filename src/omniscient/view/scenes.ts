@@ -33,6 +33,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { createBoxLabel, createCorrosionBloom, createRatingPlate } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
+import { applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { placeRigged } from './riggedContact.js';
 import { ACCENT, LIGHT, MAP, MAT } from '../art/palette.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
@@ -1841,7 +1842,16 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * directional light's number is what every lit surface gets, everywhere, so it is a
        * much smaller figure - and this is a low evening sun, which is weak as well as warm.
        */
-      intensity: 2.1,
+      /**
+       * Up from 2.1, to buy back the shadow.
+       *
+       * Lifting the skylight alone would restore the brightness and flatten the picture,
+       * because a hemisphere fills shadow and light equally - the shadow would come up with
+       * everything else and there would be no point having cast it. The sun is what makes
+       * the difference between the two, so it rises too, and the balance is read off the
+       * gap rather than off either number alone.
+       */
+      intensity: 3.2,
       color: new THREE.Color('#ffb473'),
     })
 
@@ -1878,7 +1888,18 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     ENGINE.HemisphereLightNode.create({
       name: 'Skylight',
       position: new THREE.Vector3(0, 14, -6),
-      intensity: 1.5,
+      /**
+       * Raised from 1.5 when the ground started taking light.
+       *
+       * Measured before and after the ground became a lit material: grass fell 68.6 to
+       * 42.6, soil 54.2 to 32.2, the whole field about 38 percent darker, while the sky
+       * held at 134.7 because it is unlit and never moved. That is §261 arriving on
+       * schedule - a 7 degree sun meets level ground at a glancing angle and delivers
+       * almost nothing to it, so the ground is the skylight's job and always was. The old
+       * 1.5 was balanced against a ground that ignored light completely, so it was never
+       * carrying the field; it only had to tint the props.
+       */
+      intensity: 2.5,
       // The sky as it actually is overhead in this shot, and the ground bouncing back.
       color: new THREE.Color('#e5a98a'),
       groundColor: new THREE.Color('#3a3a2c'),
@@ -1887,8 +1908,23 @@ function buildSeedlingTunnel(scene: ContactScene): void {
 
   sunLight.position.set(-20, 3.6, -23);
   sunLight.lookAt(new THREE.Vector3(0, 0.6, 0));
+  /**
+   * The sun casts, and the frustum is sized to the set rather than to the world.
+   *
+   * A directional shadow map spends its whole budget across one orthographic box, so the
+   * box wants to be the smallest one containing everything the camera can see throw a
+   * shadow - the beds, the greenhouse, the two trees, the contact. Twenty-six metres covers
+   * that; the hills and the far hedge are backdrop and unlit, so they are outside the pass
+   * by policy anyway and cost nothing to leave out.
+   *
+   * A low evening sun is the hardest case for acne, because rays hit the ground at a
+   * glancing angle and the depth difference across one faceted polygon is large. That is
+   * what the normal bias is for - it offsets along the surface normal instead of pushing
+   * the whole map away from the light, which is the only version that works on flat-shaded
+   * geometry without detaching contact shadows from their objects.
+   */
+  castShadows(sunLight as unknown as THREE.Object3D, { extent: 26, radius: 3, normalBias: 0.04 });
   scene.registerProp('sun', sunLight);
-;
 
   /**
    * Sky fill, moved round to the camera side.
