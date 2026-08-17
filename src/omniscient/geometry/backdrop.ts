@@ -680,6 +680,72 @@ export function createFieldBackdrop(sun: THREE.Vector3): BackdropPart[] {
   // The hedge and the trees in it. All the way round: unlike the headland there is no
   // reason for a field to be open on one side, and closing it is what makes the tunnel
   // sit IN somewhere rather than ON something.
+  /**
+   * A far range, hazed, standing behind the hedge.
+   *
+   * ## Why it exists
+   *
+   * There was one ribbon and it was doing two jobs: the boundary of the field and the
+   * landscape beyond it. One silhouette at one distance in one colour cannot be both, so the
+   * far country had no depth - it read as a green wall with bumps on it.
+   *
+   * ## The haze is the whole point
+   *
+   * Distance in a landscape is not size, it is CONTRAST. Air scatters light, so the further
+   * something is the more sky gets mixed into it: it goes paler, bluer and lower in contrast
+   * until it disappears into the horizon. That is the only cue the eye needs, and it works
+   * even when everything is a flat colour - which is lucky, because everything here is.
+   *
+   * So this range is authored most of the way toward the sky it stands against. It is barely
+   * separable from the sky on purpose. Anything more definite reads as near.
+   *
+   * ## Shape
+   *
+   * Ridges, not bumps. A single sine gives circles, which is what the hedge's tree term was
+   * producing and why the far country looked like a row of green balls. Real ranges are
+   * asymmetric - a long shoulder up to a summit and a shorter drop off it - so the profile
+   * here stacks three frequencies and then raises the result to a power, which sharpens the
+   * peaks and flattens the valleys between them. That one exponent is most of the difference
+   * between hills and beads.
+   */
+  parts.push(
+    silhouetteRibbon('FarRange', -0.6, '#9db4c4', Math.PI, (t) => {
+      const theta = t * Math.PI * 2;
+      const ridge =
+        Math.sin(t * 5.3 + 0.4) * 0.55 + Math.sin(t * 11.7 + 2.2) * 0.3 + Math.sin(t * 2.1) * 0.4;
+      // Raised to a power to sharpen summits and flatten the ground between them.
+      const shaped = Math.pow(Math.max(0, ridge * 0.5 + 0.5), 1.9);
+      return {
+        theta,
+        radius: HEDGE_RADIUS + 11,
+        top: 3.0 + shaped * 12.5,
+      };
+    })
+  );
+
+  /**
+   * A middle range, half-hazed, between the far one and the hedge.
+   *
+   * §241: depth in a background comes from LAYERS at separated values, not from detail. Two
+   * ribbons is a backdrop; three is a landscape, and the middle one is what turns the gap
+   * between the other two into distance rather than into a gap.
+   */
+  parts.push(
+    silhouetteRibbon('MidRange', -0.6, '#6f8a76', Math.PI, (t) => {
+      const theta = t * Math.PI * 2;
+      const ridge = Math.sin(t * 8.1 + 1.9) * 0.5 + Math.sin(t * 17.3 + 0.7) * 0.28;
+      const shaped = Math.pow(Math.max(0, ridge * 0.5 + 0.5), 1.6);
+      return {
+        theta,
+        radius: HEDGE_RADIUS + 5,
+        top: 2.4 + shaped * 7.0,
+      };
+    })
+  );
+
+  // The hedge and the trees in it. All the way round: unlike the headland there is no
+  // reason for a field to be open on one side, and closing it is what makes the tunnel
+  // sit IN somewhere rather than ON something.
   parts.push(
     silhouetteRibbon('Hedge', -0.6, '#4a5744', Math.PI, (t) => {
       const theta = t * Math.PI * 2;
