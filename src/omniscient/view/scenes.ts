@@ -529,9 +529,14 @@ function buildRepairShop(scene: ContactScene): void {
      * the bottom right of the flood shot and read as a large dark ellipse with its shape
      * cropped away - a bean nobody can see the whole of is just a curve.
      */
+    /*
+     * Shifted screen-left. From the flood camera the right vector is roughly world
+     * (0.82, 0, -0.36), so moving the pool along its negative lands it in the middle of
+     * the shot instead of running under the console panel's edge.
+     */
     const puddleGeo = new THREE.PlaneGeometry(1.02, 0.72);
     puddleGeo.rotateX(-Math.PI / 2);
-    puddleGeo.translate(-2.12, 0.006, -1.3);
+    puddleGeo.translate(-2.42, 0.006, -1.17);
     scene.registerProp(
       'puddle',
       meshOf(
@@ -893,6 +898,16 @@ function buildRepairShop(scene: ContactScene): void {
   // begin with, the certainty law warmed it further, and the work lamp then fell on
   // geometry standing proud of the panel, which is three reasons a slit came out as a bar.
   if (set.recesses) setRoot.add(meshOf('SetVents', set.recesses, MAT.slot));
+  /*
+   * The inside of the case: dark, but a surface rather than a void - the corroded
+   * connector needs something to be seen against.
+   *
+   * MAT.equipmentBack rather than MAT.dark, which came out a warm brown once the certainty
+   * law had pulled the prop warm and read as a wooden back panel. equipmentBack exists for
+   * precisely this - bare primed steel nobody was ever meant to see - and it is the inside
+   * of the same case whose cover is propped against the bench in that material already.
+   */
+  if (set.chassis) setRoot.add(meshOf('SetChassis', set.chassis, MAT.equipmentBack));
 
   /**
    * The meter face, over the recess on the front panel.

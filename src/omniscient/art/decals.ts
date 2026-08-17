@@ -115,58 +115,103 @@ export function createMeterFace(): THREE.CanvasTexture | null {
  * the darkness of the room cannot take them away.
  */
 export function createPuddleSurface(): THREE.CanvasTexture | null {
-  return createDecal(320, 220, (ctx, w, h) => {
+  return createDecal(384, 256, (ctx, w, h) => {
     ctx.clearRect(0, 0, w, h);
 
-    // The bean. Drawn once as a path and reused as a clip, so the streaks inside can be
-    // painted freely without any of them escaping the water.
+    /*
+     * The outline, as one closed bezier with a bite taken out of the top right. A circle
+     * reads as a decal; a puddle is a shape water found rather than one somebody drew.
+     */
     const bean = new Path2D();
-    bean.moveTo(w * 0.14, h * 0.52);
-    bean.bezierCurveTo(w * 0.1, h * 0.2, w * 0.42, h * 0.08, w * 0.58, h * 0.2);
-    bean.bezierCurveTo(w * 0.62, h * 0.46, w * 0.76, h * 0.12, w * 0.92, h * 0.32);
-    bean.bezierCurveTo(w * 1.0, h * 0.46, w * 0.86, h * 0.82, w * 0.62, h * 0.86);
-    bean.bezierCurveTo(w * 0.38, h * 0.9, w * 0.19, h * 0.82, w * 0.14, h * 0.52);
+    bean.moveTo(w * 0.13, h * 0.54);
+    bean.bezierCurveTo(w * 0.09, h * 0.2, w * 0.4, h * 0.07, w * 0.56, h * 0.19);
+    bean.bezierCurveTo(w * 0.63, h * 0.45, w * 0.77, h * 0.11, w * 0.93, h * 0.33);
+    bean.bezierCurveTo(w * 1.02, h * 0.5, w * 0.85, h * 0.85, w * 0.6, h * 0.89);
+    bean.bezierCurveTo(w * 0.36, h * 0.92, w * 0.18, h * 0.84, w * 0.13, h * 0.54);
     bean.closePath();
+
+    /**
+     * 1. The damp, OUTSIDE the water.
+     *
+     * This is where the dark belongs and where the last version got it exactly backwards -
+     * a heavy black stroke sat on the boundary and read as an inked outline. Stone soaks
+     * outward from a pool, so the darkening is a soft halo beyond the edge and there is no
+     * hard line anywhere in it.
+     */
+    ctx.save();
+    ctx.filter = 'blur(16px)';
+    ctx.strokeStyle = 'rgba(12,18,22,0.34)';
+    ctx.lineWidth = 30;
+    ctx.stroke(bean);
+    ctx.restore();
 
     ctx.save();
     ctx.clip(bean);
 
-    // Standing water over a dark floor: deep, slightly cool, and not black.
-    ctx.fillStyle = '#20323a';
+    /**
+     * 2. The water itself, and it is mostly transparent.
+     *
+     * Shallow water does not hide what it is lying on - it darkens it, cools it and makes
+     * it slightly more saturated. Painting an opaque body is what made the first pass read
+     * as a shape cut out of the floor rather than as something lying on it.
+     */
+    ctx.fillStyle = 'rgba(20,34,42,0.42)';
     ctx.fillRect(0, 0, w, h);
 
-    /*
-     * The reflections. Long, soft, and off-parallel - two of them catching whatever is
-     * above and a third shorter one breaking the pair up so it does not read as a pattern.
+    /**
+     * 3. The reflections, which are the whole effect.
+     *
+     * Long, soft, off-parallel, and brightest along the shallowest sightline. Blurred hard
+     * because a reflection in still water has no edge of its own - the moment one has a
+     * crisp boundary it stops being a reflection and becomes a painted stripe.
      */
+    ctx.filter = 'blur(7px)';
+    ctx.lineCap = 'round';
     for (const [x0, y0, x1, y1, width, alpha] of [
-      [w * 0.2, h * 0.62, w * 0.82, h * 0.38, 15, 0.5],
-      [w * 0.26, h * 0.75, w * 0.7, h * 0.55, 9, 0.34],
-      [w * 0.52, h * 0.28, w * 0.86, h * 0.24, 6, 0.26],
+      [w * 0.19, h * 0.63, w * 0.84, h * 0.4, 17, 0.46],
+      [w * 0.25, h * 0.77, w * 0.72, h * 0.57, 10, 0.3],
+      [w * 0.5, h * 0.3, w * 0.88, h * 0.26, 7, 0.22],
     ] as const) {
       const grad = ctx.createLinearGradient(x0, y0, x1, y1);
-      grad.addColorStop(0, 'rgba(190,214,224,0)');
-      grad.addColorStop(0.45, `rgba(190,214,224,${alpha})`);
-      grad.addColorStop(1, 'rgba(190,214,224,0)');
+      grad.addColorStop(0, 'rgba(198,222,232,0)');
+      grad.addColorStop(0.42, `rgba(198,222,232,${alpha})`);
+      grad.addColorStop(1, 'rgba(198,222,232,0)');
       ctx.strokeStyle = grad;
       ctx.lineWidth = width;
-      ctx.lineCap = 'round';
       ctx.beginPath();
       ctx.moveTo(x0, y0);
       ctx.lineTo(x1, y1);
       ctx.stroke();
     }
-
+    ctx.filter = 'none';
     ctx.restore();
 
-    /*
-     * A wet margin round the edge rather than a hard cut. Water on stone soaks outward, and
-     * the fringe is most of what stops a puddle reading as a sheet of glass on the ground.
+    /**
+     * 4. The meniscus - a THIN bright line at the rim.
+     *
+     * Surface tension pulls the water up where it meets the floor and that lip catches
+     * whatever light there is, so the boundary of a real puddle is pale and fine rather
+     * than dark and heavy. It is also the single detail that sells the effect: it says
+     * there is a SURFACE here with a height to it, which is the difference between water
+     * and a stain.
      */
     ctx.save();
-    ctx.clip(bean);
-    ctx.strokeStyle = 'rgba(14,22,26,0.42)';
-    ctx.lineWidth = 9;
+    ctx.filter = 'blur(1.5px)';
+    /*
+     * Graded round the rim rather than drawn at one strength.
+     *
+     * A meniscus catches light where the light is, so an outline of uniform brightness the
+     * whole way round is the one thing that gives it away as drawn - which is exactly what
+     * an even 0.5 stroke looked like: a neon bean on the floor. Bright along the far edge
+     * where the sightline grazes the lip, gone at the near edge where you are looking down
+     * into it.
+     */
+    const lip = ctx.createLinearGradient(0, h, 0, 0);
+    lip.addColorStop(0, 'rgba(208,230,240,0.06)');
+    lip.addColorStop(0.45, 'rgba(208,230,240,0.2)');
+    lip.addColorStop(1, 'rgba(216,238,248,0.5)');
+    ctx.strokeStyle = lip;
+    ctx.lineWidth = 2;
     ctx.stroke(bean);
     ctx.restore();
   });

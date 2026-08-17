@@ -29,6 +29,8 @@ export interface PropParts {
    * only way to keep that through a hue pull is to start much further down.
    */
   recesses?: THREE.BufferGeometry;
+  /** Interior surfaces - dark, but lit, so things can be seen against them. */
+  chassis?: THREE.BufferGeometry;
   /**
    * Named anchor points in local space, so cue handlers can attach effects or move
    * sub-objects without hard-coding coordinates in mission content.
@@ -95,9 +97,36 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
   const body: THREE.BufferGeometry[] = [];
   const fittings: THREE.BufferGeometry[] = [];
 
-  const shell = new THREE.BoxGeometry(width, height, depth);
-  shell.translate(0, height / 2, 0);
-  body.push(shell);
+  /**
+   * The case, built as five panels with the back left open.
+   *
+   * It was a solid box, and the first attempt at an open back put a cavity liner INSIDE
+   * that box - which is a cavity inside a solid, and therefore invisible. Writing "the
+   * shell stays one clean box; the cavity is a liner that sits inside it" and then being
+   * surprised that nothing showed is the whole of that mistake.
+   *
+   * There is no way round it: an opening needs the face gone. Five slabs of real wall
+   * thickness give the rim you see when you look into an open case, which is the detail
+   * that says the cover came off rather than that the model has a hole in it.
+   *
+   * The cost is textural and worth naming. The shell carries a generated map on box UVs
+   * where every face owns the whole 0..1 square, so each slab now gets its own copy and
+   * its own arris wear. On the outside that reads as a case with worn edges, which is what
+   * it is; on the inner faces it is hidden by the chassis plate and the dark of the bay.
+   */
+  const WALL = 0.02;
+  for (const [sx, sy, sz, dx, dy, dz] of [
+    // Front, and the two sides run the full depth so the rim is continuous.
+    [width, height, WALL, 0, 0, depth / 2 - WALL / 2],
+    [WALL, height, depth, -(width / 2 - WALL / 2), 0, 0],
+    [WALL, height, depth, width / 2 - WALL / 2, 0, 0],
+    [width - WALL * 2, WALL, depth, 0, height / 2 - WALL / 2, 0],
+    [width - WALL * 2, WALL, depth, 0, -(height / 2 - WALL / 2), 0],
+  ] as const) {
+    const panel = new THREE.BoxGeometry(sx, sy, sz);
+    panel.translate(dx, height / 2 + dy, dz);
+    body.push(panel);
+  }
 
   // Front panel: meter recess plus two control dials.
   const meter = new THREE.BoxGeometry(width * 0.34, height * 0.5, 0.02);
@@ -132,6 +161,16 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
    * worked on. An empty socket only looks unfinished when it has no hole.
    */
   const recesses: THREE.BufferGeometry[] = [];
+  /**
+   * The chassis is dark but not a void.
+   *
+   * As a `recess` it was MAT.slot - unlit near-black - and the open bay came out as a
+   * rectangle of pure nothing. That is right for a slot 5mm wide and wrong for a surface
+   * 40cm across that the player is asked to look INTO and find a corroded connector on:
+   * the corrosion had no ground to sit against. Its own part, so it can be dark and still
+   * be a surface.
+   */
+  const chassis: THREE.BufferGeometry[] = [];
 
   /**
    * Connector height, and it is not the middle of the panel any more.
@@ -147,16 +186,59 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
    */
   const connectorY = height * 0.42;
 
+  /**
+   * The back is off, so there is a hole where the back was.
+   *
+   * Mirela's first line is "I have the back off already" and the set was a closed box with
+   * two plugs on the outside of it - the one thing she says about the object before the
+   * player says anything was not true of the model. Asked for three times.
+   *
+   * Built as five thin panels rather than by hollowing the shell, and that is a texturing
+   * decision as much as a modelling one: the shell carries a generated map keyed to box
+   * UVs where every face owns the whole 0..1 square, so cutting the box into a shell would
+   * hand each new panel a full copy of a texture built for a half-metre case and put an
+   * arris wear band down every internal corner. The shell stays one clean box; the cavity
+   * is a liner that sits inside it.
+   *
+   * The liner walls are `recesses` - unlit, so the inside of a case reads as an interior
+   * rather than as five surfaces the work lamp happens to reach. A hole is dark because it
+   * is a hole, and MAT.slot is the material that says so.
+   */
+  /**
+   * The chassis, a little way into the case.
+   *
+   * Without it the open back looks all the way through to the inside of the front panel,
+   * which is a box with a hole in it rather than a radio with its cover off. A dark plate
+   * set 14cm in gives the bay a floor at a believable depth, something for the connectors
+   * to be mounted through, and a surface for the corrosion to creep across.
+   *
+   * Unlit, like the vents and the socket bores. The inside of a case is dark because it is
+   * inside, and nothing the work lamp does should change that.
+   */
+  const CAVITY = { depth: 0.14 };
+  {
+    const plate = new THREE.BoxGeometry(width - WALL * 2, height - WALL * 2, 0.008);
+    plate.translate(0, height / 2, -depth / 2 + CAVITY.depth);
+    chassis.push(plate);
+  }
+
   const socket = (x: number, radius: number, length: number): void => {
+    /*
+     * Mounted on the floor of the bay and standing out of it, rather than bolted to the
+     * outside of a closed box. They still reach past the rim - a connector you cannot get
+     * a plug onto is no use to anybody - but their bases are now inside the case, which is
+     * where the back of a set actually is once its cover is off.
+     */
+    const mouthZ = -depth / 2 + CAVITY.depth - 0.004;
     const shell = new THREE.CylinderGeometry(radius, radius * 0.94, length, 10);
     shell.rotateX(Math.PI / 2);
-    shell.translate(x, connectorY, -depth / 2 - length / 2);
+    shell.translate(x, connectorY, mouthZ - length / 2);
     fittings.push(shell);
 
-    // A raised collar at the base, where a socket is screwed to the panel.
+    // A raised collar where the socket is screwed through the bay floor.
     const collar = new THREE.CylinderGeometry(radius * 1.22, radius * 1.22, 0.006, 10);
     collar.rotateX(Math.PI / 2);
-    collar.translate(x, connectorY, -depth / 2 - 0.003);
+    collar.translate(x, connectorY, mouthZ - 0.003);
     fittings.push(collar);
 
     /**
@@ -178,7 +260,7 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
      */
     const bore = new THREE.CylinderGeometry(radius * 0.72, radius * 0.72, length * 0.8, 10);
     bore.rotateX(Math.PI / 2);
-    bore.translate(x, connectorY, -depth / 2 - length + length * 0.4 - 0.002);
+    bore.translate(x, connectorY, mouthZ - length + length * 0.4 - 0.002);
     recesses.push(bore);
   };
 
@@ -215,10 +297,29 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
    * both plugs - the geometry intersected, so the one feature the mission turns on was
    * growing out of a louvre.
    */
+  /**
+   * The louvres, now on the TOP of the case.
+   *
+   * They were on the rear face standing 4mm proud of it, which was right while that face
+   * was a closed panel and is nonsense now it is an open bay - six slats hanging in front
+   * of a hole. Moved to the lid, which is where a set of this vintage puts them anyway and
+   * exactly the argument used to drop the connectors clear of them in the first place:
+   * heat rises.
+   *
+   * Still proud rather than cut in, and still MAT.slot, for the reasons in those notes -
+   * no shadows to fill a recess, and nothing may be allowed to light a hole.
+   */
   const VENTS = 6;
   for (let i = 0; i < VENTS; i++) {
-    const slot = new THREE.BoxGeometry(width * 0.46 * range(rng, 0.92, 1), 0.005, 0.010);
-    slot.translate(jitter(rng, 0.004), height * (0.62 + i * 0.055), -depth / 2 - 0.003);
+    /*
+     * 3mm proud, not 10. On the lid the camera sees these almost edge-on, and 1cm bars
+     * 2.6cm apart simply occlude the gaps between them - six louvres merged into one solid
+     * black rectangle that read as a hole cut in the top of the case. Low enough not to
+     * hide each other, and that is a rule for any detail on a surface seen at a grazing
+     * angle rather than a number for this lid.
+     */
+    const slot = new THREE.BoxGeometry(width * 0.44 * range(rng, 0.92, 1), 0.003, 0.007);
+    slot.translate(jitter(rng, 0.006), height + 0.0015, -depth * 0.3 + i * 0.03);
     recesses.push(slot);
   }
 
@@ -232,20 +333,22 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
    * it makes a thing that is missing legible by showing what it was attached to.
    */
   for (const sx of [-1, 1] as const) {
-    for (const sy of [0.16, 0.84] as const) {
+    for (const sy of [0.12, 0.88] as const) {
       const screw = new THREE.CylinderGeometry(0.005, 0.005, 0.006, 6);
       screw.rotateX(Math.PI / 2);
-      screw.translate(sx * width * 0.44, height * sy, -depth / 2 - 0.002);
+      // On the rim of the opening - the lip the cover was screwed down onto.
+      screw.translate(sx * (width / 2 - 0.011), height * sy, -depth / 2 - 0.002);
       fittings.push(screw);
     }
   }
 
   return {
-    body: mergeGeometries(body, false) ?? shell,
+    body: mergeGeometries(body, false) ?? handle,
     fittings: mergeGeometries(fittings, false) ?? handle,
     recesses: mergeGeometries(recesses, false) ?? undefined,
+    chassis: mergeGeometries(chassis, false) ?? undefined,
     anchors: {
-      connectorB: new THREE.Vector3(width * 0.16, connectorY, -depth / 2 - 0.05),
+      connectorB: new THREE.Vector3(width * 0.16, connectorY, -depth / 2 - 0.02),
       /**
        * The rear panel itself, at connector B's base - a SURFACE, not an aiming point.
        *
@@ -258,7 +361,11 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
        * Reported by eye long before it was measured, which is the right way round: it
        * looked like it was floating because it was floating.
        */
-      rearPanel: new THREE.Vector3(width * 0.16, connectorY, -depth / 2),
+      rearPanel: new THREE.Vector3(
+        width * 0.16,
+        connectorY,
+        -depth / 2 + depth * 0.46 - 0.0035
+      ),
       meter: new THREE.Vector3(-width * 0.22, height * 0.55, depth / 2 + 0.02),
       front: new THREE.Vector3(0, height * 0.5, depth / 2 + 0.3),
       rear: new THREE.Vector3(0, height * 0.5, -depth / 2 - 0.3),
