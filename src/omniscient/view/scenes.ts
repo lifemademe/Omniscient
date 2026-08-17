@@ -5020,6 +5020,23 @@ function buildWireCity(scene: ContactScene): void {
     target: new THREE.Vector3(-4, 8, -6),
     duration: 2.6,
   });
+  /**
+   * Down into the traffic, for the arrival.
+   *
+   * Every other shot in this mission looks at the district from outside and above, which is
+   * the machine's natural position and the reason the whole thing has felt like a puzzle.
+   * This one is at windscreen height inside it, looking along a road at the cars rather than
+   * down at them - so the little green boxes the player has been tracking across a grid
+   * finally pass at eye level, at the exact moment the game admits they are people.
+   *
+   * Slow, at four seconds. The drop from the overview is the beat; cutting would just be a
+   * different camera, while travelling makes it the same place seen from inside.
+   */
+  scene.registerShot('windscreen', {
+    position: new THREE.Vector3(12, 2.2, 30),
+    target: new THREE.Vector3(-8, 3.4, -16),
+    duration: 4,
+  });
 }
 
 ContactScene.registerBuilder('scene-repair-shop', buildRepairShop);

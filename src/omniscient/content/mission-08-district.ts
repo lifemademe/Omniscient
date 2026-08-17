@@ -53,6 +53,15 @@ export const FACT_PARTIAL_PLATE = 'partial-plate-district-07';
  */
 const DISTRICT = DISTRICT_FLEET;
 
+/**
+ * The arrival.
+ *
+ * Written once and shared by all three interventions, because the whole point of that beat
+ * is that the choice does not change what the machine does - and three copies of this
+ * string is three chances for one of them to quietly stop matching the others.
+ */
+const ARRIVE = 'camera.push-in:windscreen';
+
 export const MISSION_08: MissionDefinition = {
   id: 'mission-08-district',
   version: 1,
@@ -457,9 +466,13 @@ export const MISSION_08: MissionDefinition = {
         'just watch, and tell him where',
       ],
       on: {
-        CHANGE_THE_LIGHTS: { to: 'arrival' },
-        CALL_HIS_PHONE: { to: 'arrival' },
-        WATCH_ONLY: { to: 'arrival' },
+        // All three drop the camera into the traffic. The choice does not change what the
+        // machine does, and it does not change what it sees either.
+        // All three drop the camera into the traffic. The choice does not change what the
+        // machine does, and it does not change what it sees either.
+        CHANGE_THE_LIGHTS: { to: 'arrival', environment: ARRIVE },
+        CALL_HIS_PHONE: { to: 'arrival', environment: ARRIVE },
+        WATCH_ONLY: { to: 'arrival', environment: ARRIVE },
         // Still reachable at the last beat, because §163 does not get switched off for the
         // ending. A person who has been told to sweep the district can still say it here.
         STOP_EVERY_RED_CAR: { to: 'sweep' },
