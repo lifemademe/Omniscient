@@ -96,8 +96,25 @@ export const ACCENT = {
   warning: '#a8402f',
   /** Cold cyan = data, scanning. */
   data: '#2f7391',
-  /** Corrosion. The fault Mission 01 turns on, so it has to read instantly. */
-  corrosion: '#6f8a4a',
+  /**
+   * Corrosion. The fault Mission 01 turns on, so it has to read instantly.
+   *
+   * Blue-green, not yellow-green, and the reason is worth keeping. This was `#6f8a4a`, a
+   * moss colour - and the transmitter is `inked`, so by the time the player is looking at
+   * the connectors the certainty law has pulled the whole prop warm and boosted its chroma
+   * by 60%. That takes a moss green to a vivid lemon: the beads read as sixteen yellow
+   * stickers applied to the hero prop, which is both the wrong material and the wrong
+   * register - UI stuck onto the world rather than crud grown on it.
+   *
+   * Verdigris is copper carbonate and it is genuinely blue-green, which is also what
+   * Mirela says: "there is green crust on the second connector". Starting this far round
+   * the wheel means it arrives at a green after the warm pull rather than at a yellow, so
+   * the law can do its job - warm means known - without lying about what the stuff is.
+   *
+   * Its separation from `HUMAN.leaf` (see the note there) widens rather than narrows: the
+   * theme is Overgrown and plant green must never be confused with the fault green.
+   */
+  corrosion: '#4f8a74',
   /** Bright metal, freshly cleaned. The highest value, used sparingly. */
   bright: '#c4bda6',
 } as const;
