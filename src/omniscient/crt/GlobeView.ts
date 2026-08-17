@@ -113,9 +113,69 @@ export class GlobeView {
     this.signals = signals;
   }
 
-  /** Radians per second. Slow - §54 warns against constant motion for its own sake. */
+  /**
+   * Turn the globe.
+   *
+   * ## The machine turns to look at whoever is calling
+   *
+   * It used to drift, always, at a constant 0.16 rad/s - which is a 39 second rotation, so
+   * a signal spent about twenty seconds of every turn on the far side of the world. Twenty
+   * seconds in which the panel says "1 waiting, answerable now", the footer says SELECT A
+   * SIGNAL, and there is nothing on screen to select. Caught it by capturing the globe six
+   * times over twenty seconds rather than once: the single frame that started this looked
+   * exactly like a missing feature.
+   *
+   * So when something is waiting, the globe eases that signal round to the front and holds
+   * it there. Twice drift speed, along the shorter way round, and it stops when it arrives.
+   * Which is also the better fiction: OMNISCIENT_ has no hands and no face, and this is the
+   * one gesture it has - somebody starts talking and the machine turns towards them.
+   *
+   * With nothing waiting it drifts as before. §54 warns against constant motion for its own
+   * sake, and an idle globe that never moves at all is a picture rather than an instrument;
+   * the difference is that the motion now means something when it stops.
+   */
   public advance(deltaTime: number, speed = 0.16): void {
-    this.rotation = (this.rotation + deltaTime * speed) % (Math.PI * 2);
+    const attend = this.rotationForWaiting();
+
+    if (attend === null) {
+      this.rotation = (this.rotation + deltaTime * speed) % (Math.PI * 2);
+      return;
+    }
+
+    // Wrapped to [-pi, pi] so it takes the short way round rather than unwinding most of a
+    // turn to reach a point a few degrees behind it.
+    const gap = Math.atan2(Math.sin(attend - this.rotation), Math.cos(attend - this.rotation));
+    if (Math.abs(gap) < 0.002) return;
+    const step = Math.sign(gap) * Math.min(Math.abs(gap), speed * 2 * deltaTime);
+    this.rotation = (this.rotation + step) % (Math.PI * 2);
+  }
+
+  /**
+   * The rotation that would put a waiting signal at the front of the globe, or null.
+   *
+   * Nearest by rotation rather than first in the list: with two waiting the machine should
+   * turn to whichever it is already closest to facing, not swing across the Atlantic
+   * because that one happens to be earlier in the array.
+   *
+   * Hidden signals are excluded - they are not in the fiction yet, and turning to look at
+   * one would announce a request the player has not been given.
+   */
+  private rotationForWaiting(): number | null {
+    let best: number | null = null;
+    let shortest = Infinity;
+
+    for (const signal of this.signals) {
+      if (signal.hidden || signal.state !== SignalState.Waiting) continue;
+      // project() adds `rotation` to the longitude, so front-centre is where that sums to 0.
+      const wanted = -signal.longitude * DEG;
+      const gap = Math.abs(Math.atan2(Math.sin(wanted - this.rotation), Math.cos(wanted - this.rotation)));
+      if (gap < shortest) {
+        shortest = gap;
+        best = wanted;
+      }
+    }
+
+    return best;
   }
 
   /**
