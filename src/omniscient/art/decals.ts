@@ -139,9 +139,15 @@ export function createPuddleSurface(): THREE.CanvasTexture | null {
      * hard line anywhere in it.
      */
     ctx.save();
-    ctx.filter = 'blur(16px)';
-    ctx.strokeStyle = 'rgba(12,18,22,0.34)';
-    ctx.lineWidth = 30;
+    /*
+     * Lighter than it was. At 0.34 the damp sat as a heavy dark band immediately outside
+     * the bright lip and the two together read as a drawn edge with a shadow under it -
+     * the halo has to be felt rather than seen, or it becomes the outline it exists to
+     * avoid.
+     */
+    ctx.filter = 'blur(18px)';
+    ctx.strokeStyle = 'rgba(12,18,22,0.17)';
+    ctx.lineWidth = 26;
     ctx.stroke(bean);
     ctx.restore();
 
@@ -207,9 +213,9 @@ export function createPuddleSurface(): THREE.CanvasTexture | null {
      * into it.
      */
     const lip = ctx.createLinearGradient(0, h, 0, 0);
-    lip.addColorStop(0, 'rgba(208,230,240,0.06)');
-    lip.addColorStop(0.45, 'rgba(208,230,240,0.2)');
-    lip.addColorStop(1, 'rgba(216,238,248,0.5)');
+    lip.addColorStop(0, 'rgba(216,238,248,0.5)');
+    lip.addColorStop(0.55, 'rgba(208,230,240,0.2)');
+    lip.addColorStop(1, 'rgba(208,230,240,0.05)');
     ctx.strokeStyle = lip;
     ctx.lineWidth = 2;
     ctx.stroke(bean);

@@ -98,34 +98,38 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
   const fittings: THREE.BufferGeometry[] = [];
 
   /**
-   * The case, built as five panels with the back left open.
+   * The case, solid, with a hatch-sized recess in the back.
    *
-   * It was a solid box, and the first attempt at an open back put a cavity liner INSIDE
-   * that box - which is a cavity inside a solid, and therefore invisible. Writing "the
-   * shell stays one clean box; the cavity is a liner that sits inside it" and then being
-   * surprised that nothing showed is the whole of that mistake.
+   * The last version opened the WHOLE rear face, which is a case with no back rather than
+   * a case with its cover off - and the reference is unambiguous about the difference: a
+   * battery compartment is a modest rectangular well let into a panel that is otherwise
+   * intact, with a wide flat border all round it. That border is most of what says
+   * "something unscrews here".
    *
-   * There is no way round it: an opening needs the face gone. Five slabs of real wall
-   * thickness give the rim you see when you look into an open case, which is the detail
-   * that says the cover came off rather than that the model has a hole in it.
-   *
-   * The cost is textural and worth naming. The shell carries a generated map on box UVs
-   * where every face owns the whole 0..1 square, so each slab now gets its own copy and
-   * its own arris wear. On the outside that reads as a case with worn edges, which is what
-   * it is; on the inner faces it is hidden by the chassis plate and the dark of the bay.
+   * Built as a body that stops short of the back, plus four frame panels bridging the gap
+   * around the opening. The body keeps its box UVs so the generated map still lands on one
+   * clean volume; only the frame is split, and it is a border rather than a surface, so
+   * the per-panel arris wear reads as the edge of a hatch.
    */
-  const WALL = 0.02;
-  for (const [sx, sy, sz, dx, dy, dz] of [
-    // Front, and the two sides run the full depth so the rim is continuous.
-    [width, height, WALL, 0, 0, depth / 2 - WALL / 2],
-    [WALL, height, depth, -(width / 2 - WALL / 2), 0, 0],
-    [WALL, height, depth, width / 2 - WALL / 2, 0, 0],
-    [width - WALL * 2, WALL, depth, 0, height / 2 - WALL / 2, 0],
-    [width - WALL * 2, WALL, depth, 0, -(height / 2 - WALL / 2), 0],
-  ] as const) {
-    const panel = new THREE.BoxGeometry(sx, sy, sz);
-    panel.translate(dx, height / 2 + dy, dz);
-    body.push(panel);
+  const BAY = { width: width * 0.52, height: height * 0.56, depth: 0.085 };
+
+  const carcass = new THREE.BoxGeometry(width, height, depth - BAY.depth);
+  carcass.translate(0, height / 2, BAY.depth / 2);
+  body.push(carcass);
+
+  {
+    const sideW = (width - BAY.width) / 2;
+    const capH = (height - BAY.height) / 2;
+    for (const [sx, sy, dx, dy] of [
+      [sideW, height, -(width - sideW) / 2, 0],
+      [sideW, height, (width - sideW) / 2, 0],
+      [BAY.width, capH, 0, (height - capH) / 2],
+      [BAY.width, capH, 0, -(height - capH) / 2],
+    ] as const) {
+      const frame = new THREE.BoxGeometry(sx, sy, BAY.depth);
+      frame.translate(dx, height / 2 + dy, -depth / 2 + BAY.depth / 2);
+      body.push(frame);
+    }
   }
 
   // Front panel: meter recess plus two control dials.
@@ -140,11 +144,28 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
     fittings.push(dial);
   }
 
-  // Carry handle - reads instantly as "portable set from before things got light".
-  const handle = new THREE.TorusGeometry(width * 0.16, 0.012, 4, 10, Math.PI);
-  handle.rotateY(Math.PI / 2);
-  handle.translate(0, height, -depth * 0.1);
-  fittings.push(handle);
+  /**
+   * Carry handle: a rectangular strap bail, running along the LONG side.
+   *
+   * It was a half torus of 12mm round section turned across the depth - a wire loop over
+   * the short axis, which is neither how a case handle is made nor which way it goes. A
+   * set is carried by its long edge so it hangs level, and the handle is a folded strap
+   * with a flat section, not a rod.
+   *
+   * Three boxes: two stirrups and a grip. Flat stock reads as pressed steel at any size
+   * and, unlike a torus, keeps a straight silhouette against the pegboard behind it.
+   */
+  const handle = new THREE.BoxGeometry(0.03, 0.014, 0.016);
+  const bail: THREE.BufferGeometry[] = [];
+  for (const sx of [-1, 1] as const) {
+    const stirrup = new THREE.BoxGeometry(0.016, 0.036, 0.018);
+    stirrup.translate(sx * width * 0.26, height + 0.018, -depth * 0.04);
+    bail.push(stirrup);
+  }
+  const grip = new THREE.BoxGeometry(width * 0.52 + 0.016, 0.014, 0.024);
+  grip.translate(0, height + 0.0365, -depth * 0.04);
+  bail.push(grip);
+  fittings.push(...bail);
 
   /**
    * Rear connectors, and they are sockets rather than pegs.
@@ -215,10 +236,10 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
    * Unlit, like the vents and the socket bores. The inside of a case is dark because it is
    * inside, and nothing the work lamp does should change that.
    */
-  const CAVITY = { depth: 0.14 };
+  const CAVITY = { depth: BAY.depth };
   {
-    const plate = new THREE.BoxGeometry(width - WALL * 2, height - WALL * 2, 0.008);
-    plate.translate(0, height / 2, -depth / 2 + CAVITY.depth);
+    const plate = new THREE.BoxGeometry(BAY.width, BAY.height, 0.006);
+    plate.translate(0, height / 2, -depth / 2 + BAY.depth + 0.003);
     chassis.push(plate);
   }
 
@@ -229,7 +250,7 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
      * a plug onto is no use to anybody - but their bases are now inside the case, which is
      * where the back of a set actually is once its cover is off.
      */
-    const mouthZ = -depth / 2 + CAVITY.depth - 0.004;
+    const mouthZ = -depth / 2 + BAY.depth + 0.006;
     const shell = new THREE.CylinderGeometry(radius, radius * 0.94, length, 10);
     shell.rotateX(Math.PI / 2);
     shell.translate(x, connectorY, mouthZ - length / 2);
@@ -298,29 +319,27 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
    * growing out of a louvre.
    */
   /**
-   * The louvres, now on the TOP of the case.
+   * The louvres: raised metal bars, not dark slots, and off the lid.
    *
-   * They were on the rear face standing 4mm proud of it, which was right while that face
-   * was a closed panel and is nonsense now it is an open bay - six slats hanging in front
-   * of a hole. Moved to the lid, which is where a set of this vintage puts them anyway and
-   * exactly the argument used to drop the connectors clear of them in the first place:
-   * heat rises.
+   * On the top in MAT.slot they were read as "a hole on top of the radio", which is
+   * exactly what an unlit black rectangle on an upward face is. A vent is not a hole in a
+   * case - it is pressed metal with slits in it, and the metal is the part you see. So
+   * these are RAISED bars in the fittings material: lit, catching the lamp along their top
+   * edges, with the dark only in the gaps between them.
    *
-   * Still proud rather than cut in, and still MAT.slot, for the reasons in those notes -
-   * no shadows to fill a recess, and nothing may be allowed to light a hole.
+   * Moved to the rear frame as well, beside the hatch, where a set of this vintage puts
+   * them and where the inspection shot already looks. The lid is left clean for the handle,
+   * which is the only thing that belongs on top.
    */
-  const VENTS = 6;
+  const VENTS = 5;
   for (let i = 0; i < VENTS; i++) {
-    /*
-     * 3mm proud, not 10. On the lid the camera sees these almost edge-on, and 1cm bars
-     * 2.6cm apart simply occlude the gaps between them - six louvres merged into one solid
-     * black rectangle that read as a hole cut in the top of the case. Low enough not to
-     * hide each other, and that is a rule for any detail on a surface seen at a grazing
-     * angle rather than a number for this lid.
-     */
-    const slot = new THREE.BoxGeometry(width * 0.44 * range(rng, 0.92, 1), 0.003, 0.007);
-    slot.translate(jitter(rng, 0.006), height + 0.0015, -depth * 0.3 + i * 0.03);
-    recesses.push(slot);
+    const slot = new THREE.BoxGeometry(0.036, 0.006, 0.004);
+    slot.translate(
+      -width * 0.36 + jitter(rng, 0.002),
+      height * 0.28 + i * 0.017,
+      -depth / 2 - 0.002
+    );
+    fittings.push(slot);
   }
 
   /**
@@ -349,6 +368,8 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
     chassis: mergeGeometries(chassis, false) ?? undefined,
     anchors: {
       connectorB: new THREE.Vector3(width * 0.16, connectorY, -depth / 2 - 0.02),
+      /** The mouth of the hatch, for anything that has to sit at the opening. */
+      bayMouth: new THREE.Vector3(0, height * 0.5, -depth / 2 + 0.004),
       /**
        * The rear panel itself, at connector B's base - a SURFACE, not an aiming point.
        *
@@ -361,11 +382,7 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
        * Reported by eye long before it was measured, which is the right way round: it
        * looked like it was floating because it was floating.
        */
-      rearPanel: new THREE.Vector3(
-        width * 0.16,
-        connectorY,
-        -depth / 2 + depth * 0.46 - 0.0035
-      ),
+      rearPanel: new THREE.Vector3(width * 0.16, connectorY, -depth / 2 + BAY.depth + 0.006),
       meter: new THREE.Vector3(-width * 0.22, height * 0.55, depth / 2 + 0.02),
       front: new THREE.Vector3(0, height * 0.5, depth / 2 + 0.3),
       rear: new THREE.Vector3(0, height * 0.5, -depth / 2 - 0.3),

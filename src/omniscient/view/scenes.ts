@@ -967,9 +967,23 @@ function buildRepairShop(scene: ContactScene): void {
   let bloomMaterial: THREE.MeshStandardMaterial | null = null;
   const bloom = createCorrosionBloom();
   if (bloom) {
-    const bloomGeo = new THREE.PlaneGeometry(0.15, 0.15);
+    /*
+     * On the floor of the bay, taken from the anchor rather than from a number.
+     *
+     * This was hardcoded to z -0.171 - the old rear face, back when the case was a closed
+     * box. Once the back opened into a recess the stain stayed where the panel used to be
+     * and hung in the air outside the set, which is what "the green rust is floating"
+     * was. The anchor moves with the geometry; -0.171 never will.
+     */
+    // Sized to the hatch rather than to the old full-width panel - at 0.13 the stain
+    // covered most of a 27cm bay and read as a mesh screen across the whole opening.
+    const bloomGeo = new THREE.PlaneGeometry(0.075, 0.075);
     bloomGeo.rotateY(Math.PI);
-    bloomGeo.translate(set.anchors.connectorB.x, set.anchors.connectorB.y, -0.171);
+    bloomGeo.translate(
+      set.anchors.rearPanel.x,
+      set.anchors.rearPanel.y,
+      set.anchors.rearPanel.z - 0.001
+    );
     bloomMaterial = decalMaterial(bloom, 0.95);
     setRoot.add(meshOf('SetCorrosion', bloomGeo, bloomMaterial));
   }
@@ -997,7 +1011,15 @@ function buildRepairShop(scene: ContactScene): void {
     // Tight around the connector, thinning outward. sqrt keeps the sample area-uniform,
     // so the cluster does not end up a ring with a hole in the middle.
     const angle = range(rng, 0, Math.PI * 2);
-    const radius = 0.022 + Math.sqrt(rng()) * 0.055;
+    /*
+     * Tighter, because the bay is smaller than the panel this was scattered for.
+     *
+     * At a 7.7cm reach the outer beads landed 7.7cm above a connector sitting 1.9cm below
+     * the top of a 12cm hatch - so a third of the cluster hung off the rim in mid-air,
+     * which is what "the green rust is floating" was. Crust creeps a couple of centimetres
+     * from the joint it grows out of; it does not throw beads across a compartment.
+     */
+    const radius = 0.016 + Math.sqrt(rng()) * 0.03;
     const size = range(rng, 0.006, 0.016) * (1 - radius * 4);
 
     const bead = new THREE.IcosahedronGeometry(Math.max(0.004, size), 0);
@@ -1016,7 +1038,12 @@ function buildRepairShop(scene: ContactScene): void {
          * hovering over it. The decal is at 1mm; verdigris is a crust a couple of
          * millimetres thick, not a cloud.
          */
-        -0.003 - Math.abs(jitter(rng, 0.002))
+        /*
+         * In FRONT of the chassis plate, not inside it. The plate's face is 6mm forward of
+         * the anchor, so anything less than that is embedded in the metal it is supposed
+         * to be growing on.
+         */
+        -0.009 - Math.abs(jitter(rng, 0.002))
       ),
     });
     node.add(meshOf(`BeadMesh${i}`, bead, MAT.corroded));
