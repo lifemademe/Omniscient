@@ -2,6 +2,7 @@ import './game-data.js';
 import './omniscient/art/certainty.js';
 import './omniscient/art/cursor.js';
 import './omniscient/art/decals.js';
+import './omniscient/art/floodwater.js';
 import './omniscient/art/glass.js';
 import './omniscient/art/mesh.js';
 import './omniscient/art/noise.js';

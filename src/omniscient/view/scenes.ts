@@ -34,6 +34,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createBoxLabel, createCorrosionBloom, createRatingPlate } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
 import { CERTAINTY } from '../art/certainty.js';
+import { createFloodwater } from '../art/floodwater.js';
 import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { placeRigged } from './riggedContact.js';
 import { ACCENT, LIGHT, MAP, MAT } from '../art/palette.js';
@@ -3418,7 +3419,13 @@ function buildFloodedCellar(scene: ContactScene): void {
   const waterGeo = new THREE.PlaneGeometry(7.6, 5.6);
   waterGeo.rotateX(-Math.PI / 2);
   waterGeo.translate(0, 0.06, 0);
-  const waterMesh = meshOf('Water', waterGeo, MAT.floodwater);
+  /*
+   * Lit water, not a painted rectangle. MAT.floodwater was a MeshBasicMaterial, which
+   * cannot reflect anything by definition - so the one scene whose entire premise is a
+   * flood had a flat sheet on the floor and Vasile standing on it. See art/floodwater.
+   */
+  const flood = createFloodwater();
+  const waterMesh = meshOf('Water', waterGeo, flood.material);
 
   /**
    * The run, as something that can be seen to carry water.
@@ -3438,6 +3445,9 @@ function buildFloodedCellar(scene: ContactScene): void {
   let runIsWet = false;
 
   scene.registerProp('water', waterMesh, {
+    // Standing water is never still. The ripple is the only thing in this room that says
+    // the flood is present rather than remembered.
+    idle: (deltaTime) => flood.update(deltaTime),
     anchors: { default: new THREE.Vector3(0, 0.06, 0) },
     actions: {
       /**
