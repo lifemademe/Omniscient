@@ -334,6 +334,81 @@ function createDeskPlant(rng: Rng): RoomPart[] {
     parts.push({ name: `PlantReach${i}`, geometry: part.geometry, material: part.material });
   });
 
+  /**
+   * The room has it too, not just the desk.
+   *
+   * Overgrown is the jam's theme and until now the entire statement of it was one pot with
+   * two runners on it - a houseplant somebody has not repotted, which reads as untidy
+   * rather than as reclaimed. The building has to be losing as well.
+   *
+   * ## Why over the window head
+   *
+   * Because it is the only place in this room where a leaf gets a bright background. Every
+   * other surface is dark painted wall, and green foliage on dark wall is a shape you have
+   * to hunt for; the same leaf hanging in front of the sky is a silhouette, which is the
+   * most readable form there is and the one that survives a screenshot at thumbnail size.
+   * It also puts the growth between the player and the outside, which is the correct
+   * relationship for this game: whatever is out there is being seen through something that
+   * is quietly taking the building back.
+   *
+   * Held just off the wall plane at -1.98 rather than on it. Coplanar geometry z-fights,
+   * and a runner is standing proud of the plaster in any case - it is growing on the wall,
+   * not painted onto it.
+   */
+  const WALL_Z = -1.98;
+  const head = WINDOW.head;
+  // Three runners over the window head at different lengths, so the eye reads a fringe
+  // rather than a row. Evenly spaced growth is a trellis, and nobody trellised this.
+  const hangs: Array<[number, number]> = [
+    [WINDOW.x - WINDOW.width * 0.42, 0.46],
+    [WINDOW.x - WINDOW.width * 0.06, 0.72],
+    [WINDOW.x + WINDOW.width * 0.33, 0.3],
+  ];
+  hangs.forEach(([x, drop], run) => {
+    createVine(rng, {
+      leaves: 6 + run * 2,
+      thickness: 0.005,
+      path: [
+        new THREE.Vector3(x - 0.16, head + 0.09, WALL_Z),
+        new THREE.Vector3(x, head + 0.04, WALL_Z),
+        new THREE.Vector3(x + 0.06, head - drop * 0.45, WALL_Z),
+        new THREE.Vector3(x - 0.02, head - drop, WALL_Z),
+      ],
+    }).forEach((part, i) => {
+      parts.push({ name: `WindowFringe${run}${i}`, geometry: part.geometry, material: part.material });
+    });
+  });
+
+  /**
+   * The long runner comes down the window JAMB, not the open wall.
+   *
+   * It was first placed in the dead gap between the board and the window, on the reasoning
+   * that it was the largest unbroken area of dark paint and needed breaking. Measured, that
+   * was wrong by an order of magnitude: the runner's brightest five percent came out at
+   * luma 8 against a wall reading 0, because no light in this room reaches that plaster at
+   * all. It did not read as a plant. It read as one more cable in a room full of cables.
+   *
+   * The same geometry against the window measures a 145-luma silhouette. So the growth goes
+   * where the contrast already is - down the left jamb, close enough that the leaves hang
+   * across the glass - and the dark wall is left dark, which is what it is for.
+   *
+   * The general rule, since this cost a capture to learn: foliage needs a bright background
+   * or a light on it. Green on unlit paint is not subtle, it is invisible.
+   */
+  createVine(rng, {
+    leaves: 14,
+    thickness: 0.007,
+    path: [
+      new THREE.Vector3(WINDOW.x - WINDOW.width * 0.5 + 0.07, head + 0.16, WALL_Z),
+      new THREE.Vector3(WINDOW.x - WINDOW.width * 0.5 + 0.02, head - 0.3, WALL_Z),
+      new THREE.Vector3(WINDOW.x - WINDOW.width * 0.5 + 0.11, head - 0.76, WALL_Z),
+      new THREE.Vector3(WINDOW.x - WINDOW.width * 0.5 + 0.03, head - 1.16, WALL_Z),
+      new THREE.Vector3(WINDOW.x - WINDOW.width * 0.5 + 0.09, WINDOW.sill + 0.04, WALL_Z),
+    ],
+  }).forEach((part, i) => {
+    parts.push({ name: `JambRunner${i}`, geometry: part.geometry, material: part.material });
+  });
+
   return parts;
 }
 
