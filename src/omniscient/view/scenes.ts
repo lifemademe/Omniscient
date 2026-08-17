@@ -497,7 +497,24 @@ function buildRepairShop(scene: ContactScene): void {
    * The same shader as Vasile's cellar, at a fifth of the ripple's business, because
    * standing water in a corner moves when the room does and not otherwise.
    */
-  const puddle = createFloodwater('#1a2428');
+  /*
+   * Pale, not dark - which is the opposite of what a wet floor does and the only thing
+   * that works here.
+   *
+   * At #1a2428 the puddle rendered correctly and measured nine luma BELOW the floor around
+   * it: present, dark-on-dark, invisible. Exactly the fault the tidemark had, made twice in
+   * a row.
+   *
+   * A specular is not available to rescue it either. Reflecting this camera off a
+   * horizontal pool at (-1.95, -1.16) puts the required light source at roughly (-2.4,
+   * 0.4, -2.2), which is a metre behind the back wall - so no legal light in this room can
+   * ever put a highlight on this puddle from this angle.
+   *
+   * So it reads by VALUE. In a dark room a puddle is the bright thing, because the one
+   * thing it has to work with is whatever it can throw back - and a pool of pale sheen on
+   * a dark stone floor is what that looks like in every photograph of a wet floor at night.
+   */
+  const puddle = createFloodwater('#5d7480');
   const puddleGeo = new THREE.CircleGeometry(0.62, 20);
   puddleGeo.rotateX(-Math.PI / 2);
   puddleGeo.scale(1.35, 1, 0.85);
@@ -511,11 +528,35 @@ function buildRepairShop(scene: ContactScene): void {
    * the floor is dark and wet without anything standing on it, and that margin is most of
    * what stops a puddle reading as a sheet of glass laid on the ground.
    */
-  const damp = new THREE.CircleGeometry(0.78, 20);
+  const damp = new THREE.CircleGeometry(0.82, 20);
   damp.rotateX(-Math.PI / 2);
   damp.scale(1.35, 1, 0.85);
   damp.translate(-1.95, 0.002, -1.16);
   scene.registerProp('puddle-damp', meshOf('PuddleDamp', damp, MAT.tideStain));
+
+  /**
+   * And something for it to be lit by.
+   *
+   * The room's cold source is the shop door at (-2.4, 1.7, 1.6) with a 1.4 decay, and by
+   * the time it reaches this corner there is almost nothing left - which is correct for §5
+   * ("dark everywhere else") and leaves the one piece of evidence in the room lit by
+   * nothing at all. §131 asks the environment to carry the evidence; it cannot carry what
+   * cannot be seen.
+   *
+   * Small, cool and short-range, so it lifts the corner and nothing else. It is the same
+   * daylight, further in - not a new source, which the room is not allowed another of.
+   */
+  scene.registerProp(
+    'corner-fill',
+    ENGINE.PointLightNode.create({
+      name: 'CornerFill',
+      position: new THREE.Vector3(-1.75, 0.85, -0.55),
+      intensity: 2.6,
+      color: new THREE.Color(LIGHT.fill),
+      distance: 2.4,
+      decay: 1.2,
+    })
+  );
   scene.registerProp(
     'tide-line',
     meshOf('TideLine', mergeGeometries(tideMarks, false) ?? tideMarks[0], MAT.tideStain)

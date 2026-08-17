@@ -600,11 +600,20 @@ function createDeskLamp(rng: Rng): RoomPart[] {
 
   // The bulb, unlit, sitting up inside the shade so it glows in the cone's mouth rather
   // than hanging under it like a berry.
-  const glass = new THREE.SphereGeometry(0.032, 10, 8);
+  /*
+   * Up inside the mouth of the shade, not hanging under it.
+   *
+   * At 55mm along the aim the bulb cleared the dome's rim entirely and read as a small
+   * golden ball floating beside the lamp - the aim has a sideways component, so "below the
+   * head" also meant "off to the right". At 22mm it sits in the opening with the dome
+   * cutting across the top of it, which is what makes a fixture look like it contains its
+   * own light rather than dangling one.
+   */
+  const glass = new THREE.SphereGeometry(0.027, 10, 8);
   glass.translate(
-    head.x + aimDown.x * 0.055,
-    head.y + aimDown.y * 0.055,
-    head.z + aimDown.z * 0.055
+    head.x + aimDown.x * 0.022,
+    head.y + aimDown.y * 0.022,
+    head.z + aimDown.z * 0.022
   );
   parts.push({ name: 'LampBulb', geometry: glass, material: 'lamp' });
 
