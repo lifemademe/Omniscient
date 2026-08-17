@@ -458,6 +458,39 @@ finished game:
 
 ---
 
+### 223. PROPS ARE POSITIONED IN SCENE SPACE
+
+`ContactScene.registerProp` calls `scene.add(node)`. **It reparents.** Any parenting done before
+that call is silently undone, the node's *local* position survives the move, and whatever transform
+its old parent carried does not.
+
+Nothing in the signature says so, and it cost weeks on one object. Mirela's connector B was built at
+the transmitter's local anchor and added to `setRoot` — correct, and true for exactly two lines. The
+transmitter's own `(0, 0.81, -0.5)` was dropped at registration, so a 7cm corroded disc that belongs
+on the back panel at y 0.92 was drawn at y 0.11: on the floor, in front of the bench, in verdigris.
+It was reported as "a green circle at the base of the table" and survived two confident fixes aimed
+at VFX nodes, because it was never a VFX node.
+
+The corrosion beads sit at the *same anchor* and were always right, because they are not registered
+props and nothing ever moved them. Two objects, one anchor, disagreeing in world space by 81cm.
+
+**The rule:** compose a registered prop's position in scene space at construction. If it needs a
+parent's offset, add that offset explicitly rather than relying on the hierarchy — and if that parent
+ever gains a rotation or a scale, a `localToWorld` before registration, not an addition.
+
+**The general form**, which is worth more than the specific bug: when an API moves an object you
+positioned, the position you wrote and the position it renders at are two different values, and
+§123's rule about one value having one home applies to transforms as much as to colours and seeds.
+
+**How it was found**, because the method matters more than the answer: not by theorising. The scene
+was walked headlessly and every hypothesis killed with evidence — no green materials in the diorama,
+VFX nodes removed from the graph entirely with the disc still on screen, the editor scene queried and
+found to contain zero nodes. What remained was one low object whose parent chain read
+`ConnectorBRoot < ContactScene` instead of `< Transmitter`. That single line of output was the bug.
+Three previous attempts guessed, and all three were wrong.
+
+---
+
 ### 219. V4.9 FINAL DIRECTIVE
 
 **THE DESIGN IS NOT THE CONSTRAINT. THE SCHEDULE IS.** Every capability this game needs is confirmed
