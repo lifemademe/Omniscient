@@ -45,7 +45,7 @@ import { buildTree } from '../geometry/tree.js';
 import { clouds } from '../geometry/clouds.js';
 import { DISTRICT_CITY, DISTRICT_FLEET, DISTRICT_SIZE } from '../content/district-07.js';
 import { CELL, cellToWorld } from '../geometry/wireCity.js';
-import { createClump } from './../geometry/foliage.js';
+import { createClump, createVine } from './../geometry/foliage.js';
 import { grassTufts, greenhouse, rocks } from '../geometry/outdoors.js';
 import { meadow, meadowGround, stepWind, WIND } from '../geometry/meadow.js';
 import { stylisedWater } from '../geometry/water.js';
@@ -243,6 +243,60 @@ function buildRepairShop(scene: ContactScene): void {
   const board = new THREE.BoxGeometry(3.4, 1.6, 0.03);
   board.translate(-0.1, 1.62, -1.805);
   scene.registerProp('pegboard', meshOf('Pegboard', board, MAT.pegboard));
+
+  /**
+   * Growth over the top of the board - §264, and the second interior that admits the theme.
+   *
+   * Placed by the rule the console room's vines cost a capture to establish: foliage needs a
+   * bright background or a light on it, because green on unlit surface measures single
+   * digits and reads as cable. The pegboard is the brightest large field in this set and it
+   * is a dense mid-value texture, so a dark leaf on it separates without anything having to
+   * be lit specially for it.
+   *
+   * A short fringe along the top edge rather than runners down the face. Mirela's tools are
+   * evidence (§131) - the player reads this wall - and growth hanging across a spanner is
+   * decoration that has started charging rent. Along the top it says the building is losing
+   * without covering a single thing anybody needs to see.
+   */
+  const ivyRng = createRng(seedFrom('mirela-ivy'));
+  const boardTop = 1.62 + 0.8;
+  const ivy: THREE.BufferGeometry[] = [];
+  const ivyDeep: THREE.BufferGeometry[] = [];
+  /*
+   * Long drops, because the board's top edge is above the frame.
+   *
+   * First pass hung 20-40cm fringes from y 2.42 and almost all of it landed off-camera -
+   * placed against the geometry without checking what the shot actually contains, which is
+   * the same mistake as authoring a colour without checking what the tone curve does to it.
+   * The origin stays at the top edge, since growing over the top is the whole idea; the
+   * runs are simply long enough to arrive somewhere the player can see them.
+   */
+  for (const [x, drop] of [[-1.42, 0.86], [-0.28, 0.62], [1.12, 0.95], [1.55, 0.7]] as const) {
+    createVine(ivyRng, {
+      leaves: 5,
+      thickness: 0.008,
+      path: [
+        new THREE.Vector3(x - 0.18, boardTop + 0.06, -1.78),
+        new THREE.Vector3(x, boardTop + 0.01, -1.78),
+        new THREE.Vector3(x + 0.05, boardTop - drop * 0.5, -1.78),
+        new THREE.Vector3(x - 0.03, boardTop - drop, -1.78),
+      ],
+    }).forEach((part) => {
+      (part.material === 'leafDeep' ? ivyDeep : ivy).push(part.geometry);
+    });
+  }
+  if (ivy.length) {
+    scene.registerProp(
+      'board-ivy',
+      meshOf('BoardIvy', mergeGeometries(ivy, false) ?? ivy[0], MAT.leaf)
+    );
+  }
+  if (ivyDeep.length) {
+    scene.registerProp(
+      'board-ivy-deep',
+      meshOf('BoardIvyDeep', mergeGeometries(ivyDeep, false) ?? ivyDeep[0], MAT.leafDeep)
+    );
+  }
 
   /**
    * What is hanging on it.
