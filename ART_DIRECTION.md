@@ -98,6 +98,20 @@ centimetres thick laid over the entire headland. **Merged props and long thin on
 disqualified however well the fiction fits**, and the fiction fitted both. Either split the
 prop, as the shelf was split, or let it sit at SHAPED and warm by colour instead.
 
+**Three tests before a prop gets tier 1**, all learned by failing them in one afternoon:
+
+1. **Is its bounding box a likeness?** Merged, sprawling and long-thin props fail. *(Dorin's
+   stoop; the beacon's supply cable.)*
+2. **Is there enough volume to draw?** Ileana's envelopes are 3 mm thick, stacked at 3.5 mm.
+   Their bounds are a wafer: the tier applies perfectly and renders something nobody can
+   see. Correct and pointless is still pointless.
+3. **Is it a thing at all?** `hall` is a plane standing in for the dark beyond a door. A
+   guess drawn round an absence invents an object the room does not contain — `suspected.ts`
+   says exactly that in its own header, and it got done anyway.
+
+A room with no prop that passes all three simply has no guesses, and warms by colour alone.
+**That is allowed.** The cleared house and the night door both ended there.
+
 ### Tier 2 — SHAPED · `0.30 – 0.59`
 *I know its shape.* **This is the 90s CG tier and the game's default resting state.**
 

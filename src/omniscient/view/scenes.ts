@@ -3724,9 +3724,28 @@ function buildClearedHouse(scene: ContactScene): void {
     ['curtain-rail', CERTAINTY.SHAPED],
     // The tide line is evidence the machine can read for itself once it is drawing a wall.
     ['tide-line', CERTAINTY.SHAPED],
-    // Papers on the table, and the dark beyond the doorway. Neither has been mentioned.
-    ['letters', CERTAINTY.SUSPECTED],
-    ['hall', CERTAINTY.SUSPECTED],
+    /*
+     * Both SHAPED, and both were SUSPECTED until it was checked on screen.
+     *
+     * The fiction is sound - nobody has mentioned the envelopes or said what is beyond the
+     * door - and both are unbuildable as guesses, for opposite reasons.
+     *
+     * `letters` is four envelopes 3mm thick stacked at 3.5mm intervals. Its bounding
+     * volume is a wafer 16cm by 2cm by 11cm, which at the shot distance is a few dozen
+     * pixels of wireframe: the tier applies correctly and cannot be seen. That is the
+     * doorstep lesson from the other end - too sprawling to be a likeness, or too flat to
+     * be a volume, and this is the second.
+     *
+     * `hall` is worse and is a category error. It is a PlaneGeometry standing in for the
+     * dark beyond the door: not an object the machine is unsure about, but the absence of
+     * one. createSuspicion's own note says it - wrapping a thing like that in a glowing box
+     * invents an object the room does not contain.
+     *
+     * So this room warms by colour and has no guesses in it, which is allowed. Not every
+     * room needs one; the night door reached the same place by the same argument.
+     */
+    ['letters', CERTAINTY.SHAPED],
+    ['hall', CERTAINTY.SHAPED],
   ] as [string, number][]) {
     scene.setCertainty(id, certainty);
   }
