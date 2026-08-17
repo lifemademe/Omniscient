@@ -87,6 +87,25 @@ export const CONSOLE_CHROME_CSS = `
   min-height: 0;
 }
 /*
+ * The left column: readouts at the top, controls at the bottom, air in between.
+ *
+ * Layout and decoration are deliberately two rules now, and the reason is a bug that cost
+ * a screen. They started as one, and when the brackets below were scoped away from the
+ * globe the space-between went with them - so the globe's controls stopped being pushed to
+ * the floor of the column and rode up under the status cards. The button back to the
+ * machine moved several hundred pixels because of a change to a border.
+ *
+ * A rule that says where things go and a rule that says what they look like should not be
+ * able to break each other. Separated, and to stay that way.
+ */
+.omni-cv__stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 0;
+}
+/*
  * The hole in the frame the world shows through, marked as one.
  *
  * Four corner brackets and nothing else. A full border would put a box round somebody's
@@ -97,19 +116,14 @@ export const CONSOLE_CHROME_CSS = `
  * Drawn as eight background gradients rather than as elements, so neither screen has to
  * build DOM for it.
  *
- * Scoped away from the globe, though. The two screens use the same class for different
- * things: on the Contact View __stage is the hole the diorama shows through, and on the
- * globe it is the left readout column - so inheriting this put a viewport frame around
- * three status cards and left two bracket corners floating in the middle of the screen.
- * The globe's own frame goes on .omni-globe__stage, in the globe's own file, which is
- * what this module's header says should happen to anything screen-specific.
+ * Scoped away from the globe. The two screens use the same class for different things: on
+ * the Contact View __stage is the hole the diorama shows through, and on the globe it is
+ * the left readout column - so inheriting this put a viewport frame around three status
+ * cards and left two bracket corners floating in the middle of the screen. The globe's own
+ * frame goes on .omni-globe__stage, in the globe's own file, which is what this module's
+ * header says should happen to anything screen-specific.
  */
 .omni-cv:not(.omni-cv--globe) .omni-cv__stage {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 0;
   --bk: 22px;
   --bc: #2f7391;
   background-image:

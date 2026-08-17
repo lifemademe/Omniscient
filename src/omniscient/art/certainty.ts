@@ -229,11 +229,11 @@ function applyToMaterial(material: THREE.Material, certainty: number): void {
  * cycles showed a mean frame difference of 0.7 - indistinguishable from noise - with no
  * warning anywhere, because nothing had failed.
  *
- * Reaching `_mesh` is poking at a private, and it is still the honest option: it is the
- * only reference to the thing on screen.
+ * The inner mesh is reachable through MeshNode's public `mesh` getter, which is the only
+ * reference anywhere to the thing actually on screen.
  */
-function renderTargetOf(object: THREE.Object3D): THREE.Mesh | null {
-  const inner = (object as { _mesh?: THREE.Mesh })._mesh;
+export function renderTargetOf(object: THREE.Object3D): THREE.Mesh | null {
+  const inner = (object as { mesh?: THREE.Mesh }).mesh;
   if (inner?.isMesh) return inner;
   const mesh = object as THREE.Mesh;
   return mesh.isMesh && mesh.material !== undefined ? mesh : null;

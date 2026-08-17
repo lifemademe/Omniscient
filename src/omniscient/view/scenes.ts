@@ -364,11 +364,35 @@ function buildRepairShop(scene: ContactScene): void {
     meshOf('TideLine', mergeGeometries(tideMarks, false) ?? tideMarks[0], MAT.tideStain)
   );
 
+  /**
+   * The shelf, and separately the things on it.
+   *
+   * One prop until the SUSPECTED tier was built, at which point the whole unit - frame,
+   * shelves and all - became a single black volume filling the left third of the frame.
+   * That is wrong twice over. Compositionally it replaces the only vertical rhythm on that
+   * side of the room with a slab. Fictionally it is a lie: Mirela is standing in her own
+   * workshop describing a radio, and the machine has no reason whatever to doubt that she
+   * has a SHELF. What nobody has said a word about is what is in the boxes on it.
+   *
+   * Split, the image says the true thing and is better for it - a real shelf, holding
+   * volumes the machine has drawn a box around. The unresolved sits inside the resolved,
+   * which is the shape every good version of this idea has.
+   *
+   * Two roots rather than one parent with two children, because registerProp reparents to
+   * the scene and a child's local position would survive the move while its parent's did
+   * not. That has already put a connector on the floor for several weeks - see the note on
+   * connector-b, which is the same mistake with a different prop.
+   */
   const shelf = createShelfStack('mirela-shelf');
-  const shelfRoot = ENGINE.SceneNode.create({ name: 'Shelf', position: new THREE.Vector3(-2.1, 0, -1.4) });
+  const SHELF_AT = new THREE.Vector3(-2.1, 0, -1.4);
+
+  const shelfRoot = ENGINE.SceneNode.create({ name: 'Shelf', position: SHELF_AT.clone() });
   shelfRoot.add(meshOf('ShelfBody', shelf.body, MAT.timber));
-  shelfRoot.add(meshOf('ShelfCrates', shelf.fittings, MAT.plastic));
   scene.registerProp('shelf', shelfRoot);
+
+  const crateRoot = ENGINE.SceneNode.create({ name: 'ShelfCrates', position: SHELF_AT.clone() });
+  crateRoot.add(meshOf('ShelfCrateMesh', shelf.fittings, MAT.plastic));
+  scene.registerProp('shelf-crates', crateRoot);
 
   const bench = createWorkbench();
   const benchRoot = ENGINE.SceneNode.create({ name: 'Bench', position: new THREE.Vector3(0, 0, -0.5) });
@@ -429,10 +453,78 @@ function buildRepairShop(scene: ContactScene): void {
     meshOf('BenchTools', mergeGeometries(clutter, false) ?? panel, MAT.metal)
   );
 
-  // Screws, in the lid of a tin because that is where they always end up.
-  const tin = new THREE.CylinderGeometry(0.055, 0.052, 0.022, 10);
-  tin.translate(0.24, 0.825, -0.3);
-  scene.registerProp('bench-tin', meshOf('BenchTin', tin, MAT.plastic));
+  /**
+   * Screws, in the lid of a tin because that is where they always end up.
+   *
+   * This was a capped decagon 11cm across in MAT.plastic - which the palette's own comment
+   * calls the lightest thing in the room - lying flat on the bench with its top face square
+   * to the key, twenty centimetres off the radio's front corner. It read as exactly what it
+   * was: a white disc. Somebody looking at the shot asked what it was, which is the only
+   * review a prop ever really gets.
+   *
+   * The fault is SILHOUETTE, not colour (ART_DIRECTION §4.1), so the colour law was never
+   * going to reach it - a flat circle is a flat circle at any value, and the cooling it
+   * already had just made it a cooler flat circle. What makes a lid read as a lid is a rim
+   * you can see over and contents breaking the line: a recessed floor in its own shadow, a
+   * bright rim catching the lamp, and screws lying across each other at angles. Three
+   * values on one object, which §4.2 asks for and a solid fill cannot give.
+   *
+   * Metal rather than plastic, too. A tin is a tin.
+   */
+  const TIN_AT = new THREE.Vector3(0.24, 0.814, -0.3);
+
+  // The floor of the lid, sunk below the rim so the inside sits in its own shadow.
+  const tinFloor = new THREE.CylinderGeometry(0.052, 0.05, 0.004, 12);
+  tinFloor.translate(TIN_AT.x, TIN_AT.y + 0.002, TIN_AT.z);
+
+  /*
+   * The rim as a torus rather than a wall. An open-ended cylinder is the obvious way to
+   * make one and needs a double-sided material to survive being looked into, and every
+   * material in this room is front-faced - so the near wall would vanish and the lid would
+   * read as a hole in the bench.
+   */
+  const tinRim = new THREE.TorusGeometry(0.0525, 0.0035, 5, 18);
+  tinRim.rotateX(Math.PI / 2);
+  tinRim.translate(TIN_AT.x, TIN_AT.y + 0.005, TIN_AT.z);
+  const tinMetal: THREE.BufferGeometry[] = [tinRim];
+
+  /*
+   * Nine screws, lying down and crossing each other.
+   *
+   * Lying down because that is what loose screws in a shallow lid do, and crossing because
+   * anything radial would read as a diagram of screws rather than a pile of them. Two
+   * heights, so they overlap. The heads stand a couple of millimetres proud of the rim,
+   * which is the entire reason this stops being a circle - the outline now has notches in
+   * it, and notches are what the eye reads at a squint.
+   */
+  for (let i = 0; i < 9; i++) {
+    const angle = range(benchRng, 0, Math.PI * 2);
+    const dist = range(benchRng, 0, 0.03);
+    const yaw = range(benchRng, 0, Math.PI * 2);
+    const length = range(benchRng, 0.018, 0.026);
+    const x = TIN_AT.x + Math.cos(angle) * dist;
+    const z = TIN_AT.z + Math.sin(angle) * dist;
+    const y = TIN_AT.y + 0.006 + (i % 2) * 0.003;
+
+    // Cylinders are built along Y; rotateZ lays the shaft down, rotateY aims it.
+    const shaft = new THREE.CylinderGeometry(0.0016, 0.0022, length, 5);
+    shaft.rotateZ(Math.PI / 2);
+    shaft.rotateY(yaw);
+    shaft.translate(x, y, z);
+    tinMetal.push(shaft);
+
+    const head = new THREE.CylinderGeometry(0.0042, 0.0042, 0.0016, 6);
+    head.rotateZ(Math.PI / 2);
+    head.rotateY(yaw);
+    head.translate(x + Math.cos(yaw) * (length / 2), y, z - Math.sin(yaw) * (length / 2));
+    tinMetal.push(head);
+  }
+
+  scene.registerProp('bench-tin', meshOf('BenchTin', tinFloor, MAT.dark));
+  scene.registerProp(
+    'bench-screws',
+    meshOf('BenchScrews', mergeGeometries(tinMetal, false) ?? tinRim, MAT.metal)
+  );
 
   /**
    * Storage under the bench.
@@ -929,16 +1021,23 @@ function buildRepairShop(scene: ContactScene): void {
     ['pegboard', CERTAINTY.SHAPED],
     ['pegboard-tools', CERTAINTY.SHAPED],
     ['tide-line', CERTAINTY.SHAPED],
-    // Nobody has said what is on the shelf or in the boxes. They are the coldest things
-    // in the room and they are supposed to look like it - this is what turns a flat white
+    // The shelf is a shelf and she is standing in front of it. What nobody has said a word
+    // about is what is in the boxes - on it, and under the bench. Those are the coldest
+    // things in the room and are supposed to look like it: this is what turns a flat white
     // box from unfinished work into an object nobody has described.
-    ['shelf', CERTAINTY.SUSPECTED],
+    ['shelf', CERTAINTY.SHAPED],
+    ['shelf-crates', CERTAINTY.SUSPECTED],
     ['bench-store', CERTAINTY.SUSPECTED],
     // She never described her bench. She described what is standing on it, and the bench
     // being the brightest mass in frame was the reason the radio lost the eye to it.
     ['bench', CERTAINTY.SHAPED],
     ['bench-tools', CERTAINTY.SHAPED],
-    ['bench-tin', CERTAINTY.SUSPECTED],
+    // The tin and its screws are SHAPED, not SUSPECTED. A lid of loose screws on a bench
+    // somebody is working at is a shape the machine can infer from the bench; it is not a
+    // thing whose existence is a guess, which is what the tier below means. It stopped
+    // needing to be cooled into the background the moment it stopped being a white disc.
+    ['bench-tin', CERTAINTY.SHAPED],
+    ['bench-screws', CERTAINTY.SHAPED],
     ['bench-rag', CERTAINTY.SUSPECTED],
     // The back panel is off and leaning on the bench, and it is the brightest object in
     // frame by luma - a blank rectangle out-competing the radio for the eye. She has not

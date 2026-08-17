@@ -23,7 +23,9 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
 import { applyCertainty, CERTAINTY } from '../art/certainty.js';
+import { createSuspicion, type Suspicion } from '../art/suspected.js';
 
+import { seedFrom } from '../core/rng.js';
 import { Ease, Tweener } from '../core/tween.js';
 
 export interface CameraShot {
@@ -47,6 +49,8 @@ export interface RegisteredProp {
   inked?: boolean;
   /** How much the machine knows about this prop. ART_DIRECTION §1. */
   certainty?: number;
+  /** Live only below SHAPED: the guess standing in for the prop. ART_DIRECTION §1 tier 1. */
+  suspicion?: Suspicion;
 }
 
 /** Populates a scene with its props, shots and actions. Registered by content modules. */
@@ -116,9 +120,25 @@ export class ContactScene extends ENGINE.SceneNode {
     }
   }
 
+  /**
+   * Has this diorama ever been put on screen? Gates every material change.
+   *
+   * `visible` was the gate and was the wrong one, in a way that took a magenta test to
+   * see. `build()` runs from the constructor, and the rig sets `visible = false` only
+   * once the constructor has RETURNED - so throughout the build the scene reports itself
+   * visible, every setCertainty applies immediately, and the results are handed to
+   * MeshNode material loads that are still in flight. The loads win. Nothing errors, the
+   * counts all look healthy, and the room comes out unchanged.
+   *
+   * This is the same trap the note in setCertainty describes and thought it had closed.
+   * It had not: the guard was reading a flag that is true at exactly the wrong moment.
+   */
+  private live = false;
+
   /** Show this diorama. The rig owns the camera and frames the shot. */
   public activate(): void {
     this.visible = true;
+    this.live = true;
     this.applyCertainties();
   }
 
@@ -266,7 +286,7 @@ export class ContactScene extends ENGINE.SceneNode {
      * the re-apply path is the main path and the builder is just the opening state.
      */
     prop.certainty = certainty;
-    if (this.visible) this.applyCertainties();
+    if (this.live) this.applyCertainties();
   }
 
   /**
@@ -283,9 +303,31 @@ export class ContactScene extends ENGINE.SceneNode {
    * that the shelf is a mystery, that the bench is not - still overrides per prop.
    */
   private applyCertainties(): void {
-    for (const prop of this.props.values()) {
+    for (const [id, prop] of this.props) {
       const certainty =
         prop.certainty ?? (prop.inked ? CERTAINTY.KNOWN : CERTAINTY.SHAPED);
+
+      /*
+       * Below SHAPED the prop is not rendered at all - the machine's guess at it is. That
+       * is a different KIND of change from the tiers above, which are all one material
+       * doing more or less work, so it is a branch here rather than another parameter
+       * inside the colour law.
+       *
+       * The suspicion is built once and torn down the moment the prop is promoted, which
+       * is the resolve moment the whole direction is built around: a black box with lit
+       * edges becomes a thing, because somebody said what it was.
+       */
+      if (certainty < CERTAINTY.SHAPED) {
+        prop.suspicion ??=
+          createSuspicion(prop.node as unknown as THREE.Object3D, seedFrom(`${this.sceneId}:${id}`)) ??
+          undefined;
+        continue;
+      }
+
+      if (prop.suspicion) {
+        prop.suspicion.dispose();
+        prop.suspicion = undefined;
+      }
       applyCertainty(prop.node as unknown as THREE.Object3D, certainty);
     }
   }
@@ -456,6 +498,7 @@ export class ContactScene extends ENGINE.SceneNode {
     this.tweener.update(deltaTime);
     for (const prop of this.props.values()) {
       prop.idle?.(deltaTime, prop.node);
+      prop.suspicion?.update(deltaTime);
     }
   }
 

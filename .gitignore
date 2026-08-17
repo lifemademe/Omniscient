@@ -39,3 +39,6 @@ assets/screenshots/*.jpg
 assets/screenshots/*.png
 assets/screenshots/*.html
 
+
+# Python bytecode from scripts/dev.
+__pycache__/

@@ -13,6 +13,7 @@ import './omniscient/art/retro.js';
 import './omniscient/art/shadows.js';
 import './omniscient/art/sky.js';
 import './omniscient/art/surface.js';
+import './omniscient/art/suspected.js';
 import './omniscient/art/warp.js';
 import './omniscient/audio/ConsoleAudio.js';
 import './omniscient/content/contacts.js';

@@ -29,7 +29,25 @@ MOUSEEVENTF_LEFTUP = 0x0004
 # The game window, in desktop pixels. Anything outside this is refused: the point of
 # scripting input is to test the game, and a typo should not be able to press something
 # in another application.
-GAME_RECT = (700, 170, 2555, 1270)
+#
+# Measured per run rather than written down. It was a constant, and the window moves every
+# time play mode restarts - so the constant went stale silently and every coordinate taken
+# off a screenshot was refused by a guard protecting the wrong rectangle, which reads as
+# "the tool is broken" rather than as "the number is old".
+WINDOW_TITLE = 'omniscient - default'
+FALLBACK_RECT = (700, 170, 2555, 1270)
+
+
+def game_rect() -> tuple[int, int, int, int]:
+    handle = user32.FindWindowW(None, WINDOW_TITLE)
+    if not handle:
+        return FALLBACK_RECT
+    rect = ctypes.wintypes.RECT()
+    user32.GetWindowRect(handle, ctypes.byref(rect))
+    return rect.left, rect.top, rect.right, rect.bottom
+
+
+GAME_RECT = game_rect()
 
 
 def guard(x: int, y: int) -> tuple[int, int]:
@@ -43,12 +61,22 @@ def move(x: int, y: int) -> None:
     user32.SetCursorPos(*guard(x, y))
 
 
-def click(x: int, y: int) -> None:
+# Seconds to stay put after a click. A main-menu plate is a socket, not a button: the
+# click starts a cable plugging in and MainMenu.tickPlug retracts it if the pointer leaves
+# before it seats. So a click followed immediately by parking the cursor CANCELS ITS OWN
+# ACTION and looks exactly like a click that missed - which cost an afternoon of diagnosing
+# coordinates, window focus and DPI before anybody read MainMenu and found the game doing
+# what it documents. Waiting is the default for that reason; pass 0 where it is not wanted.
+DWELL = 3.2
+
+
+def click(x: int, y: int, dwell: float = DWELL) -> None:
     move(x, y)
     time.sleep(0.06)
     user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
     time.sleep(0.05)
     user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+    time.sleep(dwell)
 
 
 def park() -> None:
@@ -64,7 +92,8 @@ if __name__ == '__main__':
     elif action == 'move':
         move(int(sys.argv[2]), int(sys.argv[3]))
     elif action == 'click':
-        click(int(sys.argv[2]), int(sys.argv[3]))
+        click(int(sys.argv[2]), int(sys.argv[3]),
+              float(sys.argv[4]) if len(sys.argv) > 4 else DWELL)
     elif action == 'hover':
         move(int(sys.argv[2]), int(sys.argv[3]))
         time.sleep(float(sys.argv[4]) if len(sys.argv) > 4 else 1.0)
