@@ -82,10 +82,23 @@ const BREATHE_HIGH = 0.62;
 /** Deliberately not a multiple of DRIFT_RATE, so the two never fall into step. */
 const BREATHE_RATE = 0.23;
 
+/** Seconds the sweep takes. ART_DIRECTION §3 asks for 0.6 and 0.6 is right. */
+const RESOLVE_SECONDS = 0.6;
+
 export interface Suspicion {
-  /** Advance the drift and the breath. Called from the scene's tick. */
-  update(deltaTime: number): void;
-  /** Put the real prop back. Safe to call twice. */
+  /** True once the sweep has started. The prop is on its way to being known. */
+  readonly resolving: boolean;
+  /**
+   * Play the sweep, then put the real prop back. ART_DIRECTION §3.
+   *
+   * `stagger` delays the start, so a beat that promotes three things at once does not fire
+   * three identical animations on the same frame - which reads as a glitch rather than as
+   * three separate facts arriving.
+   */
+  resolve(stagger?: number): void;
+  /** Advance drift, breath or sweep. Returns false once this is finished with. */
+  update(deltaTime: number): boolean;
+  /** Put the real prop back immediately, with no sweep. Safe to call twice. */
   dispose(): void;
 }
 
@@ -119,6 +132,27 @@ function localBounds(root: THREE.Object3D): THREE.Box3 | null {
   });
 
   return found && !box.isEmpty() ? box : null;
+}
+
+/** The bottom rectangle alone, in the box's local space. The sweep rides this. */
+function baseEdges(size: THREE.Vector3): THREE.BufferGeometry {
+  const x = size.x / 2;
+  const y = -size.y / 2;
+  const z = size.z / 2;
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(
+      [
+        -x, y, -z, x, y, -z,
+        x, y, -z, x, y, z,
+        x, y, z, -x, y, z,
+        -x, y, z, -x, y, -z,
+      ],
+      3
+    )
+  );
+  return geometry;
 }
 
 /** Twelve edges as a line list. Cheaper than EdgesGeometry and exact for a box. */
@@ -241,15 +275,97 @@ export function createSuspicion(root: THREE.Object3D, seed: number): Suspicion |
   const edges = new THREE.LineSegments(boxEdges(size), wire);
   container.add(edges);
 
+  /*
+   * The rule that crosses the volume when it resolves. ART_DIRECTION §3.
+   *
+   * Just the bottom rectangle, at full brightness, and it rides the volume's lower edge -
+   * so shrinking the box upward drags the line up through the space the prop occupies.
+   * That is the whole sweep: no clipping planes, no second shader, no discard. The line is
+   * where the change is happening and the eye follows it because it is the brightest thing
+   * in the frame for six tenths of a second.
+   *
+   * Hidden until then. A permanent bright edge along the bottom of every guess would read
+   * as a design element rather than as an event.
+   */
+  const ruleMaterial = new THREE.LineBasicMaterial({
+    color: new THREE.Color(ACCENT.knowledge),
+    transparent: true,
+    opacity: 1,
+    toneMapped: false,
+  });
+  const rule = new THREE.LineSegments(baseEdges(size), ruleMaterial);
+  rule.visible = false;
+  container.add(rule);
+
   root.add(container);
 
   let time = 0;
   let disposed = false;
+  /** Seconds into the resolve, or null while the machine is still guessing. */
+  let resolving: number | null = null;
+  let delay = 0;
 
   return {
-    update(deltaTime: number): void {
-      if (disposed) return;
+    get resolving(): boolean {
+      return resolving !== null;
+    },
+
+    resolve(stagger = 0): void {
+      if (resolving !== null || disposed) return;
+      resolving = 0;
+      delay = stagger;
+      /*
+       * The prop comes back at the START of the sweep, not the end.
+       *
+       * It is behind a volume that is still mostly opaque, so almost nothing shows yet -
+       * and as the box retreats upward it UNCOVERS a thing that was already there. Revealing
+       * it at the end instead would be a swap, and a swap reads as a bug however well it is
+       * timed. What the direction asks for is something developing, and developing means the
+       * image was always underneath.
+       */
+      for (const mesh of hidden) mesh.visible = true;
+      rule.visible = true;
+    },
+
+    update(deltaTime: number): boolean {
+      if (disposed) return false;
       time += deltaTime;
+
+      if (resolving !== null) {
+        resolving += deltaTime;
+        if (resolving < delay) return true;
+
+        const t = Math.min(1, (resolving - delay) / RESOLVE_SECONDS);
+        /*
+         * Ease out, per §3 - it decelerates into place. A linear sweep reads as a wipe, and
+         * a wipe is a transition between two pictures; this is meant to read as a thing
+         * arriving, which means it has to slow down as it gets there.
+         */
+        const eased = 1 - Math.pow(1 - t, 3);
+
+        /*
+         * Shrink upward, anchored at the top. The box's ceiling stays put and its floor
+         * climbs, so the bottom rectangle - the rule - travels the full height of the
+         * volume exactly once.
+         */
+        container.scale.y = Math.max(0.0001, 1 - eased);
+        container.position.set(centre.x, centre.y + (size.y * eased) / 2, centre.z);
+
+        fill.opacity = BREATHE_LOW * (1 - eased);
+        wire.opacity = BREATHE_HIGH * (1 - eased);
+        /*
+         * The rule holds full brightness until the very end and then goes in a hurry. A
+         * line that fades out evenly with everything else is not an event, it is a
+         * dissolve - the spike has to survive to the top and stop.
+         */
+        ruleMaterial.opacity = t < 0.82 ? 1 : 1 - (t - 0.82) / 0.18;
+
+        if (t >= 1) {
+          this.dispose();
+          return false;
+        }
+        return true;
+      }
 
       /*
        * Three unrelated rates on three axes. One sine on one axis is a bob, and a bob is a
@@ -267,6 +383,7 @@ export function createSuspicion(root: THREE.Object3D, seed: number): Suspicion |
       // The edge runs opposite the fill, so the object never dims as a whole - it resolves
       // and unresolves, which is what it is meant to be doing.
       wire.opacity = BREATHE_HIGH - (BREATHE_HIGH - BREATHE_LOW) * breath * 0.5;
+      return true;
     },
 
     dispose(): void {
@@ -276,8 +393,10 @@ export function createSuspicion(root: THREE.Object3D, seed: number): Suspicion |
       container.removeFromParent();
       volume.geometry.dispose();
       edges.geometry.dispose();
+      rule.geometry.dispose();
       fill.dispose();
       wire.dispose();
+      ruleMaterial.dispose();
     },
   };
 }

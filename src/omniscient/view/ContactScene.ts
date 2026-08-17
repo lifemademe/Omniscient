@@ -25,6 +25,9 @@ import * as THREE from 'three';
 import { applyCertainty, CERTAINTY } from '../art/certainty.js';
 import { createSuspicion, type Suspicion } from '../art/suspected.js';
 
+/** Seconds between staggered resolves. ART_DIRECTION §3. */
+const RESOLVE_STAGGER = 0.18;
+
 import { seedFrom } from '../core/rng.js';
 import { Ease, Tweener } from '../core/tween.js';
 
@@ -303,6 +306,7 @@ export class ContactScene extends ENGINE.SceneNode {
    * that the shelf is a mystery, that the bench is not - still overrides per prop.
    */
   private applyCertainties(): void {
+    let resolved = 0;
     for (const [id, prop] of this.props) {
       const certainty =
         prop.certainty ?? (prop.inked ? CERTAINTY.KNOWN : CERTAINTY.SHAPED);
@@ -324,9 +328,21 @@ export class ContactScene extends ENGINE.SceneNode {
         continue;
       }
 
-      if (prop.suspicion) {
-        prop.suspicion.dispose();
-        prop.suspicion = undefined;
+      /*
+       * Promoted. This is the resolve moment the whole direction is built to pay, so it
+       * sweeps rather than snapping - see ART_DIRECTION §3 and art/suspected.
+       *
+       * Staggered, because a beat that raises three certainties at once would otherwise
+       * fire three identical animations on the same frame, and three of anything in perfect
+       * lockstep reads as a glitch rather than as three separate things being learned.
+       * §3 puts the ceiling at two at a time and the gap at 180ms.
+       *
+       * The suspicion is NOT cleared here. It has to keep ticking to drive its own sweep,
+       * and it retires itself when the sweep finishes - see the tick.
+       */
+      if (prop.suspicion && !prop.suspicion.resolving) {
+        prop.suspicion.resolve(resolved * RESOLVE_STAGGER);
+        resolved += 1;
       }
       applyCertainty(prop.node as unknown as THREE.Object3D, certainty);
     }
@@ -519,7 +535,9 @@ export class ContactScene extends ENGINE.SceneNode {
     this.tweener.update(deltaTime);
     for (const prop of this.props.values()) {
       prop.idle?.(deltaTime, prop.node);
-      prop.suspicion?.update(deltaTime);
+      // A suspicion retires itself once its sweep has played out. Clearing it here rather
+      // than at the moment of promotion is what lets the sweep run at all.
+      if (prop.suspicion && !prop.suspicion.update(deltaTime)) prop.suspicion = undefined;
     }
   }
 
