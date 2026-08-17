@@ -10,8 +10,22 @@ import * as THREE from 'three';
 
 import { ACCENT } from '../art/palette.js';
 
-const WIDTH = 512;
-const HEIGHT = 116;
+/**
+ * Supersampled 2x, then filtered down by the GPU.
+ *
+ * At 512 the plate's lettering measured a conservative contrast of 3.14:1 after the ink was
+ * darkened - over the line, but the strokes were being thinned by antialiasing into the
+ * plate rather than by the colour choice. A Courier stem at 44px on a texture this size is
+ * about two texels wide by the time it reaches the screen, and half of each stem is a blend
+ * with the background.
+ *
+ * Drawing at twice the size and letting the mip chain do the reduction costs one megabyte
+ * of texture for the whole menu and gives a letter with an actual solid core. Every metric
+ * below is expressed off SCALE so the layout cannot drift from the canvas.
+ */
+const SCALE = 2;
+const WIDTH = 512 * SCALE;
+const HEIGHT = 116 * SCALE;
 
 export interface LabelOptions {
   title: string;
@@ -36,22 +50,47 @@ export function createLabelTexture(options: LabelOptions): THREE.CanvasTexture {
   ctx.clearRect(0, 0, WIDTH, HEIGHT);
   ctx.textBaseline = 'alphabetic';
 
+  /**
+   * Dark ink, on both states.
+   *
+   * These were cream (`#cdbfa2`) on a cream plate, and measured at a contrast ratio of
+   * **1.21:1** against it - text at median luma 140 against a plate at 147, seven values
+   * apart. WCAG asks 3:1 for large type and this is the first screen of the game, so NEW
+   * GAME was effectively unlabelled in the shot a store page would lead with.
+   *
+   * The fix is not brighter text, it is darker: every real piece of equipment in this room
+   * is stencilled dark on pale metal, because that is what survives being read across a
+   * workshop. It is the authentic answer and the legible one at the same time.
+   *
+   * Lit does not change the ink - it puts the accent BEHIND the letters as a glow, which
+   * reads as the plate backlighting from within and keeps the same reading contrast in
+   * both states. Swapping ink to the accent on hover, which is what it used to do, made
+   * the selected item the hardest one on the panel to read.
+   */
   const accent = options.accent ?? ACCENT.amber;
-  const title = options.lit ? accent : '#cdbfa2';
-  const subtitle = options.lit ? '#d8cbb0' : '#8d8069';
+  // Dark values barely move under ACES (§255), so these arrive close to as authored.
+  const title = '#2b2620';
+  const subtitle = '#5a5147';
 
-  ctx.font = 'bold 44px "Courier New", monospace';
-  ctx.fillStyle = title;
+  ctx.font = `bold ${44 * SCALE}px "Courier New", monospace`;
   if (options.lit) {
     ctx.shadowColor = accent;
-    ctx.shadowBlur = 18;
+    ctx.shadowBlur = 18 * SCALE;
+    /*
+     * Laid down twice. A shadow is drawn per fill, so painting the glow pass first and
+     * then the ink on top gives a solid letter sitting in its own halo rather than a
+     * letter with the halo washing over it.
+     */
+    ctx.fillStyle = accent;
+    ctx.fillText(options.title.toUpperCase(), 12 * SCALE, 52 * SCALE);
   }
-  ctx.fillText(options.title.toUpperCase(), 12, 52);
-
   ctx.shadowBlur = 0;
-  ctx.font = '24px "Courier New", monospace';
+  ctx.fillStyle = title;
+  ctx.fillText(options.title.toUpperCase(), 12 * SCALE, 52 * SCALE);
+
+  ctx.font = `${24 * SCALE}px "Courier New", monospace`;
   ctx.fillStyle = subtitle;
-  ctx.fillText(options.subtitle, 14, 90);
+  ctx.fillText(options.subtitle, 14 * SCALE, 90 * SCALE);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
