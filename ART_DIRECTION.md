@@ -43,14 +43,30 @@ guessed. Five tiers, and each one is a complete specification — no "somewhere 
 The machine has no reason to believe it exists. Not rendered at all.
 
 ### Tier 1 — SUSPECTED · `0.01 – 0.29`
-*Something is there.*
+*Something is there.* **Built — `art/suspected.ts`.**
 
-- **Geometry** — the prop's bounding volume, not the prop. A soft box or capsule.
-- **Material** — unlit near-black fill (`#050b0e`) with a 1px emissive wireframe on every
-  silhouette edge, in `ACCENT.data`.
-- **Motion** — drifts ±2 cm at ~0.15 Hz and breathes in opacity between 0.55 and 0.8. The
+- **Geometry** — the prop's bounding volume, not the prop. A recognisable silhouette is a
+  claim of knowledge; if a box keeps its own corners while representing something nobody
+  has described, the picture is lying about what the machine has been told.
+- **Material** — unlit fill (`#0a141a`) with a 1px emissive wireframe on every silhouette
+  edge, in `ACCENT.data`.
+- **Motion** — drifts ±2 cm at ~0.15 Hz and breathes in opacity between 0.42 and 0.62. The
   machine is *guessing*, and a guess should not sit still.
 - **Light** — casts nothing, receives nothing. It is not in the world yet.
+
+**Amended on contact with the room.** The fill was specified at `#050b0e` and 0.55–0.8, and
+both were wrong in practice for the same reason. This game's interiors sit around value 40
+with a lot of shadow, so a volume darker than the darkest wall does not read as an object —
+it reads as a **hole**, a piece of the world that failed to load, which is the exact
+impression this tier exists to dispel. Lifted, cooled and made more transparent, it sits in
+the dark end of the room's own range instead of below it, and the wall stays faintly visible
+through it. A void becomes a **marked region**, which is what the machine is actually doing.
+
+**Apply it to the right prop.** The shelf as one prop became a single black slab filling the
+left third of the frame — compositionally it replaced that side's only vertical rhythm with
+nothing, and in fiction it was a lie, because the machine has no reason to doubt that a
+woman standing in her own workshop has a shelf. Split, the unresolved sits inside the
+resolved. **Tier 1 goes on the contents, not on the furniture.**
 
 ### Tier 2 — SHAPED · `0.30 – 0.59`
 *I know its shape.* **This is the 90s CG tier and the game's default resting state.**
@@ -106,7 +122,8 @@ is correct. It should look *lonely*. The warmth arriving is the game.
 
 ## 3. The resolve
 
-The signature moment, and the thing that must feel expensive.
+The signature moment, and the thing that must feel expensive. **Built — `art/suspected.ts`,
+everything below except the audio cue.**
 
 When a prop's certainty rises, a **horizontal sweep** crosses its bounding box over 0.6 s,
 bottom to top. Below the line the new tier, above it the old one, with a 1px emissive rule at
@@ -150,7 +167,7 @@ One sentence each. If a change does not serve the sentence, it is the wrong chan
 | `scene-beacon-mast` | Exposed, wind-scoured, nothing soft. The only warmth in frame is the failing beacon. |
 | `scene-seedling-tunnel` | The calmest image in the game. Afternoon, still water, long shadow across the beds. Nothing urgent. |
 | `scene-cleared-house` | Emptied, not abandoned. Clean rectangles on the walls where things used to hang. |
-| `scene-flooded-cellar` | Everything below the line is another material. Reflection does the work. |
+| `scene-flooded-cellar` | Everything below the line is another material. Reflection does the work. **Built — lit water, `art/waterline.ts`, and a ceiling.** |
 | `scene-night-door` | One practical, one hand, and a lot of black. The most contrast in the game. |
 | `scene-mill-road` | A torch beam is the only volume. Everything outside it is tier 1 by *diegetic* right — she genuinely cannot see it either. |
 | `scene-wire-city` | Tier 2 forever, on purpose. The machine has never been here and never will be. Full CRT. |
