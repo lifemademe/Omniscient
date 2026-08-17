@@ -329,19 +329,33 @@ function silhouetteRibbon(
   base: number,
   color: string,
   arc: number,
-  sample: (t: number) => { theta: number; radius: number; top: number }
+  sample: (t: number) => { theta: number; radius: number; top: number },
+  /**
+   * Optional colour at the top edge, blended from `color` at the base.
+   *
+   * A ribbon is two rows of vertices, so a colour attribute across them is a free vertical
+   * gradient - no texture, no extra draw call, and it interpolates in the same space the
+   * geometry does. Used for the far shore, where a hard line between sand and grass is the
+   * one thing a shoreline never has.
+   */
+  topColor?: string
 ): BackdropPart {
   // Enough to resolve the roughest term in any profile without stepping it.
   const samples = 260;
   const positions: number[] = [];
   const indices: number[] = [];
+  const colors: number[] = [];
   void arc;
+
+  const low = new THREE.Color(color);
+  const high = topColor ? new THREE.Color(topColor) : null;
 
   for (let i = 0; i <= samples; i++) {
     const p = sample(i / samples);
     const x = Math.sin(p.theta) * p.radius;
     const z = Math.cos(p.theta) * p.radius;
     positions.push(x, base, z, x, p.top, z);
+    if (high) colors.push(low.r, low.g, low.b, high.r, high.g, high.b);
   }
   for (let i = 0; i < samples; i++) {
     const a = i * 2;
@@ -350,8 +364,17 @@ function silhouetteRibbon(
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  if (high) geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   geometry.setIndex(indices);
-  return { name, geometry, material: flat(color) };
+
+  const material = flat(color);
+  if (high) {
+    material.vertexColors = true;
+    // The base colour is carried by the attribute now; leaving it on the material as well
+    // would multiply the two and darken the whole ribbon.
+    material.color.set('#ffffff');
+  }
+  return { name, geometry, material };
 }
 
 function coastRibbon(
@@ -741,6 +764,41 @@ export function createFieldBackdrop(sun: THREE.Vector3): BackdropPart[] {
         top: 2.4 + shaped * 7.0,
       };
     })
+  );
+
+  /**
+   * The far bank.
+   *
+   * The near shore fades sand to grass across the ground mesh, and the far side had the
+   * water meeting a dark hedge at a hard line - which is the one thing a shoreline never
+   * does. This is a short ribbon just inside the hedge, so the hedge still closes the
+   * field behind it and this only fills the half-metre where the water arrives.
+   *
+   * It works everywhere without an arc test because of what is in front of it: the water
+   * runs out to z = -95, well past this ring, so wherever the lake is visible this is the
+   * first thing that stops it, and wherever the lake is not visible the meadow ground is
+   * already covering this height. The band is only ever seen where there is water to meet.
+   *
+   * Both colours are pulled toward the sky the way §261's distances are - a beach at forty
+   * metres is not the colour of a beach at four. The near sand is #e0cfae; this is that
+   * with a third of the haze already mixed in, so it belongs to the same shore seen from
+   * further off rather than reading as a brighter one.
+   */
+  parts.push(
+    silhouetteRibbon(
+      'FarShore',
+      -0.6,
+      '#cdc4a8',
+      Math.PI,
+      (t) => ({
+        theta: t * Math.PI * 2,
+        radius: HEDGE_RADIUS - 0.6,
+        // Wanders, because a bank cut to a constant height is a kerb. The fine term keeps
+        // the fade line from being straight enough to read as geometry.
+        top: 0.62 + Math.sin(t * 21 + 0.9) * 0.16 + Math.sin(t * 61) * 0.06,
+      }),
+      '#8b9a72'
+    )
   );
 
   // The hedge and the trees in it. All the way round: unlike the headland there is no
