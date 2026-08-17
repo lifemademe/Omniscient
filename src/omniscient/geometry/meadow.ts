@@ -147,8 +147,28 @@ function bladeGeometry(segments = 4): THREE.BufferGeometry {
    * the tip where the light gets through the blade. The gap between them is what gives a
    * field depth when nothing casts a shadow.
    */
-  const base = new THREE.Color('#35512a');
-  const tip = new THREE.Color('#a6d466');
+  /*
+   * Lifted to meet the lighter ground, rather than dragging the ground back down.
+   *
+   * The ground moved up to sage over pale sand and these blades stayed where they were, so
+   * a dark stalk was now sitting on a light field - a harder value split than before and
+   * exactly the sort of contrast that stops a picture being restful. Two ways to close it:
+   * push the ground back down, which throws away the calm the change bought, or bring the
+   * grass up to it, which keeps it. Grass IS lighter than the soil it grows out of once the
+   * sun is on it, so the second is also the true one.
+   *
+   * Overshot once on the way here. Lifted to #5a7440/#c3e08a the blades measured luma 135
+   * against a ground at 129 - six values apart, which is no separation at all, and the field
+   * dissolved into a single hazy mat. A tuft needs to be a bit DARKER at the base than the
+   * ground it stands on, because a clump shades itself and the ground around it; the light
+   * belongs at the tips, where it actually falls.
+   *
+   * The base stays clearly darker than the tip either way. That gradient is what gives a
+   * blade its own form at this poly count, and flattening it to close the gap with the
+   * ground would trade one flatness for another.
+   */
+  const base = new THREE.Color('#44603a');
+  const tip = new THREE.Color('#b4d878');
 
   for (let i = 0; i < segments; i++) {
     const t = i / segments;

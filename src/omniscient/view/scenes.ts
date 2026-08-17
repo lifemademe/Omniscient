@@ -2366,13 +2366,32 @@ function buildSeedlingTunnel(scene: ContactScene): void {
       'Lake',
       lake,
       stylisedWater({
-        deep: '#27506b',
-        shallow: '#4e9aa1',
-        crest: '#8fc4c2',
-        glint: '#ffd7a2',
-        foam: '#e8f0ea',
+        /*
+         * Re-keyed for afternoon, and for calm.
+         *
+         * The old set was a sunset lake: a near-navy deep, a hard teal shallow and a warm
+         * amber glint, which is right when the only light is a low orange sun and wrong once
+         * the sky above it is blue. Left alone it had gone cold against the new sand.
+         *
+         * Two changes matter more than the hues. The deep is lighter and the shallow is
+         * closer to it, so the water reads as CLEAR rather than as deep - the value gap
+         * between a lake's near and far water is what tells you how far down it goes, and a
+         * narrow gap over pale sand says you could wade in it. And the glint moves from
+         * amber to near-white, because a high sun makes a hard bright specular while a low
+         * one smears a warm one; keeping the warm glint under a blue sky was the single most
+         * obviously leftover thing in the shot.
+         *
+         * A wider sun band as well. A high sun spreads its reflection across more water than
+         * a low one, and a broad soft band is calmer to look at than a narrow hot stripe -
+         * which is the brief for this whole scene.
+         */
+        deep: '#3f7f96',
+        shallow: '#79bfc0',
+        crest: '#b6dcd6',
+        glint: '#fdf6e6',
+        foam: '#f2f7f1',
         sunX: LAKE_SUN_X,
-        sunWidth: 11,
+        sunWidth: 16,
         // The same clock the grass runs on, so one gust moves the whole scene.
         time: WIND.uTime,
       })
