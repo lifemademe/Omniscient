@@ -1265,9 +1265,26 @@ function buildRepairShop(scene: ContactScene): void {
     target: new THREE.Vector3(-0.2, 0.99, -0.6),
     duration: 1.5,
   });
+  /**
+   * The flood evidence - and it has never been in this shot.
+   *
+   * `ASK_HISTORY` fires `camera.pan:workshop-floor` so that when she says the floor goes
+   * under a hand's depth every spring, the room can show you it is true. What the camera
+   * actually framed was the underside of the bench: from (1.2, 0.75, 1.6) toward (-0.6,
+   * 0.15, -0.8) the sightline passes straight through the workbench, which spans x -1.2 to
+   * 1.2 and z -0.95 to -0.05 and stands exactly between that lens and the wall.
+   *
+   * So the answer to "where is the water" was: behind the bench, at 19 and 26cm, correctly
+   * built and never once visible. Asked about, which is the only review a prop gets.
+   *
+   * Swung left to look PAST the bench end at the corner where the tide marks meet the
+   * shelf - the two bands on the wall and the two soaked posts on the shelf legs are all in
+   * that corner, which is why it is the one to aim at. Checked rather than eyeballed: at
+   * the bench's near face the sightline is at x -1.37, clear of its -1.2 edge.
+   */
   scene.registerShot('workshop-floor', {
-    position: new THREE.Vector3(1.2, 0.75, 1.6),
-    target: new THREE.Vector3(-0.6, 0.15, -0.8),
+    position: new THREE.Vector3(-0.6, 0.95, 1.15),
+    target: new THREE.Vector3(-2.3, 0.26, -1.5),
     duration: 2.4,
   });
   /**

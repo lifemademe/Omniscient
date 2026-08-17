@@ -206,24 +206,36 @@ export const MISSION_01: MissionDefinition = {
         'describe the set to me',
       ],
       on: {
+        /*
+         * She points at the set on whatever the player says first.
+         *
+         * Every route out of the opening carries it, because the gesture belongs to the
+         * MOMENT rather than to the answer: she has described something she cannot explain
+         * and the first thing anybody says back is the first time she gets to show them.
+         * Only from this beat - a woman who points at the radio every time she is asked
+         * anything is a woman with a tic.
+         */
         INSPECT_UNIT: {
           to: 'unit-overview',
-          environment: 'camera.push-in:transmitter',
+          environment: 'camera.push-in:transmitter,prop.point:contact',
         },
         INSPECT_CONNECTOR: {
           to: 'connector-found',
-          environment: 'prop.rotate:transmitter-rear',
+          environment: 'prop.rotate:transmitter-rear,prop.point:contact',
         },
-        ASK_SUPPLY: { to: 'supply', environment: 'camera.push-in:transmitter' },
+        ASK_SUPPLY: {
+          to: 'supply',
+          environment: 'camera.push-in:transmitter,prop.point:contact',
+        },
         ASK_HISTORY: {
           to: 'history',
-          environment: 'camera.pan:workshop-floor',
+          environment: 'camera.pan:workshop-floor,prop.point:contact',
         },
         REMOVE_POWER: {
           to: 'power-off-early',
-          environment: 'prop.toggle:mains-switch',
+          environment: 'prop.toggle:mains-switch,prop.point:contact',
         },
-        ADMIT_UNCERTAINTY: { to: 'uncertain' },
+        ADMIT_UNCERTAINTY: { to: 'uncertain', environment: 'prop.point:contact' },
       },
       onUnrecognised: { to: 'clarify' },
       onAmbiguous: { to: 'clarify' },
@@ -467,9 +479,14 @@ export const MISSION_01: MissionDefinition = {
       suggest: ['switch it on and try it'],
       affirmIntent: 'TEST_TRANSMIT',
       on: {
+        /*
+         * The set comes back on and she nods. It is the only moment in this request where
+         * anything goes right, and until there were gestures the person it went right for
+         * stood there breathing at the same rate as when it was broken.
+         */
         TEST_TRANSMIT: {
           to: 'solved',
-          environment: 'prop.toggle:mains-switch',
+          environment: 'prop.toggle:mains-switch,prop.nod:contact',
           vfx: 'CircuitPulseVFX',
         },
       },

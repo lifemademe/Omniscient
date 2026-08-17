@@ -520,7 +520,28 @@ export class ContactScene extends ENGINE.SceneNode {
    * Prop cues are handled here. Camera cues are resolved to a shot and returned, because
    * the camera belongs to the rig - see CameraRig.
    */
+  /**
+   * Run a cue, or several separated by commas.
+   *
+   * One beat frequently wants two things to happen at once and until now could ask for
+   * exactly one. The camera pushing in on the set AND the woman pointing at it is a single
+   * moment, not two; so is the spark and the flinch. Content was having to choose, and the
+   * choice was always made by whichever was written first.
+   *
+   * A camera cue among them still returns its shot, because the caller needs one result -
+   * the LAST one wins, which is the only sane rule when a beat asks for two shots and also
+   * the one that never comes up, since no beat has a reason to.
+   */
   public applyCue(cue: string): CueResult {
+    if (cue.includes(',')) {
+      let result: CueResult = {};
+      for (const part of cue.split(',')) {
+        const one = this.applyCue(part.trim());
+        result = { ...result, ...one };
+      }
+      return result;
+    }
+
     const [head, target] = cue.split(':');
     const [domain, action] = (head ?? '').split('.');
 
