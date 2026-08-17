@@ -27,6 +27,7 @@ import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { audio } from './audio/ConsoleAudio.js';
 import { installCursor } from './art/cursor.js';
+import { installRetro, setRetroLook } from './art/retro.js';
 import { playWarp } from './art/warp.js';
 import { applyShadowPolicy } from './art/shadows.js';
 import { SystemPanel } from './menu/SystemPanel.js';
@@ -1267,10 +1268,35 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * lights, and a grade that starts moving those is a grade that will quietly undo the
      * balance the shadow pass was measured into.
      */
+    /**
+     * Left configured, and it does nothing here. Read `art/retro.ts` before touching it.
+     *
+     * `ColorGradingEffect.createWebGLEffect` returns `{ effects: [] }` - it is WebGPU-only
+     * in the same way the retro and pixelation passes are, and §221's list was one entry
+     * short. So this saturation has never reached a frame, and every argument about the
+     * colour in this game being flat was an argument about a knob that was not connected.
+     *
+     * The value stays because it is correct for the WebGPU path and costs nothing on this
+     * one. The saturation that actually applies lives in the retro pass below.
+     */
     this.post.configureEffect(ENGINE.PostProcessPass.ColorGrading, {
       enabled: true,
       saturation: 1.22,
     });
+
+    /**
+     * The CRT, and the grade that comes with it.
+     *
+     * Mounted once and never toggled - the pass is a pure copy at the `world` preset, so
+     * leaving it on costs one fullscreen blit and removes the whole class of bug where an
+     * effect is enabled from one place and disabled from another. §187 is served by the
+     * preset, not by the switch: `mountScene` and `returnHome` decide which of the three
+     * contexts we are looking at.
+     *
+     * It cannot be mounted from here. The pipeline it registers into does not exist until
+     * the first frame renders, and `registerEffect` is a no-op with no complaint until it
+     * does - so the mount is retried from `tickPrePhysics` until it confirms.
+     */
 
     // Short radius on purpose: this is contact darkening in the crack where two surfaces
     // meet, not a dirt wash in every corner of the room. A long radius reads as grime and
@@ -1730,6 +1756,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     if (warpContainer) playWarp(warpContainer);
 
+    /**
+     * The tube closes back over you.
+     *
+     * Blended rather than snapped, and timed to ride the warp: by the time the desk
+     * settles the curvature, the scanlines and the vignette are back, so the arrival home
+     * is a change of medium and not just a change of address. Leaving for a diorama is the
+     * same move in reverse - see `mountScene`.
+     */
+    setRetroLook('console');
+
     this.phase = Phase.Home;
     this.screen = Screen.Tree;
     this.phone?.setVisible(false);
@@ -1759,6 +1795,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
   /** The shared atmosphere, retuned per diorama - see mountScene. */
   private fog: ENGINE.FogNode | null = null;
 
+  /** False until the retro pass is confirmed registered - see tickPrePhysics. */
+  private retroMounted = false;
+
   /** Swap the diorama. One scene is live at a time - §133 foregrounds a single contact. */
   private mountScene(sceneId: string): void {
     this.scene?.deactivate();
@@ -1770,6 +1809,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.scene = next;
     this.scene?.activate();
+
+    /**
+     * §187, enforced here rather than trusted to discipline.
+     *
+     * Seven of these places are real - a repair shop, a field, somebody's flooded cellar -
+     * and a scanline crawling over any of them says the player is looking at a screen,
+     * which is precisely the premise the game is built to deny. They get the clean camera.
+     *
+     * The wireframe city is the exception because it is not a place. It is the machine's
+     * own reconstruction of a district it has never seen, and it should look like one.
+     */
+    setRetroLook(sceneId === 'scene-wire-city' ? 'machine' : 'world');
 
     /**
      * Air, or the absence of it.
@@ -1856,6 +1907,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   public override tickPrePhysics(deltaTime: number): void {
     super.tickPrePhysics(deltaTime);
+
+    /*
+     * The post-process pipeline is built lazily on the first render, so the retro pass
+     * cannot be mounted from beginPlay - see installRetro, which returns false until it
+     * has confirmed the registration took. Retried here rather than hooked because there
+     * is no pipeline object to hang a hook on until the pipeline exists.
+     */
+    if (!this.retroMounted && this.post) {
+      this.retroMounted = installRetro(this.post);
+      if (this.retroMounted) setRetroLook('console', true);
+    }
+
     this.cameraTweener.update(deltaTime);
     // Runs in every phase, including while the player is inside a request. The world does
     // not stop because somebody is on the line, and coming back from a call to a boat that
