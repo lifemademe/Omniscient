@@ -937,6 +937,45 @@ function buildBeaconMast(scene: ContactScene): void {
   }
   scene.registerProp('backdrop', backdropRoot);
 
+  /**
+   * Night cloud, which is mostly an absence.
+   *
+   * The trap here is painting them - a cloud lit from above at night is a grey shape on a
+   * dark sky, and grey shapes on a dark sky read as fog banks or as rendering errors. What
+   * a real night cloud does is BLOCK: it is darker than the sky it covers, and the only
+   * light on it is a thin cold edge where the moon catches the top.
+   *
+   * So the values invert against the field's. The belly is nearly the colour of the sky
+   * itself, barely separable, and the rim above it is the moon. Fewer of them, and higher,
+   * because a broken sky lets the horizon glow through - and that glow is what makes Tomas's
+   * coastline legible at all.
+   */
+  const nightClouds = clouds(rng, {
+    /*
+     * Lower than the field's, because this camera looks UP.
+     *
+     * It sits at y 4.6 pitched 16 degrees, so the top of frame is 39 degrees. Clouds at 31
+     * units and 45 out land at 35 degrees - a hand's width from the frame edge, where they
+     * were clipped into slivers nobody could read as anything. At 21 they sit at 25 degrees,
+     * in the middle of the largest empty area of the shot, which is the only reason to have
+     * put them here.
+     */
+    count: 10,
+    height: 21,
+    radius: 45,
+    size: 5,
+    /*
+     * The rim is authored bright because ACES and an exposure of 0.62 sit between this
+     * value and the screen. A moonlit edge picked by eye at #5d6a86 measured barely above
+     * the sky it was drawn on; the tone curve had eaten it. This is the colour that survives
+     * the pipeline, not the colour of the thing.
+     */
+    top: '#9fb0d4',
+    underside: '#1b2132',
+    drift: 0.22,
+  });
+  scene.registerProp('clouds', nightClouds.root, { idle: nightClouds.idle });
+
   // -- The mast -------------------------------------------------------------
   const mastPieces: THREE.BufferGeometry[] = [];
   for (let level = 0; level < 9; level++) {
