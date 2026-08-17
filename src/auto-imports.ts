@@ -15,6 +15,7 @@ import './omniscient/art/sky.js';
 import './omniscient/art/surface.js';
 import './omniscient/art/suspected.js';
 import './omniscient/art/warp.js';
+import './omniscient/art/waterline.js';
 import './omniscient/audio/ConsoleAudio.js';
 import './omniscient/content/contacts.js';
 import './omniscient/content/district-07.js';

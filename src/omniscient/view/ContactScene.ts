@@ -330,6 +330,27 @@ export class ContactScene extends ENGINE.SceneNode {
       }
       applyCertainty(prop.node as unknown as THREE.Object3D, certainty);
     }
+
+    for (const finish of this.finishers) finish();
+  }
+
+  /**
+   * Work that has to happen after the certainty pass, every time it runs.
+   *
+   * Two constraints force this to exist. Material changes made during `build()` do not
+   * survive - MeshNode's setter finishes asynchronously and a load already in flight puts
+   * the original back - so anything touching a material has to wait for activate. And the
+   * certainty pass CLONES materials, so anything installed before it would be working on an
+   * object that is no longer the one being drawn.
+   *
+   * A builder that wants a room-wide material effect registers it here and gets both for
+   * free. Finishers must be idempotent: this runs on every activate and on every certainty
+   * change during a conversation.
+   */
+  private readonly finishers: Array<() => void> = [];
+
+  public registerFinisher(finish: () => void): void {
+    this.finishers.push(finish);
   }
 
   public scanTargets(): { id: string; node: ENGINE.SceneNode }[] {

@@ -35,6 +35,7 @@ import { createBoxLabel, createCorrosionBloom, createRatingPlate } from '../art/
 import { decorMesh } from '../art/mesh.js';
 import { CERTAINTY } from '../art/certainty.js';
 import { createFloodwater } from '../art/floodwater.js';
+import { applyWaterline } from '../art/waterline.js';
 import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { placeRigged } from './riggedContact.js';
 import { ACCENT, LIGHT, MAP, MAT } from '../art/palette.js';
@@ -3508,21 +3509,57 @@ function buildFloodedCellar(scene: ContactScene): void {
   scene.registerProp('side-wall', meshOf('SideWall', sideWall, MAT.wall));
 
   /**
+   * A ceiling, because this was a room with no lid.
+   *
+   * The walls stopped at 2.4 and everything above them was the void the camera clears -
+   * a hard black band straight across the top of every shot in the scene. At a squint it
+   * is the first thing you see and it reads as a stage set with the lights showing, which
+   * is fatal in the one room that is supposed to feel like being underground.
+   *
+   * It is also the cheapest lighting in the game. The lamp on the back wall had nothing
+   * above it to catch, so its throw stopped dead; joists over it give the light something
+   * to break against and put a run of hard shadows across the top of frame, which is what
+   * a bare bulb in a cellar actually does. Low, too - 2.4m is generous for a cellar, and
+   * the beams coming down to 2.2 press the ceiling onto the room.
+   */
+  const lid = new THREE.BoxGeometry(8, 0.12, 6);
+  lid.translate(0, WALL_TOP + 0.06, 0);
+  scene.registerProp('ceiling', meshOf('Ceiling', lid, MAT.wall));
+
+  const joists: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 7; i++) {
+    const beam = new THREE.BoxGeometry(7.9, 0.2, 0.14);
+    beam.translate(0, WALL_TOP - 0.1, -2.1 + i * 0.72);
+    joists.push(beam);
+  }
+  scene.registerProp(
+    'joists',
+    meshOf('Joists', mergeGeometries(joists, false) ?? joists[0], MAT.timberDark)
+  );
+
+  /**
+   * How deep the flood is, declared once because three things need it: the water plane,
+   * the wetting on everything standing in it, and the drain cue that lowers it.
+   *
+   * It was 0.06. Six centimetres is a wet floor - it is not a thing a man rings a stranger
+   * about at night, and it is below the height at which any of it is visible: no object in
+   * the room crosses it far enough to show a mark, so the scene had a reflective sheet and
+   * no evidence. Twenty-two centimetres is mid-shin. It reaches the boxes, it reaches the
+   * sump, and it reaches Vasile, which is the whole point - the man is standing IN it.
+   */
+  const WATER_LEVEL = 0.22;
+
+  /**
    * The water.
    *
-   * A single unlit plane a few centimetres up, dark and slightly reflective in colour
-   * rather than in fact - there is no reflection to be had without a probe, and a flat
-   * dark sheet at ankle height reads as standing water because of WHERE it is, not because
-   * of what it does. §241: value and placement, not simulation.
+   * A lit plane rather than a painted one: MAT.floodwater was a MeshBasicMaterial, which
+   * cannot reflect anything by definition, so the one scene whose entire premise is a flood
+   * had a flat sheet on the floor. See art/floodwater for what makes it read - one bright
+   * thing appearing again where a solid floor should be.
    */
   const waterGeo = new THREE.PlaneGeometry(7.6, 5.6);
   waterGeo.rotateX(-Math.PI / 2);
-  waterGeo.translate(0, 0.06, 0);
-  /*
-   * Lit water, not a painted rectangle. MAT.floodwater was a MeshBasicMaterial, which
-   * cannot reflect anything by definition - so the one scene whose entire premise is a
-   * flood had a flat sheet on the floor and Vasile standing on it. See art/floodwater.
-   */
+  waterGeo.translate(0, WATER_LEVEL, 0);
   const flood = createFloodwater();
   const waterMesh = meshOf('Water', waterGeo, flood.material);
 
@@ -3547,7 +3584,7 @@ function buildFloodedCellar(scene: ContactScene): void {
     // Standing water is never still. The ripple is the only thing in this room that says
     // the flood is present rather than remembered.
     idle: (deltaTime) => flood.update(deltaTime),
-    anchors: { default: new THREE.Vector3(0, 0.06, 0) },
+    anchors: { default: new THREE.Vector3(0, WATER_LEVEL, 0) },
     actions: {
       /**
        * The room performs the answer.
@@ -3694,7 +3731,9 @@ function buildFloodedCellar(scene: ContactScene): void {
   });
 
   const DRIP_PERIOD = 3.2;
-  const WATER_Y = 0.06;
+  // Drips land on the surface, wherever that currently is - not on a second copy of the
+  // number, which is how a drop ends up falling through the water it is supposed to join.
+  const WATER_Y = WATER_LEVEL;
   scene.registerProp('run-drips', drips, {
     idle: (deltaTime) => {
       if (!runIsWet) return;
@@ -4118,6 +4157,22 @@ function buildFloodedCellar(scene: ContactScene): void {
     position: new THREE.Vector3(0.9, 1.15, 1.1),
     target: new THREE.Vector3(-0.4, 0.2, -1.0),
     duration: 2.2,
+  });
+
+  /**
+   * Everything standing in the flood gets wet at the line.
+   *
+   * A finisher rather than a call here, because a material touched during a build does not
+   * survive - see ContactScene.registerFinisher. It runs after the certainty pass has done
+   * its cloning, so this wets the materials that are actually being drawn.
+   *
+   * Applied to the whole scene rather than to a list of props, and that is deliberate: a
+   * list is a set of chances to forget one, and the object somebody forgets is the object
+   * that stands dry in six inches of water and ruins the shot. The shader is a function of
+   * height, so anything that does not reach the line is untouched at no cost.
+   */
+  scene.registerFinisher(() => {
+    applyWaterline(scene as unknown as THREE.Object3D, WATER_LEVEL);
   });
 }
 

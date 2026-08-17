@@ -156,6 +156,56 @@ function ensureShader(material: THREE.Material): CertaintyUniforms {
   return uniforms;
 }
 
+/**
+ * Clone a material without throwing away its shader.
+ *
+ * `Material.copy()` copies a fixed list of known fields, and `onBeforeCompile` is not on
+ * it - it is a prototype method that effects override as an own property, so a clone
+ * silently reverts to the empty base implementation. Any injected shader is simply gone,
+ * with no error and no warning, and the only symptom is an effect that stops happening.
+ *
+ * It had already happened. The flood in Vasile's cellar animates its ripple through
+ * `onBeforeCompile`, and the water prop carries no authored certainty - so it defaults to
+ * SHAPED, gets cloned here, and lost its ripple on the way. The reflection kept working,
+ * because roughness and metalness ARE copied, which is exactly the kind of partial survival
+ * that makes a thing look fine while half of it is dead. `flood.update()` went on writing a
+ * uniform that nothing was reading.
+ *
+ * `customProgramCacheKey` needs no help: three's default returns the source text of
+ * `onBeforeCompile`, so carrying the function across carries the correct cache key with it.
+ *
+ * The bookkeeping travels with it, and that part is not optional. Carrying the shader but
+ * not the `certaintyOwned` flag produces a material that already HAS the colour law
+ * injected and does not know it - so the next pass installs a second copy, the fragment
+ * shader ends up declaring `uniform float uCertAmount` twice, and the material fails to
+ * compile. Not at build: mid-conversation, the first time a mission raises a certainty in
+ * a room that also has a waterline. Exported because anyone else cloning these materials
+ * has the same problem, and there should be one way to do it.
+ */
+export function cloneKeepingShader(material: THREE.Material): THREE.Material {
+  const clone = material.clone();
+  if (Object.prototype.hasOwnProperty.call(material, 'onBeforeCompile')) {
+    clone.onBeforeCompile = material.onBeforeCompile;
+  }
+
+  const from = material as THREE.Material & Marked;
+  const to = clone as THREE.Material & Marked;
+  to.certaintyOwned = from.certaintyOwned;
+  to.certaintyBase = from.certaintyBase;
+  to.certainty = from.certainty;
+  to.certaintyRoughness = from.certaintyRoughness;
+  to.certaintyMetalness = from.certaintyMetalness;
+
+  const uniforms = (material as THREE.Material & { certaintyUniforms?: CertaintyUniforms })
+    .certaintyUniforms;
+  if (uniforms) {
+    (clone as THREE.Material & { certaintyUniforms?: CertaintyUniforms }).certaintyUniforms =
+      uniforms;
+  }
+
+  return clone;
+}
+
 function applyToMaterial(material: THREE.Material, certainty: number): void {
   const standard = material as THREE.MeshStandardMaterial & Marked;
   if (!standard.color) return;
@@ -265,7 +315,7 @@ export function applyCertainty(root: THREE.Object3D, certainty: number): number 
 
       // Own it before changing it, or every prop sharing this material comes with us.
       const marked = material as THREE.Material & Marked;
-      const mine = marked.certaintyOwned ? material : material.clone();
+      const mine = marked.certaintyOwned ? material : cloneKeepingShader(material);
       (mine as THREE.Material & Marked).certaintyOwned = true;
       applyToMaterial(mine, certainty);
       next.push(mine);
