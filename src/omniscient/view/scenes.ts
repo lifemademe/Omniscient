@@ -164,6 +164,7 @@ function addContact(
       handsOn: placement.handsOn,
     });
     scene.registerProp('contact', rigged.root, { idle: rigged.idle });
+    describeContact(scene);
     return;
   }
 
@@ -172,6 +173,34 @@ function addContact(
   // the contact still resolve, and switching back is one flag rather than an edit.
   contact.root.visible = !options.hidden;
   scene.registerProp('contact', contact.root, { idle: contact.idle });
+  describeContact(scene);
+}
+
+/**
+ * The person on the phone is not something the machine is guessing at.
+ *
+ * Contacts registered as `'contact'` with no certainty and no `inked` flag, so every one of
+ * them fell through to the SHAPED default - and SHAPED is 0.45, below the law's neutral
+ * point of 0.7. The cold branch was therefore running on all seven of them: desaturated by
+ * 26% and pulled 24% of the way to `ACCENT.data`, a cyan-blue.
+ *
+ * Which is why Mirela looks blue, and Vasile teal, and Ileana grey. It was reported as a
+ * saturation problem and is the opposite of one - the retro pass's +16% saturation had been
+ * partly masking it, so turning that down would have dulled the whole game and left every
+ * contact exactly as cold.
+ *
+ * PRESENT, which is the law's neutral point and therefore no grading at all - see the note
+ * on the constant. DESCRIBED was tried first and overshot in the other direction: her face
+ * came out at 58% saturation against an authored 43%, because 0.75 still carries a 10%
+ * chroma boost. Trading a blue cast for an orange one is not a fix.
+ *
+ * KNOWN would be worse again - 15% amber, a 60% chroma boost and the tier-4 emissive lift,
+ * on skin, which is the lightest material anybody wears and the first thing to clip. It
+ * would also put the contact above the hero prop in the ranking §2 spent this direction
+ * building. The machine is certain who it is talking to; the request is still the subject.
+ */
+function describeContact(scene: ContactScene): void {
+  scene.setCertainty('contact', CERTAINTY.PRESENT);
 }
 
 /**
@@ -952,6 +981,24 @@ function buildRepairShop(scene: ContactScene): void {
      *
      * A cold blue-grey work coat over a pale apron is the only cool mass in the room,
      * which puts the human at the top of the read where she belongs.
+     */
+    /*
+     * NOTE, unresolved: the coolness this note asks for is not surviving the work lamp.
+     *
+     * Contacts were falling through to the SHAPED certainty default, so the law was
+     * draining them 26% and pulling them a quarter of the way toward cyan - and on this
+     * coat that accident happened to be doing the job the authored colour is supposed to
+     * do. Graded honestly at the neutral point (see describeContact), her skin and apron
+     * come out true to what is written here, and the coat measures r-b +5 against an
+     * authored -26: warm, where the whole point of it is to be the one cool mass.
+     *
+     * Deepening the blue to #3a5570 was tried and could not be confirmed either way - the
+     * idle animation moves her between captures, so a 1% frame difference is as consistent
+     * with breathing as with a recolour, and no sample box on her torso moved. Reverted
+     * rather than left in on a guess, because this is an authored character decision and
+     * an unverifiable edit to one is worse than a known fault.
+     *
+     * The fault is real and worth returning to with a still pose or a wider sample.
      */
     colors: {
       garment: '#42525c',

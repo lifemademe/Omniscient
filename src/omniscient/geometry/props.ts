@@ -117,16 +117,59 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
   handle.translate(0, height, -depth * 0.1);
   fittings.push(handle);
 
-  // Rear connectors. Connector B is the fat one and sits proud of the panel.
-  const connectorA = new THREE.CylinderGeometry(0.018, 0.018, 0.05, 8);
-  connectorA.rotateX(Math.PI / 2);
-  connectorA.translate(-width * 0.2, height * 0.5, -depth / 2 - 0.02);
-  fittings.push(connectorA);
+  /**
+   * Rear connectors, and they are sockets rather than pegs.
+   *
+   * They were two plain eight-sided cylinders standing out of a flat panel: no opening, no
+   * collar, nothing electrical about them at all. At the range the mission actually puts
+   * the camera - an inspection shot where the set fills a third of the frame - they read as
+   * two dowels, while the dialogue asks the player to look at a CONNECTOR and find green
+   * crust "spread right across the pins". There were no pins.
+   *
+   * Three parts each, which is the least that says socket: a shell, a bore that is properly
+   * dark all the way in, and pins standing in the bore. Nothing is plugged into either, and
+   * that is correct rather than missing - the back is off and the set is on a bench being
+   * worked on. An empty socket only looks unfinished when it has no hole.
+   */
+  const recesses: THREE.BufferGeometry[] = [];
 
-  const connectorB = new THREE.CylinderGeometry(0.032, 0.03, 0.06, 8);
-  connectorB.rotateX(Math.PI / 2);
-  connectorB.translate(width * 0.16 + jitter(rng, 0.01), height * 0.5, -depth / 2 - 0.025);
-  fittings.push(connectorB);
+  const socket = (x: number, radius: number, length: number): void => {
+    const shell = new THREE.CylinderGeometry(radius, radius * 0.94, length, 10);
+    shell.rotateX(Math.PI / 2);
+    shell.translate(x, height * 0.5, -depth / 2 - length / 2);
+    fittings.push(shell);
+
+    // A raised collar at the base, where a socket is screwed to the panel.
+    const collar = new THREE.CylinderGeometry(radius * 1.22, radius * 1.22, 0.006, 10);
+    collar.rotateX(Math.PI / 2);
+    collar.translate(x, height * 0.5, -depth / 2 - 0.003);
+    fittings.push(collar);
+
+    /**
+     * The bore: an unlit cylinder sunk into the shell so the socket has a hole in it.
+     *
+     * The shell is solid, so there is no cavity to see into - what reads as a hole is this
+     * dark volume sitting where the opening would be. Sunk rather than a flat disc on the
+     * face, because a disc stops being a hole the moment the camera is off-axis and the
+     * inspection shot is off-axis.
+     *
+     * Two attempts at pins were removed rather than kept. Standing them inside this bore
+     * put them behind it, and moving the bore back to clear them buried it in the shell and
+     * lost the hole entirely - the connectors went back to reading as dowels, which is the
+     * fault the whole socket rebuild exists to fix. At 2.2mm across, from where the
+     * inspection shot sits, a pin is about one pixel; the hole is worth ten of them.
+     *
+     * "Green crust spread right across the pins" is carried by the corrosion beads round
+     * the socket mouth instead, which is where the player can actually see it.
+     */
+    const bore = new THREE.CylinderGeometry(radius * 0.72, radius * 0.72, length * 0.8, 10);
+    bore.rotateX(Math.PI / 2);
+    bore.translate(x, height * 0.5, -depth / 2 - length + length * 0.4 - 0.002);
+    recesses.push(bore);
+  };
+
+  socket(-width * 0.2, 0.018, 0.05);
+  socket(width * 0.16 + jitter(rng, 0.01), 0.032, 0.06);
 
   /**
    * Ventilation, uneven so the object looks used rather than extruded.
@@ -158,7 +201,6 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
    * both plugs - the geometry intersected, so the one feature the mission turns on was
    * growing out of a louvre.
    */
-  const recesses: THREE.BufferGeometry[] = [];
   const VENTS = 6;
   for (let i = 0; i < VENTS; i++) {
     const slot = new THREE.BoxGeometry(width * 0.46 * range(rng, 0.92, 1), 0.005, 0.010);
@@ -186,7 +228,7 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
 
   return {
     body: mergeGeometries(body, false) ?? shell,
-    fittings: mergeGeometries(fittings, false) ?? connectorB,
+    fittings: mergeGeometries(fittings, false) ?? handle,
     recesses: mergeGeometries(recesses, false) ?? undefined,
     anchors: {
       connectorB: new THREE.Vector3(width * 0.16, height * 0.5, -depth / 2 - 0.05),

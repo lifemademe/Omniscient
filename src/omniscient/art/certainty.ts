@@ -52,6 +52,21 @@ export const CERTAINTY = {
   DESCRIBED: 0.75,
   /** The thing being talked about. Fully warm, full detail. */
   KNOWN: 1,
+  /**
+   * Neither inferred nor dramatised - rendered exactly as authored.
+   *
+   * The law's neutral point, so both branches are a no-op: no drain toward cyan, no pull
+   * toward amber, no chroma boost. Not a tier and deliberately not in §1's five - it is an
+   * opt-out for the things the law has no business grading, and so far that is one thing.
+   *
+   * The people. A contact is not a surface the machine is guessing at, and not something it
+   * should be embellishing either; it is a person on a telephone. Left at the SHAPED
+   * default they were drained 26% and pulled a quarter of the way to `ACCENT.data`, which
+   * is why every contact in the game looked faintly blue. Pushed to DESCRIBED instead they
+   * came out at 58% saturation against an authored 43% - traded a blue cast for an orange
+   * one. Here they simply look like themselves.
+   */
+  PRESENT: 0.7,
 } as const;
 
 const COLD = new THREE.Color(ACCENT.data);
