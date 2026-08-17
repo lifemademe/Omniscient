@@ -168,7 +168,26 @@ function addContact(
       clip: true,
       handsOn: placement.handsOn,
     });
-    scene.registerProp('contact', rigged.root, { idle: rigged.idle });
+    /**
+     * Gestures, as prop actions.
+     *
+     * Reached through the cue system a mission already speaks - `prop.point:contact` fires
+     * the same way `prop.highlight:connector-b` does, so content asks for a reaction in the
+     * terms it already uses and nothing new has to be learned to author one.
+     *
+     * Registered for every rigged contact rather than per character, because a gesture is
+     * a property of the rig and all seven share it. A mission that asks Dorin to nod gets
+     * a nod without anybody adding Dorin to a list.
+     */
+    scene.registerProp('contact', rigged.root, {
+      idle: rigged.idle,
+      actions: {
+        point: () => rigged.gesture('point'),
+        surprised: () => rigged.gesture('surprised'),
+        reacting: () => rigged.gesture('reacting'),
+        nod: () => rigged.gesture('nod'),
+      },
+    });
     describeContact(scene);
     return;
   }
@@ -990,7 +1009,20 @@ function buildRepairShop(scene: ContactScene): void {
           }
         );
       },
-      /** Arc: a hard flinch. The VFX itself is fired by the caller at this anchor. */
+      /**
+       * Arc: a hard flinch. The VFX itself is fired by the caller at this anchor.
+       *
+       * And now the person flinches too. The spark fires on the mission's worst branch -
+       * the player telling her to clean a live connector - and until there were gestures
+       * nobody reacted to it: a woman takes a belt off a set she is holding and carries on
+       * breathing at exactly the rate she was before.
+       *
+       * Fired here rather than from the mission because a transition carries ONE
+       * environment cue and that slot is already spent on the spark. It belongs here on
+       * merit as well: the spark and the flinch are not two things a beat schedules
+       * together, they are one event seen from two sides, and nothing should be able to
+       * fire one without the other.
+       */
       spark: (tweener, node) => {
         const baseZ = node.position.z;
         tweener.add((t) => node.position.setZ(baseZ - Math.sin(t * Math.PI) * 0.03), {
@@ -998,6 +1030,7 @@ function buildRepairShop(scene: ContactScene): void {
           easing: Ease.linear,
           channel: 'connector-spark',
         });
+        scene.applyCue('prop.surprised:contact');
       },
     },
   });

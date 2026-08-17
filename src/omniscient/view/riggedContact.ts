@@ -34,6 +34,8 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { loadGesture, type GestureName } from './gestures.js';
+
 /**
  * Mixamo names its bones consistently. three.js then renames them.
  *
@@ -131,13 +133,37 @@ export function reachFor(
   side: 'left' | 'right',
   target: THREE.Vector3,
   pole?: THREE.Vector3,
-  rest?: Record<string, THREE.Quaternion>
+  rest?: Record<string, THREE.Quaternion>,
+  /**
+   * How much of the solve to apply, 0 to 1.
+   *
+   * Exists so a gesture can take the arms off the IK without either of them winning
+   * outright. At 1 this is the old behaviour exactly; below it, the solved pose is slerped
+   * back toward whatever the clip had just written, which is the pose the gesture wants.
+   *
+   * A blend rather than a switch because the alternative was visible: dropping the IK on
+   * the frame a gesture starts snaps a hand off the bench, and restoring it on the frame
+   * one ends snaps it back. Both read as a glitch on a person.
+   */
+  weight = 1
 ): number {
   const [upperName, foreName, handName] = CHAIN[side];
   const upper = bones[upperName];
   const fore = bones[foreName];
   const hand = bones[handName];
   if (!upper || !fore || !hand) return Number.NaN;
+  if (weight <= 0) return Number.NaN;
+
+  // The clip's own pose, captured before the solver overwrites it - this is what a partial
+  // weight blends back toward, and the mixer has just written it this frame.
+  const clipPose =
+    weight < 1
+      ? {
+          upper: upper.quaternion.clone(),
+          fore: fore.quaternion.clone(),
+          hand: hand.quaternion.clone(),
+        }
+      : null;
 
   const shoulderAt = upper.getWorldPosition(new THREE.Vector3());
   const elbowAt = fore.getWorldPosition(new THREE.Vector3());
@@ -212,6 +238,13 @@ export function reachFor(
     hand.updateMatrixWorld(true);
   }
 
+  if (clipPose) {
+    upper.quaternion.slerp(clipPose.upper, 1 - weight);
+    fore.quaternion.slerp(clipPose.fore, 1 - weight);
+    hand.quaternion.slerp(clipPose.hand, 1 - weight);
+    upper.updateMatrixWorld(true);
+  }
+
   // How far off it finished. Reported rather than assumed - a solver that quietly stops
   // short is exactly the failure this is here to detect.
   return hand.getWorldPosition(new THREE.Vector3()).distanceTo(target);
@@ -282,6 +315,14 @@ export interface RiggedContact {
    * be holding something.
    */
   idle: (deltaTime: number) => void;
+  /**
+   * Play a one-shot gesture over the idle. See gestures.ts.
+   *
+   * The contact keeps breathing underneath and the hand targets are released for the
+   * duration, so somebody told to point at a set does not point at it while still holding
+   * the bench.
+   */
+  gesture: (name: GestureName) => void;
 }
 
 /**
@@ -326,17 +367,83 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
     right: 'right',
   };
 
+  /**
+   * The gesture currently playing, and how much of the hands it has taken over.
+   *
+   * `hold` runs 0 to 1 and is what the IK is scaled against. A gesture that seized the
+   * arms instantly would snap a hand off the bench in one frame, and a gesture that never
+   * released them would be a person pointing while still holding the table - so the
+   * takeover is a ramp in both directions and the IK is blended out rather than switched.
+   */
+  let gestureAction: THREE.AnimationAction | null = null;
+  let gestureLeft = 0;
+  let hold = 0;
+
   const contact: RiggedContact = {
     root,
     bones: {},
     rest: {},
+
+    /**
+     * Play a one-shot over the idle.
+     *
+     * Crossfaded rather than swapped: the idle keeps running underneath, so when the
+     * gesture finishes the character is already breathing again instead of arriving back
+     * at a T-pose for a frame. `clampWhenFinished` holds the last frame while the fade
+     * out happens, which is what stops the arm dropping before the blend has finished.
+     *
+     * Async because the clip is fetched on demand - a mission that never asks anybody to
+     * point never downloads the pointing. The first use of each gesture is a beat late by
+     * however long the file takes; every use after that is instant, since the clip is
+     * cached across all seven contacts.
+     */
+    gesture: (name) => {
+      void loadGesture(name).then((clip) => {
+        if (!clip || !mixer) return;
+        gestureAction?.fadeOut(0.25);
+        const action = mixer.clipAction(clip);
+        action.reset();
+        action.setLoop(THREE.LoopOnce, 1);
+        action.clampWhenFinished = true;
+        action.fadeIn(0.25);
+        action.play();
+        gestureAction = action;
+        gestureLeft = clip.duration;
+      });
+    },
+
     idle: (deltaTime: number) => {
       if (mixer) mixer.update(deltaTime);
-      // Then the hands, on top of whatever the clip just did to the arms.
+
+      if (gestureLeft > 0) {
+        gestureLeft -= deltaTime;
+        hold = Math.min(1, hold + deltaTime * 4);
+        if (gestureLeft <= 0) {
+          gestureAction?.fadeOut(0.3);
+          gestureAction = null;
+        }
+      } else if (hold > 0) {
+        hold = Math.max(0, hold - deltaTime * 2.4);
+      }
+
+      /*
+       * Then the hands, on top of whatever the clip just did to the arms - except while a
+       * gesture owns them. The ORDER is still the point (see the interface note): the
+       * mixer writes every bone it animates every frame, so IK has to run after it or it
+       * is gone by the next tick.
+       */
+      if (hold >= 1) return;
       for (const named of ['left', 'right'] as const) {
         const target = options.handsOn?.[named];
         if (target) {
-          reachFor(contact.bones, sideFor[named], target, poleFor(root, sideFor[named]), contact.rest);
+          reachFor(
+            contact.bones,
+            sideFor[named],
+            target,
+            poleFor(root, sideFor[named]),
+            contact.rest,
+            1 - hold
+          );
         }
       }
     },

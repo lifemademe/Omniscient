@@ -87,6 +87,7 @@ import './omniscient/session/SessionController.js';
 import './omniscient/vfx/library.js';
 import './omniscient/view/character-node.js';
 import './omniscient/view/ContactScene.js';
+import './omniscient/view/gestures.js';
 import './omniscient/view/riggedContact.js';
 import './omniscient/view/scene-ids.js';
 import './omniscient/view/scenes.js';
