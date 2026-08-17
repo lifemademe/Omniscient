@@ -263,7 +263,17 @@ const BOARD = { x: -0.42, y: 1.12, width: 1.36, height: 0.88 } as const;
 export const DESK_SHIFT = -0.72;
 
 /** Where the plant sits: desk right, under the window, out of the machine's way. */
-const PLANT = { x: 1.28, y: 0, z: -0.66 + DESK_SHIFT } as const;
+/*
+ * Brought in from x 1.28, because it was outside the shot.
+ *
+ * Measured against HOME_SHOT rather than guessed: the camera sits at station (0.62, 1.31,
+ * 0.8) looking at (-0.22, 0.92, -1.0), and a 46-degree vertical lens at 16:9 gives a
+ * horizontal half-angle of about 37. The pot at 1.28 sat 42 degrees off axis - five
+ * degrees outside the frame, which is why nobody had ever seen it. At 1.0 it lands near 35
+ * and sits just clear of the machine's right shoulder, which is also where the note below
+ * always said it was: under the window, out of the machine's way.
+ */
+const PLANT = { x: 1.0, y: 0, z: -0.66 + DESK_SHIFT } as const;
 
 /**
  * The desk plant - and the whole theme in one prop.
@@ -482,46 +492,108 @@ export const LAMP = {
  * this size the silhouette is all that survives, and a curve reads as an anglepoise more
  * honestly than four boxes and two hinges nobody can see.
  */
+/**
+ * The desk lamp, rebuilt so it reads as one.
+ *
+ * Reported plainly: not recognisable. It was a foot, a `createVine` tube 13mm thick
+ * curving up in a smooth S, a cone shade turned edge-on to the camera and a bright sphere
+ * - which from the home shot resolved to a thin stalk with a yellow blob and a dark leaf
+ * near it. Several people would call that a plant before they called it a lamp, and one
+ * did.
+ *
+ * The fault is silhouette (§4.1), so none of it was recoverable by material or value. What
+ * makes a desk lamp unmistakable at any size is the ANGLEPOISE shape: a heavy round foot,
+ * two straight arms meeting at a visible elbow, and a wide shade cocked down at the work.
+ * Straight segments beat a smooth curve here for the same reason a blade beats a wedge -
+ * a curve read small is just a line, while a hinge is a shape you can name.
+ *
+ * The shade is also turned to face the desk rather than the camera. It was cocked -0.34
+ * about Z, which from this lens presented its opening as a thin ellipse; aimed down and
+ * across the paper it shows its inside, which is the part that says the light comes from
+ * here.
+ */
 function createDeskLamp(rng: Rng): RoomPart[] {
   const parts: RoomPart[] = [];
   const { base, bulb } = LAMP;
 
-  const foot = new THREE.CylinderGeometry(0.095, 0.105, 0.024, 14);
+  // A heavier foot. A desk lamp is bottom-weighted or it tips over, and the weight is
+  // most of what separates its silhouette from a plant in a pot.
+  const foot = new THREE.CylinderGeometry(0.105, 0.12, 0.022, 16);
   foot.translate(base.x, base.y + 0.011, base.z);
   parts.push({ name: 'LampFoot', geometry: foot, material: 'metal' });
 
-  // Up, over, and down onto the desk. The middle point is what gives it the shoulder.
-  const arm = createVine(rng, {
-    leaves: 0,
-    thickness: 0.013,
-    path: [
-      new THREE.Vector3(base.x, base.y + 0.02, base.z),
-      new THREE.Vector3(base.x + 0.02, base.y + 0.22, base.z + 0.05),
-      new THREE.Vector3(base.x + 0.11, base.y + 0.38, base.z + 0.2),
-      new THREE.Vector3(bulb.x + 0.02, bulb.y + 0.12, bulb.z - 0.02),
-    ],
-  });
-  arm.forEach((part, i) => {
-    parts.push({ name: `LampArm${i}`, geometry: part.geometry, material: 'metal' });
+  const collar = new THREE.CylinderGeometry(0.038, 0.052, 0.03, 12);
+  collar.translate(base.x, base.y + 0.036, base.z);
+  parts.push({ name: 'LampCollar', geometry: collar, material: 'metal' });
+
+  /*
+   * Two straight arms and an elbow between them, built by aiming a cylinder along a
+   * vector rather than by authoring rotations - the elbow has to land exactly on the join
+   * or the lamp reads as two sticks near each other.
+   */
+  const elbow = new THREE.Vector3(base.x + 0.05, base.y + 0.34, base.z + 0.06);
+  const head = new THREE.Vector3(bulb.x, bulb.y + 0.1, bulb.z);
+
+  const strut = (from: THREE.Vector3, to: THREE.Vector3, radius: number): THREE.BufferGeometry => {
+    const span = new THREE.Vector3().subVectors(to, from);
+    const tube = new THREE.CylinderGeometry(radius, radius, span.length(), 8);
+    tube.translate(0, span.length() / 2, 0);
+    const aim = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 1, 0),
+      span.clone().normalize()
+    );
+    tube.applyQuaternion(aim);
+    tube.translate(from.x, from.y, from.z);
+    return tube;
+  };
+
+  const arms = [
+    strut(new THREE.Vector3(base.x, base.y + 0.045, base.z), elbow, 0.017),
+    strut(elbow, head, 0.015),
+  ];
+  const joint = new THREE.SphereGeometry(0.03, 10, 8);
+  joint.translate(elbow.x, elbow.y, elbow.z);
+  arms.push(joint);
+  parts.push({
+    name: 'LampArm',
+    geometry: mergeGeometries(arms, false) ?? arms[0],
+    material: 'metal',
   });
 
   /**
-   * The shade, open at the bottom.
+   * The shade: wider, deeper, open at the bottom and aimed at the paper.
    *
-   * Open-ended on purpose: a closed cone hides the bulb and the fixture reads as a lump
-   * on a stick. The lit interior is most of what says "this is where the light is coming
-   * from", and it costs one flag.
+   * Open-ended on purpose - a closed cone hides the bulb and the fixture reads as a lump
+   * on a stick. The lit interior is most of what says "the light comes from here", and it
+   * costs one flag.
+   *
+   * Aimed by the same strut vector the upper arm uses, so the shade always points where
+   * the lamp is leaning however the numbers above are retuned.
    */
-  const shade = new THREE.ConeGeometry(0.145, 0.155, 14, 1, true);
-  shade.rotateX(Math.PI);
-  shade.rotateZ(-0.34);
-  shade.translate(bulb.x, bulb.y + 0.075, bulb.z);
+  /*
+   * 19cm across, not 34. The first rebuild used a 0.17 radius - a shade two thirds of a
+   * metre wide in a room where the lamp's head sits 28cm above the desk - so the cone came
+   * down over its own foot like a tent and the lamp disappeared inside its own shade.
+   * Overcorrecting a silhouette is still getting the silhouette wrong.
+   */
+  const aimDown = new THREE.Vector3(0.34, -1, 0.24).normalize();
+  const shade = new THREE.ConeGeometry(0.095, 0.13, 16, 1, true);
+  shade.translate(0, -0.065, 0);
+  shade.applyQuaternion(
+    new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, -1, 0), aimDown)
+  );
+  shade.rotateY(jitter(rng, 0.05));
+  shade.translate(head.x, head.y, head.z);
   parts.push({ name: 'LampShade', geometry: shade, material: 'plastic' });
 
-  // The bulb itself, unlit, so the fixture has a bright core at this distance rather than
-  // a dark hole where the light is supposedly coming from.
-  const glass = new THREE.SphereGeometry(0.036, 10, 8);
-  glass.translate(bulb.x, bulb.y + 0.03, bulb.z);
+  // The bulb, unlit, sitting up inside the shade so it glows in the cone's mouth rather
+  // than hanging under it like a berry.
+  const glass = new THREE.SphereGeometry(0.032, 10, 8);
+  glass.translate(
+    head.x + aimDown.x * 0.055,
+    head.y + aimDown.y * 0.055,
+    head.z + aimDown.z * 0.055
+  );
   parts.push({ name: 'LampBulb', geometry: glass, material: 'lamp' });
 
   return parts;
@@ -554,7 +626,20 @@ export const CHAIR_PLACEMENT = {
    * place hangs off the left edge with a quarter of it in shot, which frames nothing.
    * Still well below the menu plates, which is the constraint that put it left at all.
    */
-  position: new THREE.Vector3(-1.24, FLOOR_Y, 1.38),
+  /*
+   * Forward of the lens is not the same as in the shot, and this chair was behind it.
+   *
+   * Its note says the job is to fill the empty lower left of the home frame with a dark
+   * chair back in the near foreground. That has never happened: at station z 1.38 the
+   * chair stood behind a camera at z 0.8, so the framing argument below was written about
+   * an object outside the picture.
+   *
+   * At (-1.3, -0.35) it is about 32 degrees off axis against a 37 degree half-frame, so
+   * the back corner enters the lower left rather than the whole chair blocking it. It
+   * still cannot hide the plates: they run y 0.42 to 2.10 on the wall and the chair back
+   * tops out near y 0.15, well under the lowest of them from a lens at 1.31.
+   */
+  position: new THREE.Vector3(-1.3, FLOOR_Y, -0.35),
   /** Turned out from the desk, the way a chair is left rather than tucked in. */
   turn: 0.42,
 } as const;
@@ -827,13 +912,55 @@ export function createWorkstationRoom(): RoomPart[] {
     parts.push({ name: `Note${note.id}`, geometry: quad, material: noteMaterial(texture) });
   });
 
-  // A length of string with two things hanging off it, across the lower half. One
-  // diagonal breaks the grid of rectangles and says this board has been lived with.
-  // In front of every note - it was pinned across them, not under them.
-  const string = new THREE.BoxGeometry(BOARD.width - 0.06, 0.008, 0.008);
+  /**
+   * A length of string with two things hanging off it - and this time there are two things.
+   *
+   * The comment said that and the code drew the string alone: an 8mm bar in MAT.metal
+   * running the full width of the board with nothing on it. Asked about directly - "there
+   * is a line across the notice board, what is that?" - which is the correct reading. A
+   * bare horizontal line across a board is not string, it is a scratch on the lens.
+   *
+   * The intent was right and worth finishing rather than deleting: one diagonal breaking a
+   * grid of rectangles is what says somebody has lived with this board. It needed the
+   * things it was described as carrying, and it needed to stop being metal - twine at 5mm
+   * in a warm fibre reads as string; a grey bar at 8mm reads as a rail.
+   */
+  const string = new THREE.BoxGeometry(BOARD.width - 0.06, 0.005, 0.005);
   string.rotateZ(0.035);
   string.translate(BOARD.x, BOARD.y - 0.14, -1.9705);
-  parts.push({ name: 'BoardString', geometry: string, material: 'metal' });
+  parts.push({ name: 'BoardString', geometry: string, material: 'twine' });
+
+  /*
+   * Two small cards pegged to it, at different heights and both off-square. Hung BELOW the
+   * line with a peg straddling it, which is the detail that makes a string read as bearing
+   * weight rather than as a line drawn across a board.
+   */
+  const pegged: THREE.BufferGeometry[] = [];
+  const pegs: THREE.BufferGeometry[] = [];
+  for (const [dx, drop, w, h] of [
+    [-0.31, 0.075, 0.1, 0.13],
+    [0.22, 0.055, 0.085, 0.105],
+  ] as const) {
+    const card = new THREE.BoxGeometry(w, h, 0.004);
+    card.rotateZ(0.035 + jitter(rng, 0.09));
+    card.translate(BOARD.x + dx, BOARD.y - 0.14 - drop - h / 2, -1.968);
+    pegged.push(card);
+
+    const peg = new THREE.BoxGeometry(0.012, 0.03, 0.012);
+    peg.rotateZ(jitter(rng, 0.12));
+    peg.translate(BOARD.x + dx, BOARD.y - 0.14 - drop + 0.004, -1.9655);
+    pegs.push(peg);
+  }
+  parts.push({
+    name: 'BoardPegged',
+    geometry: mergeGeometries(pegged, false) ?? pegged[0],
+    material: 'paper',
+  });
+  parts.push({
+    name: 'BoardPegs',
+    geometry: mergeGeometries(pegs, false) ?? pegs[0],
+    material: 'timberLit',
+  });
 
   /**
    * A shelf on the side wall, with things on it.

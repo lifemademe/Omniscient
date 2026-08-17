@@ -219,6 +219,29 @@ export class CableCursor {
       velocity.z += (targetZ - point.z) * 60 * dt;
       velocity.multiplyScalar(Math.pow(0.02, dt));
       point.addScaledVector(velocity, dt);
+
+      /**
+       * The desk is solid, and the rope did not know that.
+       *
+       * This is a sag simulation with nothing to sag ONTO: every interior point pulls
+       * toward its neighbours' midpoint minus 2cm, so reaching for a low plate let the
+       * slack belly downward straight through the desk top - reported as the wire passing
+       * through the table.
+       *
+       * One clamp fixes it, because in this module the desk top IS y = 0 (see room.ts,
+       * where the coordinates are desk-space for exactly this kind of reason). Held a
+       * cable's radius clear so the tube rests ON the surface rather than half-buried in
+       * it, and the downward velocity is killed at the same time - leaving it would let
+       * the point fight the clamp and buzz along the desk.
+       *
+       * Only interior points. The anchor is fixed and the tip is driven to wherever the
+       * player is pointing, which may legitimately be below the desk edge.
+       */
+      const rest = CABLE_RADIUS * 1.5;
+      if (point.y < rest) {
+        point.y = rest;
+        if (velocity.y < 0) velocity.y = 0;
+      }
     }
 
     this.rebuild();

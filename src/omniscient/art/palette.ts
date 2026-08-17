@@ -336,6 +336,15 @@ export const MAT = {
   /** Corrugated card. Boxes, packing, the substance of a house being emptied. */
   card: standard('#8a7150', 0.96),
   /**
+   * Twine. Fully matte, warm, and never metal.
+   *
+   * The pinboard's string was MAT.metal, and at 8mm a grey bar across a board is a rail or
+   * a scratch rather than a length of string - it was reported as "a line across the notice
+   * board". Fibre has no specular at all, which is most of what separates string from wire
+   * at this distance, so roughness goes to the ceiling.
+   */
+  twine: standard('#9a8763', 1),
+  /**
    * Pegboard, the wall of Mirela's shop.
    *
    * §230's reading of the repair-shop reference asks for "dense mid-value texture behind a
