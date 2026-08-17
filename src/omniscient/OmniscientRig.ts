@@ -635,7 +635,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     const post = this.post;
     if (post) {
-      const bloom = { strength: 0.87, threshold: 0.6, radius: 0.65 };
+      // Mirrors the shipped values above, so the panel starts where the game actually is.
+      const bloom = { strength: 0.72, threshold: 0.55, radius: 0.82 };
       const pushBloom = (): void =>
         post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: true, ...bloom });
 
@@ -1117,9 +1118,31 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * have. Bloom should be a property of things that EMIT, not of everything the lamp
        * happens to be pointing at.
        */
-      strength: 0.8,
-      threshold: 0.78,
-      radius: 0.65,
+      /**
+       * Retuned after tone mapping, which invalidated every number above.
+       *
+       * All of that reasoning was correct and was measured on an UNTONEMAPPED image. ACES at
+       * exposure 0.62 then pulled the whole range down, and nobody moved the threshold to
+       * follow it - so the line stayed where it was while everything it was meant to catch
+       * dropped underneath.
+       *
+       * The proof is Tomas's beacon. Its core measures luma 181, which is 0.71 - below a
+       * threshold of 0.78. Twenty pixels outside the lamp the sky reads 15, against a far-sky
+       * reference of 16.6: not a weak halo, NO halo, the emitter darker at its own edge than
+       * the sky across the map. Every practical in the game was in the same position.
+       *
+       * At 0.55 the beacon reads 26 against sky at 16.6 and decays to it by 120px, which is
+       * light in air. The original concern - lit surfaces glowing - is answered by the tone
+       * curve rather than by the threshold: the desk that forced 0.78 was sampling 240 before
+       * ACES and sits far below this line after it. Checked, and the bench is lit without
+       * glowing; only the paper takes any halation.
+       *
+       * Radius up as well. The old 0.65 was a tight rim, and a wide low-strength spread is
+       * what reads as light in air rather than as an outline traced round the bright thing.
+       */
+      strength: 0.72,
+      threshold: 0.55,
+      radius: 0.82,
     });
 
     /**
