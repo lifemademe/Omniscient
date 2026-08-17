@@ -45,7 +45,7 @@ import { buildTree } from '../geometry/tree.js';
 import { clouds } from '../geometry/clouds.js';
 import { DISTRICT_CITY, DISTRICT_FLEET, DISTRICT_SIZE } from '../content/district-07.js';
 import { CELL, cellToWorld } from '../geometry/wireCity.js';
-import { createClump, createVine } from './../geometry/foliage.js';
+import { createClump } from './../geometry/foliage.js';
 import { grassTufts, greenhouse, rocks } from '../geometry/outdoors.js';
 import { meadow, meadowGround, stepWind, WIND } from '../geometry/meadow.js';
 import { stylisedWater } from '../geometry/water.js';
@@ -258,55 +258,26 @@ function buildRepairShop(scene: ContactScene): void {
    * decoration that has started charging rent. Along the top it says the building is losing
    * without covering a single thing anybody needs to see.
    */
-  const ivyRng = createRng(seedFrom('mirela-ivy'));
-  const boardTop = 1.62 + 0.8;
-  const ivy: THREE.BufferGeometry[] = [];
-  const ivyDeep: THREE.BufferGeometry[] = [];
   /*
-   * Long drops, because the board's top edge is above the frame.
+   * No ivy on the pegboard, and this is the second time that decision has been made.
    *
-   * First pass hung 20-40cm fringes from y 2.42 and almost all of it landed off-camera -
-   * placed against the geometry without checking what the shot actually contains, which is
-   * the same mistake as authoring a colour without checking what the tone curve does to it.
-   * The origin stays at the top edge, since growing over the top is the whole idea; the
-   * runs are simply long enough to arrive somewhere the player can see them.
+   * §264 wants the theme in the interiors and this wall looked like the place for it: the
+   * brightest large field in the set, dense mid-value texture, exactly the bright background
+   * the console room's vines proved foliage needs. It was built, and it never read as a
+   * plant - at this camera distance createVine's leaves are 3-7cm and resolve to nothing,
+   * so four runners came out as green squiggles on a workshop wall. Three passes went into
+   * it: denser leaves, a wandering path, and a genuine bug where the mapping painted the
+   * STEM with the leaf material. None of them fixed the actual problem, which is that the
+   * prop is too small to read from where the camera stands.
+   *
+   * §274 decides it. Mirela's tools are evidence the player has to read, and a decoration
+   * that does not carry a clue, say who works here, or build depth is cut - especially one
+   * adding line noise to the one surface in the shot that has a job.
+   *
+   * If this comes back it needs bigger leaves authored for this distance, not a fourth
+   * attempt at the same geometry.
    */
-  for (const [x, drop] of [[-1.42, 0.86], [-0.28, 0.62], [1.12, 0.95], [1.55, 0.7]] as const) {
-    createVine(ivyRng, {
-      leaves: 5,
-      thickness: 0.008,
-      path: [
-        new THREE.Vector3(x - 0.18, boardTop + 0.06, -1.78),
-        new THREE.Vector3(x, boardTop + 0.01, -1.78),
-        new THREE.Vector3(x + 0.05, boardTop - drop * 0.5, -1.78),
-        new THREE.Vector3(x - 0.03, boardTop - drop, -1.78),
-      ],
-    }).forEach((part) => {
-      (part.material === 'leafDeep' ? ivyDeep : ivy).push(part.geometry);
-    });
-  }
-  if (ivy.length) {
-    scene.registerProp(
-      'board-ivy',
-      meshOf('BoardIvy', mergeGeometries(ivy, false) ?? ivy[0], MAT.leaf)
-    );
-  }
-  if (ivyDeep.length) {
-    scene.registerProp(
-      'board-ivy-deep',
-      meshOf('BoardIvyDeep', mergeGeometries(ivyDeep, false) ?? ivyDeep[0], MAT.leafDeep)
-    );
-  }
 
-  /**
-   * What is hanging on it.
-   *
-   * Silhouettes, not tools. At three metres a spanner is fifteen pixels and its only
-   * legible property is its outline, so these are the four outlines a workshop wall has:
-   * things that hang straight down, things that hang in pairs, coils, and one long thing.
-   * The board's own texture does the density; these do the irregularity, which is what
-   * stops a regular grid reading as wallpaper.
-   */
   const hanging: THREE.BufferGeometry[] = [];
   const pegRng = createRng(seedFrom('mirela-pegboard'));
   // [x, y, length, width, kind] - kind 0 straight, 1 forked at the bottom, 2 a coil.
