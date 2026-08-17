@@ -26,7 +26,7 @@
 
 import { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import { TERMS } from '../mission/intent.js';
-import { OutcomeKind, Tempo, Urgency } from '../mission/types.js';
+import { HOLD_FRAMING, OutcomeKind, Tempo, Urgency } from '../mission/types.js';
 
 import { FACT_PINS_BIND_BY_TOLERANCE } from './mission-06-lock.js';
 
@@ -211,6 +211,7 @@ export const MISSION_07: MissionDefinition = {
     },
     {
       id: 'open-again',
+      framing: HOLD_FRAMING,
       tempo: Tempo.Respond,
       say: 'What? Tell me something - ask me about him, or about the road, or tell me what to do.',
       suggest: ['how close is he', 'what is on this road', 'use the torch'],
@@ -236,6 +237,7 @@ export const MISSION_07: MissionDefinition = {
     },
     {
       id: 'how-close',
+      framing: 'camera.push-in:follower',
       tempo: Tempo.Respond,
       learn: [FACT_LIGHT_IS_A_DETERRENT],
       say:
@@ -256,6 +258,7 @@ export const MISSION_07: MissionDefinition = {
     },
     {
       id: 'the-road',
+      framing: 'camera.pan:road',
       tempo: Tempo.Respond,
       learn: [FACT_SANDA_ROUTE],
       say:
@@ -295,6 +298,7 @@ export const MISSION_07: MissionDefinition = {
        * learn it the other way.
        */
       id: 'chase',
+      framing: 'camera.push-in:follower',
       tempo: Tempo.Act,
       say:
         'I have it out. It is heavy - it does not go where I want it quickly.\n\nHe is ' +
@@ -355,6 +359,7 @@ export const MISSION_07: MissionDefinition = {
     },
     {
       id: 'solved',
+      framing: 'camera.push-in:follower',
       tempo: Tempo.Respond,
       say:
         'It is on him - it is right on his face and he has got his arm up - \n\n' +

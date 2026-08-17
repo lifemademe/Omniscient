@@ -14,6 +14,7 @@ import { Certainty } from '../knowledge/KnowledgeStore.js';
 
 import { gradeDevice } from './device.js';
 import { readsAsYesNo, resolveIntent } from './intent.js';
+import { HOLD_FRAMING } from './types.js';
 
 import type { DeviceSubmission } from './device.js';
 
@@ -312,13 +313,51 @@ export class MissionRuntime {
 
     return {
       say: next.say,
-      environment: transition.environment,
+      environment: this.framingFor(transition, next),
       vfx: transition.vfx,
       learned,
       outcome: next.outcome,
       failure: next.failure,
       clarifying: false,
     };
+  }
+
+  /**
+   * Every arrival gets a camera, whether or not the author remembered one.
+   *
+   * The camera holds its last shot by default, which is right between two beats about the
+   * same thing and wrong the moment the subject changes. Across the eight missions, 124
+   * of 134 transitions carry no camera cue - so "holds until told otherwise" meant the
+   * frame was decided by whichever earlier beat last had an opinion, which is how the
+   * player ended up watching a puddle for the back half of a request about a radio.
+   *
+   * Resolution order, most specific first:
+   *
+   *   1. a `camera.*` cue on the transition - an authored move for this route in
+   *   2. the destination beat's own `framing` - what this beat is about
+   *   3. `camera.pan:default` - the establishing shot, which is never wrong, only plain
+   *
+   * The transition's prop cues survive in all three cases; only the framing is supplied.
+   * Camera first in the string to match how these are authored by hand, and because
+   * `applyCue` merges results by key - two camera cues would silently fight, and the
+   * order decides which one lands.
+   *
+   * `framing: 'hold'` opts a beat out and keeps whatever shot is up. It exists for the
+   * clarify beats: every mission routes `onUnrecognised` and `onAmbiguous` through a
+   * transition, so without it, mistyping a word while reading the back of the set would
+   * throw the camera back to the establishing shot - punishing the player for the
+   * parser's failure, and taking away the thing they were looking at while they retype.
+   */
+  private framingFor(transition: BeatTransition, beat: Beat): string {
+    const cues = (transition.environment ?? '')
+      .split(',')
+      .map((cue) => cue.trim())
+      .filter(Boolean);
+
+    if (cues.some((cue) => cue.startsWith('camera.'))) return cues.join(',');
+    if (beat.framing === HOLD_FRAMING) return cues.join(',');
+
+    return [beat.framing ?? 'camera.pan:default', ...cues].join(',');
   }
 
   /**

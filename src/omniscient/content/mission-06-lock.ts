@@ -28,7 +28,7 @@
 
 import { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import { TERMS } from '../mission/intent.js';
-import { OutcomeKind, Tempo, Urgency } from '../mission/types.js';
+import { HOLD_FRAMING, OutcomeKind, Tempo, Urgency } from '../mission/types.js';
 
 import { FACT_MEMORY_IS_NOT_A_RECORD } from './mission-04-relations.js';
 
@@ -221,6 +221,7 @@ export const MISSION_06: MissionDefinition = {
     },
     {
       id: 'open-again',
+      framing: HOLD_FRAMING,
       tempo: Tempo.Respond,
       say:
         'Sorry - say it again. Ask me about the door, or about the lock, or just tell me ' +
@@ -253,6 +254,7 @@ export const MISSION_06: MissionDefinition = {
     },
     {
       id: 'the-lock',
+      framing: 'camera.push-in:lock',
       tempo: Tempo.Respond,
       learn: [FACT_PINS_BIND_BY_TOLERANCE],
       say:
@@ -278,6 +280,7 @@ export const MISSION_06: MissionDefinition = {
        * else's hands are shaking.
        */
       id: 'working',
+      framing: 'camera.push-in:lock',
       tempo: Tempo.Act,
       say:
         'Wrench is in. I am on the pins.\n\nTell me the order and I will follow it - and if ' +

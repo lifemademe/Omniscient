@@ -251,11 +251,40 @@ export interface TrailBoard extends DeviceBase {
   trail: Trail;
 }
 
+/**
+ * `Beat.framing` value meaning "whatever is on screen is still right".
+ *
+ * Not a shot id - it never reaches the Contact View, which would only warn that nothing
+ * is registered under that name. See MissionRuntime.framingFor.
+ */
+export const HOLD_FRAMING = 'hold';
+
 export interface Beat {
   id: string;
   /** What the contact transmits on arrival. */
   say: string;
   tempo: Tempo;
+  /**
+   * The camera cue this beat is ABOUT, applied on arrival unless the transition in
+   * brought its own.
+   *
+   * Framing used to live only on transitions, which is the wrong owner and shipped a
+   * bug the player found: asking Mirela what happened to the set recently pans down to
+   * the puddle on the floor, and the next question - about the connectors on the back -
+   * carried prop cues but no camera cue. The camera has no opinion of its own, so it sat
+   * on the puddle for the rest of the request while the conversation moved on without it.
+   *
+   * A transition is an edge and there are four ways into most beats; a beat is a subject
+   * and there is one. Declaring it here means every route in frames the same thing, and a
+   * new route cannot forget. A transition may still override for a move that is about the
+   * journey rather than the destination - swinging round to the back of the set is worth
+   * seeing happen.
+   *
+   * Left undeclared, a beat falls back to `camera.pan:default`, so the worst case is the
+   * establishing shot rather than a stranded one. `HOLD_FRAMING` opts out entirely. See
+   * MissionRuntime.framingFor.
+   */
+  framing?: string;
   /**
    * Present on a beat that puts a device up instead of asking for a sentence. The text
    * input stays live, so a player can still talk to the contact while it is open.

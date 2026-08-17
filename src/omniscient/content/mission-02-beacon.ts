@@ -19,7 +19,7 @@
 
 import { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import { TERMS } from '../mission/intent.js';
-import { OutcomeKind, Tempo, Urgency } from '../mission/types.js';
+import { HOLD_FRAMING, OutcomeKind, Tempo, Urgency } from '../mission/types.js';
 
 import { TOMAS } from './contacts.js';
 import { FACT_SHARED_POWER_FEED } from './mission-01-transmitter.js';
@@ -179,6 +179,7 @@ export const MISSION_02: MissionDefinition = {
 
     {
       id: 'clarify-blind',
+      framing: HOLD_FRAMING,
       tempo: Tempo.Respond,
       say: 'Say again - the wind is taking it. I am holding on with one hand up here.',
       suggest: ['follow the supply wire', 'when did it start', 'tell me about Mirela'],
@@ -192,6 +193,7 @@ export const MISSION_02: MissionDefinition = {
 
     {
       id: 'timing',
+      framing: 'camera.push-in:beacon',
       tempo: Tempo.Think,
       say:
         'Started this morning. It is worse in the evening - but that is when the boats are in, so ' +
@@ -220,6 +222,7 @@ export const MISSION_02: MissionDefinition = {
     {
       /** The slow route to the same truth. §163: never a dead end. */
       id: 'feed-traced-slow',
+      framing: 'camera.pan:mast-cable',
       tempo: Tempo.Think,
       say:
         'Following the wire down... it does not go straight to the light. There is a join on ' +
@@ -275,6 +278,7 @@ export const MISSION_02: MissionDefinition = {
 
     {
       id: 'timing-known',
+      framing: 'camera.push-in:beacon',
       tempo: Tempo.Think,
       say:
         'Started this morning, first time ever. Clear weather all day, so it is not the sky. ' +
@@ -297,6 +301,7 @@ export const MISSION_02: MissionDefinition = {
 
     {
       id: 'feed-confirmed',
+      framing: 'camera.pan:mast-cable',
       tempo: Tempo.Respond,
       say:
         'The join on the bracket - yes, it is here. Second wire off it, down the hill. That is ' +
@@ -350,6 +355,7 @@ export const MISSION_02: MissionDefinition = {
 
     {
       id: 'isolator-fitted',
+      framing: 'camera.push-in:beacon',
       tempo: Tempo.Respond,
       say:
         'Box is in, the light is on its own feed now. Steady... still steady... she must be ' +

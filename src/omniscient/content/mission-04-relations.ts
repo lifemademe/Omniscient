@@ -17,7 +17,7 @@
 
 import { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import { TERMS } from '../mission/intent.js';
-import { OutcomeKind, Tempo, Urgency } from '../mission/types.js';
+import { HOLD_FRAMING, OutcomeKind, Tempo, Urgency } from '../mission/types.js';
 
 import type { MissionDefinition } from '../mission/types.js';
 
@@ -254,6 +254,7 @@ export const MISSION_04: MissionDefinition = {
     },
     {
       id: 'open-again',
+      framing: HOLD_FRAMING,
       tempo: Tempo.Think,
       say:
         'Sorry - say that again? I am not at my best today. Ask me anything you like ' +
@@ -340,6 +341,7 @@ export const MISSION_04: MissionDefinition = {
        * the player solve each one the moment they hear it and never do the holding.
        */
       id: 'names',
+      framing: 'camera.push-in:photo-box',
       tempo: Tempo.Think,
       say:
         'Right. Petra first. Petra was my mother’s sister. She had one boy, Andrei. ' +

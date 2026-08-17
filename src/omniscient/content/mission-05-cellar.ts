@@ -19,7 +19,7 @@
 
 import { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import { TERMS } from '../mission/intent.js';
-import { OutcomeKind, Tempo, Urgency } from '../mission/types.js';
+import { HOLD_FRAMING, OutcomeKind, Tempo, Urgency } from '../mission/types.js';
 
 import { FACT_FLOOD_TOOK_RECORDS } from './mission-04-relations.js';
 
@@ -217,6 +217,7 @@ export const MISSION_05: MissionDefinition = {
     },
     {
       id: 'open-again',
+      framing: HOLD_FRAMING,
       tempo: Tempo.Think,
       say:
         'Say again? It is loud down here. Ask me about the pump, or about where the pipe ' +
@@ -247,6 +248,7 @@ export const MISSION_05: MissionDefinition = {
     },
     {
       id: 'the-run',
+      framing: 'camera.push-in:covers',
       tempo: Tempo.Think,
       say:
         'That is the thing. It has been done four times over. There is lead from before I ' +
@@ -271,6 +273,7 @@ export const MISSION_05: MissionDefinition = {
        * the thing he cannot do is hold the layout. That is the machine's half.
        */
       id: 'covers',
+      framing: 'camera.push-in:covers',
       tempo: Tempo.Act,
       learn: [FACT_CELLAR_RUN],
       say:

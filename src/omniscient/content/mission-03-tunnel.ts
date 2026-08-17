@@ -24,7 +24,7 @@
 
 import { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import { TERMS } from '../mission/intent.js';
-import { OutcomeKind, Tempo, Urgency } from '../mission/types.js';
+import { HOLD_FRAMING, OutcomeKind, Tempo, Urgency } from '../mission/types.js';
 
 import { ADAEZE } from './contacts.js';
 import { FACT_FEED_NEEDS_ISOLATOR } from './mission-02-beacon.js';
@@ -238,6 +238,7 @@ export const MISSION_03: MissionDefinition = {
 
     {
       id: 'clarify',
+      framing: HOLD_FRAMING,
       tempo: Tempo.Respond,
       say: 'Say that again - I am kneeling in the dirt with the phone on a crate.',
       suggest: ['which rows are dying', 'look outside the tunnel', 'check the water'],
@@ -275,6 +276,7 @@ export const MISSION_03: MissionDefinition = {
        * removes a suspect, which is what an eliminating move is supposed to do.
        */
       id: 'water-fine',
+      framing: 'camera.pan:tunnel-rows',
       tempo: Tempo.Think,
       learn: [FACT_EQUIPMENT_FINE],
       say:
@@ -308,6 +310,7 @@ export const MISSION_03: MissionDefinition = {
     {
       /** The turn. Not an answer - a shape. */
       id: 'pattern-found',
+      framing: 'camera.pan:tunnel-rows',
       tempo: Tempo.Think,
       learn: [FACT_SHADE_LINE],
       say:
@@ -327,6 +330,7 @@ export const MISSION_03: MissionDefinition = {
 
     {
       id: 'outside',
+      framing: 'camera.push-in:neighbour-tree',
       tempo: Tempo.Respond,
       learn: [FACT_TREE_GREW],
       say:
@@ -351,6 +355,7 @@ export const MISSION_03: MissionDefinition = {
        * first one meant nothing.
        */
       id: 'lost',
+      framing: 'camera.pan:tunnel-rows',
       tempo: Tempo.Respond,
       say:
         'They are down. All of them, flat in the barrow by noon and they have not stood back ' +
@@ -375,6 +380,7 @@ export const MISSION_03: MissionDefinition = {
        * payoff with a hole in front of it.
        */
       id: 'solved',
+      framing: 'camera.pan:tunnel-rows',
       tempo: Tempo.Respond,
       say:
         'I have the saw... there. The low limbs are off and the light is on those rows for ' +

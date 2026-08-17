@@ -17,7 +17,7 @@
 
 import { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import { TERMS } from '../mission/intent.js';
-import { OutcomeKind, Tempo, Urgency } from '../mission/types.js';
+import { HOLD_FRAMING, OutcomeKind, Tempo, Urgency } from '../mission/types.js';
 
 import { MIRELA } from './contacts.js';
 
@@ -243,6 +243,7 @@ export const MISSION_01: MissionDefinition = {
 
     {
       id: 'clarify',
+      framing: HOLD_FRAMING,
       tempo: Tempo.Respond,
       say: 'Say that again? I have my hands in it, I did not catch you.',
       suggest: [
@@ -280,6 +281,7 @@ export const MISSION_01: MissionDefinition = {
 
     {
       id: 'unit-overview',
+      framing: 'camera.push-in:transmitter',
       tempo: Tempo.Think,
       // THE SEED, attached to the line rather than to any exit. She says it out loud, so
       // OMNISCIENT_ has heard it - regardless of how the player phrases what comes next.
@@ -305,6 +307,7 @@ export const MISSION_01: MissionDefinition = {
 
     {
       id: 'history',
+      framing: 'camera.pan:workshop-floor',
       tempo: Tempo.Think,
       // Her answer mentions the shared supply too, so this route also seeds the callback.
       learn: [FACT_WORKSHOP_FLOODS, FACT_SHARED_POWER_FEED],
@@ -351,6 +354,7 @@ export const MISSION_01: MissionDefinition = {
 
     {
       id: 'connector-found',
+      framing: 'camera.push-in:transmitter',
       tempo: Tempo.Think,
       say:
         'Round the back... ah. There is green crust on the second connector, the fat one. ' +
@@ -382,6 +386,7 @@ export const MISSION_01: MissionDefinition = {
 
     {
       id: 'power-off-early',
+      framing: 'camera.push-in:transmitter',
       tempo: Tempo.Think,
       say:
         'Power is off at the wall. The lamp has gone out. Right - what am I looking for?',
@@ -404,6 +409,7 @@ export const MISSION_01: MissionDefinition = {
 
     {
       id: 'connector-found-safe',
+      framing: 'camera.push-in:transmitter',
       tempo: Tempo.Think,
       say:
         'Green crust on the second connector, right across the pins. The set is dead cold now, ' +
@@ -439,6 +445,7 @@ export const MISSION_01: MissionDefinition = {
        * writes themselves (§170).
        */
       id: 'arc',
+      framing: 'camera.push-in:transmitter',
       tempo: Tempo.Respond,
       say:
         'AH - it went across my hand, there was a flash. I am alright, I am - no. ' +
@@ -458,6 +465,7 @@ export const MISSION_01: MissionDefinition = {
 
     {
       id: 'power-off',
+      framing: 'camera.push-in:transmitter',
       tempo: Tempo.Think,
       say: 'Power is off at the wall, lamp has gone out. It is cold now - I can get at that crust properly.',
       suggest: ['clean the green off the connector'],
@@ -473,6 +481,7 @@ export const MISSION_01: MissionDefinition = {
 
     {
       id: 'cleaned',
+      framing: 'camera.push-in:transmitter',
       tempo: Tempo.Respond,
       say:
         'Scraped back to bright metal, both pins. Pushed it back on. Shall I switch it on and try?',
@@ -495,6 +504,7 @@ export const MISSION_01: MissionDefinition = {
 
     {
       id: 'solved',
+      framing: 'camera.push-in:transmitter',
       tempo: Tempo.Respond,
       say:
         'There it is. The needle is moving. That is my week back. ' +

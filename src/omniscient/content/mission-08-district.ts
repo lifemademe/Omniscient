@@ -36,7 +36,7 @@
 
 import { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import { DISTRICT_FLEET, DISTRICT_PURSUIT, DISTRICT_TRAIL } from './district-07.js';
-import { OutcomeKind, Tempo, Urgency } from '../mission/types.js';
+import { HOLD_FRAMING, OutcomeKind, Tempo, Urgency } from '../mission/types.js';
 
 import type { MissionDefinition } from '../mission/types.js';
 
@@ -252,6 +252,7 @@ export const MISSION_08: MissionDefinition = {
     },
     {
       id: 'call-again',
+      framing: HOLD_FRAMING,
       say: 'Say again? I have got two units sitting doing nothing and a car going somewhere.',
       tempo: Tempo.Respond,
       suggest: ['what do you have on it?', 'let me look at the district'],
@@ -440,6 +441,7 @@ export const MISSION_08: MissionDefinition = {
        * §157 held all the way down: the console never touched anything, it only ever knew.
        */
       id: 'bridge',
+      framing: 'camera.pan:downtown',
       say:
         'The bridge. He is going to the bridge - that is the only thing at the end of that '
         + 'road. I can be there in four minutes and he cannot turn round on it.',
@@ -494,6 +496,7 @@ export const MISSION_08: MissionDefinition = {
        * about how this mission resolves. The car stops because a man drove to a bridge.
        */
       id: 'arrival',
+      framing: 'camera.push-in:windscreen',
       say:
         'Are you still on it? ... Four minutes. Alright. Talk to me - what is it doing? '
         + 'Is he still moving?',
