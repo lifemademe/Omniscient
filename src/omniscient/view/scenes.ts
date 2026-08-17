@@ -560,9 +560,9 @@ function buildRepairShop(scene: ContactScene): void {
    * And something for it to be lit by.
    *
    * The room's cold source is the shop door at (-2.4, 1.7, 1.6) with a 1.4 decay, and by
-   * the time it reaches this corner there is almost nothing left - which is correct for §5
+   * the time it reaches this corner there is almost nothing left - which is correct for ï¿½5
    * ("dark everywhere else") and leaves the one piece of evidence in the room lit by
-   * nothing at all. §131 asks the environment to carry the evidence; it cannot carry what
+   * nothing at all. ï¿½131 asks the environment to carry the evidence; it cannot carry what
    * cannot be seen.
    *
    * Small, cool and short-range, so it lifts the corner and nothing else. It is the same
@@ -6273,6 +6273,26 @@ function buildMillRoad(scene: ContactScene): void {
       if (node) guess.claim(node as unknown as THREE.Object3D, { grid: 0.25 });
     }
   });
+
+  /*
+   * No `setCertainty` table here, and that is the finished state rather than a gap.
+   *
+   * Six of the eight rooms declare their opening certainties and raise them on facts, and
+   * the obvious reading of this room having none is that somebody stopped before the last
+   * two. It is the opposite: this room says the same thing per PIXEL instead of per prop,
+   * which is strictly better and cannot be run twice.
+   *
+   * `guess.claim` above drains everything outside the torch beam toward the guess colour
+   * and lays the cyan grid over it, so certainty here is a function of where the light is
+   * pointing rather than of what Sanda has said. The follower is the case that proves it:
+   * as a prop-level certainty he would resolve the moment she described him, from twenty
+   * metres away in the dark, which is not what the request is about. Under the beam he
+   * resolves when, and only when, she puts the light on him.
+   *
+   * Layering the prop system on top would also collide outright below SHAPED, where
+   * `applyCertainties` swaps the prop for a `createSuspicion` box - two systems replacing
+   * one object, and the torch would then be lighting the replacement.
+   */
 }
 
 // Registered at module load. auto-imports pulls this module in, so a ContactScene node
@@ -6439,6 +6459,24 @@ function buildWireCity(scene: ContactScene): void {
     target: new THREE.Vector3(-8, 3.4, -16),
     duration: 4,
   });
+
+  /*
+   * No certainty table here either, and this one is not a choice - the law cannot reach
+   * this room.
+   *
+   * Every prop above is `LineSegments` on a `LineBasicMaterial`. `applyCertainty` walks a
+   * subtree through `renderTargetOf`, which requires `isMesh`; line segments do not have
+   * it, so the traversal returns null for all five props and touches nothing. Authoring a
+   * table would produce five "changed nothing" warnings and no pixels - the silent
+   * nothing-happened this codebase has lost afternoons to, dressed up as a feature.
+   *
+   * There is nothing to resolve FROM in any case. The certainty scale runs from the
+   * machine's guess at a thing to the thing itself, and this room has no things: it is
+   * the network drawn as the network, the one set that is already entirely the machine's
+   * own abstraction. A wireframe city that resolved into a real one would be telling the
+   * player the opposite of what District 07 is about - Lucian can see everything here,
+   * and the one car he wants is the one thing the lattice does not contain.
+   */
 }
 
 ContactScene.registerBuilder('scene-repair-shop', buildRepairShop);
