@@ -106,7 +106,32 @@ export class SessionController {
         case 'note':
           this.writeNote(message.text);
           break;
+        /**
+         * Leaving is refused while a lost request is waiting for its note.
+         *
+         * Not cosmetic. `leaveContact` puts the signal back to Waiting, adds it to
+         * `openable` and decrements `queueIndex` - and after a failure `onRequestLost` has
+         * ALREADY decremented it. So closing out of a lost request handed the player the
+         * mission back un-cooled AND stepped the queue twice, which is a corrupted run
+         * from one press of a button that looked like an ordinary exit.
+         *
+         * The note is not busywork either (§170): it is the thing the player finds waiting
+         * in Records when the cooldown lapses. Skipping it loses the only record of what
+         * went wrong.
+         *
+         * It says so rather than doing nothing. A dead button is worse than a refused one
+         * - the player presses it twice, concludes the game is stuck, and is right to.
+         */
         case 'leave':
+          if (this.failed) {
+            this.push({
+              source: 'system',
+              name: 'OMNISCIENT_',
+              body: 'Not yet. Write the note first - type it below and send.',
+            });
+            this.present();
+            break;
+          }
           this.hooks.onLeave?.();
           break;
         case 'device':
@@ -293,6 +318,22 @@ export class SessionController {
       this.knowledge.recordOutcome(this.contact.id, false);
       this.failed = step.failure;
       this.push({ source: 'system', name: 'OMNISCIENT_', body: step.failure.summary });
+      /*
+       * Say what happens next, in the log the player is already reading.
+       *
+       * The only signal that a note was wanted was the transmit field's placeholder text
+       * changing to "record a note for next time" - which is a hint sitting in the one
+       * part of the screen a player stops looking at once a request has ended. Reported as
+       * not knowing a note was needed, and the exits being locked makes saying so
+       * mandatory rather than polite.
+       */
+      this.push({
+        source: 'system',
+        name: 'OMNISCIENT_',
+        body:
+          'Record a note before this closes. Whatever you write is waiting for you in '
+          + 'Records when the request comes back.',
+      });
       this.hooks.onFailed?.(step.failure);
     }
 
@@ -364,6 +405,7 @@ export class SessionController {
       failure: this.failed
         ? { summary: this.failed.summary, lesson: this.failed.lesson }
         : undefined,
+      awaitingNote: this.failed !== null,
       device: finished ? undefined : this.buildDevice(),
     });
   }

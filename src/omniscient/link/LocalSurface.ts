@@ -417,6 +417,16 @@ export class LocalSurface implements InterventionSurface {
   private renderedCount = 0;
   private tab: Tab = 'chat';
   private lastState: SurfaceState | null = null;
+  /**
+   * The two ways out of a request, held so they can be locked.
+   *
+   * Both dispatch `leave`, and after a lost request leaving is refused until the note is
+   * written - see SessionController. The refusal is enforced there, because that is the
+   * only place that knows; these are so the buttons LOOK unavailable rather than looking
+   * ordinary and declining to work, which is how a player concludes a game is broken.
+   */
+  private closeButton: HTMLButtonElement | null = null;
+  private endButton: HTMLElement | null = null;
 
   constructor(private readonly container: HTMLElement) {}
 
@@ -446,6 +456,7 @@ export class LocalSurface implements InterventionSurface {
     back.className = 'omni-back';
     back.textContent = '‹ Close';
     back.addEventListener('click', () => this.dispatch({ kind: 'leave' }));
+    this.closeButton = back;
 
     const contact = document.createElement('span');
     contact.className = 'omni-terminal__contact';
@@ -540,10 +551,12 @@ export class LocalSurface implements InterventionSurface {
     actions.className = 'omni-cv__actions';
     // Only controls that do something. A row of four looks better than a row of two,
     // and a button that does nothing when pressed is worse than both.
+    const endCall = this.buildAction('☎', 'End call', 'omni-action--end', () =>
+      this.dispatch({ kind: 'leave' })
+    );
+    this.endButton = endCall;
     actions.append(
-      this.buildAction('☎', 'End call', 'omni-action--end', () =>
-        this.dispatch({ kind: 'leave' })
-      ),
+      endCall,
       this.buildAction('☷', 'Observations', '', () => {
         this.tab = 'hints';
         if (this.lastState) this.present(this.lastState);
@@ -820,6 +833,14 @@ export class LocalSurface implements InterventionSurface {
   }
 
   public present(state: SurfaceState): void {
+    const locked = state.awaitingNote === true;
+    for (const exit of [this.closeButton, this.endButton]) {
+      if (!exit) continue;
+      exit.classList.toggle('omni-exit--locked', locked);
+      exit.setAttribute('aria-disabled', locked ? 'true' : 'false');
+      exit.title = locked ? 'Write your note first' : '';
+    }
+
     if (!this.logElement || !this.contactElement || !this.inputElement || !this.hintElement) {
       return;
     }

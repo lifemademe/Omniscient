@@ -266,6 +266,31 @@ export const CONSOLE_CHROME_CSS = `
 .omni-action--end:hover { color: #e8877a; box-shadow:
   inset 1px 1px 0 #8a4438, inset -1px -1px 0 #040906, 0 0 0 1px #3a1c17; }
 
+
+/*
+ * A locked exit.
+ *
+ * Dimmed and struck through rather than hidden: the player has to see that the way out
+ * still exists and is temporarily closed, or the console looks like it has lost a control.
+ * pointer-events stays ON so the click still lands and still gets an answer in the log - a
+ * button that swallows the press teaches nothing.
+ */
+.omni-exit--locked {
+  opacity: 0.4;
+  cursor: not-allowed;
+  position: relative;
+}
+.omni-exit--locked::after {
+  content: '';
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  top: 52%;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.75;
+  pointer-events: none;
+}
 `;
 
 /** Add the chrome stylesheet once, whichever screen asks for it first. */

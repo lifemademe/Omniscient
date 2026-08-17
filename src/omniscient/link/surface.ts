@@ -208,6 +208,14 @@ export interface SurfaceState {
   confirming?: Confirmation;
   /** When set, the request has been lost and the player may write themselves a note. */
   failure?: { summary: string; lesson?: string };
+  /**
+   * The request is lost and the note has not been written yet, so leaving is refused.
+   *
+   * Separate from `failure` because the two stop being true at the same moment: the
+   * failure stays on screen while the player types, and the lock lifts the instant they
+   * send. A surface should grey its exits while this is set.
+   */
+  awaitingNote?: boolean;
   /** When set, the surface shows a device alongside the conversation. */
   device?: DeviceView;
 }
