@@ -78,8 +78,8 @@ export interface RetroLook {
   aberration: number;
   /** Depth of the scanline troughs, 0-1. */
   scanline: number;
-  /** Bands across the screen height is half this. 480 gives a band every ~4.5px at 1080p. */
-  scanCount: number;
+  /** Raster pitch in framebuffer rows: one dark line every `scanPitch` pixels. */
+  scanPitch: number;
   /** Aperture-grille strength - the per-device-pixel RGB triad mask. */
   grille: number;
   /** Phosphor persistence: how much of the trailing smear survives. */
@@ -106,7 +106,7 @@ export const RETRO_LOOKS = {
     curve: 0,
     aberration: 0.0008,
     scanline: 0,
-    scanCount: 480,
+    scanPitch: 3,
     grille: 0,
     bleed: 0,
     vignette: 0.16,
@@ -119,7 +119,7 @@ export const RETRO_LOOKS = {
     curve: 0.010,
     aberration: 0.0018,
     scanline: 0.055,
-    scanCount: 620,
+    scanPitch: 3,
     grille: 0,
     bleed: 0.20,
     vignette: 0.30,
@@ -132,7 +132,7 @@ export const RETRO_LOOKS = {
     curve: 0.055,
     aberration: 0.0060,
     scanline: 0.20,
-    scanCount: 480,
+    scanPitch: 2,
     grille: 0.55,
     bleed: 0.55,
     vignette: 0.42,
@@ -162,7 +162,7 @@ uniform float uTime;
 uniform float uCurve;
 uniform float uAberration;
 uniform float uScanline;
-uniform float uScanCount;
+uniform float uScanPitch;
 uniform float uGrille;
 uniform float uBleed;
 uniform float uVignette;
@@ -210,9 +210,15 @@ void main() {
   // displayed picture. This is the line between them - see the note in the module header.
   col = mix(col, linearToSRGB(col), uEncode);
 
-  // Scanlines. sin squared so the troughs are narrow and the lit part stays wide - the
-  // other way round reads as a grate over the picture rather than as a raster.
-  float sl = sin(tube.y * uScanCount * 3.14159265);
+  // Scanlines, in framebuffer rows rather than in UV.
+  //
+  // They were UV-based and a fixed count, which is resolution-independent right up until
+  // the drawing buffer is smaller than the window - and here it is. 620 bands over the
+  // height put the pattern above the buffer's Nyquist limit, so what reached the screen
+  // was not a raster at all but the beat between the two, measured at a 10.5px period
+  // where the maths says 1.7. Anchoring to gl_FragCoord makes the pitch exact at any
+  // buffer size and makes aliasing impossible, which is why the grille below already does.
+  float sl = sin(gl_FragCoord.y * 3.14159265 / uScanPitch);
   col *= 1.0 - uScanline * sl * sl;
 
   // Aperture grille, in device pixels rather than UV so it stays one triad per pixel at
@@ -293,7 +299,7 @@ class RetroPass {
         uCurve: { value: this.target.curve },
         uAberration: { value: this.target.aberration },
         uScanline: { value: this.target.scanline },
-        uScanCount: { value: this.target.scanCount },
+        uScanPitch: { value: this.target.scanPitch },
         uGrille: { value: this.target.grille },
         uBleed: { value: this.target.bleed },
         uVignette: { value: this.target.vignette },
@@ -331,7 +337,7 @@ class RetroPass {
     u.uCurve.value = look.curve;
     u.uAberration.value = look.aberration;
     u.uScanline.value = look.scanline;
-    u.uScanCount.value = look.scanCount;
+    u.uScanPitch.value = look.scanPitch;
     u.uGrille.value = look.grille;
     u.uBleed.value = look.bleed;
     u.uVignette.value = look.vignette;
@@ -358,7 +364,7 @@ class RetroPass {
     u.uCurve.value += (to.curve - u.uCurve.value) * k;
     u.uAberration.value += (to.aberration - u.uAberration.value) * k;
     u.uScanline.value += (to.scanline - u.uScanline.value) * k;
-    u.uScanCount.value += (to.scanCount - u.uScanCount.value) * k;
+    u.uScanPitch.value += (to.scanPitch - u.uScanPitch.value) * k;
     u.uGrille.value += (to.grille - u.uGrille.value) * k;
     u.uBleed.value += (to.bleed - u.uBleed.value) * k;
     u.uVignette.value += (to.vignette - u.uVignette.value) * k;
