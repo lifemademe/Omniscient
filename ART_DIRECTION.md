@@ -212,6 +212,23 @@ against this before anything else in them is touched.
 Run this every time, in this order. Stop at the first failure and fix that.
 
 1. **Capture** the shot the player actually sees. Not an editor view.
+
+   **And `SceneJump` is an editor view.** This needs saying because a whole pass of work was
+   verified through it without anyone noticing. It mounts the room with none of the game in
+   front of it — which is exactly what it is for, and exactly why it is not step 1. In the
+   real shot the console covers the right third of the frame, the left column takes another
+   sixth, and the camera sits closer than the jump view puts it. A composition judged on the
+   full width is a composition judged at a width the player never sees.
+
+   Use it to *iterate* — it is far quicker, and value ranking within one image survives the
+   difference. Confirm in a real session before calling anything finished. Mission 01 is
+   reachable; the other seven need playing.
+
+   **Two captures of different framings are not a comparison.** Sampling the same pixel box
+   in a jump view and a session view produced a confident, wrong finding that the console
+   was stripping a third of the warmth out of every room. It was not: the boxes were
+   averaging different amounts of background and different surface angles. Compare within
+   one image, or compare the same physical surface found in each.
 2. **Put it beside the reference at the same pixel size.** Not from memory.
 3. **Squint / downsample to 10% and look at silhouette and value only.** If the read fails
    here, nothing else matters yet.
