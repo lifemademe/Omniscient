@@ -4366,22 +4366,33 @@ function buildMillRoad(scene: ContactScene): void {
    * It also does something for the chase specifically: the torch pool now falls across
    * texture rather than across a flat band, so the light has something to READ on.
    */
+  /*
+   * On the meadow system, for the clumping.
+   *
+   * Which earns more here than anywhere else in the game. The torch pool sweeps ACROSS this
+   * verge, and a moving light reveals shape by the shadows it throws between things - so an
+   * evenly scattered verge gives it nothing to find, while tufts with gaps between them give
+   * the beam something that changes as it passes. The reason for texture under the torch was
+   * already in the comment above; clumping is what actually delivers it.
+   *
+   * Lit blades, as everywhere. The ground stays as it is: unlit soil would kill the torch.
+   */
   for (const side of [-1, 1] as const) {
     scene.registerProp(
       `verge-grass-${side < 0 ? 'left' : 'right'}`,
-      meshOf(
-        `VergeGrass${side < 0 ? 'L' : 'R'}`,
-        grassTufts(
-          rng,
-          {
-            centre: new THREE.Vector3(side * (HALF + 0.45), 0, MID),
-            width: 1.0,
-            depth: LENGTH * 0.92,
-          },
-          { count: 220, height: [0.08, 0.26], lean: 0.6 }
-        ),
-        MAT.stem
-      )
+      meadow(rng, {
+        at: new THREE.Vector3(side * (HALF + 0.45), 0, MID),
+        width: 1.0,
+        depth: LENGTH * 0.92,
+        count: 900,
+        // Uncut since the lamps went out, so taller than the trodden path at Dorin's door.
+        height: [0.12, 0.3],
+        bareBelow: 0.4,
+        y: 0,
+      }),
+      // The gust is a shared clock, so exactly one of the two verges advances it. Both
+      // registering an idle would step it twice a frame and blow at double speed.
+      side < 0 ? { idle: (deltaTime) => stepWind(deltaTime) } : undefined
     );
   }
 
