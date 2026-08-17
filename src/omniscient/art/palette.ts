@@ -198,6 +198,25 @@ export const MAT = {
    * in the front of the home shot has to fall away, not glow.
    */
   timberDark: standard('#5a4430', 0.9),
+  /**
+   * The top of a bench somebody actually works at.
+   *
+   * Not a shade of timber for its own sake - a value decision, and the room it exists for
+   * is the one §5 calls the proving ground. Measured there: the empty bench directly in
+   * front of the Kestrel-3 came out at luma 192, against the set's own face at 177, its
+   * body at 148 and Mirela's face at 138. The brightest, largest thing in the frame was
+   * the FURNITURE, which inverts the whole colour law - §2 says the eye goes to the warmest
+   * thing in frame and that is supposed to be what the player has earned.
+   *
+   * MAT.timberDark's note already states the rule this breaks: a framing element lit to the
+   * same value as the subject stops framing and starts competing. A bench is the most
+   * framing thing in a workshop.
+   *
+   * It is also the true colour. Fresh pine is `MAT.timber`; a bench top that has had thirty
+   * years of oil, solder and forearms on it is several steps down from the timber it was
+   * cut from, and nobody has ever seen a workbench the colour of a new plank.
+   */
+  worktop: standard('#6f5335', 0.88),
   timberLit: standard(HUMAN.timberLit, 0.8),
   /**
    * Floorboards - timber at ROOM scale rather than furniture scale.
@@ -256,6 +275,25 @@ export const MAT = {
    * desaturated against all that warm wood, it separates on hue as well as value.
    */
   equipment: standard('#6a7268', 0.62, 0.15),
+  /**
+   * The inside of that housing - a panel that has been taken off and propped up.
+   *
+   * `MAT.equipment` is the OUTSIDE of a case: sprayed, slightly metallic, made to look
+   * like something. The back of the same panel is bare primed steel that nobody has ever
+   * seen, and it should not be the second brightest thing in the room.
+   *
+   * Which it was, twice. The first fix moved the panel out of the shot's way; the second
+   * stood it upright to take the lamp at a grazing angle - and that one was reasoned from
+   * the wrong model and moved the value by 2.6 out of 163. The light on it is not diffuse,
+   * it is the specular lobe of a flat plate at metalness 0.15 and roughness 0.62 turned
+   * toward a hard practical. So: no metalness and rough, which removes the lobe rather
+   * than aiming it somewhere else.
+   *
+   * Worth stating plainly because the lesson is not about a panel. Two geometric fixes in a
+   * row failed on a problem that was never geometric, and both of them looked reasonable.
+   * Measuring the result each time is the only reason it is not still there.
+   */
+  equipmentBack: standard('#484f47', 0.92, 0),
   /** Corrugated card. Boxes, packing, the substance of a house being emptied. */
   card: standard('#8a7150', 0.96),
   /**

@@ -398,7 +398,9 @@ function buildRepairShop(scene: ContactScene): void {
 
   const bench = createWorkbench();
   const benchRoot = ENGINE.SceneNode.create({ name: 'Bench', position: new THREE.Vector3(0, 0, -0.5) });
-  benchRoot.add(meshOf('BenchTop', bench.body, MAT.timber));
+  // Worked, not fresh. The bench was measuring brighter than the set standing on it - see
+  // MAT.worktop, which exists because of this frame.
+  benchRoot.add(meshOf('BenchTop', bench.body, MAT.worktop));
   benchRoot.add(meshOf('BenchLegs', bench.fittings, MAT.metal));
   scene.registerProp('bench', benchRoot);
 
@@ -425,7 +427,21 @@ function buildRepairShop(scene: ContactScene): void {
     * small, behind the plane the set sits on, and still obviously off the radio.
     */
   const panel = new THREE.BoxGeometry(0.36, 0.26, 0.012);
-  panel.rotateX(-0.4);
+  /*
+   * Stood up. The last fix moved it and did not lower it.
+   *
+   * Measured as regions rather than as pixels, which is the reading that finally caught it:
+   * the panel's MEAN is 163 against the Kestrel's 144. Peak brightness said the set was
+   * winning - it reaches 210 on one corner - and peak brightness is not what the eye ranks.
+   * A large flat slab at a uniform value beats a smaller object with internal variation
+   * every time, so §244 was still being broken by the part that had already been fixed for
+   * breaking it.
+   *
+   * At -0.4 the face was tilted 23 degrees back, which puts 39% of its normal straight up
+   * into the work lamp. At -0.18 it is 18%, and it is also the truer lean: a panel propped
+   * against the back of a bench stands nearly upright, it does not recline.
+   */
+  panel.rotateX(-0.18);
   panel.rotateY(jitter(benchRng, 0.24));
   panel.translate(0.66, 0.94, -0.74);
   /*
@@ -437,7 +453,7 @@ function buildRepairShop(scene: ContactScene): void {
    * had been unscrewed from. §244: nothing may out-contrast the hero prop, and a part OF
    * the hero prop doing it is the silliest version of that.
    */
-  scene.registerProp('set-panel', meshOf('SetPanel', panel, MAT.equipment));
+  scene.registerProp('set-panel', meshOf('SetPanel', panel, MAT.equipmentBack));
 
   // Screwdrivers and a spanner, laid down roughly parallel the way tools are.
   for (const [x, z, length, angle] of [
