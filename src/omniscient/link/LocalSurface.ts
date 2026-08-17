@@ -72,7 +72,8 @@ export const TERMINAL_CSS = `
 }
 .omni-terminal__head {
   display: flex;
-  justify-content: space-between;
+  /* One child now the Close button is gone. Right, to stay over the location line. */
+  justify-content: flex-end;
   align-items: baseline;
   padding: 4px 12px 8px;
   border-bottom: 1px solid #23422c;
@@ -204,19 +205,6 @@ export const TERMINAL_CSS = `
 .omni-item--mine { border-left: 2px solid #c9a227; }
 /* Words the player can use back. Bright enough to notice while skimming. */
 .omni-key { color: #d8ffb0; font-weight: bold; }
-/* Leave the request / back to the machine. */
-.omni-back {
-  background: transparent;
-  border: 1px solid #2b5c39;
-  color: #4f9a5e;
-  font: inherit;
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  padding: 3px 10px;
-  cursor: pointer;
-}
-.omni-back:hover { border-color: #4f9a5e; color: #d8ffb0; }
 .omni-empty {
   color: #3f6b48;
   font-size: 11px;
@@ -418,14 +406,13 @@ export class LocalSurface implements InterventionSurface {
   private tab: Tab = 'chat';
   private lastState: SurfaceState | null = null;
   /**
-   * The two ways out of a request, held so they can be locked.
+   * The way out of a request, held so it can be locked.
    *
-   * Both dispatch `leave`, and after a lost request leaving is refused until the note is
-   * written - see SessionController. The refusal is enforced there, because that is the
-   * only place that knows; these are so the buttons LOOK unavailable rather than looking
-   * ordinary and declining to work, which is how a player concludes a game is broken.
+   * After a lost request, leaving is refused until the note is written - see
+   * SessionController, which enforces it because it is the only place that knows. This
+   * reference is so the button LOOKS unavailable rather than looking ordinary and
+   * declining to work, which is how a player concludes a game is broken.
    */
-  private closeButton: HTMLButtonElement | null = null;
   private endButton: HTMLElement | null = null;
 
   constructor(private readonly container: HTMLElement) {}
@@ -449,18 +436,26 @@ export class LocalSurface implements InterventionSurface {
     const head = document.createElement('div');
     head.className = 'omni-terminal__head';
 
-    // Stepping out of a request. §97: a contact can be left waiting and returned to -
-    // the player should never feel trapped in a conversation.
-    const back = document.createElement('button');
-    back.type = 'button';
-    back.className = 'omni-back';
-    back.textContent = '‹ Close';
-    back.addEventListener('click', () => this.dispatch({ kind: 'leave' }));
-    this.closeButton = back;
-
+    /*
+     * There is exactly one way out of a request, and it is END CALL in the actions column.
+     *
+     * There used to be two. A "‹ Close" button sat here in the header and dispatched the
+     * same `leave` message END CALL does, byte for byte - two differently named controls,
+     * in two places, for one action, with nothing in either label to say so. The header
+     * position made it worse than a duplicate: a control at the top-left of a panel reads
+     * as "collapse this panel", and what this one actually did was hang up on somebody.
+     *
+     * §97 still holds - a contact can be left waiting and returned to, and the player is
+     * never trapped in a conversation. One door is enough to keep that promise, and END
+     * CALL is the one that says what it does and sits with the other things a call can do.
+     *
+     * It also makes the note gate honest. Locking a way out is a claim that it is THE way
+     * out; a second door with a different name beside it turns that into a puzzle about
+     * which button the game meant.
+     */
     const contact = document.createElement('span');
     contact.className = 'omni-terminal__contact';
-    head.append(back, contact);
+    head.append(contact);
 
     const where = document.createElement('span');
     where.className = 'omni-terminal__where';
@@ -752,7 +747,7 @@ export class LocalSurface implements InterventionSurface {
     const element = this.suggestElement;
     if (!element) return;
 
-    const key = (suggestions ?? []).join(' ');
+    const key = (suggestions ?? []).join('\u0000');
     if (key === this.renderedSuggestKey) return;
     this.renderedSuggestKey = key;
 
@@ -833,12 +828,16 @@ export class LocalSurface implements InterventionSurface {
   }
 
   public present(state: SurfaceState): void {
+    /*
+     * The one exit, dimmed and struck through while a lost request is waiting on its note.
+     * Left clickable on purpose: the controller answers a blocked `leave` with a line of
+     * dialogue saying what is missing, which teaches more than a dead button does.
+     */
     const locked = state.awaitingNote === true;
-    for (const exit of [this.closeButton, this.endButton]) {
-      if (!exit) continue;
-      exit.classList.toggle('omni-exit--locked', locked);
-      exit.setAttribute('aria-disabled', locked ? 'true' : 'false');
-      exit.title = locked ? 'Write your note first' : '';
+    if (this.endButton) {
+      this.endButton.classList.toggle('omni-exit--locked', locked);
+      this.endButton.setAttribute('aria-disabled', locked ? 'true' : 'false');
+      this.endButton.title = locked ? 'Write your note first' : '';
     }
 
     if (!this.logElement || !this.contactElement || !this.inputElement || !this.hintElement) {
