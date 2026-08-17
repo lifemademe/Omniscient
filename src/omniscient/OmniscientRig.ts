@@ -1226,8 +1226,19 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * is about, and nothing else, means the two things the player must look at are the two
      * things drawn in ink. Edge the walls as well and that advantage is spent on a floor.
      */
+    /**
+     * Off. The ink line was the wrong tool for the job it was doing.
+     *
+     * The reasoning below is still sound in the abstract - edge the two things the player
+     * must look at and nothing else - but in practice a dark stroke around a clue reads as
+     * a UI decoration laid over the world rather than as something IN it, and it fought the
+     * one thing this art direction has going for it, which is that everything is made of
+     * flat planes and honest silhouettes. Directing the eye is lighting's job here: the clue
+     * gets a practical on it or it sits against a value it separates from. That is what the
+     * whole shadow and bloom pass was for.
+     */
     this.post.configureEffect(ENGINE.PostProcessPass.ObjectOutline, {
-      enabled: true,
+      enabled: false,
       // Thin and dark rather than thick and coloured. A heavy line eats a 1.7m figure at
       // four metres, and a coloured one competes with §9's semantic accents - the acid
       // green means knowledge and must not start meaning "outlined".
@@ -1240,6 +1251,25 @@ export class OmniscientRig extends ENGINE.SceneNode {
       // blocky read as cracks.
       useRootGrouping: true,
       resolutionScale: 1,
+    });
+
+    /**
+     * Colour grading, for saturation the tone curve takes out.
+     *
+     * ACES is a filmic curve and filmic curves desaturate as they roll off - that is what
+     * makes them read as film rather than as a render, and it is also why every colour in
+     * this game arrives a little greyer than it was authored. §255 says author for what
+     * survives the pipeline; this is the other half of that bargain, putting the chroma back
+     * globally instead of hand-correcting several hundred hex values that were right when
+     * they were written.
+     *
+     * Saturation only, and modestly. Contrast and lift are already doing their work in the
+     * lights, and a grade that starts moving those is a grade that will quietly undo the
+     * balance the shadow pass was measured into.
+     */
+    this.post.configureEffect(ENGINE.PostProcessPass.ColorGrading, {
+      enabled: true,
+      saturation: 1.22,
     });
 
     // Short radius on purpose: this is contact darkening in the crack where two surfaces

@@ -296,7 +296,20 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
      * Scaling depth with height keeps the curl proportional, so a short blade arches a
      * little and a tall one arches more, which is what actually happens in a field.
      */
-    scale.set(range(rng, 0.7, 1.1) * 0.07, tall, tall);
+    /*
+     * Narrow. This was 0.07, and it is the answer to why the grass never read as grass.
+     *
+     * halfWidth runs to 0.5, so that scale gave a blade SEVEN CENTIMETRES across at the
+     * base on a stalk 20-34cm tall - a ratio near 3:1, which is a leaf. Real grass is a few
+     * millimetres wide and forty times longer than it is broad, and the stylised references
+     * exaggerate the length rather than the width. Every other fix attempted here - colour,
+     * clumping, height, taper - was correct and none of them could survive the silhouette
+     * being wrong, because width is what the eye reads first.
+     *
+     * 0.026 gives roughly 2.6cm at the base tapering to a point: still chunky enough to
+     * catch light as a facet at this poly budget, and now ten times longer than it is wide.
+     */
+    scale.set(range(rng, 0.7, 1.1) * 0.026, tall, tall);
     matrix.compose(position, quaternion, scale);
 
     // Thin, dry blades where the field is sparse - the same reason the soil shows there.

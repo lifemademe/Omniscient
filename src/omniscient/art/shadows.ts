@@ -112,3 +112,25 @@ export function applyShadowPolicy(root: THREE.Object3D): void {
     mesh.receiveShadow = !unlit;
   });
 }
+
+/**
+ * Point a light so its rays travel from `at` outward - which is NOT what lookAt does.
+ *
+ * `LightNode.updateMatrixWorld` sets the three.js target to `worldPosition +
+ * getWorldDirection() * d`, and `getWorldDirection()` returns the **+Z** column. Meanwhile
+ * `Object3D.lookAt(p)` builds a rotation whose +Z points from `p` back toward the object.
+ * Compose those two and a light "looking at" something shines directly away from it.
+ *
+ * It is not a crash and it is not visibly wrong on its own, which is why it survived: the
+ * field's sun was aimed with a plain lookAt at the beds and threw its shadow off the far
+ * side of the tree instead, across the empty left of frame. The scene had a shadow, it was
+ * soft and plausible, and it was pointing the wrong way for weeks.
+ *
+ * Mirroring the target through the light's own position cancels the double negative. Use
+ * this for every directional and spot light rather than lookAt, and the intent in the call
+ * site is then the thing that actually happens.
+ */
+export function aimLight(light: THREE.Object3D, at: THREE.Vector3): void {
+  const mirrored = light.position.clone().multiplyScalar(2).sub(at);
+  light.lookAt(mirrored);
+}

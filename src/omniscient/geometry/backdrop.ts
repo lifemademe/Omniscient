@@ -537,13 +537,22 @@ export function fieldSkyTexture(sun: THREE.Vector3): THREE.CanvasTexture | null 
      * gradient somebody applied.
      */
     const stops: ReadonlyArray<readonly [number, string]> = [
-      [FIELD_SKY_BOTTOM, '#ffd9a0'],
-      [0, '#ffc98a'],
-      [4, '#f5a973'],
-      [10, '#dd8b74'],
-      [20, '#a87a92'],
-      [36, '#6f6d9e'],
-      [FIELD_SKY_TOP, '#41527f'],
+      /*
+       * Afternoon, not sunset.
+       *
+       * The gradient still runs warm-to-cool bottom-to-top, because that is what any sky
+       * does - the horizon is always paler and warmer than the zenith, since you are looking
+       * through far more atmosphere at it. What changes is where the whole ramp sits: a
+       * sunset is orange at the bottom and violet at the top, an afternoon is a pale warm
+       * haze at the bottom and a strong blue overhead. Same shape, different register.
+       */
+      [FIELD_SKY_BOTTOM, '#e8eef0'],
+      [0, '#d6e5ef'],
+      [4, '#bcd8ec'],
+      [10, '#9cc4e6'],
+      [20, '#74a9db'],
+      [36, '#5189c9'],
+      [FIELD_SKY_TOP, '#3f74b6'],
     ];
     for (const [y, color] of stops) sky.addColorStop(fieldSkyV(y), color);
     ctx.fillStyle = sky;

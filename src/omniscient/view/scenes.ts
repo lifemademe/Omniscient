@@ -33,7 +33,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { createBoxLabel, createCorrosionBloom, createRatingPlate } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
-import { applyShadowPolicy, castShadows } from '../art/shadows.js';
+import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { placeRigged } from './riggedContact.js';
 import { ACCENT, LIGHT, MAP, MAT } from '../art/palette.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
@@ -1435,7 +1435,15 @@ function buildBeaconMast(scene: ContactScene): void {
  * panel is describing a room that is not there, which is the mistake the first two scenes
  * both made and both had to have fixed.
  */
-const SUNLIGHT_AT = new THREE.Vector3(5.5, 7.5, 1.5);
+/**
+ * Mid-afternoon, high and off to the left.
+ *
+ * This is the position the BACKDROP paints its glow at, and it has to agree with where the
+ * light actually comes from or the sky brightens on one bearing while the shadows fall on
+ * another - which nobody can name but everybody feels. Raised from (5.5, 7.5, 1.5), which
+ * was a low evening sun on the wrong side of the set.
+ */
+const SUNLIGHT_AT = new THREE.Vector3(-9, 16, -10);
 
 function buildSeedlingTunnel(scene: ContactScene): void {
   const rng = createRng(seedFrom('adaeze-tunnel'));
@@ -1851,8 +1859,24 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * the difference between the two, so it rises too, and the balance is read off the
        * gap rather than off either number alone.
        */
-      intensity: 3.2,
-      color: new THREE.Color('#ffb473'),
+      /**
+       * Afternoon: stronger and much less orange.
+       *
+       * A low sun is weak and warm because its light has crossed a lot of atmosphere; a
+       * mid-afternoon one has not, so it is brighter and close to white with only a trace
+       * of warmth left in it. #ffb473 was doing a lot of the sunset's work on its own.
+       */
+      /*
+       * 5.2, and the jump is a consequence of fixing the aim rather than a taste change.
+       *
+       * While the sun was pointed backwards it was contributing almost nothing to the
+       * ground and the hemisphere was carrying the whole field on its own - so the old
+       * intensity was never measured against a sun that was actually hitting anything. With
+       * the aim corrected the ground fell to luma 67, which is dusk. This is what an
+       * afternoon costs once the light is going the right way.
+       */
+      intensity: 5.2,
+      color: new THREE.Color('#fff1d8'),
     })
 
   /**
@@ -1899,15 +1923,36 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * 1.5 was balanced against a ground that ignored light completely, so it was never
        * carrying the field; it only had to tint the props.
        */
-      intensity: 2.5,
+      /*
+       * Down from 2.5, because the sun is doing more of the work now.
+       *
+       * The skylight had to carry the ground under a 7 degree sun. A 40 degree one reaches
+       * level ground perfectly well, so the fill steps back to being fill - and its colour
+       * changes with the sky it represents, from a sunset's warm dome to an afternoon blue.
+       */
+      intensity: 2.2,
       // The sky as it actually is overhead in this shot, and the ground bouncing back.
-      color: new THREE.Color('#e5a98a'),
-      groundColor: new THREE.Color('#3a3a2c'),
+      color: new THREE.Color('#a9c9e8'),
+      groundColor: new THREE.Color('#4a5237'),
     })
   );
 
-  sunLight.position.set(-20, 3.6, -23);
-  sunLight.lookAt(new THREE.Vector3(0, 0.6, 0));
+  /**
+   * Aimed so the tree lays its shadow across the beds.
+   *
+   * The neighbour's tree stands at x -3.7 and the two raised beds are at x +/-1.05, so the
+   * sun has to sit further out on the tree's own side for the shadow to travel toward them.
+   * At this position the light arrives about 40 degrees above the horizon, which throws a
+   * roughly five metre shadow off a four and a half metre tree - far enough to reach the
+   * near bed and break across its frame.
+   *
+   * That is the point of the change and not a detail: a shadow lying over the thing the
+   * mission is ABOUT ties the two together in one image. The tree is the neighbour's, the
+   * beds are Adaeze's, and the shadow is the problem.
+   */
+  sunLight.position.set(-15, 13, -7);
+  // aimLight, not lookAt - see art/shadows.ts. lookAt aims these lights backwards.
+  aimLight(sunLight as unknown as THREE.Object3D, new THREE.Vector3(0.4, 0.25, -0.2));
   /**
    * The sun casts, and the frustum is sized to the set rather than to the world.
    *
