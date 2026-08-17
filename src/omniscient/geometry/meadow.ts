@@ -138,13 +138,24 @@ function bladeGeometry(segments = 4): THREE.BufferGeometry {
   const colors: number[] = [];
   const indices: number[] = [];
 
-  const base = new THREE.Color('#2c4420');
-  const tip = new THREE.Color('#8fbf5e');
+  /**
+   * Less black at the root, less yellow at the tip.
+   *
+   * The ramp ran #2c4420 to #8fbf5e - almost black to a dry yellow-green - which was tuned
+   * against the old unlit-ish ground and reads as dead thatch under a real sun. Grass in
+   * light is SATURATED: dark green in its own shade at the base, and a bright cool green at
+   * the tip where the light gets through the blade. The gap between them is what gives a
+   * field depth when nothing casts a shadow.
+   */
+  const base = new THREE.Color('#35512a');
+  const tip = new THREE.Color('#a6d466');
 
   for (let i = 0; i < segments; i++) {
     const t = i / segments;
     // Tapered, and faster near the tip so it looks like a blade rather than a wedge.
-    const halfWidth = 0.5 * (1 - Math.pow(t, 0.75) * 0.86);
+    // Sharper taper. At 0.75 the blade held most of its width to two-thirds up and read
+    // as a wedge; a real blade is widest near the root and narrows the whole way.
+    const halfWidth = 0.5 * (1 - Math.pow(t, 0.55) * 0.9);
     // The curl. Baked in rather than done in the shader: it is the blade's shape, not its
     // motion, and shape does not need recomputing sixty times a second.
     const lean = t * t * 0.34;
@@ -212,9 +223,36 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
   const position = new THREE.Vector3();
   const dry = new THREE.Color('#b9b177');
 
+  /**
+   * Grass grows in TUFTS, and this is the change that matters most.
+   *
+   * Every blade used to get its own independent position, which produces an even scatter -
+   * and an even scatter is the one thing a field never is. Real grass comes up in clumps
+   * from a single root: several blades splaying from nearly the same point, with bare
+   * ground between the clumps. That texture is most of what the eye uses to recognise
+   * grass at all, and without it any number of individually correct blades still reads as
+   * bristles on a brush.
+   *
+   * So a clump centre is chosen, then a handful of blades are placed within a few
+   * centimetres of it, SHARING its height - because blades from one root are the same age.
+   */
+  const CLUMP_SPREAD = 0.075;
+  let clumpX = 0;
+  let clumpZ = 0;
+  let clumpLeft = 0;
+  let clumpHeight = 1;
+
   for (let i = 0; i < count; i++) {
-    const x = at.x + range(rng, -width / 2, width / 2);
-    const z = at.z + range(rng, -depth / 2, depth / 2);
+    if (clumpLeft <= 0) {
+      clumpX = at.x + range(rng, -width / 2, width / 2);
+      clumpZ = at.z + range(rng, -depth / 2, depth / 2);
+      clumpLeft = 3 + Math.floor(rng() * 4);
+      clumpHeight = range(rng, 0.75, 1.25);
+    }
+    clumpLeft--;
+
+    const x = clumpX + range(rng, -CLUMP_SPREAD, CLUMP_SPREAD);
+    const z = clumpZ + range(rng, -CLUMP_SPREAD, CLUMP_SPREAD);
     if (options.clear?.some((zone) => Math.hypot(x - zone.centre.x, z - zone.centre.z) < zone.radius)) {
       continue;
     }
@@ -245,7 +283,8 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
 
     position.set(x, y, z);
     quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), range(rng, 0, Math.PI * 2));
-    const tall = range(rng, low, high) * (0.45 + 0.55 * lush);
+    // clumpHeight is shared across the tuft - blades from one root are the same age.
+    const tall = range(rng, low, high) * clumpHeight * (0.45 + 0.55 * lush);
     /**
      * Z scales with height, and this was the bug that made the field look mown flat.
      *

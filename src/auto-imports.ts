@@ -32,6 +32,7 @@ import './omniscient/crt/PixelSurface.js';
 import './omniscient/dev/TunePanel.js';
 import './omniscient/geometry/backdrop.js';
 import './omniscient/geometry/character.js';
+import './omniscient/geometry/clouds.js';
 import './omniscient/geometry/foliage.js';
 import './omniscient/geometry/hardware.js';
 import './omniscient/geometry/meadow.js';

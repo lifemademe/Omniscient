@@ -42,6 +42,7 @@ import type { Rng } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
 import { createFieldBackdrop, createNightBackdrop } from '../geometry/backdrop.js';
 import { buildTree } from '../geometry/tree.js';
+import { clouds } from '../geometry/clouds.js';
 import { DISTRICT_CITY, DISTRICT_FLEET, DISTRICT_SIZE } from '../content/district-07.js';
 import { CELL, cellToWorld } from '../geometry/wireCity.js';
 import { createClump } from './../geometry/foliage.js';
@@ -1373,6 +1374,39 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   }
   scene.registerProp('backdrop', fieldRoot);
 
+  /**
+   * Weather, at the same scale as the hills.
+   *
+   * The sky was a clean gradient with a sun disc in it, which is a lighting statement rather
+   * than a place - nothing in it had a size, so nothing else in frame got one either. Clouds
+   * are the only thing up there that can be BIG, and having something recognisably huge at
+   * the top of the shot is what tells you the hedge is far away and the tree is close.
+   *
+   * Sunset colours, taken off the same warm/violet pair the backdrop's own gradient uses:
+   * lit tops facing the low sun, cool undersides where the sky has already gone over.
+   *
+   * The numbers here are the whole trick, and they took two wrong answers to find. At 170
+   * units out the clouds were OUTSIDE the sky cylinder and drew nothing at all. Pulled in to
+   * 70 with 20-unit lumps they became a single purple ceiling over the entire shot, because
+   * a big cloud close overhead is not a cloud, it is a roof. They live on a ring near the
+   * shell wall now and they are small, which is the only way to buy distance in a world that
+   * is 52 units deep.
+   *
+   * The underside is a muted mauve rather than the near-navy it started as. Against a warm
+   * sky a dark cold belly reads as storm; this scene is a calm evening and the shadowed side
+   * of the cloud should only just be cooler than the sky behind it.
+   */
+  const cloudLayer = clouds(rng, {
+    count: 12,
+    height: 27,
+    radius: 44,
+    size: 5.5,
+    top: '#ffcbA6',
+    underside: '#b09ab4',
+    drift: 0.3,
+  });
+  scene.registerProp('clouds', cloudLayer.root, { idle: cloudLayer.idle });
+
   /*
    * No ground slab. There used to be a nine-by-seven box of MAT.ground here, and it was
    * standing in for the world - it existed because there was nothing else under the beds.
@@ -2016,9 +2050,15 @@ function buildSeedlingTunnel(scene: ContactScene): void {
       width: 26,
       depth: 22,
       count: 48000,
-      // Ankle height. At 0.4 she was standing waist-deep in a hay meadow rather than in a
-      // worked field somebody walks across every day.
-      height: [0.07, 0.2],
+      /**
+       * Up from 0.07-0.2, which was mown lawn.
+       *
+       * Ankle height was right when every blade stood alone, because a field of individual
+       * 40cm blades is a hay meadow. Clumped, the same height reads as somebody's back
+       * garden - and this is rough grass round a worked smallholding, which comes to mid
+       * shin. The clump spread does the work that height used to be doing.
+       */
+      height: [0.16, 0.34],
       bareBelow: 0.44,
       keepOffBeach: 3.2,
       clear: KEEP_CLEAR,
