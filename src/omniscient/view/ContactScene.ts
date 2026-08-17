@@ -22,6 +22,8 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { applyCertainty } from '../art/certainty.js';
+
 import { Ease, Tweener } from '../core/tween.js';
 
 export interface CameraShot {
@@ -43,6 +45,8 @@ export interface RegisteredProp {
   idle?: (deltaTime: number, node: ENGINE.SceneNode) => void;
   /** Drawn in ink by the outline pass. See registerProp's `inked`. */
   inked?: boolean;
+  /** How much the machine knows about this prop. ART_DIRECTION §1. */
+  certainty?: number;
 }
 
 /** Populates a scene with its props, shots and actions. Registered by content modules. */
@@ -115,6 +119,7 @@ export class ContactScene extends ENGINE.SceneNode {
   /** Show this diorama. The rig owns the camera and frames the shot. */
   public activate(): void {
     this.visible = true;
+    this.applyCertainties();
   }
 
   /** Hide this diorama. */
@@ -225,6 +230,53 @@ export class ContactScene extends ENGINE.SceneNode {
    * genuinely different things and one of them is on its way out: the outline is disabled,
    * and the reticles are what replaced it.
    */
+  /**
+   * Set how much the machine knows about one prop. ART_DIRECTION §1.
+   *
+   * The scene owns this rather than the rig because certainty is a property of the room's
+   * contents, and the rig has no business knowing which prop id is the radio. Missions
+   * raise it from their beats; the builder sets the opening state.
+   */
+  public setCertainty(id: string, certainty: number): void {
+    const prop = this.props.get(id);
+    if (!prop) {
+      console.warn(`[certainty] no prop "${id}" in ${this.sceneId}`);
+      return;
+    }
+    /*
+     * Warn on a hit that changed nothing.
+     *
+     * A mistyped id and a prop whose meshes the traversal cannot reach fail identically -
+     * silently - and this project has lost whole afternoons to exactly that shape of
+     * nothing-happened. The count makes the difference visible at the moment it occurs.
+     */
+    /*
+     * Recorded, then applied on activate rather than now.
+     *
+     * MeshNode's material setter routes through `resourceManager.loadGenericMaterial` and
+     * assigns the result to the inner mesh when the promise settles - and the constructor
+     * has already started that load by the time a builder runs. So a material changed
+     * during the build is changed correctly, counted correctly, and then overwritten a
+     * moment later by a load that was already in flight. Three cycles measured a mean
+     * frame difference of 0.8 with every prop reporting a healthy touch count, because
+     * nothing had failed; it had simply been undone.
+     *
+     * Applying after the room is put on screen is later than any of those loads, and it is
+     * also where this needs to happen anyway - certainty rises during a conversation, so
+     * the re-apply path is the main path and the builder is just the opening state.
+     */
+    prop.certainty = certainty;
+    if (this.visible) this.applyCertainties();
+  }
+
+  /** Push every recorded certainty onto its prop. Cheap, idempotent, safe to repeat. */
+  private applyCertainties(): void {
+    for (const prop of this.props.values()) {
+      if (prop.certainty === undefined) continue;
+      applyCertainty(prop.node as unknown as THREE.Object3D, prop.certainty);
+    }
+  }
+
   public scanTargets(): { id: string; node: ENGINE.SceneNode }[] {
     const out: { id: string; node: ENGINE.SceneNode }[] = [];
     for (const [id, prop] of this.props) {

@@ -33,6 +33,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { createBoxLabel, createCorrosionBloom, createRatingPlate } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
+import { CERTAINTY } from '../art/certainty.js';
 import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { placeRigged } from './riggedContact.js';
 import { ACCENT, LIGHT, MAP, MAT } from '../art/palette.js';
@@ -902,6 +903,55 @@ function buildRepairShop(scene: ContactScene): void {
     target: new THREE.Vector3(-0.6, 0.15, -0.8),
     duration: 2.4,
   });
+  /**
+   * What the machine knows about this room, at the moment the call connects.
+   *
+   * ART_DIRECTION §1/§2. Measured before: mean saturation 0.58, mean R−B +56, and at a
+   * squint the brightest object in frame was a blank white board - the radio, which is the
+   * subject of the whole request, read as a mid-grey box behind it. One hue, no cool, no
+   * focal point.
+   *
+   * These numbers fix both faults with one idea. The room's shell is SHAPED, because she
+   * has told us it is a workshop and nothing more; the shelf and the boxes under the bench
+   * are SUSPECTED, because nobody has said a word about what is in them; the bench is
+   * DESCRIBED, because she is working at it; and the transmitter is KNOWN, because it is
+   * the only thing this call is about.
+   *
+   * The result is that the one warm object in a cold room is the one the player is here
+   * for. The composition and the fiction want exactly the same thing, which is the whole
+   * argument for this direction.
+   */
+  for (const [id, certainty] of [
+    ['floor', CERTAINTY.SHAPED],
+    ['floor-seams', CERTAINTY.SHAPED],
+    ['wall', CERTAINTY.SHAPED],
+    ['pegboard', CERTAINTY.SHAPED],
+    ['pegboard-tools', CERTAINTY.SHAPED],
+    ['tide-line', CERTAINTY.SHAPED],
+    // Nobody has said what is on the shelf or in the boxes. They are the coldest things
+    // in the room and they are supposed to look like it - this is what turns a flat white
+    // box from unfinished work into an object nobody has described.
+    ['shelf', CERTAINTY.SUSPECTED],
+    ['bench-store', CERTAINTY.SUSPECTED],
+    // She never described her bench. She described what is standing on it, and the bench
+    // being the brightest mass in frame was the reason the radio lost the eye to it.
+    ['bench', CERTAINTY.SHAPED],
+    ['bench-tools', CERTAINTY.SHAPED],
+    ['bench-tin', CERTAINTY.SUSPECTED],
+    ['bench-rag', CERTAINTY.SUSPECTED],
+    // The back panel is off and leaning on the bench, and it is the brightest object in
+    // frame by luma - a blank rectangle out-competing the radio for the eye. She has not
+    // described it; she described what it came off.
+    ['set-panel', CERTAINTY.SHAPED],
+    // She has the back off and the lamp still comes on: the set, its connector and its
+    // supply are the three things she has actually described.
+    ['transmitter', CERTAINTY.KNOWN],
+    ['connector-b', CERTAINTY.DESCRIBED],
+    ['mains-switch', CERTAINTY.DESCRIBED],
+  ] as [string, number][]) {
+    scene.setCertainty(id, certainty);
+  }
+
 }
 
 /**
