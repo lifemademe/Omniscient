@@ -1495,9 +1495,19 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     height: 27,
     radius: 44,
     size: 5.5,
-    top: '#ffcbA6',
-    underside: '#b09ab4',
-    drift: 0.3,
+    /*
+     * White cloud under an afternoon sky, not the sunset's lit pink.
+     *
+     * These were authored against an orange horizon and kept their rose tops when the sky
+     * went blue, which is why they read as a leftover rather than as weather. A fair-weather
+     * afternoon cloud is close to white on top and a cool grey underneath, and the small gap
+     * between those two is what keeps it soft instead of graphic - a hard light/dark split
+     * up there would pull the eye off the field, which is the opposite of what this scene is
+     * for.
+     */
+    top: '#fdfbf6',
+    underside: '#c3ccd8',
+    drift: 0.22,
   });
   scene.registerProp('clouds', cloudLayer.root, { idle: cloudLayer.idle });
 
@@ -2206,7 +2216,21 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   groundPatch.translate(0.2, -0.012, -1.0);
   scene.registerProp(
     'ground',
-    meshOf('Ground', groundPatch, meadowGround({ grass: '#5c6b32', soil: '#6f6047' }))
+    meshOf('Ground', groundPatch, meadowGround({
+      /*
+       * Lighter, and warmer. Calm is a VALUE decision before it is a colour one.
+       *
+       * These were a dark olive over a dark brown, which is what a field looks like in
+       * overcast light and is also what makes a picture feel heavy - the eye reads low
+       * value as weight. This scene is supposed to be the one the player exhales at, so the
+       * whole ground moves up the scale: a soft sage green over pale beach sand, which is
+       * also honest for a smallholding sitting on a shoreline where the soil is half sand.
+       */
+      grass: '#8a9a5b',
+      soil: '#c9b491',
+      sand: '#e0cfae',
+      drySand: '#eaddc2',
+    }))
   );
 
   scene.registerProp(
@@ -2373,13 +2397,46 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * above the ridge, which is where a low sun actually reads from, and raised so it clears
    * the water rather than sitting in it.
    */
-  const disc = new THREE.CircleGeometry(2.6, 24);
-  disc.translate(LAKE_SUN_X, 6.4, -42);
-  scene.registerProp('sun-disc', meshOf('SunDisc', disc, MAT.sunDisc));
+  /**
+   * Turned to face the viewer, which is why it was an egg.
+   *
+   * CircleGeometry is built in the XY plane facing +Z, and this one was translated into the
+   * sky and left there. The camera does not look straight down -Z - it stands near the
+   * ground and looks slightly up and across - so it met the disc at an angle and saw a
+   * circle foreshortened along one axis. A perfectly round sun, drawn correctly, rendered
+   * as an ellipse for exactly the reason a plate on a table looks oval.
+   *
+   * Rotating it to face the camera's own position fixes it. The sun is 40 metres out and
+   * every shot in this scene stands within a couple of metres of the origin, so aiming at
+   * one point near the origin is within a degree or two of correct for all of them - a
+   * per-frame billboard would cost an update to save nothing anybody could measure.
+   */
+  const SUN_AT = new THREE.Vector3(LAKE_SUN_X, 6.4, -42);
+  const EYE_AT = new THREE.Vector3(0, 2, 4);
 
-  const halo = new THREE.CircleGeometry(6.0, 24);
-  halo.translate(LAKE_SUN_X, 6.4, -42.4);
-  scene.registerProp('sun-halo', meshOf('SunHalo', halo, MAT.sunHalo));
+  const faceViewer = (geometry: THREE.BufferGeometry, at: THREE.Vector3): THREE.BufferGeometry => {
+    const facing = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 0, 1),
+      EYE_AT.clone().sub(at).normalize()
+    );
+    geometry.applyQuaternion(facing);
+    geometry.translate(at.x, at.y, at.z);
+    return geometry;
+  };
+
+  scene.registerProp(
+    'sun-disc',
+    meshOf('SunDisc', faceViewer(new THREE.CircleGeometry(2.6, 48), SUN_AT), MAT.sunDisc)
+  );
+  scene.registerProp(
+    'sun-halo',
+    // Nudged behind the disc along the same viewing axis, so the halo cannot poke through.
+    meshOf(
+      'SunHalo',
+      faceViewer(new THREE.CircleGeometry(6.0, 48), SUN_AT.clone().add(new THREE.Vector3(0, 0, -0.4))),
+      MAT.sunHalo
+    )
+  );
 
   // Field stone, half-buried. Cool grey so it never competes with a crop.
   scene.registerProp(

@@ -149,9 +149,32 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
      * would quietly delete the reason for the whole request.
      */
     const swing = (i / 6) * Math.PI * 2 + jitter(rng, 0.3);
-    const lean = -(0.44 + range(rng, 0, 0.24));
+
+    /**
+     * Low branches lie down, high branches reach up.
+     *
+     * Every limb used to leave the trunk at the same 25-to-39 degree lean, which is why the
+     * crown read as a bundle of sticks all going one way. A real tree is a record of its own
+     * history: the bottom branches are the oldest, they have been carrying their own weight
+     * for decades and have settled towards horizontal, and they are long because they have
+     * had the most time to grow. The ones at the top are the newest, still climbing for
+     * light, and short.
+     *
+     * So lean is a function of HEIGHT rather than a constant with noise on it. `up` already
+     * says where on the trunk this limb emerges, so the same number that places the fork
+     * decides how far over it lies - the two cannot disagree.
+     *
+     * At the bottom that is about 66 degrees off vertical, nearly a horizontal bough; at the
+     * top about 21, a shoot. That spread is the whole difference between a tree and a broom.
+     */
+    const up = 0.34 + i * 0.12;
+    const age = 1 - (up - 0.34) / 0.6;
+    const lean = -(0.37 + age * 0.78 + range(rng, 0, 0.12));
+
     const towardBeds = Math.max(0, Math.cos(swing - options.leanToward)) * options.leanBias;
-    const length = (2.0 + towardBeds * 0.85) * range(rng, 0.92, 1.06) * options.size;
+    // Older limbs are longer, for the same reason they are lower.
+    const length =
+      (2.0 + towardBeds * 0.85) * (0.82 + age * 0.36) * range(rng, 0.92, 1.06) * options.size;
 
     // geometry.rotateZ then .rotateY composes as Ry * Rz, so the direction has to be
     // built in the same order or the foliage lands somewhere the branch never went.
@@ -170,7 +193,6 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
      * taper at that height. The limb cannot start inside the wood or float off it, and it
      * cannot drift if the trunk is ever re-proportioned.
      */
-    const up = 0.34 + i * 0.12;
     const girth = UPPER_BASE + (UPPER_TOP - UPPER_BASE) * up;
     // The limb's horizontal heading, which is where on the trunk it should emerge.
     const out = new THREE.Vector3(Math.cos(swing), 0, -Math.sin(swing));
