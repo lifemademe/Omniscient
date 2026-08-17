@@ -2239,7 +2239,17 @@ function buildSeedlingTunnel(scene: ContactScene): void {
       at: new THREE.Vector3(0.2, 0, -3.5),
       width: 26,
       depth: 22,
-      count: 48000,
+      /*
+       * More of it. 48000 across a 26x22 patch is about 84 blades per square metre, which
+       * sounds like a lot and is not - real grass is thousands, and at this density the eye
+       * still reads individual stalks with ground between them rather than a sward. Doubled,
+       * with the bare threshold lowered so the thin areas fill in rather than the thick ones
+       * getting thicker.
+       *
+       * It costs nothing measurable because the whole field is one InstancedMesh: the extra
+       * blades are extra matrices in a buffer, not extra draw calls.
+       */
+      count: 105000,
       /**
        * Up from 0.07-0.2, which was mown lawn.
        *
@@ -2249,7 +2259,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * shin. The clump spread does the work that height used to be doing.
        */
       height: [0.16, 0.34],
-      bareBelow: 0.44,
+      bareBelow: 0.34,
       keepOffBeach: 3.2,
       clear: KEEP_CLEAR,
       y: 0,
