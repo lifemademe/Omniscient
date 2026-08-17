@@ -89,6 +89,15 @@ nothing, and in fiction it was a lie, because the machine has no reason to doubt
 woman standing in her own workshop has a shelf. Split, the unresolved sits inside the
 resolved. **Tier 1 goes on the contents, not on the furniture.**
 
+**And only where the bounding volume is a fair likeness.** This tier draws a prop's bounds,
+so a prop whose bounds are nothing like it produces a lie of a different kind. Dorin's
+doorstep is a merged set of small things spread along its whole width: one box a metre and a
+half across, standing in front of the door and passing through the man — the best-composed
+shot in the game, ruined. The beacon's supply cable is worse, a slab tens of metres wide and
+centimetres thick laid over the entire headland. **Merged props and long thin ones are
+disqualified however well the fiction fits**, and the fiction fitted both. Either split the
+prop, as the shelf was split, or let it sit at SHAPED and warm by colour instead.
+
 ### Tier 2 — SHAPED · `0.30 – 0.59`
 *I know its shape.* **This is the 90s CG tier and the game's default resting state.**
 

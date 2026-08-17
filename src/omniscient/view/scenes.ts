@@ -76,15 +76,29 @@ import {
   FACT_WORKSHOP_FLOODS,
 } from '../content/mission-01-transmitter.js';
 import {
+  FACT_BEACON_DROPS_ON_KEYUP,
+  FACT_FEED_NEEDS_ISOLATOR,
+} from '../content/mission-02-beacon.js';
+import {
   FACT_EQUIPMENT_FINE,
   FACT_SHADE_LINE,
   FACT_TREE_GREW,
 } from '../content/mission-03-tunnel.js';
 import {
+  FACT_FLOOD_TOOK_RECORDS,
+  FACT_ILEANA_LINE,
+  FACT_NAMES_ON_PHOTOGRAPHS,
+} from '../content/mission-04-relations.js';
+import {
   FACT_CELLAR_RUN,
   FACT_PIECEMEAL_PLUMBING,
   FACT_PUMP_IS_FINE,
 } from '../content/mission-05-cellar.js';
+import {
+  FACT_DORIN_HANDS,
+  FACT_OLD_LOCK_WORN,
+  FACT_PINS_BIND_BY_TOLERANCE,
+} from '../content/mission-06-lock.js';
 
 import { placeCharacter } from './character-node.js';
 import { ContactScene } from './ContactScene.js';
@@ -1673,6 +1687,48 @@ function buildBeaconMast(scene: ContactScene): void {
     target: new THREE.Vector3(0, 5.5, 0),
     duration: 2.2,
   });
+
+  /**
+   * -- What the machine knows about the mast, and what Ilie can tell it ------------------
+   *
+   * He rang about a beacon that keeps dropping out. That is the beacon and the structure
+   * holding it up; everything to do with how it is FED is what the call is for.
+   */
+  for (const [id, certainty] of [
+    ['beacon', CERTAINTY.KNOWN],
+    ['mast', CERTAINTY.SHAPED],
+    ['platform', CERTAINTY.SHAPED],
+    ['deck', CERTAINTY.SHAPED],
+    ['outcrop', CERTAINTY.SHAPED],
+    ['turf', CERTAINTY.SHAPED],
+    /*
+     * The supply, and the box it passes through. He is standing next to a junction box he
+     * has not mentioned - which is exactly the shape of this request, because the fault is
+     * in the feed and not in the lamp. The splice box is on the mast in frame, so it is
+     * the one that performs.
+     */
+    ['feed-down', CERTAINTY.SUSPECTED],
+    /*
+     * SHAPED, not SUSPECTED, and the reason is a rule rather than a preference.
+     *
+     * Tier 1 draws the prop's BOUNDING VOLUME, so it only says what it means when that
+     * volume is a fair proxy for the object. `feed-away` is a cable running off across the
+     * headland: its bounds are a slab tens of metres wide and centimetres thick, and
+     * putting a guess on it laid a cyan glass sheet across the entire set. The same
+     * mistake in the same session as the doorstep - see the note in buildNightDoor.
+     */
+    ['feed-away', CERTAINTY.SHAPED],
+    ['splice-box', CERTAINTY.SUSPECTED],
+  ] as [string, number][]) {
+    scene.setCertainty(id, certainty);
+  }
+
+  // The lamp dims when he keys up: the drop down the mast is carrying both, which is the
+  // first time the cable is a thing rather than a wire going somewhere.
+  scene.revealOn(FACT_BEACON_DROPS_ON_KEYUP, 'feed-down', CERTAINTY.DESCRIBED);
+  // And the answer - the feed wants isolating, which makes the box the fault lives in.
+  scene.revealOn(FACT_FEED_NEEDS_ISOLATOR, 'splice-box', CERTAINTY.KNOWN);
+  scene.revealOn(FACT_FEED_NEEDS_ISOLATOR, 'feed-away', CERTAINTY.DESCRIBED);
 }
 
 
@@ -3641,6 +3697,49 @@ function buildClearedHouse(scene: ContactScene): void {
     target: new THREE.Vector3(-0.48, 0.84, -1.14),
     duration: 2.2,
   });
+
+  /**
+   * -- What the machine knows about the house Ileana is emptying -----------------------
+   *
+   * She rang about a box of photographs, so that is what is warm. The house around it is a
+   * house - she has said as much by standing in it - and the two things nobody has
+   * described are the papers on the table and whatever is through the door.
+   *
+   * §5 asks this room for "emptied, not abandoned", and the guesses help: a room being
+   * cleared is full of things whose contents nobody can any longer account for, which is
+   * the same sentence tier 1 draws.
+   */
+  for (const [id, certainty] of [
+    ['photo-box', CERTAINTY.KNOWN],
+    ['table', CERTAINTY.SHAPED],
+    ['floor', CERTAINTY.SHAPED],
+    ['floor-seams', CERTAINTY.SHAPED],
+    ['wall', CERTAINTY.SHAPED],
+    ['window', CERTAINTY.SHAPED],
+    ['window-frame', CERTAINTY.SHAPED],
+    ['door-casing', CERTAINTY.SHAPED],
+    ['light-fitting', CERTAINTY.SHAPED],
+    ['bulb', CERTAINTY.SHAPED],
+    ['chairs', CERTAINTY.SHAPED],
+    ['curtain-rail', CERTAINTY.SHAPED],
+    // The tide line is evidence the machine can read for itself once it is drawing a wall.
+    ['tide-line', CERTAINTY.SHAPED],
+    // Papers on the table, and the dark beyond the doorway. Neither has been mentioned.
+    ['letters', CERTAINTY.SUSPECTED],
+    ['hall', CERTAINTY.SUSPECTED],
+  ] as [string, number][]) {
+    scene.setCertainty(id, certainty);
+  }
+
+  // Names written on the backs. The moment the papers stop being clutter and become the
+  // record - which is the mission, and it happens on the table in the middle of the frame.
+  scene.revealOn(FACT_NAMES_ON_PHOTOGRAPHS, 'letters', CERTAINTY.DESCRIBED);
+  // The flood took the records, so the mark on the wall stops being a stain and becomes
+  // the reason there is nothing else to go on.
+  scene.revealOn(FACT_FLOOD_TOOK_RECORDS, 'tide-line', CERTAINTY.DESCRIBED);
+  // Once the machine has her family line it has an account of whose house this is, and the
+  // rest of it stops being somewhere she happens to be standing.
+  scene.revealOn(FACT_ILEANA_LINE, 'hall', CERTAINTY.DESCRIBED);
 }
 
 /**
@@ -4941,6 +5040,70 @@ function buildNightDoor(scene: ContactScene): void {
     target: new THREE.Vector3(0.1, 1.02, -0.24),
     duration: 2.0,
   });
+
+  /**
+   * -- What the machine knows about Dorin's doorstep ------------------------------------
+   *
+   * A lock that will not turn, in the dark, and the man who fitted it standing in front of
+   * it. The lock is DESCRIBED rather than KNOWN at the open, which is the one departure
+   * from the pattern in this file and is deliberate: he has told the machine there is a
+   * lock and that it is stuck, and neither of those is knowing what a lock IS. It goes to
+   * KNOWN when the mechanism is understood, which is the only moment in this mission
+   * anything is actually solved.
+   */
+  for (const [id, certainty] of [
+    ['lock', CERTAINTY.DESCRIBED],
+    ['door', CERTAINTY.SHAPED],
+    ['door-frame', CERTAINTY.SHAPED],
+    ['upper-frame', CERTAINTY.SHAPED],
+    ['pane', CERTAINTY.SHAPED],
+    ['porch', CERTAINTY.SHAPED],
+    ['porch-hood', CERTAINTY.SHAPED],
+    ['porch-bulb', CERTAINTY.SHAPED],
+    ['step', CERTAINTY.SHAPED],
+    ['front', CERTAINTY.SHAPED],
+    ['path', CERTAINTY.SHAPED],
+    ['path-weeds', CERTAINTY.SHAPED],
+    /*
+     * The stoop stays SHAPED, and this is the clearest lesson of the pass that added it.
+     *
+     * The idea was good: nobody has described what is on his step, so the machine should
+     * not be drawing pots and boots as fact. The execution was impossible, because tier 1
+     * renders a prop's BOUNDING VOLUME and `stoop` is a merged set of small things spread
+     * along the whole width of the step. Its bounds are one box a metre and a half across,
+     * so the guess came out as a glass case standing in front of the door and passing
+     * through Dorin - the best-composed shot in the game, ruined by a rule applied without
+     * looking at what it would draw.
+     *
+     * §1 already says tier 1 goes on the contents rather than the furniture. The sharper
+     * version, learned here: a prop qualifies for tier 1 only if its bounding volume is a
+     * fair likeness of it. Merged props and long thin ones are disqualified whatever the
+     * fiction says about them.
+     */
+    ['stoop', CERTAINTY.SHAPED],
+    ['stoop-dark', CERTAINTY.SHAPED],
+    /*
+     * The landing keeps its guess. It is behind a shut door, so its volume is never in
+     * frame - which sounds like a reason to drop it and is the reason to keep it: the door
+     * opens later in this mission, and what is behind it should not already be drawn.
+     */
+    ['landing', CERTAINTY.SUSPECTED],
+  ] as [string, number][]) {
+    scene.setCertainty(id, certainty);
+  }
+
+  // He fitted this door himself and remembers the work, which is what makes the pots and
+  // the boots on the step his rather than anybody's. A warming rather than a resolve, for
+  // the bounding-volume reason above.
+  scene.revealOn(FACT_DORIN_HANDS, 'stoop', CERTAINTY.DESCRIBED);
+  scene.revealOn(FACT_DORIN_HANDS, 'stoop-dark', CERTAINTY.DESCRIBED);
+  // The lock is older than the door it is in - so the door becomes evidence rather than
+  // the thing the lock happens to be mounted on.
+  scene.revealOn(FACT_OLD_LOCK_WORN, 'door', CERTAINTY.DESCRIBED);
+  scene.revealOn(FACT_OLD_LOCK_WORN, 'door-frame', CERTAINTY.DESCRIBED);
+  // And the mechanism. Pins bind one at a time because no two are cut alike, which is the
+  // fact the whole request turns on and the only one that takes the lock to KNOWN.
+  scene.revealOn(FACT_PINS_BIND_BY_TOLERANCE, 'lock', CERTAINTY.KNOWN);
 }
 
 /**
