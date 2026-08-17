@@ -26,6 +26,76 @@ import { seedFrom } from '../core/rng.js';
  * The print is eroded by the same noise field that wears the paint, so the plate ages with
  * the housing instead of sitting on it looking freshly printed.
  */
+/**
+ * The signal meter on the front of the Kestrel-3.
+ *
+ * Asked about directly: "why is the radio screen brown?" It was not a screen. It was a
+ * BoxGeometry in `MAT.metal` - a cool grey - warmed to brown by the certainty law, because
+ * the transmitter is `inked` and everything on it goes warm at KNOWN. So the one part of
+ * the set that should read as glass read as a slab of painted metal.
+ *
+ * A meter is a face, not a colour: a pale card, an arc of graduations, and a needle sitting
+ * where the reading is. Mirela's line is that the lamp comes on and nothing else happens,
+ * so the needle rests at the bottom of the scale - the set has power and no signal, which
+ * is the diagnosis stated on the instrument before anybody says it (ยง131).
+ *
+ * Drawn rather than lit: the glass highlight is a painted diagonal, because a real specular
+ * would come and go with the camera and this has to read from the two shots the mission
+ * actually uses.
+ */
+export function createMeterFace(): THREE.CanvasTexture | null {
+  return createDecal(320, 220, (ctx, w, h) => {
+    /*
+     * A DARK card with a pale needle, which is the third attempt and the first that reads.
+     *
+     * The first two drew a correct instrument - cream card, twenty graduations, fine needle
+     * - and both resolved to a blank panel, because this meter is about 65 pixels wide from
+     * the shot the mission uses and because a lit decal under the work lamp blows out
+     * whatever is painted on it. Darkening the card helped and did not fix it.
+     *
+     * So it stops being a drawing and becomes a SHAPE: a dark rectangle in a cream case,
+     * with one bright mark across it. That reads at 65 pixels and at 650, which is the only
+     * test that matters here. ง4.1 - silhouette first, and a dial's silhouette is its
+     * needle against its face, not its graduations.
+     */
+    ctx.fillStyle = '#22221f';
+    ctx.fillRect(0, 0, w, h);
+
+    const cx = w / 2;
+    const cy = h * 1.04;
+    const radius = h * 0.8;
+
+    // Five graduations, heavy, pale. Any more and they merge into a band.
+    ctx.strokeStyle = '#8e8a7c';
+    ctx.lineWidth = 6;
+    for (let i = 0; i <= 4; i++) {
+      const angle = Math.PI * (1.2 + (i / 4) * 0.6);
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius);
+      ctx.lineTo(cx + Math.cos(angle) * (radius - 26), cy + Math.sin(angle) * (radius - 26));
+      ctx.stroke();
+    }
+
+    /*
+     * The needle, resting at the bottom of the scale. Mirela's line is that the lamp comes
+     * on and nothing else happens, so the instrument says the same thing before she does
+     * (ง131): power in, nothing coming through.
+     */
+    const rest = Math.PI * 1.23;
+    ctx.strokeStyle = '#e8e2cf';
+    ctx.lineWidth = 9;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(rest) * (radius - 10), cy + Math.sin(rest) * (radius - 10));
+    ctx.stroke();
+
+    // A bezel, so the face reads as set into the case rather than stuck on it.
+    ctx.strokeStyle = '#6e6a5e';
+    ctx.lineWidth = 9;
+    ctx.strokeRect(4, 4, w - 8, h - 8);
+  });
+}
+
 export function createRatingPlate(): THREE.CanvasTexture | null {
   return createDecal(512, 160, (ctx, w, h) => {
     // Plate: brushed alloy, a shade lighter than the housing so it separates without

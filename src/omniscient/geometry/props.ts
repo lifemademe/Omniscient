@@ -133,16 +133,30 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
    */
   const recesses: THREE.BufferGeometry[] = [];
 
+  /**
+   * Connector height, and it is not the middle of the panel any more.
+   *
+   * At `height * 0.5` connector B's collar reached y 0.149 and the lowest vent sat at
+   * 0.136 - so the socket was growing through the louvres, which was reported by eye
+   * before it was measured. Dropped to 0.42 the collar tops out at 0.131 and clears the
+   * bottom slot by 5mm.
+   *
+   * Down rather than moving the vents up, because vents belong high on a case - heat
+   * rises, and every piece of equipment this is pretending to be puts them above the
+   * connectors for that reason.
+   */
+  const connectorY = height * 0.42;
+
   const socket = (x: number, radius: number, length: number): void => {
     const shell = new THREE.CylinderGeometry(radius, radius * 0.94, length, 10);
     shell.rotateX(Math.PI / 2);
-    shell.translate(x, height * 0.5, -depth / 2 - length / 2);
+    shell.translate(x, connectorY, -depth / 2 - length / 2);
     fittings.push(shell);
 
     // A raised collar at the base, where a socket is screwed to the panel.
     const collar = new THREE.CylinderGeometry(radius * 1.22, radius * 1.22, 0.006, 10);
     collar.rotateX(Math.PI / 2);
-    collar.translate(x, height * 0.5, -depth / 2 - 0.003);
+    collar.translate(x, connectorY, -depth / 2 - 0.003);
     fittings.push(collar);
 
     /**
@@ -164,7 +178,7 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
      */
     const bore = new THREE.CylinderGeometry(radius * 0.72, radius * 0.72, length * 0.8, 10);
     bore.rotateX(Math.PI / 2);
-    bore.translate(x, height * 0.5, -depth / 2 - length + length * 0.4 - 0.002);
+    bore.translate(x, connectorY, -depth / 2 - length + length * 0.4 - 0.002);
     recesses.push(bore);
   };
 
@@ -231,7 +245,7 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
     fittings: mergeGeometries(fittings, false) ?? handle,
     recesses: mergeGeometries(recesses, false) ?? undefined,
     anchors: {
-      connectorB: new THREE.Vector3(width * 0.16, height * 0.5, -depth / 2 - 0.05),
+      connectorB: new THREE.Vector3(width * 0.16, connectorY, -depth / 2 - 0.05),
       /**
        * The rear panel itself, at connector B's base - a SURFACE, not an aiming point.
        *
@@ -244,7 +258,7 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
        * Reported by eye long before it was measured, which is the right way round: it
        * looked like it was floating because it was floating.
        */
-      rearPanel: new THREE.Vector3(width * 0.16, height * 0.5, -depth / 2),
+      rearPanel: new THREE.Vector3(width * 0.16, connectorY, -depth / 2),
       meter: new THREE.Vector3(-width * 0.22, height * 0.55, depth / 2 + 0.02),
       front: new THREE.Vector3(0, height * 0.5, depth / 2 + 0.3),
       rear: new THREE.Vector3(0, height * 0.5, -depth / 2 - 0.3),

@@ -31,7 +31,12 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-import { createBoxLabel, createCorrosionBloom, createRatingPlate } from '../art/decals.js';
+import {
+  createBoxLabel,
+  createCorrosionBloom,
+  createMeterFace,
+  createRatingPlate,
+} from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
 import { CERTAINTY } from '../art/certainty.js';
 import { createFloodwater } from '../art/floodwater.js';
@@ -522,9 +527,43 @@ function buildRepairShop(scene: ContactScene): void {
    */
   scene.registerProp('set-panel', meshOf('SetPanel', panel, MAT.equipmentBack));
 
-  // Screwdrivers and a spanner, laid down roughly parallel the way tools are.
+  /**
+   * Tools, and one of them is now actually a screwdriver.
+   *
+   * The comment here has said "screwdrivers and a spanner" since it was written and all
+   * three were 16mm square bars. Somebody looking at the shot asked what the grey sticks
+   * were, which is the same review the tin lid got and the same answer: a bar is a bar at
+   * any value, and no amount of material work makes one a tool (§4.1, silhouette first).
+   *
+   * A screwdriver is two shapes and a colour change - a thin steel shaft and a fat handle
+   * that is not steel - so the handle goes in its own material rather than into the merged
+   * metal. That is the whole trick; the other two stay bars, because three identifiable
+   * tools would be a tool shop and this is one person's bench mid-job.
+   */
+  const handles: THREE.BufferGeometry[] = [];
+  const DRIVER = { x: 0.44, z: -0.16, angle: 0.18 };
+
+  {
+    const shaft = new THREE.CylinderGeometry(0.0055, 0.0055, 0.17, 6);
+    shaft.rotateZ(Math.PI / 2);
+    shaft.translate(0.055, 0, 0);
+    // The tip: flattened to a blade, which is what says driver rather than rod.
+    const tip = new THREE.BoxGeometry(0.028, 0.009, 0.004);
+    tip.translate(0.154, 0, 0);
+    const steel = mergeGeometries([shaft, tip], false) ?? shaft;
+    steel.rotateY(DRIVER.angle + jitter(benchRng, 0.1));
+    steel.translate(DRIVER.x, 0.824, DRIVER.z);
+    clutter.push(steel);
+
+    const grip = new THREE.CylinderGeometry(0.018, 0.015, 0.095, 8);
+    grip.rotateZ(Math.PI / 2);
+    grip.translate(-0.055, 0, 0);
+    grip.rotateY(DRIVER.angle + jitter(benchRng, 0.1));
+    grip.translate(DRIVER.x, 0.824, DRIVER.z);
+    handles.push(grip);
+  }
+
   for (const [x, z, length, angle] of [
-    [0.44, -0.16, 0.26, 0.18],
     [0.52, -0.06, 0.22, 0.31],
     [-0.24, -0.12, 0.19, -0.42],
   ] as const) {
@@ -536,6 +575,12 @@ function buildRepairShop(scene: ContactScene): void {
   scene.registerProp(
     'bench-tools',
     meshOf('BenchTools', mergeGeometries(clutter, false) ?? panel, MAT.metal)
+  );
+  // The handle, in the one warm plastic on the bench. A screwdriver reads by its two-part
+  // silhouette AND by the handle not being the colour of the shaft.
+  scene.registerProp(
+    'bench-tool-grip',
+    meshOf('BenchToolGrip', mergeGeometries(handles, false) ?? handles[0], MAT.plastic)
   );
 
   /**
@@ -556,7 +601,14 @@ function buildRepairShop(scene: ContactScene): void {
    *
    * Metal rather than plastic, too. A tin is a tin.
    */
-  const TIN_AT = new THREE.Vector3(0.24, 0.814, -0.3);
+  /*
+   * Moved clear of the set. At x 0.24 the lid's 5.5cm rim reached x 0.295 while the
+   * Kestrel-3 spans to 0.26 and its front face sits at z -0.33 - so the tin was cutting
+   * into the radio's front right corner, and from the default shot it read as a disc
+   * embedded in the case. Out to 0.34 and forward to -0.26 it sits beside the set on the
+   * bench with daylight between them.
+   */
+  const TIN_AT = new THREE.Vector3(0.34, 0.814, -0.26);
 
   // The floor of the lid, sunk below the rim so the inside sits in its own shadow.
   const tinFloor = new THREE.CylinderGeometry(0.052, 0.05, 0.004, 12);
@@ -700,6 +752,47 @@ function buildRepairShop(scene: ContactScene): void {
   // begin with, the certainty law warmed it further, and the work lamp then fell on
   // geometry standing proud of the panel, which is three reasons a slit came out as a bar.
   if (set.recesses) setRoot.add(meshOf('SetVents', set.recesses, MAT.slot));
+
+  /**
+   * The meter face, over the recess on the front panel.
+   *
+   * The recess itself is a box in MAT.metal and was reading as a brown slab - the set is
+   * `inked`, so the certainty law takes everything on it warm, and a cool grey box becomes
+   * a warm one. The recess is right; what was missing was a face in it. See
+   * createMeterFace: card, graduations and a needle resting low, because the lamp is on and
+   * nothing is coming through.
+   *
+   * The z matters and got it wrong first time. The recess box spans z 0.165 to 0.185, so a
+   * plane at 0.177 sits INSIDE it and is drawn by nothing - the face was there and buried,
+   * which looked exactly like the decal never having been applied. 0.187 is 2mm proud of
+   * the box's front face.
+   */
+  const meter = createMeterFace();
+  if (meter) {
+    const meterGeo = new THREE.PlaneGeometry(0.168, 0.104);
+    meterGeo.translate(-0.1144, 0.121, 0.187);
+    /*
+     * Unlit, for the reason MAT.slot is unlit: the work lamp is directly on this face, and
+     * a lit decal under it washes out whatever is painted on it. Two lit versions of this
+     * meter came out as blank panels. Glass returns a reflection rather than a diffuse
+     * anyway, so an instrument face is one of the few places §4.6's "unlit is a decision"
+     * genuinely applies.
+     */
+    setRoot.add(
+      meshOf(
+        'SetMeter',
+        meterGeo,
+        new THREE.MeshBasicMaterial({
+          map: meter,
+          transparent: true,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+          polygonOffsetUnits: -2,
+        })
+      )
+    );
+  }
 
   // The rating plate, under the controls on the front panel.
   const plate = createRatingPlate();
@@ -1005,7 +1098,21 @@ function buildRepairShop(scene: ContactScene): void {
       underlayer: '#c2b79c',
     },
     position: new THREE.Vector3(-0.72, 0, -1.02),
-    rotation: new THREE.Euler(0, Math.PI * 0.58, 0),
+    /**
+     * Turned toward the set, which she was not.
+     *
+     * Asked directly - is she supposed to be facing right instead of the radio? She was.
+     * She stands at (-0.72, -1.02) and the Kestrel-3 sits at (0, -0.5), so the bearing to
+     * it is 54 degrees; her yaw was 0.58π, which is 104. Fifty degrees past it, looking out
+     * of the shot over the thing she is describing.
+     *
+     * Not taken all the way to 54. Her hands are IK'd to two points on the bench either
+     * side of the set, and swinging her fully square to it turns those into a reach across
+     * her own body; 0.40π lands at 72 degrees, which reads as somebody looking down at
+     * their work while still angled to the room. The remaining 18 degrees is the difference
+     * between attending to something and staring at it.
+     */
+    rotation: new THREE.Euler(0, Math.PI * 0.4, 0),
   });
 
   // A work lamp over the bench. §187: one key plus controlled practicals - and a
