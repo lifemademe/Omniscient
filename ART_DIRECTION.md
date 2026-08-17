@@ -104,6 +104,15 @@ and slides toward `ACCENT.data`. Above it, chroma comes up and the colour leans 
 visibly comes to life, which is the reward this whole direction exists to pay. A law with
 only one direction cannot build a focal point; it can only fail to destroy one.
 
+**Warm is a hue, not a brightness — the law may not touch value.** Both warm steps moved
+luminance as a side effect, which on a light material is a tint nobody notices and on a
+near-black one is most of the colour: the flooded cellar's inspection covers are `MAT.dark`
+and `inked`, and they came out as orange plastic tiles at luma 127. A hole somebody has
+described is still a hole. Value belongs to the palette, which is the entire reason its
+entries have the numbers they have. The one lift tier 4 is allowed is the emissive in
+`applyToMaterial` — proportional to the authored colour, so a light hero lifts a lot and a
+black one barely at all, and it is a decision made once rather than a side effect of a mix.
+
 It is applied **in the shader**, after `map_fragment`, not on `material.color`. Colour is a
 multiplier on the texture: it can dim a map, never desaturate one. The pegboard proved it —
 halved in saturation and pulled a third toward cyan, it came out the same amber, merely
@@ -171,7 +180,7 @@ One sentence each. If a change does not serve the sentence, it is the wrong chan
 |---|---|
 | `scene-repair-shop` | A careful person's workbench, over-lit in one small pool and dark everywhere else. **The proving ground — this room ships first and best.** |
 | `scene-beacon-mast` | Exposed, wind-scoured, nothing soft. The only warmth in frame is the failing beacon. |
-| `scene-seedling-tunnel` | The calmest image in the game. Afternoon, still water, long shadow across the beds. Nothing urgent. |
+| `scene-seedling-tunnel` | The calmest image in the game. Afternoon, still water, long shadow across the beds. Nothing urgent. **Overgrown — nobody has cut this since the spring.** |
 | `scene-cleared-house` | Emptied, not abandoned. Clean rectangles on the walls where things used to hang. |
 | `scene-flooded-cellar` | Everything below the line is another material. Reflection does the work. **Built — lit water, `art/waterline.ts`, and a ceiling.** |
 | `scene-night-door` | One practical, one hand, and a lot of black. The most contrast in the game. |
@@ -218,6 +227,18 @@ budget intact, is the effect present at all. Numbers do **not** answer "is it go
 **Never settle a taste question with a number.** An afternoon was spent measuring a 4.5 px
 periodicity that turned out to be an artefact of the screen-capture path (§224). None of it
 was an art question and none of it improved a pixel.
+
+But do settle a **ranking** question with one, and **measure regions, not pixels.** The
+repair shop's removed back panel had already been moved once for out-contrasting the hero
+and was still doing it: peak brightness said the Kestrel-3 was winning, because the set
+reaches 210 on one corner — while the panel's *mean* was 163 against the set's 144. Peak is
+not what the eye ranks. A large flat slab at a uniform value beats a smaller object with
+internal variation, every time.
+
+And beware the number that does not move. Making the smallholding overgrown changed the
+field's value spread by half a standard deviation — statistically nothing — while
+transforming the picture. Coverage and silhouette do not show up in a histogram. Numbers
+answer *is it running*; that is all they were ever asked to do.
 
 ### The hour rule
 
