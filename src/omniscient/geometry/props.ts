@@ -190,6 +190,19 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
     recesses: mergeGeometries(recesses, false) ?? undefined,
     anchors: {
       connectorB: new THREE.Vector3(width * 0.16, height * 0.5, -depth / 2 - 0.05),
+      /**
+       * The rear panel itself, at connector B's base - a SURFACE, not an aiming point.
+       *
+       * `connectorB` above is 5cm out in the air in front of the plug, which is what a
+       * camera or an effect wants to be pointed at and is the wrong place to put matter.
+       * The corrosion beads were parented to it and then pushed a further 14mm out, so
+       * sixteen lumps of verdigris were hanging 64mm off the back of the set and 9mm past
+       * the end of the connector they were supposed to be growing on.
+       *
+       * Reported by eye long before it was measured, which is the right way round: it
+       * looked like it was floating because it was floating.
+       */
+      rearPanel: new THREE.Vector3(width * 0.16, height * 0.5, -depth / 2),
       meter: new THREE.Vector3(-width * 0.22, height * 0.55, depth / 2 + 0.02),
       front: new THREE.Vector3(0, height * 0.5, depth / 2 + 0.3),
       rear: new THREE.Vector3(0, height * 0.5, -depth / 2 - 0.3),

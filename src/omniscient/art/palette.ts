@@ -311,6 +311,28 @@ export const MAT = {
    * Measuring the result each time is the only reason it is not still there.
    */
   equipmentBack: standard('#484f47', 0.92, 0),
+  /**
+   * A slot, a louvre, a hole. Unlit on purpose.
+   *
+   * The Kestrel-3's vents were `MAT.dark` and came out brown, and it was reported as
+   * looking like bars rather than slits - correctly. Three warm influences were stacking on
+   * them and none of it was the retro pass, whose `world` look has a neutral tint and only
+   * lifts saturation. `HUMAN.dark` is `#2b2724`, a WARM near-black; the certainty law pulls
+   * anything `inked` warmer still; and the work lamp then lights them, because a slot that
+   * stands 4mm proud of the panel is a surface facing the light.
+   *
+   * That last one is the real fault and it was my own decision. Proud geometry was the
+   * right call for a project with no shadows - a recess with no shadow in it is just a
+   * different colour - but a proud bar catches the key and a hole never does. Geometry
+   * alone cannot say "hole" here.
+   *
+   * So the material says it instead. Unlit, so no lamp can find it; un-tone-mapped, so it
+   * stays exactly this value whatever the exposure does; and neutral rather than warm, so
+   * it reads as absence rather than as dark paint. §4.6 allows unlit as a decision, and
+   * the mill road's `cut` already uses the same trick for the same reason - one unlit quad
+   * that is blacker than the wall around it reads as a gap in the wall.
+   */
+  slot: new THREE.MeshBasicMaterial({ color: '#15161a', toneMapped: false }),
   /** Corrugated card. Boxes, packing, the substance of a house being emptied. */
   card: standard('#8a7150', 0.96),
   /**

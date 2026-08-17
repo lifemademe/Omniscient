@@ -667,10 +667,10 @@ function buildRepairShop(scene: ContactScene): void {
     )
   );
   setRoot.add(meshOf('SetFittings', set.fittings, MAT.metal));
-  // The vents, in the darkest thing the palette has. See PropParts.recesses: a slot only
-  // reads as a hole while it is darker than the panel around it, and the certainty law
-  // pulls this whole prop warm once the player has been told what it is.
-  if (set.recesses) setRoot.add(meshOf('SetVents', set.recesses, MAT.dark));
+  // The vents, unlit so nothing can light a hole. See MAT.slot - MAT.dark was warm to
+  // begin with, the certainty law warmed it further, and the work lamp then fell on
+  // geometry standing proud of the panel, which is three reasons a slit came out as a bar.
+  if (set.recesses) setRoot.add(meshOf('SetVents', set.recesses, MAT.slot));
 
   // The rating plate, under the controls on the front panel.
   const plate = createRatingPlate();
@@ -713,7 +713,8 @@ function buildRepairShop(scene: ContactScene): void {
    * more than anything else here.
    */
   const beads: ENGINE.SceneNode[] = [];
-  const beadRoot = ENGINE.SceneNode.create({ name: 'Corrosion', position: set.anchors.connectorB.clone() });
+  // On the panel, not on the aiming point. See the `rearPanel` anchor in createTransmitter.
+  const beadRoot = ENGINE.SceneNode.create({ name: 'Corrosion', position: set.anchors.rearPanel.clone() });
   for (let i = 0; i < 16; i++) {
     // Tight around the connector, thinning outward. sqrt keeps the sample area-uniform,
     // so the cluster does not end up a ring with a hole in the middle.
@@ -732,7 +733,12 @@ function buildRepairShop(scene: ContactScene): void {
       position: new THREE.Vector3(
         Math.cos(angle) * radius,
         Math.sin(angle) * radius,
-        -0.014 - Math.abs(jitter(rng, 0.004))
+        /*
+         * A few millimetres proud of the panel, so the beads sit ON the stain rather than
+         * hovering over it. The decal is at 1mm; verdigris is a crust a couple of
+         * millimetres thick, not a cloud.
+         */
+        -0.003 - Math.abs(jitter(rng, 0.002))
       ),
     });
     node.add(meshOf(`BeadMesh${i}`, bead, MAT.corroded));
