@@ -596,12 +596,33 @@ function buildRepairShop(scene: ContactScene): void {
   const connectorGeo = new THREE.CylinderGeometry(0.036, 0.034, 0.02, 8);
   connectorGeo.rotateX(Math.PI / 2);
   const connectorMesh = meshOf('ConnectorB', connectorGeo, MAT.corroded);
+  /**
+   * Positioned in SCENE space, because registerProp is going to reparent it.
+   *
+   * This is the green disc that has been sitting on the floor at the base of Mirela's bench
+   * for weeks, and it was never a VFX node - two fixes aimed at those changed nothing,
+   * because the object was this.
+   *
+   * The connector was built at the transmitter's local anchor and then added to setRoot,
+   * which is correct and lasted exactly two lines: registerProp calls scene.add(node), and
+   * that reparents it to the scene root. The local position survived the move and the
+   * transmitter's own (0, 0.81, -0.5) did not, so a 7cm corroded disc that belongs on the
+   * back panel at y 0.92 was being drawn at y 0.11 - on the floor, in front of the bench,
+   * in verdigris, exactly where it was reported.
+   *
+   * The corrosion beads never had the problem because they are not registered props, so
+   * nothing ever moved them. Same anchor, different parent, and the two disagreed in world
+   * space by four fifths of a metre.
+   *
+   * So the position is composed here instead. setRoot carries no rotation or scale, so
+   * adding its offset to the anchor is exact; if it ever gains either, this needs to become
+   * a proper localToWorld and the scene tree walked once before registering.
+   */
   const connectorRoot = ENGINE.SceneNode.create({
     name: 'ConnectorBRoot',
-    position: set.anchors.connectorB.clone(),
+    position: setRoot.position.clone().add(set.anchors.connectorB),
   });
   connectorRoot.add(connectorMesh);
-  setRoot.add(connectorRoot);
 
   scene.registerProp('connector-b', connectorRoot, {
     anchors: { default: new THREE.Vector3(0, 0, -0.02) },

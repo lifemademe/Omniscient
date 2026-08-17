@@ -405,6 +405,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   public override beginPlay(): boolean {
     if (!super.beginPlay()) return false;
+    // TEMP-VERIFY
+    window.setTimeout(() => {
+      this.phase = Phase.Contact;
+      this.screen = Screen.Tree;
+      this.globeScreen?.detach();
+      this.menu?.setEnabled(false);
+      this.mountScene('scene-repair-shop');
+    }, 3000);
 
     /**
      * Before anything else draws.
