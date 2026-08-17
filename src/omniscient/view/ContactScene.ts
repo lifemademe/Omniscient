@@ -382,6 +382,57 @@ export class ContactScene extends ENGINE.SceneNode {
     return this.props.get(id)?.node ?? null;
   }
 
+  /**
+   * What a fact does to the room.
+   *
+   * ART_DIRECTION's central claim is that a room starts cold and warms as the machine is
+   * told things - "the warmth arriving is the game". None of it was connected. Certainty
+   * was set once in each builder from a static table and never moved again, so the colour
+   * law graded the room at build and stopped, the resolve sweep could not fire because
+   * nothing ever rose, and tier 1 was a permanent state rather than a temporary one. The
+   * note on setCertainty says "certainty rises during a conversation, so the re-apply path
+   * is the main path" - it was right about the design and the wire was missing.
+   *
+   * The mapping lives HERE, in the scene, rather than in the mission. The writing is done
+   * and art serves it: a mission says what was learned, and the room decides what that
+   * makes visible. It also puts the prop ids next to the registerProp calls that created
+   * them, which is the only place anybody can check them against reality.
+   */
+  private readonly reveals = new Map<string, Array<{ prop: string; certainty: number }>>();
+
+  public revealOn(factId: string, propId: string, certainty: number): void {
+    const list = this.reveals.get(factId) ?? [];
+    list.push({ prop: propId, certainty });
+    this.reveals.set(factId, list);
+  }
+
+  /**
+   * The machine has been told something. Raise whatever that makes it sure of.
+   *
+   * Only ever upward. A fact repeated, or re-delivered when a scene re-activates, must not
+   * walk a prop back down and re-run its resolve - the sweep is a reward and §163 is firm
+   * that the world remembers. So this is a max, not an assignment.
+   */
+  public learn(factIds: readonly string[]): void {
+    let raised = 0;
+
+    for (const factId of factIds) {
+      for (const reveal of this.reveals.get(factId) ?? []) {
+        const prop = this.props.get(reveal.prop);
+        if (!prop) {
+          console.warn(`[certainty] fact "${factId}" reveals unknown prop "${reveal.prop}"`);
+          continue;
+        }
+        const now = prop.certainty ?? (prop.inked ? CERTAINTY.KNOWN : CERTAINTY.SHAPED);
+        if (reveal.certainty <= now) continue;
+        prop.certainty = reveal.certainty;
+        raised += 1;
+      }
+    }
+
+    if (raised > 0 && this.live) this.applyCertainties();
+  }
+
   public scanTargets(): { id: string; node: ENGINE.SceneNode }[] {
     const out: { id: string; node: ENGINE.SceneNode }[] = [];
     for (const [id, prop] of this.props) {

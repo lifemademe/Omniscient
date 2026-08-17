@@ -62,6 +62,20 @@ import {
   createWorkbench,
 } from '../geometry/props.js';
 
+/*
+ * The fact ids, imported rather than typed out as strings.
+ *
+ * A scene that reveals props on `'connector_b_corrosion'` and a mission that teaches
+ * `FACT_CONNECTOR_CORROSION` agree until somebody renames one of them, and then they fail
+ * in the worst available way: silently, with the room simply never warming up. Importing
+ * the constant makes that a build error instead.
+ */
+import {
+  FACT_CONNECTOR_CORROSION,
+  FACT_SHARED_POWER_FEED,
+  FACT_WORKSHOP_FLOODS,
+} from '../content/mission-01-transmitter.js';
+
 import { placeCharacter } from './character-node.js';
 import { ContactScene } from './ContactScene.js';
 
@@ -1086,15 +1100,48 @@ function buildRepairShop(scene: ContactScene): void {
     // frame by luma - a blank rectangle out-competing the radio for the eye. She has not
     // described it; she described what it came off.
     ['set-panel', CERTAINTY.SHAPED],
-    // She has the back off and the lamp still comes on: the set, its connector and its
-    // supply are the three things she has actually described.
+    /*
+     * The set is the one thing she has described before the player says anything - it is
+     * what she rang about. Everything else she is asked about, and until she is asked,
+     * the machine has her word for it and nothing more.
+     *
+     * The connector and the wall switch used to open at DESCRIBED, which is the state they
+     * should REACH. Starting them there meant the room was already as warm as it would
+     * ever get on the first frame, and §2's "a room at the start of a request should look
+     * lonely" was true of no room in the game.
+     */
     ['transmitter', CERTAINTY.KNOWN],
-    ['connector-b', CERTAINTY.DESCRIBED],
-    ['mains-switch', CERTAINTY.DESCRIBED],
+    ['connector-b', CERTAINTY.SHAPED],
+    ['mains-switch', CERTAINTY.SUSPECTED],
   ] as [string, number][]) {
     scene.setCertainty(id, certainty);
   }
 
+  /**
+   * And what the conversation does to them.
+   *
+   * These are the three facts mission 01 can teach, mapped to the things in the room they
+   * are facts ABOUT. The mission says what was learned; the room decides what that makes
+   * visible - see ContactScene.learn for why the mapping lives on this side.
+   *
+   * `connector_b_corrosion` is the diagnosis, so its connector goes all the way to KNOWN:
+   * it is the object the request turns on, and by the time she has found the crust it is
+   * the thing they are both looking at. The resolve sweep crossing it is the moment §3
+   * exists to pay for, and until now it could not happen in play at all.
+   *
+   * `shared_power_feed` is the wall switch. She has to say where the supply goes before
+   * the machine has any account of it - it is behind her and out of frame in the opening
+   * shot, and a machine that has not been told about a switch has no business drawing one.
+   */
+  scene.revealOn(FACT_CONNECTOR_CORROSION, 'connector-b', CERTAINTY.KNOWN);
+  scene.revealOn(FACT_SHARED_POWER_FEED, 'mains-switch', CERTAINTY.DESCRIBED);
+  /*
+   * The flooding is what explains the corrosion, and the evidence for it is the tide line
+   * round the bottom of the wall - so learning it resolves the floor she has been standing
+   * on the whole time. It is the quietest of the three and the most satisfying: nothing
+   * moves, the room simply stops being provisional underfoot.
+   */
+  scene.revealOn(FACT_WORKSHOP_FLOODS, 'bench-rag', CERTAINTY.DESCRIBED);
 }
 
 /**

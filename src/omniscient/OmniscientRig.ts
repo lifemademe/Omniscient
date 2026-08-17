@@ -1439,9 +1439,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
        */
       // Presentation only, and it never touches mission state - see PlayerMessage's `aim`.
       onAim: (to) => this.scene?.aim(to),
-      onKnowledgeGained: () => {
+      onKnowledgeGained: (factIds) => {
         audio.play('learn');
         this.revealGrowth();
+        /*
+         * And the room hears it too.
+         *
+         * The fact ids were being discarded here. The tree grew, the cue played, and the
+         * diorama - the half of the game the whole art direction is about - was told
+         * nothing, which is why a room never warmed up in eleven months of it being the
+         * stated plan. See ContactScene.learn.
+         */
+        this.scene?.learn(factIds);
       },
       onResolved: () => {
         audio.play('solved');
