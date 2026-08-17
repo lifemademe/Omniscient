@@ -540,7 +540,30 @@ dress(
  * hole in the wall rather than as a view through it.
  */
 {
-  const sky = skyTexture({ zenith: '#8ea6bd', horizon: '#e4d3ad', bands: 5 });
+  /*
+   * Evening, not afternoon - and the value is the point rather than the hour.
+   *
+   * These were tuned against the HOME shot, where the note above says the window must sit a
+   * clear step below the CRT's brightest green because the CRT is the thing that has to win.
+   * Correct there. But this material is used in exactly one place, and it is not that shot:
+   * it is the cleared house, where there is no CRT, and the thing that has to win is the
+   * box on the table.
+   *
+   * Measured, it was not close. The pane came out at mean 165 against the box at 121 - a
+   * large flat slab forty-four values above the subject, in a room whose own builder comment
+   * says the window is high and behind "so the table under it is the lit thing in the room".
+   * Unlit and un-tone-mapped, it was rendering at its full authored brightness while every
+   * lit surface in the room went through the tone curve.
+   *
+   * Down to roughly the box's own value, which also settles a small lie the room was
+   * telling: the pendant is ON. A bare bulb burning under an afternoon sky is somebody who
+   * forgot; under a sky this colour it is the reason the fitting is there at all.
+   *
+   * The light through the window is deliberately NOT re-tinted to match. It stays the cool
+   * `#cfe0f0` skylight, which is what a window still gives after the sun is off it, and it
+   * keeps the cool-window/warm-bulb split this room's composition is built on.
+   */
+  const sky = skyTexture({ zenith: '#54677d', horizon: '#a08d6e', bands: 5 });
   if (sky) {
     MAT.daylight.map = sky;
     MAT.daylight.color = new THREE.Color('#ffffff');
