@@ -148,6 +148,31 @@ export const SCAN_CSS = `
 }
 
 /*
+ * Corner furniture, from the mockup's COASTAL RELAY 7 // STORM CELL 04.
+ *
+ * Two lines in the stage's bottom-right saying what the machine is doing with its eye. It
+ * is not decoration: the count is the number of reticles actually on screen, so a room
+ * where the evidence has not been found yet reads NO TRACK, and the player can tell the
+ * difference between "nothing to see" and "the overlay is broken" - which is a distinction
+ * this project has had to make by hand more than once.
+ */
+.omni-scan__status {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  padding: 6px 9px 7px;
+  text-align: right;
+  font-size: 9px;
+  line-height: 1.65;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #5f93a8;
+  background: linear-gradient(90deg, rgba(4, 12, 16, 0), rgba(4, 12, 16, 0.66));
+  pointer-events: none;
+}
+.omni-scan__status b { color: #9fd8ec; font-weight: normal; }
+
+/*
  * The one moving part.
  *
  * A static reticle reads as a decal; something has to say the machine is still looking.
@@ -236,6 +261,10 @@ export class ScanTargets {
    */
   private stage: HTMLElement | null = null;
 
+  /** The corner readout, parented to the stage once the stage exists. */
+  private status: HTMLElement | null = null;
+  private statusTyper = 0;
+
   constructor(container: HTMLElement) {
     if (!document.getElementById(SCAN_STYLE_ID)) {
       const style = document.createElement('style');
@@ -252,6 +281,52 @@ export class ScanTargets {
   /** Show the layer only while a request is open. */
   public setVisible(visible: boolean): void {
     this.layer.style.display = visible ? '' : 'none';
+    if (this.status) this.status.style.display = visible ? '' : 'none';
+  }
+
+  /**
+   * The corner readout, typed rather than set.
+   *
+   * A readout that simply appears has always been there; one that types has just been
+   * worked out, and the whole premise is that the machine is figuring this room out live.
+   * It is also the cheapest possible version of the effect - two short strings, one
+   * interval, and it stops - which is the only kind worth having in a frame budget.
+   *
+   * The interval is cancelled on every call, so a fast scene change cannot leave two
+   * typers racing to write into the same element.
+   */
+  private writeStatus(lines: [string, string]): void {
+    if (!this.stage) return;
+    if (!this.status) {
+      this.status = document.createElement('div');
+      this.status.className = 'omni-scan__status';
+      this.stage.appendChild(this.status);
+    }
+
+    window.clearInterval(this.statusTyper);
+    const status = this.status;
+    const full = lines.join('\n');
+    let shown = 0;
+
+    this.statusTyper = window.setInterval(() => {
+      shown += 1;
+      const text = full.slice(0, shown);
+      status.replaceChildren();
+      for (const [i, line] of text.split('\n').entries()) {
+        if (i > 0) status.appendChild(document.createElement('br'));
+        // The value after the // is the part worth reading, so it gets the bright colour.
+        const cut = line.indexOf('//');
+        if (cut < 0) {
+          status.appendChild(document.createTextNode(line));
+          continue;
+        }
+        status.appendChild(document.createTextNode(line.slice(0, cut + 2)));
+        const value = document.createElement('b');
+        value.textContent = line.slice(cut + 2);
+        status.appendChild(value);
+      }
+      if (shown >= full.length) window.clearInterval(this.statusTyper);
+    }, 26);
   }
 
   /**
@@ -262,6 +337,13 @@ export class ScanTargets {
    */
   public setTargets(targets: ScanTarget[]): void {
     this.layer.replaceChildren();
+
+    this.stage ??= document.querySelector('.omni-cv__stage');
+    this.writeStatus([
+      `OPTICAL // ${targets.length === 0 ? 'NO TRACK' : `${String(targets.length).padStart(2, '0')} TRACKED`}`,
+      'FEED // REMOTE',
+    ]);
+
     this.markers = targets.map((target, index) => {
       const root = document.createElement('div');
       root.className = 'omni-scan__t';
@@ -404,6 +486,9 @@ export class ScanTargets {
   }
 
   public dispose(): void {
+    window.clearInterval(this.statusTyper);
+    this.status?.remove();
+    this.status = null;
     this.layer.remove();
     this.markers = [];
   }

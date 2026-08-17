@@ -34,6 +34,14 @@ export const CONSOLE_CHROME_CSS = `
   pointer-events: none;
   isolation: isolate;
 }
+/*
+ * Brushed plate rather than a flat fill.
+ *
+ * A single colour reads as a div; a shallow vertical gradient with a lit top edge reads as
+ * a piece of anodised metal with a light source above it, which is what the bar is meant
+ * to be. The gradient is only six values wide - any more and it stops being a surface and
+ * starts being a background.
+ */
 .omni-cv__top,
 .omni-cv__foot {
   display: flex;
@@ -44,13 +52,16 @@ export const CONSOLE_CHROME_CSS = `
   font-size: 11px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  background: linear-gradient(#060d08, #060d08);
+  background: linear-gradient(#0d1a12, #060d08);
+  box-shadow: inset 0 1px 0 #2c5a3b, 0 1px 0 #040906;
   border-bottom: 1px solid #1d3325;
   color: #4f9a5e;
 }
 .omni-cv__foot {
   border-bottom: none;
   border-top: 1px solid #1d3325;
+  background: linear-gradient(#060d08, #0b1710);
+  box-shadow: inset 0 -1px 0 #204631, 0 -1px 0 #040906;
   font-size: 10px;
   color: #35603f;
 }
@@ -75,26 +86,80 @@ export const CONSOLE_CHROME_CSS = `
   padding: 14px 18px;
   min-height: 0;
 }
+/*
+ * The hole in the frame the world shows through, marked as one.
+ *
+ * Four corner brackets and nothing else. A full border would put a box round somebody's
+ * workshop and make it a picture; corners say "this is the extent of what I can see",
+ * which is the machine's limit rather than the room's. Same reasoning as the scan sights,
+ * one scale up - and the same colour, because they are the same instrument talking.
+ *
+ * Drawn as eight background gradients rather than as elements, so the globe screen gets it
+ * from the shared stylesheet without either screen having to build any DOM for it.
+ */
 .omni-cv__stage {
   position: relative;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   min-height: 0;
+  --bk: 22px;
+  --bc: #2f7391;
+  background-image:
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc));
+  background-repeat: no-repeat;
+  background-size:
+    var(--bk) 1px, 1px var(--bk),
+    var(--bk) 1px, 1px var(--bk),
+    var(--bk) 1px, 1px var(--bk),
+    var(--bk) 1px, 1px var(--bk);
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
 }
+/*
+ * Inset from the stage edge, so the viewport brackets are not sat on.
+ *
+ * The cards used to start flush in the corner, which put the top-left bracket behind the
+ * CONNECTION STRENGTH plate and left the frame reading as two corners rather than four -
+ * an asymmetry that looked like a bug rather than a choice. Twelve pixels is enough for
+ * the bracket to clear and reads as the instrument having a bezel.
+ */
 .omni-cv__readouts {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
   width: min(23vw, 260px);
+  margin: 13px 0 0 13px;
 }
+/*
+ * Bevelled, and square.
+ *
+ * These were rounded rectangles with a single hairline border, which is how software has
+ * looked since about 2012 and is nothing like the machine this is meant to be. Hardware
+ * from the period this game is set in did not draw a 1px outline around a panel - it
+ * pressed the panel out of the surface, and you read the shape from where the light
+ * catches. Two inset shadows do the whole job: one light on the top-left, one black on the
+ * bottom-right, with a dark ring outside to seat it.
+ *
+ * The radius goes because a bevel and a rounded corner are contradictory claims. A bevel
+ * says the panel is a physical plate with a chamfered edge; a 6px radius says it is a
+ * rectangle someone softened. Nothing in the reference frames has a rounded corner.
+ */
 .omni-card {
   width: 100%;
   padding: 9px 11px;
-  background: rgba(6, 14, 9, 0.82);
-  border: 1px solid #23422c;
-  border-radius: 6px;
+  background: rgba(9, 20, 13, 0.88);
+  box-shadow:
+    inset 1px 1px 0 #3f7a52,
+    inset -1px -1px 0 #040906,
+    0 0 0 1px #0b1a11;
   backdrop-filter: blur(2px);
 }
 .omni-card__label {
@@ -107,21 +172,40 @@ export const CONSOLE_CHROME_CSS = `
 }
 .omni-card__value { display: block; font-size: 12px; color: #cfe6c4; }
 .omni-card__sub { display: block; font-size: 10px; color: #6a8f72; margin-top: 3px; }
+/*
+ * The meter is a channel cut into the plate, with lamps in it.
+ *
+ * So its bevel runs the other way from the card's: dark on the top-left, light on the
+ * bottom-right, which is what a recess looks like under a light from above. The card
+ * stands proud and the meter sinks into it, and that one reversal is most of what makes a
+ * bevelled interface read as a physical object rather than as a set of boxes.
+ *
+ * A lit segment gets a highlight along its top edge - the lamp is behind a lens, and the
+ * lens catches. Unlit ones do not, so the difference between on and off is a change in
+ * material and not only in colour.
+ */
 .omni-meter { display: flex; gap: 3px; margin-bottom: 5px; }
 .omni-meter i {
   display: block;
   flex: 1;
   height: 9px;
-  background: #1d3325;
-  border-radius: 1px;
+  background: #16281c;
+  box-shadow: inset 1px 1px 0 #040906, inset -1px -1px 0 #2a5138;
 }
-.omni-meter i.on { background: #4f9a5e; }
-.omni-meter--trust i.on { background: #7fe08a; }
+.omni-meter i.on {
+  background: #4f9a5e;
+  box-shadow: inset 1px 1px 0 #040906, inset -1px -1px 0 #2a5138, inset 0 2px 0 #7fc98d;
+}
+.omni-meter--trust i.on {
+  background: #7fe08a;
+  box-shadow: inset 1px 1px 0 #040906, inset -1px -1px 0 #2a5138, inset 0 2px 0 #c2f5c9;
+}
 
 /* Bottom-left controls, sitting over the scene. */
 .omni-cv__actions {
   display: flex;
   gap: 8px;
+  margin: 0 0 13px 13px;
   pointer-events: auto;
 }
 .omni-action {
@@ -136,15 +220,30 @@ export const CONSOLE_CHROME_CSS = `
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #8fbe93;
-  background: rgba(6, 14, 9, 0.86);
-  border: 1px solid #23422c;
-  border-radius: 6px;
+  background: rgba(11, 24, 15, 0.9);
+  border: 0;
+  /* Same plate as the cards, and it travels: pressed swaps the light to the other side,
+     which is the one interaction 90s hardware UI always got right. */
+  box-shadow:
+    inset 1px 1px 0 #3f7a52,
+    inset -1px -1px 0 #040906,
+    0 0 0 1px #0b1a11;
   cursor: pointer;
 }
-.omni-action:hover { border-color: #4f9a5e; color: #d8ffb0; }
+.omni-action:hover { color: #d8ffb0; box-shadow:
+  inset 1px 1px 0 #5fb277, inset -1px -1px 0 #040906, 0 0 0 1px #17402a; }
+.omni-action:active {
+  color: #d8ffb0;
+  box-shadow:
+    inset 1px 1px 0 #040906,
+    inset -1px -1px 0 #3f7a52,
+    0 0 0 1px #0b1a11;
+  transform: translate(1px, 1px);
+}
 .omni-action__glyph { font-size: 15px; line-height: 1; }
-.omni-action--end { color: #c2483a; border-color: #4d2a25; }
-.omni-action--end:hover { border-color: #c2483a; color: #e8877a; }
+.omni-action--end { color: #c2483a; }
+.omni-action--end:hover { color: #e8877a; box-shadow:
+  inset 1px 1px 0 #8a4438, inset -1px -1px 0 #040906, 0 0 0 1px #3a1c17; }
 
 `;
 
