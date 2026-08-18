@@ -6616,11 +6616,18 @@ function buildNightDoor(scene: ContactScene): void {
   knockerRing.translate(DOOR.x, 1.415, LEAF_FRONT + 0.012);
   furniture.push(knockerRing);
 
-  // The number, as two short bars. Legible as digits at this distance and cheaper than any
-  // attempt to actually shape them.
-  for (const ox of [-0.03, 0.03] as const) {
-    const digit = new THREE.BoxGeometry(0.016, 0.07, 0.012);
-    digit.translate(DOOR.x + ox, 1.74, LEAF_FRONT + 0.006);
+  /*
+   * The number, on the top rail.
+   *
+   * It was at 1.74, which is inside the glazed opening - so two brass bars were floating
+   * on a pane of glass with the muntin behind them. Seen on screen it read as a pair of
+   * leftover tabs rather than as a number. The top rail is solid, it is where a number
+   * goes on a door with glass in it, and it puts the digits above the glazing where they
+   * are read against wood.
+   */
+  for (const ox of [-0.028, 0.028] as const) {
+    const digit = new THREE.BoxGeometry(0.015, 0.062, 0.012);
+    digit.translate(DOOR.x + ox, DOOR.h - 0.065, LEAF_FRONT + 0.006);
     furniture.push(digit);
   }
   /**
@@ -6647,11 +6654,22 @@ function buildNightDoor(scene: ContactScene): void {
    * The arm points INWARD, toward the middle of the leaf, because that is the side a hand
    * comes from - a lever pointing at the jamb would be one you cannot get behind.
    */
-  const HANDLE_Y = 0.88;
+  /*
+   * 80mm below the cylinder, which is as close as the two roses will go.
+   *
+   * It was 140mm, and looked at on screen that reads as two unrelated bits of brass rather
+   * than one lockset - a handle and a lock that happen to be on the same door. On a mortice
+   * lock the spindle and the keyhole are one fitting and sit within a hand's width of each
+   * other.
+   *
+   * 80 is the floor, not a preference: the rose is 36mm in radius and the escutcheon 35mm,
+   * so anything under 71mm has them touching. This leaves 9mm of daylight between them.
+   */
+  const HANDLE_Y = 0.94;
   const handleAt = new THREE.Vector3(DOOR.x + 0.35, HANDLE_Y, LEAF_FRONT + 0.03);
 
   // The rose stays put; only the lever turns, so it belongs with the static furniture.
-  const rose = new THREE.CylinderGeometry(0.033, 0.036, 0.016, 12);
+  const rose = new THREE.CylinderGeometry(0.03, 0.033, 0.016, 12);
   rose.rotateX(Math.PI / 2);
   rose.translate(handleAt.x, handleAt.y, LEAF_FRONT + 0.008);
   furniture.push(rose);
@@ -6681,13 +6699,26 @@ function buildNightDoor(scene: ContactScene): void {
   neck.rotateX(Math.PI / 2);
   neck.translate(0, 0, 0.012);
   lever.push(neck);
-  // The arm, inward and very slightly down, which is where a lever rests.
+  /*
+   * The arm, level.
+   *
+   * It had a droop on it - the arm dropped 6mm and the tip another 19 - and magnified on
+   * screen that is not a lever at rest, it is a tap. A sprung lever sits horizontal; the
+   * only time it points down is while somebody is pushing it, which is what the open cue
+   * is for.
+   */
   const arm = new THREE.BoxGeometry(0.105, 0.021, 0.026);
-  arm.translate(-0.055, -0.006, 0.032);
+  arm.translate(-0.055, 0, 0.032);
   lever.push(arm);
-  // The return: the little downturn at the tip that stops a sleeve catching on it.
-  const tip = new THREE.BoxGeometry(0.02, 0.03, 0.024);
-  tip.translate(-0.1, -0.019, 0.032);
+  /*
+   * The return, turned back toward the DOOR rather than down.
+   *
+   * A return exists so a sleeve cannot hook the end of the lever, which means it curls back
+   * to the face it is mounted on. Pointing it at the floor made the whole thing read as a
+   * spout with the handle as its body.
+   */
+  const tip = new THREE.BoxGeometry(0.022, 0.021, 0.034);
+  tip.translate(-0.097, 0, 0.019);
   lever.push(tip);
   handleNode.add(meshOf('DoorLever', mergeGeometries(lever, false) ?? lever[0], MAT.brass));
   doorRoot.add(handleNode);
