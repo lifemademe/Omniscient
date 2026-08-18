@@ -2413,12 +2413,30 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * A closed polytunnel would hide the one thing this scene exists to show. The hoops
    * read as a tunnel from any angle and let the shadow, the rows and the tree all stay
    * visible at once.
+   *
+   * ## The hoops were turned ninety degrees, and it is worth saying how that was found
+   *
+   * There was a `rotateY(Math.PI / 2)` on this line and it was destroying the structure.
+   * `TorusGeometry` with `arc: Math.PI` is built in the XY plane, so it ALREADY spans
+   * x = -2.05 to 2.05 with its apex at y = 2.05: an arch across the width, which is what
+   * a hoop is. Rotating it maps (x, y, z) to (z, y, -x), which puts every point at x = 0
+   * and turns the arch to run lengthways. So this was not six hoops over two beds. It was
+   * six 4.1m arches stacked in the centre plane at 0.92m intervals, overlapping each
+   * other, standing in the gap between the beds and spanning nothing.
+   *
+   * Which is exactly what it was reported as - not "the tunnel looks wrong" but two
+   * questions, "what is the tunnel?" and "what is the structure between the two flower
+   * beds?". The frame had stopped reading as a tunnel because it had stopped being one.
+   *
+   * The file's own note two hundred lines down says the hoop above Adaeze is 1.72m up,
+   * measured. She stands at x = -1.12, and sqrt(2.05^2 - 1.12^2) is 1.72 exactly - but
+   * only for an unrotated hoop. With the rotation there is no hoop above her at all. The
+   * measurement was taken when this was right and the rotation was added afterwards.
    */
   const frame: THREE.BufferGeometry[] = [];
   for (let i = 0; i < 6; i++) {
     const z = -2.3 + i * 0.92;
     const hoop = new THREE.TorusGeometry(2.05, 0.022, 5, 16, Math.PI);
-    hoop.rotateY(Math.PI / 2);
     hoop.translate(0, 0.02, z);
     frame.push(hoop);
   }
