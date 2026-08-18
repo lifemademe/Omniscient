@@ -521,6 +521,35 @@ export class ContactScene extends ENGINE.SceneNode {
   public air: { color: string; near: number; far: number } | null = null;
 
   /**
+   * How much of the rig's daylight reaches this room. 1 is all of it.
+   *
+   * ## The cellar found this, and it had been true the whole time
+   *
+   * The workstation carries a warm directional key at 1.9 and a hemisphere fill at 1.35,
+   * and both are infinite - so every diorama, wherever it sits on the rig, is lit by a
+   * late coastal afternoon before its own fittings contribute anything. For six of the
+   * eight that is exactly right and it is why they have depth.
+   *
+   * The flooded cellar is underground. It is written as a room "lit entirely by its own
+   * fittings" - one bulkhead lamp, a cold bounce off the water - and the note above its
+   * light rig says so in as many words. It was not true. Measured off a capture, dropping
+   * its brightest local light by forty per cent moved the wall behind Vasile by TWO points,
+   * from 111 to 109, because the rig's daylight was doing the work and the cellar's own
+   * lamps were a rounding error on top of it. Every number tuned in that room was being
+   * tuned against a sun it cannot see.
+   *
+   * ## Why a multiplier and not a switch
+   *
+   * Zero is a black room with four small pools in it, which is not a cellar, it is a cave.
+   * Some light gets down a stairwell and through a floor. The number is how much.
+   *
+   * Restored to 1 on every mount rather than left where the last scene put it - same
+   * contract as `air` above, and for the same reason: these are global nodes, and a room
+   * that retunes one owes the next room the default back.
+   */
+  public daylight = 1;
+
+  /**
    * Equipment on this set that OMNISCIENT_ can sign into and operate.
    *
    * Declared by the builder because the machine's reach is a fact about the PLACE, not

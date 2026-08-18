@@ -5275,8 +5275,15 @@ function buildFloodedCellar(scene: ContactScene): void {
    * bracket in the repair shop. The clone is per length of pipe, which is also what lets
    * the front cross the run instead of the whole thing changing at once.
    */
-  const wettable = (base: THREE.Material, x: number): THREE.MeshStandardMaterial => {
+  const wettable = (
+    base: THREE.Material,
+    x: number,
+    tone?: string
+  ): THREE.MeshStandardMaterial => {
     const clone = (base as THREE.MeshStandardMaterial).clone();
+    // Retoned before `dry` is captured, so the wetting pass darkens from the cellar's
+    // colour rather than snapping back to the shared family's on the way out. See RUN_TONE.
+    if (tone) clone.color.set(tone);
     runParts.push({
       material: clone,
       dry: clone.color.clone(),
@@ -5287,6 +5294,42 @@ function buildFloodedCellar(scene: ContactScene): void {
     return clone;
   };
 
+  /**
+   * The run's four materials, retoned for this room only.
+   *
+   * ## Why the shared family could not stay
+   *
+   * Measured off the default shot through ACES at exposure 0.62, the four spans rendered at
+   * 19, 108, 188 and 15 out of 255. Twelve and a half times, end to end, on the one object
+   * the entire mission is a search along - two spans invisible, one blown past Vasile's own
+   * face. The player is asked to reason about four materials laid end to end by four
+   * different people, and half of them were not on screen.
+   *
+   * Only about a third of that was the lighting; the rest is albedo. `MAT.plastic` is a
+   * pale cream and `MAT.steel` is a near-black blue, and no light rig reconciles a 4.7x
+   * albedo ratio on two objects a metre apart.
+   *
+   * ## Separated by HUE at equal value, which is the project's whole approach
+   *
+   * Retoned so the four sit between 48 and 108 - a 2.25x spread - and tell themselves apart
+   * by colour instead: lead a warm grey, copper orange, the new plastic main blue (which is
+   * what a modern water main actually is, and reads instantly as the recent repair), and
+   * galvanised steel a neutral light grey. In a room lit by one warm bulkhead, hue is the
+   * channel with headroom and value is the one that is already spent.
+   *
+   * Local because `wettable` clones - the note above it is explicit that darkening the
+   * shared family here would wet Sanda's torch and every bracket in the repair shop.
+   */
+  const RUN_TONE: Record<string, string> = {
+    // Lifted twice. Adding light to the dark end raised the pipe and the WALL BEHIND IT
+    // together - 30/33 became 42/47 and the ratio never moved off 0.89 - because a pipe
+    // 110mm off a wall shares every light with it. Only albedo separates the two.
+    metal: '#b3aba0',
+    copper: '#8a5a3c',
+    plastic: '#5f7d92',
+    steel: '#7d828a',
+  };
+
   const joins: THREE.Vector3[] = [];
   for (const [from, to, material] of spans) {
     const pipe = new THREE.CylinderGeometry(0.055, 0.055, to - from, 8);
@@ -5294,7 +5337,7 @@ function buildFloodedCellar(scene: ContactScene): void {
     pipe.translate((from + to) / 2, runY + jitter(rng, 0.02), -2.0);
     scene.registerProp(
       `run-${material}`,
-      meshOf(`Run-${material}`, pipe, wettable(MAT[material], (from + to) / 2))
+      meshOf(`Run-${material}`, pipe, wettable(MAT[material], (from + to) / 2, RUN_TONE[material]))
     );
 
     // A collar at every join - the place where one person's work met the next one's.
@@ -5307,6 +5350,429 @@ function buildFloodedCellar(scene: ContactScene): void {
     );
     joins.push(new THREE.Vector3(to, runY - 0.07, -2.0));
   }
+
+  /**
+   * -- The stopcock, and what happens when the instruction was wrong -----------------------
+   *
+   * ## Why the run needed one
+   *
+   * The pipe puzzle used to resolve with a line of dialogue and the water level dropping.
+   * Both of those are CONSEQUENCES; neither is the act. A stopcock is the one object in a
+   * cellar that means "this is the thing you turn", and turning it is what the player has
+   * spent the whole call working out how to justify - so now the answer has somewhere to
+   * happen, in the room, on a thing they can see.
+   *
+   * It sits on the plastic-to-steel join, because a valve goes where a system changes and
+   * that is the one place on this run where a fitting is not a surprise.
+   *
+   * ## The wheel is its own node
+   *
+   * Body, bonnet and wheel are separate for exactly one reason: the wheel turns and nothing
+   * else does. A valve that spins whole is a wheel with a pipe stuck through it.
+   */
+  const valveRoot = ENGINE.SceneNode.create({
+    name: 'Valve',
+    position: new THREE.Vector3(1.4, runY, -2.0),
+  });
+
+  const valveBody: THREE.BufferGeometry[] = [];
+  // A fat barrel round the run, with a bolted flange each side. The flanges are what say
+  // "this was fitted into an existing pipe" rather than "this pipe has a lump in it".
+  const barrel = new THREE.CylinderGeometry(0.1, 0.1, 0.17, 10);
+  barrel.rotateZ(Math.PI / 2);
+  valveBody.push(barrel);
+  for (const side of [-1, 1] as const) {
+    const flange = new THREE.CylinderGeometry(0.122, 0.122, 0.022, 12);
+    flange.rotateZ(Math.PI / 2);
+    flange.translate(side * 0.096, 0, 0);
+    valveBody.push(flange);
+  }
+  /*
+   * The bonnet, leaning out of the body toward the room.
+   *
+   * Not straight up. A vertical stem puts the handwheel edge-on to a camera that is barely
+   * above the pipe, and an edge-on wheel is a line - the rotation the whole feature exists
+   * to show would be invisible. Tipped 30 degrees forward it presents its face.
+   */
+  const bonnet = new THREE.CylinderGeometry(0.045, 0.068, 0.14, 8);
+  bonnet.rotateX(-0.52);
+  bonnet.translate(0, 0.09, 0.045);
+  valveBody.push(bonnet);
+  const bonnetCap = new THREE.CylinderGeometry(0.058, 0.058, 0.02, 8);
+  bonnetCap.rotateX(-0.52);
+  bonnetCap.translate(0, 0.148, 0.078);
+  valveBody.push(bonnetCap);
+  valveRoot.add(
+    decorMesh('ValveBody', mergeGeometries(valveBody, false) ?? valveBody[0], MAT.metal)
+  );
+
+  /**
+   * The handwheel, on a node tilted to match the bonnet so it turns about the stem.
+   *
+   * Four spokes and a rim, not a disc. A solid wheel gives the eye nothing to measure a
+   * rotation against, and the entire point of this object is that the player watches it
+   * turn. Spokes are the read; the rim is only there so it looks like a wheel when still.
+   */
+  const wheelNode = ENGINE.SceneNode.create({
+    name: 'ValveWheel',
+    position: new THREE.Vector3(0, 0.19, 0.1),
+    rotation: new THREE.Euler(-0.52, 0, 0),
+  });
+  /*
+   * 280mm across, which is generous for a 110mm run and is the right call anyway.
+   *
+   * Measured against the shot it is framed in, a correctly-scaled 160mm wheel subtends
+   * 1.5 degrees against a 23-degree half-angle - six per cent of screen height, for the
+   * object the entire request is built around. Plumbing accuracy is not worth an unreadable
+   * hero prop, so it is sized to the frame instead of the pipe.
+   */
+  const wheelParts: THREE.BufferGeometry[] = [];
+  wheelParts.push(new THREE.TorusGeometry(0.14, 0.016, 5, 18));
+  for (let i = 0; i < 4; i++) {
+    const spoke = new THREE.BoxGeometry(0.275, 0.018, 0.012);
+    spoke.rotateZ((i * Math.PI) / 4);
+    wheelParts.push(spoke);
+  }
+  const hub = new THREE.CylinderGeometry(0.025, 0.025, 0.055, 8);
+  hub.rotateX(Math.PI / 2);
+  wheelParts.push(hub);
+  wheelNode.add(
+    decorMesh(
+      'ValveWheelMesh',
+      mergeGeometries(wheelParts, false) ?? wheelParts[0],
+      MAT.valveWheel
+    )
+  );
+  valveRoot.add(wheelNode);
+
+  /**
+   * The actuator - which is not decoration, it is the reason any of this is allowed to
+   * happen.
+   *
+   * ## The fiction had a hole in it
+   *
+   * OMNISCIENT_ has no hands. That is the premise of the whole game, and the one exception
+   * is equipment on a network - which is how it drove the cameras in District 07 and how it
+   * drove Adaeze's mower. A bare handwheel spinning on its own when the player presses send
+   * would break that in the most visible way possible: either the machine grew hands, or
+   * Vasile turned it, and he is stood four metres away with his back to it.
+   *
+   * So there is a motor on the stem. A grey box with cooling fins, a conduit dropping to
+   * the wall, and a lamp on the front. It costs about forty triangles and it is the single
+   * most load-bearing object in the room, because it is what makes the answer legal.
+   *
+   * ## And it is the 90s-futuristic note the scene was missing
+   *
+   * Every other room has one piece of hardware that is obviously newer than the building
+   * around it - the plug on Mirela's plate, the unit in Adaeze's shed. The cellar had none:
+   * it was fifty years of pipework and a wire-guarded lamp, with nothing in it from the era
+   * the machine belongs to. This is that object, and it is sat on a lead pipe.
+   */
+  /**
+   * One 56mm disc, built fresh per lamp so the three never share a buffer.
+   *
+   * Up from 38mm after a capture: at 3.1m a 19mm radius is about four pixels, and the state
+   * of this lamp is the only thing telling the player whether the machine has the valve.
+   */
+  const lampDisc = (): THREE.BufferGeometry =>
+    new THREE.CylinderGeometry(0.028, 0.028, 0.016, 10).rotateX(Math.PI / 2);
+
+  const actuator: THREE.BufferGeometry[] = [];
+  // Clamped to the near side of the body, low enough that it never crosses the spokes.
+  const ACT = new THREE.Vector3(0.175, 0.03, 0.05);
+  const casing = new THREE.BoxGeometry(0.13, 0.14, 0.11);
+  casing.translate(ACT.x, ACT.y, ACT.z);
+  actuator.push(casing);
+  /*
+   * Fins on TOP, which is where a heat sink goes and, more to the point, where they are
+   * not in front of the lamp.
+   *
+   * The first version put three ribs on the front face at z + 0.068, and the status lamp at
+   * z + 0.062 - so the fins stood 6mm proud of the one thing on this object that has to be
+   * seen. Captured, the lamp was a yellow speck behind a grille.
+   */
+  for (let i = 0; i < 3; i++) {
+    const fin = new THREE.BoxGeometry(0.14, 0.014, 0.02);
+    fin.translate(ACT.x, ACT.y + 0.078, ACT.z + 0.03 - i * 0.032);
+    actuator.push(fin);
+  }
+  // The drive collar, reaching back to the stem - it has to be seen to be connected.
+  const drive = new THREE.CylinderGeometry(0.026, 0.026, 0.12, 6);
+  drive.rotateZ(Math.PI / 2);
+  drive.translate(ACT.x - 0.115, ACT.y + 0.05, ACT.z + 0.005);
+  actuator.push(drive);
+  /*
+   * The conduit, and it now ARRIVES somewhere.
+   *
+   * It was a 420mm tube hanging straight down off the actuator and stopping in mid-air,
+   * which read as a dowel somebody had left wedged in the pipework. A cable that ends in
+   * nothing is worse than no cable: it draws the eye to a loose end.
+   *
+   * Two segments instead - down the side of the body, then back into the wall face at
+   * z = -2.11 (0.11 behind the valve's own origin at z = -2.0). The lamp says the actuator
+   * is powered; the conduit says it is REACHED, which is the half that matters, and a
+   * termination is what makes that legible.
+   */
+  const conduitDrop = new THREE.CylinderGeometry(0.014, 0.014, 0.26, 6);
+  conduitDrop.translate(ACT.x + 0.045, ACT.y - 0.19, ACT.z + 0.02);
+  actuator.push(conduitDrop);
+  const intoWall = new THREE.CylinderGeometry(0.014, 0.014, 0.2, 6);
+  intoWall.rotateX(Math.PI / 2);
+  intoWall.translate(ACT.x + 0.045, ACT.y - 0.31, ACT.z - 0.06);
+  actuator.push(intoWall);
+  valveRoot.add(
+    decorMesh('ValveActuator', mergeGeometries(actuator, false) ?? actuator[0], MAT.actuator)
+  );
+
+  /**
+   * The status lamp, unlit, so it holds its colour whatever the bulkhead is doing.
+   *
+   * Amber and blinking on standby - the cheapest possible way to say "this is on the
+   * network and waiting" - solid green while it is being driven, and red once the run has
+   * let go. Three states, one 20mm disc, and it tells the player where they are in the
+   * request without a line of dialogue.
+   */
+  /*
+   * Three lamps stacked in the same hole, and only one of them ever visible.
+   *
+   * The obvious version is one mesh whose material is swapped. It does not survive: a
+   * MeshNode's material is not durable here - an asset load still in flight will put the
+   * original back underneath you, and the lamp silently reverts to amber some frames after
+   * the player watched it go green. Visibility is not a material, so nothing overwrites it.
+   */
+  type ValveState = 'standby' | 'live' | 'fault';
+  const LAMPS: Record<ValveState, ENGINE.MeshNode> = {
+    standby: decorMesh('ValveLampStandby', lampDisc(), MAT.lamp),
+    live: decorMesh('ValveLampLive', lampDisc(), MAT.knowledgeLamp),
+    fault: decorMesh('ValveLampFault', lampDisc(), MAT.warningLamp),
+  };
+  for (const lamp of Object.values(LAMPS)) {
+    lamp.position.set(ACT.x, ACT.y + 0.035, ACT.z + 0.06);
+    valveRoot.add(lamp);
+  }
+
+  let valveState: ValveState = 'standby';
+  let blink = 0;
+
+  const setState = (next: ValveState): void => {
+    valveState = next;
+    blink = 0;
+    for (const [state, lamp] of Object.entries(LAMPS)) lamp.visible = state === next;
+  };
+  setState('standby');
+
+  /**
+   * The spray, for when the answer was wrong.
+   *
+   * A pool of points at every join on the run, dead until something bursts. Same shape as
+   * the mower's clippings and for the same reason: this fires on a beat transition, and
+   * allocating a particle system at that moment is allocating in the one frame the player is
+   * watching hardest.
+   *
+   * It comes out of the JOINS and not the valve, and that is the whole story of the failure
+   * told in geometry: the valve did exactly what it was told. It was the instruction that
+   * was wrong, and fifty years of other people's fittings could not take what it sent them.
+   */
+  const SPRAY_PER_JOIN = 24;
+  const sprayCount = joins.length * SPRAY_PER_JOIN;
+  const sprayAt = new Float32Array(sprayCount * 3);
+  const sprayVelocity = new Float32Array(sprayCount * 3);
+  const sprayLife = new Float32Array(sprayCount);
+  // Parked below the floor rather than at the origin, so the pool is invisible before it is
+  // ever used instead of being a knot of points sitting in the middle of the room.
+  for (let i = 0; i < sprayCount; i++) sprayAt[i * 3 + 1] = -8;
+  const sprayGeometry = new THREE.BufferGeometry();
+  sprayGeometry.setAttribute('position', new THREE.BufferAttribute(sprayAt, 3));
+  const sprayPoints = new THREE.Points(
+    sprayGeometry,
+    new THREE.PointsMaterial({
+      color: new THREE.Color('#b6d2dc'),
+      size: 0.034,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.8,
+      depthWrite: false,
+      fog: false,
+      toneMapped: false,
+    })
+  );
+  sprayPoints.frustumCulled = false;
+  const sprayRoot = ENGINE.SceneNode.create({ name: 'Spray' });
+  sprayRoot.add(sprayPoints);
+
+  const sprayPosition = sprayGeometry.getAttribute('position') as THREE.BufferAttribute;
+  const sprayArray = sprayPosition.array as Float32Array;
+  let sprayFor = 0;
+
+  scene.registerProp('spray', sprayRoot, {
+    idle: (deltaTime) => {
+      if (sprayFor <= 0) return;
+      sprayFor -= deltaTime;
+      // Clamped for the same reason the flies are: a stalled frame with gravity in it puts
+      // every droplet through the floor at once.
+      const step = Math.min(deltaTime, 0.05);
+      for (let i = 0; i < sprayCount; i++) {
+        if (sprayLife[i] <= 0) continue;
+        sprayLife[i] -= step;
+        const o = i * 3;
+        if (sprayLife[i] <= 0) {
+          sprayArray[o + 1] = -8;
+          continue;
+        }
+        sprayVelocity[o + 1] -= 9.4 * step;
+        sprayArray[o] += sprayVelocity[o] * step;
+        sprayArray[o + 1] += sprayVelocity[o + 1] * step;
+        sprayArray[o + 2] += sprayVelocity[o + 2] * step;
+      }
+      sprayPosition.needsUpdate = true;
+    },
+  });
+
+  /** Charge the pool and let go. Called by the valve's burst action. */
+  const burstJoints = (): void => {
+    joins.forEach((at, index) => {
+      for (let k = 0; k < SPRAY_PER_JOIN; k++) {
+        const i = index * SPRAY_PER_JOIN + k;
+        const o = i * 3;
+        sprayArray[o] = at.x;
+        sprayArray[o + 1] = at.y + 0.07;
+        sprayArray[o + 2] = at.z;
+        /*
+         * Out, up and toward the room.
+         *
+         * A joint under pressure sprays perpendicular to the pipe from wherever it has
+         * failed, which here is the near side - so the fan is biased hard to +z, which is
+         * also the only side the camera can see. The upward component is what makes it a
+         * jet rather than a leak; without it this reads as the pipe crumbling.
+         */
+        sprayVelocity[o] = range(rng, -1.0, 1.0);
+        sprayVelocity[o + 1] = range(rng, 1.0, 2.7);
+        sprayVelocity[o + 2] = range(rng, 0.8, 2.5);
+        sprayLife[i] = range(rng, 0.5, 1.15);
+      }
+    });
+    sprayPosition.needsUpdate = true;
+    sprayFor = 2.6;
+  };
+
+  let valveTurn = 0;
+
+  /**
+   * The motor's own curve, shared by both endings, because it is the same motor.
+   *
+   * A one-second hold while the camera parks and the command travels, then a stiff break
+   * and a free run - which is what a gate valve does and also what an actuator does, since
+   * it has to overcome the seat before it has anything to spin against.
+   *
+   * The hold is not padding. The `valve` shot takes 1.0s to arrive; without it the wheel is
+   * 89% turned by the time the camera gets there, and the player is shown the aftermath of
+   * the thing they pressed the button for.
+   */
+  const LEAD_IN = 1.0;
+  const TURN_TIME = 2.6;
+  const BURST_TIME = 3.6;
+  const motor = (t: number): number => {
+    const at = t * TURN_TIME;
+    if (at <= LEAD_IN) return 0;
+    const along = Math.min(1, (at - LEAD_IN) / (TURN_TIME - LEAD_IN));
+    return 1 - (1 - along) ** 3;
+  };
+
+  scene.registerProp('valve', valveRoot, {
+    // Inked: it is the object the whole call is trying to reach.
+    inked: true,
+    anchors: { default: new THREE.Vector3(0, 0.24, 0.12) },
+    /*
+     * The blink. Slow on standby, urgent on fault, steady while it is being driven.
+     *
+     * Rates chosen the way real panels choose them: a heartbeat you stop noticing when
+     * nothing is wrong, and one you cannot stop noticing when something is.
+     */
+    idle: (deltaTime) => {
+      if (valveState === 'live') return;
+      blink += deltaTime;
+      const period = valveState === 'fault' ? 0.34 : 1.5;
+      LAMPS[valveState].visible =
+        blink % period < period * (valveState === 'fault' ? 0.5 : 0.62);
+    },
+    actions: {
+      /**
+       * Turned, and seated.
+       *
+       * Two and a half revolutions on an ease-out, because a gate valve is stiff at the
+       * break and free afterwards - and it STOPS. A stopcock that coasts gently to a halt
+       * was never seating against anything.
+       */
+      turn: (tweener) => {
+        const from = valveTurn;
+        valveTurn = from + Math.PI * 5;
+        setState('live');
+        tweener.add(
+          (t) => {
+            const drive = motor(t);
+            wheelNode.rotation.set(-0.52, 0, from + (valveTurn - from) * drive);
+          },
+          { duration: TURN_TIME, easing: Ease.linear, channel: 'valve' }
+        );
+      },
+
+      /**
+       * Turned, and then the run lets go.
+       *
+       * The wheel does the same thing it does when the player is right, which is the point:
+       * the machine carried the instruction out exactly. The DELAY is what turns this from
+       * an error message into a consequence - it shuts, the pressure has to go somewhere,
+       * and a moment later the weakest fittings on the run find out where.
+       *
+       * Linear rather than eased, and compressed into the first 60% of the tween, so the
+       * wheel finishes and there is a beat of nothing before the burst. That silence is
+       * doing more work than the particles are.
+       */
+      burst: (tweener) => {
+        const from = valveTurn;
+        valveTurn = from + Math.PI * 5;
+        // Green while it drives, because the actuator does not know it is wrong either.
+        setState('live');
+        let fired = false;
+        tweener.add(
+          (t) => {
+            const drive = motor((t * BURST_TIME) / TURN_TIME);
+            wheelNode.rotation.set(-0.52, 0, from + (valveTurn - from) * drive);
+            /*
+             * 2.95s in: a third of a second after the wheel seats at 2.60s.
+             *
+             * That gap is the entire difference between a consequence and an error message.
+             * The valve finishes, the room is quiet for a beat, and THEN the pressure finds
+             * the weakest fittings on the run. Fire it on the same frame the wheel stops and
+             * it reads as the valve having broken, which is the opposite of the point.
+             */
+            if (!fired && t * BURST_TIME > 2.95) {
+              fired = true;
+              burstJoints();
+              setState('fault');
+            }
+          },
+          { duration: BURST_TIME, easing: Ease.linear, channel: 'valve' }
+        );
+      },
+    },
+  });
+
+  /*
+   * Ending the call and coming back has to give the player the valve they found the first
+   * time - shut, green and already answered is a mission that cannot be replayed.
+   */
+  scene.onReset(() => {
+    valveTurn = 0;
+    wheelNode.rotation.set(-0.52, 0, 0);
+    sprayFor = 0;
+    for (let i = 0; i < sprayCount; i++) {
+      sprayLife[i] = 0;
+      sprayArray[i * 3 + 1] = -8;
+    }
+    sprayPosition.needsUpdate = true;
+    setState('standby');
+  });
 
   /**
    * What fifty years of other people's joins look like once they are working.
@@ -5381,35 +5847,60 @@ function buildFloodedCellar(scene: ContactScene): void {
   scene.registerProp('outfall', meshOf('Outfall', outfall, wettable(MAT.steel, 3.05)));
 
   /**
-   * Three inspection covers, up.
+   * Three inspection covers, up - and what is left of them.
    *
-   * Lifted and leaning against the wall beside their own openings, because a cover lying
-   * flat beside a hole reads as a hole with a lid near it, and a cover propped up reads as
-   * somebody having got it up and gone in.
+   * ## Both halves of this read as plates on a floor, so both halves are gone
+   *
+   * There were two objects here and the player asked what each of them was, which is the
+   * only review that counts. The openings were 520mm dark slabs at y = 0.02 - under a water
+   * line at 0.22, so they never read as holes at all, they read as black tiles lying in the
+   * water. The lids were 540mm plates leaning on the back wall, and a plate is what they
+   * looked like however much rim and slot detail went onto them.
+   *
+   * I spent this session making the lids more legible AS PLATES - a rim in a contrasting
+   * value, lifting slots, a warmer iron - and legibility was never the problem. Nobody could
+   * tell what they were FOR. Three more grey rectangles in a room that already has boxes,
+   * a bench, a bulkhead and six metres of pipework is clutter, and clutter beside the run is
+   * the worst place for it: it competes with the one object the request is about.
+   *
+   * What survives is the junction boxes themselves, which is what Vasile actually describes
+   * - "three boxes, and every one of them can be turned" - standing proud of the water where
+   * they can be seen and counted, instead of being implied by three dark squares.
    */
   const openings: THREE.BufferGeometry[] = [];
-  const lids: THREE.BufferGeometry[] = [];
+  const collars: THREE.BufferGeometry[] = [];
   for (let i = 0; i < 3; i++) {
     const x = -1.5 + i * 1.5;
-    const hole = new THREE.BoxGeometry(0.52, 0.04, 0.52);
-    hole.translate(x, 0.02, -0.9);
-    openings.push(hole);
+    /*
+     * A box, standing out of the water rather than a hole lying under it.
+     *
+     * 340mm tall against a water line at 220mm, so the top 120mm and the lid on it are
+     * clear of the surface - that is what makes three of them countable from the camera,
+     * and countable is the whole requirement: the request is "set the run", and the player
+     * has to see how many things there are to set.
+     */
+    const box = new THREE.BoxGeometry(0.34, 0.34, 0.3);
+    box.translate(x, 0.17, -0.9);
+    openings.push(box);
+    // The bolted rim round its top, which is the only detail it needs to stop being a cube.
+    const collar = new THREE.BoxGeometry(0.38, 0.035, 0.34);
+    collar.translate(x, 0.352, -0.9);
+    collars.push(collar);
 
-    const lid = new THREE.BoxGeometry(0.54, 0.05, 0.54);
-    lid.rotateX(-1.15 + jitter(rng, 0.1));
-    lid.translate(x + jitter(rng, 0.06), 0.26, -1.32);
-    lids.push(lid);
   }
   scene.registerProp(
     'covers',
-    meshOf('Covers', mergeGeometries(openings, false) ?? openings[0], MAT.dark),
+    meshOf('Covers', mergeGeometries(openings, false) ?? openings[0], MAT.equipment),
     {
-      // Inked: the three lifted covers. What the request is a search along.
+      // Inked: the three junction boxes. What the request is a search along.
       inked: true,
-      anchors: { default: new THREE.Vector3(0, 0.3, -0.9) },
+      anchors: { default: new THREE.Vector3(0, 0.5, -0.9) },
     }
   );
-  scene.registerProp('lids', meshOf('Lids', mergeGeometries(lids, false) ?? lids[0], MAT.steel));
+  scene.registerProp(
+    'cover-collars',
+    meshOf('CoverCollars', mergeGeometries(collars, false) ?? collars[0], MAT.coverPlate)
+  );
 
   /**
    * The chalk marks. Four springs, four heights, and the highest one dated.
@@ -5420,14 +5911,25 @@ function buildFloodedCellar(scene: ContactScene): void {
    */
   const marks: THREE.BufferGeometry[] = [];
   for (const height of [0.42, 0.66, 0.81, 0.98] as const) {
-    const mark = new THREE.BoxGeometry(0.3, 0.018, 0.02);
-    mark.rotateZ(jitter(rng, 0.03));
-    mark.translate(-2.4 + jitter(rng, 0.08), height, -2.1);
+    /*
+     * A different length every year, because a man with a piece of chalk does not measure.
+     *
+     * They were all 300mm and 18mm thick in `MAT.paper` - four identical bright bars
+     * standing 10mm off the wall, which the player read as "three floating white ones".
+     * Identical length is most of why: four things the same size in a column is a scale, not
+     * four separate occasions. And 18mm of paper-white catches the fill on its edge, which
+     * is what detached them from the wall.
+     *
+     * 6mm now, in `MAT.chalkMark`, at lengths that disagree.
+     */
+    const mark = new THREE.BoxGeometry(range(rng, 0.19, 0.34), 0.006, 0.014);
+    mark.rotateZ(jitter(rng, 0.045));
+    mark.translate(-2.4 + jitter(rng, 0.11), height, -2.103);
     marks.push(mark);
   }
   scene.registerProp(
     'marks',
-    meshOf('Marks', mergeGeometries(marks, false) ?? marks[0], MAT.paper)
+    meshOf('Marks', mergeGeometries(marks, false) ?? marks[0], MAT.chalkMark)
   );
 
   // The sump and its pump, in the corner the run drops into.
@@ -5655,45 +6157,45 @@ function buildFloodedCellar(scene: ContactScene): void {
     // 90 degrees, so the run is in front of him rather than behind. See `handsOn`.
     rotation: new THREE.Euler(0, Math.PI / 2, 0),
     /**
-     * Turned to face along the wall, with his right hand on the pipe.
+     * No IK. He faces along the run and gestures at it, and that is the whole staging.
      *
-     * The fault was real: the target was on the pipe at z = -1.95, he stood at -1.6 facing
-     * the camera, and that put it 0.46m BEHIND him - reachable at 0.51m against a 0.63m
-     * arm, so the solver dutifully sent his arm round his own back. Reported as his left
-     * hand bent backwards, and it was.
+     * ## Why the reach came off
      *
-     * I then claimed no facing could fix it without turning his face out of the shot. That
-     * was asserted rather than measured, and it is wrong. Swept through every facing: at 90
-     * degrees the pipe comes round in FRONT of him and his face is 49 degrees off the
-     * camera axis - a three-quarter view, and a better one than the 1 degree he had, which
-     * is dead-on and flat.
+     * There was a `handsOn.right` target on the near-top of the pipe, and the history of it
+     * is three rounds of correction: the arm went behind his back, then it was re-aimed, then
+     * the facing was changed to suit it. Every round fixed the previous round's artefact and
+     * none of them was ever better than not solving the arm at all.
      *
-     * So he faces along the run with his RIGHT hand on it, which is the near side once he
-     * has turned. x = -0.60 puts the target 0.55m in front of him and 0.58m from that
-     * shoulder against a 0.63m arm: extended, not folded, and not straining.
+     * The idle clip already has him talking with his hands, which is what a man explaining
+     * his own cellar does. Pinning one wrist to a fixed point in the room fights that clip
+     * for the whole call - the solver holds the hand still while the animation tries to move
+     * the shoulder, and the elbow takes the difference. A contact who touches nothing reads
+     * as a person; a contact welded to a pipe reads as a mannequin near a pipe.
      *
-     * The wrists still settle, because only the targeted arm is solved - the left is on the
-     * idle clip and wants the same correction Dorin's did.
+     * The facing stays at 90 degrees. That was a separate and correct change - it puts the
+     * run in front of him instead of behind him, and gives the camera a three-quarter view
+     * of his face instead of a flat-on one. It never depended on the reach.
+     *
+     * `settleWrists` goes with the IK: it existed to correct the arm the solver was NOT
+     * driving, and with no solver there is nothing to correct.
      */
-    settleWrists: 0.6,
-    handsOn: {
-      /*
-       * On the near-top of the run, not at its centre line.
-       *
-       * The pipe is at z = -2.0 with a 55mm radius, so its axis is 55mm inside the surface
-       * a hand can actually touch - aiming at the axis sends the fingers through the pipe
-       * and puts the arm at full stretch reaching past it. This is the near-top face at
-       * (1.40, -1.96), 0.46m from his shoulder against a 0.63m arm, which lands the hand ON
-       * it with the elbow still bent.
-       */
-      right: new THREE.Vector3(-0.72, 1.4, -1.96),
-    },
     liveliness: 1.15,
   });
 
   // -- Light -----------------------------------------------------------------
-  // One bulkhead lamp on the wall and a cold spill off the water. A cellar has no windows,
-  // so this is the only room in the game lit entirely by its own fittings.
+  /**
+   * One bulkhead lamp on the wall and a cold spill off the water. A cellar has no windows,
+   * so this is the only room in the game lit entirely by its own fittings.
+   *
+   * That sentence was aspirational until `daylight` existed. The rig's key and hemisphere
+   * are infinite and reach every diorama, so this room was getting a warm late afternoon
+   * through a ceiling it does not have - and getting most of its light from it. See the
+   * note on ContactScene.daylight for the measurement that found it.
+   *
+   * 0.3, not 0. Light gets down a stairwell and in round a hatch; a cellar is dim, not
+   * sealed, and at zero the four local pools read as torches in a cave.
+   */
+  scene.daylight = 0.3;
   /**
    * The bulkhead, which was a sphere.
    *
@@ -5750,31 +6252,38 @@ function buildFloodedCellar(scene: ContactScene): void {
     ENGINE.PointLightNode.create({
       name: 'Bulkhead',
       position: lampAt.clone().add(new THREE.Vector3(0, 0, 0.2)),
-      intensity: 11,
+      // 11 down to 9.5. It is still the key and still the brightest thing in the room; the
+      // run no longer needs it to reach six metres, so it can go back to being a lamp.
+      intensity: 9.5,
       color: new THREE.Color('#ffdcae'),
       distance: 7,
       decay: 1.3,
     })
   );
 
-  /**
-   * Bounce off the water.
+  /*
+   * ## The two blue bounce lights are gone, and the reason is on the floor
    *
-   * A cold uplight from below, which is the one lighting cue that says "there is water on
-   * this floor" without drawing a single ripple - it is what a flooded room actually looks
-   * like, and it costs one point light.
+   * There were two cold point lights standing in for light bouncing off the flood, at
+   * (0.2, 0.55, -0.4) and (-2.4, 0.55, -1.3). They were reported as "two blue lights", and
+   * that is precisely what they had become: not a bounce, but two visible glowing discs
+   * sitting on the water.
+   *
+   * The cause is in floodwater.ts, which sets `metalness: 0.30, roughness: 0.31` on the
+   * flood - deliberately, so the surface has some mirror in it. A glossy surface returns a
+   * SPECULAR HIGHLIGHT for every punctual light above it, one bright disc per light, and a
+   * point light 550mm above a glossy plane puts that disc directly beneath itself. So each
+   * bounce light drew a picture of itself on the thing it was pretending to be a bounce off.
+   *
+   * A bounce is diffuse and comes from a whole plane; a point light is neither. There is no
+   * version of this trick that does not leave its own reflection on the water, so both are
+   * out, and the flood is lit by the fittings that are actually in the room.
+   *
+   * (This is also the answer to why the flood shows highlights when Mirela's puddle was said
+   * to have no reflections: those are direct specular from named lights, which any lit
+   * material gives for free. An ENVIRONMENT reflection - the room mirrored in the water -
+   * needs a PMREM cubemap and does not exist in this project. See the note in glass.ts.)
    */
-  scene.registerProp(
-    'waterbounce',
-    ENGINE.PointLightNode.create({
-      name: 'WaterBounce',
-      position: new THREE.Vector3(0.2, 0.25, -0.4),
-      intensity: 3.4,
-      color: new THREE.Color('#8fb6c4'),
-      distance: 5,
-      decay: 1.6,
-    })
-  );
 
   /**
    * Two lights the cellar was missing, both found by sampling rather than by looking.
@@ -5798,11 +6307,24 @@ function buildFloodedCellar(scene: ContactScene): void {
     'face-fill',
     ENGINE.PointLightNode.create({
       name: 'FaceFill',
-      position: new THREE.Vector3(1.9, 1.7, 1.4),
-      intensity: 4.6,
+      /*
+       * Moved after a capture, and this was the worst thing in the room.
+       *
+       * Vasile was turned to face the pipe this session, at his own request. Nobody
+       * re-derived the fill that was placed when he faced the camera - and at (1.9, 1.7,
+       * 1.4) his face is 4.21m from a light whose cutoff distance is 4.4m, where three's
+       * falloff term is (1 - (d/cutoff)^4)^2 = 0.026. It was contributing two per cent of
+       * itself. Measured off the frame, his face rendered at 30-60 against the wall behind
+       * his head at 150-170: the contact, in the contact view, was a silhouette.
+       *
+       * On his eyeline now and inside its own range, coming from the camera side so it
+       * lands on the cheek the lens can actually see.
+       */
+      position: new THREE.Vector3(0.75, 1.72, -0.25),
+      intensity: 3.2,
       color: new THREE.Color('#a8c0d4'),
-      distance: 4.4,
-      decay: 1.5,
+      distance: 4.5,
+      decay: 1.35,
     })
   );
 
@@ -5810,11 +6332,28 @@ function buildFloodedCellar(scene: ContactScene): void {
     'run-wash',
     ENGINE.PointLightNode.create({
       name: 'RunWash',
-      position: new THREE.Vector3(0.4, 1.5, -1.1),
-      intensity: 5.2,
+      /*
+       * Moved off the run and up into the room, which is the fix.
+       *
+       * It sat 900mm from a six-metre pipe at decay 1.4, so it was not a wash, it was a
+       * spotlight on whichever span it happened to be nearest - the plastic one, at 188.
+       * Falloff along the run was 6.8x from one end to the other before albedo was even
+       * considered.
+       *
+       * From up by the joists at the room's centre, every span is between 2.5m and 4.2m
+       * away, and at decay 1.05 that is a 1.9x gradient across the whole run - a gradient
+       * rather than a hotspot. Still motivated: it is the light in the ceiling void that a
+       * cellar this old has, and it falls on the pipework because the pipework is up there
+       * with it.
+       */
+      position: new THREE.Vector3(0.2, 2.15, 0.3),
+      // 6.0 down to 3.6. Measured off the frame the copper span came out at 165 and the
+      // wall behind Vasile at 111-170 - the wash had stopped being a wash and become the
+      // room's ambient, which is how a flooded cellar ends up brighter than its own lamp.
+      intensity: 3.6,
       color: new THREE.Color('#ffd8b0'),
-      distance: 5.2,
-      decay: 1.4,
+      distance: 9,
+      decay: 1.05,
     })
   );
 
@@ -5828,8 +6367,38 @@ function buildFloodedCellar(scene: ContactScene): void {
   });
   scene.registerShot('covers', {
     position: new THREE.Vector3(0.9, 1.15, 1.1),
-    target: new THREE.Vector3(-0.4, 0.2, -1.0),
+    // Target lifted from 0.2 to 0.32: the covers used to be flat plates on the floor and
+    // are now boxes standing 340mm out of the water, so the shot has to look at the tops.
+    target: new THREE.Vector3(-0.4, 0.32, -1.0),
     duration: 2.2,
+  });
+  /**
+   * The answer's shot: the stopcock, the run it sits on, and the floor it drains to.
+   *
+   * ## It has to hold three things at once
+   *
+   * This one frame carries both endings. The valve has to be big enough to watch turn, the
+   * joints down the run have to be in it so a burst reads as the RUN letting go rather than
+   * a puff of steam at the valve, and the floor has to be in it so the water going down is
+   * visible in the same shot. A tight close-up gets the first and loses the other two.
+   *
+   * Composed against the numbers rather than by eye, at 16:9 with a 46-degree vertical fov
+   * (23 vertical / 37 horizontal half-angles):
+   *
+   *   - the wheel sits 6 degrees left of the axis, so it lands at 42% of screen width -
+   *     clear of the console panel, which owns the right 35%
+   *   - it subtends 2.6 degrees, so 11% of screen height: readable without being a poster
+   *   - the joint at x = -0.2 falls at 11% of width, in frame, so the burst has somewhere
+   *     to happen that is not on top of the valve
+   *   - the floor plane clears the bottom edge by about 8% of height
+   */
+  scene.registerShot('valve', {
+    position: new THREE.Vector3(2.4, 1.95, 0.9),
+    target: new THREE.Vector3(1.7, 1.05, -2.15),
+    // 1.0s, and the valve's two actions both hold for exactly that long before the motor
+    // picks up - see LEAD_IN. The camera has to be parked before the thing it came to
+    // watch happens, or the player watches it through a move.
+    duration: 1,
   });
 
   /**
@@ -5861,7 +6430,16 @@ function buildFloodedCellar(scene: ContactScene): void {
     // wall - somebody has been measuring this flood for years, and that reads without
     // anybody saying it.
     ['marks', CERTAINTY.SHAPED],
-    ['lids', CERTAINTY.SHAPED],
+    ['cover-collars', CERTAINTY.SHAPED],
+    /*
+     * The stopcock is KNOWN from the first frame, and it is the only thing down here that
+     * is. Everything else in the cellar the machine has been told about; the actuator on
+     * this valve is a thing it is CONNECTED TO - it is reading the lamp off the network the
+     * same way it read District 07's cameras. It cannot be uncertain about the one object
+     * it is holding a wire to.
+     */
+    ['valve', CERTAINTY.KNOWN],
+    ['spray', CERTAINTY.KNOWN],
     // The run is the mission. He has said there is pipework; he has not said what it is
     // made of, which is the whole diagnosis.
     ['run-metal', CERTAINTY.SHAPED],

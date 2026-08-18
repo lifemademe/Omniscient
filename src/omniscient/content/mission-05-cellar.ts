@@ -291,11 +291,29 @@ export const MISSION_05: MissionDefinition = {
         kind: 'pipes',
         prompt: 'Set the run from the sump to the outfall.',
         grid: CELLAR_RUN,
-        onSolved: { to: 'solved', environment: 'prop.clear:water' },
-        onWrong: { to: 'covers' },
+        /**
+         * Both endings are the same act, and that is the point of the valve.
+         *
+         * The player sets the run and sends it, and either way the machine reaches down the
+         * line and turns the stopcock - a thing they can watch happen, in the room, at the
+         * moment they commit. What differs is what the pipework does about it half a second
+         * later. The instruction is never refused; it is either right or it is carried out
+         * anyway and the cellar tells them.
+         *
+         * `camera.push:valve` on both, because a resolution the player cannot see is a
+         * caption. It beats the destination beat's own framing (see `environmentFor`), and
+         * the shot is composed to hold the valve, two joints and the floor at once, so the
+         * water going down and the water coming out both land in the same frame.
+         */
+        onSolved: {
+          to: 'solved',
+          environment: 'camera.push:valve,prop.turn:valve,prop.clear:water',
+        },
+        onWrong: { to: 'covers', environment: 'camera.push:valve,prop.burst:valve' },
         wrongSay:
-          'Nothing. Well - not nothing, I can hear it moving, but it is coming back round ' +
-          'on itself somewhere.',
+          'It turned - I felt it go. Then... ah, no. No, it is coming out of the joints, ' +
+          'it is finding its way back round on itself somewhere and the old fittings ' +
+          'cannot hold that. Shut it off and think again.',
       },
       on: {
         ASK_RUN: { to: 'the-run', learn: [FACT_PIECEMEAL_PLUMBING] },

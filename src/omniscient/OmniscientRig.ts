@@ -203,6 +203,15 @@ const RESOLVE_HOLD = 4.6;
  */
 const NOTE_HOLD = 11;
 
+/**
+ * The workstation's daylight, at full strength.
+ *
+ * Named because they are no longer only defaults: `ContactScene.daylight` scales both per
+ * room, and a scene that wants less sun needs something to be a fraction OF.
+ */
+const KEY_INTENSITY = 1.9;
+const SKY_INTENSITY = 1.35;
+
 /** The diorama atmosphere. Tuned to a room, not to a world - see mountScene. */
 const FOG_NEAR = 3.5;
 const FOG_FAR = 26;
@@ -921,7 +930,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       // Pulled from 2.6. §230's reading of all three reference frames is a warm pool on
       // a corner of a COLD room, and a warm global key of that strength makes the whole
       // room warm - which leaves the lamp with nothing to be warm against.
-      intensity: 1.9,
+      intensity: KEY_INTENSITY,
       color: new THREE.Color(LIGHT.key),
     });
     // Shadows off. The rig spans sixty units - the workstation at one end, the dioramas
@@ -936,7 +945,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
         // Raised as the key came down, so the room does not simply get darker - §243
         // counts a scene that lost value as a regression however good the reason was.
         // The trade is warm-everywhere for cold-everywhere-except-the-pool.
-        intensity: 1.35,
+        intensity: SKY_INTENSITY,
         color: new THREE.Color(LIGHT.fill),
         groundColor: new THREE.Color(LIGHT.bounce),
       });
@@ -2130,6 +2139,19 @@ export class OmniscientRig extends ENGINE.SceneNode {
         .setFogColor(new THREE.Color(air?.color ?? LIGHT.haze))
         .setFogNear(airless ? 4000 : (air?.near ?? FOG_NEAR))
         .setFogFar(airless ? 8000 : (air?.far ?? FOG_FAR));
+    }
+
+    /**
+     * How much of the rig's afternoon this room gets. See ContactScene.daylight.
+     *
+     * Applied here rather than in the scene builder because the key and the fill belong to
+     * the workstation, not to any diorama - a room reaching into the rig to turn the sun
+     * down would leave it down for whichever room came next.
+     */
+    if (this.lightRig) {
+      const daylight = next?.daylight ?? 1;
+      this.lightRig.key.intensity = KEY_INTENSITY * daylight;
+      this.lightRig.sky.intensity = SKY_INTENSITY * daylight;
     }
 
     /**

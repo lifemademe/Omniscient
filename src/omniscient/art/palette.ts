@@ -607,6 +607,55 @@ export const MAT = {
    * Diffuse-dominant, cool, and a clear step below anything it is meant to sit under.
    */
   steel: standard('#454c55', 0.72, 0.15),
+
+  /**
+   * The stopcock's handwheel: red oxide, and it is the only saturated thing in the cellar.
+   *
+   * Every other object down there is a shade of wet grey between 40 and 90 - that is what
+   * makes the room read as a flooded cellar, and it is also what makes finding anything in
+   * it hard. A valve wheel is painted red in real life for exactly that reason, so this is
+   * not a stylisation, it is the one place where the honest colour and the colour the
+   * composition needs are the same. It is the answer to the puzzle; it should be the first
+   * thing the eye lands on and the only warm note below the waterline.
+   *
+   * Matte, not gloss. A shiny red wheel would read as plastic and new; this one has been
+   * down there as long as the pipes have.
+   */
+  valveWheel: standard('#c25c40', 0.82, 0.05),
+
+  /**
+   * Cast iron, for the lifted inspection covers.
+   *
+   * Written for three lifted cover plates that are no longer in the scene - the player could
+   * not tell what they were for and they went. It stays because the bolted collars round the
+   * junction boxes are the same iron and want the same tone: warm and dark, and below the
+   * pipework in value, so a lid sits down onto its box instead of off it.
+   */
+  coverPlate: standard('#463f37', 0.88, 0.2),
+
+  /**
+   * The valve's actuator. Dark, because MAT.equipment was not.
+   *
+   * `equipment` is #6c6e6f at roughness 0.62, and under the run wash it rendered near the
+   * wall's own value - the housing read as a cardboard box taped to the pipework rather
+   * than as the one piece of modern hardware in the room. Machine-grey and well below the
+   * wall, so it sits against it instead of dissolving into it.
+   */
+  actuator: standard('#3a3d41', 0.7, 0.35),
+
+  /**
+   * Chalk, for the flood marks - which were `paper` and looked like it.
+   *
+   * ACCENT.bright is #c4bda6 at roughness 0.94, and against a cellar wall that measures in
+   * the fifties it rendered as four bright bars floating in the dark - the user read them as
+   * "three floating white ones", which is precisely the failure: they were brighter than
+   * anything around them, so they detached from the wall and became objects.
+   *
+   * A chalk line on damp brick is barely lighter than the brick. This is a small step above
+   * the wall rather than a leap off it, so the marks read as something drawn ON the surface,
+   * which is what they are and what makes them mean anything.
+   */
+  chalkMark: standard('#8e8878', 0.97),
   // The night sea and sky used to be flat unlit fills here. They are painted gradients
   // now and live in geometry/backdrop.ts, because a backdrop whose whole content is one
   // authored canvas has nothing to share with a material family (§187, and see RoomPart).
