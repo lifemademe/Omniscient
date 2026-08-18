@@ -43,6 +43,7 @@ import './omniscient/crt/PixelSurface.js';
 import './omniscient/dev/SceneJump.js';
 import './omniscient/dev/TunePanel.js';
 import './omniscient/geometry/backdrop.js';
+import './omniscient/geometry/cat.js';
 import './omniscient/geometry/character.js';
 import './omniscient/geometry/clouds.js';
 import './omniscient/geometry/foliage.js';

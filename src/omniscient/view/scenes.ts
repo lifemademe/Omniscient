@@ -64,6 +64,7 @@ import type { Tweener } from '../core/tween.js';
 import { createFieldBackdrop, createNightBackdrop } from '../geometry/backdrop.js';
 import { buildTree } from '../geometry/tree.js';
 import { buildMower } from '../geometry/mower.js';
+import { buildCat } from '../geometry/cat.js';
 import { clouds } from '../geometry/clouds.js';
 import { createBirds, createMotes } from '../geometry/wildlife.js';
 import { DISTRICT_CITY, DISTRICT_FLEET, DISTRICT_SIZE } from '../content/district-07.js';
@@ -6182,6 +6183,34 @@ function buildNightDoor(scene: ContactScene): void {
   );
 
   /**
+   * A cat.
+   *
+   * There is no reason for it. That is the reason - and it is not quite nothing, either.
+   * This is the only set in the game where the contact is doing something he is ashamed of,
+   * outside somebody else's house, at two in the morning, hoping nobody looks. Putting one
+   * unbothered animal on a windowsill watching him do it is the cheapest joke the scene can
+   * make and the only one it has room for.
+   *
+   * ## Where
+   *
+   * The right-hand sill, which was solved rather than picked. Measured against the default
+   * shot it sits 4.8m out and 21 degrees off the axis - comfortably inside frame, well clear
+   * of the door, and above Dorin's head so it never crowds him. The bin lid was the other
+   * candidate and came out at 24 degrees, right on the edge, which is the worst place to put
+   * something whose entire job is being noticed by accident.
+   *
+   * Turned to face the door, because a cat watching the thing the player is watching is
+   * funnier and more alive than a cat facing out. It has an opinion about this.
+   */
+  const cat = buildCat({
+    at: new THREE.Vector3(DOOR_X + 2.05, 0.765, -0.26),
+    // Its own +z is forward, so this points it down the wall at the doorway.
+    facing: -1.45,
+    seed: 'rasca-cat',
+  });
+  scene.registerProp('cat', cat.root, { idle: cat.idle });
+
+  /**
    * -- The step, and what lives on it ---------------------------------------------------
    *
    * The door met the path directly, which is the detail that quietly stopped this being a
@@ -7092,6 +7121,16 @@ function buildNightDoor(scene: ContactScene): void {
     ['terrace', CERTAINTY.SHAPED],
     ['terrace-dark', CERTAINTY.SHAPED],
     ['terrace-glass', CERTAINTY.SHAPED],
+    /*
+     * The cat is DESCRIBED, and it is the one thing here the machine is not guessing at.
+     *
+     * Everything else on this street is inferred from a phone call - the machine has never
+     * seen the door, the brick or the bin, and they are drawn at the confidence that
+     * deserves. The cat is on the optical feed. It is the only object in the shot that
+     * something is actually looking at, so draining it toward cyan with the architecture
+     * would be the reconstruction being unsure about the one thing it can see.
+     */
+    ['cat', CERTAINTY.DESCRIBED],
     ['hall', CERTAINTY.SHAPED],
     ['path', CERTAINTY.SHAPED],
     ['path-weeds', CERTAINTY.SHAPED],

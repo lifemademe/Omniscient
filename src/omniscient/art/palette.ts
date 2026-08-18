@@ -537,6 +537,16 @@ export const MAT = {
    */
   doorLeaf: standard('#2f3a30', 0.72),
   /**
+   * Eyeshine.
+   *
+   * Unlit, and that is the entire point rather than a shortcut: a tapetum lucidum does not
+   * obey the scene's lighting, it throws back whatever hits it, so a lit material would go
+   * out every time the cat turned away from the porch lamp - which is exactly backwards.
+   * Green-gold, because that is what a cat's is; a dog's is blue and a fox's is red, and
+   * the difference is the whole of how anybody identifies an animal in a torch beam.
+   */
+  catEye: new THREE.MeshBasicMaterial({ color: '#c8d67a', toneMapped: false }),
+  /**
    * The landing light lying on the hall floor at the far end.
    *
    * The same warm as `landingLight` and a third of its value, because this is that lamp
