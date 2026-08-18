@@ -6532,8 +6532,8 @@ function buildNightDoor(scene: ContactScene): void {
    * framing's own 12mm offset and put the brass 8mm under the surface.
    */
   const LEAF_FRONT = LEAF_Z + PROUD_AT + PROUD / 2;
-  /** Keyhole height. Under the handle at 1.02, which is where a mortice keyhole lives. */
-  const LOCK_Y = 0.94;
+  /** Keyhole height. 80mm under the spindle, which is where a mortice keyhole lives. */
+  const LOCK_Y = 1.0;
   for (const [w, h, ox, oy] of [
     // Stiles, full height, one each side.
     [STILE, DOOR.h, -(DOOR.w - STILE) / 2, DOOR.h / 2],
@@ -6713,7 +6713,14 @@ function buildNightDoor(scene: ContactScene): void {
    * 80 is the floor, not a preference: the rose is 36mm in radius and the escutcheon 35mm,
    * so anything under 71mm has them touching. This leaves 9mm of daylight between them.
    */
-  const HANDLE_Y = 1.02;
+  /*
+   * 1.08, which is as high as the pair will go and stay on the lock rail.
+   *
+   * The rail runs 0.92 to 1.12 and the rose is 33mm in radius, so a spindle above 1.087 has
+   * brass hanging over the top edge of the timber it is screwed to. 1.08 puts the rose top
+   * at 1.113 - just inside - and takes the keyhole with it.
+   */
+  const HANDLE_Y = 1.08;
   const handleAt = new THREE.Vector3(DOOR.x + 0.35, HANDLE_Y, LEAF_FRONT + 0.03);
 
   // The rose stays put; only the lever turns, so it belongs with the static furniture.
@@ -6834,7 +6841,15 @@ function buildNightDoor(scene: ContactScene): void {
         tweener.add(
           (t: number) => {
             const push = t < 0.18 ? t / 0.18 : t > 0.82 ? (1 - t) / 0.18 : 1;
-            handleNode.rotation.set(0, 0, -0.62 * push);
+            /*
+             * POSITIVE, so it goes down.
+             *
+             * The arm points -x from the spindle, and a rotation about +z takes +x toward
+             * +y - so it takes -x toward -y, which is downward. I had it negative, which
+             * lifted the lever 56mm instead of dropping it: a handle being pulled up as the
+             * door swings, which is not a gesture anybody makes.
+             */
+            handleNode.rotation.set(0, 0, 0.62 * push);
           },
           { duration: 2.6, easing: Ease.linear, channel: 'door-handle' }
         );
@@ -7394,7 +7409,7 @@ function buildNightDoor(scene: ContactScene): void {
     position: new THREE.Vector3(-0.1, 1.12, 1.05),
     // Follows the keyhole down when it moved under the handle. A shot aimed at where the
     // lock used to be is a push-in on a door handle.
-    target: new THREE.Vector3(0.2, 0.94, -0.22),
+    target: new THREE.Vector3(0.2, 1.0, -0.22),
     duration: 2.0,
   });
 
