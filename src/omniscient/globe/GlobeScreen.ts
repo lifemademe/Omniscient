@@ -431,6 +431,23 @@ export class GlobeScreen {
     this.openable = openable;
     this.globe.setSignals(signals);
 
+    /*
+     * Nothing is selected when the globe comes up, and this line is the whole of a bug
+     * that survived every request in the game.
+     *
+     * §99 stops the world turning while a point is selected, so the player can read a
+     * tooltip without it sliding away. Selecting is how you answer - click the marker,
+     * click Answer - and coming back from a finished request calls attach again, which
+     * re-shows the root and returns early. The selection was still Mirela's. So the globe
+     * froze the first time the player ever answered anybody and never turned again, with
+     * her tooltip pinned open over a request she had already solved.
+     *
+     * Reported as "after Mirela's mission the globe should start turning as it is
+     * supposed to", which is exactly what it is: the drift was never broken, it was being
+     * suppressed by a selection nobody had made for several minutes.
+     */
+    this.clearSelection();
+
     if (this.root) {
       this.root.style.display = 'flex';
       return;

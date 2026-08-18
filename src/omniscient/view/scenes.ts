@@ -3981,9 +3981,24 @@ function buildClearedHouse(scene: ContactScene): void {
      * photographs puts them - and on the EDGE rather than out among the box and the
      * envelopes, because she has stopped. That is the whole reason she is calling.
      */
+    /*
+     * Rebuilt along HER axis rather than the world's, which is what was wrong with them.
+     *
+     * She is turned 36 degrees (rotation.y = 0.2pi), so her forward is (0.59, 0, 0.81) and
+     * her right is (0.81, 0, -0.59) - and the old pair were laid out as though she faced
+     * straight down -z. Resolved against her actual facing, the right-hand target came out
+     * 0.03m to her right: on her own centreline, at hip height, 0.30m out. That is not a
+     * hand resting on a table, it is a hand tucked across the body, and CCD solved it by
+     * swinging the elbow back behind her. Reported as arms bent oddly and behind her back.
+     *
+     * These sit 0.37m and 0.43m in front of her and about 0.17m either side of her centre,
+     * which is a person with both hands on a table. Both are on the top - it spans
+     * x -1.05..0.65 and z -1.5..-0.7 - and both stay 0.4m clear of the shoebox, so the note
+     * above still holds: she has stopped, and her hands are not among the photographs.
+     */
     handsOn: {
-      left: new THREE.Vector3(-1.02, 0.79, -1.47),
-      right: new THREE.Vector3(-0.8, 0.79, -1.5),
+      left: new THREE.Vector3(-0.92, 0.79, -1.32),
+      right: new THREE.Vector3(-0.66, 0.79, -1.44),
     },
     // Slower and smaller than the rest of the cast. She has been sorting a dead relative's
     // photographs for two days; the difference between her idle and Mirela's is the only
