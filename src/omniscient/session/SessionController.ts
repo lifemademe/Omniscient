@@ -282,12 +282,28 @@ export class SessionController {
    * Open an observation. §131: it says more, and the world shows you where.
    * Reading evidence is not a turn - the contact does not respond to it.
    */
+  /**
+   * Open an observation, once.
+   *
+   * The re-press used to paste the whole detail into the transcript again, so a player who
+   * tapped the same line three times had three identical paragraphs in their conversation
+   * with a person - which reads as the machine repeating itself, and buries whatever was
+   * actually said underneath. An observation is a thing you have READ; reading it twice is
+   * not an event and does not belong in a log of what happened.
+   *
+   * The cue still fires on every press, and that is deliberate rather than an oversight.
+   * The text is a record and the cue is a CAMERA - "show me that again" is a completely
+   * reasonable thing to ask twice, and it is the only way back to a shot the player has
+   * moved off. So the words are posted once and the look is available for as long as the
+   * request lasts.
+   */
   private openHint(hintId: string): void {
     const hint = this.runtime?.openHint(hintId);
     if (!hint) return;
 
+    const first = !this.opened.has(hintId);
     this.opened.add(hintId);
-    this.push({ source: 'system', name: 'OMNISCIENT_', body: hint.detail });
+    if (first) this.push({ source: 'system', name: 'OMNISCIENT_', body: hint.detail });
     if (hint.cue) this.hooks.onEnvironment?.(hint.cue);
     this.present();
   }

@@ -211,11 +211,21 @@ export const MISSION_06: MissionDefinition = {
         'picked up since yesterday teatime, and she always picks up. I have not got a key. ' +
         'I have got - other things. I can do this, I just cannot do it and think at the ' +
         'same time, not tonight.',
-      suggest: ['whose door is this', 'look at the lock', 'start on the pins'],
+      suggest: ['whose door is this', 'look at the lock'],
       on: {
         ASK_WHY: { to: 'why', environment: 'prop.point:contact' },
         ASK_LOCK: { to: 'the-lock', environment: 'prop.point:contact', learn: [FACT_OLD_LOCK_WORN] },
-        WORK_THE_LOCK: { to: 'working', environment: 'prop.point:contact' },
+        /*
+         * Through the description, not past it.
+         *
+         * The chip is gated to the beat after he has described the lock, but a player can
+         * still TYPE "pick it" from the doorstep - and dropping them onto a five-pin board
+         * before they have been told the pins bind by wear is dropping them onto a puzzle
+         * with nothing to reason from. So the request is honoured and routed through the
+         * one thing they need first. He does not refuse; he looks at the lock and tells
+         * them what he sees, which is what anybody would do before starting.
+         */
+        WORK_THE_LOCK: { to: 'the-lock', environment: 'prop.point:contact' },
         BREAK_GLASS: { to: 'glass', environment: 'prop.point:contact' },
       },
       onUnrecognised: { to: 'open-again' },
@@ -227,11 +237,11 @@ export const MISSION_06: MissionDefinition = {
       say:
         'Sorry - say it again. Ask me about the door, or about the lock, or just tell me ' +
         'to start.',
-      suggest: ['whose door is this', 'look at the lock', 'start on the pins'],
+      suggest: ['whose door is this', 'look at the lock'],
       on: {
         ASK_WHY: { to: 'why' },
         ASK_LOCK: { to: 'the-lock', learn: [FACT_OLD_LOCK_WORN] },
-        WORK_THE_LOCK: { to: 'working' },
+        WORK_THE_LOCK: { to: 'the-lock' },
         BREAK_GLASS: { to: 'glass' },
       },
       onUnrecognised: { to: 'open-again' },
@@ -245,10 +255,10 @@ export const MISSION_06: MissionDefinition = {
         'me standing here with these in my hand. I did eleven months a long time ago and I ' +
         'have not touched a lock since. This is the one door in the world I would have ' +
         'sworn I would never open this way.',
-      suggest: ['look at the lock', 'start on the pins'],
+      suggest: ['look at the lock'],
       on: {
         ASK_LOCK: { to: 'the-lock', learn: [FACT_OLD_LOCK_WORN] },
-        WORK_THE_LOCK: { to: 'working' },
+        WORK_THE_LOCK: { to: 'the-lock' },
         BREAK_GLASS: { to: 'glass' },
       },
       onUnrecognised: { to: 'why' },
@@ -264,7 +274,25 @@ export const MISSION_06: MissionDefinition = {
         'different amount over forty years and that is what decides which one is taking the ' +
         'weight. I can feel which is which. I just cannot keep the order in my head and ' +
         'keep my hand still.',
-      suggest: ['start on the pins', 'whose door is this'],
+      /*
+       * Two changes, both reported.
+       *
+       * It read "start on the pins", which is what somebody who already knows the puzzle
+       * would call it and means nothing to anybody else - it does not say who starts, on
+       * what, or what the player will then be doing. This says the arrangement out loud:
+       * he picks, and the ordering is the thing being asked of the machine.
+       *
+       * And it is only offered HERE now. It used to sit on the opening beat, so a player
+       * could commit to picking a lock before Dorin had described it, which skips the one
+       * observation the puzzle depends on - that the pins bind by wear and not in a row -
+       * and drops them onto a five-pin board with nothing to reason from.
+       *
+       * The first rewrite dropped the word "pins" and the stuck-checker caught it in one
+       * run: WORK_THE_LOCK wants a verb AND a thing, and "start picking, I will call the
+       * order" has the verb and names nothing. Every chip in this game is a sentence the
+       * parser has to accept, so rewording one for clarity is a change to two files.
+       */
+      suggest: ['start on the pins - I will call the order'],
       on: {
         WORK_THE_LOCK: { to: 'working' },
         ASK_WHY: { to: 'why' },

@@ -6368,9 +6368,29 @@ function buildNightDoor(scene: ContactScene): void {
     position: new THREE.Vector3(-1.55, 1.7, 3.05),
     target: new THREE.Vector3(0.05, 1.3, -0.26),
   });
+  /**
+   * The lock, and the camera was standing inside Dorin.
+   *
+   * Reported as "my contact view is Dorin's back, I am not sure how to find the clues" -
+   * and the second half followed from the first. Measured, the old camera at (0.85, 1.2,
+   * 0.75) sat 0.30m from his chest. That is not a tight over-the-shoulder, it is inside the
+   * man: at a third of a metre a 1.8m body subtends more than the whole frame, so the shot
+   * was his coat, and the lock it was pushing in on was 24 degrees off axis at the very
+   * edge of it.
+   *
+   * The lock itself was never the problem. It reads at 99/255 brass against 29/255 timber
+   * under the step bounce, which is legible - it was simply behind somebody.
+   *
+   * From here it is 1.31m away, dead centre, and 14 degrees off the door's own face, so the
+   * escutcheon and the keyway are seen nearly square-on rather than edge-on. He is 0.86m
+   * back and 49 degrees off axis, which puts him out of frame entirely - correct for this
+   * shot, because the request at this moment is not about him. He is on the line describing
+   * what his fingers can feel, and what the player needs to see is the thing being
+   * described.
+   */
   scene.registerShot('lock', {
-    position: new THREE.Vector3(0.85, 1.2, 0.75),
-    target: new THREE.Vector3(0.1, 1.02, -0.24),
+    position: new THREE.Vector3(-0.1, 1.15, 1.05),
+    target: new THREE.Vector3(0.2, 1.02, -0.22),
     duration: 2.0,
   });
 

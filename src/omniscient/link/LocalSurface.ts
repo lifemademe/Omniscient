@@ -755,8 +755,10 @@ export class LocalSurface implements InterventionSurface {
   private hintsElement: HTMLDivElement | null = null;
   /** Whether a device was up last frame - see the tab switching in present. */
   private hadDevice = false;
-  /** Transcript length at the last present, so a second ask can be told from a redraw. */
-  private spokeAt = 0;
+  /** Set by `dispatch` when the player took a turn, cleared once acted on. */
+  private saidSomething = false;
+  /** Pending auto-open of the console. See openConsoleOnceRead. */
+  private consoleTimer: number | null = null;
   /** Rebuilt only when the observations change - they are clicked, not re-rendered. */
   private renderedHintKey = '';
   /** Whether the last frame was already waiting on a note - see focusNote. */
@@ -1237,7 +1239,48 @@ export class LocalSurface implements InterventionSurface {
     return () => this.handlers.delete(handler);
   }
 
+  /**
+   * How long the newest thing said takes to read, and then the console.
+   *
+   * Twelve characters a second is a deliberately unhurried reading speed - the measure has
+   * to hold for somebody meeting these people for the first time, not for whoever wrote the
+   * line. Floored at 1.4s so a curt answer still registers, and ceilinged at 5s because
+   * past that the player has stopped reading and started waiting.
+   */
+  private openConsoleOnceRead(state: SurfaceState): void {
+    this.cancelConsoleOpen();
+    const last = state.transcript[state.transcript.length - 1];
+    const words = last?.body?.length ?? 0;
+    const delay = Math.min(5000, Math.max(1400, words * 83));
+
+    this.consoleTimer = window.setTimeout(() => {
+      this.consoleTimer = null;
+      // Only if they are still where we left them and there is still something to go to.
+      if (this.tab !== 'chat' || !this.hadDevice || !this.lastState) return;
+      this.tab = 'console';
+      this.present(this.lastState);
+    }, delay);
+  }
+
+  private cancelConsoleOpen(): void {
+    if (this.consoleTimer === null) return;
+    window.clearTimeout(this.consoleTimer);
+    this.consoleTimer = null;
+  }
+
   private dispatch(message: PlayerMessage): void {
+    /*
+     * Remember whether the player SPOKE, as opposed to looked something up.
+     *
+     * The console-on-second-ask rule below needs this and got it wrong first time: it
+     * watched the transcript grow, and opening an observation grows the transcript too. So
+     * tapping a hint threw the player onto the console tab - the exact opposite of what
+     * they asked for, since the reason to open an observation is to read it.
+     *
+     * A hint is a lookup. It is not a turn, it does not advance a beat, and it must not
+     * move the player anywhere.
+     */
+    this.saidSomething = message.kind === 'text' || message.kind === 'device';
     this.handlers.forEach((handler) => handler(message));
   }
 
@@ -1387,6 +1430,26 @@ export class LocalSurface implements InterventionSurface {
     else if (spoke && this.tab === 'console') this.tab = 'chat';
 
     /*
+     * A device that arrives with words opens itself once the words have been read.
+     *
+     * Two opposite complaints landed on the same line of code, which is how it became
+     * clear the rule was wrong rather than mistuned. Adaeze's grounds unit arrives on a
+     * beat that spends a paragraph explaining what it is and why, and switching instantly
+     * threw all of it away. Dorin's lock arrives on "Wrench is in. I am on the pins. Tell
+     * me the order" - two lines of instruction - and NOT switching left the player looking
+     * at a chat panel wondering where the game was.
+     *
+     * Neither is a special case: the difference is how much there is to read, so that is
+     * what it is timed against. The panel waits out the reading and then opens, which is
+     * what the contact themselves is doing - saying their piece and then waiting for an
+     * answer.
+     *
+     * Cancelled if the player gets there first, because an interface that moves a tab under
+     * somebody who has already pressed it is worse than one that never moved at all.
+     */
+    if (deviceAppeared && spoke) this.openConsoleOnceRead(state);
+
+    /*
      * Asked a second time while the same device is up: they have read it, take them to it.
      *
      * The waiting rule above is about the FIRST arrival, when the beat is explaining what
@@ -1398,15 +1461,10 @@ export class LocalSurface implements InterventionSurface {
      * Keyed on the device being unchanged rather than on any particular mission, so it is
      * the general rule it sounds like: the first mention explains, and asking again opens.
      */
-    if (
-      state.device !== undefined &&
-      !deviceAppeared &&
-      this.tab === 'chat' &&
-      state.transcript.length > this.spokeAt
-    ) {
+    if (state.device !== undefined && !deviceAppeared && this.tab === 'chat' && this.saidSomething) {
       this.tab = 'console';
     }
-    this.spokeAt = state.transcript.length;
+    this.saidSomething = false;
 
     this.renderHints(state);
     this.renderTabs(state);
@@ -1492,6 +1550,8 @@ export class LocalSurface implements InterventionSurface {
       }
 
       button.addEventListener('click', () => {
+        // They have chosen. Nothing may move a tab after that.
+        this.cancelConsoleOpen();
         this.tab = spec.id;
         if (this.lastState) this.present(this.lastState);
       });
