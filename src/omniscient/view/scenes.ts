@@ -6623,9 +6623,74 @@ function buildNightDoor(scene: ContactScene): void {
     digit.translate(DOOR.x + ox, 1.74, LEAF_FRONT + 0.006);
     furniture.push(digit);
   }
+  /**
+   * The handle, which the door did not have.
+   *
+   * ## Where it goes, and why it is not next to the lock by accident
+   *
+   * On the lock stile - the far one from the hinge - at 880mm, which is handle height
+   * everywhere. The lock sits at 1020 on the lock rail directly above it, and that vertical
+   * pair is what a front door actually looks like: you grip at one height and the cylinder
+   * is at another, and a handle level with its own lock reads as a fire door.
+   *
+   * Below rather than above, so it is clear of the pick. The whole second act happens in
+   * that keyway with a 150mm pick standing out of it, and furniture above the cylinder
+   * would be something for it to grow out of.
+   *
+   * ## A lever rather than a knob
+   *
+   * A knob is the period-correct answer and the wrong one here. At this camera a knob is a
+   * disc on a disc - it has no silhouette, and silhouette is all this game's shading gives
+   * you. A lever has an arm, and the arm reads from the doorstep and from three metres back
+   * on the default shot. It also gives the door somewhere to move that is not the door.
+   *
+   * The arm points INWARD, toward the middle of the leaf, because that is the side a hand
+   * comes from - a lever pointing at the jamb would be one you cannot get behind.
+   */
+  const HANDLE_Y = 0.88;
+  const handleAt = new THREE.Vector3(DOOR.x + 0.35, HANDLE_Y, LEAF_FRONT + 0.03);
+
+  // The rose stays put; only the lever turns, so it belongs with the static furniture.
+  const rose = new THREE.CylinderGeometry(0.033, 0.036, 0.016, 12);
+  rose.rotateX(Math.PI / 2);
+  rose.translate(handleAt.x, handleAt.y, LEAF_FRONT + 0.008);
+  furniture.push(rose);
+
   doorRoot.add(
     meshOf('DoorFurniture', ontoHinge(mergeGeometries(furniture, false) ?? furniture[0]), MAT.brass)
   );
+
+  /**
+   * The lever, on its own node so it can be pushed down.
+   *
+   * Pivoting about z - the axis through the door - which is the one a lever actually turns
+   * on. Built around the node's origin so the rotation happens at the spindle rather than
+   * somewhere out in the middle of the arm.
+   */
+  const handleNode = ENGINE.SceneNode.create({
+    name: 'DoorHandle',
+    position: new THREE.Vector3(
+      handleAt.x - (DOOR.x - DOOR.w / 2),
+      handleAt.y,
+      handleAt.z + 0.26
+    ),
+  });
+  const lever: THREE.BufferGeometry[] = [];
+  // The neck, out from the rose.
+  const neck = new THREE.CylinderGeometry(0.014, 0.016, 0.045, 8);
+  neck.rotateX(Math.PI / 2);
+  neck.translate(0, 0, 0.012);
+  lever.push(neck);
+  // The arm, inward and very slightly down, which is where a lever rests.
+  const arm = new THREE.BoxGeometry(0.105, 0.021, 0.026);
+  arm.translate(-0.055, -0.006, 0.032);
+  lever.push(arm);
+  // The return: the little downturn at the tip that stops a sleeve catching on it.
+  const tip = new THREE.BoxGeometry(0.02, 0.03, 0.024);
+  tip.translate(-0.1, -0.019, 0.032);
+  lever.push(tip);
+  handleNode.add(meshOf('DoorLever', mergeGeometries(lever, false) ?? lever[0], MAT.brass));
+  doorRoot.add(handleNode);
   /** The turning part of the lock, built below and driven by the door's own cue. */
   let lockPlug: ENGINE.SceneNode | null = null;
 
@@ -6664,6 +6729,24 @@ function buildNightDoor(scene: ContactScene): void {
             pick.scale.setScalar(Math.max(0.001, 1 - t));
           },
           { duration: 0.5, easing: Ease.outCubic, channel: 'lock-pick' }
+        );
+
+        /**
+         * And the handle goes down, because that is what opens a door.
+         *
+         * The lock coming off is not the thing that swings it - somebody still has to push
+         * the lever. Held down while the leaf moves and let back up at the end, which is
+         * the shape of the actual gesture and takes one tween.
+         *
+         * A third of a turn: a lever travels about 35 degrees before the latch clears, not
+         * 90. Anything more reads as a pump handle.
+         */
+        tweener.add(
+          (t: number) => {
+            const push = t < 0.18 ? t / 0.18 : t > 0.82 ? (1 - t) / 0.18 : 1;
+            handleNode.rotation.set(0, 0, -0.62 * push);
+          },
+          { duration: 2.6, easing: Ease.linear, channel: 'door-handle' }
         );
 
         // Turn, catch, turn, catch, give. Each pair is a pin binding and then dropping.
@@ -7000,6 +7083,9 @@ function buildNightDoor(scene: ContactScene): void {
     pick.scale.setScalar(1);
     pickTip.visible = true;
     pickTip.position.set(0, 0, 0);
+    // The lever comes back up with everything else, or a re-opened request starts with the
+    // handle already pushed down by whoever went in last time.
+    handleNode.rotation.set(0, 0, 0);
     doorRoot.rotation.set(0, 0, 0);
   });
 
