@@ -6044,12 +6044,16 @@ function buildNightDoor(scene: ContactScene): void {
    * a facade - the 0.3m returns at the reveal take a stretched map that nothing can see.
    */
   /*
-   * 1.05m per tile, 16 courses in it, which is a course every 66mm and a brick 217mm wide.
-   * A real stock brick with its joints is 215 x 65. Worked out rather than dialled in -
-   * the first attempt at 2.1 was exactly double, and a wall of double-size bricks reads as
-   * a model of a wall.
+   * 2.4m per tile, 32 courses in it: a course every 75mm and a brick 225mm wide, which is
+   * a real stock brick with its joints to the millimetre.
+   *
+   * The size was never the problem. At 1.05m the module was already 217 x 66 - right to
+   * within a few millimetres - and the wall still read as tiling, because 1.05m repeats
+   * 6.7 times across a 7m facade and brick is the one surface where the eye counts courses.
+   * A bigger tile at the same brick size repeats 2.9 times instead, which is the difference
+   * between masonry and wallpaper.
    */
-  const TILE = 1.05;
+  const TILE = 2.4;
   const uv = frontMesh.getAttribute('uv') as THREE.BufferAttribute;
   const xyz = frontMesh.getAttribute('position') as THREE.BufferAttribute;
   for (let i = 0; i < uv.count; i++) {

@@ -62,7 +62,13 @@ function parse(hex: string): [number, number, number] {
 export function brickwork(options: BrickOptions = {}): SurfaceMaps | null {
   const {
     color = '#8d6a52',
-    mortar = '#9a938a',
+    /*
+     * Darker than it was. Mortar is paler than brick and only just - #9a938a against a
+     * #7d5f4b brick is a 40-level gap, which under a warm porch lamp turned every joint
+     * into a bright line and the wall into a grid of tiles with light between them. Real
+     * mortar is a dirty grey that reads as the SHADOW between bricks, not as a highlight.
+     */
+    mortar = '#6f675e',
     /*
      * Down from 0.22, which was a carnival.
      *
@@ -73,9 +79,25 @@ export function brickwork(options: BrickOptions = {}): SurfaceMaps | null {
      * visible at arm's length and gone at twenty metres, exactly like the real thing.
      */
     variation = 0.055,
-    courses = 16,
+    /**
+     * Courses in the tile - and this is the number that decides whether it reads as
+     * brickwork or as wallpaper.
+     *
+     * It is not about brick SIZE. At 16 courses over a 1.05m tile the module came out
+     * 217 x 66mm against a real 225 x 75, which is right to within a few millimetres - and
+     * it still did not look like a wall, because a 1.05m tile repeats 6.7 times across a
+     * 7m facade and brick is the one surface where the eye counts. Seven copies of the same
+     * five bricks is a pattern, and a pattern reads as tiling however well each tile is
+     * drawn.
+     *
+     * 32 courses over a 2.4m tile is the same brick at 225 x 75 exactly, repeating 2.9
+     * times instead - and with 10.7 bricks per course in the tile rather than 4.8, so the
+     * arrangement of light and dark ones has somewhere to hide.
+     */
+    courses = 32,
     seed = 'brick',
-    size = 512,
+    // Doubled with the courses, so the resolution per brick is unchanged at 96px.
+    size = 1024,
   } = options;
 
   const key = `brick:${JSON.stringify([color, mortar, variation, courses, seed, size])}`;
@@ -119,12 +141,14 @@ export function brickwork(options: BrickOptions = {}): SurfaceMaps | null {
   const courseHeight = size / courses;
   // Two-to-one is the proportion of a stretcher face, near enough at this scale.
   /*
-   * Wider. A brick is 215 x 65mm, which is 3.3 to 1 including its joints - not 2.1.
+   * A brick and its joints is 225 x 75mm, which is exactly 3 to 1.
    *
-   * The old ratio made them stubby, and stubby bricks read as tiles or as blockwork. This
-   * is the actual proportion of the thing, and getting it right costs nothing.
+   * Was 2.1, which is stubby and reads as blockwork, then 3.3, which was the bare brick's
+   * ratio rather than the module's - a joint is 10mm on both axes, so it takes proportionally
+   * far more off the height than the width. Three is the number that matters, because it is
+   * the one the courses actually repeat on.
    */
-  const brickWidth = courseHeight * 3.3;
+  const brickWidth = courseHeight * 3;
   const joint2 = Math.max(2, Math.round(courseHeight * 0.13));
 
   for (let row = 0; row < courses; row++) {
@@ -182,7 +206,12 @@ export function brickwork(options: BrickOptions = {}): SurfaceMaps | null {
    * Cheaper and more controllable than deriving a normal map from a height field, and at
    * this tile size the difference is invisible. Drawn after the faces so it survives them.
    */
-  nc.globalAlpha = 0.55;
+  /*
+   * Down from 0.55. Every brick having a bright top-left and dark bottom-right at full
+   * strength is a hard four-sided grid, which is the other half of what made this read as
+   * tiling - real brick edges are arrises, not chamfers.
+   */
+  nc.globalAlpha = 0.32;
   for (let row = 0; row < courses; row++) {
     const y = row * courseHeight;
     const offset = row % 2 === 0 ? 0 : -brickWidth / 2;
