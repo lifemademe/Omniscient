@@ -271,26 +271,30 @@ export const MISSION_04: MissionDefinition = {
       learn: [FACT_NAMES_ON_PHOTOGRAPHS],
       suggest: ['tell me the names', 'why does it matter now', 'what happened to the papers'],
       /*
-       * She nods rather than points, and she is the only one who does.
+       * No gesture on the way out of her opening, and she is the only contact with none.
        *
-       * Everybody else shows the player the thing on the way out of their opening -
-       * Mirela has a radio on a bench and can turn to it. Ileana is behind a table with
-       * both hands flat on the near edge, framed from across it, and the point clip turns
-       * her: it carries spine rotation, so she swings out of the one composition the shot
-       * is built on. Reported as the papers question rotating her a little.
+       * It was `point` first, which turned her: measured off the clip, Pointing Forward
+       * swings the left arm 57 degrees in yaw and the legs and feet 27 to 36, and with
+       * only the hips dropped by the retarget that lower-body rotation carries the whole
+       * figure round. Reported.
        *
-       * It got worse the moment gestures started playing at full strength - it was there
-       * all along at half, averaged into the breathing loop and too weak to notice.
+       * Then `nod`, which is a genuine head nod - 10 degrees of head yaw, 14 of pitch,
+       * nothing else above 5 - and it was reported again in the same words. That is the
+       * answer rather than a puzzle: she is framed from across a table at chest height
+       * with both hands pinned to its edge, so ten degrees is not small on her the way it
+       * would be on Mirela standing free at a bench. Every other contact in the game has
+       * room around them and she has none.
        *
-       * A nod is the right gesture for her anyway. She is not showing anybody anything;
-       * she is a tired woman at a table answering a question. And a nod is a head, so it
-       * leaves her hands where the scene put them - see riggedContact.
+       * So she keeps still, which is also who she is - the one person in the cast whose
+       * stillness is not exhaustion, and who has stopped, which is why she is calling.
+       * She still recoils at being asked to write to a dead woman and still nods when the
+       * board comes out right; those are arrivals, at beats that have earned a movement.
        */
       on: {
-        LIST_NAMES: { to: 'names', environment: 'prop.nod:contact' },
-        ASK_WHY: { to: 'why', environment: 'prop.nod:contact' },
-        ASK_PAPERS: { to: 'papers', environment: 'prop.nod:contact', learn: [FACT_FLOOD_TOOK_RECORDS] },
-        WRITE_TO_EVERYONE: { to: 'scattergun', environment: 'prop.nod:contact' },
+        LIST_NAMES: { to: 'names' },
+        ASK_WHY: { to: 'why' },
+        ASK_PAPERS: { to: 'papers', learn: [FACT_FLOOD_TOOK_RECORDS] },
+        WRITE_TO_EVERYONE: { to: 'scattergun' },
       },
       onUnrecognised: { to: 'open-again' },
     },
