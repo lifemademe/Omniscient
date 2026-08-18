@@ -1222,9 +1222,26 @@ export class BoardPanel {
 
   private refreshKit(): void {
     this.send.disabled = !this.held;
+    /*
+     * Clear the pick after it has been sent.
+     *
+     * A wrong answer left the item selected and the status still reading "ready to
+     * tell him", so pressing send again did the same thing with no sign anything had
+     * happened - which is what made a working button feel broken. Letting go of it
+     * makes the panel ask the question again, which is what it is doing.
+     */
     this.status.textContent = this.held
       ? 'ready to tell him'
       : 'pick what will do the job';
+  }
+
+  /** Drop the pick, so the bag reads as a fresh question after a wrong one. */
+  private clearKit(): void {
+    this.held = null;
+    for (const button of this.kitButtons.values()) {
+      button.classList.remove('omni-kit__item--held');
+    }
+    this.refreshKit();
   }
 
   private buildTrail(): void {
@@ -1495,6 +1512,7 @@ export class BoardPanel {
     if (view.kind === 'kit') {
       if (!this.held) return;
       this.dispatch({ kind: 'device', submission: { kind: 'kit', itemId: this.held } });
+      this.clearKit();
       return;
     }
 

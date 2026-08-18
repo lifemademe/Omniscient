@@ -294,7 +294,36 @@ export class MissionRuntime {
     if (graded.solved) return this.applyTransition(device.onSolved);
 
     const step = this.applyTransition(device.onWrong);
-    return { ...step, say: device.wrongSay, clarifying: true, deviceNote: graded.note };
+
+    /*
+     * Where a wrong answer is explained depends on what the explanation IS.
+     *
+     * Most devices report a measurement - two of five are right, the water reaches
+     * here and stops - and that belongs beside the device, in the status line, where
+     * the player is looking when they press send.
+     *
+     * The bag reports a sentence in the contact's own voice: "that is for putting two
+     * wires together, and they are already together, that is the whole trouble". That
+     * is dialogue. It belongs in the conversation, and it does not fit in an eleven
+     * pixel status line beside a button.
+     *
+     * It was going to the status line, which ignored it, so a wrong pick produced a
+     * bare "No - hold on." in a scrolled transcript and no change anywhere else -
+     * reported, reasonably, as the send button not working at all.
+     */
+    const spoken = device.kind === 'kit' && graded.note
+      ? `${device.wrongSay}
+
+${graded.note}`
+      : device.wrongSay;
+
+    return {
+      ...step,
+      say: spoken,
+      clarifying: true,
+      // Not duplicated into the panel for the bag - it has just been said out loud.
+      deviceNote: device.kind === 'kit' ? undefined : graded.note,
+    };
   }
 
   private applyTransition(transition: BeatTransition): MissionStep {
