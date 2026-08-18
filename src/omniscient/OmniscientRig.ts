@@ -1973,6 +1973,30 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     setRetroLook('console');
 
+    /**
+     * And the room goes with you.
+     *
+     * This was missing, and it is the whole of the reported fault: solving a request left
+     * the diorama LIVE. `leaveLostRequest` has always deactivated it, `mountScene`
+     * deactivates the previous one on the way in - but returning home mounts nothing, so
+     * the success path had nowhere the scene was ever put away, and it stayed in the world
+     * with everything in it still rendering.
+     *
+     * Reported against Adaeze because hers is the brightest set in the game and the only
+     * one with weather. A directional sun, a skylight and a 62-unit unlit sky shell do not
+     * stop existing when the camera is somewhere else: they were lighting the workstation
+     * from sixty units away, which is why the console room's walls came back blown to
+     * white and its desk to flat saturated blue. Every other room leaked too - it was only
+     * visible when the room that leaked had a sun in it.
+     *
+     * Here rather than after the camera settles, matching the two paths that already did
+     * it. The warp is over the top of this and the retro look has just changed on the same
+     * tick, so the medium is already announcing the cut.
+     */
+    this.post?.clearOutlineSelection();
+    this.scene?.deactivate();
+    this.scene = null;
+
     this.setPhase(Phase.Home);
     this.screen = Screen.Tree;
     this.phone?.setVisible(false);
