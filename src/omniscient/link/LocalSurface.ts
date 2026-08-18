@@ -212,7 +212,16 @@ export const TERMINAL_CSS = `
   border-bottom: 1px solid #1a2f21;
 }
 .omni-observed[hidden] { display: none; }
+/*
+ * The label takes a line of its own, so every observation starts at the same margin.
+ *
+ * Inline, it pushed the first one in by the width of the word and left the rest
+ * flush - so the list read as one odd item and then a list. A heading over a column
+ * is what this is.
+ */
 .omni-observed__tag {
+  flex-basis: 100%;
+  margin-bottom: 1px;
   color: #35603f;
   font-size: 9px;
   letter-spacing: 0.16em;
