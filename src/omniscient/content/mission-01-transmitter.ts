@@ -34,6 +34,7 @@ export const MISSION_01: MissionDefinition = {
   contactId: MIRELA.id,
   sceneId: 'scene-repair-shop',
   archetype: 'diagnosis',
+  objective: 'Find out why Mirela’s transmitter has stopped, and get it working.',
   urgency: Urgency.Calm,
 
   hiddenTruth: {

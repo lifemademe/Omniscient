@@ -187,6 +187,8 @@ export interface SurfaceState {
   contactName: string;
   /** Where they are calling from, e.g. "Coastal repair shop, Portu Vech". */
   contactLocation?: string;
+  /** What this request is asking for, held on screen throughout - MissionDefinition. */
+  objective?: string;
   /** Trust and shared history, shown alongside the call. */
   standing?: StandingView;
   /** Full exchange so far. Renderers may diff or redraw. */

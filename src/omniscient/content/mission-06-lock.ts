@@ -93,6 +93,7 @@ export const MISSION_06: MissionDefinition = {
   contactId: 'dorin',
   sceneId: 'scene-night-door',
   archetype: 'diagnosis',
+  objective: 'Get Dorin through his mother’s door without breaking it.',
   urgency: Urgency.Timed,
 
   hiddenTruth: {

@@ -68,6 +68,7 @@ export const MISSION_04: MissionDefinition = {
   contactId: 'ileana',
   sceneId: 'scene-cleared-house',
   archetype: 'diagnosis',
+  objective: 'Work out how Ileana’s family are related, so she can address the letters.',
   // Nothing is on fire and nobody is in danger. §154: not every request gets a countdown,
   // and a request about a funeral is the last one that should have a clock on it.
   urgency: Urgency.Calm,

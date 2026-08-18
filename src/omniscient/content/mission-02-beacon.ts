@@ -35,6 +35,7 @@ export const MISSION_02: MissionDefinition = {
   contactId: TOMAS.id,
   sceneId: 'scene-beacon-mast',
   archetype: 'diagnosis',
+  objective: 'Find out why the harbour light keeps going out, and make it hold.',
   urgency: Urgency.Timed,
 
   hiddenTruth: {

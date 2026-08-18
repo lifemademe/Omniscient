@@ -437,6 +437,23 @@ export interface MissionDefinition {
   /** Contact View scene this mission stages in. */
   sceneId: string;
   archetype: 'diagnosis';
+  /**
+   * What the player is being asked to achieve, in one line, held on screen throughout.
+   *
+   * Added because a playtester finished a request without ever knowing what it wanted:
+   * the opening chip said "tell me the names" and nothing said that following it leads
+   * to a family tree to assemble. The conversation states the goal in the contact's own
+   * words, once, in the first thirty seconds, and then scrolls away above the fold.
+   *
+   * Written as the MACHINE's log of the request rather than as a quest marker - this is
+   * what OMNISCIENT_ has understood it has been asked to do, which is the one framing
+   * that can sit permanently on a screen belonging to a machine without becoming a HUD.
+   *
+   * §157 still holds: it says what is WANTED, never what is true. "Find out why the set
+   * has stopped" is the request. "The connector is corroded" is the answer, and it does
+   * not appear here.
+   */
+  objective: string;
   urgency: Urgency;
   /** Authored ground truth, for QA and for the runtime's own assertions. */
   hiddenTruth: {

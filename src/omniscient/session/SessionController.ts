@@ -443,6 +443,7 @@ export class SessionController {
         ? { summary: this.failed.summary, lesson: this.failed.lesson }
         : undefined,
       awaitingNote: this.failed !== null,
+      objective: definition.objective,
       notice: this.notice ?? undefined,
       device: finished ? undefined : this.buildDevice(),
     });

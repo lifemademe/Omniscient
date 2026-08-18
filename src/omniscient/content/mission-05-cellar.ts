@@ -71,6 +71,7 @@ export const MISSION_05: MissionDefinition = {
   contactId: 'vasile',
   sceneId: 'scene-flooded-cellar',
   archetype: 'diagnosis',
+  objective: 'Find out where the water is going, and get it out of the cellar.',
   /**
    * Soft, not Timed.
    *

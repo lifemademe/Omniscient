@@ -150,6 +150,31 @@ export const TERMINAL_CSS = `
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+/*
+ * The request, as the machine understood it.
+ *
+ * Deliberately not styled as a quest banner. It is a logged line - a dim label and a
+ * sentence - sitting where a terminal would put the header of the thing it is currently
+ * working on, because that is the only way a permanent goal reads as belonging to a
+ * machine rather than to a game overlay.
+ */
+.omni-objective {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 0 12px 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #8fbe93;
+}
+.omni-objective[hidden] { display: none; }
+.omni-objective__tag {
+  flex: none;
+  color: #35603f;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
 /* Tabs: CHAT / HINTS / RECORDS. §162 - the phone changes tool mode as the mission asks. */
 .omni-tabs {
   display: flex;
@@ -580,6 +605,8 @@ export class LocalSurface implements InterventionSurface {
    * declining to work, which is how a player concludes a game is broken.
    */
   private endButton: HTMLElement | null = null;
+  private objectiveElement: HTMLDivElement | null = null;
+  private objectiveText: HTMLSpanElement | null = null;
   /** The amber flag above the input while a lost request is waiting for its note. */
   private noteFlag: HTMLDivElement | null = null;
 
@@ -628,6 +655,18 @@ export class LocalSurface implements InterventionSurface {
     const where = document.createElement('span');
     where.className = 'omni-terminal__where';
 
+    // Under the location, above the tabs: the last fixed thing before the conversation.
+    const objective = document.createElement('div');
+    objective.className = 'omni-objective';
+    objective.hidden = true;
+    const objectiveTag = document.createElement('span');
+    objectiveTag.className = 'omni-objective__tag';
+    objectiveTag.textContent = 'Request';
+    const objectiveText = document.createElement('span');
+    objective.append(objectiveTag, objectiveText);
+    this.objectiveElement = objective;
+    this.objectiveText = objectiveText;
+
     const tabs = document.createElement('div');
     tabs.className = 'omni-tabs';
 
@@ -674,7 +713,7 @@ export class LocalSurface implements InterventionSurface {
     entry.append(caret, input);
     foot.append(suggestions, hint, noteFlag, entry);
 
-    root.append(session, head, where, tabs, log, panel, extra, foot);
+    root.append(session, head, where, objective, tabs, log, panel, extra, foot);
 
     /*
      * The console around the conversation.
@@ -989,6 +1028,8 @@ export class LocalSurface implements InterventionSurface {
     this.hintElement = null;
     this.suggestElement = null;
     this.noteFlag = null;
+    this.objectiveElement = null;
+    this.objectiveText = null;
     this.endButton = null;
     this.renderedSuggestKey = '';
     this.handlers.clear();
@@ -1015,6 +1056,10 @@ export class LocalSurface implements InterventionSurface {
       this.endButton.classList.toggle('omni-exit--locked', locked);
       this.endButton.setAttribute('aria-disabled', locked ? 'true' : 'false');
       this.endButton.title = locked ? 'Write your note first' : '';
+    }
+    if (this.objectiveElement && this.objectiveText) {
+      this.objectiveText.textContent = state.objective ?? '';
+      this.objectiveElement.hidden = !state.objective;
     }
     if (this.noteFlag) this.noteFlag.hidden = !locked;
     this.root?.classList.toggle('omni-terminal--note', locked);

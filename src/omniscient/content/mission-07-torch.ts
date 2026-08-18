@@ -84,6 +84,7 @@ export const MISSION_07: MissionDefinition = {
   contactId: 'sanda',
   sceneId: 'scene-mill-road',
   archetype: 'diagnosis',
+  objective: 'Get Sanda down the mill road.',
   urgency: Urgency.Critical,
 
   hiddenTruth: {

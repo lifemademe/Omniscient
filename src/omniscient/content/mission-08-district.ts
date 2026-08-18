@@ -68,6 +68,7 @@ export const MISSION_08: MissionDefinition = {
   contactId: 'lucian',
   sceneId: 'scene-wire-city',
   archetype: 'diagnosis',
+  objective: 'Find the car that left the scene, and where it is going.',
   /**
    * Soft, not Timed.
    *

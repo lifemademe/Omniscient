@@ -41,6 +41,7 @@ export const MISSION_03: MissionDefinition = {
   contactId: ADAEZE.id,
   sceneId: 'scene-seedling-tunnel',
   archetype: 'diagnosis',
+  objective: 'Find out what is killing one side of Adaeze’s seedlings.',
   urgency: Urgency.Timed,
 
   hiddenTruth: {
