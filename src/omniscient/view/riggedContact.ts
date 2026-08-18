@@ -393,6 +393,9 @@ const TAKE = 0.25;
  */
 const RELEASE = 0.5;
   let gestureAction: THREE.AnimationAction | null = null;
+  /** A finished one-shot, still fading down. Stopped once it reaches zero - see release. */
+  let fading: THREE.AnimationAction | null = null;
+  let fadeLeft = 0;
   let gestureLeft = 0;
   let hold = 0;
   /**
@@ -445,16 +448,43 @@ const RELEASE = 0.5;
    * her own bench and the shot is chest-up; the only part of the release anybody can see
    * is the head and shoulders settling, and those are on the idle either way.
    */
+  /** The breathing loop, at full weight, playing, whatever state it was left in. */
+  const holdIdle = (): void => {
+    if (!baseAction) return;
+    baseAction.enabled = true;
+    baseAction.paused = false;
+    if (!baseAction.isRunning()) baseAction.play();
+  };
+
+  /**
+   * Hand the body back to the idle.
+   *
+   * Two rules, and the T-pose reported after a point came from breaking the first one.
+   *
+   * 1. THE WEIGHTS MUST ALWAYS SUM TO ONE. three.js does not leave a bone alone when the
+   *    actions driving it add up to less than that - PropertyMixer lerps the remainder
+   *    toward the value it captured when the binding was made, which for a skinned mesh
+   *    is the bind pose. So any window where the gesture has been taken away and the
+   *    idle has not yet been given back is not a gap, it is a T-pose, weighted by
+   *    exactly how big the shortfall is. The previous version zeroed the idle outright
+   *    when a gesture began and restored it on release; the half second the player saw
+   *    was that shortfall being blended in and out. Crossfading both ways keeps the sum
+   *    at one throughout.
+   *
+   * 2. THE ONE-SHOT MUST BE STOPPED, not merely faded. A LoopOnce action with
+   *    clampWhenFinished holds its last frame and stays BOUND at zero weight, which is
+   *    what kept her head thrown back for six seconds after the arm had come home.
+   *    Fading alone was the previous bug; stopping during the fade is what caused this
+   *    one. It has to be both, in that order.
+   */
   const release = (): void => {
-    gestureAction?.stop();
+    if (!gestureAction) return;
+    holdIdle();
+    if (baseAction) gestureAction.crossFadeTo(baseAction, RELEASE, false);
+    else gestureAction.fadeOut(RELEASE);
+    fading = gestureAction;
+    fadeLeft = RELEASE;
     gestureAction = null;
-    if (baseAction) {
-      baseAction.stopFading();
-      baseAction.enabled = true;
-      baseAction.paused = false;
-      baseAction.setEffectiveWeight(1);
-      if (!baseAction.isRunning()) baseAction.play();
-    }
   };
 
   const contact: RiggedContact = {
@@ -479,15 +509,24 @@ const RELEASE = 0.5;
       gestureTakesHands = name !== 'nod';
       void loadGesture(name).then((clip) => {
         if (!clip || !mixer) return;
-        // Whatever was running, end it outright before starting this one.
-        release();
-        baseAction?.setEffectiveWeight(0);
+        // Anything still on its way out goes now - two one-shots fading at once is a
+        // sum below one again, which is the same T-pose by another route.
+        gestureAction?.stop();
+        fading?.stop();
+        fading = null;
+        fadeLeft = 0;
+        holdIdle();
+
         const action = mixer.clipAction(clip);
         action.reset();
         action.setLoop(THREE.LoopOnce, 1);
         action.clampWhenFinished = true;
-        action.fadeIn(0.25);
         action.play();
+        action.setEffectiveWeight(0);
+        // Idle 1 -> 0 and the clip 0 -> 1 over the same quarter second, so the two
+        // always add to one and nothing is ever left to the bind pose.
+        if (baseAction) baseAction.crossFadeTo(action, TAKE, false);
+        else action.fadeIn(TAKE);
         gestureAction = action;
         gestureLeft = clip.duration;
       });
@@ -496,6 +535,21 @@ const RELEASE = 0.5;
 
     idle: (deltaTime: number) => {
       if (mixer) mixer.update(deltaTime);
+
+      /*
+       * Unbind the finished one-shot, but only once it is genuinely at zero.
+       *
+       * Stopping it any earlier removes weight the idle has not taken up yet, and
+       * the shortfall is drawn as the bind pose. This is the half second.
+       */
+      if (fadeLeft > 0) {
+        fadeLeft -= deltaTime;
+        if (fadeLeft <= 0) {
+          fading?.stop();
+          fading = null;
+          holdIdle();
+        }
+      }
 
       if (gestureLeft > 0) {
         gestureLeft -= deltaTime;
