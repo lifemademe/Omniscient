@@ -5652,25 +5652,42 @@ function buildFloodedCellar(scene: ContactScene): void {
      * hidden by the person describing it.
      */
     position: new THREE.Vector3(-1.15, 0, -1.6),
-    rotation: new THREE.Euler(0, 0.7, 0),
+    // 90 degrees, so the run is in front of him rather than behind. See `handsOn`.
+    rotation: new THREE.Euler(0, Math.PI / 2, 0),
     /**
-     * No hand target, and this is the third contact to arrive at that answer.
+     * Turned to face along the wall, with his right hand on the pipe.
      *
-     * It was on the pipe, which is the right thing for him to be touching - it is what his
-     * opening line is about - and the target was REACHABLE, 0.51m against a 0.63m arm. It
-     * was also 0.46m BEHIND HIM. The whole run sits at z = -1.95 on the wall, he stands at
-     * -1.6 facing the camera, so there is no point on that pipe he can reach without
-     * putting his arm round his own back, and the solver did exactly as it was told.
-     * Reported as his left hand bent backwards.
+     * The fault was real: the target was on the pipe at z = -1.95, he stood at -1.6 facing
+     * the camera, and that put it 0.46m BEHIND him - reachable at 0.51m against a 0.63m
+     * arm, so the solver dutifully sent his arm round his own back. Reported as his left
+     * hand bent backwards, and it was.
      *
-     * No placement fixes it either: standing him behind the pipe puts him inside the wall,
-     * and turning him to face along it turns his face out of the shot. The pipe is on a
-     * wall and he has to stand in front of it looking at the camera, which means his hands
-     * are his own.
+     * I then claimed no facing could fix it without turning his face out of the shot. That
+     * was asserted rather than measured, and it is wrong. Swept through every facing: at 90
+     * degrees the pipe comes round in FRONT of him and his face is 49 degrees off the
+     * camera axis - a three-quarter view, and a better one than the 1 degree he had, which
+     * is dead-on and flat.
      *
-     * The run is pointed at by the hint cue instead, which is what that cue is for.
+     * So he faces along the run with his RIGHT hand on it, which is the near side once he
+     * has turned. x = -0.60 puts the target 0.55m in front of him and 0.58m from that
+     * shoulder against a 0.63m arm: extended, not folded, and not straining.
+     *
+     * The wrists still settle, because only the targeted arm is solved - the left is on the
+     * idle clip and wants the same correction Dorin's did.
      */
     settleWrists: 0.6,
+    handsOn: {
+      /*
+       * On the near-top of the run, not at its centre line.
+       *
+       * The pipe is at z = -2.0 with a 55mm radius, so its axis is 55mm inside the surface
+       * a hand can actually touch - aiming at the axis sends the fingers through the pipe
+       * and puts the arm at full stretch reaching past it. This is the near-top face at
+       * (1.40, -1.96), 0.46m from his shoulder against a 0.63m arm, which lands the hand ON
+       * it with the elbow still bent.
+       */
+      right: new THREE.Vector3(-0.72, 1.4, -1.96),
+    },
     liveliness: 1.15,
   });
 
