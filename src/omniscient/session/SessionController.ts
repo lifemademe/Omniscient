@@ -92,6 +92,10 @@ export class SessionController {
     this.opened = new Set();
     this.confirming = null;
     this.failed = null;
+    // Cleared with the rest of it. A notice is about the request that just ended, and
+    // this is a different one - left standing it would greet the next contact with the
+    // last one's countdown.
+    this.notice = null;
     this.deviceNote = null;
 
     this.unsubscribe = this.surface.onMessage((message) => {
