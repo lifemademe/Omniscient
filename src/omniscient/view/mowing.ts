@@ -33,7 +33,14 @@ import * as THREE from 'three';
 // means this module loads outside a browser, and the cut can be tested without a scene.
 import type * as ENGINE from '@gnsx/genesys.js';
 
-import { CUT_WIDTH, DECK_Y, MOWER_SPEED, MOWER_TURN, MOWER_WIDTH } from '../geometry/mower.js';
+import {
+  CLIPPINGS,
+  CUT_WIDTH,
+  DECK_Y,
+  MOWER_SPEED,
+  MOWER_TURN,
+  MOWER_WIDTH,
+} from '../geometry/mower.js';
 
 import type { GeneratedMower } from '../geometry/mower.js';
 
@@ -361,6 +368,30 @@ export class MowerDrive {
   private spin = 0;
   private beaconPhase = 0;
   private engaged = false;
+  /**
+   * Metres travelled, and the reason the shake is keyed to it rather than to a clock.
+   *
+   * See `apply`. Accumulates on reverse too - a wheel does not care which way it turns.
+   */
+  private rolled = 0;
+  /** Seconds the engine has been running, for the idle tremble alone. */
+  private shudder = 0;
+  /** Smoothed throttle and steer, so the body leans into changes instead of snapping. */
+  private lean = 0;
+  private roll = 0;
+  /**
+   * The clipping pool: where each one is, how fast, and how long it has left.
+   *
+   * Flat arrays rather than objects, because these are written every frame for the whole
+   * time the player has the machine and an array of sixty little objects is sixty pointer
+   * chases per frame to move some numbers.
+   */
+  private readonly clipVel = new Float32Array(CLIPPINGS * 3);
+  private readonly clipLife = new Float32Array(CLIPPINGS);
+  /** Next slot to reuse. See the note on the pool in mower.ts. */
+  private clipNext = 0;
+  /** Seconds until the next clipping is thrown. */
+  private clipDue = 0;
 
   public constructor(
     private readonly mower: GeneratedMower,
@@ -381,6 +412,22 @@ export class MowerDrive {
   public place(x: number, z: number, heading: number): void {
     this.at.set(x, 0, z);
     this.heading = heading;
+    /*
+     * Everything the gait remembers, forgotten. A machine parked by a reset should be
+     * standing still and level, not carrying the lean of whatever it was doing when the
+     * player hung up on it.
+     */
+    this.rolled = 0;
+    this.shudder = 0;
+    this.lean = 0;
+    this.roll = 0;
+    const positions = this.mower.clippings.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const array = positions.array as Float32Array;
+    for (let i = 0; i < CLIPPINGS; i++) {
+      this.clipLife[i] = 0;
+      array[i * 3 + 1] = -10;
+    }
+    positions.needsUpdate = true;
     this.apply();
   }
 
@@ -418,6 +465,18 @@ export class MowerDrive {
     );
 
     this.slide(wanted);
+    /*
+     * Measured AFTER the slide, so grinding along a bed frame stops the shake.
+     *
+     * Taking it from the intended step would have the machine bouncing merrily while it is
+     * held against an obstacle going nowhere, which is the tell that a shake is decoration
+     * rather than motion.
+     */
+    this.rolled += this.at.distanceTo(wanted);
+    this.shudder += deltaTime;
+    // Chased rather than assigned: the body is a mass and takes a moment to catch up.
+    this.lean += (throttle - this.lean) * Math.min(1, deltaTime * 6);
+    this.roll += (steer * Math.abs(throttle) - this.roll) * Math.min(1, deltaTime * 5);
     this.at.copy(wanted);
     this.apply();
 
@@ -450,7 +509,64 @@ export class MowerDrive {
         this.at.z - Math.cos(this.heading) * step * (1 - t)
       );
     }
+
+    this.throwClippings(done, deltaTime);
     return done;
+  }
+
+  /**
+   * Grass out of the chute, and grass already in the air.
+   *
+   * Throttled to a rate rather than emitted per blade: a deck in deep grass takes forty
+   * blades a frame, and forty points a frame would empty a sixty-point pool three times a
+   * second and read as a solid green sheet. `done` decides WHETHER to throw, not how much.
+   *
+   * Out of the right-hand side and back, which is where a rotary deck's chute is, plus
+   * enough up to arc. All in the machine's local frame, so no heading maths is needed
+   * anywhere in here - the node it hangs off is already pointing the right way.
+   */
+  private throwClippings(cut: number, deltaTime: number): void {
+    const positions = this.mower.clippings.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const array = positions.array as Float32Array;
+
+    if (cut > 0) {
+      this.clipDue -= deltaTime;
+      if (this.clipDue <= 0) {
+        // Faster when it is eating more, so a heavy patch visibly throws more than a thin one.
+        this.clipDue = 0.028 / Math.min(3, 0.6 + cut * 0.09);
+        const slot = this.clipNext;
+        this.clipNext = (this.clipNext + 1) % CLIPPINGS;
+        const o = slot * 3;
+        array[o] = CUT_WIDTH * 0.42;
+        array[o + 1] = 0.08;
+        array[o + 2] = -0.05;
+        this.clipVel[o] = 1.1 + Math.random() * 1.5;
+        this.clipVel[o + 1] = 1.3 + Math.random() * 1.1;
+        this.clipVel[o + 2] = -0.7 - Math.random() * 0.9;
+        this.clipLife[slot] = 0.42;
+      }
+    }
+
+    for (let i = 0; i < CLIPPINGS; i++) {
+      if (this.clipLife[i] <= 0) continue;
+      this.clipLife[i] -= deltaTime;
+      const o = i * 3;
+      if (this.clipLife[i] <= 0) {
+        // Parked under the floor rather than scaled away: one write, and nothing to reset.
+        array[o + 1] = -10;
+        continue;
+      }
+      // Gravity, and air on something with the mass of a grass clipping - which is why
+      // they stop travelling almost immediately and fall rather than arcing like gravel.
+      this.clipVel[o + 1] -= 9.4 * deltaTime;
+      const drag = 1 - Math.min(0.9, 3.4 * deltaTime);
+      this.clipVel[o] *= drag;
+      this.clipVel[o + 2] *= drag;
+      array[o] += this.clipVel[o] * deltaTime;
+      array[o + 1] += this.clipVel[o + 1] * deltaTime;
+      array[o + 2] += this.clipVel[o + 2] * deltaTime;
+    }
+    positions.needsUpdate = true;
   }
 
   /**
@@ -479,9 +595,36 @@ export class MowerDrive {
     }
   }
 
+  /**
+   * Put the body where the physics says, plus the part the physics does not model.
+   *
+   * A machine that translates perfectly smoothly along a plane reads as a cursor, because
+   * nothing in the world is that steady - and the difference between a mower and an icon
+   * sliding about is almost entirely this. Three cheap terms, all driven by DISTANCE
+   * TRAVELLED rather than by clock time, which is the whole trick: a unit sitting still
+   * with its engine on trembles and does not bounce, and one crawling forward bounces
+   * slowly. Time-driven shake does the same thing at every speed and immediately reads as
+   * an animation playing on top of a vehicle rather than as the vehicle.
+   *
+   * The wheelbase term is deliberately not a sine of one frequency. Two out of phase gives
+   * an uneven gait, which is what wheels on rough ground actually produce.
+   */
   private apply(): void {
-    this.mower.root.position.set(this.at.x, 0, this.at.z);
-    this.mower.root.rotation.set(0, this.heading, 0);
+    const rolling = this.rolled * 6.4;
+    const bump =
+      Math.sin(rolling) * 0.006 + Math.sin(rolling * 1.87 + 1.1) * 0.0035;
+    // Idle tremble, which IS time-driven, because an engine turning over does not care
+    // whether the machine is moving. Tiny - it is a vibration, not a wobble.
+    const idle = Math.sin(this.shudder * 41) * 0.0016;
+
+    this.mower.root.position.set(this.at.x, bump + idle, this.at.z);
+    this.mower.root.rotation.set(
+      // Pitching back under power and nodding forward off it, the way a light machine does.
+      -this.lean * 0.055 + Math.sin(rolling * 0.93) * 0.012,
+      this.heading,
+      // Rolling into the turn, which is the term that makes steering feel like weight.
+      -this.roll * 0.09 + Math.sin(rolling * 1.31 + 2.2) * 0.010
+    );
   }
 
   /**

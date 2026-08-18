@@ -755,6 +755,8 @@ export class LocalSurface implements InterventionSurface {
   private hintsElement: HTMLDivElement | null = null;
   /** Whether a device was up last frame - see the tab switching in present. */
   private hadDevice = false;
+  /** Transcript length at the last present, so a second ask can be told from a redraw. */
+  private spokeAt = 0;
   /** Rebuilt only when the observations change - they are clicked, not re-rendered. */
   private renderedHintKey = '';
   /** Whether the last frame was already waiting on a note - see focusNote. */
@@ -1383,6 +1385,28 @@ export class LocalSurface implements InterventionSurface {
     this.hadDevice = state.device !== undefined;
     if (deviceAppeared && !spoke) this.tab = 'console';
     else if (spoke && this.tab === 'console') this.tab = 'chat';
+
+    /*
+     * Asked a second time while the same device is up: they have read it, take them to it.
+     *
+     * The waiting rule above is about the FIRST arrival, when the beat is explaining what
+     * the thing is and why. It should not still apply on the next turn - a player who has
+     * read Adaeze's answer and then pressed "mow the bank" has said, as plainly as the game
+     * lets them, that they want to get on with it. Leaving them on the chat to read the
+     * same paragraph again and then hunt for a tab is the interface ignoring an instruction.
+     *
+     * Keyed on the device being unchanged rather than on any particular mission, so it is
+     * the general rule it sounds like: the first mention explains, and asking again opens.
+     */
+    if (
+      state.device !== undefined &&
+      !deviceAppeared &&
+      this.tab === 'chat' &&
+      state.transcript.length > this.spokeAt
+    ) {
+      this.tab = 'console';
+    }
+    this.spokeAt = state.transcript.length;
 
     this.renderHints(state);
     this.renderTabs(state);

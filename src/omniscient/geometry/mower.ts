@@ -66,7 +66,17 @@ export interface GeneratedMower {
   rotor: ENGINE.MeshNode;
   /** The amber beacon, flashed while it is under remote control. */
   beacon: ENGINE.MeshNode;
+  /**
+   * Grass coming off the deck. See `spray`.
+   *
+   * Parented to the machine so it inherits the gait for free, which matters more than it
+   * sounds: clippings that do not shake with the mower that threw them read as a decal.
+   */
+  clippings: THREE.Points;
 }
+
+/** How many clippings can be in the air at once. The pool is fixed - see `spray`. */
+export const CLIPPINGS = 60;
 
 /**
  * Build the unit.
@@ -158,6 +168,40 @@ export function buildMower(name = 'Mower'): GeneratedMower {
   mast.translate(MOWER_WIDTH * 0.34, DECK_Y + 0.31, -0.26);
   trim.push(mast);
 
+  /**
+   * The chute, which the clippings need to be coming OUT of.
+   *
+   * Added when the spray was: grass appearing from the side of a smooth box is grass
+   * appearing from nowhere, and the eye finds the discrepancy faster than it finds the
+   * effect. A short angled hood on the right flank at deck height gives it a source, and
+   * the emitter below is aimed to match rather than the other way round.
+   */
+  const chute = new THREE.BoxGeometry(0.13, 0.11, 0.26);
+  chute.rotateY(-0.32);
+  chute.translate(MOWER_WIDTH * 0.5 - 0.01, DECK_Y - 0.01, -0.02);
+  shell.push(chute);
+
+  /**
+   * The handle, folded down over the engine.
+   *
+   * The one part that tells the whole story of the object without a word: this is a
+   * walk-behind mower, it has a push handle because somebody used to push it, and the
+   * handle is folded flat because for years now nobody has. It also breaks up the top of
+   * the silhouette, which was a flat lid from every angle the player sees it.
+   */
+  for (const side of [-1, 1] as const) {
+    const arm = new THREE.CylinderGeometry(0.017, 0.017, 0.5, 6);
+    // Laid back along the deck rather than standing up. Not quite flat - a folded handle
+    // rests on whatever is under it, and here that is the motor housing.
+    arm.rotateX(Math.PI / 2 - 0.22);
+    arm.translate(side * (MOWER_WIDTH * 0.32), DECK_Y + 0.3, -0.3);
+    trim.push(arm);
+  }
+  const grip = new THREE.CylinderGeometry(0.019, 0.019, MOWER_WIDTH * 0.64, 6);
+  grip.rotateZ(Math.PI / 2);
+  grip.translate(0, DECK_Y + 0.36, -0.53);
+  trim.push(grip);
+
   root.add(meshOf(`${name}Shell`, mergeGeometries(shell, false) ?? shell[0], MAT.equipment));
   root.add(meshOf(`${name}Trim`, mergeGeometries(trim, false) ?? trim[0], MAT.equipmentBack));
 
@@ -197,5 +241,52 @@ export function buildMower(name = 'Mower'): GeneratedMower {
   );
   root.add(beacon);
 
-  return { root, rotor, beacon };
+  /**
+   * The spray off the chute.
+   *
+   * ## Why this is the piece that makes it feel like cutting
+   *
+   * The deck is under the machine and the grass it takes is 2.6cm wide, so from the camera
+   * there is no moment of contact to see at all - the field is tall, then it is short, and
+   * nothing happened in between. Everything about the cut was legible only in aggregate.
+   * A handful of green thrown out of the side is the event: it says the blade is engaged,
+   * it says WHERE the blade is, and it stops the instant there is nothing left to cut,
+   * which is the clearest possible signal that a strip is done.
+   *
+   * ## A ring buffer, not a spawner
+   *
+   * Sixty points allocated once and recycled oldest-first. Emitting particles on demand
+   * means allocating during the one activity in the game with a per-frame budget, and a
+   * mower in deep grass is cutting on every single frame - so the pool is the whole design
+   * rather than an optimisation of it. When they are all in flight the oldest is taken,
+   * which at this lifetime is invisible and is the only behaviour that cannot stall.
+   *
+   * In LOCAL space, so they ride the machine. Which is wrong for thrown grass in the
+   * strictest sense - a real clipping is in the world the moment it leaves - and right at
+   * this scale, because their whole life is 0.4s within half a metre of the deck, and
+   * parenting them costs one matrix instead of a world-space transform per point per frame.
+   */
+  const positions = new Float32Array(CLIPPINGS * 3);
+  // Started below the floor, so nothing shows until the first one is actually thrown.
+  for (let i = 0; i < CLIPPINGS; i++) positions[i * 3 + 1] = -10;
+  const clipGeometry = new THREE.BufferGeometry();
+  clipGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  const clippings = new THREE.Points(
+    clipGeometry,
+    new THREE.PointsMaterial({
+      // The cut face of a grass blade, which is paler and yellower than the standing plant.
+      color: new THREE.Color('#a8c46a'),
+      size: 0.045,
+      sizeAttenuation: true,
+      transparent: true,
+      opacity: 0.9,
+      depthWrite: false,
+      toneMapped: false,
+    })
+  );
+  clippings.frustumCulled = false;
+  root.add(clippings);
+
+  return { root, rotor, beacon, clippings };
 }

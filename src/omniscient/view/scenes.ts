@@ -62,6 +62,7 @@ import { createFieldBackdrop, createNightBackdrop } from '../geometry/backdrop.j
 import { buildTree } from '../geometry/tree.js';
 import { buildMower } from '../geometry/mower.js';
 import { clouds } from '../geometry/clouds.js';
+import { createBirds, createMotes } from '../geometry/wildlife.js';
 import { DISTRICT_CITY, DISTRICT_FLEET, DISTRICT_SIZE } from '../content/district-07.js';
 import { CELL, cellToWorld } from '../geometry/wireCity.js';
 import { createClump } from './../geometry/foliage.js';
@@ -3460,6 +3461,40 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     // runs while this diorama is the one on screen.
     { idle: (deltaTime) => stepWind(deltaTime) }
   );
+
+  /**
+   * -- Things that were here before you called -----------------------------------------
+   *
+   * Everything else in this field either stands still or moves on a loop: the grass sways,
+   * the clouds drift, the water swells. All of that is scenery moving the way scenery
+   * moves - evenly, and forever. What the set had none of is anything going somewhere for
+   * its own reasons, and that absence is most of why a smallholding with a sun, a sea and a
+   * person in it still read as a diorama.
+   *
+   * Two birds on a circuit and a cloud of flies over the beds. Neither is looked at and
+   * neither is meant to be; they are what makes the place look like it does not need you.
+   */
+  const birds = createBirds({
+    // Out over the water and high, where a gull would be. Not over the tunnel: something
+    // circling directly above the thing the player is examining reads as a vulture.
+    at: new THREE.Vector3(-9, 0, -16),
+    count: 3,
+    radius: 13,
+    seed: 'adaeze-gulls',
+    // Against a pale sky at fifty metres a bird is a dark shape and nothing else.
+    color: '#3c4a52',
+  });
+  scene.registerProp('birds', birds.root, { idle: birds.idle });
+
+  const flies = createMotes({
+    // Over the warm end of the beds, which is where anything with wings would be.
+    at: new THREE.Vector3(0.1, 0.5, 0.4),
+    size: new THREE.Vector3(2.6, 0.7, 4.2),
+    count: 34,
+    seed: 'adaeze-flies',
+    scale: 0.03,
+  });
+  scene.registerProp('flies', flies.root, { idle: flies.idle });
 
   /**
    * -- The bank, and the machine that deals with it -------------------------------------

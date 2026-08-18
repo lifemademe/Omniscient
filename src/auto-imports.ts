@@ -58,6 +58,7 @@ import './omniscient/geometry/seaLife.js';
 import './omniscient/geometry/shore.js';
 import './omniscient/geometry/tree.js';
 import './omniscient/geometry/water.js';
+import './omniscient/geometry/wildlife.js';
 import './omniscient/geometry/wireCity.js';
 import './omniscient/globe/GlobeScreen.js';
 import './omniscient/input/Picker.js';
