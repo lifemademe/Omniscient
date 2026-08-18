@@ -1249,9 +1249,30 @@ export class LocalSurface implements InterventionSurface {
    */
   private openConsoleOnceRead(state: SurfaceState): void {
     this.cancelConsoleOpen();
+
+    /*
+     * A beat that says ACT NOW does not get to make anybody wait.
+     *
+     * The reading delay was the right answer to Adaeze's device, where the player asked a
+     * QUESTION and the reply is the payoff, and the wrong answer to Dorin's, where they
+     * pressed "start on the pins - I will call the order" and then sat through five seconds
+     * of nothing. Timing it by how much there was to read got the second case backwards,
+     * because the length of the reply is not what decides it - what the player just DID is.
+     *
+     * And the content already says which is which. Tempo.Act is the beat telling the
+     * surface it is a moment for doing rather than talking; it is what puts ACT NOW under
+     * the input. A device arriving on one of those is the thing the player just asked to be
+     * given, so it is handed over at once.
+     */
+    if (state.mode === 'action') {
+      this.tab = 'console';
+      return;
+    }
+
     const last = state.transcript[state.transcript.length - 1];
     const words = last?.body?.length ?? 0;
-    const delay = Math.min(5000, Math.max(1400, words * 83));
+    // Nothing gains from more than three seconds; past that they have stopped reading.
+    const delay = Math.min(3000, Math.max(1200, words * 62));
 
     this.consoleTimer = window.setTimeout(() => {
       this.consoleTimer = null;

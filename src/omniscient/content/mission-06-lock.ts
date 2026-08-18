@@ -311,10 +311,32 @@ export const MISSION_06: MissionDefinition = {
       id: 'working',
       framing: 'camera.push-in:lock',
       tempo: Tempo.Act,
+      /**
+       * The method, said out loud, because it is not guessable.
+       *
+       * Reported as "I do not understand what I am supposed to do to find the clues", and
+       * the player was right to be lost: there are none to find. The order the pins bind in
+       * is not written anywhere in the scene and cannot be - it is forty years of uneven
+       * wear inside a cylinder, which is exactly why HE cannot see it either. The only
+       * source of information in this puzzle is what his fingers report, and the only way
+       * to get a report is to name an order and let him work down it.
+       *
+       * That is a sound puzzle and it was an invisible one, because the beat previously
+       * said "if I get one wrong the set drops and we start again, so think first" - which
+       * tells the player that attempting is a FAILURE STATE. So the correct move looked
+       * like the punished one, and a player doing what they were told - thinking first -
+       * had nothing whatsoever to think with.
+       *
+       * Nothing about the mechanic changed. He now says what he is going to do: go down
+       * the order, call out each pin as it lifts, and stop at the one that will not. The
+       * dropped set costs nothing but the time, and he says so, because a player who
+       * believes a retry is expensive will not make one.
+       */
       say:
-        'Wrench is in. I am on the pins.\n\nTell me the order and I will follow it - and if ' +
-        'I get one wrong the set drops and we start again, so think first and then say all ' +
-        'of it.',
+        'Wrench is in. I am on the pins.\n\nName me an order and I will go down it - and I ' +
+        'will tell you what I feel at every one. When I reach one that will not lift, the ' +
+        'set drops and I say which it was.\n\nThat is the only way either of us finds out. ' +
+        'It costs nothing but my knees, and it will not be right the first time.',
       // Same dead chip as the cellar's: ASK_LOCK needs an inspect or describe word, and
       // "go back over" carries none of them.
       suggest: ['tell me about the lock again'],
@@ -324,7 +346,16 @@ export const MISSION_06: MissionDefinition = {
         lock: HER_DOOR,
         onSolved: { to: 'solved', environment: 'prop.open:door' },
         onWrong: { to: 'working' },
-        wrongSay: 'No - it dropped. All of them. Right, again, and tell me the lot at once.',
+        /*
+         * Points at the report rather than just announcing the failure.
+         *
+         * `workLock` returns what he felt on the way down and the board prints it - that
+         * string is the entire yield of an attempt, and it was arriving with a line over it
+         * that read as pure loss. Naming it is what turns a dropped set into a move.
+         */
+        wrongSay:
+          'No - it dropped. All of them.\n\nBut you have got what I felt on the way down. ' +
+          'Read it back and give me another order.',
       },
       on: {
         ASK_LOCK: { to: 'the-lock', learn: [FACT_PINS_BIND_BY_TOLERANCE] },
