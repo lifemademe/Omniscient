@@ -33,7 +33,7 @@ import * as THREE from 'three';
 // means this module loads outside a browser, and the cut can be tested without a scene.
 import type * as ENGINE from '@gnsx/genesys.js';
 
-import { CUT_WIDTH, DECK_Y, MOWER_SPEED, MOWER_TURN } from '../geometry/mower.js';
+import { CUT_WIDTH, DECK_Y, MOWER_SPEED, MOWER_TURN, MOWER_WIDTH } from '../geometry/mower.js';
 
 import type { GeneratedMower } from '../geometry/mower.js';
 
@@ -462,7 +462,9 @@ export class MowerDrive {
    * version where the player fights the controls in a 1.1m gap.
    */
   private slide(wanted: THREE.Vector3): void {
-    const half = 0.31;
+    // Derived, not typed. This was 0.31 sitting next to a MOWER_WIDTH of 0.62, and widening
+    // the machine without it would leave the body overhanging every boundary by 4cm.
+    const half = MOWER_WIDTH / 2;
     wanted.x = Math.min(this.bounds.maxX - half, Math.max(this.bounds.minX + half, wanted.x));
     wanted.z = Math.min(this.bounds.maxZ - half, Math.max(this.bounds.minZ + half, wanted.z));
 

@@ -24,9 +24,14 @@
  * no screens, no chrome and no glowing seams. The tell that it is remote is the aerial and
  * the beacon, not a lightshow.
  *
- * Deliberately small - 0.62m across the deck. It has to fit down the 0.6m path between the
- * beds and along the 1.1m strip between the tunnel's hoops and the neighbour's trunk,
- * which is where the weeds it is here for are actually growing.
+ * Small, because it works in the 1.1m strip between the tunnel's hoops and the neighbour's
+ * trunk, which is where the weeds it is here for are actually growing.
+ *
+ * Widened once, from 0.62 across the deck and a 0.5m cut. A 0.5m cut over a 3.45m bank is
+ * seven passes with no room for error in any of them, and the deck is the single number
+ * that decides whether the job reads as work or as admin. 0.62 makes it six comfortable
+ * passes and still leaves visible misses when the lines are sloppy, which is the point:
+ * the skill has to stay in the overlap.
  */
 
 import * as ENGINE from '@gnsx/genesys.js';
@@ -38,7 +43,7 @@ import { MAT } from '../art/palette.js';
 import { decorMesh as meshOf } from '../art/mesh.js';
 
 /** Across the deck. The cut is narrower - see `CUT_WIDTH`. */
-export const MOWER_WIDTH = 0.62;
+export const MOWER_WIDTH = 0.7;
 /**
  * How wide a strip it actually cuts.
  *
@@ -47,7 +52,7 @@ export const MOWER_WIDTH = 0.62;
  * uncut lines between them unless they overlap, which is the entire skill in mowing and
  * the only reason this is a game rather than a walk.
  */
-export const CUT_WIDTH = 0.5;
+export const CUT_WIDTH = 0.62;
 /** Metres per second flat out. A walking pace - this is a groundskeeper, not a kart. */
 export const MOWER_SPEED = 1.5;
 /** Radians per second at full lock. */

@@ -2616,6 +2616,34 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   });
   scene.registerProp('shore-tree', shoreTree.root);
 
+  /**
+   * The leaf bits each cut limb throws as it is cleared, built once and reused.
+   *
+   * Built here rather than inside the `clear` action, and that is not tidiness. A request
+   * can be re-opened, so `clear` can run more than once on the same diorama - and building
+   * these in the action would add five more meshes per limb to the tree every single time,
+   * for as long as the player kept coming back. They are parented to their limb so they
+   * inherit its fall for free, and start hidden.
+   */
+  const limbPuffs = neighbourTree.cutLimbs.map((cut, index) => {
+    const spread = createRng(seedFrom(`limb-puff-${index}`));
+    const bits: ENGINE.MeshNode[] = [];
+    const drift: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const bit = meshOf(
+        `Puff${index}_${i}`,
+        new THREE.IcosahedronGeometry(range(spread, 0.1, 0.2), 0),
+        MAT.leafDeep
+      );
+      bit.position.set(range(spread, -0.4, 0.4), range(spread, 0.1, 0.5), range(spread, -0.4, 0.4));
+      bit.visible = false;
+      cut.node.add(bit);
+      bits.push(bit);
+      drift.push(range(spread, 0.8, 1.9));
+    }
+    return { node: cut.node, bits, drift, home: bits.map((bit) => bit.position.clone()) };
+  });
+
   scene.registerProp('neighbour-tree', treeRoot, {
     // Inked: The tree on the other side of the glass.
     inked: true,
@@ -2762,6 +2790,56 @@ function buildSeedlingTunnel(scene: ContactScene): void {
             duration: 1.4,
             easing: Ease.inCubic,
             channel: 'tree-clear',
+          }
+        );
+
+        /**
+         * And then they are gone.
+         *
+         * The pile was the wrong end state. What the player has just done is give one side
+         * of a tunnel its light back, and the way to see that is to look at the tunnel -
+         * except a heap of cut bough was sitting in the mid-distance holding the eye,
+         * exactly where the shot needed nothing. The falling is the beat; the debris is not.
+         *
+         * So it lands, sits for a moment so the landing registers, and clears. Which is
+         * also honest about what happens next on a real smallholding: somebody drags them
+         * to the boundary, and she has just told the player she has the saw in her hand.
+         *
+         * ## The vanish, and why it is a lift rather than a fade
+         *
+         * These share MAT.leafDeep and MAT.timberDark with the rest of the tree, and the
+         * palette materials are shared across every prop in the game - so fading them means
+         * either cloning two materials per limb to animate opacity on, or fading the trunk
+         * along with the branches. Scale needs neither: it is per-node, it costs nothing,
+         * and dropping a bough INTO the grass while it shrinks reads as being cleared away
+         * rather than as being deleted.
+         *
+         * The leaf puff is what makes it an event. Each limb throws a handful of its own
+         * canopy colour outward and down as it goes, which at this distance is the shape of
+         * a bough being dragged through long grass - and it is drawn from the same
+         * geometry the crown is made of, so nothing new has to match anything.
+         */
+        tweener.add(
+          (t) => {
+            for (const puff of limbPuffs) {
+              // Held back for the first third, so the fall finishes before the clear starts.
+              const away = Math.max(0, (t - 0.34) / 0.66);
+              puff.node.scale.setScalar(CLOSES_TO * (1 - away * away));
+              // Sinking as it shrinks, so it goes into the grass and not out of existence.
+              puff.node.position.y = Math.max(0, puff.node.position.y - away * 0.004);
+              puff.bits.forEach((bit, i) => {
+                bit.visible = away > 0 && away < 0.9;
+                const fling = away * puff.drift[i];
+                bit.position.y = 0.3 + fling * 0.5 - fling * fling * 1.4;
+                bit.scale.setScalar(Math.max(0.001, 1 - away));
+              });
+            }
+          },
+          {
+            // Starts as the fall lands and runs past it, so nothing is ever still.
+            duration: 2.6,
+            easing: Ease.linear,
+            channel: 'tree-cleared-away',
           }
         );
       },
@@ -3241,9 +3319,20 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     }))
   );
 
-  scene.registerProp(
-    'meadow',
-    meadow(rng, {
+  /**
+   * Held in a variable, because the mower has to be able to cut it.
+   *
+   * This patch is 26 by 22 metres centred near the tunnel, so it covers the bank ENTIRELY -
+   * the two meadows are stacked in the same square metres, one at 0.18-0.40m and one at
+   * 0.34-0.72m. The mowing field was only ever told about the bank's own grass, so a pass
+   * took 6,400 blades down and left the field's own 2,500 standing in exactly the same
+   * place. Which is precisely what it looked like: a plot reporting a cut strip over ground
+   * that was still green.
+   *
+   * The first attempt at this bug was the blade scale - real, and not the whole of it. Two
+   * separate faults with one symptom, which is why fixing one changed nothing visible.
+   */
+  const fieldGrass = meadow(rng, {
       at: new THREE.Vector3(0.2, 0, -3.5),
       width: 26,
       depth: 22,
@@ -3314,7 +3403,10 @@ function buildSeedlingTunnel(scene: ContactScene): void {
       keepOffBeach: 3.2,
       clear: KEEP_CLEAR,
       y: 0,
-    }),
+  });
+  scene.registerProp(
+    'meadow',
+    fieldGrass,
     // The gust, advanced once a frame. Registered here rather than globally so it only
     // runs while this diorama is the one on screen.
     { idle: (deltaTime) => stepWind(deltaTime) }
@@ -3429,6 +3521,15 @@ function buildSeedlingTunnel(scene: ContactScene): void {
 
   const mowingField = new MowingField(BANK);
   mowingField.addMeadow(bankGrass);
+  /*
+   * And the field's own grass, which stands in the same ground.
+   *
+   * `addMeadow` keeps only what falls inside the bank, so this indexes the couple of
+   * thousand blades of ordinary field that happen to be under the bank and ignores the
+   * forty-odd thousand that are not. Without it the mower cuts the tall grass and the short
+   * grass underneath it stays exactly where it was.
+   */
+  mowingField.addMeadow(fieldGrass);
   mowingField.addWeeds(bankWeeds);
   mowingField.addWeeds(bankDocks);
 
@@ -3485,10 +3586,90 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     }
     shadeMesh.position.setX(shadeAt);
     (shadeMesh.material as THREE.MeshBasicMaterial).opacity = shadeOpacity;
+    // The leaf bits go back where they started and out of sight, or a re-opened request
+    // shows five icosahedra hanging in the air where a branch used to be.
+    for (const puff of limbPuffs) {
+      puff.bits.forEach((bit, i) => {
+        bit.visible = false;
+        bit.position.copy(puff.home[i]);
+        bit.scale.setScalar(1);
+      });
+    }
     mowingField.reset();
     drive.place(home.x, home.z, home.heading);
     mower.beacon.visible = false;
   });
+
+  /**
+   * A post-and-rail run round the bank, and it is a gameplay object dressed as a fence.
+   *
+   * ## The problem it solves
+   *
+   * The job is "clear this strip", and nothing in the world said where the strip ENDED.
+   * The bank is a rectangle in a field of grass that goes on for twenty-six metres in every
+   * direction, so from inside the machine there was no way to know whether the tall stuff
+   * ahead was the job or just more field - and the plot could only answer that by being
+   * squinted at. A player who cannot see the edge of a task cannot tell when they are
+   * finished, and will either quit early or grind past it.
+   *
+   * ## Why it is on the DRIVEABLE bounds and not the grass
+   *
+   * Because those are the bounds the machine is actually stopped by, and a barrier the
+   * player can see is doing its job only if it is where the wall is. Fencing the grass
+   * instead would put a rail 0.45m inside a boundary the mower drives straight through,
+   * which is worse than no fence: it would teach that the fence means nothing.
+   *
+   * Three sides, not four. The tunnel side is left open because the beds are there and a
+   * rail across them would be nonsense - and because from the default shot an unbroken
+   * rectangle in the middle distance reads as a pen, which this is not. It is the line
+   * somebody put in to keep the far side of their smallholding out of the beds.
+   *
+   * Post and two rails rather than posts and wire, which is what the boundary fence up by
+   * the hedge already is. Rails are legible at three metres from inside a mower; wire is
+   * two pixels and disappears.
+   */
+  const railRun: THREE.BufferGeometry[] = [];
+  const RAIL_TOP = 0.86;
+  const railPost = (x: number, z: number): void => {
+    const post = new THREE.BoxGeometry(0.09, RAIL_TOP + 0.16, 0.09);
+    // Leaning a little, each its own way. A dead-straight run of farm fence has never
+    // existed, and the lean is most of what makes it read as timber rather than as a chart.
+    post.rotateZ(jitter(rng, 0.035));
+    post.rotateX(jitter(rng, 0.03));
+    post.translate(x, (RAIL_TOP + 0.16) / 2, z);
+    railRun.push(post);
+  };
+  /** One side: posts at intervals plus two rails spanning the whole length. */
+  const railSide = (
+    from: THREE.Vector2,
+    to: THREE.Vector2
+  ): void => {
+    const span = from.distanceTo(to);
+    const bays = Math.max(1, Math.round(span / 1.5));
+    for (let i = 0; i <= bays; i++) {
+      const at = from.clone().lerp(to, i / bays);
+      railPost(at.x, at.y);
+    }
+    const middle = from.clone().lerp(to, 0.5);
+    const along = Math.atan2(to.x - from.x, to.y - from.y);
+    for (const height of [RAIL_TOP, RAIL_TOP * 0.55]) {
+      const rail = new THREE.BoxGeometry(0.05, 0.11, span);
+      rail.rotateY(along);
+      rail.translate(middle.x, height, middle.y);
+      railRun.push(rail);
+    }
+  };
+
+  const nearX = DRIVEABLE.maxX;
+  const farX = DRIVEABLE.minX;
+  railSide(new THREE.Vector2(farX, DRIVEABLE.minZ), new THREE.Vector2(farX, DRIVEABLE.maxZ));
+  railSide(new THREE.Vector2(farX, DRIVEABLE.minZ), new THREE.Vector2(nearX, DRIVEABLE.minZ));
+  railSide(new THREE.Vector2(farX, DRIVEABLE.maxZ), new THREE.Vector2(nearX, DRIVEABLE.maxZ));
+
+  scene.registerProp(
+    'bank-fence',
+    meshOf('BankFence', mergeGeometries(railRun, false) ?? railRun[0], MAT.timber)
+  );
 
   scene.remoteUnit = {
     drive,
