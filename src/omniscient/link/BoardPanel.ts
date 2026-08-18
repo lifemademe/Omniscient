@@ -574,6 +574,8 @@ export class BoardPanel {
   private order: string[] = [];
   /** The one thing out of the bag the player has hold of. */
   private held: string | null = null;
+  /** The pin pressed since the last refresh, so a rising count can be attributed. */
+  private tried: string | null = null;
   private kitButtons = new Map<string, HTMLButtonElement>();
   /** Live chase state, while a beam device is up. */
   private chase: BeamState | null = null;
@@ -1481,15 +1483,29 @@ export class BoardPanel {
       label.textContent = pin.label;
       button.appendChild(label);
 
-      button.addEventListener('mousedown', (event) => {
+      /**
+       * Press a pin and it is TRIED, immediately.
+       *
+       * This used to compose an order locally and wait for Send, so the player made five
+       * blind choices and then found out about all of them at once - every piece of
+       * information in the puzzle arrived after the decisions that needed it. Now each
+       * press asks the lock, and the lock answers in the only terms it has: the pin lifts
+       * and the cylinder turns a little, or the whole set drops.
+       *
+       * `click`, and the dispatch before the sound - the same fix the Send button needed.
+       * A press that made a noise and did nothing is the worst version of this.
+       */
+      button.addEventListener('click', (event) => {
         event.preventDefault();
-        const at = this.order.indexOf(pin.id);
-        // Un-setting a pin is not the same gesture as setting one, and the lock is the one
-        // device where the player is listening for a difference.
-        audio.play(at >= 0 ? 'reject' : 'seat');
-        if (at >= 0) this.order.length = at;
-        else this.order.push(pin.id);
-        if (this.view) this.refresh(this.view);
+        if (this.view?.kind !== 'lock') return;
+        this.dispatch({
+          kind: 'device',
+          // Everything already up, plus the one being tried. The runtime holds the truth
+          // about how many are up; this only ever appends to what it last reported.
+          submission: { kind: 'lock', order: [...this.order.slice(0, this.view.set), pin.id] },
+        });
+        this.tried = pin.id;
+        audio.play('seat');
       });
 
       this.pinButtons.set(pin.id, { button, order });
@@ -1619,20 +1635,46 @@ export class BoardPanel {
     }
 
     if (view.kind === 'lock') {
+      /*
+       * Follow the lock, do not keep a second copy of it.
+       *
+       * The runtime says how many pins are up and this reconciles to that number. The board
+       * knows which pin it last pressed, so a count that has gone up by one means that pin
+       * set; a count of zero means the set dropped and everything is on the floor. Nothing
+       * here decides anything - if the two ever disagree the lock wins, because the lock is
+       * what the player can see turning.
+       */
+      if (view.set === 0) this.order.length = 0;
+      else if (view.set === this.order.length + 1 && this.tried) this.order.push(this.tried);
+      else if (view.set < this.order.length) this.order.length = view.set;
+      this.tried = null;
+
       for (const [id, parts] of this.pinButtons) {
         const at = this.order.indexOf(id);
         parts.button.classList.toggle('omni-board__pin--picked', at >= 0);
         parts.order.textContent = at >= 0 ? String(at + 1) : '';
       }
-      this.send.disabled = this.order.length === 0;
+
+      /*
+       * No Send. The fifth pin setting IS the solve, so there is nothing left to commit -
+       * and a button that only ever means "I have finished doing the thing you watched me
+       * do" is a button asking to be pressed for no reason.
+       */
+      this.send.style.display = 'none';
+
       this.status.className = view.note
         ? 'omni-board__status omni-board__status--score'
         : 'omni-board__status';
       this.status.textContent =
-        view.note ?? 'name the order they should be set in';
+        view.note ??
+        (this.order.length === 0
+          ? 'press a pin to try it'
+          : `${this.order.length} up - press the next one`);
       this.wires.replaceChildren();
       return;
     }
+    // Every other board commits with the button, so it has to come back.
+    this.send.style.display = '';
 
     if (view.kind === 'pipes') {
       view.grid.cells.forEach((cell, index) => {

@@ -58,6 +58,8 @@ import { createRng, jitter, range, seedFrom } from '../core/rng.js';
 
 import type { Rng } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
+
+import type { Tweener } from '../core/tween.js';
 import { createFieldBackdrop, createNightBackdrop } from '../geometry/backdrop.js';
 import { buildTree } from '../geometry/tree.js';
 import { buildMower } from '../geometry/mower.js';
@@ -6184,9 +6186,46 @@ function buildNightDoor(scene: ContactScene): void {
   plug.add(meshOf('Keyway', keyway, MAT.dark));
   lockRoot.add(plug);
   lockPlug = plug;
+  /**
+   * The cylinder turns as the pins go up, and springs back when they drop.
+   *
+   * This is the whole of the new lock interaction expressed in one object. A pick that
+   * sets a pin lets the plug rotate a few degrees against the wrench; a pick that binds
+   * lets everything fall, and the plug snaps back to where it started. That is what a
+   * lock does, and it means the player is reading the ANSWER off the thing they are
+   * working on rather than off a status line in a panel.
+   *
+   * Five steps to ninety degrees, so each pin is a visible eighteen and the fifth is the
+   * one that opens the door. `set` eases out - a pin lifting is a small controlled thing -
+   * and `drop` uses `inCubic` for the same reason the cut branches do: it is a fall.
+   *
+   * A tween per press rather than a held state, because the plug's angle is derived from
+   * how many are up and the runtime already owns that number. Nothing here counts.
+   */
+  const PLUG_STEP = Math.PI / 10;
+  let plugSet = 0;
+  const turnPlug = (tweener: Tweener, to: number, duration: number, easing: (t: number) => number): void => {
+    const from = plugSet;
+    plugSet = to;
+    tweener.add(
+      (t: number) => {
+        if (lockPlug) lockPlug.rotation.set(0, 0, -(from + (to - from) * t));
+      },
+      { duration, easing, channel: 'lock-turn' }
+    );
+  };
+
   scene.registerProp('lock', lockRoot, {
     // Inked: Two centimetres of brass, and the entire mission.
-    inked: true, anchors: { default: new THREE.Vector3(0, 0, 0.06) } });
+    inked: true,
+    anchors: { default: new THREE.Vector3(0, 0, 0.06) },
+    actions: {
+      /** One more pin up: a few degrees of give against the wrench. */
+      set: (tweener) => turnPlug(tweener, Math.min(Math.PI / 2, plugSet + PLUG_STEP), 0.26, Ease.outCubic),
+      /** The set drops. Everything falls and the plug goes home. */
+      drop: (tweener) => turnPlug(tweener, 0, 0.34, Ease.inCubic),
+    },
+  });
 
   // -- The landing window he keeps looking at -------------------------------
   const upperFrame = new THREE.BoxGeometry(0.94, 1.16, 0.08);

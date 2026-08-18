@@ -163,6 +163,15 @@ export type DeviceView =
       prompt: string;
       /** Pins in their physical order along the lock. Carries no binding order. */
       pins: Array<{ id: string; label: string }>;
+      /**
+       * How many are currently up, counted from the start of the order.
+       *
+       * §157 again: this is not a hint about WHICH pins - it is the state of the lock,
+       * which the player can already see in the cylinder's rotation. Sending it lets the
+       * console draw what the world is doing rather than keeping a second tally that can
+       * disagree with it.
+       */
+      set: number;
       note?: string;
     }
   | {

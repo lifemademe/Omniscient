@@ -333,10 +333,11 @@ export const MISSION_06: MissionDefinition = {
        * believes a retry is expensive will not make one.
        */
       say:
-        'Wrench is in. I am on the pins.\n\nName me an order and I will go down it - and I ' +
-        'will tell you what I feel at every one. When I reach one that will not lift, the ' +
-        'set drops and I say which it was.\n\nThat is the only way either of us finds out. ' +
-        'It costs nothing but my knees, and it will not be right the first time.',
+        'Wrench is in. I am on the pins.\n\nCall them one at a time. If you name the one ' +
+        'that is binding it will lift, and you will see the cylinder give - watch the plug, ' +
+        'not me. If you name any of the others the whole set drops and we are back to ' +
+        'nothing.\n\nThat is the only way either of us finds out which is which. It costs ' +
+        'nothing but my knees.',
       // Same dead chip as the cellar's: ASK_LOCK needs an inspect or describe word, and
       // "go back over" carries none of them.
       suggest: ['tell me about the lock again'],
@@ -354,8 +355,7 @@ export const MISSION_06: MissionDefinition = {
          * that read as pure loss. Naming it is what turns a dropped set into a move.
          */
         wrongSay:
-          'No - it dropped. All of them.\n\nBut you have got what I felt on the way down. ' +
-          'Read it back and give me another order.',
+          'That is not the one. The whole set has dropped - start me again from the first.',
       },
       on: {
         ASK_LOCK: { to: 'the-lock', learn: [FACT_PINS_BIND_BY_TOLERANCE] },

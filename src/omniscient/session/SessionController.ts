@@ -534,6 +534,7 @@ export class SessionController {
         prompt: device.prompt,
         // Physical order along the lock, never the binding order - that is the answer.
         pins: device.lock.pins.map((pin, i) => ({ id: pin.id, label: `pin ${i + 1}` })),
+        set: this.runtime?.lockProgress() ?? 0,
         note,
       };
     }

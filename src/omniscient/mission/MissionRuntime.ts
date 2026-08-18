@@ -13,6 +13,7 @@
 import { Certainty } from '../knowledge/KnowledgeStore.js';
 
 import { gradeDevice } from './device.js';
+import { workLock } from './lock.js';
 import { readsAsYesNo, resolveIntent } from './intent.js';
 import { HOLD_FRAMING } from './types.js';
 
@@ -88,6 +89,19 @@ export class MissionRuntime {
    * wanting. Both are answered by `confirm`, which checks this one first.
    */
   private pendingDevice: DeviceSubmission | null = null;
+  /**
+   * How many pins are currently up.
+   *
+   * Held here rather than in the console because it is a fact about the LOCK, not about
+   * the panel - the board is a view of it and a second copy would be a second truth. Also
+   * what the surface reads to draw the pins that are already set.
+   */
+  private lockSet = 0;
+
+  /** For the console: how far the cylinder has turned. */
+  public lockProgress(): number {
+    return this.lockSet;
+  }
   /**
    * Latched at construction. Reading it off the current beat would report false the
    * moment the mission advanced past its opening.
@@ -363,6 +377,57 @@ export class MissionRuntime {
      */
     if (device.kind === 'unit' && submission.kind === 'unit' && submission.cleared <= 0) {
       return { say: '', learned: [], clarifying: false, environment: device.take };
+    }
+
+    /**
+     * The lock is worked one pin at a time, and only a DROP is a wrong answer.
+     *
+     * ## What changed and why
+     *
+     * It used to take a whole order and grade it in one go, which made every attempt a
+     * submission and every submission a beat transition - so the player composed five picks
+     * blind, pressed send, and read a paragraph about what he had felt. All the information
+     * in the puzzle arrived after the decision that needed it.
+     *
+     * Now each press sends the confirmed prefix plus the one pin being tried. Three things
+     * follow, and none of them is a change to the mechanic:
+     *
+     * 1. A pin that SETS is not an answer to be graded. It is progress, so the beat does
+     *    not move - he says what he felt in that one pin's own words and the board keeps
+     *    the prefix. The `sets` and `early` lines have been authored per pin since this
+     *    mission was written and were being concatenated into one status string; they are
+     *    what a single press should say, one at a time, and now they do.
+     * 2. A pin that DROPS the set is the wrong answer, and that is the only thing that
+     *    reaches `onWrong`. The cost is unchanged - everything falls and the order has to
+     *    be given again from the top - which is what keeps this a memory puzzle rather than
+     *    a search: testing the third position means re-entering the first two.
+     * 3. The fifth pin setting IS the solve. There is nothing left to submit, so nothing
+     *    has to be pressed to submit it.
+     */
+    if (device.kind === 'lock' && submission.kind === 'lock') {
+      const reading = workLock(device.lock, submission.order);
+      if (!reading.solved && reading.correct === submission.order.length) {
+        this.lockSet = reading.correct;
+        return {
+          say: reading.felt[reading.felt.length - 1] ?? '',
+          learned: [],
+          clarifying: false,
+          environment: `prop.set:lock`,
+        };
+      }
+      if (!reading.solved) {
+        this.lockSet = 0;
+        // The line he says as it drops, then the transition, which carries `wrongSay`.
+        const stuck = reading.felt[reading.felt.length - 1];
+        const step = this.applyTransition(device.onWrong);
+        return {
+          ...step,
+          say: [stuck, step.say].filter(Boolean).join('\n\n'),
+          environment: ['prop.drop:lock', step.environment].filter(Boolean).join(','),
+        };
+      }
+      this.lockSet = 0;
+      return this.applyTransition(device.onSolved);
     }
 
     if (device.kind === 'kit' && submission.kind === 'kit') {
