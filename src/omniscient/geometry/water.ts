@@ -35,8 +35,27 @@ import { SHORE_GLSL } from './shore.js';
 export interface WaterOptions {
   /** Deep water, away from the shore. */
   deep: string;
+  /**
+   * The band between the shallows and the deep.
+   *
+   * A third stop, because two cannot describe a sea. Shallow-to-deep as a single mix is a
+   * lake: one colour fading into another across a shelf. What makes tropical water read as
+   * tropical is that the turquoise over sand and the blue over depth are DIFFERENT HUES
+   * with a distinct band between them, and a straight lerp between the two ends walks
+   * through the dull middle of that arc instead of round it.
+   */
+  mid: string;
   /** Shallower, warmer water nearer the near edge. */
   shallow: string;
+  /**
+   * Metres from the waterline over which shallow becomes deep.
+   *
+   * Was fixed at 16, against a lake 90m across, so 82% of every pixel of water on screen
+   * was one flat colour - the turquoise existed but was a rim you had to look for. A shelf
+   * is the widest single thing in a tropical shot; this is what decides how much of the
+   * frame is the colour the reference is actually about.
+   */
+  shelf?: number;
   /** The crest colour - what the light catches. */
   crest: string;
   /** The colour of the sun's own path across the water. */
@@ -47,6 +66,31 @@ export interface WaterOptions {
   sunWidth?: number;
   /** The wet sand and broken water where it meets the shore. */
   foam: string;
+  /**
+   * What the water fades to at the horizon, and the single biggest thing missing from it.
+   *
+   * This material is unlit and unfogged, so the colour on screen is exactly the colour
+   * authored - which means distant water was rendering the same value and the same
+   * saturation as water fifteen metres away. Air does not work like that. Over tens of
+   * metres it scatters sky into everything you look through, so the sea gets paler,
+   * bluer and lower in contrast until it meets the sky, and that gradient is the ONLY
+   * cue that tells you the surface is going away from you rather than standing up.
+   *
+   * It matters more here than it would have last week, because the hills behind this
+   * water have been taken out. A flat plane of one colour meeting a sky used to have a
+   * ridge line across the join to hide it; now the join is the horizon, and without haze
+   * it reads as two pieces of paper touching.
+   *
+   * Not the sky's own colour. Sea at the horizon stays a little darker and bluer than the
+   * air above it, and that difference IS the horizon line - matched exactly, the water
+   * would simply stop existing at the far edge.
+   */
+  haze: string;
+  /** Metres from the camera at which the haze starts and where it is full. */
+  hazeFrom?: number;
+  hazeTo?: number;
+  /** How much sky the furthest water is allowed to take. Never 1 - see `haze`. */
+  hazeMax?: number;
   /** Shared time uniform, so water and grass move on the same clock. */
   time: { value: number };
 }
@@ -61,6 +105,12 @@ export function stylisedWater(options: WaterOptions): THREE.MeshBasicMaterial {
     shader.uniforms.uTime = options.time;
     shader.uniforms.uDeep = { value: new THREE.Color(options.deep) };
     shader.uniforms.uShallow = { value: new THREE.Color(options.shallow) };
+    shader.uniforms.uMid = { value: new THREE.Color(options.mid) };
+    shader.uniforms.uShelf = { value: options.shelf ?? 16 };
+    shader.uniforms.uHaze = { value: new THREE.Color(options.haze) };
+    shader.uniforms.uHazeFrom = { value: options.hazeFrom ?? 24 };
+    shader.uniforms.uHazeTo = { value: options.hazeTo ?? 60 };
+    shader.uniforms.uHazeMax = { value: options.hazeMax ?? 0.72 };
     shader.uniforms.uCrest = { value: new THREE.Color(options.crest) };
     shader.uniforms.uGlint = { value: new THREE.Color(options.glint) };
     shader.uniforms.uSunX = { value: options.sunX };
@@ -110,6 +160,12 @@ export function stylisedWater(options: WaterOptions): THREE.MeshBasicMaterial {
           'uniform float uTime;',
           'uniform vec3 uDeep;',
           'uniform vec3 uShallow;',
+          'uniform vec3 uMid;',
+          'uniform float uShelf;',
+          'uniform vec3 uHaze;',
+          'uniform float uHazeFrom;',
+          'uniform float uHazeTo;',
+          'uniform float uHazeMax;',
           'uniform vec3 uCrest;',
           'uniform vec3 uGlint;',
           'uniform float uSunX;',
@@ -139,8 +195,11 @@ export function stylisedWater(options: WaterOptions): THREE.MeshBasicMaterial {
            * follows the beach.
            */
           '  float depth = shoreDepth(p);',
-          '  float toShore = clamp(depth / 16.0, 0.0, 1.0);',
-          '  vec3 body = mix(uShallow, uDeep, toShore);',
+          '  float toShore = clamp(depth / uShelf, 0.0, 1.0);',
+          // Two segments through uMid rather than one straight lerp - see `mid`.
+          '  vec3 body = toShore < 0.5',
+          '    ? mix(uShallow, uMid, toShore * 2.0)',
+          '    : mix(uMid, uDeep, toShore * 2.0 - 1.0);',
           '',
           // The crests, quantised hard. This is the whole stylisation in one line.
           '  float crest = smoothstep(0.62, 0.66, wave);',
@@ -171,6 +230,21 @@ export function stylisedWater(options: WaterOptions): THREE.MeshBasicMaterial {
           '  float lap = 1.0 - smoothstep(0.0, 0.7 + run * 1.5, depth);',
           '  float foam = max(edge * 0.55, smoothstep(0.35, 0.55, lap));',
           '  body = mix(body, uFoam, clamp(foam, 0.0, 1.0) * 0.92);',
+          '',
+          /*
+           * And the air, last, over everything.
+           *
+           * After the crests, the sun path and the foam on purpose: haze is not a colour
+           * the water has, it is the distance between the water and the eye, so it has to
+           * dilute the sparkle and the whitecaps too. Distant water that still glints as
+           * hard as near water is the same mistake as distant water that is still as
+           * saturated.
+           *
+           * `cameraPosition` comes from three's own fragment prefix, so the fade follows
+           * the shot rather than the world origin - and this scene has four of them.
+           */
+          '  float away = length(vWaterAt.xz - cameraPosition.xz);',
+          '  body = mix(body, uHaze, smoothstep(uHazeFrom, uHazeTo, away) * uHazeMax);',
           '',
           '  diffuseColor.rgb = body;',
           // Beyond the waterline there is no water. Discarding rather than shrinking the

@@ -3434,11 +3434,46 @@ function buildSeedlingTunnel(scene: ContactScene): void {
          * depth rather than as one colour lit unevenly. The crest goes paler with
          * them so the tops still catch.
          */
-        deep: '#1d7fa6',
-        shallow: '#4fd0c6',
-        crest: '#b7f0e2',
+        /*
+         * Retuned again, and this time the palette was the smaller half of the problem.
+         *
+         * Two stops over a 16m shelf meant 82% of the water on screen was one flat
+         * #1d7fa6 - a colour that is perfectly good ocean blue and, spread edge to edge
+         * with nothing happening in it, reads as a municipal boating lake. The reference
+         * has three things this did not: a wide turquoise SHELF, a distinct band where it
+         * turns blue, and a horizon it fades into.
+         *
+         * So: a third stop, a shelf widened from 16m to 44m, and haze. The hues are also
+         * lifted - #1183b6 over #1d7fa6 is the same blue with the grey taken out, and the
+         * shallows go up to a proper pale turquoise rather than a green-teal.
+         */
+        deep: '#1183b6',
+        mid: '#1fb4cf',
+        shallow: '#5fdcd0',
+        shelf: 34,
+        crest: '#c9f5ea',
         glint: '#fdf6e6',
         foam: '#f2f7f1',
+        /*
+         * The sky's own horizon stop is #e8eef0. This is that with the blue left in and a
+         * little value taken out, so the far water still parts from the air along a line
+         * instead of dissolving into it.
+         */
+        haze: '#b9d4e4',
+        /*
+         * The waterline is 26m from this camera, so a haze starting at 22 began IN the
+         * shallows - sampled along the sight line, it took the whole shelf down to a
+         * washed 0.38 saturation and the deep blue never appeared at all. Which is
+         * trading one flat expanse for a paler flat expanse.
+         *
+         * Starting past the near water instead: the turquoise is at full strength where
+         * it is closest and the fade does its work on the blue behind it, which is the
+         * order air actually applies it in.
+         */
+        hazeFrom: 38,
+        // Water is visible to about 70m from here, where the sky shell cuts it off.
+        hazeTo: 74,
+        hazeMax: 0.62,
         sunX: LAKE_SUN_X,
         sunWidth: 16,
         // The same clock the grass runs on, so one gust moves the whole scene.
