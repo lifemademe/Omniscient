@@ -81,12 +81,27 @@ const BOARD_CSS = `
   pointer-events: none;
   overflow: visible;
 }
+/*
+ * The working area, and it scrolls.
+ *
+ * The console column is a fixed height and this panel sits inside it above the
+ * input, so a device taller than the room left simply ran off the bottom of the
+ * screen - reported on the six-item bag, where the last two could not be reached at
+ * all. Bounding it here rather than on the panel keeps the prompt and the send
+ * button pinned, which is what you want when the thing you are scrolling is the
+ * choice you are about to make.
+ */
 .omni-board__grid {
   position: relative;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   gap: 8px 26px;
   align-items: start;
+  max-height: 38vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #2b5c39 transparent;
 }
 .omni-board__column { display: flex; flex-direction: column; gap: 7px; }
 .omni-board__spine {
@@ -135,8 +150,17 @@ const BOARD_CSS = `
  * at an object and decide what it does, which is a different act from reading a label.
  */
 .omni-kit {
+  /*
+   * Across all three columns of the board grid, then two per row inside that.
+   *
+   * Without the span this lands in the first 1fr of a layout built for the
+   * relation board - boxes, spine, slots - and comes out as one narrow column down
+   * the left with two thirds of the panel empty beside it. That is what a six item
+   * bag looked like: a list, and a long one.
+   */
+  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   width: 100%;
 }

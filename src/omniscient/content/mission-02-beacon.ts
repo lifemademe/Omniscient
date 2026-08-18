@@ -41,10 +41,16 @@ export const FACT_FEED_NEEDS_ISOLATOR = 'feed_needs_isolator';
  * is not a distractor, it is a hint - the player eliminates it without thinking and the
  * puzzle gets easier by exactly one.
  *
- * The fault is that two loads share one supply and the other one now pulls this one down.
- * So the question is not "what fixes a light" but "what SEPARATES two things", and every
- * wrong answer here does something else that sounds like fixing: insulate, join, protect,
- * tidy, extend.
+ * NOTHING IS CUT. That is worth saying at the top, because the word "separate" was read
+ * as a broken wire needing something conductive to bridge it, by the first person to
+ * play this. There is no break anywhere in the request: one supply feeds two households,
+ * and the fault is that they share it. Her set pulls hard the moment it is keyed and his
+ * light goes out.
+ *
+ * So the question is never "what fixes a light" but "what gives the light a supply of its
+ * own", and every wrong answer here does something else that sounds like fixing:
+ * insulate, join, protect, tidy, extend. Joining is the one that is most obviously wrong
+ * and hardest to see as wrong, which is why the terminal block is in the bag.
  */
 const TOMAS_BAG = [
   {
@@ -481,7 +487,19 @@ export const MISSION_02: MissionDefinition = {
       suggest: ['go back over the join'],
       device: {
         kind: 'kit',
-        prompt: 'Pick what will separate the two feeds.',
+        /*
+         * The prompt states the PROBLEM, not just the action.
+         *
+         * It read "Pick what will separate the two feeds", which is accurate and was
+         * still misread - as a cut wire needing something conductive to bridge it.
+         * That is a fair reading of the word separate in isolation, and nothing is cut
+         * anywhere in this request: one supply feeds two households and the fix is to
+         * stop them sharing it.
+         *
+         * A prompt that names the fault cannot be read backwards. This one says there
+         * is one supply and two things on it before it asks for anything.
+         */
+        prompt: 'One supply, feeding her shop and the light. Pick what gives the light its own.',
         items: [...TOMAS_BAG],
         answer: 'isolator',
         onSolved: { to: 'isolator-fitted', learn: [FACT_FEED_NEEDS_ISOLATOR] },
