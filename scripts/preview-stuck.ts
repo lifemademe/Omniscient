@@ -29,6 +29,7 @@ import type { DeviceSubmission } from '../src/omniscient/mission/device.js';
 import type { Device } from '../src/omniscient/mission/types.js';
 import type { PipeGrid } from '../src/omniscient/mission/pipes.js';
 import { GlobeView, SignalState } from '../src/omniscient/crt/GlobeView.js';
+import { createSignals } from '../src/omniscient/content/signals.js';
 import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
 
 const SEED = 0x0c151e;
@@ -298,6 +299,44 @@ function checkGlobeTurns(): void {
     dwell >= 8,
     `${dwell.toFixed(1)}s of it within 35 degrees`
   );
+}
+
+/**
+ * Every mission the campaign offers must have somewhere on the globe to arrive.
+ *
+ * Lucian shipped without one. `LUCIAN_SIGNAL` was exported and never used, so the eighth
+ * request was queued, offered and marked openable, and then vanished inside
+ * `setSignalState`, which looked for a signal with his id, found none, and returned. The
+ * globe is the only place a request can be clicked, so the last mission of the game could
+ * not be started - and nothing failed, nothing warned, and the "requests waiting" count was
+ * still right.
+ *
+ * It is the cheapest possible check and it would have caught it the day it was written.
+ */
+/*
+ * The campaign, in order. Built inline in OmniscientRig rather than exported, so this
+ * mirrors it - and the reverse check below is what catches the mirror going stale.
+ */
+const CAMPAIGN = [MISSION_01, MISSION_02, MISSION_03, MISSION_04, MISSION_05, MISSION_06, MISSION_07, MISSION_08];
+
+function checkEveryMissionHasASignal(): void {
+  const signals = createSignals();
+  for (const mission of CAMPAIGN) {
+    const signal = signals.find((s) => s.id === mission.contactId);
+    check(
+      `${mission.id}: has a globe signal for "${mission.contactId}"`,
+      signal !== undefined,
+      signal ? `${signal.name || '(unnamed)'}` : 'NOT ON THE GLOBE - unreachable'
+    );
+  }
+  // And the reverse, which is how a signal quietly becomes scenery.
+  for (const signal of signals) {
+    if (signal.id === 'anomaly') continue;
+    check(
+      `signal "${signal.id}" belongs to a mission`,
+      CAMPAIGN.some((m) => m.contactId === signal.id)
+    );
+  }
 }
 
 let failures = 0;
@@ -796,6 +835,7 @@ console.log('\n=== THE PIPE GRID ===\n');
  */
 console.log('');
 console.log('=== THE GLOBE ===');
+checkEveryMissionHasASignal();
 checkGlobeTurns();
 console.log('');
 console.log('=== THE PIPE RUNS ===');

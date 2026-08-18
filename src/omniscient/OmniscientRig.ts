@@ -1830,7 +1830,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
    */
   private setSignalState(signalId: string, state: SignalState): void {
     const signal = this.signals.find((s) => s.id === signalId);
-    if (!signal) return;
+    /*
+     * A mission with no signal cannot be reached, and this used to say nothing about it.
+     *
+     * Lucian shipped like that: the eighth request was queued, offered and marked openable,
+     * and then died here because createSignals had no entry for him. The globe is the only
+     * place a request can be clicked, so the final mission of the game was unreachable and
+     * the only symptom was a player saying they could not see it.
+     */
+    if (!signal) {
+      console.warn(`[omniscient] no globe signal for "${signalId}" - this request cannot be opened`);
+      return;
+    }
     signal.state = state;
     signal.hidden = false;
   }

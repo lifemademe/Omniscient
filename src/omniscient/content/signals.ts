@@ -168,6 +168,40 @@ export function createSignals(): Signal[] {
       state: SignalState.Dormant,
       hidden: true,
     },
+    {
+      /**
+       * Lucian, who had a contact, a mission, a model and no signal.
+       *
+       * ## The eighth request could not be started
+       *
+       * `LUCIAN_SIGNAL` was exported from this file and never used. The campaign queue
+       * offers his request like any other - `topUpGlobe` advances past it and adds 'lucian'
+       * to `openable` - and then `setSignalState` looks for a signal with that id, finds
+       * nothing, and returns. Silently. So the final mission of the game was offered,
+       * marked answerable, and never drawn on the globe, which is the only place it can be
+       * clicked.
+       *
+       * Reported as simply not seeing it, which is exactly what it looked like from
+       * outside: nothing failed, nothing warned, the count in the panel was right. That
+       * silent `return` now warns, and preview-stuck holds every queued mission to having a
+       * signal to arrive on.
+       *
+       * ## Why he is on his own continent
+       *
+       * The one request that is not somebody asking for help. Seven people have trusted the
+       * machine with a problem and the eighth arrival is a policeman who has been given a
+       * terminal - so he comes from the emptiest part of the globe, a long way from the
+       * coast the rest of them share, and the player watches him come round.
+       */
+      id: LUCIAN_SIGNAL,
+      latitude: -25.0,
+      longitude: 141.0,
+      name: 'Lucian Barbu',
+      label: 'District 07 - routine audit.',
+      // Last, and only after Sanda. See the queue in OmniscientRig.
+      state: SignalState.Dormant,
+      hidden: true,
+    },
     // §169: an origin that should not exist. Visible for a few frames in every hundred,
     // never openable, never explained. Most players will not notice it. That is correct.
     {
