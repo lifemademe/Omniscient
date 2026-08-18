@@ -55,6 +55,21 @@ const GESTURES = {
   reacting: '@project/assets/animations/Reacting.fbx',
   /** Agreement, or resignation. The cheapest way to make somebody feel listened to. */
   nod: '@project/assets/animations/Sarcastic Head Nod.fbx',
+  /**
+   * The one clip here that is not a one-shot.
+   *
+   * It lives in the same record because everything around it applies unchanged - the
+   * colon strip, the dropped position tracks, the hips delta, the shared cache. What
+   * differs is entirely on the playback side, so `riggedContact.walk` drives it as
+   * LoopRepeat for a distance rather than LoopOnce for a duration, and it is deliberately
+   * NOT registered as a prop action: a walk needs somewhere to walk to, which a cue that
+   * only names a gesture cannot supply.
+   *
+   * In place, measured: no hips translation track, and the planted foot sweeps back at
+   * 0.97 statures per second. That is where the 1.66 m/s in riggedContact comes from, and
+   * it is the number that decides whether the feet grip the ground or skate over it.
+   */
+  walk: '@project/assets/animations/Walking.fbx',
 } as const;
 
 export type GestureName = keyof typeof GESTURES;

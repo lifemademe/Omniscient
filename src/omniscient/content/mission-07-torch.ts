@@ -238,6 +238,20 @@ export const MISSION_07: MissionDefinition = {
     },
     {
       id: 'how-close',
+      /**
+       * He takes the twenty metres down to seven while the camera is on him.
+       *
+       * The arrival cue rather than a transition one, so it fires however the player got
+       * here - ASK_WHO routes in from three other beats and `onUnrecognised` returns to
+       * it - and the mark he walks to is absolute, so asking twice does not walk him into
+       * the lens. See the `closer` action in scenes.ts.
+       *
+       * `gesture` is the beat's arrival slot and this is not a gesture, but it is the
+       * right slot: what it means is "the thing that happens when we land here", and the
+       * thing that happens when we land here is that he moves. Sanda has no reaction of
+       * her own on this beat, so nothing is displaced.
+       */
+      gesture: 'prop.closer:follower',
       framing: 'camera.push-in:follower',
       tempo: Tempo.Respond,
       learn: [FACT_LIGHT_IS_A_DETERRENT],

@@ -6296,23 +6296,53 @@ function buildMillRoad(scene: ContactScene): void {
     },
     actions: {
       /**
+       * He closes.
+       *
+       * Fired on `how-close`, whose first line is "Twenty metres. Maybe less now." - the
+       * beat where the player asks how near he is, and the camera pushes in on him to
+       * answer. He was standing perfectly still through all of it, so the line was a
+       * claim the picture contradicted.
+       *
+       * This is the one place in the game a walk cycle earns its keep, and it is worth
+       * saying why it is here and not in Adaeze's garden, where the question came up. A
+       * walk needs three things at once: the character has to be ON CAMERA, the movement
+       * has to be MOTIVATED by the beat, and it has to happen ONCE so it cannot read as a
+       * loop. A patrol between two points fails the last of those on its second lap and
+       * the first as soon as the shot changes - framing here belongs to the beat, so a
+       * contact wandering on a timer walks out of a composed frame. He passes all three:
+       * `camera.push-in:follower` is pointed straight at him, the request is about how
+       * close he is getting, and he does it when asked.
+       *
+       * An ABSOLUTE mark rather than a relative step, because `how-close` can be
+       * re-entered - `onUnrecognised` returns to it, and three other beats route back
+       * through ASK_WHO. Relative steps would let a player who kept asking walk him past
+       * the camera and out of the road. He comes to 7.4m and stays there however many
+       * times he is asked about; the guard below means a repeat is not even a twitch.
+       *
+       * He keeps to the hedge side, because that is what she says he does.
+       */
+      closer: (_tweener, node) => {
+        const to = new THREE.Vector3(1.88, 0, -7.4);
+        if (node.position.distanceTo(to) < 0.2) return;
+        follower.walk(to);
+      },
+
+      /**
        * He breaks off.
        *
        * Not a fade and not a delete: he crosses the road to the mill side and walks into
        * the cut, which is exactly what she narrates. A contact describing something the
        * player can watch happen is the difference between an ending and a caption.
+       *
+       * It WAS a lerp, and a lerp is a slide - a man in a walk-cycle-free T of a pose
+       * travelling seven metres without taking a step, turning at a constant rate the
+       * whole way. He now walks it, at the speed the clip's own planted foot moves, and
+       * turns onto the heading rather than through it. `interrupt` because he may still
+       * be closing in when the torch goes on, and being ignored there would have him
+       * carry on toward her at the exact moment the mission says he gives up.
        */
-      clear: (tweener, node) => {
-        const from = node.position.clone();
-        const to = new THREE.Vector3(MILL_X - 0.6, 0, CUT.z - 1.2);
-        tweener.add(
-          (t) => {
-            node.position.lerpVectors(from, to, t);
-            // Turning away as he goes, so the last thing visible is his back.
-            node.rotation.set(0, Math.PI * 0.02 + t * Math.PI * 0.78, 0);
-          },
-          { duration: 3.2, easing: Ease.inOutCubic, channel: 'follower-away' }
-        );
+      clear: () => {
+        follower.walk(new THREE.Vector3(MILL_X - 0.6, 0, CUT.z - 1.2), { interrupt: true });
       },
     },
   });

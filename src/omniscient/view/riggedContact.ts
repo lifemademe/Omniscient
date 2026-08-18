@@ -323,6 +323,50 @@ export interface RiggedContact {
    * the bench.
    */
   gesture: (name: GestureName) => void;
+  /**
+   * Walk somewhere, in the same space `options.position` was given in.
+   *
+   * The one clip in the game that is not a one-shot, and the only thing that moves a
+   * contact's root. `to.y` is ignored - these people walk on the ground.
+   *
+   * ## Why this is not an idle behaviour
+   *
+   * The obvious version of this is a patrol on a timer: two points, walk between them
+   * forever. It is the wrong shape for this game and it would cost more than it pays.
+   * Framing here is owned by the beat (`camera.push-in:neighbour-tree`), so a contact
+   * who wanders on a clock is either walking out of a composed shot or dragging the
+   * camera after her; arrival gestures fire on beats, so `prop.surprised:contact` would
+   * land mid-stride; and a two-waypoint loop watched for four minutes reads as a rail
+   * within one cycle. The fiction is against it too - somebody who has phoned for help
+   * and is answering questions stands still, and pacing on a schedule reads as not
+   * listening.
+   *
+   * So this is driven by the conversation instead. She walks because the player told her
+   * to, once, to somewhere that means something. That cannot read as a loop, and it
+   * doubles as confirmation that the instruction landed.
+   *
+   * `back` gives the A-to-B-to-A shape anyway, for a room that wants it: she stands at B
+   * for `dwell` seconds with the breathing loop and her hands back before returning.
+   * Ignored while a walk is already running.
+   */
+  walk: (to: THREE.Vector3, options?: WalkOptions) => void;
+}
+
+export interface WalkOptions {
+  /** Facing on arrival. Defaults to the direction she travelled - people look where they went. */
+  facing?: number;
+  /** Return to where she started, and to the heading she had there. */
+  back?: boolean;
+  /** Seconds standing at the far end before turning back. Only used with `back`. */
+  dwell?: number;
+  /**
+   * Abandon a walk already in progress rather than being ignored.
+   *
+   * For the case where something in the fiction overrides where somebody was going - the
+   * follower breaks off while he is still closing in. Without it the second instruction
+   * is dropped and he carries on walking toward her, which is the opposite of the beat.
+   */
+  interrupt?: boolean;
 }
 
 /**
@@ -392,6 +436,41 @@ const TAKE = 0.25;
  * radio to flat on a bench, and that travel was being done in under half a second.
  */
 const RELEASE = 0.5;
+
+/**
+ * How fast the walk clip actually covers ground, in statures per second.
+ *
+ * MEASURED, because guessing this is what makes a walking character skate. `Walking.fbx`
+ * is an in-place clip - no hips translation track at all - so the root has to be driven
+ * by hand, and there is exactly one speed at which that looks like walking: the one where
+ * the planted foot stays put on the ground.
+ *
+ * Which is a thing that can be measured rather than tuned. Run the clip on its own
+ * skeleton, take the frames where a toe is within 12% of its vertical range of the floor,
+ * and read off how fast that toe travels BACKWARD relative to the hips. During stance the
+ * foot is stationary in the world, so that number IS the walk speed. Over 240 samples of
+ * the 0.967s cycle it comes out at 0.971 statures per second - 1.66 m/s and 0.80m per step
+ * at Adaeze's 1.71m, which is a brisk but ordinary walk and a realistic stride, so the two
+ * independent checks agree.
+ *
+ * Anything faster and she moonwalks; anything slower and she treadmills. Scaled by the
+ * rig's own height rather than fixed in metres, because a shorter contact takes shorter
+ * steps out of the same clip and would skate at a taller one's speed.
+ */
+const WALK_PACE = 0.971;
+
+/**
+ * Radians per second the body comes round onto a new heading.
+ *
+ * Slow enough to read as a person turning and fast enough that a right-angle turn is
+ * under a second. She does not translate while she is more than square to her
+ * destination - see `forward` below - so this also sets how long the turn on the spot at
+ * the start of a walk lasts.
+ */
+const TURN_RATE = 2.4;
+
+/** Close enough to have arrived. Below the width of a foot, so it cannot be seen. */
+const ARRIVE = 0.06;
   let gestureAction: THREE.AnimationAction | null = null;
   /** A finished one-shot, still fading down. Stopped once it reaches zero - see release. */
   let fading: THREE.AnimationAction | null = null;
@@ -412,6 +491,24 @@ const RELEASE = 0.5;
    * lifts their hands off a table to agree with somebody.
    */
   let gestureTakesHands = true;
+
+  /**
+   * The walk: the looping action, the leg being walked, and what is left of the route.
+   *
+   * A route rather than a destination because the return trip is not one long walk with a
+   * pause in it - she has to STOP at the far end. The clip is ended and the breathing loop
+   * taken back for the dwell, then a fresh action is started for the way home, which is
+   * why this is a queue of legs and not a target vector.
+   */
+  interface Leg {
+    to: THREE.Vector3;
+    facing: number;
+  }
+  let walkAction: THREE.AnimationAction | null = null;
+  let leg: Leg | null = null;
+  let route: Leg[] = [];
+  let dwell = 0;
+  let dwellLeft = 0;
 
   /**
    * The breathing loop, and the flag that says whether it is currently in charge.
@@ -533,6 +630,146 @@ const RELEASE = 0.5;
     gestureAction = null;
   };
 
+  /**
+   * Turn toward a heading the short way round, and report how far off she still is.
+   *
+   * Through atan2 of the sine and cosine rather than by subtracting angles, so a turn
+   * from 170 degrees to -170 is the 20-degree one and not the 340-degree one. Rate
+   * limited, so this is also what makes the turn a movement rather than a snap.
+   */
+  const turnToward = (want: number, deltaTime: number): number => {
+    const delta = Math.atan2(
+      Math.sin(want - root.rotation.y),
+      Math.cos(want - root.rotation.y)
+    );
+    const step = Math.min(Math.abs(delta), TURN_RATE * deltaTime);
+    root.rotation.y += Math.sign(delta) * step;
+    return Math.abs(delta) - step;
+  };
+
+  /**
+   * Hand the body back to the breathing loop at the end of a leg.
+   *
+   * The same two rules as `release`, and for the same reasons: crossfade both ways so the
+   * weights never sum to less than one, and stop the outgoing action only once it has
+   * actually reached zero - which `fadeLeft` in the tick does. A walk is LoopRepeat rather
+   * than LoopOnce so it is not clamped and bound the way a gesture is, but leaving a
+   * looping action running at zero weight would keep it advancing forever, so it still has
+   * to be stopped rather than merely faded.
+   */
+  const endLeg = (): void => {
+    leg = null;
+    if (!walkAction) return;
+    holdIdle();
+    if (baseAction) walkAction.crossFadeTo(baseAction, RELEASE, false);
+    else walkAction.fadeOut(RELEASE);
+    fading = walkAction;
+    fadeLeft = RELEASE;
+    walkAction = null;
+  };
+
+  /** Start the clip for the next leg of the route. */
+  const beginLeg = (): void => {
+    const next = route.shift();
+    if (!next) return;
+    void loadGesture('walk').then((clip) => {
+      if (!clip || !mixer) return;
+
+      const action = mixer.clipAction(fitHips(clip));
+      /*
+       * A redirect, not a departure.
+       *
+       * `clipAction` is cached by clip and root, so a second walk on the same rig is
+       * literally the same action object - and crossfading an action with itself is not
+       * a blend, it is two fades fighting over one interpolant. Somebody already walking
+       * who is sent somewhere else just gets a new destination; the legs never stop.
+       */
+      if (walkAction === action && action.isRunning()) {
+        leg = next;
+        return;
+      }
+
+      // Nothing else may be on its way anywhere - two actions fading at once is a sum
+      // below one, which three draws as the bind pose.
+      gestureAction?.stop();
+      fading?.stop();
+      fading = null;
+      fadeLeft = 0;
+      gestureLeft = 0;
+      holdIdle();
+
+      action.reset();
+      action.setLoop(THREE.LoopRepeat, Infinity);
+      action.clampWhenFinished = false;
+      // Weight one and let the crossfade ramp it - see the note on the gesture, where
+      // starting at zero was the whole T-pose.
+      action.enabled = true;
+      action.weight = 1;
+      action.play();
+      if (baseAction) baseAction.crossFadeTo(action, TAKE, false);
+      else action.fadeIn(TAKE);
+      walkAction = action;
+      leg = next;
+    });
+  };
+
+  /**
+   * Move the root while the clip plays.
+   *
+   * Turn and travel are separate, and the coupling between them is the one line that
+   * decides whether this looks like walking: forward speed is scaled by the cosine of how
+   * far off the heading still is, so a body square to its destination turns on the spot
+   * and eases into the travel as it comes round, instead of sliding sideways down the
+   * shortest line while facing somewhere else.
+   *
+   * Travel is along her own facing rather than straight at the target, so the path is an
+   * arc she could actually have walked. The two converge because she is turning toward
+   * the target every frame.
+   */
+  const stepWalk = (deltaTime: number): void => {
+    if (!leg) {
+      if (dwellLeft <= 0) return;
+      dwellLeft -= deltaTime;
+      if (dwellLeft <= 0) beginLeg();
+      return;
+    }
+
+    const dx = leg.to.x - root.position.x;
+    const dz = leg.to.z - root.position.z;
+    const distance = Math.hypot(dx, dz);
+
+    const speed = WALK_PACE * options.height;
+    if (distance > ARRIVE) {
+      const error = turnToward(Math.atan2(dx, dz), deltaTime);
+      /*
+       * Inside her own turning circle, walk first and she orbits.
+       *
+       * Turning while travelling traces an arc of radius speed/TURN_RATE - 0.69m here -
+       * so a target nearer than that and off to one side cannot be reached by curving
+       * toward it: she circles it instead. Simulated, and it is not subtle. A 0.4m step
+       * to the side came out as 1.4m of walking over five seconds, which is a person
+       * pacing round a spot rather than stepping onto it.
+       *
+       * So inside the circle she turns on the spot first and then walks straight at it,
+       * which is what a person does for a short sideways move anyway.
+       */
+      const orbiting = distance < speed / TURN_RATE && error > 0.15;
+      const forward = orbiting ? 0 : Math.max(0, Math.cos(error));
+      const step = Math.min(distance, speed * forward * deltaTime);
+      root.position.x += Math.sin(root.rotation.y) * step;
+      root.position.z += Math.cos(root.rotation.y) * step;
+      return;
+    }
+
+    // Arrived. Square up before handing back, or she finishes the walk still facing the
+    // way she was going and the idle plays to nobody.
+    root.position.x = leg.to.x;
+    root.position.z = leg.to.z;
+    if (turnToward(leg.facing, deltaTime) > 0.02) return;
+    endLeg();
+    if (route.length > 0) dwellLeft = dwell;
+  };
+
   const contact: RiggedContact = {
     root,
     bones: {},
@@ -590,6 +827,30 @@ const RELEASE = 0.5;
       });
     },
 
+    walk: (to, walkOptions = {}) => {
+      // One walk at a time, unless told otherwise. A second instruction arriving
+      // mid-stride would otherwise capture a half-walked position as "home" and send her
+      // back to the middle of the last trip.
+      const busy = leg !== null || dwellLeft > 0 || route.length > 0;
+      if (busy && !walkOptions.interrupt) return;
+      if (busy) {
+        leg = null;
+        route = [];
+        dwellLeft = 0;
+      }
+
+      const home = root.position.clone();
+      const homeFacing = root.rotation.y;
+      // Where she ends up looking, if the caller did not say: along the way she came,
+      // which is what somebody who has just walked over to look at something is doing.
+      const travelled = Math.atan2(to.x - home.x, to.z - home.z);
+
+      route = [{ to: to.clone(), facing: walkOptions.facing ?? travelled }];
+      if (walkOptions.back) route.push({ to: home, facing: homeFacing });
+      dwell = walkOptions.dwell ?? 1.8;
+      beginLeg();
+    },
+
 
     idle: (deltaTime: number) => {
       if (mixer) mixer.update(deltaTime);
@@ -609,6 +870,8 @@ const RELEASE = 0.5;
         }
       }
 
+      stepWalk(deltaTime);
+
       if (gestureLeft > 0) {
         gestureLeft -= deltaTime;
         // Only ramps for a gesture that owns the arms - see gestureTakesHands. A nod
@@ -616,6 +879,15 @@ const RELEASE = 0.5;
         // the hands stay where the scene put them while the head does the work.
         if (gestureTakesHands) hold = Math.min(1, hold + deltaTime / TAKE);
         if (gestureLeft <= 0) release();
+      } else if (leg) {
+        /*
+         * A walk always owns the arms, and it has to, because the alternative is worse
+         * than a gesture's. Hand IK is solved to a target in WORLD space - a bench, a
+         * bed rail - and the root is moving, so a walking contact who kept her targets
+         * would reach further back with every step until the arm inverted. The arms
+         * swing with the clip until she stops, then ease back over RELEASE.
+         */
+        hold = Math.min(1, hold + deltaTime / TAKE);
       } else if (hold > 0) {
         hold = Math.max(0, hold - deltaTime / RELEASE);
       }
