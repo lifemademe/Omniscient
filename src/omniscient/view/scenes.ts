@@ -42,6 +42,7 @@ import { decorMesh } from '../art/mesh.js';
 import { CERTAINTY } from '../art/certainty.js';
 import { createFloodwater } from '../art/floodwater.js';
 import { createTorchlight } from '../art/torchlight.js';
+import { applyFloodstain } from '../art/floodstain.js';
 import { applyWaterline } from '../art/waterline.js';
 import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { placeRigged } from './riggedContact.js';
@@ -1406,6 +1407,24 @@ function buildRepairShop(scene: ContactScene): void {
       decay: 1.6,
     })
   );
+
+
+  /**
+   * The wall, a year after the water went down - see art/floodstain.
+   *
+   * Mirela's shop takes it every spring and she has lived with it - heavy, but a wall
+   * somebody still works against rather than one that has been given up on.
+   *
+   * A finisher, not a build step, for the reason every material change in this project
+   * has to be: MeshNode finishes its material load asynchronously, so anything assigned
+   * during the build is quietly replaced by a load that was already in flight.
+   */
+  scene.registerFinisher(() => {
+    const wall = scene.nodeFor('wall');
+    if (!wall) return;
+    const stained = applyFloodstain(wall as unknown as THREE.Object3D, 0.26, 0.85);
+    if (!stained) console.warn('[scene] flood staining touched nothing on the wall');
+  });
 
   scene.registerShot('default', {
     // Target raised to chest height rather than bench height, so she is in the frame
@@ -4084,6 +4103,24 @@ function buildClearedHouse(scene: ContactScene): void {
       decay: 1.5,
     })
   );
+
+
+  /**
+   * The wall, a year after the water went down - see art/floodstain.
+   *
+   * Ileana's went under once and badly, and the person who cleaned it up afterwards is
+   * the one who has just died. Stronger than the workshop, and nobody has painted over it.
+   *
+   * A finisher, not a build step, for the reason every material change in this project
+   * has to be: MeshNode finishes its material load asynchronously, so anything assigned
+   * during the build is quietly replaced by a load that was already in flight.
+   */
+  scene.registerFinisher(() => {
+    const wall = scene.nodeFor('wall');
+    if (!wall) return;
+    const stained = applyFloodstain(wall as unknown as THREE.Object3D, 0.26, 1.0);
+    if (!stained) console.warn('[scene] flood staining touched nothing on the wall');
+  });
 
   scene.registerShot('default', {
     /**

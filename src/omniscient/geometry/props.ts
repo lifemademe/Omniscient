@@ -238,8 +238,25 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
    */
   const CAVITY = { depth: BAY.depth };
   {
+    /*
+     * A millimetre proud of the carcass, and that millimetre is the actual z-fight.
+     *
+     * Reported twice at the back of the set. The first fix moved the socket collar,
+     * which was genuinely coplanar and was genuinely not what the player was looking
+     * at: the collar is a 4cm ring, and this is the entire floor of the bay.
+     *
+     * The carcass stops at -0.0850 - it is the case minus the depth of the well - and
+     * this plate was laid at -0.0850 to -0.0790, so its front face and the carcass's
+     * rear face were the same plane, both facing the camera, both drawn. Every pixel
+     * of the well's floor was a tie between a dark chassis panel and the warm case,
+     * which is why it shimmered across the whole opening rather than at one edge.
+     *
+     * Set proud rather than sunk, because it is a liner dropped into the well and a
+     * liner sits on top of what it lines. It also keeps the collar's geometry above
+     * valid: that ring now overlaps this plate instead of sharing a face with it.
+     */
     const plate = new THREE.BoxGeometry(BAY.width, BAY.height, 0.006);
-    plate.translate(0, height / 2, -depth / 2 + BAY.depth + 0.003);
+    plate.translate(0, height / 2, -depth / 2 + BAY.depth - 0.001);
     chassis.push(plate);
   }
 

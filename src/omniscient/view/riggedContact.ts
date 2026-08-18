@@ -375,6 +375,8 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
    * released them would be a person pointing while still holding the table - so the
    * takeover is a ramp in both directions and the IK is blended out rather than switched.
    */
+  /** The breathing loop. Faded down while a gesture owns the body - see gesture. */
+  let baseAction: THREE.AnimationAction | null = null;
   let gestureAction: THREE.AnimationAction | null = null;
   let gestureLeft = 0;
   let hold = 0;
@@ -416,6 +418,9 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
       void loadGesture(name).then((clip) => {
         if (!clip || !mixer) return;
         gestureAction?.fadeOut(0.25);
+        // Down, not off. It comes back under the gesture's own fade at the end, so
+        // she is breathing again before the clip has finished letting go.
+        baseAction?.fadeOut(0.25);
         const action = mixer.clipAction(clip);
         action.reset();
         action.setLoop(THREE.LoopOnce, 1);
@@ -438,6 +443,7 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
         if (gestureTakesHands) hold = Math.min(1, hold + deltaTime * 4);
         if (gestureLeft <= 0) {
           gestureAction?.fadeOut(0.3);
+          baseAction?.fadeIn(0.3);
           gestureAction = null;
         }
       } else if (hold > 0) {
@@ -580,7 +586,19 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
           : clips.find((candidate) => candidate.name === options.clip);
       if (wanted) {
         mixer = new THREE.AnimationMixer(loaded);
-        mixer.clipAction(wanted).play();
+        /*
+         * Held, because a gesture has to be able to get it out of the way.
+         *
+         * This played at full weight forever and nothing ever turned it down, so a
+         * gesture was a SECOND action writing the same bones at the same weight - and
+         * three.js blends actions on shared tracks by weight, which makes the result
+         * the average of the two. Every gesture in the game was playing at half
+         * strength against a breathing loop, which is why the point did not look like
+         * a point: it was a point and an idle, halfway between, with the arms drifting
+         * outward to somewhere neither clip ever goes.
+         */
+        baseAction = mixer.clipAction(wanted);
+        baseAction.play();
       }
       console.log(`[rigged] ${name} clips: ${clips.map((c) => c.name).join(', ') || 'none'}`);
     }

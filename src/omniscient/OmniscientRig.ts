@@ -237,6 +237,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private pauseRemaining = 0;
   /** Seconds left holding the Contact View after a resolution. Zero when not holding. */
   private resolveHold = 0;
+  /** The wordmark at the head of the menu. Only ever visible on the menu itself. */
+  private facilityPlate: THREE.Object3D | null = null;
   /** Counting down to leaving a LOST request - see closeLostRequest. */
   private lostHold = 0;
 
@@ -1412,7 +1414,21 @@ export class OmniscientRig extends ENGINE.SceneNode {
         depthWrite: false,
       });
 
-      station.add(decorMesh('FacilityPlate', plate, material));
+      /*
+       * Kept, so it can be taken down.
+       *
+       * The mark belongs to the front door and nowhere else. It is a physical plate at
+       * the head of the menu stack, which means the camera flying home from a finished
+       * request sweeps back across the workstation and puts the logo through the middle
+       * of the transition - a title card in the middle of a game, which is what it reads
+       * as and is exactly what it should not.
+       *
+       * Hidden the moment the menu is left and hung again when it is returned to. See
+       * showFacilityPlate.
+       */
+      this.facilityPlate = decorMesh('FacilityPlate', plate, material);
+      this.facilityPlate.visible = this.phase === Phase.Menu;
+      station.add(this.facilityPlate);
     } catch (error) {
       console.warn('[omniscient] facility plate not hung', error);
     }
@@ -1492,11 +1508,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.attachPicker(world, container);
 
     // Open on the machine at rest: menu up, tree on the CRT (§174, §183).
-    this.phase = Phase.Menu;
+    this.setPhase(Phase.Menu);
     this.screen = Screen.Tree;
     this.cutTo(HOME_SHOT);
     this.menu?.setEnabled(true);
     this.phone.setVisible(false);
+  }
+
+  /**
+   * Change phase, and take the wordmark down with it.
+   *
+   * A setter rather than six assignments, because the plate has to come down on every
+   * route out of the menu and go back up on every route in, and a rule enforced at six
+   * call sites is a rule that holds until somebody adds a seventh.
+   */
+  private setPhase(next: Phase): void {
+    this.phase = next;
+    if (this.facilityPlate) this.facilityPlate.visible = next === Phase.Menu;
   }
 
   private attachPicker(world: ENGINE.World, container: HTMLElement): void {
@@ -1633,7 +1661,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.globeScreen?.detach();
     this.phone?.setVisible(false);
     this.globeHandoff = 0;
-    this.phase = Phase.Menu;
+    this.setPhase(Phase.Menu);
     this.screen = Screen.Tree;
     this.menu?.setEnabled(true);
     this.moveTo(HOME_SHOT, 1.4);
@@ -1647,7 +1675,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * while the points stay big enough to click.
    */
   private showGlobe(): void {
-    this.phase = Phase.Choosing;
+    this.setPhase(Phase.Choosing);
     this.screen = Screen.Globe;
     this.phone?.setVisible(false);
 
@@ -1669,7 +1697,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.openable.delete(signalId);
     this.queueIndex = index + 1;
 
-    this.phase = Phase.Contact;
+    this.setPhase(Phase.Contact);
     this.screen = Screen.Tree;
     this.globeScreen?.detach();
     this.phone?.setVisible(true);
@@ -1858,7 +1886,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     setRetroLook('console');
 
-    this.phase = Phase.Home;
+    this.setPhase(Phase.Home);
     this.screen = Screen.Tree;
     this.phone?.setVisible(false);
     this.pauseRemaining = HOME_DWELL;
@@ -1900,7 +1928,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * when jumped to is not a beat that reads.
    */
   public jumpToScene(sceneId: string): void {
-    this.phase = Phase.Contact;
+    this.setPhase(Phase.Contact);
     this.globeScreen?.detach();
     this.phone?.setVisible(false);
     this.menu?.setEnabled(false);
