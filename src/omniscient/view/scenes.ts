@@ -6512,6 +6512,17 @@ function buildNightDoor(scene: ContactScene): void {
    * the old version simply did not have, and whose absence was the widest of the holes.
    */
   const PROUD = 0.06;
+  /** How far the framing's centre sits toward the street from the slab's. */
+  const PROUD_AT = 0.012;
+  /**
+   * The street-facing surface of the whole leaf, derived once.
+   *
+   * Everything mounted on this door - the lock, the glass, the letterbox - needs to sit on
+   * THIS plane, and each of them working it out separately is how one of them ends up
+   * inside the woodwork. Which is what happened: the lock's copy of this sum left out the
+   * framing's own 12mm offset and put the brass 8mm under the surface.
+   */
+  const LEAF_FRONT = LEAF_Z + PROUD_AT + PROUD / 2;
   for (const [w, h, ox, oy] of [
     // Stiles, full height, one each side.
     [STILE, DOOR.h, -(DOOR.w - STILE) / 2, DOOR.h / 2],
@@ -6523,8 +6534,18 @@ function buildNightDoor(scene: ContactScene): void {
     // The muntin, from the bottom rail to the top one.
     [0.08, DOOR.h - 0.3, 0, DOOR.h / 2 - 0.015],
   ] as const) {
+    /*
+     * PLUS, not minus, and this was the fault behind three separate reports.
+     *
+     * The camera looks down -z, so the street-facing side of anything is the one with the
+     * LARGER z. Offsetting the framing by -0.012 stood it proud on the BACK of the door and
+     * left its street face exactly flush with the slab - so from outside, a panelled door
+     * presented as one unbroken sheet with all of its joinery hidden behind it. That is the
+     * "door is still a flat plane" report, and no amount of shading or panel colour was
+     * ever going to fix it, because there was nothing to shade.
+     */
     const piece = new THREE.BoxGeometry(w, h, PROUD);
-    piece.translate(DOOR.x + ox, oy, LEAF_Z - 0.012);
+    piece.translate(DOOR.x + ox, oy, LEAF_Z + PROUD_AT);
     carcass.push(piece);
   }
 
@@ -6569,7 +6590,8 @@ function buildNightDoor(scene: ContactScene): void {
   ] as const) {
     // Just proud of the slab so it does not z-fight with the leaf it is set into.
     const glazing = new THREE.PlaneGeometry(0.29, 0.66);
-    glazing.translate(DOOR.x + ox, 1.5, LEAF_Z - 0.02);
+    // Set into the opening: behind the framing's face, in front of the slab.
+    glazing.translate(DOOR.x + ox, 1.5, LEAF_Z + 0.021);
     doorRoot.add(meshOf(name, ontoHinge(glazing), MAT.doorGlass));
   }
 
@@ -6583,22 +6605,22 @@ function buildNightDoor(scene: ContactScene): void {
    */
   const furniture: THREE.BufferGeometry[] = [];
   const letterbox = new THREE.BoxGeometry(0.26, 0.045, 0.02);
-  letterbox.translate(DOOR.x, 1.02, LEAF_Z - 0.035);
+  letterbox.translate(DOOR.x, 1.02, LEAF_FRONT + 0.008);
   furniture.push(letterbox);
 
   const knockerPlate = new THREE.CylinderGeometry(0.035, 0.035, 0.016, 10);
   knockerPlate.rotateX(Math.PI / 2);
-  knockerPlate.translate(DOOR.x, 1.46, LEAF_Z - 0.033);
+  knockerPlate.translate(DOOR.x, 1.46, LEAF_FRONT + 0.008);
   furniture.push(knockerPlate);
   const knockerRing = new THREE.TorusGeometry(0.038, 0.008, 6, 14);
-  knockerRing.translate(DOOR.x, 1.415, LEAF_Z - 0.036);
+  knockerRing.translate(DOOR.x, 1.415, LEAF_FRONT + 0.012);
   furniture.push(knockerRing);
 
   // The number, as two short bars. Legible as digits at this distance and cheaper than any
   // attempt to actually shape them.
   for (const ox of [-0.03, 0.03] as const) {
     const digit = new THREE.BoxGeometry(0.016, 0.07, 0.012);
-    digit.translate(DOOR.x + ox, 1.74, LEAF_Z - 0.032);
+    digit.translate(DOOR.x + ox, 1.74, LEAF_FRONT + 0.006);
     furniture.push(digit);
   }
   doorRoot.add(
@@ -6759,10 +6781,17 @@ function buildNightDoor(scene: ContactScene): void {
    * escutcheon sits a couple of millimetres proud of that, which is what a rim of brass
    * screwed to a door does.
    */
-  const LEAF_FRONT = LEAF_Z - 0.06 / 2;
+  /*
+   * On the leaf's street face, taken from LEAF_FRONT rather than recomputed.
+   *
+   * The old line worked it out again from scratch and got the sign wrong: LEAF_Z MINUS half
+   * the thickness is the face pointing into the hall, and the lock then went a further 4mm
+   * behind that - 52mm inside a door 60mm thick. It was rendering perfectly, on the inside,
+   * where nobody was standing. Reported twice as the lock not being on the door.
+   */
   const lockRoot = ENGINE.SceneNode.create({
     name: 'Lock',
-    position: new THREE.Vector3(DOOR.w - 0.11, 1.02, LEAF_FRONT + 0.26 - 0.004),
+    position: new THREE.Vector3(DOOR.w - 0.11, 1.02, LEAF_FRONT + 0.26 + 0.004),
   });
   const escutcheon = new THREE.CylinderGeometry(0.035, 0.035, 0.012, 12);
   escutcheon.rotateX(Math.PI / 2);
