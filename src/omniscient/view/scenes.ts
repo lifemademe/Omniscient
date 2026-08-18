@@ -2547,9 +2547,23 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     size: 1,
     leanToward: 0,
     leanBias: 1,
+    /*
+     * Thicker on the side it reaches, not just longer. With the six evenly spaced limbs
+     * only ONE genuinely made it out over the tunnel, so the cause of the entire request
+     * was a single arm - and once that arm is cut there has to be a tree left standing.
+     * Four more on the same bearing means the crowded side reads as crowded both before
+     * the cut and after it.
+     */
+    extraToward: 4,
+    /*
+     * The hoops span x = -2.05 to 2.05 and the tree stands at x = -3.7, so 1.7 out from
+     * its own trunk is the hoop line to the centimetre. A limb that gets past it is over
+     * her tunnel and comes off; one that does not is over the boundary and is none of her
+     * business. The threshold is the fiction, written as a number.
+     */
+    overhangPast: 1.7,
   });
   const treeRoot = neighbourTree.root;
-  const crown = neighbourTree.crown;
 
   /**
    * A second tree, down by the water, and it is doing a different job.
@@ -2585,23 +2599,146 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     inked: true,
     anchors: { default: new THREE.Vector3(1.6, 3.3, -0.4) },
     actions: {
-      /** Cutting back: the crown lifts away and the light lands on the failing rows. */
+      /**
+       * Cutting back: the overhanging limbs come off and fall, and the light lands.
+       *
+       * This used to slide the WHOLE crown 2.4m in -x, lift it 0.6m and scale it to 45%,
+       * which is a canopy retreating behind its own trunk and getting smaller - reported,
+       * accurately, as the branches moving to the back of the tree. It was doing that
+       * because the crown was one merged mesh with its origin at the tree's base: there
+       * was no such thing as "the branches over the tunnel" to move, and any rotation
+       * would have pivoted about the roots four metres away.
+       *
+       * They are their own node now, hinged at the mean saw cut, so this is the motion a
+       * bough actually makes - it swings down from where it was cut, comes back clear of
+       * the hoops, and lands.
+       *
+       * `inCubic` because it is falling. The old ease was `outCubic`, which starts fast
+       * and settles, and that is the shape of something being PULLED away rather than
+       * let go.
+       */
       clear: (tweener) => {
-        const from = crown.position.clone();
         const shadeMaterial = shadeMesh.material as THREE.MeshBasicMaterial;
         const shadeFrom = shadeMesh.position.x;
+
+        /**
+         * Where each cut limb ends up, worked out from its own geometry.
+         *
+         * ## Lying down is per limb
+         *
+         * The limbs left the trunk at anything from 21 to 66 degrees off vertical, so
+         * there is no single rotation that lays them all flat - simulated, one rigid pose
+         * for the group lands as a 3.9m-tall mass with the hoops through it. Each limb
+         * gets the minimal rotation that takes ITS OWN axis onto a chosen bearing just
+         * below horizontal, which is what a branch on the ground is.
+         *
+         * ## Where they go
+         *
+         * Past the far end of the tunnel, and finding that spot took three tries with a
+         * simulation because every obvious one is already occupied.
+         *
+         * The strip between the trunk and the hoops is 1.11m wide and the heap is three
+         * metres across - each limb carries a 1.4m crown at its end - so branches came out
+         * through the hoops AND through the trunk. Laying them along z past the tunnel put
+         * their far ends in the lake, whose near edge is z = -5.
+         *
+         * What is actually free is the band between the last hoop at z = -2.3 and the
+         * water at z = -5: no hoops, no beds, no trunk, and unlimited in x. So they lie
+         * ALONG x there, which is the one orientation that fits, fanned and stacked across
+         * a 1.8m depth. It lands four degrees off the default shot's axis - middle of
+         * frame, in the mid-distance, behind the tunnel rather than in front of the beds
+         * it has just uncovered. Which is where anybody who had cut them would have
+         * dragged them anyway: out of the way, at the end of the row.
+         *
+         * ## The height
+         *
+         * From the VERTICES under the final rotation, never from a bounding box. The
+         * obvious version rotates the local Box3 and reads its floor; it is wrong by
+         * nearly two metres, because re-fitting an axis-aligned box around a rotated one
+         * finds the corner where max x meets min y and there is no geometry within a
+         * metre of that corner. A few thousand points transformed once, at the moment of
+         * the cut, is exact and costs nothing.
+         */
+        /** Tree-local xz. The tree stands at world (-3.7, -0.4), so this is (-2.4, -4.15). */
+        const DROP_AT = new THREE.Vector2(1.3, -3.75);
+        /**
+         * How much they close up as they come down.
+         *
+         * Not a cheat to make the numbers fit - though it does that too. Five whole boughs
+         * dropped at full spread measure 3.5m across a band that is 2.7m deep, and they
+         * pile 3.2m high, which is not a heap of cuttings but a second tree lying on the
+         * grass. Foliage on a standing branch is held apart by the branch; once it is down
+         * it collapses under its own weight, and a quarter is about what that looks like.
+         */
+        const CLOSES_TO = 0.75;
+        const falls = neighbourTree.cutLimbs.map((cut, index) => {
+          // Alternating ends and fanned, so they cross each other like a heap rather
+          // than lining up like stacked timber.
+          const side = index % 2 === 0 ? 1 : -1;
+          const bearing = (side > 0 ? 0 : Math.PI) + (index - 1.5) * 0.18;
+          const lying = new THREE.Vector3(
+            Math.cos(bearing),
+            // Nose down a little. Dead level reads as floating; a branch on the ground
+            // has its tip in the grass and its cut end propped on whatever is under it.
+            -0.16,
+            Math.sin(bearing)
+          ).normalize();
+          const turn = new THREE.Quaternion().setFromUnitVectors(cut.direction, lying);
+
+          const point = new THREE.Vector3();
+          const low = new THREE.Vector3(Infinity, Infinity, Infinity);
+          const high = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+          cut.node.traverse((object) => {
+            const mesh = object as THREE.Mesh;
+            if (!mesh.isMesh) return;
+            const vertices = mesh.geometry.getAttribute('position');
+            for (let i = 0; i < vertices.count; i++) {
+              point
+                .fromBufferAttribute(vertices as THREE.BufferAttribute, i)
+                .applyQuaternion(turn)
+                .multiplyScalar(CLOSES_TO);
+              low.min(point);
+              high.max(point);
+            }
+          });
+
+          return {
+            node: cut.node,
+            from: cut.node.position.clone(),
+            turn,
+            spin: cut.node.quaternion.clone(),
+            to: new THREE.Vector3(
+              // Spread along the row they are lying in, and stacked shallowly across it -
+              // the across figure is small on purpose, because the clear band is only
+              // 2.35m deep and the crowns are 1.4m wide before any scatter is added.
+              DROP_AT.x - (low.x + high.x) / 2 + (index - 1.5) * 0.42,
+              // 0.07 to sit ON the grass, and each one a little higher than the last so
+              // the pile is a pile and no two faces are coplanar.
+              0.07 + index * 0.11 - low.y,
+              DROP_AT.y - (low.z + high.z) / 2 + side * 0.16
+            ),
+          };
+        });
+
+        /*
+         * `inCubic` because it is falling. The old ease was `outCubic`, which starts fast
+         * and settles - the shape of something being PULLED away rather than let go.
+         */
         tweener.add(
           (t) => {
-            crown.position.set(from.x - t * 2.4, from.y + t * 0.6, from.z);
-            crown.scale.setScalar(1 - t * 0.55);
-            // The light arrives as the limbs go. The shade retreats the same way the
-            // crown does, so the player watches one thing cause the other.
+            for (const fall of falls) {
+              fall.node.position.lerpVectors(fall.from, fall.to, t);
+              fall.node.quaternion.slerpQuaternions(fall.spin, fall.turn, t);
+              fall.node.scale.setScalar(1 - (1 - CLOSES_TO) * t);
+            }
+            // The light arrives as the limbs go. The shade retreats the same way they
+            // do, so the player watches one thing cause the other.
             shadeMesh.position.setX(shadeFrom - t * 2.6);
             shadeMaterial.opacity = 0.52 * (1 - t);
           },
           {
             duration: 1.4,
-            easing: Ease.outCubic,
+            easing: Ease.inCubic,
             channel: 'tree-clear',
           }
         );

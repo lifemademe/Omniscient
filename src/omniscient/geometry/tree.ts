@@ -34,12 +34,55 @@ export interface TreeOptions {
   leanToward: number;
   /** How hard it reaches. 0 is an even crown. */
   leanBias: number;
+  /**
+   * Extra limbs crowded onto the reaching side, on top of the six that go all the way round.
+   *
+   * The six are evenly spaced because that is what makes a trunk look like it is holding
+   * something up rather than leaning under it. But a tree that has spent thirty years
+   * growing out over a neighbour's ground is THICKER on that side as well as longer, and
+   * with only one limb genuinely over the tunnel the crown that the whole request is about
+   * was a single arm with a lollipop on the end of it.
+   *
+   * These are drawn after the six, so a tree that asks for none draws exactly the same
+   * random numbers it always did.
+   */
+  extraToward?: number;
+  /**
+   * Local x past which a limb counts as overhanging, and gets built as a separate object.
+   *
+   * The scene needs to cut these off and drop them, which cannot be done to part of a
+   * merged mesh. Expressed as a distance from the trunk rather than a count, so the split
+   * is decided by where the foliage ACTUALLY ends up rather than by which index it had -
+   * change a length or a lean and the right limbs still go in the right group.
+   */
+  overhangPast?: number;
 }
 
 export interface GeneratedTree {
   root: ENGINE.SceneNode;
   /** The canopy on its own, so a scene can animate it being cut back. */
   crown: ENGINE.MeshNode;
+  /**
+   * The limbs that reach past `overhangPast`, one node each, ready to be cut off.
+   *
+   * ONE NODE PER LIMB rather than one node for the lot, and the difference is not
+   * bookkeeping. Each node's origin is that limb's own fork - where a saw would go - so
+   * rotating it is a hinge at the cut. Rotating a single merged group can only ever apply
+   * one angle to limbs that left the trunk at anything from 21 to 66 degrees, so the
+   * steep ones stay steep: measured, a rigidly-posed group lands as a 3.9m-tall mass that
+   * still pokes through the tunnel hoops. Separately they lie down.
+   *
+   * `direction` is the limb's own axis in tree space, so a scene can work out the
+   * rotation that lays THAT limb flat instead of guessing an angle for all of them.
+   */
+  cutLimbs: CutLimb[];
+}
+
+export interface CutLimb {
+  /** Origin at the fork. Its geometry is stored relative to that point. */
+  node: ENGINE.SceneNode;
+  /** Unit vector along the limb, in tree space. */
+  direction: THREE.Vector3;
 }
 
 export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
@@ -122,10 +165,34 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
    */
   const limbs: THREE.BufferGeometry[] = [];
   const canopy: THREE.BufferGeometry[] = [];
+  /**
+   * The limbs that reach out over the neighbour's ground, kept apart from each other.
+   *
+   * `from` is where this one leaves the trunk and `direction` is where it points - the
+   * two things a scene needs to hinge it at the cut and lay it down.
+   */
+  const cutParts: {
+    limbs: THREE.BufferGeometry[];
+    leaves: THREE.BufferGeometry[];
+    from: THREE.Vector3;
+    direction: THREE.Vector3;
+  }[] = [];
   const UP = new THREE.Vector3(0, 1, 0);
   const Z_AXIS = new THREE.Vector3(0, 0, 1);
   const Y_AXIS = new THREE.Vector3(0, 1, 0);
-  for (let i = 0; i < 6; i++) {
+  const extra = options.extraToward ?? 0;
+  for (let i = 0; i < 6 + extra; i++) {
+    /**
+     * Everything this limb is made of, held aside until its tip is known.
+     *
+     * A limb, its two secondaries and their five leaf clusters are one branch and have to
+     * be cut as one - so they are collected here and posted to whichever bucket the tip
+     * turns out to belong in, at the bottom of the loop.
+     */
+    const limbParts: THREE.BufferGeometry[] = [];
+    const leafParts: THREE.BufferGeometry[] = [];
+    /** True for the limbs crowded onto the reaching side rather than spaced round it. */
+    const reaching = i >= 6;
     /*
      * Negative, for the reason spelled out on `section` above - and this one was doing
      * real damage rather than a cosmetic one. With a positive lean every limb reached out
@@ -148,7 +215,9 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
      * shade on the failing bank comes from THIS tree - and a perfectly symmetrical canopy
      * would quietly delete the reason for the whole request.
      */
-    const swing = (i / 6) * Math.PI * 2 + jitter(rng, 0.3);
+    const swing = reaching
+      ? options.leanToward + jitter(rng, 0.62)
+      : (i / 6) * Math.PI * 2 + jitter(rng, 0.3);
 
     /**
      * Low branches lie down, high branches reach up.
@@ -167,7 +236,9 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
      * At the bottom that is about 66 degrees off vertical, nearly a horizontal bough; at the
      * top about 21, a shoot. That spread is the whole difference between a tree and a broom.
      */
-    const up = 0.34 + i * 0.12;
+    // The extras spread over the same span of trunk as the six, so they fork in among
+    // them rather than all leaving from one collar.
+    const up = reaching ? 0.38 + ((i - 6) / Math.max(1, extra - 1)) * 0.5 : 0.34 + i * 0.12;
     const age = 1 - (up - 0.34) / 0.6;
     const lean = -(0.37 + age * 0.78 + range(rng, 0, 0.12));
 
@@ -206,7 +277,7 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
     limb.rotateY(swing);
     const mid = from.clone().addScaledVector(dir, length / 2);
     limb.translate(mid.x, mid.y, mid.z);
-    limbs.push(limb);
+    limbParts.push(limb);
 
     /**
      * Secondary forks, and clusters where they end.
@@ -231,7 +302,7 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
       blob.rotateY(range(rng, 0, Math.PI * 2));
       blob.rotateX(jitter(rng, 0.5));
       blob.translate(centre.x, centre.y, centre.z);
-      canopy.push(blob);
+      leafParts.push(blob);
     };
 
     for (const side of [-1, 1] as const) {
@@ -247,7 +318,7 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
       twig.rotateY(swing2);
       const mid2 = forkAt.clone().addScaledVector(dir2, length2 / 2);
       twig.translate(mid2.x, mid2.y, mid2.z);
-      limbs.push(twig);
+      limbParts.push(twig);
 
       /**
        * Two clusters per secondary, not one.
@@ -267,11 +338,65 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
     leafCluster(from.clone().addScaledVector(dir, length * 1.04), 0.76 - i * 0.03);
     // And one at the fork itself, which is where a real crown is thickest.
     leafCluster(forkAt.clone().addScaledVector(dir, 0.12), 0.6 - i * 0.02);
+
+    /*
+     * And now the only decision that needed the whole limb built first.
+     *
+     * The test is on the TIP, in the tree's own space, so it asks the question the scene
+     * actually cares about - does this branch end up over the tunnel - rather than
+     * guessing from the swing. A limb angled the right way but too short to get there is
+     * not the neighbour's problem and does not get cut.
+     */
+    const tip = from.clone().addScaledVector(dir, length * 1.04);
+    const overhanging = options.overhangPast !== undefined && tip.x > options.overhangPast;
+    if (overhanging) {
+      cutParts.push({ limbs: limbParts, leaves: leafParts, from, direction: dir.clone() });
+    } else {
+      limbs.push(...limbParts);
+      canopy.push(...leafParts);
+    }
   }
   treeRoot.add(meshOf('TreeLimbs', mergeGeometries(limbs, false) ?? limbs[0], MAT.timberDark));
 
   const crown = meshOf('TreeCrown', mergeGeometries(canopy, false) ?? canopy[0], MAT.leafDeep);
   treeRoot.add(crown);
 
-  return { root: treeRoot, crown };
+  /**
+   * The overhanging limbs, each moved onto its own origin at its own fork.
+   *
+   * Everything so far is built in the tree's space, so this geometry is three metres out
+   * from the trunk and two up. A node whose origin is still the tree's base pivots about
+   * the ROOTS - which is exactly what made cutting the branches back look like the crown
+   * sliding round behind the trunk, because it was rotating about a point four metres
+   * away from itself.
+   *
+   * Translating each limb's geometry back by its own fork and putting its node there
+   * moves nothing on screen and changes everything about how it can animate.
+   */
+  const cutLimbs: CutLimb[] = cutParts.map((part, index) => {
+    const at = part.from;
+    for (const geometry of [...part.limbs, ...part.leaves]) {
+      geometry.translate(-at.x, -at.y, -at.z);
+    }
+    const node = ENGINE.SceneNode.create({
+      name: `${options.name}Cut${index}`,
+      position: at.clone(),
+    });
+    node.add(
+      meshOf(`Cut${index}Limb`, mergeGeometries(part.limbs, false) ?? part.limbs[0], MAT.timberDark)
+    );
+    if (part.leaves.length > 0) {
+      node.add(
+        meshOf(
+          `Cut${index}Leaves`,
+          mergeGeometries(part.leaves, false) ?? part.leaves[0],
+          MAT.leafDeep
+        )
+      );
+    }
+    treeRoot.add(node);
+    return { node, direction: part.direction };
+  });
+
+  return { root: treeRoot, crown, cutLimbs };
 }

@@ -15,6 +15,14 @@ export const Ease = {
   /** Default for camera moves - starts and ends soft, never mechanical. */
   inOutCubic: (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2),
   outCubic: (t: number) => 1 - Math.pow(1 - t, 3),
+  /**
+   * Starts still and accelerates - the shape of something falling.
+   *
+   * Every other curve here settles at the end, which is right for anything being moved
+   * and wrong for anything being dropped. A cut branch does not ease out; it goes faster
+   * until it hits the ground and then it stops.
+   */
+  inCubic: (t: number) => t * t * t,
   /** For things a hand did - a switch thrown, a panel pushed. */
   outBack: (t: number) => {
     const c1 = 1.70158;
