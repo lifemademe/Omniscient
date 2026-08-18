@@ -190,10 +190,14 @@ const RESOLVE_HOLD = 4.6;
  * Seconds the Contact View is held after the note is written, before the camera leaves.
  *
  * Longer than RESOLVE_HOLD because there is more to read - the recorded note comes back,
- * and after it the line about what happens to the request now - and because a player who
- * has just lost one is being told the rules rather than watching a payoff.
+ * and after it a standing panel explaining what now happens to the request - and because
+ * a player who has just lost one is being told the rules rather than watching a payoff.
+ *
+ * A ceiling rather than a wait. The notice is about forty words, which is eleven seconds
+ * at a comfortable reading pace, and END CALL skips straight out for anybody who has
+ * finished sooner - see leaveContact.
  */
-const NOTE_HOLD = 7.5;
+const NOTE_HOLD = 11;
 
 /** The diorama atmosphere. Tuned to a room, not to a world - see mountScene. */
 const FOG_NEAR = 3.5;
@@ -1731,7 +1735,22 @@ export class OmniscientRig extends ENGINE.SceneNode {
       signal.state = waits ? SignalState.Cooldown : SignalState.Waiting;
       signal.cooldown = waits ? failure.cooldownSeconds : undefined;
     }
+
+    /*
+     * ADD, not "skip the delete". This was the bug reported on the first build of the
+     * waived countdown: Mirela came back green and unanswerable, the globe read "0
+     * waiting - nothing you can take", and her marker said nobody was asking there yet.
+     *
+     * Answerable is two conditions, not one - GlobeScreen counts a request as waiting
+     * only if the state is Waiting AND the id is in `openable`, and the tooltip puts the
+     * Answer button on the same test. `openContact` removes the id the moment a request
+     * is opened, so by the time a failure lands it is already gone, and declining to
+     * remove it again restores nothing. `reopenAfterCooldown` has always had to add it
+     * back; the no-countdown path is that same path with the wait taken out.
+     */
     if (waits) this.openable.delete(contactId);
+    else this.openable.add(contactId);
+
     // Back in the queue: when the cooldown lapses - or at once, above - it can be
     // attempted again.
     this.queueIndex -= 1;

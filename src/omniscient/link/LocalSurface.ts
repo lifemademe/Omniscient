@@ -264,12 +264,70 @@ export const TERMINAL_CSS = `
   border-left: 2px solid #c9a227;
   color: #e0c265;
 }
+/*
+ * The note prompt, as a callout rather than a footnote.
+ *
+ * This was 10px grey text at the bottom of the failure panel, and it was reported missed
+ * twice - the second time as "I expected an icon the player cannot miss". It was
+ * competing with a red border, a red title and a summary paragraph, all louder than the
+ * one line that says what to DO.
+ *
+ * So it gets the amber, a 26px pen, and the width of the panel. Amber is the player's
+ * turn everywhere in this console now: the flag over the input, the input's own text, and
+ * this.
+ */
 .omni-failure__prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 11px;
+  padding: 9px 10px;
+  border: 1px solid #6b5518;
+  border-left: 3px solid #c9a227;
+  background: rgba(201, 162, 39, 0.1);
+  color: #e0c265;
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+}
+.omni-failure__pen {
+  flex: none;
+  font-size: 22px;
+  line-height: 1;
+  color: #c9a227;
+  animation: omni-note-blink 1.1s steps(1, end) infinite;
+}
+.omni-failure__prompt strong {
   display: block;
-  margin-top: 8px;
   font-size: 10px;
-  letter-spacing: 0.06em;
-  color: #7a8f80;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+  color: #f0d78a;
+}
+/*
+ * And the same panel after the note is written, carrying what happens to the request now.
+ *
+ * That line started life as a transcript push and was reported as "I did not know where
+ * to look" - the log scrolls, and the console closes a few seconds later. Here it is in
+ * the place the player is already looking, because it is where they have just typed.
+ */
+.omni-notice {
+  border: 1px solid #2b5c39;
+  border-left: 3px solid #4f9a5e;
+  background: rgba(79, 154, 94, 0.08);
+  padding: 9px 11px;
+  color: #a7d8ae;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.omni-notice strong {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+  color: #7fe08a;
 }
 .omni-terminal__foot {
   border-top: 1px solid #23422c;
@@ -1195,12 +1253,47 @@ export class LocalSurface implements InterventionSurface {
         box.appendChild(lesson);
       }
 
-      const prompt = document.createElement('span');
+      const prompt = document.createElement('div');
       prompt.className = 'omni-failure__prompt';
-      prompt.textContent =
-        'Write yourself a note below. It will be waiting for you when this request comes back.';
+
+      // Developer-authored glyph, set as text rather than markup - see AGENTS.md on safe
+      // UI. Nothing here comes from the network or from anything the player typed.
+      const pen = document.createElement('span');
+      pen.className = 'omni-failure__pen';
+      pen.textContent = '✎';
+
+      const words = document.createElement('span');
+      const heading = document.createElement('strong');
+      heading.textContent = 'Write your note';
+      const detail = document.createElement('span');
+      detail.textContent =
+        'Type it in the box below and send. It is waiting for you in Records when this '
+        + 'request comes back, and nothing else opens until it is written.';
+      words.append(heading, detail);
+
+      prompt.append(pen, words);
       box.appendChild(prompt);
 
+      this.extraElement.appendChild(box);
+    }
+
+    /*
+     * The notice outlives the failure panel by design.
+     *
+     * `state.failure` clears the moment the note is recorded, which is also the moment
+     * there is something to say about what happens to the request - so this is a separate
+     * branch rather than another line inside the box above.
+     */
+    if (state.notice) {
+      const box = document.createElement('div');
+      box.className = 'omni-notice';
+
+      const heading = document.createElement('strong');
+      heading.textContent = 'Note recorded';
+      const detail = document.createElement('span');
+      detail.textContent = state.notice;
+
+      box.append(heading, detail);
       this.extraElement.appendChild(box);
     }
   }

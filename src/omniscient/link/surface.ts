@@ -216,6 +216,15 @@ export interface SurfaceState {
    * send. A surface should grey its exits while this is set.
    */
   awaitingNote?: boolean;
+  /**
+   * A standing message shown where the failure panel was, rather than in the transcript.
+   *
+   * Exists for one line - what happens to a request after its note is written - which was
+   * pushed into the log and reported as impossible to find. The log scrolls, and a lost
+   * request closes a few seconds later; anything the player has to be told at the end of
+   * one has to hold still.
+   */
+  notice?: string;
   /** When set, the surface shows a device alongside the conversation. */
   device?: DeviceView;
 }

@@ -241,9 +241,17 @@ export const MISSION_01: MissionDefinition = {
           to: 'connector-found',
           environment: 'camera.push-in:transmitter,prop.rotate:transmitter-rear,prop.point:contact',
         },
+        /*
+         * No camera cue, so the `supply` beat's own framing decides - and it is not the
+         * set. This forced a push-in on the transmitter, which meant "follow the supply
+         * wire" and "look at the set" put the camera in the same place and the two chips
+         * looked like one chip with two names.
+         *
+         * She still points, because she is answering from where she stands.
+         */
         ASK_SUPPLY: {
           to: 'supply',
-          environment: 'camera.push-in:transmitter,prop.point:contact',
+          environment: 'prop.point:contact',
         },
         ASK_HISTORY: {
           to: 'history',
@@ -354,6 +362,25 @@ export const MISSION_01: MissionDefinition = {
        * no idea it matters either.
        */
       id: 'supply',
+      /**
+       * Back to the room, and deliberately not to a closer look at anything.
+       *
+       * What she describes here is not IN the room - "out through the wall and up the
+       * hill, it feeds the harbour light as well". The only supply object in the set is
+       * the mains switch on the back wall, and that is the power rather than the route;
+       * pointing the camera at a switch while she talks about a hillside would be a
+       * confident answer to a question nobody asked.
+       *
+       * I considered registering a shot for it and did not, because I cannot see this
+       * one - a camera position picked from coordinates and shipped as though it had been
+       * looked at is how the last three framing faults got in. The wide shot is the true
+       * one anyway: she is telling the machine that this room is on the end of a line
+       * shared with somebody else, which is a fact about the room, and it is also the
+       * seed for Tomas two requests later.
+       *
+       * What matters for now is that it is not the transmitter - see ASK_SUPPLY above.
+       */
+      framing: 'camera.pan:default',
       tempo: Tempo.Think,
       learn: [FACT_SHARED_POWER_FEED],
       say:

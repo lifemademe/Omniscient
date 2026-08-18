@@ -71,6 +71,8 @@ export class SessionController {
   private opened = new Set<string>();
   private confirming: { intentId: string; question: string } | null = null;
   private failed: MissionFailure | null = null;
+  /** Standing message shown where the failure panel was - see writeNote. */
+  private notice: string | null = null;
   /** Last device report, so the surface can show it without re-grading anything. */
   private deviceNote: string | null = null;
 
@@ -291,27 +293,26 @@ export class SessionController {
      * Then say what happens to the request, because nothing else does.
      *
      * A lost request goes red on the globe and counts down, and the only place that was
-     * ever explained is a number on a marker the player has to go and find. Told here, in
-     * the log they are already reading, at the one moment they have just been made to
-     * think about the mistake.
+     * ever explained is a number on a marker the player has to go and find.
+     *
+     * As a `notice` rather than a transcript push. It was a push first, and the report
+     * was "I did not know where to look" - the log scrolls, and the console leaves a few
+     * seconds later. The notice holds still, in the panel above the box they have just
+     * typed in, where the note prompt was a moment ago.
      *
      * Two versions, because the first request has no countdown at all - see its failure
      * in mission-01. Reading "she will call back in a minute and a half" and then finding
      * her green immediately would teach the mechanic wrong on the one attempt where the
      * player is most likely to be learning it.
      */
-    this.push({
-      source: 'system',
-      name: 'OMNISCIENT_',
-      body:
-        cooldown > 0
-          ? `${this.contact.name} is off the air for about ${Math.round(cooldown / 30) * 0.5} `
-            + 'minutes. The request comes back when the countdown on the globe runs out, and '
-            + 'your note is in Records waiting for it.'
-          : 'The request is still open - it is back on the globe now, and your note is in '
-            + 'Records waiting for it. Later ones will not come back so quickly: a lost '
-            + 'request goes red and counts down before you can try it again.',
-    });
+    this.notice =
+      cooldown > 0
+        ? `${this.contact.name} is off the air for about ${Math.round(cooldown / 30) * 0.5} `
+          + 'minutes. The request comes back when the countdown on her marker runs out, and '
+          + 'your note is in Records waiting for it.'
+        : 'This request is still open - it is back on the globe now, answerable straight '
+          + 'away, and your note is in Records waiting for it. Later ones will not come '
+          + 'back so quickly: a lost request goes red and counts down first.';
 
     this.failed = null;
     this.present();
@@ -435,6 +436,7 @@ export class SessionController {
         ? { summary: this.failed.summary, lesson: this.failed.lesson }
         : undefined,
       awaitingNote: this.failed !== null,
+      notice: this.notice ?? undefined,
       device: finished ? undefined : this.buildDevice(),
     });
   }
