@@ -702,9 +702,9 @@ export const MISSION_03: MissionDefinition = {
         prompt:
           'And I cannot do that bank by hand tonight and have anything left for the picking.\n\n'
           + 'There is the little mower, though - the green one by the corner post. My father '
-          + 'put a radio in it years ago so it could be run from the house, and the switch on '
-          + 'the handle is still over. It has been waiting for somebody to call it since he '
-          + 'died. If you can reach it, reach it.',
+          + 'put a radio in it years ago so it could be run from the house. Nobody has called '
+          + 'it in a long time, but the switch on the handle is still over. It might still '
+          + 'work. Check the connection and see.',
         take: 'unit.take',
         accept: 'TAKE THE UNIT',
         wrongSay: '',

@@ -242,14 +242,37 @@ export const TERMINAL_CSS = `
 /* Read. Dimmed rather than removed - the room still has water on the floor. */
 .omni-observed__item--read { opacity: 0.5; }
 /* A device is waiting on the console tab. */
-.omni-tab--live { color: #d8ffb0; }
+/*
+ * The live tab, and it now has to carry more weight than a dot.
+ *
+ * The console no longer steals focus the moment a device arrives - see the note in the
+ * present method, which is a reported fault: the sentence explaining WHY the device matters
+ * was on the tab the player had just been moved off. So the marker is the only thing telling
+ * them there is something to go and do, and a 6px dot pulsing its opacity was not enough
+ * for a player who had never seen the console before.
+ *
+ * Lit background, a border and a ring that expands out of it, so it reads as a thing
+ * asking to be pressed rather than as a status light. The dot stays because it is the part
+ * that survives peripheral vision.
+ */
+.omni-tab--live {
+  color: #e6ffd0;
+  background: rgba(24, 62, 32, 0.95);
+  border-color: rgba(127, 224, 138, 0.75);
+  animation: omni-tab-wants 1.9s ease-in-out infinite;
+}
+.omni-tab--live.omni-tab--active { animation: none; }
+@keyframes omni-tab-wants {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(127, 224, 138, 0.4); }
+  60% { box-shadow: 0 0 0 5px rgba(127, 224, 138, 0); }
+}
 .omni-tab__live {
   display: inline-block;
   width: 6px;
   height: 6px;
   margin-left: 6px;
   border-radius: 50%;
-  background: #7fe08a;
+  background: #b6f08a;
   animation: omni-live 1.2s ease-in-out infinite;
 }
 @keyframes omni-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
@@ -1337,16 +1360,28 @@ export class LocalSurface implements InterventionSurface {
     }
 
     /*
-     * A device arriving takes the player to it; a contact answering takes them back.
+     * A device arriving takes the player to it - unless the same beat SAID something.
      *
-     * Both halves are needed. Without the first, the bag opens on a tab nobody is
-     * looking at; without the second, Tomas raises an objection to a part while the
-     * player is staring at the bag, which is the fault that produced 'nothing
+     * Both halves of the original rule are still needed. Without the switch, the bag opens
+     * on a tab nobody is looking at; without the switch back, Tomas raises an objection to a
+     * part while the player is staring at the bag, which is the fault that produced 'nothing
      * happens' twice over - the answer was arriving where they were not.
+     *
+     * The exception is new, and it is a reported fault rather than a refinement. Adaeze's
+     * grounds unit arrives on a beat whose whole job is to say why it is needed: she confirms
+     * the overgrown strip, explains that it has had the season to itself, and only then
+     * offers the machine. Flipping to the console on the same tick threw all of that away -
+     * a new player was shown a button marked TAKE THE UNIT with no idea what unit or why,
+     * because the sentence explaining it was on the tab they had just been moved off.
+     *
+     * So a device that comes with words waits. The console tab is already marked live for
+     * exactly this - see renderTabs - so nothing is hidden; the player reads the answer to
+     * the question they asked and then goes to the thing it is about, which is the order
+     * they asked for it in.
      */
     const deviceAppeared = state.device !== undefined && !this.hadDevice;
     this.hadDevice = state.device !== undefined;
-    if (deviceAppeared) this.tab = 'console';
+    if (deviceAppeared && !spoke) this.tab = 'console';
     else if (spoke && this.tab === 'console') this.tab = 'chat';
 
     this.renderHints(state);
