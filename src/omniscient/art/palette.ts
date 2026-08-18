@@ -216,6 +216,17 @@ export const MAT = {
    */
   timberDark: standard('#5a4430', 0.9),
   /**
+   * Timber that has been outside for years - a fence rail, a gate, a post.
+   *
+   * Between `timber` (#9a7248, fresh-sawn and pale) and `timberDark` (#5a4430, which is
+   * shadowed structural wood). Weathered rail goes grey and loses its warmth without going
+   * to bark colour, and at this scene's exposure it lands around 85/255 against grass at
+   * 137 - present as a line, not competing as a highlight.
+   *
+   * Rougher than either, because sun and rain lift the grain on anything left in them.
+   */
+  timberWeathered: standard('#806348', 0.94),
+  /**
    * The top of a bench somebody actually works at.
    *
    * Not a shade of timber for its own sake - a value decision, and the room it exists for
@@ -262,8 +273,20 @@ export const MAT = {
    * outside and the field beyond it, and neither of those has been watered this
    * morning. Roughness at the ceiling: wet compost has no sheen at all, and any
    * specular on it reads instantly as plastic.
+   *
+   * ## Raised from #3a2a1c when the tunnel's exposure was corrected
+   *
+   * That value was chosen against a scene lit six times too brightly, where it rendered
+   * around 50/255 and looked like rich damp earth. With the key brought down to something
+   * an afternoon actually is, the same colour lands at FOUR - and the failing bank is the
+   * shaded one, so the beds the whole request is about would have been two black troughs.
+   *
+   * A tuned colour is only ever tuned against an exposure. This is the same material at
+   * the same job under a light budget that is now correct: 34/255 on the shaded bank and
+   * 80 on the sunlit one, against ground outside at 96 - darker than what surrounds it,
+   * which is what says worked and watered, and with the two banks still clearly apart.
    */
-  bedSoil: standard('#3a2a1c', 1),
+  bedSoil: standard('#7d5e40', 1),
   /**
    * The sun, seen. Unlit and unfogged - it is 60m out, past everything that lights or hazes,
    * and it has to be the brightest thing in the frame by a clear margin or it reads as a

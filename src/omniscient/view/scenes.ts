@@ -2956,8 +2956,25 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * the aim corrected the ground fell to luma 67, which is dusk. This is what an
        * afternoon costs once the light is going the right way.
        */
-      // Up from 5.2, so the key leads. See the fill below for the arithmetic.
-      intensity: 8,
+      /**
+       * Down from 8, and this is the whole answer to "is anything still over-lit".
+       *
+       * 8 was set for a sun seven degrees above the horizon, where cos on level ground is
+       * 0.12 and the key delivered under 1. The sun was then aimed properly - it is at
+       * (-9, 16, -10), which is fifty degrees up and cos 0.765 - so the same number started
+       * delivering 6.1 instead of 0.96, a six-fold increase that nothing was rebalanced
+       * for. Everything in the shot was sitting on the shoulder of the tone curve.
+       *
+       * Measured through the actual pipeline rather than adjusted by eye: ACES at exposure
+       * 0.62, three's own 1/PI on the Lambert BRDF, and the surface albedos this scene
+       * uses. At 8 the grass rendered 203/255, the ground 223 and the timber 179 - the
+       * whole set inside the top fifth of the range with nothing left to separate one
+       * material from another. At 3.0 they land 137, 96 and 85, which is a lit afternoon
+       * with somewhere to go above it.
+       *
+       * For scale, the only other directional in the game is Tomas's moon at 1.9.
+       */
+      intensity: 3.0,
       color: new THREE.Color('#fff1d8'),
     })
 
@@ -3012,7 +3029,15 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * level ground perfectly well, so the fill steps back to being fill - and its colour
        * changes with the sky it represents, from a sunset's warm dome to an afternoon blue.
        */
-      intensity: 2.2,
+      /*
+       * Down from 2.2, in step with the key.
+       *
+       * A hemisphere does not attenuate either, so it was adding its full 2.2 to every
+       * up-facing surface in the room on top of an over-bright sun. Held at a quarter of
+       * the key, which is about what an open sky is worth against direct sun on a clear
+       * afternoon - and it is still the thing carrying the ground, which is what it is for.
+       */
+      intensity: 0.75,
       // The sky as it actually is overhead in this shot, and the ground bouncing back.
       color: new THREE.Color('#a9c9e8'),
       groundColor: new THREE.Color('#4a5237'),
@@ -3102,7 +3127,17 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * filling. Kept rather than cut because it is what keeps a contact's face off
        * black on the shadow side, which is the one thing this scene may not trade.
        */
-      intensity: 9,
+      /*
+       * Down from 9, keeping the ratio the note above worked out.
+       *
+       * The arithmetic there is still right and its inputs changed. At 3.2 it arrives at
+       * her from 2.7m at about 1.0 against a key of 2.3 on a surface facing the sun -
+       * a bit over two to one, which is the outdoor-with-sky-fill ratio that note was
+       * after. What it must not do is fall to nothing: this is the only light her front
+       * ever sees, and a contact who is a silhouette in daylight is the fault this whole
+       * light was added to fix.
+       */
+      intensity: 3.2,
       color: new THREE.Color('#7d9ecc'),
       distance: 18,
       decay: 1.15,
@@ -3313,7 +3348,21 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * also honest for a smallholding sitting on a shoreline where the soil is half sand.
        */
       grass: '#8a9a5b',
-      soil: '#c9b491',
+      /*
+       * Brown, because it is soil.
+       *
+       * This was #c9b491, a pale tan, and the note below explains why: the whole ground was
+       * moved up in value to make the scene calm, and the argument was that a smallholding
+       * on a shoreline has soil that is half sand. True at the waterline and wrong at the
+       * beds - the ground somebody digs and feeds every day is dark, damp and brown, and
+       * pale tan under thin grass reads as a beach that has not been swept.
+       *
+       * `sand` and `drySand` below are untouched, and they are what keeps the argument
+       * honest: the shader blends toward them approaching the water, so the shore is still
+       * sand and only the worked ground is earth. Landing at 96/255 against grass at 137 -
+       * darker than what grows in it, which is the one thing soil must be.
+       */
+      soil: '#8f6a40',
       sand: '#e0cfae',
       drySand: '#eaddc2',
     }))
@@ -3666,9 +3715,15 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   railSide(new THREE.Vector2(farX, DRIVEABLE.minZ), new THREE.Vector2(nearX, DRIVEABLE.minZ));
   railSide(new THREE.Vector2(farX, DRIVEABLE.maxZ), new THREE.Vector2(nearX, DRIVEABLE.maxZ));
 
+  /*
+   * MAT.timber is #9a7248, which is fresh-sawn pine and reads pale in sunlight. A farm rail
+   * that has stood out in the weather is a good deal darker and greyer than the day it went
+   * up, and against grass at 137/255 this lands at 85 - a line the eye reads as timber
+   * rather than as a bright edge competing with the tunnel.
+   */
   scene.registerProp(
     'bank-fence',
-    meshOf('BankFence', mergeGeometries(railRun, false) ?? railRun[0], MAT.timber)
+    meshOf('BankFence', mergeGeometries(railRun, false) ?? railRun[0], MAT.timberWeathered)
   );
 
   scene.remoteUnit = {
