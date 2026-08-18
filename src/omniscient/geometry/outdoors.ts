@@ -194,17 +194,142 @@ export function greenhouse(
     }
   }
 
-  // Gable ends, and a door in the near one.
+  /*
+   * Gable ends, and a door in the near one.
+   *
+   * The apex triangle is new, and it was a hole rather than a shortcut: the gable was a
+   * rectangle up to eaves height only, so everything above the eaves at both ends was OPEN
+   * and you could see straight through the building along its length. Invisible while this
+   * was scenery on a hill nine metres behind a tunnel; not invisible now that a camera pans
+   * to it and it is the subject of a beat.
+   */
   for (const end of [-1, 1] as const) {
     const z = at.z + (end * length) / 2;
     const gable = new THREE.PlaneGeometry(width, wall);
     gable.translate(at.x, at.y + wall / 2, z);
     glass.push(gable);
+
+    // The triangle over it, built as a BufferGeometry because a pitched gable is not a quad.
+    const apex = new THREE.BufferGeometry();
+    apex.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(
+        [
+          at.x - width / 2, at.y + wall, z,
+          at.x + width / 2, at.y + wall, z,
+          at.x, at.y + ridge, z,
+        ],
+        3
+      )
+    );
+    apex.computeVertexNormals();
+    glass.push(apex);
+
+    // And the two bargeboards under it, so the end reads as built rather than cut out.
+    for (const side of [-1, 1] as const) {
+      const rise = ridge - wall;
+      const barge = new THREE.BoxGeometry(0.055, Math.hypot(rise, width / 2), 0.055);
+      barge.rotateZ(side * Math.atan2(width / 2, rise));
+      barge.translate(at.x + (side * width) / 4, at.y + wall + rise / 2, z);
+      frame.push(barge);
+    }
   }
 
   const door = new THREE.BoxGeometry(0.72, 1.5, 0.05);
   door.translate(at.x + 0.5, at.y + 0.75, at.z + length / 2 + 0.02);
   frame.push(door);
+
+  /**
+   * Two roof lights, propped open.
+   *
+   * The highest-value detail on the whole building and the cheapest. A glasshouse with
+   * every pane flat is a MODEL of a glasshouse; one with its vents up on a hot afternoon is
+   * a glasshouse somebody is working in - and this scene is specifically about a hot
+   * afternoon and about somebody who is out here every day. It also breaks the roof's two
+   * flat planes, which were the largest unbroken shapes in the silhouette.
+   *
+   * Hinged at the ridge and lifted, which is how a roof light actually opens. Different
+   * angles on the two, because nobody sets them to match.
+   */
+  for (const [bayIndex, lift, side] of [
+    [1, 0.42, -1],
+    [3, 0.3, 1],
+  ] as const) {
+    const z = at.z - length / 2 + bayIndex * bay + bay / 2;
+    const slope = Math.hypot(ridge - wall, width / 2) * 0.46;
+    const vent = new THREE.PlaneGeometry(bay * 0.86, slope);
+    vent.rotateX(Math.PI / 2);
+    // The roof's own pitch, opened out by `lift` radians about the ridge.
+    vent.rotateZ(side * (Math.atan2(width / 2, ridge - wall) - lift));
+    const along = slope / 2;
+    const pitch = side * (Math.atan2(width / 2, ridge - wall) - lift);
+    vent.translate(
+      at.x + Math.sin(pitch) * along,
+      at.y + ridge - Math.cos(pitch) * along,
+      z
+    );
+    glass.push(vent);
+
+    // The stay holding it up. Two triangles of nothing, and it is what says "propped".
+    const stay = new THREE.BoxGeometry(0.025, lift * 0.9, 0.025);
+    stay.translate(at.x + side * (width / 5), at.y + ridge - 0.24, z);
+    frame.push(stay);
+  }
+
+  /**
+   * A bench down one side, with trays on it.
+   *
+   * Seen through glass at twelve metres this is three boxes, and three boxes is the
+   * difference between a glass shed and a place where the tomatoes she mentions are away.
+   * §187: the beat says the glasshouse is doing better than the tunnel, and the player
+   * should be able to see that rather than take her word for it.
+   */
+  const benchTop = new THREE.BoxGeometry(width * 0.34, 0.05, length * 0.82);
+  benchTop.translate(at.x - width * 0.28, at.y + 0.78, at.z);
+  frame.push(benchTop);
+  for (const end of [-1, 1] as const) {
+    const leg = new THREE.BoxGeometry(0.06, 0.78, 0.06);
+    leg.translate(at.x - width * 0.28, at.y + 0.39, at.z + end * length * 0.34);
+    frame.push(leg);
+  }
+  for (let i = 0; i < 4; i++) {
+    const tray = new THREE.BoxGeometry(width * 0.3, 0.12, length * 0.17);
+    tray.translate(
+      at.x - width * 0.28,
+      at.y + 0.86,
+      at.z - length * 0.3 + i * length * 0.2
+    );
+    frame.push(tray);
+  }
+
+  /**
+   * A water butt on the near corner, under a downpipe off the eaves.
+   *
+   * Every glasshouse on every smallholding has one, and it does a job in the frame as well:
+   * the building is a tall thin box on a base and there is nothing at ground level to give
+   * it scale. A barrel is a known size.
+   */
+  const butt = new THREE.CylinderGeometry(0.29, 0.26, 0.86, 10);
+  butt.translate(at.x - width / 2 - 0.34, at.y + 0.43, at.z + length / 2 - 0.5);
+  frame.push(butt);
+  const lid = new THREE.CylinderGeometry(0.31, 0.31, 0.04, 10);
+  lid.translate(at.x - width / 2 - 0.34, at.y + 0.88, at.z + length / 2 - 0.5);
+  frame.push(lid);
+  const downpipe = new THREE.CylinderGeometry(0.035, 0.035, wall - 0.8, 6);
+  downpipe.translate(at.x - width / 2 - 0.12, at.y + 0.8 + (wall - 0.8) / 2, at.z + length / 2 - 0.5);
+  frame.push(downpipe);
+
+  /*
+   * A mid-rail down both sides.
+   *
+   * Glasshouse sidelights are two panes tall, not one, and the rail between them is the
+   * horizontal that stops a 1.7m wall of glass reading as a single sheet. One box each side.
+   */
+  for (const side of [-1, 1] as const) {
+    const rail = new THREE.BoxGeometry(0.05, 0.05, length);
+    rail.translate(at.x + side * (width / 2), at.y + wall * 0.52, at.z);
+    frame.push(rail);
+  }
 
   // A low wall it stands on, because glass does not meet soil.
   const base = new THREE.BoxGeometry(width + 0.18, 0.22, length + 0.18);

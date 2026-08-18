@@ -42,6 +42,18 @@ export const MISSION_03: MissionDefinition = {
   sceneId: 'scene-seedling-tunnel',
   archetype: 'diagnosis',
   objective: 'Find out what is killing one side of Adaeze’s seedlings.',
+  /**
+   * Two jobs, and the counter is here because the second one is a surprise.
+   *
+   * The only request in the game with more than one thing to fix. Every other request has
+   * taught the player that a fix ends a call, so somebody who has just dealt with the shade
+   * has no reason to think they are not finished - and the console saying 1/2 is the
+   * cheapest possible way to say keep looking without anybody having to say it.
+   */
+  tasks: [
+    { beatId: 'light-back', label: 'the shade taken off the failing rows' },
+    { beatId: 'solved', label: 'the bank cut back off the bed' },
+  ],
   urgency: Urgency.Timed,
 
   hiddenTruth: {
@@ -250,6 +262,14 @@ export const MISSION_03: MissionDefinition = {
       priority: 2,
     },
     {
+      /** Feeding them: the other reasonable wrong answer once the light is dealt with. */
+      id: 'FEED_THEM',
+      requires: [
+        ['feed', 'fertilise', 'fertilize', 'compost', 'manure', 'nutrient', 'nutrients'],
+      ],
+      priority: 3,
+    },
+    {
       /**
        * The glasshouse, which is a lead and not a clue.
        *
@@ -280,9 +300,19 @@ export const MISSION_03: MissionDefinition = {
        * would land on does not exist yet.
        */
       id: 'CLEAR_GROUND',
+      /**
+       * Widened, because the chip that reaches it is now a question and not an order.
+       *
+       * "mow the bank" was wrong twice over. The player does the mowing, so telling Adaeze
+       * to do it is the wrong speaker - and it named the answer, which is exactly what this
+       * beat had to stop doing. The chip asks what is around the bed; the intent accepts
+       * that and any of the direct phrasings somebody might type once they have worked it
+       * out for themselves.
+       */
       requires: [
-        ['cut', 'clear', 'mow', 'mower', 'machine', 'unit', 'deal', 'run'],
-        ['weeds', 'weed', 'grass', 'bank', 'ground', 'growth', 'overgrown', 'it', 'them'],
+        [...TERMS.inspect, ...TERMS.describe, 'cut', 'clear', 'mow', 'mower', 'machine',
+          'unit', 'around', 'beside', 'next', 'what', 'edge'],
+        ['weeds', 'weed', 'grass', 'bank', 'ground', 'growth', 'overgrown', 'bed', 'boards'],
       ],
       priority: 3,
     },
@@ -528,15 +558,105 @@ export const MISSION_03: MissionDefinition = {
       say:
         'I have the saw... there. The low limbs are off and the light is on those rows for ' +
         'the first time in weeks - you can see the line where the shadow was.\n\n' +
-        'But look at the ground on that side. I have not been down there since the spring - ' +
-        'why would I, nothing was growing - and it has closed right over. It is up past the ' +
-        'boards. Whatever light I have just given those seedlings, that is drinking it first.',
-      suggest: ['clear the ground on that side'],
-      affirmIntent: 'CLEAR_GROUND',
+        'So that is the shade dealt with. But I am looking at them and they are still not ' +
+        'right - still thin, still stretched. It is like they are not getting the whole of ' +
+        'it even now.',
+      /*
+       * She reports and does not diagnose, which was the note.
+       *
+       * This used to name the grass outright - "look at the ground on that side, it has
+       * closed right over" - and hand over a single chip saying clear it. So the second act
+       * had no act in it: the player was told the answer and given one button, immediately
+       * after being told the first answer and given one button.
+       *
+       * What she says now is what somebody standing in a tunnel would say - the light is
+       * back and the rows are still not right - and that is genuinely puzzling, because the
+       * shade WAS the cause and dealing with it should have been enough. The ground is in
+       * the console as `hint-ground` and has been since they worked out which side was
+       * failing, so the information is there and the connection is not made for them.
+       *
+       * Three chips and only one is it. The other two are the reasonable things to try when
+       * a plant is not thriving and the light is already fixed, and both come back with her
+       * explaining why they are not the problem - the same shape as the pump and the water
+       * in the first act. §163: the wrong moves resolve, they are not punished, they teach.
+       */
+      suggest: ['feed them', 'check the water', 'what is around that bed'],
+      /*
+       * CHECK_WATER goes to a SECOND-ACT answer, not back to `water-fine`.
+       *
+       * The audit found this as an infinite loop and it was a design fault, not a typo.
+       * Routing a post-cut question back into a pre-cut beat reopens the first act:
+       * water-fine offers the glasshouse, the glasshouse offers looking outside, outside
+       * ends at light-back, and round it goes forever. Anything asked after the branches
+       * are off has to be answered by somebody who knows the branches are off.
+       */
+      on: {
+        FEED_THEM: { to: 'feed-fine' },
+        CHECK_WATER: { to: 'water-again' },
+        CLEAR_GROUND: { to: 'the-unit' },
+        MOVE_SEEDLINGS: { to: 'lost' },
+      },
+      onUnrecognised: { to: 'light-back' },
+    },
+
+    {
+      /**
+       * Feeding them, which is not it, and the refusal has to be worth hearing.
+       *
+       * The same job the pump and the water do in the first act: a reasonable move that
+       * resolves, is not punished, and narrows things. Her answer rules out the soil - she
+       * fed both banks out of the same bucket and only one bank is failing - which leaves
+       * whatever is different about that ONE SIDE, and by this point the player has already
+       * fixed the only difference they knew about. That is the nudge to go looking for
+       * another one.
+       */
+      id: 'feed-fine',
+      framing: HOLD_FRAMING,
+      tempo: Tempo.Respond,
+      say:
+        'They were fed a fortnight ago - both banks, same bucket, same afternoon. If it were '
+        + 'the feed the whole tunnel would be sulking, and the other side has never looked '
+        + 'better.',
+      /*
+       * One chip, and it points forward.
+       *
+       * Offering the OTHER wrong answer here is what turned this into a loop the second
+       * time: feed sends you to water, water sends you back to feed. A wrong answer should
+       * not hand the player another wrong answer on a plate - it should say why it is wrong
+       * and leave the way on visible. Anything else they want to try, they can still type.
+       */
+      suggest: ['what is around that bed'],
       on: {
         CLEAR_GROUND: { to: 'the-unit' },
+        CHECK_WATER: { to: 'water-again' },
+        MOVE_SEEDLINGS: { to: 'lost' },
       },
-      onUnrecognised: { to: 'the-unit' },
+      onUnrecognised: { to: 'light-back' },
+    },
+
+    {
+      /**
+       * The water, asked again after the cut, and answered by somebody who has just checked.
+       *
+       * `water-fine` already exists and cannot be reused - see the note on light-back's `on`
+       * map. This is the same fact in the second act's mouth, and it does one more thing
+       * than the first-act version: she says she looked at it AGAIN, with the saw in her
+       * hand, which quietly tells the player that re-treading old ground is not where this
+       * is going.
+       */
+      id: 'water-again',
+      framing: HOLD_FRAMING,
+      tempo: Tempo.Respond,
+      say:
+        'I checked it again while I had the saw out. The drip line is wet the whole length '
+        + 'and both banks are on the same run - they always have been. It is not the water.',
+      suggest: ['what is around that bed'],
+      on: {
+        CLEAR_GROUND: { to: 'the-unit' },
+        FEED_THEM: { to: 'feed-fine' },
+        MOVE_SEEDLINGS: { to: 'lost' },
+      },
+      onUnrecognised: { to: 'light-back' },
     },
 
     {

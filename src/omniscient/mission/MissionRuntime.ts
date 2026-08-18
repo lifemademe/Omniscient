@@ -314,6 +314,22 @@ export class MissionRuntime {
    * the same shape either way, so a new device is a new case in `gradeDevice` and
    * nothing else.
    */
+  /**
+   * How many of this request's jobs are done, out of how many there are.
+   *
+   * Read off `visited`, which the runtime already keeps for hint gating - so nothing new is
+   * tracked and the count cannot disagree with where the player has actually been. Null for
+   * a request that has not declared any, which is all of them but one.
+   */
+  public taskProgress(): { done: number; total: number } | null {
+    const tasks = this.definition.tasks;
+    if (!tasks?.length) return null;
+    return {
+      done: tasks.filter((task) => this.visited.has(task.beatId)).length,
+      total: tasks.length,
+    };
+  }
+
   public submitDevice(submission: DeviceSubmission): MissionStep {
     const device = this.getCurrentBeat().device;
     if (this.finished || !device || device.kind !== submission.kind) {

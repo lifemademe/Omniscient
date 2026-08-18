@@ -353,6 +353,46 @@ const BOARD_CSS = `
   cursor: pointer;
 }
 .omni-board__send:disabled { opacity: 0.35; cursor: default; }
+/*
+ * The grounds unit's one control, and it has to LOOK like the only thing on the board.
+ *
+ * Reported as not looking like a button, and it was not - it inherited nothing, so it was
+ * browser-default text sitting in the middle of a panel whose every other control is a
+ * bordered box in green phosphor. This is the send button's language, scaled up: it is not
+ * one option among several like a bag item, it is the whole device, so it takes the full
+ * width and enough weight to read as the thing to press.
+ *
+ * The pulse is the other half. Everywhere else in this console a button appears next to
+ * something to study and waits; this one appears with nothing to study, and a control that
+ * is the only way forward should say so rather than sit there politely.
+ */
+.omni-board__unit {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  padding: 6px 2px 2px;
+}
+.omni-board__take {
+  padding: 11px 26px;
+  border: 1px solid rgba(127, 224, 138, 0.85);
+  border-radius: 3px;
+  background: rgba(22, 58, 30, 0.95);
+  color: #dcf7de;
+  font: inherit;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 0 0 rgba(127, 224, 138, 0.5);
+  animation: omni-take-pulse 2s ease-in-out infinite;
+}
+.omni-board__take:hover { background: rgba(30, 78, 40, 0.95); }
+.omni-board__take:disabled { opacity: 0.35; cursor: default; animation: none; }
+@keyframes omni-take-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(127, 224, 138, 0.36); }
+  55% { box-shadow: 0 0 0 5px rgba(127, 224, 138, 0); }
+}
 /* The pipe run: a grid of pieces, each one a button that turns a quarter on click. */
 .omni-board__pipes {
   display: grid;

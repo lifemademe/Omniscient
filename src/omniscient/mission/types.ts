@@ -223,6 +223,25 @@ export interface GroundsUnit extends DeviceBase {
   accept: string;
 }
 
+/**
+ * The jobs a request contains, named by the beat that means one is done.
+ *
+ * Optional, and only one mission has it. Seven of the eight are a single fault with a
+ * single fix, and putting "0/1" over those would be an interface element that says nothing
+ * - it is the one that turns out to be TWO problems that needs to say so, because a player
+ * who has just fixed the obvious one has no way of knowing the request is not over.
+ *
+ * Beat ids rather than facts, because the count is about what has been DONE and a fact is
+ * about what has been worked out. Adaeze's shade is diagnosed long before it is dealt with,
+ * and a counter that ticked on the diagnosis would be counting the wrong thing.
+ */
+export interface MissionTask {
+  /** The beat whose arrival means this job is finished. */
+  beatId: string;
+  /** For the record, and for anybody reading this list later. */
+  label: string;
+}
+
 export interface DeviceBase {
   /** The question, in the contact's voice. */
   prompt: string;
@@ -527,6 +546,8 @@ export interface MissionDefinition {
    * not appear here.
    */
   objective: string;
+  /** See MissionTask. Omitted by every request that is one problem with one fix. */
+  tasks?: MissionTask[];
   urgency: Urgency;
   /** Authored ground truth, for QA and for the runtime's own assertions. */
   hiddenTruth: {

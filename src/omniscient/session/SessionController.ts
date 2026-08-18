@@ -470,7 +470,14 @@ export class SessionController {
         ? { summary: this.failed.summary, lesson: this.failed.lesson }
         : undefined,
       awaitingNote: this.failed !== null,
-      objective: definition.objective,
+      /*
+       * The count is appended here rather than authored into the string, so the objective
+       * stays a sentence about the request and the progress stays a fact about the play.
+       */
+      objective: ((): string => {
+        const tasks = this.runtime.taskProgress();
+        return tasks ? `${definition.objective}  ${tasks.done}/${tasks.total}` : definition.objective;
+      })(),
       notice: this.notice ?? undefined,
       device: finished ? undefined : this.buildDevice(),
     });
