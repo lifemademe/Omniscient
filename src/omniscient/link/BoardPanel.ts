@@ -29,6 +29,7 @@ import { audio } from '../audio/ConsoleAudio.js';
 
 import type { BeamState } from '../mission/beam.js';
 import type { ClueId, Evidence } from '../mission/traces.js';
+import { createKitPlate } from './kit.js';
 import type { DeviceView, PlayerMessage } from './surface.js';
 
 const STYLE_ID = 'omniscient-board-styles';
@@ -125,6 +126,50 @@ const BOARD_CSS = `
 .omni-board__box--slot { font-size: 13px; letter-spacing: 0.04em; }
 .omni-board__note {
   font-size: 11px;
+  color: rgba(159, 216, 168, 0.72);
+  font-style: italic;
+}
+
+/*
+ * The bag. A shelf of things rather than a list of names - the player is meant to look
+ * at an object and decide what it does, which is a different act from reading a label.
+ */
+.omni-kit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+.omni-kit__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 6px 9px;
+  background: #0d1c14;
+  border: 1px solid #23422c;
+  color: #cfe6c4;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease;
+}
+.omni-kit__item:hover { border-color: #4f9a5e; transform: translateY(-2px); }
+.omni-kit__item--held {
+  border-color: #d8ffb0;
+  background: #14301f;
+  box-shadow: inset 0 0 18px rgba(127, 224, 138, 0.16);
+}
+.omni-kit__item img { width: 54px; height: 54px; image-rendering: pixelated; }
+.omni-kit__name {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #d8ffb0;
+}
+.omni-kit__note {
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: center;
   color: rgba(159, 216, 168, 0.72);
   font-style: italic;
 }
@@ -478,6 +523,9 @@ export class BoardPanel {
   private pinButtons = new Map<string, { button: HTMLButtonElement; order: HTMLSpanElement }>();
   /** The order the player is proposing, pin ids front to back. */
   private order: string[] = [];
+  /** The one thing out of the bag the player has hold of. */
+  private held: string | null = null;
+  private kitButtons = new Map<string, HTMLButtonElement>();
   /** Live chase state, while a beam device is up. */
   private chase: BeamState | null = null;
   /** Every call the player has made, with its timestamp. */
@@ -617,13 +665,17 @@ export class BoardPanel {
                 ? `traces|${view.prompt}|${view.fleet.length}`
                 : view.kind === 'pursuit'
                   ? `pursuit|${view.prompt}|${view.hops.length}`
-                  : `trail|${view.prompt}|${view.trail.fragments.length}`;
+                  : view.kind === 'trail'
+                    ? `trail|${view.prompt}|${view.trail.fragments.length}`
+                    : `kit|${view.prompt}|${view.items.map((i) => i.id).join(',')}`;
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       this.links.clear();
       this.armed = null;
       this.rotations = view.kind === 'pipes' ? view.grid.cells.map(() => 0) : [];
       this.order = [];
+      this.held = null;
+      this.kitButtons.clear();
       this.pinButtons.clear();
       if (this.frame !== null) {
         cancelAnimationFrame(this.frame);
@@ -671,6 +723,11 @@ export class BoardPanel {
 
     if (view.kind === 'trail') {
       this.buildTrail();
+      return;
+    }
+
+    if (view.kind === 'kit') {
+      this.buildKit(view.items);
       return;
     }
 
@@ -1068,6 +1125,65 @@ export class BoardPanel {
    * anything relative to the one before it, and a list in any other order would force the
    * player to do the sorting in their head before they could start.
    */
+  /**
+   * The contact's bag, laid out.
+   *
+   * A grid of what he has on him, each with his own words underneath it, and one of them
+   * gets picked. Deliberately NOT a list of names: the player is meant to look at a thing
+   * and decide what it does, which is a different act from reading a label - and it is the
+   * one the whole request turns on.
+   *
+   * The panel has no idea which is right. It never receives the answer or the reasons -
+   * see SessionController, which rebuilds these field by field on the way out.
+   */
+  private buildKit(items: Array<{ id: string; name: string; note: string }>): void {
+    const shelf = document.createElement('div');
+    shelf.className = 'omni-kit';
+
+    for (const item of items) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'omni-kit__item';
+
+      const plate = createKitPlate(item.id);
+      if (plate) {
+        const image = document.createElement('img');
+        image.src = plate;
+        image.alt = '';
+        button.appendChild(image);
+      }
+
+      const name = document.createElement('span');
+      name.className = 'omni-kit__name';
+      name.textContent = item.name;
+
+      const note = document.createElement('span');
+      note.className = 'omni-kit__note';
+      note.textContent = item.note;
+
+      button.append(name, note);
+      button.addEventListener('click', () => {
+        this.held = this.held === item.id ? null : item.id;
+        for (const [id, other] of this.kitButtons) {
+          other.classList.toggle('omni-kit__item--held', id === this.held);
+        }
+        this.refreshKit();
+      });
+
+      this.kitButtons.set(item.id, button);
+      shelf.appendChild(button);
+    }
+
+    this.grid.appendChild(shelf);
+  }
+
+  private refreshKit(): void {
+    this.send.disabled = !this.held;
+    this.status.textContent = this.held
+      ? 'ready to tell him'
+      : 'pick what will do the job';
+  }
+
   private buildTrail(): void {
     const view = this.view;
     if (!view || view.kind !== 'trail') return;
@@ -1333,6 +1449,12 @@ export class BoardPanel {
       return;
     }
 
+    if (view.kind === 'kit') {
+      if (!this.held) return;
+      this.dispatch({ kind: 'device', submission: { kind: 'kit', itemId: this.held } });
+      return;
+    }
+
     if (view.kind === 'traces') {
       if (!this.picked) return;
       this.dispatch({ kind: 'device', submission: { kind: 'traces', traceId: this.picked } });
@@ -1358,6 +1480,12 @@ export class BoardPanel {
     this.element.classList.toggle('omni-board--folded', this.folded);
     this.fold.textContent = this.folded ? 'Show' : 'Hide';
     if (this.folded) return;
+
+    if (view.kind === 'kit') {
+      this.refreshKit();
+      this.wires.replaceChildren();
+      return;
+    }
 
     if (view.kind === 'beam') {
       // The frame loop owns this one; refresh must not fight it.

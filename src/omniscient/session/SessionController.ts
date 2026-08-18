@@ -503,6 +503,20 @@ export class SessionController {
       return { kind: 'pursuit', prompt: device.prompt, hops: device.hops, note };
     }
 
+    if (device.kind === 'kit') {
+      return {
+        kind: 'kit',
+        prompt: device.prompt,
+        /*
+         * Rebuilt field by field rather than passed through, so `answer` and every
+         * item's `wrong` stay on this side of the link. §157's boundary held at the
+         * presentation layer: the console is handed a bag and no idea what is in it.
+         */
+        items: device.items.map((item) => ({ id: item.id, name: item.name, note: item.note })),
+        note,
+      };
+    }
+
     if (device.kind === 'traces') {
       return {
         kind: 'traces',

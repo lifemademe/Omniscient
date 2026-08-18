@@ -30,7 +30,9 @@ export type DeviceSubmission =
   /** One camera id per hop, in order. */
   | { kind: 'pursuit'; picks: string[] }
   /** The fragments the player says are the same car. Order does not matter - time decides. */
-  | { kind: 'trail'; picks: string[] };
+  | { kind: 'trail'; picks: string[] }
+  /** The one thing out of the bag the player says will do it. */
+  | { kind: 'kit'; itemId: string };
 
 export interface DeviceResult {
   solved: boolean;
@@ -90,6 +92,22 @@ export function gradeDevice(device: Device, submission: DeviceSubmission): Devic
       // player already watched the whole thing happen.
       const held = ending.held.toFixed(1);
       return { solved: false, note: `you had the light on him for ${held} seconds` };
+    }
+
+    case 'kit': {
+      if (submission.kind !== 'kit') return { solved: false };
+      if (submission.itemId === device.answer) return { solved: true };
+
+      /*
+       * The note is the item's own reason, not a verdict.
+       *
+       * "That is for a bare conductor - it will not change what is joined to what" tells
+       * the player something true about tape, which is worth more than knowing tape is
+       * not the answer. §159, and it is also what makes a wrong pick feel like being
+       * taught by a tradesman rather than marked by a machine.
+       */
+      const picked = device.items.find((item) => item.id === submission.itemId);
+      return { solved: false, note: picked?.wrong };
     }
 
     case 'traces': {

@@ -29,6 +29,69 @@ import type { MissionDefinition } from '../mission/types.js';
 export const FACT_BEACON_DROPS_ON_KEYUP = 'beacon_drops_on_keyup';
 export const FACT_FEED_NEEDS_ISOLATOR = 'feed_needs_isolator';
 
+/**
+ * What Tomas has on him, and only what he has on him.
+ *
+ * He is halfway up a mast in the dark. There is no shop, no van, no going back down and
+ * up again - the parts in this bag are the only parts in the world for the length of this
+ * request. That constraint is what makes the device honest rather than a shopping list.
+ *
+ * Every wrong item is a real thing a rigger carries and is wrong for a reason worth
+ * learning. None of them is filler and none is absurd, because an obviously silly option
+ * is not a distractor, it is a hint - the player eliminates it without thinking and the
+ * puzzle gets easier by exactly one.
+ *
+ * The fault is that two loads share one supply and the other one now pulls this one down.
+ * So the question is not "what fixes a light" but "what SEPARATES two things", and every
+ * wrong answer here does something else that sounds like fixing: insulate, join, protect,
+ * tidy, extend.
+ */
+const TOMAS_BAG = [
+  {
+    id: 'tape',
+    name: 'Insulating tape',
+    note: 'Half a roll. Always have it.',
+    wrong:
+      'Tape? That covers a bare wire up. It does not change what is joined to what - ' +
+      'and the join down there is meant to be a join, it is just feeding two things.',
+  },
+  {
+    id: 'block',
+    name: 'Terminal block',
+    note: 'Four ways. For joining a wire to a wire.',
+    wrong:
+      'That is for putting two wires together. They are already together - that is the ' +
+      'whole trouble. It would hold the same fault tighter, that is all.',
+  },
+  {
+    id: 'fuse',
+    name: 'Cartridge fuse',
+    note: 'A couple of spares in the tin. Fifteen amp.',
+    wrong:
+      'A fuse waits for something to go badly wrong and then cuts everything. Nothing ' +
+      'here is going badly wrong - the light just keeps standing aside for her.',
+  },
+  {
+    id: 'isolator',
+    name: 'Isolator switch',
+    note: 'Off the last job. Two ways in, two out, a handle on the front.',
+  },
+  {
+    id: 'flex',
+    name: 'Three core flex',
+    note: 'A few metres of it, coiled on my belt.',
+    wrong:
+      'More cable on the same supply is more of what I have got. It has to come off ' +
+      'that line somewhere or it is the same line.',
+  },
+  {
+    id: 'ties',
+    name: 'Cable ties',
+    note: 'A handful. They hold everything up here together.',
+    wrong: 'They will tidy it. They will not change a thing about where the power goes.',
+  },
+] as const;
+
 export const MISSION_02: MissionDefinition = {
   id: 'm02-beacon',
   version: 1,
@@ -153,6 +216,22 @@ export const MISSION_02: MissionDefinition = {
       priority: 1,
     },
     {
+      /**
+       * Asking what he has got, which is the route into the bag.
+       *
+       * Kept separate from FIT_ISOLATOR on purpose. A player who already knows the answer
+       * can still say it outright and skip the device - §163, and it respects somebody who
+       * reasoned it out - while a player who does not can ask what is in the bag and work
+       * it out by looking. Two routes to one beat, and neither is the lesser one.
+       */
+      id: 'ASK_KIT',
+      requires: [
+        [...TERMS.inspect, ...TERMS.describe, 'got', 'have', 'carrying', 'bag', 'kit'],
+        ['bag', 'kit', 'tools', 'got', 'have', 'carrying', 'parts', 'spares', 'anything'],
+      ],
+      priority: 3,
+    },
+    {
       id: 'ADMIT_UNCERTAINTY',
       requires: [[...TERMS.uncertain]],
       priority: 4,
@@ -230,8 +309,9 @@ export const MISSION_02: MissionDefinition = {
         'the bracket, and a second wire off it heading down the hill. Towards the town. So the ' +
         'light and whatever is down there are pulling off the one supply. Towards - oh. That ' +
         'goes to Mirela’s shop, does it not.',
-      suggest: ['put something in to separate them'],
+      suggest: ['what have you got in your bag', 'put something in to separate them'],
       on: {
+        ASK_KIT: { to: 'the-bag' },
         FIT_ISOLATOR: {
           to: 'isolator-fitted',
           learn: [FACT_BEACON_DROPS_ON_KEYUP, FACT_FEED_NEEDS_ISOLATOR],
@@ -334,8 +414,9 @@ export const MISSION_02: MissionDefinition = {
         'keys it - hard enough to take my light with it. It has been that way for years and it ' +
         'never mattered, because her set has been dead for... ' +
         'Her set has been dead for a long time. Until this morning.',
-      suggest: ['put something in to separate them'],
+      suggest: ['what have you got in your bag', 'put something in to separate them'],
       on: {
+        ASK_KIT: { to: 'the-bag' },
         FIT_ISOLATOR: {
           to: 'isolator-fitted',
           learn: [FACT_FEED_NEEDS_ISOLATOR],
@@ -379,6 +460,40 @@ export const MISSION_02: MissionDefinition = {
       },
     },
 
+    {
+      /**
+       * The bag, open.
+       *
+       * The one device in the game that asks the player to KNOW something rather than to
+       * arrange something, which is why it belongs to this request in particular. Tomas
+       * can describe every item in his bag and cannot say which one will stop his light
+       * going out; OMNISCIENT_ has never held any of them and knows exactly what they do.
+       * That is the division of labour the whole game is built on, finally as a verb.
+       */
+      id: 'the-bag',
+      framing: 'camera.pan:mast-cable',
+      tempo: Tempo.Act,
+      say:
+        'Right - hold on.\n\n' +
+        'That is everything I have got on me. I am not going down and ' +
+        'up again tonight, so if it is not in here it does not exist. Tell me which one and ' +
+        'I will put it in.',
+      suggest: ['go back over the join'],
+      device: {
+        kind: 'kit',
+        prompt: 'Pick what will separate the two feeds.',
+        items: [...TOMAS_BAG],
+        answer: 'isolator',
+        onSolved: { to: 'isolator-fitted', learn: [FACT_FEED_NEEDS_ISOLATOR] },
+        // Back to the bag. A wrong pick costs the item's own explanation and nothing else.
+        onWrong: { to: 'the-bag' },
+        wrongSay: 'No - hold on.',
+      },
+      on: {
+        ASK_FEED: { to: 'the-bag' },
+      },
+      onUnrecognised: { to: 'the-bag' },
+    },
     {
       id: 'isolator-fitted',
       gesture: 'prop.nod:contact',

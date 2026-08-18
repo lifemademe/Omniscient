@@ -131,6 +131,16 @@ export type DeviceView =
   | { kind: 'pursuit'; prompt: string; hops: Hop[]; note?: string }
   /** The cold trail. The pool crosses whole; deciding which of it matters is the game. */
   | { kind: 'trail'; prompt: string; trail: Trail; note?: string }
+  /**
+   * The contact's own bag. Carries no answer - the console can draw it, let the
+   * player choose and send the choice up, and still not know which one works.
+   */
+  | {
+      kind: 'kit';
+      prompt: string;
+      items: Array<{ id: string; name: string; note: string }>;
+      note?: string;
+    }
   | {
       kind: 'traces';
       prompt: string;
@@ -272,7 +282,8 @@ export type PlayerMessage =
         | { kind: 'beam'; calls: Array<{ at: number; to: number }> }
         | { kind: 'traces'; traceId: string }
         | { kind: 'pursuit'; picks: string[] }
-        | { kind: 'trail'; picks: string[] };
+        | { kind: 'trail'; picks: string[] }
+        | { kind: 'kit'; itemId: string };
     };
 
 export interface InterventionSurface {

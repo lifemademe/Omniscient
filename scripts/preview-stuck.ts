@@ -113,6 +113,17 @@ function solveDevice(device: Device): DeviceSubmission {
     return { kind: 'traces', traceId: found?.id ?? 'none' };
   }
 
+  /*
+   * The bag: the one item the mission says works.
+   *
+   * A walk-through has to be able to solve it, and unlike every other device here
+   * there is nothing to reason out from the view - the whole puzzle is knowing what
+   * the parts do, which is knowledge this script does not have and the mission does.
+   */
+  if (device.kind === 'kit') {
+    return { kind: 'kit', itemId: device.answer };
+  }
+
   const cells = device.grid.cells;
   const turnable = cells.map((c, i) => (c.fixed ? -1 : i)).filter((i) => i >= 0);
   const rotations = cells.map(() => 0);

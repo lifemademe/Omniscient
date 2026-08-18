@@ -148,7 +148,46 @@ export type Device =
   | BeamBoard
   | TraceBoard
   | PursuitBoard
-  | TrailBoard;
+  | TrailBoard
+  | KitBoard;
+
+/**
+ * What the contact has on them, and which of it does the job.
+ *
+ * The other six devices ask the player to arrange something - which pipes, which order,
+ * which car. This one asks them to KNOW something, and it is the most direct statement of
+ * the whole premise the game has: Tomas is halfway up a mast in the dark and cannot go
+ * anywhere, so the parts in his bag are the only parts in the world. He can describe every
+ * one of them and cannot say which will stop his light going out. OMNISCIENT_ has never
+ * held any of them and knows exactly what they do.
+ *
+ * That is the division of labour the entire game is built on, made into a verb.
+ *
+ * Every wrong item is wrong for a REASON the player can learn from - tape insulates a
+ * conductor without changing what is connected to what; a terminal block joins two things
+ * that are already too joined. §159: the note explains the item rather than saying no.
+ */
+export interface KitBoard extends DeviceBase {
+  kind: 'kit';
+  items: KitItem[];
+  /** Item id that solves it. Authored - §157, the evaluator never decides what is true. */
+  answer: string;
+}
+
+export interface KitItem {
+  id: string;
+  /** What it is called. Rendered via textContent only. */
+  name: string;
+  /** What the contact says it is, in their words - they are the one holding it. */
+  note: string;
+  /**
+   * Why it does not do this job, in the contact's voice. Shown only when it is picked.
+   *
+   * Absent on the item that works, which is also how the renderer knows nothing about
+   * which one that is - it never sees this field until the runtime has already graded.
+   */
+  wrong?: string;
+}
 
 export interface DeviceBase {
   /** The question, in the contact's voice. */
