@@ -240,6 +240,13 @@ export class SessionController {
       return named.length ? `Try ${named.join(', then ')}.` : 'Try it.';
     }
 
+    if (device.kind === 'kit' && submission.kind === 'kit') {
+      const picked = device.items.find((item) => item.id === submission.itemId);
+      // Named, because "try that" in a transcript beside a bag of six things is not
+      // a record of anything. What was said was which one.
+      return picked ? `Use the ${picked.name.toLowerCase()}.` : 'Use that one.';
+    }
+
     if (device.kind === 'pipes' && submission.kind === 'pipes') {
       const turned = submission.rotations.filter((r) => r % 4 !== 0).length;
       return turned

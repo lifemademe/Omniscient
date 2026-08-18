@@ -4158,7 +4158,28 @@ function buildClearedHouse(scene: ContactScene): void {
        * gentler decay give a flatter wash across the whole room instead of a hotspot on
        * whoever happens to be standing under it.
        */
-      position: new THREE.Vector3(-0.35, 2.35, -1.7),
+      /*
+       * In the window, which is where the light from a window comes from.
+       *
+       * It was at (-0.35, 2.35, -1.7): five centimetres ABOVE the top of the glass,
+       * a quarter of a metre below the ceiling and a quarter of a metre out into the
+       * room. So the brightest thing in the frame was a pool on the head of the wall
+       * with nothing visible making it - reported as the light up there not looking
+       * like it comes from the bulb, which is exactly right: it does not come from
+       * anything.
+       *
+       * Now at the centre of the glass, 4cm inside it. The window is the brightest
+       * thing in the room again and the light falls into it from there, which is the
+       * same §230 rule the bulb was moved into a fixture for - every light in this
+       * game has to have something the player can see emitting it.
+       *
+       * It does not undo the clipping fix above. That was about how much of her the
+       * light lands on, and she is 1.13m from here against 1.15m from where it was:
+       * the same distance, differently angled. What changes is that it now rakes
+       * across her from the side rather than standing on her head, which is what a
+       * window three metres from somebody actually does.
+       */
+      position: new THREE.Vector3(-0.2, 1.75, -1.93),
       intensity: 10.5,
       color: new THREE.Color('#cfe0f0'),
       distance: 12,
