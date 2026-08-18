@@ -96,18 +96,9 @@ export function gradeDevice(device: Device, submission: DeviceSubmission): Devic
 
     case 'kit': {
       if (submission.kind !== 'kit') return { solved: false };
-      if (submission.itemId === device.answer) return { solved: true };
-
-      /*
-       * The note is the item's own reason, not a verdict.
-       *
-       * "That is for a bare conductor - it will not change what is joined to what" tells
-       * the player something true about tape, which is worth more than knowing tape is
-       * not the answer. §159, and it is also what makes a wrong pick feel like being
-       * taught by a tradesman rather than marked by a machine.
-       */
-      const picked = device.items.find((item) => item.id === submission.itemId);
-      return { solved: false, note: picked?.wrong };
+      // No note. What the contact thinks of a part is said before it goes in, not
+      // reported afterwards - see MissionRuntime.submitDevice.
+      return { solved: submission.itemId === device.answer };
     }
 
     case 'traces': {

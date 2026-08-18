@@ -41,11 +41,14 @@ export const FACT_FEED_NEEDS_ISOLATOR = 'feed_needs_isolator';
  * is not a distractor, it is a hint - the player eliminates it without thinking and the
  * puzzle gets easier by exactly one.
  *
- * The `wrong` lines are what he SAYS when a part is named, not what happens if it goes
- * in. He is a rigger and he can see the objection, so he raises it - and then asks
- * whether to do it anyway, because the machine is the one that is supposed to know. Say
- * yes and he fits it and the request is lost; say no and nothing has been spent but the
- * explanation, which is the thing worth having.
+ * EVERY part has a remark, including the one that works, and he never says which is
+ * which. He describes what the thing DOES and asks whether to fit it; deciding is the
+ * player's job and it is the whole job.
+ *
+ * When only the wrong ones spoke, the appearance of a remark WAS the answer - the player
+ * could read the shape of the exchange and never think about a part at all. And every
+ * one of them opened on the same three words, so the tell arrived before the sentence
+ * did.
  *
  * NOTHING IS CUT. That is worth saying at the top, because the word "separate" was read
  * as a broken wire needing something conductive to bridge it, by the first person to
@@ -63,15 +66,15 @@ const TOMAS_BAG = [
     id: 'tape',
     name: 'Insulating tape',
     note: 'Half a roll. Always have it.',
-    wrong:
-      'Tape? That covers a bare wire up. It does not change what is joined to what - ' +
-      'and the join down there is meant to be a join, it is just feeding two things.',
+    remark:
+      'Tape covers a bare wire up. It does not change what is joined to what, and the ' +
+      'join down there is meant to be a join - it is just feeding two things.',
   },
   {
     id: 'block',
     name: 'Terminal block',
     note: 'Four ways. For joining a wire to a wire.',
-    wrong:
+    remark:
       'That is for putting two wires together. They are already together - that is the ' +
       'whole trouble. It would hold the same fault tighter, that is all.',
   },
@@ -79,7 +82,7 @@ const TOMAS_BAG = [
     id: 'fuse',
     name: 'Cartridge fuse',
     note: 'A couple of spares in the tin. Fifteen amp.',
-    wrong:
+    remark:
       'A fuse waits for something to go badly wrong and then cuts everything. Nothing ' +
       'here is going badly wrong - the light just keeps standing aside for her.',
   },
@@ -87,12 +90,23 @@ const TOMAS_BAG = [
     id: 'isolator',
     name: 'Isolator switch',
     note: 'Off the last job. Two ways in, two out, a handle on the front.',
+    /*
+     * He describes it and does not endorse it, exactly as he does the other five.
+     *
+     * The temptation is to have him say "yes, that is the one", and that would hand the
+     * player the answer for free at the last moment they could still have earned it. What
+     * he says is what the part DOES; whether that is what this fault needs is the
+     * question the whole request has been asking.
+     */
+    remark:
+      'That would go in the join and sit between them. Her side one way, the light the ' +
+      'other, off its own way out. They would stop being one thing.',
   },
   {
     id: 'flex',
     name: 'Three core flex',
     note: 'A few metres of it, coiled on my belt.',
-    wrong:
+    remark:
       'More cable on the same supply is more of what I have got. It has to come off ' +
       'that line somewhere or it is the same line.',
   },
@@ -100,7 +114,7 @@ const TOMAS_BAG = [
     id: 'ties',
     name: 'Cable ties',
     note: 'A handful. They hold everything up here together.',
-    wrong: 'They will tidy it. They will not change a thing about where the power goes.',
+    remark: 'They will tidy it. They will not change a thing about where the power goes.',
   },
 ] as const;
 
@@ -569,8 +583,12 @@ export const MISSION_02: MissionDefinition = {
         },
         // A wrong part is fitted and the request is lost with it. See `fitted-wrong`.
         onWrong: { to: 'fitted-wrong' },
-        // He stops rather than agrees - the objection comes next, then the question.
-        wrongSay: 'No - hold on.',
+        /*
+         * Empty on purpose. It used to be "No - hold on." in front of every wrong
+         * remark, which announced the verdict before he had said anything - and it
+         * only ever appeared on the wrong ones, so it was the answer.
+         */
+        wrongSay: '',
       },
       on: {
         ASK_FEED: { to: 'the-bag' },

@@ -181,12 +181,18 @@ export interface KitItem {
   /** What the contact says it is, in their words - they are the one holding it. */
   note: string;
   /**
-   * Why it does not do this job, in the contact's voice. Shown only when it is picked.
+   * What the contact says when this part is named, in their voice. EVERY item has one,
+   * including the one that works.
    *
-   * Absent on the item that works, which is also how the renderer knows nothing about
-   * which one that is - it never sees this field until the runtime has already graded.
+   * That is the point of the field. When only the wrong ones spoke, the appearance of a
+   * remark WAS the answer - the player learned to read the shape of the exchange instead
+   * of the words in it, and never had to think about a single part. He has an opinion
+   * about everything in his own bag, so he gives it, and the player decides.
+   *
+   * Never leaves the runtime. The console is handed names and notes only - see
+   * SessionController's device mapping - so it cannot be read off the wire.
    */
-  wrong?: string;
+  remark: string;
 }
 
 export interface DeviceBase {

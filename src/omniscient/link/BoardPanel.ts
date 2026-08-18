@@ -70,31 +70,6 @@ const BOARD_CSS = `
   color: #9fd8a8;
   text-transform: uppercase;
 }
-/*
- * The fold control, at the weight of a control.
- *
- * It was a 2px-padded outline in 40% green at 11px, sitting beside a prompt in the
- * same colour family - reported as having to be looked for. A device the player can
- * put away is only useful if putting it away is obviously offered, and this is the
- * one button on the panel that is present whatever device is up.
- */
-.omni-board__fold {
-  padding: 5px 14px;
-  border: 1px solid rgba(127, 224, 138, 0.75);
-  border-radius: 3px;
-  background: rgba(127, 224, 138, 0.12);
-  color: #d8ffb0;
-  font: inherit;
-  font-size: 12px;
-  font-weight: bold;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.omni-board__fold:hover { background: rgba(127, 224, 138, 0.24); border-color: #d8ffb0; }
-.omni-board--folded .omni-board__stage,
-.omni-board--folded .omni-board__foot { display: none; }
 /* The wires are drawn on a layer behind the boxes, sized to the grid. */
 /*
  * Natural height, and the TAB scrolls it.
@@ -629,15 +604,11 @@ export class BoardPanel {
     prompt.className = 'omni-board__prompt';
     head.appendChild(prompt);
 
-    this.fold = document.createElement('button');
-    this.fold.className = 'omni-board__fold';
-    this.fold.type = 'button';
-    this.fold.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      this.folded = !this.folded;
-      if (this.view) this.refresh(this.view);
-    });
-    head.appendChild(this.fold);
+    /*
+     * No fold control. The device has its own tab now, and CHAT is two words away -
+     * a second way to put it aside, inside the thing being put aside, is a control
+     * whose whole job the tab bar already does better.
+     */
 
     this.element.appendChild(head);
 
@@ -716,8 +687,6 @@ export class BoardPanel {
   private trailParts: { headline: HTMLElement; list: HTMLElement } | null = null;
 
   private readonly promptElement: HTMLDivElement;
-  private readonly fold: HTMLButtonElement;
-  private folded = false;
 
   /**
    * Render a board.
@@ -1578,9 +1547,6 @@ export class BoardPanel {
   }
 
   private refresh(view: DeviceView): void {
-    this.element.classList.toggle('omni-board--folded', this.folded);
-    this.fold.textContent = this.folded ? 'Show' : 'Hide';
-    if (this.folded) return;
 
     if (view.kind === 'kit') {
       this.refreshKit();

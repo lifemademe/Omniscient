@@ -272,7 +272,9 @@ export class MissionRuntime {
       if (!accepted || !device) {
         return { say: 'Right. What else, then?', learned: [], clarifying: true };
       }
-      return this.applyTransition(device.onWrong);
+      // Graded here rather than when it was picked, so the yes is the moment it counts.
+      const graded = gradeDevice(device, pending);
+      return this.applyTransition(graded.solved ? device.onSolved : device.onWrong);
     }
 
     const intentId = this.pendingIntent;
@@ -318,35 +320,35 @@ export class MissionRuntime {
       return { say: '', learned: [], clarifying: false };
     }
 
-    const graded = gradeDevice(device, submission);
-    if (graded.solved) return this.applyTransition(device.onSolved);
-
     /*
-     * The bag asks before it commits, which is the same guard the unsafe intents get.
+     * The bag asks about EVERY part, right or wrong, and grades only after the answer.
      *
-     * Naming a part now loses the request, and a one-in-six guess that ends a request
-     * on a single click is a coin toss with a punishment on it. So Tomas says what the
-     * part is, raises the objection he can obviously see, and asks whether to fit it
-     * anyway. The question is the second chance - the same rule that keeps CLEAN_LIVE
-     * and CUT_FEED_LIVE fair - and it costs a player who is reasoning nothing at all,
-     * because saying no returns them to the bag with the explanation in hand.
+     * It used to grade first and question the failures, which meant being asked was the
+     * answer: a player who noticed that never had to read a word Tomas said, and the
+     * right part completed the request without them ever choosing it. Now he says what
+     * the part does - the same register whichever it is - and asks whether to fit it.
+     * Reading him IS the puzzle, and saying yes is the commitment either way.
      *
-     * Only the bag does this. The other devices grade a configuration and can be
-     * tried again; there is nothing to warn anybody about.
+     * Nothing is decided here, which is the other half. The submission is held and graded
+     * in `confirm`, so a yes is what resolves or loses the request and nothing has been
+     * spent before it.
      */
     if (device.kind === 'kit' && submission.kind === 'kit') {
       const picked = device.items.find((item) => item.id === submission.itemId);
       this.pendingDevice = submission;
       return {
-        say: [device.wrongSay, graded.note].filter(Boolean).join('\n\n'),
+        say: [device.wrongSay, picked?.remark].filter(Boolean).join('\n\n'),
         learned: [],
         clarifying: false,
         confirming: {
           intentId: DEVICE_PENDING,
-          question: `Have him fit the ${picked?.name.toLowerCase() ?? 'part'} anyway?`,
+          question: `Have him fit the ${picked?.name.toLowerCase() ?? 'part'}?`,
         },
       };
     }
+
+    const graded = gradeDevice(device, submission);
+    if (graded.solved) return this.applyTransition(device.onSolved);
 
     const step = this.applyTransition(device.onWrong);
 
