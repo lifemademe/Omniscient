@@ -158,20 +158,35 @@ export const TERMINAL_CSS = `
  * working on, because that is the only way a permanent goal reads as belonging to a
  * machine rather than to a game overlay.
  */
+/* Splits the shell's middle row: the request band, then the two panels under it. */
+.omni-cv__middle {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.omni-cv__middle > .omni-cv__body { flex: 1; min-height: 0; }
 .omni-objective {
   display: flex;
-  gap: 8px;
+  gap: 12px;
   align-items: baseline;
-  padding: 0 12px 8px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: #8fbe93;
+  margin: 14px 18px 0;
+  padding: 9px 14px;
+  border: 1px solid #2b5c39;
+  border-left: 3px solid #7fe08a;
+  background: linear-gradient(90deg, rgba(30, 74, 44, 0.55), rgba(13, 28, 20, 0.35));
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.45);
 }
 .omni-objective[hidden] { display: none; }
+.omni-objective__text {
+  color: #d8ffb0;
+  font-size: 14px;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+}
 .omni-objective__tag {
   flex: none;
-  color: #35603f;
-  font-size: 9px;
+  color: #5f9c6c;
+  font-size: 10px;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -655,18 +670,6 @@ export class LocalSurface implements InterventionSurface {
     const where = document.createElement('span');
     where.className = 'omni-terminal__where';
 
-    // Under the location, above the tabs: the last fixed thing before the conversation.
-    const objective = document.createElement('div');
-    objective.className = 'omni-objective';
-    objective.hidden = true;
-    const objectiveTag = document.createElement('span');
-    objectiveTag.className = 'omni-objective__tag';
-    objectiveTag.textContent = 'Request';
-    const objectiveText = document.createElement('span');
-    objective.append(objectiveTag, objectiveText);
-    this.objectiveElement = objective;
-    this.objectiveText = objectiveText;
-
     const tabs = document.createElement('div');
     tabs.className = 'omni-tabs';
 
@@ -713,7 +716,7 @@ export class LocalSurface implements InterventionSurface {
     entry.append(caret, input);
     foot.append(suggestions, hint, noteFlag, entry);
 
-    root.append(session, head, where, objective, tabs, log, panel, extra, foot);
+    root.append(session, head, where, tabs, log, panel, extra, foot);
 
     /*
      * The console around the conversation.
@@ -789,7 +792,44 @@ export class LocalSurface implements InterventionSurface {
     corp.textContent = 'Omniscient';
     footer.append(version, notice, corp);
 
-    shell.append(top, body, footer);
+    /*
+     * The request, on its own plate above everything.
+     *
+     * It started life as a line inside the transcript column, under the caller's
+     * location, and was reported lost: that column is a wall of green text and one more
+     * line of it is one more line of it. A goal that has to be hunted for is not doing
+     * the job the goal was added to do.
+     *
+     * So it spans the console instead, between the brand bar and the two panels, at a
+     * size the transcript never uses. It is the only thing on screen with nothing else
+     * beside it, which is the whole point - the eye has somewhere to land that is not the
+     * conversation.
+     */
+    const objective = document.createElement('div');
+    objective.className = 'omni-objective';
+    objective.hidden = true;
+    const objectiveTag = document.createElement('span');
+    objectiveTag.className = 'omni-objective__tag';
+    objectiveTag.textContent = 'Request';
+    const objectiveText = document.createElement('span');
+    objectiveText.className = 'omni-objective__text';
+    objective.append(objectiveTag, objectiveText);
+    this.objectiveElement = objective;
+    this.objectiveText = objectiveText;
+
+    /*
+     * Wrapped rather than appended as a fourth child of the shell.
+     *
+     * `.omni-cv` is `grid-template-rows: auto 1fr auto` and the globe screen builds its
+     * own shell from the same class - so a fourth child here would hand the 1fr row to
+     * the objective, collapse the body to auto, and do it in two places at once. This
+     * keeps the shell at exactly three rows and splits the middle one.
+     */
+    const middle = document.createElement('div');
+    middle.className = 'omni-cv__middle';
+    middle.append(objective, body);
+
+    shell.append(top, middle, footer);
     this.container.appendChild(shell);
 
     this.shell = shell;

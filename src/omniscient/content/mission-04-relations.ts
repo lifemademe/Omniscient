@@ -270,11 +270,27 @@ export const MISSION_04: MissionDefinition = {
         'how we are all joined up. I know these people. I just cannot get them in order.',
       learn: [FACT_NAMES_ON_PHOTOGRAPHS],
       suggest: ['tell me the names', 'why does it matter now', 'what happened to the papers'],
+      /*
+       * She nods rather than points, and she is the only one who does.
+       *
+       * Everybody else shows the player the thing on the way out of their opening -
+       * Mirela has a radio on a bench and can turn to it. Ileana is behind a table with
+       * both hands flat on the near edge, framed from across it, and the point clip turns
+       * her: it carries spine rotation, so she swings out of the one composition the shot
+       * is built on. Reported as the papers question rotating her a little.
+       *
+       * It got worse the moment gestures started playing at full strength - it was there
+       * all along at half, averaged into the breathing loop and too weak to notice.
+       *
+       * A nod is the right gesture for her anyway. She is not showing anybody anything;
+       * she is a tired woman at a table answering a question. And a nod is a head, so it
+       * leaves her hands where the scene put them - see riggedContact.
+       */
       on: {
-        LIST_NAMES: { to: 'names', environment: 'prop.point:contact' },
-        ASK_WHY: { to: 'why', environment: 'prop.point:contact' },
-        ASK_PAPERS: { to: 'papers', environment: 'prop.point:contact', learn: [FACT_FLOOD_TOOK_RECORDS] },
-        WRITE_TO_EVERYONE: { to: 'scattergun', environment: 'prop.point:contact' },
+        LIST_NAMES: { to: 'names', environment: 'prop.nod:contact' },
+        ASK_WHY: { to: 'why', environment: 'prop.nod:contact' },
+        ASK_PAPERS: { to: 'papers', environment: 'prop.nod:contact', learn: [FACT_FLOOD_TOOK_RECORDS] },
+        WRITE_TO_EVERYONE: { to: 'scattergun', environment: 'prop.nod:contact' },
       },
       onUnrecognised: { to: 'open-again' },
     },
