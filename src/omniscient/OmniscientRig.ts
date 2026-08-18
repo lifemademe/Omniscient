@@ -1814,6 +1814,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * The player stays in the Contact View until they close it, because the note is written
    * here, while the mistake is still in front of them.
    */
+  /**
+   * TESTING: every failure countdown, clamped to this many seconds.
+   *
+   * The authored values are 90 to 180 and they are the right ones - long enough that a
+   * lost request is a real setback, short enough to come back inside one sitting. They
+   * are also unbearable when what you are testing is the losing.
+   *
+   * One number in one place so it is one line to take out. Set it to null to give every
+   * mission its own cooldown back.
+   */
+  private static readonly COOLDOWN_OVERRIDE: number | null = 10;
+
   private onRequestLost(failure: MissionFailure): void {
     const contactId = this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
     if (!contactId) return;
@@ -1828,10 +1840,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * has already finished, which GlobeScreen's own note calls a cooldown that never ends.
      */
     const signal = this.signals.find((s) => s.id === contactId);
-    const waits = failure.cooldownSeconds > 0;
+    const authored = failure.cooldownSeconds;
+    const seconds =
+      OmniscientRig.COOLDOWN_OVERRIDE !== null && authored > 0
+        ? OmniscientRig.COOLDOWN_OVERRIDE
+        : authored;
+    const waits = seconds > 0;
     if (signal) {
       signal.state = waits ? SignalState.Cooldown : SignalState.Waiting;
-      signal.cooldown = waits ? failure.cooldownSeconds : undefined;
+      signal.cooldown = waits ? seconds : undefined;
     }
 
     /*

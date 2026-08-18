@@ -334,6 +334,17 @@ export class SessionController {
     if (!this.contact) return;
 
     if (step.confirming) {
+      /*
+       * A question can arrive with something said before it.
+       *
+       * This returned early without pushing the line, which was fine while every
+       * confirmation came from `propose` and carried an empty say. The bag's does not:
+       * Tomas names the part and raises the objection, and THEN asks whether to fit it
+       * anyway. Dropping that would leave a yes/no with nothing to answer it on.
+       */
+      if (step.say) {
+        this.push({ source: 'contact', name: this.contact.name, body: step.say });
+      }
       this.confirming = step.confirming;
       this.present();
       return;

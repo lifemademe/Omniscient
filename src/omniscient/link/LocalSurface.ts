@@ -296,6 +296,20 @@ export const TERMINAL_CSS = `
   color: #d99b8f;
   font-size: 12px;
   line-height: 1.45;
+
+  /*
+   * Bounded, and it scrolls.
+   *
+   * A lost request puts a summary, a lesson and a callout above the input, and on Tomas's
+   * the summary is three lines - enough to push the note box to the bottom edge of the
+   * console and past it. Which is the one thing that must not happen here, because the
+   * box is what the player is being held for.
+   */
+  max-height: 34vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #7d3830 transparent;
 }
 .omni-terminal--lost {
   border-color: #7d3830;

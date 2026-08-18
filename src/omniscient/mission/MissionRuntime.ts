@@ -25,6 +25,9 @@ import { HOLD_FRAMING } from './types.js';
  */
 const GESTURE_CUE = /^prop\.(point|surprised|reacting|nod)/;
 
+/** Marks a confirmation that belongs to a device rather than to an intent. */
+const DEVICE_PENDING = '__device__';
+
 import type { DeviceSubmission } from './device.js';
 
 import type { KnowledgeStore } from '../knowledge/KnowledgeStore.js';
@@ -77,6 +80,14 @@ export class MissionRuntime {
   private readonly visited = new Set<string>();
   /** Intent awaiting a yes/no from the player. */
   private pendingIntent: string | null = null;
+  /**
+   * A device answer that has been questioned rather than acted on.
+   *
+   * Separate from `pendingIntent` because it is not an intent - there is no id to look
+   * up in the beat's `on` map, only a submission that has already been graded and found
+   * wanting. Both are answered by `confirm`, which checks this one first.
+   */
+  private pendingDevice: DeviceSubmission | null = null;
   /**
    * Latched at construction. Reading it off the current beat would report false the
    * moment the mission advanced past its opening.
@@ -247,6 +258,23 @@ export class MissionRuntime {
 
   /** Answer a proposed reading. */
   public confirm(accepted: boolean): MissionStep {
+    /*
+     * A questioned device answer is settled here, before any intent is looked at.
+     *
+     * Yes fits the part and loses the request; no puts the bag back with nothing
+     * spent. The submission is cleared either way, so a stale one cannot be applied
+     * by the next confirmation the player happens to answer.
+     */
+    const pending = this.pendingDevice;
+    this.pendingDevice = null;
+    if (pending) {
+      const device = this.getCurrentBeat().device;
+      if (!accepted || !device) {
+        return { say: 'Right. What else, then?', learned: [], clarifying: true };
+      }
+      return this.applyTransition(device.onWrong);
+    }
+
     const intentId = this.pendingIntent;
     this.pendingIntent = null;
 
@@ -292,6 +320,33 @@ export class MissionRuntime {
 
     const graded = gradeDevice(device, submission);
     if (graded.solved) return this.applyTransition(device.onSolved);
+
+    /*
+     * The bag asks before it commits, which is the same guard the unsafe intents get.
+     *
+     * Naming a part now loses the request, and a one-in-six guess that ends a request
+     * on a single click is a coin toss with a punishment on it. So Tomas says what the
+     * part is, raises the objection he can obviously see, and asks whether to fit it
+     * anyway. The question is the second chance - the same rule that keeps CLEAN_LIVE
+     * and CUT_FEED_LIVE fair - and it costs a player who is reasoning nothing at all,
+     * because saying no returns them to the bag with the explanation in hand.
+     *
+     * Only the bag does this. The other devices grade a configuration and can be
+     * tried again; there is nothing to warn anybody about.
+     */
+    if (device.kind === 'kit' && submission.kind === 'kit') {
+      const picked = device.items.find((item) => item.id === submission.itemId);
+      this.pendingDevice = submission;
+      return {
+        say: [device.wrongSay, graded.note].filter(Boolean).join('\n\n'),
+        learned: [],
+        clarifying: false,
+        confirming: {
+          intentId: DEVICE_PENDING,
+          question: `Have him fit the ${picked?.name.toLowerCase() ?? 'part'} anyway?`,
+        },
+      };
+    }
 
     const step = this.applyTransition(device.onWrong);
 
