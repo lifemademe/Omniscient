@@ -56,8 +56,6 @@ const BOARD_CSS = `
   padding: 12px 14px 14px;
   border-top: 1px solid rgba(127, 224, 138, 0.22);
   background: rgba(6, 14, 9, 0.5);
-  max-height: 44vh;
-  min-height: 0;
 }
 .omni-board__head, .omni-board__foot { flex: none; }
 .omni-board__head {
@@ -98,7 +96,16 @@ const BOARD_CSS = `
 .omni-board--folded .omni-board__stage,
 .omni-board--folded .omni-board__foot { display: none; }
 /* The wires are drawn on a layer behind the boxes, sized to the grid. */
-.omni-board__stage { position: relative; flex: 1; min-height: 0; display: flex; }
+/*
+ * Natural height, and the TAB scrolls it.
+ *
+ * Not the grid. The wires are an absolutely positioned SVG over this stage and the
+ * boxes they join are inside the grid, so anything that scrolls one and not the
+ * other separates them - which is exactly what happened. Letting the whole board
+ * be as tall as it needs and giving the panel around it the scroll keeps head,
+ * boxes, wires and foot in one moving piece.
+ */
+.omni-board__stage { position: relative; display: flex; }
 .omni-board__wires {
   position: absolute;
   inset: 0;
@@ -123,13 +130,19 @@ const BOARD_CSS = `
   grid-template-columns: 1fr auto 1fr;
   gap: 8px 26px;
   align-items: start;
-  flex: 1;
-  min-height: 0;
   width: 100%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: #2b5c39 transparent;
+  /*
+   * NOT a scroll container, and that is the fix for the relation board's wires.
+   *
+   * They are an absolutely positioned SVG over the stage while the boxes they join
+   * live in here, so scrolling this moved the boxes and left every wire behind -
+   * reported as the connectors not scrolling with the inventory. Two coordinate
+   * spaces, one of which moved.
+   *
+   * The scroll was only ever here because the panel was sharing a column with the
+   * transcript and had a few hundred pixels to fit into. It has its own tab now, so
+   * it has the height it needs and nothing has to slide.
+   */
 }
 .omni-board__column { display: flex; flex-direction: column; gap: 7px; }
 .omni-board__spine {

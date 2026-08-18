@@ -202,6 +202,48 @@ export const TERMINAL_CSS = `
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
+/* The observations, over the conversation. Titles; the detail goes into the chat. */
+.omni-observed {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 10px;
+  border-bottom: 1px solid #1a2f21;
+}
+.omni-observed[hidden] { display: none; }
+.omni-observed__tag {
+  color: #35603f;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.omni-observed__item {
+  padding: 4px 9px;
+  background: #0d1c14;
+  border: 1px solid #2b5c39;
+  color: #cfe6c4;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+}
+.omni-observed__item:hover { border-color: #7fe08a; color: #d8ffb0; }
+/* Read. Dimmed rather than removed - the room still has water on the floor. */
+.omni-observed__item--read { opacity: 0.5; }
+/* A device is waiting on the console tab. */
+.omni-tab--live { color: #d8ffb0; }
+.omni-tab__live {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #7fe08a;
+  animation: omni-live 1.2s ease-in-out infinite;
+}
+@keyframes omni-live { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
 /* Tabs: CHAT / HINTS / RECORDS. §162 - the phone changes tool mode as the mission asks. */
 .omni-tabs {
   display: flex;
@@ -599,7 +641,21 @@ export const TERMINAL_CSS = `
 }
 `;
 
-type Tab = 'chat' | 'hints' | 'records';
+/**
+ * CHAT, CONSOLE, RECORDS.
+ *
+ * Hints stopped being a tab because they were never a place - they are four sentences
+ * about the room, and reading one already pushes it into the conversation. They sit
+ * above the transcript now as titles you can open, which is what they always were.
+ *
+ * The seat they vacated goes to the device, and that is the change that matters. A
+ * board, a bag or a lock used to share the transcript's column, which produced three
+ * separate faults in a week: the log squeezed to a strip, the send button pushed off
+ * the bottom of the screen, and the relation board's wires refusing to scroll with the
+ * boxes they connect. All three are one fault - two things that each want a whole
+ * column, in one column.
+ */
+type Tab = 'chat' | 'console' | 'records';
 
 /** One readout in the left margin: a label, a segmented meter, a value and a note. */
 interface ReadoutCard {
@@ -664,6 +720,11 @@ export class LocalSurface implements InterventionSurface {
   private objectiveText: HTMLSpanElement | null = null;
   /** The amber flag above the input while a lost request is waiting for its note. */
   private noteFlag: HTMLDivElement | null = null;
+  private hintsElement: HTMLDivElement | null = null;
+  /** Whether a device was up last frame - see the tab switching in present. */
+  private hadDevice = false;
+  /** Rebuilt only when the observations change - they are clicked, not re-rendered. */
+  private renderedHintKey = '';
   /** Whether the last frame was already waiting on a note - see focusNote. */
   private wasLocked = false;
 
@@ -715,6 +776,21 @@ export class LocalSurface implements InterventionSurface {
     const tabs = document.createElement('div');
     tabs.className = 'omni-tabs';
 
+    /*
+     * Observations, above the conversation rather than behind a tab.
+     *
+     * Four sentences about the room is not a place worth navigating to, and putting
+     * them behind a tab meant a player had to already suspect there was something to
+     * see. Here they are the first thing under the header, and opening one puts what
+     * it says into the conversation - which is what opening one already did.
+     *
+     * Outside the log rather than at the top of it, because the log is anchored to the
+     * bottom and grows: inside, they would scroll away and be gone by the third line.
+     */
+    const hintStrip = document.createElement('div');
+    hintStrip.className = 'omni-observed';
+    this.hintsElement = hintStrip;
+
     const log = document.createElement('div');
     log.className = 'omni-terminal__log';
 
@@ -758,7 +834,7 @@ export class LocalSurface implements InterventionSurface {
     entry.append(caret, input);
     foot.append(suggestions, hint, noteFlag, entry);
 
-    root.append(session, head, where, tabs, log, panel, extra, foot);
+    root.append(session, head, where, tabs, hintStrip, log, panel, extra, foot);
 
     /*
      * The console around the conversation.
@@ -809,17 +885,16 @@ export class LocalSurface implements InterventionSurface {
       this.dispatch({ kind: 'leave' })
     );
     this.endButton = endCall;
-    actions.append(
-      endCall,
-      this.buildAction('☷', 'Observations', '', () => {
-        this.tab = 'hints';
-        if (this.lastState) this.present(this.lastState);
-      }),
-      this.buildAction('☰', 'Records', '', () => {
-        this.tab = 'records';
-        if (this.lastState) this.present(this.lastState);
-      })
-    );
+    /*
+     * END CALL alone.
+     *
+     * OBSERVATIONS and RECORDS sat here as a second way to reach two of the tabs, in
+     * the opposite corner of the screen from the tabs themselves - and were reported
+     * as never having been noticed at all, which is the worst outcome for a control:
+     * it took up room and taught nobody that the tabs existed. The tabs are three
+     * words at the top of the panel the player is already reading.
+     */
+    actions.append(endCall);
 
     stage.append(readouts, actions);
     body.append(stage, root);
@@ -925,9 +1000,13 @@ export class LocalSurface implements InterventionSurface {
      * which is the same shape as the bug that broke the suggestion chips. It is created
      * once and told to update instead.
      */
+    /*
+     * Built, but not placed. renderPanel puts it in the console tab when there is
+     * something to work on - it used to sit above the input on every tab, sharing
+     * the column with the transcript, which is the arrangement all of this is
+     * moving away from.
+     */
     this.board = new BoardPanel((message) => this.dispatch(message));
-    this.board.element.style.display = 'none';
-    extra.parentElement?.insertBefore(this.board.element, extra);
   }
 
   /** Build one margin readout. Segments are filled later by fillMeter. */
@@ -1110,6 +1189,7 @@ export class LocalSurface implements InterventionSurface {
     this.hintElement = null;
     this.suggestElement = null;
     this.noteFlag = null;
+    this.hintsElement = null;
     this.objectiveElement = null;
     this.objectiveText = null;
     this.endButton = null;
@@ -1237,6 +1317,9 @@ export class LocalSurface implements InterventionSurface {
         window.setTimeout(() => audio.play('receive'), delay);
       }
     }
+    const spoke =
+      state.transcript.length > this.renderedCount &&
+      state.transcript[state.transcript.length - 1]?.source === 'contact';
     this.renderedCount = state.transcript.length;
 
     // A new line arriving means something happened in the conversation - go back to it.
@@ -1244,6 +1327,20 @@ export class LocalSurface implements InterventionSurface {
       this.tab = 'chat';
     }
 
+    /*
+     * A device arriving takes the player to it; a contact answering takes them back.
+     *
+     * Both halves are needed. Without the first, the bag opens on a tab nobody is
+     * looking at; without the second, Tomas raises an objection to a part while the
+     * player is staring at the bag, which is the fault that produced 'nothing
+     * happens' twice over - the answer was arriving where they were not.
+     */
+    const deviceAppeared = state.device !== undefined && !this.hadDevice;
+    this.hadDevice = state.device !== undefined;
+    if (deviceAppeared) this.tab = 'console';
+    else if (spoke && this.tab === 'console') this.tab = 'chat';
+
+    this.renderHints(state);
     this.renderTabs(state);
     this.renderPanel(state);
     this.renderExtra(state);
@@ -1258,12 +1355,50 @@ export class LocalSurface implements InterventionSurface {
     if (typing) this.inputElement.focus();
   }
 
+  /**
+   * The observations, as a row of titles over the conversation.
+   *
+   * Titles only. Opening one already pushes what it says into the chat as a line from
+   * OMNISCIENT_, so the detail belongs there and not here - and once it has been read the
+   * title dims rather than disappearing, because a room does not stop having water on the
+   * floor once somebody has mentioned it.
+   */
+  private renderHints(state: SurfaceState): void {
+    const strip = this.hintsElement;
+    if (!strip) return;
+
+    const hints = state.hints ?? [];
+    const key = hints.map((hint) => `${hint.id}:${hint.detail ? 1 : 0}`).join('|');
+    if (key === this.renderedHintKey) return;
+    this.renderedHintKey = key;
+
+    strip.replaceChildren();
+    if (hints.length === 0) return;
+
+    const label = document.createElement('span');
+    label.className = 'omni-observed__tag';
+    label.textContent = 'Observed';
+    strip.appendChild(label);
+
+    for (const hint of hints) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      // `detail` is only set once opened - see SessionController's hint mapping.
+      button.className = `omni-observed__item${hint.detail ? ' omni-observed__item--read' : ''}`;
+      this.appendEmphasised(button, hint.summary, hint.keywords);
+      button.addEventListener('click', () => this.dispatch({ kind: 'hint', hintId: hint.id }));
+      strip.appendChild(button);
+    }
+  }
+
   private renderTabs(state: SurfaceState): void {
     if (!this.tabsElement) return;
 
-    const specs: Array<{ id: Tab; label: string; count?: number }> = [
+    const specs: Array<{ id: Tab; label: string; count?: number; live?: boolean }> = [
       { id: 'chat', label: 'Chat' },
-      { id: 'hints', label: 'Hints', count: state.hints?.length ?? 0 },
+      // Marked rather than counted. A device is one thing or nothing, and a live one
+      // is the only reason to leave the conversation.
+      { id: 'console', label: 'Console', live: state.device !== undefined },
       { id: 'records', label: 'Records', count: state.records?.length ?? 0 },
     ];
 
@@ -1281,6 +1416,13 @@ export class LocalSurface implements InterventionSurface {
         button.appendChild(count);
       }
 
+      if (spec.live) {
+        button.classList.add('omni-tab--live');
+        const dot = document.createElement('span');
+        dot.className = 'omni-tab__live';
+        button.appendChild(dot);
+      }
+
       button.addEventListener('click', () => {
         this.tab = spec.id;
         if (this.lastState) this.present(this.lastState);
@@ -1295,19 +1437,24 @@ export class LocalSurface implements InterventionSurface {
     const showingChat = this.tab === 'chat';
     this.logElement.style.display = showingChat ? 'flex' : 'none';
     this.panelElement.style.display = showingChat ? 'none' : 'flex';
+    if (this.hintsElement) this.hintsElement.hidden = !showingChat;
     if (showingChat) return;
 
     this.panelElement.replaceChildren();
 
-    if (this.tab === 'hints') {
-      const hints = state.hints ?? [];
-      if (hints.length === 0) {
-        this.panelElement.appendChild(this.renderEmpty('nothing observed yet'));
+    /*
+     * The device gets the whole column, which is the point of giving it a tab.
+     *
+     * It is moved rather than rebuilt - BoardPanel owns its own state, and tearing it
+     * down on a tab change would lose a half-wired relation board every time somebody
+     * looked at what was said.
+     */
+    if (this.tab === 'console') {
+      if (!state.device) {
+        this.panelElement.appendChild(this.renderEmpty('nothing to work on yet'));
         return;
       }
-      for (const hint of hints) {
-        this.panelElement.appendChild(this.renderHint(hint));
-      }
+      if (this.board) this.panelElement.appendChild(this.board.element);
       return;
     }
 
