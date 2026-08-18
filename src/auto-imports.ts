@@ -1,4 +1,5 @@
 import './game-data.js';
+import './omniscient/art/brickwork.js';
 import './omniscient/art/certainty.js';
 import './omniscient/art/cursor.js';
 import './omniscient/art/decals.js';

@@ -527,6 +527,16 @@ export const MAT = {
    */
   hallDark: new THREE.MeshBasicMaterial({ color: '#0a0c0f', toneMapped: false }),
   /**
+   * A painted front door, and its own entry rather than borrowing `timberDark`.
+   *
+   * `timberDark` is structural wood - joists, rafters, the inside of a frame - and it is
+   * shared by half the game. This is a door somebody painted, and it wants to be readable
+   * as ITS OWN object under one porch light while the frame around it stays timber. Dark
+   * green, which is what half the front doors in a terrace of this age are, and dark enough
+   * to hold the panel shadows that do all the modelling on it.
+   */
+  doorLeaf: standard('#2f3a30', 0.72),
+  /**
    * The landing light lying on the hall floor at the far end.
    *
    * The same warm as `landingLight` and a third of its value, because this is that lamp

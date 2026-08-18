@@ -5972,16 +5972,39 @@ function buildNightDoor(scene: ContactScene): void {
     brickWall.roughnessMap = brickMaps.roughnessMap;
     brickWall.color = new THREE.Color('#ffffff');
     brickWall.roughness = 1;
-    brickWall.normalScale = new THREE.Vector2(0.8, 0.8);
-    for (const map of [brickMaps.map, brickMaps.normalMap, brickMaps.roughnessMap]) {
-      map?.repeat.set(3.4, 2.5);
-    }
+    brickWall.normalScale = new THREE.Vector2(0.75, 0.75);
     brickWall.needsUpdate = true;
   }
-  scene.registerProp(
-    'front',
-    meshOf('Front', mergeGeometries(front, false) ?? front[0], brickWall)
-  );
+
+  const frontMesh = mergeGeometries(front, false) ?? front[0];
+  /**
+   * UVs in METRES, which is the only way the courses come out the same size everywhere.
+   *
+   * Box UVs run 0 to 1 on every face whatever that face measures, so one repeat across the
+   * whole wall gave the 2.85m panel, the 3.15m panel and the 1.00m lintel three completely
+   * different brick sizes - which is what "the bricks are not wide enough" was actually
+   * looking at. It was not one wrong number; it was three walls disagreeing.
+   *
+   * Rewriting the UVs from world position fixes it for good and for any future piece: a
+   * course is a fixed number of metres tall wherever it appears, and adding a chimney or a
+   * bay next week needs no repeat to be worked out for it. Projected on XY, because this is
+   * a facade - the 0.3m returns at the reveal take a stretched map that nothing can see.
+   */
+  /*
+   * 1.05m per tile, 16 courses in it, which is a course every 66mm and a brick 217mm wide.
+   * A real stock brick with its joints is 215 x 65. Worked out rather than dialled in -
+   * the first attempt at 2.1 was exactly double, and a wall of double-size bricks reads as
+   * a model of a wall.
+   */
+  const TILE = 1.05;
+  const uv = frontMesh.getAttribute('uv') as THREE.BufferAttribute;
+  const xyz = frontMesh.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < uv.count; i++) {
+    uv.setXY(i, xyz.getX(i) / TILE, xyz.getY(i) / TILE);
+  }
+  uv.needsUpdate = true;
+
+  scene.registerProp('front', meshOf('Front', frontMesh, brickWall));
 
   /**
    * And what is on the other side of it, because now there is an other side.
@@ -5997,12 +6020,45 @@ function buildNightDoor(scene: ContactScene): void {
    */
   const hallRoot = ENGINE.SceneNode.create({ name: 'Hall' });
   const HALL_D = 2.4;
-  const hall = new THREE.BoxGeometry(1.6, 2.4, HALL_D);
-  hall.translate(DOOR_X, 1.2, -0.55 - HALL_D / 2);
-  // Inside out: the player is in the box, so the faces have to point at them.
-  const hallMesh = meshOf('HallShell', hall, MAT.hallDark);
-  (hallMesh.material as THREE.Material).side = THREE.BackSide;
-  hallRoot.add(hallMesh);
+
+  /**
+   * Built from planes facing inward, not from a box turned inside out.
+   *
+   * The first version was a BoxGeometry with `side = BackSide` set on the material - and
+   * that material is `MAT.hallDark`, which lives in the shared palette. Reaching into the
+   * palette from a scene builder to flip a global flag is the kind of thing that works
+   * until something else uses that material, and then breaks somewhere entirely different.
+   *
+   * Five planes, each rotated to face the doorway, is the same picture with nothing shared
+   * and nothing global touched. It is also fewer triangles, since the two faces nobody can
+   * ever see are simply not built.
+   */
+  const HALL_W = 1.6;
+  const HALL_H = 2.4;
+  const back = -0.55 - HALL_D;
+  const hall: THREE.BufferGeometry[] = [];
+
+  // The far wall, facing the door.
+  const hallBack = new THREE.PlaneGeometry(HALL_W, HALL_H);
+  hallBack.translate(DOOR_X, HALL_H / 2, back);
+  hall.push(hallBack);
+  // Floor and ceiling.
+  const hallFloor = new THREE.PlaneGeometry(HALL_W, HALL_D);
+  hallFloor.rotateX(-Math.PI / 2);
+  hallFloor.translate(DOOR_X, 0.01, back + HALL_D / 2);
+  hall.push(hallFloor);
+  const hallCeil = new THREE.PlaneGeometry(HALL_W, HALL_D);
+  hallCeil.rotateX(Math.PI / 2);
+  hallCeil.translate(DOOR_X, HALL_H, back + HALL_D / 2);
+  hall.push(hallCeil);
+  // The two side walls, each turned to face the middle.
+  for (const side of [-1, 1] as const) {
+    const wall = new THREE.PlaneGeometry(HALL_D, HALL_H);
+    wall.rotateY(side * (Math.PI / 2));
+    wall.translate(DOOR_X + side * (HALL_W / 2), HALL_H / 2, back + HALL_D / 2);
+    hall.push(wall);
+  }
+  hallRoot.add(meshOf('HallShell', mergeGeometries(hall, false) ?? hall[0], MAT.hallDark));
 
   /**
    * The landing light, arriving down the stairs.
@@ -6037,15 +6093,27 @@ function buildNightDoor(scene: ContactScene): void {
    */
   const terrace: THREE.BufferGeometry[] = [];
   const terraceDark: THREE.BufferGeometry[] = [];
+  const terraceGlass: THREE.BufferGeometry[] = [];
 
   for (const side of [-1, 1] as const) {
     const wx = DOOR_X + side * 2.05;
 
-    // The opening, as a dark recess rather than a pane laid on the brick - a window at
-    // night is a hole, and a hole needs a depth or it is a sticker.
+    /*
+     * The reveal is the hole; the glass is what is in it.
+     *
+     * Both were dark timber, so a neighbour's window read as a boarded-up opening - which
+     * is a completely different thing to say about a street. The recess stays timber
+     * because it is a frame, and the pane in front of it takes the same glass the front
+     * door uses, so the whole terrace agrees about what a window is at night: nearly black,
+     * and just slightly the wrong black.
+     */
     const reveal = new THREE.BoxGeometry(1.06, 1.34, 0.12);
     reveal.translate(wx, 1.42, -0.31);
     terraceDark.push(reveal);
+
+    const pane = new THREE.PlaneGeometry(1.0, 1.28);
+    pane.translate(wx, 1.42, -0.253);
+    terraceGlass.push(pane);
 
     // Sill and head, which are what actually make it read as a window from across a road.
     const sill = new THREE.BoxGeometry(1.24, 0.09, 0.2);
@@ -6107,6 +6175,10 @@ function buildNightDoor(scene: ContactScene): void {
   scene.registerProp(
     'terrace-dark',
     meshOf('TerraceDark', mergeGeometries(terraceDark, false) ?? terraceDark[0], MAT.timberDark)
+  );
+  scene.registerProp(
+    'terrace-glass',
+    meshOf('TerraceGlass', mergeGeometries(terraceGlass, false) ?? terraceGlass[0], MAT.doorGlass)
   );
 
   /**
@@ -6292,7 +6364,15 @@ function buildNightDoor(scene: ContactScene): void {
    * where the light comes through. That is the commonest front door in the country this
    * street is pretending to be, and it puts glass exactly where BREAK_GLASS wants it.
    */
-  const LEAF_Z = -0.26;
+  /*
+   * Set back into the opening rather than laid across it.
+   *
+   * The wall's front face is at z = -0.25 and the leaf was at -0.26, so with its framing
+   * standing 60mm proud the door finished 8mm in FRONT of the brickwork - a door stuck on
+   * the outside of a house. Every front door in a terrace sits back in its reveal, and that
+   * setback is what gives the jambs a shadow and the doorway any depth at all.
+   */
+  const LEAF_Z = -0.32;
   const STILE = 0.11;
   const carcass: THREE.BufferGeometry[] = [];
 
@@ -6338,7 +6418,7 @@ function buildNightDoor(scene: ContactScene): void {
     carcass.push(piece);
   }
 
-  const doorMesh = meshOf('Door', mergeGeometries(carcass, false) ?? carcass[0], MAT.timberDark);
+  const doorMesh = meshOf('Door', mergeGeometries(carcass, false) ?? carcass[0], MAT.doorLeaf);
 
   const doorRoot = ENGINE.SceneNode.create({
     name: 'DoorRoot',
@@ -6481,13 +6561,46 @@ function buildNightDoor(scene: ContactScene): void {
     },
   });
 
+  /**
+   * The architrave, on the face of the wall rather than inside it.
+   *
+   * It was a 0.14m-deep surround centred at z = -0.30, which put three quarters of it
+   * inside brickwork that runs from -0.55 to -0.25 - so most of the moulding was buried and
+   * what showed was a thin edge poking out of the wall. Now the door has been set properly
+   * back into its reveal, the architrave has a job again: it is a board applied to the
+   * BRICK, covering the joint between the frame and the opening, which is what one is for.
+   *
+   * Wider, too. 80mm of surround round a 920mm door is a bead; a real architrave is a
+   * plank, and it is the thing that makes a doorway read as joinery rather than as a
+   * rectangle cut in a wall.
+   */
+  const ARCH = 0.13;
   const frame: THREE.BufferGeometry[] = [];
   for (const [w, h, x, y] of [
-    [DOOR.w + 0.16, 0.08, DOOR.x, DOOR.h + 0.04],
-    [0.08, DOOR.h + 0.08, DOOR.x - DOOR.w / 2 - 0.04, DOOR.h / 2],
-    [0.08, DOOR.h + 0.08, DOOR.x + DOOR.w / 2 + 0.04, DOOR.h / 2],
+    [DOOR.w + 0.12 + ARCH * 2, ARCH, DOOR.x, DOOR.h + 0.06 + ARCH / 2],
+    [ARCH, DOOR.h + 0.06 + ARCH, DOOR.x - DOOR.w / 2 - 0.06 - ARCH / 2, (DOOR.h + 0.06 + ARCH) / 2],
+    [ARCH, DOOR.h + 0.06 + ARCH, DOOR.x + DOOR.w / 2 + 0.06 + ARCH / 2, (DOOR.h + 0.06 + ARCH) / 2],
   ] as const) {
-    const piece = new THREE.BoxGeometry(w, h, 0.14);
+    // Standing 40mm proud of the brick, which is the thickness of the board.
+    const piece = new THREE.BoxGeometry(w, h, 0.04);
+    piece.translate(x, y, -0.23);
+    frame.push(piece);
+  }
+
+  /**
+   * And the reveal: the sides of the hole, between the brick face and the door.
+   *
+   * Setting the door back 100mm leaves 100mm of raw opening on each jamb and over the head.
+   * Without something in it the player sees the cut edge of the wall box, which is a
+   * hairline of whatever the brick map happens to be doing there. Three thin boards, and
+   * they are the surfaces the porch light actually rakes across on the way to the door.
+   */
+  for (const [w, h, x, y, d] of [
+    [0.1, DOOR.h + 0.06, DOOR.x - DOOR.w / 2 - 0.02, DOOR.h / 2, 0.1],
+    [0.1, DOOR.h + 0.06, DOOR.x + DOOR.w / 2 + 0.02, DOOR.h / 2, 0.1],
+    [DOOR.w + 0.12, 0.1, DOOR.x, DOOR.h + 0.05, 0.1],
+  ] as const) {
+    const piece = new THREE.BoxGeometry(w, h, d);
     piece.translate(x, y, -0.3);
     frame.push(piece);
   }
@@ -6516,9 +6629,19 @@ function buildNightDoor(scene: ContactScene): void {
    * the left jamb, so the lock sits at nearly the full width of the leaf from it - which
    * is the far stile, where every lock in the country is.
    */
+  /*
+   * Its depth is derived from the leaf, not typed next to it.
+   *
+   * The lock is now a child of the door, so if the leaf is ever moved deeper into the
+   * reveal - as it just was - a hand-written z would leave the brass floating in front of
+   * the door or buried in it. LEAF_FRONT is where the framing's outer face is; the
+   * escutcheon sits a couple of millimetres proud of that, which is what a rim of brass
+   * screwed to a door does.
+   */
+  const LEAF_FRONT = LEAF_Z - 0.06 / 2;
   const lockRoot = ENGINE.SceneNode.create({
     name: 'Lock',
-    position: new THREE.Vector3(DOOR.w - 0.11, 1.02, 0.04),
+    position: new THREE.Vector3(DOOR.w - 0.11, 1.02, LEAF_FRONT + 0.26 - 0.004),
   });
   const escutcheon = new THREE.CylinderGeometry(0.035, 0.035, 0.012, 12);
   escutcheon.rotateX(Math.PI / 2);
@@ -6968,6 +7091,7 @@ function buildNightDoor(scene: ContactScene): void {
      */
     ['terrace', CERTAINTY.SHAPED],
     ['terrace-dark', CERTAINTY.SHAPED],
+    ['terrace-glass', CERTAINTY.SHAPED],
     ['hall', CERTAINTY.SHAPED],
     ['path', CERTAINTY.SHAPED],
     ['path-weeds', CERTAINTY.SHAPED],

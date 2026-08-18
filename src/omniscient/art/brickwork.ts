@@ -63,7 +63,16 @@ export function brickwork(options: BrickOptions = {}): SurfaceMaps | null {
   const {
     color = '#8d6a52',
     mortar = '#9a938a',
-    variation = 0.22,
+    /*
+     * Down from 0.22, which was a carnival.
+     *
+     * Reported as too colourful, and the number was simply wrong: 0.22 of 255 is +/-56 per
+     * channel, so neighbouring bricks could differ by over a hundred levels and the wall
+     * came out as confetti. Real stock brick varies, but within a family - the whole wall
+     * still reads as one colour from across a street. 0.055 is about +/-14, which is
+     * visible at arm's length and gone at twenty metres, exactly like the real thing.
+     */
+    variation = 0.055,
     courses = 16,
     seed = 'brick',
     size = 512,
@@ -109,7 +118,13 @@ export function brickwork(options: BrickOptions = {}): SurfaceMaps | null {
 
   const courseHeight = size / courses;
   // Two-to-one is the proportion of a stretcher face, near enough at this scale.
-  const brickWidth = courseHeight * 2.1;
+  /*
+   * Wider. A brick is 215 x 65mm, which is 3.3 to 1 including its joints - not 2.1.
+   *
+   * The old ratio made them stubby, and stubby bricks read as tiles or as blockwork. This
+   * is the actual proportion of the thing, and getting it right costs nothing.
+   */
+  const brickWidth = courseHeight * 3.3;
   const joint2 = Math.max(2, Math.round(courseHeight * 0.13));
 
   for (let row = 0; row < courses; row++) {
@@ -137,10 +152,10 @@ export function brickwork(options: BrickOptions = {}): SurfaceMaps | null {
       ac.fillStyle = `rgb(${r | 0},${g | 0},${b | 0})`;
       ac.fillRect(bx, by, bw, bh);
 
-      // A few bricks are noticeably darker - overfired headers, damp, soot. Sparse, so
-      // they read as individuals rather than as noise.
-      if (rng() < 0.07) {
-        ac.fillStyle = `rgba(20, 14, 12, ${0.18 + rng() * 0.22})`;
+      // A few darker - overfired headers, damp, soot. Rarer and gentler than they were:
+      // at one in fourteen and up to 40% black they were reading as a chequerboard.
+      if (rng() < 0.045) {
+        ac.fillStyle = `rgba(20, 14, 12, ${0.08 + rng() * 0.12})`;
         ac.fillRect(bx, by, bw, bh);
       }
 
