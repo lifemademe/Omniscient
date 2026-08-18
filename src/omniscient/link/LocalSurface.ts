@@ -86,8 +86,20 @@ export const TERMINAL_CSS = `
   text-transform: uppercase;
 }
 .omni-terminal__contact { color: #d8ffb0; }
+/*
+ * The transcript keeps a floor, so a device cannot squeeze it shut.
+ *
+ * flex:1 next to a panel that can be half the viewport tall means the reply to a
+ * device submission arrives in a strip a few pixels high, above the thing the player
+ * is looking at. Reported exactly that way: the explanation for a wrong item was
+ * appearing behind the bag. It was not behind it - it was in a log that had been
+ * flattened to nothing by the bag being open.
+ *
+ * 108px is about three lines, which is what it takes to see a contact answer.
+ */
 .omni-terminal__log {
   flex: 1;
+  min-height: 108px;
   overflow-y: auto;
   padding: 12px;
   display: flex;
@@ -319,7 +331,12 @@ export const TERMINAL_CSS = `
  * turn everywhere in this console now: the flag over the input, the input's own text, and
  * this.
  */
+/* Pressable, and it says so. See focusNote - this is a control, not a caption. */
 .omni-failure__prompt {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -333,6 +350,15 @@ export const TERMINAL_CSS = `
   line-height: 1.5;
   letter-spacing: 0.02em;
 }
+.omni-failure__prompt:hover {
+  background: rgba(201, 162, 39, 0.2);
+  border-color: #c9a227;
+}
+@keyframes omni-called {
+  0%, 100% { background: transparent; }
+  30% { background: rgba(201, 162, 39, 0.3); }
+}
+.omni-terminal__input--called { animation: omni-called 900ms ease-out 2; }
 .omni-failure__pen {
   flex: none;
   font-size: 22px;
@@ -624,6 +650,8 @@ export class LocalSurface implements InterventionSurface {
   private objectiveText: HTMLSpanElement | null = null;
   /** The amber flag above the input while a lost request is waiting for its note. */
   private noteFlag: HTMLDivElement | null = null;
+  /** Whether the last frame was already waiting on a note - see focusNote. */
+  private wasLocked = false;
 
   constructor(private readonly container: HTMLElement) {}
 
@@ -1085,6 +1113,24 @@ export class LocalSurface implements InterventionSurface {
     this.handlers.forEach((handler) => handler(message));
   }
 
+  /**
+   * Put the player in the note box and make it obvious that is where they now are.
+   *
+   * Scrolled into view first, because on a short console the input can be below the fold
+   * behind a failure panel - focusing something off screen moves the caret and nothing
+   * the player can see.
+   */
+  private focusNote(): void {
+    const input = this.inputElement;
+    if (!input) return;
+    input.scrollIntoView({ block: 'nearest' });
+    input.focus();
+    // A flash on the field itself, so the eye is taken there rather than told about it.
+    input.classList.remove('omni-terminal__input--called');
+    void input.offsetWidth;
+    input.classList.add('omni-terminal__input--called');
+  }
+
   public present(state: SurfaceState): void {
     /*
      * The one exit, dimmed and struck through while a lost request is waiting on its note.
@@ -1102,6 +1148,18 @@ export class LocalSurface implements InterventionSurface {
       this.objectiveElement.hidden = !state.objective;
     }
     if (this.noteFlag) this.noteFlag.hidden = !locked;
+    /*
+     * The caret goes to the box on the frame the request is lost.
+     *
+     * Every other attempt at this pointed AT the input. Putting the cursor in it is
+     * the only version that cannot be missed, because the next key the player presses
+     * lands in the right place whether they read anything or not.
+     *
+     * Once per failure - `wasLocked` - so it does not steal focus back every time the
+     * panel re-renders while they are typing.
+     */
+    if (locked && !this.wasLocked) this.focusNote();
+    this.wasLocked = locked;
     this.root?.classList.toggle('omni-terminal--note', locked);
 
     if (!this.logElement || !this.contactElement || !this.inputElement || !this.hintElement) {
@@ -1448,8 +1506,18 @@ export class LocalSurface implements InterventionSurface {
         box.appendChild(lesson);
       }
 
-      const prompt = document.createElement('div');
+      /*
+       * A button, not a paragraph.
+       *
+       * Reported three times as not noticeable, through a system line, an amber
+       * callout and a flag over the input. The fault was never the loudness - it was
+       * that all three DESCRIBED where to go and none of them took you there. So this
+       * one is pressable, and pressing it puts the caret in the box.
+       */
+      const prompt = document.createElement('button');
+      prompt.type = 'button';
       prompt.className = 'omni-failure__prompt';
+      prompt.addEventListener('click', () => this.focusNote());
 
       // Developer-authored glyph, set as text rather than markup - see AGENTS.md on safe
       // UI. Nothing here comes from the network or from anything the player typed.

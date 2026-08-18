@@ -56,7 +56,7 @@ const BOARD_CSS = `
   padding: 12px 14px 14px;
   border-top: 1px solid rgba(127, 224, 138, 0.22);
   background: rgba(6, 14, 9, 0.5);
-  max-height: 52vh;
+  max-height: 44vh;
   min-height: 0;
 }
 .omni-board__head, .omni-board__foot { flex: none; }

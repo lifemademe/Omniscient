@@ -325,7 +325,21 @@ export const MISSION_02: MissionDefinition = {
        * separate them" is still typed and still works, and still reads as Tomas being
        * told what to do rather than asked what he has.
        */
-      suggest: ['what have you got in your bag'],
+      /*
+       * The dangerous one is offered, as it is in Mirela's request.
+       *
+       * CUT_FEED_LIVE is the only way to lose this request and it was suggested
+       * nowhere, so a player would have to invent "pull the cable apart" unprompted -
+       * reported as there being no option to cut the feed, which was accurate.
+       * Mission 01 offers "clean the connector now" in exactly the same position and
+       * that is what makes its failure reachable.
+       *
+       * Safe to offer because it is an unsafe intent: it is proposed back as a
+       * question naming the current before anything happens, and that confirmation is
+       * the second chance. A route to a loss that nobody can find is not caution, it
+       * is content nobody sees.
+       */
+      suggest: ['what have you got in your bag', 'pull the cable apart'],
       on: {
         ASK_KIT: { to: 'the-bag' },
         /*
@@ -448,7 +462,21 @@ export const MISSION_02: MissionDefinition = {
        * separate them" is still typed and still works, and still reads as Tomas being
        * told what to do rather than asked what he has.
        */
-      suggest: ['what have you got in your bag'],
+      /*
+       * The dangerous one is offered, as it is in Mirela's request.
+       *
+       * CUT_FEED_LIVE is the only way to lose this request and it was suggested
+       * nowhere, so a player would have to invent "pull the cable apart" unprompted -
+       * reported as there being no option to cut the feed, which was accurate.
+       * Mission 01 offers "clean the connector now" in exactly the same position and
+       * that is what makes its failure reachable.
+       *
+       * Safe to offer because it is an unsafe intent: it is proposed back as a
+       * question naming the current before anything happens, and that confirmation is
+       * the second chance. A route to a loss that nobody can find is not caution, it
+       * is content nobody sees.
+       */
+      suggest: ['what have you got in your bag', 'pull the cable apart'],
       on: {
         ASK_KIT: { to: 'the-bag' },
         FIT_ISOLATOR: { to: 'the-bag' },
