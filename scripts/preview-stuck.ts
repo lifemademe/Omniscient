@@ -236,7 +236,21 @@ for (const mission of [
        */
       const device = walker.getCurrentBeat().device;
       if (device) {
-        walker.submitDevice(solveDevice(device));
+        /*
+         * A device can ASK before it grades, and this walk has to answer.
+         *
+         * Tomas's bag questions every part, right or wrong, and decides nothing until the
+         * yes - so a submission on its own leaves the beat exactly where it was. Without
+         * the confirm this loop submitted the correct isolator forty times in a row and
+         * reported the request as unfinishable, which is what it had been doing since the
+         * bag stopped grading on submit.
+         *
+         * The sentence branch below has always handled `confirming`. This one had not,
+         * which is the whole bug: the two paths through the same runtime were not being
+         * driven the same way.
+         */
+        const step = walker.submitDevice(solveDevice(device));
+        if (step.confirming) walker.confirm(true);
         path.push(walker.getCurrentBeat().id);
         continue;
       }
@@ -358,10 +372,43 @@ console.log('\n=== LOSING MIRELA ===\n');
     (lost.failure?.lesson?.length ?? 0) > 0,
     lost.failure?.lesson
   );
+  /*
+   * Mirela's is the one failure in the game that does NOT start a countdown, and this
+   * check used to assert the opposite because it was written before that was decided.
+   *
+   * The reasoning is in mission-01 next to the zero: this is the first request, and a
+   * player who fails it is handed a globe with nothing answerable on it and asked to
+   * wait. The lesson is in the arc, the line she says afterwards, and the note - all of
+   * which have already happened by the time a countdown would start. So the mechanic is
+   * TAUGHT here and charged later, which is why the second half of this checks a request
+   * that does bite.
+   */
   check(
-    'It puts the contact on a countdown',
-    (lost.failure?.cooldownSeconds ?? 0) > 0,
+    'The first failure in the game does not lock the player out',
+    lost.failure?.cooldownSeconds === 0,
     `${lost.failure?.cooldownSeconds}s`
+  );
+
+  /*
+   * And the other half of that bargain, across the whole game.
+   *
+   * The exemption is for the FIRST request and nothing else. Checked over the definitions
+   * rather than by playing each one to its loss, because the claim being made is about the
+   * authored numbers - every way to fail a request after Mirela's costs the player a wait.
+   * A second zero appearing anywhere would quietly delete the mechanic her failure exists
+   * to teach, and it would do it silently.
+   */
+  const uncharged = [
+    MISSION_02, MISSION_03, MISSION_04, MISSION_05, MISSION_06, MISSION_07, MISSION_08,
+  ].flatMap((mission) =>
+    mission.beats
+      .filter((beat) => beat.failure && (beat.failure.cooldownSeconds ?? 0) <= 0)
+      .map((beat) => `${mission.id}/${beat.id}`)
+  );
+  check(
+    'Every later failure does charge for it',
+    uncharged.length === 0,
+    uncharged.length ? uncharged.join(', ') : 'all carry a countdown'
   );
 
   // And the note the player writes has to survive to the retry.
