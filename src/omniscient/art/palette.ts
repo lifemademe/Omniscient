@@ -560,6 +560,20 @@ export const MAT = {
    * Green-gold, because that is what a cat's is; a dog's is blue and a fox's is red, and
    * the difference is the whole of how anybody identifies an animal in a torch beam.
    */
+  /**
+   * A grey cat, and it is grey for a measurable reason.
+   *
+   * The first one was `MAT.dark` at #2b2724, on the reasoning that a cat at two in the
+   * morning is a silhouette. Which is true, and a silhouette needs something behind it to
+   * be a silhouette AGAINST - and there was nothing there but dark brick. Measured on the
+   * sill it rendered at 7/255 against brickwork at 56: not a cat-shaped shadow, just a
+   * slightly darker patch of night. Reported, correctly, as no cat.
+   *
+   * At #8a8174 the same spot reads 86 against that 56 - clearly lighter than the wall it
+   * sits on, from any angle, without being a white cat in a dark street. Half the cats in
+   * the country are this colour and it is the one that survives being unlit.
+   */
+  catFur: standard('#8a8174', 0.94),
   catEye: new THREE.MeshBasicMaterial({ color: '#c8d67a', toneMapped: false }),
   /**
    * The landing light lying on the hall floor at the far end.

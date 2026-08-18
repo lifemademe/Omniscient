@@ -12,6 +12,14 @@
  * standing is a small dog; a cat lying down is a bag. Sitting is the shape everybody draws
  * when asked to draw a cat, because it is the one that cannot be mistaken for anything else.
  *
+ * ## Grey, not black
+ *
+ * The first version was near-black, on the reasoning that a cat at night is a silhouette.
+ * A silhouette needs something behind it to be a silhouette against, and on a dark brick
+ * wall under one porch lamp there is nothing - measured, it rendered at 7/255 against
+ * brickwork at 56, which is not a shape, it is a slightly darker piece of night. It has to
+ * be paler than what it sits on or it is not there at all.
+ *
  * ## The eyes do all the work
  *
  * Cats have a tapetum lucidum and everybody has met it in a torch beam. Two unlit dots that
@@ -94,7 +102,7 @@ export function buildCat(options: CatOptions): GeneratedCat {
     body.push(paw);
   }
 
-  root.add(meshOf('CatBody', mergeGeometries(body, false) ?? body[0], MAT.dark));
+  root.add(meshOf('CatBody', mergeGeometries(body, false) ?? body[0], MAT.catFur));
 
   /**
    * The head, on its own node because it turns.
@@ -128,7 +136,7 @@ export function buildCat(options: CatOptions): GeneratedCat {
     ear.translate(side * 0.042, 0.062, -0.005);
     head.push(ear);
   }
-  headNode.add(meshOf('CatHead', mergeGeometries(head, false) ?? head[0], MAT.dark));
+  headNode.add(meshOf('CatHead', mergeGeometries(head, false) ?? head[0], MAT.catFur));
 
   /**
    * The eyes: unlit, so they hold their brightness whatever the porch light is doing.
@@ -164,7 +172,7 @@ export function buildCat(options: CatOptions): GeneratedCat {
     const segment = new THREE.CylinderGeometry(0.016 - i * 0.002, 0.019 - i * 0.002, 0.09, 5);
     segment.rotateX(Math.PI / 2);
     segment.translate(0, 0, 0.045);
-    joint.add(meshOf(`CatTailSeg${i}`, segment, MAT.dark));
+    joint.add(meshOf(`CatTailSeg${i}`, segment, MAT.catFur));
     parent.add(joint);
     tailJoints.push(joint);
     parent = joint;
