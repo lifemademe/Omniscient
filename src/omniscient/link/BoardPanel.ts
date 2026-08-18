@@ -1498,13 +1498,32 @@ export class BoardPanel {
       button.addEventListener('click', (event) => {
         event.preventDefault();
         if (this.view?.kind !== 'lock') return;
+        /*
+         * `tried` is set BEFORE the dispatch, and that is not tidiness.
+         *
+         * `dispatch` is synchronous all the way down: it runs the session, which grades
+         * the press and calls `present`, which calls `refresh` - so the reconcile happens
+         * INSIDE this line, before anything written after it exists. With the assignment
+         * below the dispatch, refresh always saw a null `tried` and recorded nothing, and
+         * the next press reconciled against the pin before it. Reported as pressing pin 3
+         * and watching a different pin light up, which is exactly what a one-press lag
+         * looks like from the outside.
+         *
+         * Simulated both orders against the real reconcile: after the dispatch the board
+         * ends up holding [] having played the whole correct sequence; before it, it holds
+         * the sequence.
+         *
+         * The same shape as the Send button's `mousedown` fix and the one on the mower's
+         * take. Anything a synchronous dispatch will read has to be true before it is
+         * called, because there is no "after" until it returns.
+         */
+        this.tried = pin.id;
         this.dispatch({
           kind: 'device',
           // Everything already up, plus the one being tried. The runtime holds the truth
           // about how many are up; this only ever appends to what it last reported.
           submission: { kind: 'lock', order: [...this.order.slice(0, this.view.set), pin.id] },
         });
-        this.tried = pin.id;
         audio.play('seat');
       });
 
