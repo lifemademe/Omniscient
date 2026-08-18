@@ -30,6 +30,8 @@ import type { Device } from '../src/omniscient/mission/types.js';
 import type { PipeGrid } from '../src/omniscient/mission/pipes.js';
 import { GlobeView, SignalState } from '../src/omniscient/crt/GlobeView.js';
 import { createSignals } from '../src/omniscient/content/signals.js';
+import { DISTRICT_PURSUIT } from '../src/omniscient/content/district-07.js';
+import { auditPursuit } from '../src/omniscient/mission/pursuit.js';
 import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
 
 const SEED = 0x0c151e;
@@ -337,6 +339,34 @@ function checkEveryMissionHasASignal(): void {
       CAMPAIGN.some((m) => m.contactId === signal.id)
     );
   }
+}
+
+/**
+ * The chase the game actually ships.
+ *
+ * audit-pursuit.ts plans fresh pursuits from test seeds and audits those, which proves the
+ * planner. It does not touch DISTRICT_PURSUIT, the one constant the mission hands to the
+ * player - and that file's own header warns about exactly this hazard, two copies of a
+ * thing drifting apart while the check watches the wrong one.
+ *
+ * The rule the console now states - not backwards, not further than the clock allows, not
+ * off his street - is only honest if every hop really does have exactly one camera passing
+ * all three. That is what singleAnswer counts.
+ */
+function checkShippedChase(): void {
+  const audit = auditPursuit(DISTRICT_PURSUIT);
+  check('the shipped chase has hops to play', audit.hops > 0, `${audit.hops}`);
+  check(
+    'every hop has exactly one camera that survives all three tests',
+    audit.singleAnswer === audit.hops,
+    `${audit.singleAnswer} of ${audit.hops}`
+  );
+  check(
+    'every decoy fails the way the contact says it does',
+    audit.honestDecoys === audit.hops,
+    `${audit.honestDecoys} of ${audit.hops}`
+  );
+  check('no hop is a single option', audit.thin === 0, `${audit.thin} thin`);
 }
 
 let failures = 0;
@@ -837,6 +867,9 @@ console.log('');
 console.log('=== THE GLOBE ===');
 checkEveryMissionHasASignal();
 checkGlobeTurns();
+console.log('');
+console.log('=== THE CHASE THAT SHIPS ===');
+checkShippedChase();
 console.log('');
 console.log('=== THE PIPE RUNS ===');
 console.log('');

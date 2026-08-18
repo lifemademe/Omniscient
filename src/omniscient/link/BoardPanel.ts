@@ -1254,6 +1254,8 @@ export class BoardPanel {
       // Every hop answered. The picks go up and the runtime decides what they were worth.
       sighting.textContent = 'TRAIL ENDS - no camera ahead of him';
       this.send.disabled = false;
+      this.status.className = 'omni-board__status';
+      this.status.textContent = view.note ?? 'that is the whole trail - send it';
       return;
     }
 
@@ -1296,10 +1298,29 @@ export class BoardPanel {
 
     // Nothing to send until the chase has been played out.
     this.send.disabled = true;
-    if (view.note) {
-      this.status.className = 'omni-board__status omni-board__status--score';
-      this.status.textContent = view.note;
-    }
+
+    /**
+     * What makes a camera the right one, said out loud.
+     *
+     * Asked, about this exact board: "how am I supposed to solve this?" - and there was no
+     * answer on screen, because the only line that could have carried one was showing a
+     * hint from another mission entirely.
+     *
+     * The rule is three tests and `classify` applies them in this order: he cannot have
+     * gone backwards, he cannot have got further than the elapsed time allows, and he has
+     * not left his street. Every wrong option in a hop fails exactly one of them, so naming
+     * the three is enough - it turns four distances into a process of elimination without
+     * pointing at the answer.
+     *
+     * The sighting line above already gives the two numbers it needs: which way he was
+     * pointed and how long ago.
+     */
+    this.status.className = view.note
+      ? 'omni-board__status omni-board__status--score'
+      : 'omni-board__status';
+    this.status.textContent =
+      view.note ??
+      'he has not turned back, cannot outrun the clock, and is still on his street - one camera is all three';
   }
 
   /**
@@ -1759,6 +1780,28 @@ export class BoardPanel {
       this.send.textContent = SEND_LABEL;
     }
 
+    /**
+     * The status line, written from scratch every time, before any board gets to speak.
+     *
+     * The panel is shared and cached, so its DOM outlives the device that configured it -
+     * the same fact the note above records about the send button, and the status line had
+     * the same hole. Only three of the eight boards ever wrote this element, and the
+     * pursuit board wrote it only when it had a score to report, so a fresh chase inherited
+     * whatever the last device had left there.
+     *
+     * Which is how Vasile's "lit pieces have water in them - turn the rest until it reaches
+     * the outfall" ended up under Lucian's camera list, in a mission with no pipes in it.
+     * Reported by the player, and the giveaway is that it read as perfectly sensible advice
+     * about the wrong game.
+     *
+     * A default here means a board that forgets to write its own hint shows nothing, which
+     * is a missing sentence rather than a lie.
+     */
+    this.status.className = view.note
+      ? 'omni-board__status omni-board__status--score'
+      : 'omni-board__status';
+    this.status.textContent = view.note ?? '';
+
     if (view.kind === 'kit') {
       this.refreshKit();
       this.wires.replaceChildren();
@@ -1769,6 +1812,18 @@ export class BoardPanel {
       // The frame loop owns this one; refresh must not fight it.
       this.send.disabled = true;
       this.paintChase(view.spec.holdToBlind, view.spec.width);
+      this.wires.replaceChildren();
+      return;
+    }
+
+    /*
+     * The chase had no branch here at all - it fell through to `if (view.kind !==
+     * 'relations') return`, so every present() left the pursuit board untouched and its
+     * hint unwritten. It is refreshed on build and on each pick, and now on present too,
+     * which is what makes the default above reach it.
+     */
+    if (view.kind === 'pursuit') {
+      this.refreshPursuit();
       this.wires.replaceChildren();
       return;
     }
