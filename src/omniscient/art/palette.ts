@@ -305,7 +305,16 @@ export const MAT = {
    * the entire mission is about had no edge against the bench it stood on. Cool and
    * desaturated against all that warm wood, it separates on hue as well as value.
    */
-  equipment: standard('#6a7268', 0.62, 0.15),
+  /*
+   * Grey, not grey-green. The green cast came off at the request of the eye looking at
+   * it: 106/114/104 has the middle channel nine above the average of the other two,
+   * which on a warm-lit bench reads as olive. 108/110/111 is neutral and a touch cool.
+   *
+   * The value barely moves - 111.6 to 109.6 out of 255 - so what §187 bought here is
+   * intact. The separation from the timber was never the green, it was being cool and
+   * desaturated against a room of warm wood, and neutral grey is more of both.
+   */
+  equipment: standard('#6c6e6f', 0.62, 0.15),
   /**
    * The inside of that housing - a panel that has been taken off and propped up.
    *
@@ -324,7 +333,16 @@ export const MAT = {
    * row failed on a problem that was never geometric, and both of them looked reasonable.
    * Measuring the result each time is the only reason it is not still there.
    */
-  equipmentBack: standard('#484f47', 0.92, 0),
+  /*
+   * Neutralised to match the case, and the VALUE is deliberately unchanged.
+   *
+   * Everything above is about how bright this is, twice over. So the hue moved and the
+   * brightness did not: 76.9 to 75.6 out of 255, a difference of one and a third, which
+   * is inside the noise of the measurements that produced those numbers. The bay floor
+   * now reads as the dark inside of the same grey box rather than as a green panel
+   * behind a grey one.
+   */
+  equipmentBack: standard('#4a4c4d', 0.92, 0),
   /**
    * A slot, a louvre, a hole. Unlit on purpose.
    *

@@ -868,7 +868,7 @@ function buildRepairShop(scene: ContactScene): void {
       'SetShell',
       set.body,
       texturedFrom(MAT.equipment, {
-        color: '#6a7268',
+        color: '#6c6e6f',
         /**
          * Widened and lifted, for the shot the mission is actually spent in.
          *
@@ -890,7 +890,19 @@ function buildRepairShop(scene: ContactScene): void {
          * is the line that keeps this inside the flat pass rather than sliding back into
          * the crackle-enamel version that was deleted.
          */
-        worn: '#bdb7a8',
+        /*
+         * The arris wear is RUST now, not rubbed paint.
+         *
+         * It was #bdb7a8 - a pale warm cream, 183 against a body at 110 - which is what
+         * bare alloy showing through looks like, and this set has spent its winters in a
+         * shop that floods. What belongs on those edges is oxide.
+         *
+         * So darker than the body rather than lighter, by 17, and hard warm: a red-blue
+         * spread of +74 where the case sits at -3. That gap is doing the work. The two
+         * read apart on hue at any light level, which matters because this object is
+         * lit by one practical and the certainty law pulls the whole prop warm on top.
+         */
+        worn: '#84553a',
         grime: '#3a3a2e',
         seed: 'kestrel-3-shell',
         wear: 0.085,
