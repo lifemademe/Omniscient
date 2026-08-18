@@ -225,10 +225,11 @@ export const MISSION_02: MissionDefinition = {
       /**
        * Asking what he has got, which is the route into the bag.
        *
-       * Kept separate from FIT_ISOLATOR on purpose. A player who already knows the answer
-       * can still say it outright and skip the device - §163, and it respects somebody who
-       * reasoned it out - while a player who does not can ask what is in the bag and work
-       * it out by looking. Two routes to one beat, and neither is the lesser one.
+       * Kept separate from FIT_ISOLATOR, but both now land in the same place. Asking
+       * what he has opens the bag; saying "put something in to separate them" also
+       * opens the bag, with Tomas agreeing on the way in. Two ways to arrive at the
+       * choice, and no way past it - §163 is about never dead-ending, not about
+       * letting the one interesting decision be skipped.
        */
       id: 'ASK_KIT',
       requires: [
@@ -318,11 +319,20 @@ export const MISSION_02: MissionDefinition = {
       suggest: ['what have you got in your bag', 'put something in to separate them'],
       on: {
         ASK_KIT: { to: 'the-bag' },
-        FIT_ISOLATOR: {
-          to: 'isolator-fitted',
-          learn: [FACT_BEACON_DROPS_ON_KEYUP, FACT_FEED_NEEDS_ISOLATOR],
-          environment: 'prop.steady:beacon',
-        },
+        /*
+         * Into the bag, not past it.
+         *
+         * This used to finish the request on its own, which meant the one sentence a
+         * player is most likely to type - it is offered as a chip - skipped the device
+         * entirely. Reported, and rightly: a mission whose gameplay is optional does
+         * not have gameplay.
+         *
+         * Saying it is still worth something and still lands as a diagnosis. Tomas
+         * agrees, opens the bag and asks which one, and the player who worked it out
+         * in words finds the item they already have in mind waiting for them. The
+         * sentence is the reasoning; the pick is the act. He is the one with hands.
+         */
+        FIT_ISOLATOR: { to: 'the-bag', learn: [FACT_BEACON_DROPS_ON_KEYUP] },
         CUT_FEED_LIVE: {
           to: 'arc',
           learn: [FACT_BEACON_DROPS_ON_KEYUP],
@@ -423,11 +433,7 @@ export const MISSION_02: MissionDefinition = {
       suggest: ['what have you got in your bag', 'put something in to separate them'],
       on: {
         ASK_KIT: { to: 'the-bag' },
-        FIT_ISOLATOR: {
-          to: 'isolator-fitted',
-          learn: [FACT_FEED_NEEDS_ISOLATOR],
-          environment: 'prop.steady:beacon',
-        },
+        FIT_ISOLATOR: { to: 'the-bag' },
         CUT_FEED_LIVE: {
           to: 'arc',
           environment: 'prop.spark:splice-box',
@@ -502,7 +508,13 @@ export const MISSION_02: MissionDefinition = {
         prompt: 'One supply, feeding her shop and the light. Pick what gives the light its own.',
         items: [...TOMAS_BAG],
         answer: 'isolator',
-        onSolved: { to: 'isolator-fitted', learn: [FACT_FEED_NEEDS_ISOLATOR] },
+        onSolved: {
+          to: 'isolator-fitted',
+          learn: [FACT_FEED_NEEDS_ISOLATOR],
+          // The beacon holds. It follows the isolator going in, so it belongs here
+          // rather than on the sentence that proposes one.
+          environment: 'prop.steady:beacon',
+        },
         // Back to the bag. A wrong pick costs the item's own explanation and nothing else.
         onWrong: { to: 'the-bag' },
         wrongSay: 'No - hold on.',
