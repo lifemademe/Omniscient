@@ -70,6 +70,29 @@ const cache = new Map<GestureName, Promise<THREE.AnimationClip | null>>();
  * and renaming bones to match the clip would break every hand target in the game to fix
  * one animation.
  */
+/** The one bone whose rotation is rewritten rather than kept or dropped. */
+export const HIPS = /Hips\.quaternion$/;
+
+/**
+ * Rewrite a rotation track as the rotation SINCE its own first frame.
+ *
+ * Leaves the values as a delta rather than a pose - see the note in `retarget` and
+ * `fitHips` in riggedContact, which is where the delta meets a particular skeleton.
+ */
+function asDelta(track: THREE.KeyframeTrack): THREE.KeyframeTrack {
+  const values = Array.from(track.values);
+  const first = new THREE.Quaternion(values[0], values[1], values[2], values[3]).invert();
+  const q = new THREE.Quaternion();
+  for (let i = 0; i < values.length; i += 4) {
+    q.set(values[i], values[i + 1], values[i + 2], values[i + 3]).premultiply(first);
+    values[i] = q.x;
+    values[i + 1] = q.y;
+    values[i + 2] = q.z;
+    values[i + 3] = q.w;
+  }
+  return new THREE.QuaternionKeyframeTrack(track.name, Array.from(track.times), values);
+}
+
 function retarget(clip: THREE.AnimationClip): THREE.AnimationClip {
   const copy = clip.clone();
   for (const track of copy.tracks) {
@@ -103,9 +126,33 @@ function retarget(clip: THREE.AnimationClip): THREE.AnimationClip {
    * start, a recoil and a nod actually live, and the character keeps standing where the
    * room put her.
    */
-  copy.tracks = copy.tracks.filter(
-    (track) => !track.name.endsWith('.position') && !track.name.includes('Hips')
-  );
+  /*
+   * Position tracks go, hips ROTATION stays - and the difference is the fix.
+   *
+   * Both used to go, which is why every gesture in the game played as though the
+   * pelvis were bolted to the floor. Measured, the hips travel up to 27 degrees over
+   * Pointing Forward and 19 over Surprised, and a body that turns and leans from the
+   * chest up while its hips hold still is the single thing that most reads as a
+   * puppet. It is a lot of animation to throw away.
+   *
+   * The reason it was thrown away is real though: a clip's hips carry the stance the
+   * ANIMATOR chose - which way the actor faces and how far they lean - and this game
+   * authors that per contact, in the scene, and has already turned Mirela 72 degrees
+   * to her work and solved both her hands onto it. Letting the clip win doubled her
+   * over her own bench for most of a take.
+   *
+   * So the clip keeps its hip MOVEMENT and loses its hip OPINION: every key becomes
+   * the delta from that clip's own first frame. At the first frame the hips are
+   * exactly where the scene put them and from there they move as animated.
+   *
+   * The delta is left as a delta here and composed onto each rig's real rest pose in
+   * riggedContact, because this clip is shared by all seven contacts and the rest is
+   * per rig - Mirela's hips sit at -90 degrees about X, so writing the raw delta
+   * would fold every character in the game face down at the floor.
+   */
+  copy.tracks = copy.tracks
+    .filter((track) => !track.name.endsWith('.position'))
+    .map((track) => (HIPS.test(track.name) ? asDelta(track) : track));
   return copy;
 }
 

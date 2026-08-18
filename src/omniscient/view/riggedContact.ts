@@ -34,7 +34,7 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
-import { loadGesture, type GestureName } from './gestures.js';
+import { HIPS, loadGesture, type GestureName } from './gestures.js';
 
 /**
  * Mixamo names its bones consistently. three.js then renames them.
@@ -487,6 +487,42 @@ const RELEASE = 0.5;
    *    Fading alone was the previous bug; stopping during the fade is what caused this
    *    one. It has to be both, in that order.
    */
+  /**
+   * Compose a shared clip's hips delta onto THIS skeleton's rest pose.
+   *
+   * `retarget` leaves the hips track as the rotation since the clip's own first frame,
+   * because the clip is cached once and played by all seven contacts while the rest pose
+   * belongs to each GLB. Mirela's hips sit at -90 degrees about X; writing the raw delta
+   * would put her face down at the floor and take everybody else with her.
+   *
+   * Cached per rig, so a contact who points twenty times rebuilds nothing.
+   */
+  const fitted = new Map<THREE.AnimationClip, THREE.AnimationClip>();
+  const fitHips = (clip: THREE.AnimationClip): THREE.AnimationClip => {
+    const already = fitted.get(clip);
+    if (already) return already;
+
+    const rest = contact.rest.hips;
+    const copy = clip.clone();
+    if (rest) {
+      copy.tracks = copy.tracks.map((track) => {
+        if (!HIPS.test(track.name)) return track;
+        const values = Array.from(track.values);
+        const q = new THREE.Quaternion();
+        for (let i = 0; i < values.length; i += 4) {
+          q.set(values[i], values[i + 1], values[i + 2], values[i + 3]).premultiply(rest);
+          values[i] = q.x;
+          values[i + 1] = q.y;
+          values[i + 2] = q.z;
+          values[i + 3] = q.w;
+        }
+        return new THREE.QuaternionKeyframeTrack(track.name, Array.from(track.times), values);
+      });
+    }
+    fitted.set(clip, copy);
+    return copy;
+  };
+
   const release = (): void => {
     if (!gestureAction) return;
     holdIdle();
@@ -527,7 +563,7 @@ const RELEASE = 0.5;
         fadeLeft = 0;
         holdIdle();
 
-        const action = mixer.clipAction(clip);
+        const action = mixer.clipAction(fitHips(clip));
         action.reset();
         action.setLoop(THREE.LoopOnce, 1);
         action.clampWhenFinished = true;

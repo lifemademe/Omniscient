@@ -1978,7 +1978,15 @@ function buildBeaconMast(scene: ContactScene): void {
      * other free.
      */
     handsOn: {
-      right: new THREE.Vector3(0.85, 3.07, 0.75),
+      /*
+       * z 0.94, not 0.75. The handrail runs along z 0.94 at y 3.07, and the height
+       * and the x were already right - the hand was simply 19cm short of it, holding
+       * a rail that was not there. Reported as his hand not being on anything.
+       *
+       * 0.925 rather than 0.94 so the palm meets the near face of a 45mm rail rather
+       * than floating at its centre line.
+       */
+      right: new THREE.Vector3(0.85, 3.07, 0.925),
     },
     // He is six metres up a lattice on a headland at night. The one figure in the cast
     // with weather on him gets the larger idle - still under two centimetres at the head,
@@ -2097,9 +2105,27 @@ function buildBeaconMast(scene: ContactScene): void {
     position: new THREE.Vector3(4.4, 3.9, 4.4),
     target: new THREE.Vector3(0.25, 3.7, 0.25),
   });
+  /*
+   * The join on the bracket, from the one side of it that is not blocked.
+   *
+   * The aim was never wrong - it has always pointed at the splice box, which sits at
+   * (0.3, 2.6, 0.36). The camera was in the wrong place, and reported as the shot
+   * showing nothing recognisable, which is exactly what it showed: Tomas.
+   *
+   * Measured against the two things that can stand in the way. From (1.35, 2.95,
+   * 1.35) the sightline passed 0.18m from his centre of mass - through him, since a
+   * torso is wider than that - and crossed the platform railing 0.016m from an
+   * upright, which is 35mm square, so through that as well. Two occluders on one
+   * 1.44m line.
+   *
+   * From here it clears him by 0.44m and the nearest upright by 0.106m, and passes
+   * between the handrail and the mid rail rather than through either. 1.07m out,
+   * which puts a 24cm box across about a quarter of the frame with the second cable
+   * leaving the bottom of it - the join and the thing the join does, in one read.
+   */
   scene.registerShot('mast-cable', {
-    position: new THREE.Vector3(1.35, 2.95, 1.35),
-    target: new THREE.Vector3(0.35, 2.66, 0.36),
+    position: new THREE.Vector3(0.05, 2.92, 1.35),
+    target: new THREE.Vector3(0.3, 2.6, 0.36),
     duration: 2.4,
   });
   scene.registerShot('beacon', {
