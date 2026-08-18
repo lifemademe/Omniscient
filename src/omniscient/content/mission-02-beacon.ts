@@ -316,7 +316,16 @@ export const MISSION_02: MissionDefinition = {
         'the bracket, and a second wire off it heading down the hill. Towards the town. So the ' +
         'light and whatever is down there are pulling off the one supply. Towards - oh. That ' +
         'goes to Mirela’s shop, does it not.',
-      suggest: ['what have you got in your bag', 'put something in to separate them'],
+      /*
+       * One chip, because they now do the same thing.
+       *
+       * Both land on the bag - that was the fix for the sentence skipping the device -
+       * so offering both is two names for one move. This is the one that says a bag
+       * exists, which is the thing a player cannot guess; "put something in to
+       * separate them" is still typed and still works, and still reads as Tomas being
+       * told what to do rather than asked what he has.
+       */
+      suggest: ['what have you got in your bag'],
       on: {
         ASK_KIT: { to: 'the-bag' },
         /*
@@ -430,7 +439,16 @@ export const MISSION_02: MissionDefinition = {
         'keys it - hard enough to take my light with it. It has been that way for years and it ' +
         'never mattered, because her set has been dead for... ' +
         'Her set has been dead for a long time. Until this morning.',
-      suggest: ['what have you got in your bag', 'put something in to separate them'],
+      /*
+       * One chip, because they now do the same thing.
+       *
+       * Both land on the bag - that was the fix for the sentence skipping the device -
+       * so offering both is two names for one move. This is the one that says a bag
+       * exists, which is the thing a player cannot guess; "put something in to
+       * separate them" is still typed and still works, and still reads as Tomas being
+       * told what to do rather than asked what he has.
+       */
+      suggest: ['what have you got in your bag'],
       on: {
         ASK_KIT: { to: 'the-bag' },
         FIT_ISOLATOR: { to: 'the-bag' },

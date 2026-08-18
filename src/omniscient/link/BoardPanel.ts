@@ -72,20 +72,29 @@ const BOARD_CSS = `
   color: #9fd8a8;
   text-transform: uppercase;
 }
+/*
+ * The fold control, at the weight of a control.
+ *
+ * It was a 2px-padded outline in 40% green at 11px, sitting beside a prompt in the
+ * same colour family - reported as having to be looked for. A device the player can
+ * put away is only useful if putting it away is obviously offered, and this is the
+ * one button on the panel that is present whatever device is up.
+ */
 .omni-board__fold {
-  padding: 2px 10px;
-  border: 1px solid rgba(127, 224, 138, 0.4);
+  padding: 5px 14px;
+  border: 1px solid rgba(127, 224, 138, 0.75);
   border-radius: 3px;
-  background: transparent;
-  color: rgba(207, 233, 210, 0.85);
+  background: rgba(127, 224, 138, 0.12);
+  color: #d8ffb0;
   font: inherit;
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   cursor: pointer;
   white-space: nowrap;
 }
-.omni-board__fold:hover { border-color: rgba(127, 224, 138, 0.8); }
+.omni-board__fold:hover { background: rgba(127, 224, 138, 0.24); border-color: #d8ffb0; }
 .omni-board--folded .omni-board__stage,
 .omni-board--folded .omni-board__foot { display: none; }
 /* The wires are drawn on a layer behind the boxes, sized to the grid. */
@@ -648,10 +657,28 @@ export class BoardPanel {
      * and read as a bug the moment Vasile got one. A shared panel cannot carry a pronoun.
      */
     this.send.textContent = 'Send it';
-    this.send.addEventListener('mousedown', (event) => {
-      audio.play('transmit');
+    /*
+     * `click`, and the submit goes first.
+     *
+     * This was on `mousedown` with `audio.play` ahead of the submit, which is two ways
+     * for a press to come to nothing and no reason for either. It is the only control
+     * in the console on mousedown - the item buttons, the tabs, the chips are all on
+     * click, and those demonstrably work in play mode - so if anything in the engine's
+     * input handling swallows a mousedown over the overlay, this button and only this
+     * button stops responding.
+     *
+     * Reported three times as the send button doing nothing. Twice it was something
+     * else and this was ruled out by measurement, which is exactly why it is worth
+     * removing now rather than defending: it costs nothing and it is one fewer thing
+     * that can be true.
+     *
+     * The sound moved after the dispatch for the same reason. A press that made a
+     * noise and did nothing would be the worst version of this.
+     */
+    this.send.addEventListener('click', (event) => {
       event.preventDefault();
       this.submit();
+      audio.play('transmit');
     });
     foot.appendChild(this.send);
 
