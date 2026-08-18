@@ -46,6 +46,7 @@ import { createTorchlight } from '../art/torchlight.js';
 import { applyFloodstain } from '../art/floodstain.js';
 import { applySaltRust } from '../art/saltrust.js';
 import { createStarfield } from '../art/starfield.js';
+import { brickwork } from '../art/brickwork.js';
 import { applyWaterline } from '../art/waterline.js';
 import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { placeRigged } from './riggedContact.js';
@@ -5945,9 +5946,41 @@ function buildNightDoor(scene: ContactScene): void {
   const lintel = new THREE.BoxGeometry(openRight - openLeft, WALL_TOP - openHead, 0.3);
   lintel.translate((openLeft + openRight) / 2, openHead + (WALL_TOP - openHead) / 2, -0.4);
   front.push(lintel);
+  /**
+   * Brick, and the repeat is the whole of getting it right.
+   *
+   * Box UVs run 0 to 1 on every face regardless of how big the face is, so a wall 7m wide
+   * and one 1m wide would carry the same number of courses without this - and the tile has
+   * 16 courses in it, so the repeat is chosen to put a course at a believable height. Two
+   * and a half repeats over 5.2m of wall gives courses about 13cm apart, which is a brick
+   * and its joint.
+   *
+   * Set on the material rather than baked into the tile because the three faces of these
+   * boxes want the same brick at the same scale, and a texture's repeat is the only thing
+   * that can be shared across them.
+   */
+  const brickMaps = brickwork({
+    color: '#7d5f4b',
+    mortar: '#8f877c',
+    courses: 16,
+    seed: 'rasca-front',
+  });
+  const brickWall = brickMaps ? MAT.wall.clone() : MAT.wall;
+  if (brickMaps) {
+    brickWall.map = brickMaps.map;
+    brickWall.normalMap = brickMaps.normalMap;
+    brickWall.roughnessMap = brickMaps.roughnessMap;
+    brickWall.color = new THREE.Color('#ffffff');
+    brickWall.roughness = 1;
+    brickWall.normalScale = new THREE.Vector2(0.8, 0.8);
+    for (const map of [brickMaps.map, brickMaps.normalMap, brickMaps.roughnessMap]) {
+      map?.repeat.set(3.4, 2.5);
+    }
+    brickWall.needsUpdate = true;
+  }
   scene.registerProp(
     'front',
-    meshOf('Front', mergeGeometries(front, false) ?? front[0], MAT.wall)
+    meshOf('Front', mergeGeometries(front, false) ?? front[0], brickWall)
   );
 
   /**
@@ -5990,6 +6023,93 @@ function buildNightDoor(scene: ContactScene): void {
   scene.registerProp('hall', hallRoot);
 
   /**
+   * -- The rest of the terrace ----------------------------------------------------------
+   *
+   * The set was one door in seven metres of blank wall. Everything the request needs was in
+   * it and it did not read as a street: a house has neighbours, and the thing that says so
+   * is not detail on the house but the fact that the SAME details repeat along it at the
+   * same spacing. A terrace is a rhythm.
+   *
+   * So the wall gets the run of things every house on it would have - a window each side at
+   * ground level, sills, a downpipe off the gutter, and the sills and heads that go with
+   * them. All dark: this is two in the morning and the only lit window in the street is the
+   * one Dorin keeps looking at. They are silhouette and spacing, nothing else.
+   */
+  const terrace: THREE.BufferGeometry[] = [];
+  const terraceDark: THREE.BufferGeometry[] = [];
+
+  for (const side of [-1, 1] as const) {
+    const wx = DOOR_X + side * 2.05;
+
+    // The opening, as a dark recess rather than a pane laid on the brick - a window at
+    // night is a hole, and a hole needs a depth or it is a sticker.
+    const reveal = new THREE.BoxGeometry(1.06, 1.34, 0.12);
+    reveal.translate(wx, 1.42, -0.31);
+    terraceDark.push(reveal);
+
+    // Sill and head, which are what actually make it read as a window from across a road.
+    const sill = new THREE.BoxGeometry(1.24, 0.09, 0.2);
+    sill.translate(wx, 0.72, -0.29);
+    terrace.push(sill);
+    const head = new THREE.BoxGeometry(1.2, 0.11, 0.16);
+    head.translate(wx, 2.14, -0.3);
+    terrace.push(head);
+
+    // Glazing bars: one vertical, one horizontal. Two boxes, and without them the recess
+    // is a hole in a wall rather than a window.
+    const bar = new THREE.BoxGeometry(0.035, 1.3, 0.04);
+    bar.translate(wx, 1.42, -0.25);
+    terrace.push(bar);
+    const transom = new THREE.BoxGeometry(1.02, 0.035, 0.04);
+    transom.translate(wx, 1.72, -0.25);
+    terrace.push(transom);
+  }
+
+  /**
+   * The downpipe, off the gutter and into the ground.
+   *
+   * The one vertical in a wall of horizontals, and it is doing composition work rather
+   * than set dressing: the front is 7m of brick with a door in the middle of it, so a hard
+   * vertical line two metres off to one side is what stops the wall reading as a backdrop
+   * flat. It also explains the staining the brickwork carries down from it.
+   */
+  const pipe = new THREE.CylinderGeometry(0.055, 0.055, WALL_TOP - 0.2, 8);
+  pipe.translate(DOOR_X + 3.3, (WALL_TOP - 0.2) / 2, -0.19);
+  terraceDark.push(pipe);
+  for (const y of [0.4, 1.9, 3.4] as const) {
+    // Brackets, at the spacing a pipe is actually clipped at.
+    const bracket = new THREE.BoxGeometry(0.14, 0.05, 0.09);
+    bracket.translate(DOOR_X + 3.3, y, -0.245);
+    terraceDark.push(bracket);
+  }
+  const hopper = new THREE.BoxGeometry(0.2, 0.22, 0.16);
+  hopper.translate(DOOR_X + 3.3, WALL_TOP - 0.28, -0.2);
+  terraceDark.push(hopper);
+
+  /**
+   * The gutter and the string course, running the whole width.
+   *
+   * Two horizontal bands are the cheapest thing that turns a wall into a facade. The
+   * course at first-floor level is what every terrace of this age has where the brickwork
+   * changes, and the gutter caps the top so the wall stops rather than being cropped.
+   */
+  const course = new THREE.BoxGeometry(7, 0.14, 0.36);
+  course.translate(0, 2.42, -0.39);
+  terrace.push(course);
+  const gutter = new THREE.BoxGeometry(7, 0.13, 0.3);
+  gutter.translate(0, WALL_TOP - 0.12, -0.32);
+  terraceDark.push(gutter);
+
+  scene.registerProp(
+    'terrace',
+    meshOf('Terrace', mergeGeometries(terrace, false) ?? terrace[0], MAT.wall)
+  );
+  scene.registerProp(
+    'terrace-dark',
+    meshOf('TerraceDark', mergeGeometries(terraceDark, false) ?? terraceDark[0], MAT.timberDark)
+  );
+
+  /**
    * -- The step, and what lives on it ---------------------------------------------------
    *
    * The door met the path directly, which is the detail that quietly stopped this being a
@@ -6017,12 +6137,24 @@ function buildNightDoor(scene: ContactScene): void {
    */
   // Pulled in to 0.62 from 0.72: at 0.72 the right-hand pot stood 0.35m from Dorin's feet
   // and its stems came up through his boots.
+  /*
+   * Standing ON the step, which they were not.
+   *
+   * The step's top face is at y = 0.14 and the pots were sitting at y = 0 with their bases
+   * buried in it - the bottom two thirds of each pot was inside the stone. Reported as the
+   * plants clipping through the step, and it was the pots doing it; the stems were only
+   * where the pots put them.
+   *
+   * Everything on the stoop is offset by STEP_TOP now rather than by a number typed into
+   * each translate, so a step that is ever made thicker takes its contents with it.
+   */
+  const STEP_TOP = 0.14;
   for (const [i, px] of [DOOR_X - 0.62, DOOR_X + 0.62].entries()) {
     const pot = new THREE.CylinderGeometry(0.13, 0.1, 0.22, 10);
-    pot.translate(px, 0.11, 0.2);
+    pot.translate(px, STEP_TOP + 0.11, 0.2);
     stoopDark.push(pot);
     const rim = new THREE.CylinderGeometry(0.145, 0.145, 0.03, 10);
-    rim.translate(px, 0.215, 0.2);
+    rim.translate(px, STEP_TOP + 0.215, 0.2);
     stoopDark.push(rim);
 
     // The near one still has something in it; the far one is stems.
@@ -6033,7 +6165,7 @@ function buildNightDoor(scene: ContactScene): void {
       stem.translate(0, h / 2, 0);
       stem.rotateX(jitter(rng, alive ? 0.4 : 0.75));
       stem.rotateZ(jitter(rng, alive ? 0.4 : 0.75));
-      stem.translate(px + jitter(rng, 0.06), 0.23, 0.2 + jitter(rng, 0.06));
+      stem.translate(px + jitter(rng, 0.06), STEP_TOP + 0.23, 0.2 + jitter(rng, 0.06));
       stoop.push(stem);
     }
   }
@@ -6052,6 +6184,14 @@ function buildNightDoor(scene: ContactScene): void {
     foot.translate(0, 0.035, 0.05);
     for (const part of [boot, foot]) {
       part.rotateY(0.34 + side * 0.16);
+      /*
+       * On the path, NOT on the step, and checked rather than assumed.
+       *
+       * The step runs to x = 0.70 and these stand at 0.66 to 0.94, so they are over its
+       * edge - lifting them with the pots would have left them hanging in the air off the
+       * corner. Boots kicked off beside a step rather than on it is also the truer picture:
+       * that is where they end up when somebody steps out of them on their way in.
+       */
       part.translate(DOOR_X + 0.95 + side * 0.14, 0, 0.16);
       stoopDark.push(part);
     }
@@ -6156,30 +6296,46 @@ function buildNightDoor(scene: ContactScene): void {
   const STILE = 0.11;
   const carcass: THREE.BufferGeometry[] = [];
 
-  // The frame of the door itself: two stiles, three rails.
+  /**
+   * A SOLID leaf first, and then the framing proud of it.
+   *
+   * The previous version built the door as separate bars - two stiles, three rails, four
+   * panels - and every gap between them was a hole straight through the door. Reported as
+   * exactly that. The 70mm between the two panels had nothing in it at all, and so did the
+   * band between the bottom rail and the lower panels.
+   *
+   * The fix is to build it the way it is actually made rather than the way it is drawn. A
+   * panelled door is a continuous leaf of thin stock with a heavier frame applied over it;
+   * the panels are not holes with wood behind them, they are the leaf itself showing
+   * between the framing. So this is a full-size slab at panel thickness with the stiles and
+   * rails standing 24mm proud, which is structurally what the joiner did and which cannot
+   * have a gap in it by construction - there is nothing for a gap to be between.
+   */
+  const leafSlab = new THREE.BoxGeometry(DOOR.w, DOOR.h, 0.036);
+  leafSlab.translate(DOOR.x, DOOR.h / 2, LEAF_Z);
+  carcass.push(leafSlab);
+
+  /*
+   * The framing, standing proud toward the street.
+   *
+   * Includes the muntin - the vertical bar down the middle between the panel pairs - which
+   * the old version simply did not have, and whose absence was the widest of the holes.
+   */
+  const PROUD = 0.06;
   for (const [w, h, ox, oy] of [
+    // Stiles, full height, one each side.
     [STILE, DOOR.h, -(DOOR.w - STILE) / 2, DOOR.h / 2],
     [STILE, DOOR.h, (DOOR.w - STILE) / 2, DOOR.h / 2],
+    // Top rail, lock rail, bottom rail. The lock rail is the thick one, as it always is.
     [DOOR.w, 0.13, 0, DOOR.h - 0.065],
-    // The lock rail, thicker, at the height the lock goes through it.
     [DOOR.w, 0.2, 0, 1.02],
     [DOOR.w, 0.17, 0, 0.085],
+    // The muntin, from the bottom rail to the top one.
+    [0.08, DOOR.h - 0.3, 0, DOOR.h / 2 - 0.015],
   ] as const) {
-    const piece = new THREE.BoxGeometry(w, h, 0.06);
-    piece.translate(DOOR.x + ox, oy, LEAF_Z);
+    const piece = new THREE.BoxGeometry(w, h, PROUD);
+    piece.translate(DOOR.x + ox, oy, LEAF_Z - 0.012);
     carcass.push(piece);
-  }
-
-  // The panels, sunk 18mm into the carcass so each one has a shadow round it.
-  for (const [w, h, ox, oy] of [
-    [0.31, 0.72, -0.19, 0.6],
-    [0.31, 0.72, 0.19, 0.6],
-    [0.31, 0.7, -0.19, 1.5],
-    [0.31, 0.7, 0.19, 1.5],
-  ] as const) {
-    const panel = new THREE.BoxGeometry(w, h, 0.024);
-    panel.translate(DOOR.x + ox, oy, LEAF_Z - 0.018);
-    carcass.push(panel);
   }
 
   const doorMesh = meshOf('Door', mergeGeometries(carcass, false) ?? carcass[0], MAT.timberDark);
@@ -6206,12 +6362,15 @@ function buildNightDoor(scene: ContactScene): void {
    * was when the door swung - a pane of glass hanging in an empty doorway. Same family of
    * fault as the missing opening and reported as part of it.
    */
-  const glazing = new THREE.PlaneGeometry(0.31, 0.7);
-  glazing.translate(DOOR.x - 0.19, 1.5, LEAF_Z - 0.02);
-  doorRoot.add(meshOf('DoorGlassLeft', ontoHinge(glazing), MAT.doorGlass));
-  const glazingRight = new THREE.PlaneGeometry(0.31, 0.7);
-  glazingRight.translate(DOOR.x + 0.19, 1.5, LEAF_Z - 0.02);
-  doorRoot.add(meshOf('DoorGlassRight', ontoHinge(glazingRight), MAT.doorGlass));
+  for (const [name, ox] of [
+    ['DoorGlassLeft', -0.19],
+    ['DoorGlassRight', 0.19],
+  ] as const) {
+    // Just proud of the slab so it does not z-fight with the leaf it is set into.
+    const glazing = new THREE.PlaneGeometry(0.29, 0.66);
+    glazing.translate(DOOR.x + ox, 1.5, LEAF_Z - 0.02);
+    doorRoot.add(meshOf(name, ontoHinge(glazing), MAT.doorGlass));
+  }
 
   /**
    * The furniture: letterbox, knocker, number.
@@ -6344,9 +6503,22 @@ function buildNightDoor(scene: ContactScene): void {
    * hint about the keyway is the only place the player is told that pins bind by wear
    * rather than by position, and it needs the environment to point at.
    */
+  /*
+   * On the door, not beside it.
+   *
+   * It was registered as a top-level prop at the door's world position, so when the leaf
+   * swung the lock stayed in the empty doorway - the same fault the glass had, and the
+   * more obvious one, because the lock is what the player has spent the whole request
+   * looking at. A lock is a hole through a door with brass in it; it goes where the door
+   * goes.
+   *
+   * Positioned in hinge space, since that is what it is parented to now. The hinge is at
+   * the left jamb, so the lock sits at nearly the full width of the leaf from it - which
+   * is the far stile, where every lock in the country is.
+   */
   const lockRoot = ENGINE.SceneNode.create({
     name: 'Lock',
-    position: new THREE.Vector3(DOOR.x + DOOR.w / 2 - 0.11, 1.02, -0.22),
+    position: new THREE.Vector3(DOOR.w - 0.11, 1.02, 0.04),
   });
   const escutcheon = new THREE.CylinderGeometry(0.035, 0.035, 0.012, 12);
   escutcheon.rotateX(Math.PI / 2);
@@ -6454,6 +6626,7 @@ function buildNightDoor(scene: ContactScene): void {
     );
   };
 
+  doorRoot.add(lockRoot);
   scene.registerProp('lock', lockRoot, {
     // Inked: Two centimetres of brass, and the entire mission.
     inked: true,
@@ -6784,6 +6957,18 @@ function buildNightDoor(scene: ContactScene): void {
     ['porch-bulb', CERTAINTY.SHAPED],
     ['step', CERTAINTY.SHAPED],
     ['front', CERTAINTY.SHAPED],
+    /*
+     * The neighbours, at the same confidence as the house.
+     *
+     * SHAPED rather than KNOWN because the machine has never been down this street either -
+     * it knows there is a terrace because Dorin is standing on one, and that is exactly the
+     * certainty the rest of the facade carries. A wall drawn more confidently than the door
+     * in it would say the reconstruction is surer about the neighbours than about the
+     * problem.
+     */
+    ['terrace', CERTAINTY.SHAPED],
+    ['terrace-dark', CERTAINTY.SHAPED],
+    ['hall', CERTAINTY.SHAPED],
     ['path', CERTAINTY.SHAPED],
     ['path-weeds', CERTAINTY.SHAPED],
     /*
