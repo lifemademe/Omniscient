@@ -517,6 +517,38 @@ const FIELD_SKY_TOP = 60;
 /** Where the hedgerow that closes the field stands. */
 const HEDGE_RADIUS = 42;
 
+/**
+ * Where the sea is, as a bearing.
+ *
+ * The lake is a 150x90 plane centred at (-18, -50), so from the tunnel it fills the arc
+ * from about 140 degrees round to 260 - and it runs out to 101 units along the view axis,
+ * which is well past the 62-unit sky shell. That last number is the whole reason this
+ * works: the water is already wider than the sky, so the moment nothing is standing in
+ * front of it the horizon becomes water meeting sky with no seam to hide.
+ */
+const SEA_BEARING = 3.49;
+/** Half the fully-open arc. Wide enough that the shot cannot see either end of it. */
+const SEA_HALF = 1.05;
+/** How far the land takes to come back. A hard edge would read as a cut, not as a coast. */
+const SEA_FEATHER = 0.35;
+
+/**
+ * How much land stands at this bearing: 1 inland, 0 out to sea.
+ *
+ * Every ribbon in the field runs the full circle - `silhouetteRibbon` ignores its own arc
+ * argument - so the way to open one side is not to shorten the ring but to bring its top
+ * down to its base, where it collapses to degenerate triangles and draws nothing. Doing it
+ * with a factor rather than an early return also means the coast eases in: the hedge and
+ * both ranges drop away over the same 20 degrees, so they duck below the horizon together
+ * the way a headland recedes rather than all stopping at one radius.
+ */
+function landward(theta: number): number {
+  const delta = Math.abs(((theta - SEA_BEARING + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+  const t = (delta - SEA_HALF) / SEA_FEATHER;
+  const k = Math.min(1, Math.max(0, t));
+  return k * k * (3 - 2 * k);
+}
+
 function fieldSkyV(y: number): number {
   return (y - FIELD_SKY_BOTTOM) / (FIELD_SKY_TOP - FIELD_SKY_BOTTOM);
 }
@@ -700,9 +732,6 @@ export function createFieldBackdrop(sun: THREE.Vector3): BackdropPart[] {
   ground.translate(0, -0.02, 0);
   parts.push({ name: 'Field', geometry: ground, material: basic(field) });
 
-  // The hedge and the trees in it. All the way round: unlike the headland there is no
-  // reason for a field to be open on one side, and closing it is what makes the tunnel
-  // sit IN somewhere rather than ON something.
   /**
    * A far range, hazed, standing behind the hedge.
    *
@@ -741,7 +770,7 @@ export function createFieldBackdrop(sun: THREE.Vector3): BackdropPart[] {
       return {
         theta,
         radius: HEDGE_RADIUS + 11,
-        top: 3.0 + shaped * 12.5,
+        top: -0.6 + (3.6 + shaped * 12.5) * landward(theta),
       };
     })
   );
@@ -761,7 +790,7 @@ export function createFieldBackdrop(sun: THREE.Vector3): BackdropPart[] {
       return {
         theta,
         radius: HEDGE_RADIUS + 5,
-        top: 2.4 + shaped * 7.0,
+        top: -0.6 + (3.0 + shaped * 7.0) * landward(theta),
       };
     })
   );
@@ -790,20 +819,25 @@ export function createFieldBackdrop(sun: THREE.Vector3): BackdropPart[] {
       -0.6,
       '#cdc4a8',
       Math.PI,
-      (t) => ({
-        theta: t * Math.PI * 2,
-        radius: HEDGE_RADIUS - 0.6,
+      (t) => {
+        const theta = t * Math.PI * 2;
         // Wanders, because a bank cut to a constant height is a kerb. The fine term keeps
         // the fade line from being straight enough to read as geometry.
-        top: 0.62 + Math.sin(t * 21 + 0.9) * 0.16 + Math.sin(t * 61) * 0.06,
-      }),
+        const bank = 1.22 + Math.sin(t * 21 + 0.9) * 0.16 + Math.sin(t * 61) * 0.06;
+        return { theta, radius: HEDGE_RADIUS - 0.6, top: -0.6 + bank * landward(theta) };
+      },
       '#8b9a72'
     )
   );
 
-  // The hedge and the trees in it. All the way round: unlike the headland there is no
-  // reason for a field to be open on one side, and closing it is what makes the tunnel
-  // sit IN somewhere rather than ON something.
+  /*
+   * The hedge and the trees in it.
+   *
+   * Closed inland and open to sea, which is `landward`'s doing. Closing the field is what
+   * makes the tunnel sit IN somewhere rather than ON something, so it still shuts behind
+   * and to either side; the one bearing it does not shut is the one the water is on,
+   * because a hedge drawn across the sea is what was making an ocean read as a pond.
+   */
   parts.push(
     silhouetteRibbon('Hedge', -0.6, '#4a5744', Math.PI, (t) => {
       const theta = t * Math.PI * 2;
@@ -813,7 +847,7 @@ export function createFieldBackdrop(sun: THREE.Vector3): BackdropPart[] {
       return {
         theta,
         radius: HEDGE_RADIUS + Math.sin(t * 9 + 1.4) * 2.6,
-        top: 2.1 + trees * 7.5 + Math.sin(t * 130) * 0.3,
+        top: -0.6 + (2.7 + trees * 7.5 + Math.sin(t * 130) * 0.3) * landward(theta),
       };
     })
   );
