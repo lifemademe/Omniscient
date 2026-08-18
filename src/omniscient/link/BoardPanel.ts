@@ -364,6 +364,55 @@ const BOARD_CSS = `
 
    One character, invisible in review, and it only breaks the one rule that
    happens to follow it. See scripts/css-balanced.ts. */
+/* -- The chase's trail ------------------------------------------------------------------
+   Every camera the player has already committed to, kept on screen.
+
+   ## Why it exists
+
+   Reported as picking the right camera and having "the option disappear and nothing
+   happen". It had happened - the hop advanced, the trust went up - but the only thing the
+   screen did was replace one list of cameras with another, which from the player's side is
+   indistinguishable from a row being deleted by a misclick.
+
+   A choice with no acknowledgement is a choice the player cannot tell they made. So each
+   confirmed sighting stays, numbered, and the chase visibly grows downward: the answer to
+   "did that do anything" is the line that was not there a second ago.
+
+   It also does the job the send button needs. The picks go up in one submission at the end,
+   so before pressing it the player should be able to read back the route they have
+   assembled - and until now the only record of it was in their memory. */
+.omni-hop__trail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+.omni-hop__step {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 3px 8px;
+  border-left: 2px solid rgba(127, 224, 138, 0.45);
+  background: rgba(10, 24, 15, 0.6);
+  font-size: 11px;
+  color: rgba(159, 216, 168, 0.75);
+}
+.omni-hop__step b {
+  font-weight: normal;
+  letter-spacing: 0.14em;
+  color: #7fe08a;
+}
+/* The one just added. Fades to the others' weight, so the eye is pulled to it once. */
+.omni-hop__step--new {
+  border-left-color: #e0a24c;
+  background: rgba(38, 30, 12, 0.7);
+  animation: omni-hop-settle 900ms ease-out forwards;
+}
+@keyframes omni-hop-settle {
+  from { background: rgba(70, 54, 20, 0.9); }
+  to { background: rgba(10, 24, 15, 0.6); }
+}
+
 /* -- The pipe run ---------------------------------------------------------------------
    A grid of pieces, each one a button that turns a quarter on click.
 
@@ -781,7 +830,11 @@ export class BoardPanel {
   /** The chase, hop by hop: which one we are on and what has been picked so far. */
   private hopIndex = 0;
   private picks: string[] = [];
-  private pursuitParts: { sighting: HTMLElement; options: HTMLElement } | null = null;
+  private pursuitParts: {
+    trail: HTMLElement;
+    sighting: HTMLElement;
+    options: HTMLElement;
+  } | null = null;
 
   /** Which fragments the player is claiming are the same car. */
   private claimed = new Set<string>();
@@ -1226,9 +1279,13 @@ export class BoardPanel {
   private buildPursuit(): void {
     this.hopIndex = 0;
     this.picks = [];
+    this.pursuitTrail = [];
 
     const panel = document.createElement('div');
     panel.className = 'omni-trace';
+
+    const trail = document.createElement('div');
+    trail.className = 'omni-hop__trail';
 
     const sighting = document.createElement('div');
     sighting.className = 'omni-hop__sighting';
@@ -1236,18 +1293,42 @@ export class BoardPanel {
     const options = document.createElement('div');
     options.className = 'omni-hop__options';
 
-    panel.append(sighting, options);
+    // Trail above the question: the route reads top to bottom, oldest first, and the thing
+    // being decided is always at the bottom where the last answer just landed.
+    panel.append(trail, sighting, options);
     this.grid.appendChild(panel);
-    this.pursuitParts = { sighting, options };
+    this.pursuitParts = { trail, sighting, options };
     this.refreshPursuit();
   }
+
+  /**
+   * Each sighting the player has committed to, as it will be read back to them.
+   *
+   * Held as text rather than looked up from the view, because the description of a hop is
+   * relative to where the car was AT that hop - once the chase moves on, `hop.from` has
+   * moved with it and "five blocks straight ahead" can no longer be recomputed.
+   */
+  private pursuitTrail: Array<{ cam: string; where: string }> = [];
 
   private refreshPursuit(): void {
     const view = this.view;
     if (!view || view.kind !== 'pursuit' || !this.pursuitParts) return;
 
-    const { sighting, options } = this.pursuitParts;
+    const { trail, sighting, options } = this.pursuitParts;
     for (const child of Array.from(options.children)) child.remove();
+
+    trail.replaceChildren();
+    this.pursuitTrail.forEach((step, index) => {
+      const row = document.createElement('div');
+      const newest = index === this.pursuitTrail.length - 1;
+      row.className = `omni-hop__step${newest ? ' omni-hop__step--new' : ''}`;
+      const cam = document.createElement('b');
+      cam.textContent = `${index + 1}. ${step.cam}`;
+      const where = document.createElement('span');
+      where.textContent = step.where;
+      row.append(cam, where);
+      trail.appendChild(row);
+    });
 
     const hop = view.hops[this.hopIndex];
     if (!hop) {
@@ -1255,7 +1336,8 @@ export class BoardPanel {
       sighting.textContent = 'TRAIL ENDS - no camera ahead of him';
       this.send.disabled = false;
       this.status.className = 'omni-board__status';
-      this.status.textContent = view.note ?? 'that is the whole trail - send it';
+      this.status.textContent =
+        view.note ?? `${this.pursuitTrail.length} sightings - read the route back, then send it`;
       return;
     }
 
@@ -1289,6 +1371,9 @@ export class BoardPanel {
       row.addEventListener('mousedown', (event) => {
         event.preventDefault();
         audio.play('seat');
+        // Captured before the hop moves on - see pursuitTrail for why it cannot be
+        // recomputed afterwards.
+        this.pursuitTrail.push({ cam: id.textContent ?? '', where: where.textContent ?? '' });
         this.picks.push(option.id);
         this.hopIndex++;
         this.refreshPursuit();
@@ -1318,9 +1403,12 @@ export class BoardPanel {
     this.status.className = view.note
       ? 'omni-board__status omni-board__status--score'
       : 'omni-board__status';
+    const found = this.pursuitTrail.length;
     this.status.textContent =
       view.note ??
-      'he has not turned back, cannot outrun the clock, and is still on his street - one camera is all three';
+      (found === 0
+        ? 'he has not turned back, cannot outrun the clock, and is still on his street - one camera is all three'
+        : `${found} sighting${found === 1 ? '' : 's'} confirmed - pick the next one up`);
   }
 
   /**
