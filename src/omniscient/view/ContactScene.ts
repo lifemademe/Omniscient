@@ -499,6 +499,11 @@ export class ContactScene extends ENGINE.SceneNode {
     this.shots.set(id, shot);
   }
 
+  /** Whether this room has a shot under that name, so a caller can offer it or not. */
+  public hasShot(id: string): boolean {
+    return this.shots.has(id);
+  }
+
   /** Look up a registered shot. The rig's camera does the framing. */
   public getShot(id: string): CameraShot | null {
     return this.shots.get(id) ?? null;

@@ -37,6 +37,7 @@ import {
   createMeterFace,
   createPuddleSurface,
   createRatingPlate,
+  createUnknownSignal,
 } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
 import { CERTAINTY } from '../art/certainty.js';
@@ -6522,6 +6523,85 @@ function buildWireCity(scene: ContactScene): void {
    * Slow, at four seconds. The drop from the overview is the beat; cutting would just be a
    * different camera, while travelling makes it the same place seen from inside.
    */
+  /**
+   * The overhead, on a key - see OmniscientRig's overview toggle.
+   *
+   * The default shot deliberately refuses a plan view, and its note says why: from
+   * straight up the height variation foreshortens and the district reads as a circuit
+   * board rather than a city. That is the right default and it is the wrong ONLY view,
+   * because the thing the player is actually doing here - following a car across a road
+   * network - is a plan-view task. So the tilt stays the shot the room opens on and the
+   * map is a key away.
+   *
+   * Dead overhead rather than nearly: 0.1 of z is enough to keep the up vector from
+   * degenerating while reading as square to the grid.
+   *
+   * 240m, which is a measurement and not a guess. The district is 24 cells of 8, so
+   * it runs to 96 either side of the origin - from 240 up its edge sits 21.8 degrees
+   * off nadir and fits inside the lens; from the 108 this was first written at it
+   * was 41.6 and half the city was off the sides of the frame.
+   */
+  scene.registerShot('overview', {
+    position: new THREE.Vector3(0, 240, 0.1),
+    target: new THREE.Vector3(0, 0, 0),
+    duration: 1.8,
+  });
+
+  /**
+   * A signal the network has and cannot name - §52's bigger world, said in the room's
+   * own language. See createUnknownSignal for why it is amber.
+   *
+   * Placed ON the default shot's view axis, past the target, which is the one
+   * placement that needs no eye to check: every point on the line from a camera
+   * through its target is at the centre of frame. At 2.2 of the way it is 3.6 degrees
+   * off that axis once the height is levelled - still centre - and 375m out.
+   *
+   * The distance is the point and it was wrong first time round. The district runs to
+   * 96 either side of the origin, not 24 - 24 is the cell COUNT and the cells are 8
+   * across - so the first placement put this marker inside the city near a corner,
+   * where an amber dot reads as a junction somebody has flagged. At 224 from the
+   * centre it is unmistakably not in District 07.
+   *
+   * It is not in the overhead, and should not be: that view exists to follow a car
+   * around the road network and frames the district. This is something you notice
+   * while being told about the district, from the shot the room opens on.
+   */
+  {
+    const from = new THREE.Vector3(92, 34, 118);
+    const at = new THREE.Vector3(-10, 14, -18);
+    const where = from.clone().lerp(at, 2.2);
+    where.y = 14;
+
+    const texture = createUnknownSignal();
+    if (texture) {
+      const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: texture,
+          transparent: true,
+          depthWrite: false,
+          // Unlit and unfogged: it is a readout drawn over the world, not a thing in it.
+          fog: false,
+          toneMapped: false,
+          opacity: 0.9,
+        })
+      );
+      /*
+       * Constant on screen rather than shrinking with distance.
+       *
+       * With attenuation this would have to be sized against a 250m sightline in the
+       * default shot and a 108m one from overhead, and be wrong in one of them. A marker
+       * is a piece of interface; it should be the same size in both.
+       */
+      sprite.material.sizeAttenuation = false;
+      sprite.scale.set(0.22, 0.055, 1);
+      sprite.position.copy(where);
+
+      const node = ENGINE.SceneNode.create({ name: 'UnknownSignal', position: new THREE.Vector3() });
+      node.add(sprite);
+      scene.registerProp('unknown-signal', node);
+    }
+  }
+
   scene.registerShot('windscreen', {
     position: new THREE.Vector3(12, 2.2, 30),
     target: new THREE.Vector3(-8, 3.4, -16),

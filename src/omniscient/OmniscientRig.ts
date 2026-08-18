@@ -233,7 +233,36 @@ export class OmniscientRig extends ENGINE.SceneNode {
   } | null = null;
 
   private queue: QueuedRequest[] = [];
-  private queueIndex = 0;
+  /**
+   * How far down the queue requests have been HANDED OUT.
+   *
+   * Split from `activeIndex` because those were one number and could not stay one. A
+   * single cursor works only while exactly one request is answerable at a time - open
+   * it, resolve it, hand out the next - and the globe now offers up to five at once, so
+   * the player can answer the third one first and the cursor would release the fourth
+   * while the first two were still waiting on it.
+   */
+  private offered = 1;
+  /*
+   * One, not zero: the opening hands Mirela out before anything runs, which is what
+   * `openable` below is seeded with. They have to agree or the first resolve would
+   * deal her out a second time.
+   */
+  /** Index of the request currently open, or null on the globe. */
+  private activeIndex: number | null = null;
+
+  /**
+   * How many requests the globe will hold at once.
+   *
+   * Five. Enough that the map is a place with things happening on it rather than a
+   * corridor with one lit door, and few enough that a player can still hold what is
+   * waiting in their head - a globe with everything on it at once has the same problem
+   * as a globe with one thing, which is that there is no choice being made.
+   *
+   * The first request is exempt on purpose. Mirela arrives alone, because the opening
+   * teaches what the globe IS, and it cannot do that while offering four alternatives.
+   */
+  private static readonly OPEN_AT_ONCE = 5;
   private pauseRemaining = 0;
   /** Seconds left holding the Contact View after a resolution. Zero when not holding. */
   private resolveHold = 0;
@@ -241,6 +270,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private facilityPlate: THREE.Object3D | null = null;
   /** Counting down to leaving a LOST request - see closeLostRequest. */
   private lostHold = 0;
+  /** Whether the current room is being looked at from directly above - see toggleOverview. */
+  private overhead = false;
+  private onOverviewKey: ((event: KeyboardEvent) => void) | null = null;
 
   private phase: Phase = Phase.Menu;
   private screen: Screen = Screen.Tree;
@@ -1507,6 +1539,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.attachPicker(world, container);
 
+    // Held so it can be taken off again in endPlay, rather than outliving the rig.
+    this.onOverviewKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'F2') return;
+      event.preventDefault();
+      this.toggleOverview();
+    };
+    window.addEventListener('keydown', this.onOverviewKey);
+
     // Open on the machine at rest: menu up, tree on the CRT (§174, §183).
     this.setPhase(Phase.Menu);
     this.screen = Screen.Tree;
@@ -1639,12 +1679,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
       return;
     }
 
-    const contactId = this.queue[this.queueIndex - 1]?.mission.contactId;
+    const contactId = this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
     if (contactId) {
       this.setSignalState(contactId, SignalState.Waiting);
       this.openable.add(contactId);
-      this.queueIndex -= 1;
     }
+    this.activeIndex = null;
 
     audio.play('disconnect');
     audio.setOnAir(false);
@@ -1684,6 +1724,34 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.globeHandoff = 1.5;
   }
 
+  /**
+   * Hand out requests until the globe is holding its quota.
+   *
+   * Counts what is actually ANSWERABLE rather than what has been handed out: a contact
+   * on a countdown after a failure is on the globe but cannot be taken, and so does not
+   * fill a slot. Resolved ones do not either. So a player who fails one still has five
+   * things they can do, which is the point of the number.
+   *
+   * Order is preserved. The queue is authored - Mirela teaches looking, Ileana breaks
+   * the habit of looking for a fault, Tomas pays off Mirela's shared feed - and this
+   * releases along it rather than choosing. What changes is that five doors are open at
+   * once instead of one, not which door comes next.
+   */
+  private topUpGlobe(): void {
+    const answerable = (): number =>
+      this.signals.filter(
+        (signal) =>
+          !signal.hidden && signal.state === SignalState.Waiting && this.openable.has(signal.id)
+      ).length;
+
+    while (answerable() < OmniscientRig.OPEN_AT_ONCE && this.offered < this.queue.length) {
+      const request = this.queue[this.offered];
+      this.offered += 1;
+      this.setSignalState(request.mission.contactId, SignalState.Waiting);
+      this.openable.add(request.mission.contactId);
+    }
+  }
+
   private openSignal(signalId: string): void {
     const index = this.queue.findIndex((request) => request.mission.contactId === signalId);
     if (index < 0 || !this.session) return;
@@ -1695,9 +1763,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.setSignalState(signalId, SignalState.Active);
     this.openable.delete(signalId);
-    this.queueIndex = index + 1;
+    this.activeIndex = index;
 
     this.setPhase(Phase.Contact);
+    // Every room opens on its own establishing shot, whatever the last one was left on.
+    this.overhead = false;
     this.screen = Screen.Tree;
     this.globeScreen?.detach();
     this.phone?.setVisible(true);
@@ -1745,7 +1815,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * here, while the mistake is still in front of them.
    */
   private onRequestLost(failure: MissionFailure): void {
-    const contactId = this.queue[this.queueIndex - 1]?.mission.contactId;
+    const contactId = this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
     if (!contactId) return;
 
     /*
@@ -1779,9 +1849,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (waits) this.openable.delete(contactId);
     else this.openable.add(contactId);
 
-    // Back in the queue: when the cooldown lapses - or at once, above - it can be
-    // attempted again.
-    this.queueIndex -= 1;
+    // No longer the open request. It goes back on the globe either at once or when
+    // its countdown lapses, and both of those are handled above.
+    this.activeIndex = null;
 
     // Deliberately NOT leaving the Contact View here. The globe is already updating
     // behind us, but the player is still looking at what went wrong and is being asked to
@@ -1801,10 +1871,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * stayed out of `openable`, and the tooltip said "no longer waiting" with no way in.
    */
   private reopenAfterCooldown(signalId: string): void {
-    const pending = this.queue
-      .slice(this.queueIndex)
-      .some((request) => request.mission.contactId === signalId);
-    if (!pending) return;
+    // Anything already answered stays answered - a cooldown that outlives its own
+    // request would put a solved contact back on the globe asking for help again.
+    const signal = this.signals.find((s) => s.id === signalId);
+    if (!signal || signal.state === SignalState.Resolved) return;
 
     this.openable.add(signalId);
     this.setSignalState(signalId, SignalState.Waiting);
@@ -1894,22 +1964,19 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     // Resolving Mirela's request is what puts Tomas on the globe - §163's consequence
     // chain, visible before the player knows why.
-    const resolvedId = this.queue[this.queueIndex - 1]?.mission.contactId;
+    const resolvedId = this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
     if (resolvedId) this.setSignalState(resolvedId, SignalState.Resolved);
+    this.activeIndex = null;
 
     // The world opens up after the first request, not before it. §52 still gets its
     // tease; the player just gets to learn what the globe is for on an empty one first.
-    if (this.queueIndex === 1) {
+    if (this.offered === 1) {
       for (const signal of this.signals) {
         if (REVEALED_AFTER_FIRST.includes(signal.id)) signal.hidden = false;
       }
     }
 
-    const next = this.queue[this.queueIndex];
-    if (next) {
-      this.setSignalState(next.mission.contactId, SignalState.Waiting);
-      this.openable.add(next.mission.contactId);
-    }
+    this.topUpGlobe();
   }
 
   /** The shared atmosphere, retuned per diorama - see mountScene. */
@@ -2025,6 +2092,28 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * resolves the cue to a camera move or a prop animation and hands back the world
    * position any effect should play at.
    */
+  /**
+   * The overhead view, on F2, for any room that has one.
+   *
+   * Not a District 07 special case: a scene that registers a shot called `overview` gets
+   * the key, and one that does not is untouched. Today that is the wireframe city, whose
+   * default shot refuses a plan view for good compositional reasons and whose actual task
+   * - following a car across a road network - is a plan-view job. The room should be able
+   * to be both without the mission having to script it.
+   *
+   * F2 rather than a letter, and that is not arbitrary. The player types into the console
+   * for the whole of a request, so any key that produces a character is swallowed by the
+   * input the moment it has focus - a view toggle on V would work exactly until somebody
+   * used it, and then type a v.
+   *
+   * Contact phase only. On the globe or the menu there is no diorama to look down at.
+   */
+  private toggleOverview(): void {
+    if (this.phase !== Phase.Contact || !this.scene?.hasShot('overview')) return;
+    this.overhead = !this.overhead;
+    this.applyEnvironmentCue(this.overhead ? 'camera.pan:overview' : 'camera.pan:default');
+  }
+
   private applyEnvironmentCue(cue: string): void {
     const result = this.scene?.applyCue(cue);
     if (!result) return;
@@ -2157,6 +2246,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   public override endPlay(): boolean {
+    if (this.onOverviewKey) window.removeEventListener('keydown', this.onOverviewKey);
+    this.onOverviewKey = null;
     this.tune?.dispose();
     this.tune = null;
     this.session?.end();

@@ -393,3 +393,52 @@ export function createBoxLabel(text: string, seedKey = text): THREE.CanvasTextur
     ctx.putImageData(image, 0, 0);
   });
 }
+
+/**
+ * The one signal on the District 07 map that OMNISCIENT_ cannot name.
+ *
+ * §52 asks the world to look bigger than the part of it the player is being given, and
+ * the wireframe city is the only room where that can be said in the room's own language:
+ * everything else in that frame is the network drawn as the network, so a point the
+ * network has and cannot identify is a hole in the machine's own picture of the world.
+ *
+ * Amber rather than cyan or green, which is what makes it legible as an outsider. §9
+ * assigns cold cyan to data and acid green to knowledge, and every line in that district
+ * is one or the other; amber is used nowhere else out there, so the eye finds it without
+ * anything having to point at it.
+ *
+ * Drawn as one texture with the dot and the word together, on a sprite. Two objects would
+ * have to be kept aligned at every camera angle and the label would have to be billboarded
+ * anyway - one canvas is the same picture with none of that.
+ */
+export function createUnknownSignal(): THREE.CanvasTexture | null {
+  return createDecal(256, 64, (ctx) => {
+    ctx.clearRect(0, 0, 256, 64);
+
+    // The bloom first, so the dot sits inside its own glow rather than on top of it.
+    const halo = ctx.createRadialGradient(32, 32, 1, 32, 32, 26);
+    halo.addColorStop(0, 'rgba(224, 162, 76, 0.55)');
+    halo.addColorStop(1, 'rgba(224, 162, 76, 0)');
+    ctx.fillStyle = halo;
+    ctx.fillRect(0, 0, 72, 64);
+
+    ctx.fillStyle = ACCENT.amber;
+    ctx.beginPath();
+    ctx.arc(32, 32, 7, 0, Math.PI * 2);
+    ctx.fill();
+
+    // A ring, because a marker with a ring reads as a reading and a bare dot reads as a
+    // speck of dust on the screen.
+    ctx.strokeStyle = 'rgba(224, 162, 76, 0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(32, 32, 14, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.font = 'bold 21px "Courier New", monospace';
+    ctx.textBaseline = 'middle';
+    ctx.letterSpacing = '3px';
+    ctx.fillStyle = ACCENT.amber;
+    ctx.fillText('UNKNOWN', 58, 33);
+  });
+}
