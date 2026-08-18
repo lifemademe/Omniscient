@@ -39,13 +39,33 @@ export const LUCIAN_SIGNAL = 'lucian';
 /**
  * §96 caps conscious attention at five. The globe honours that: five nameable people at
  * a time, plus the anomaly, which is not a person and cannot be answered.
+ *
+ * ## Where they are, and why it is not where they live
+ *
+ * The pins used to sit inside 122 degrees of longitude, and the seven named people inside
+ * 54 of it - a single wedge, with 238 degrees of empty planet behind them. That was fine
+ * while the globe only ever showed one face; it is not fine now that it turns all the way
+ * round, because most of a revolution had nothing on it.
+ *
+ * They span 224 degrees now, across four landmasses, with no two closer than 12 degrees.
+ * Checked against COASTLINES by point-in-polygon rather than by eye - a marker in the
+ * middle of an ocean is a bug you only notice from one angle.
+ *
+ * This file has bent geography for legibility three times already, and each of those notes
+ * is still below. This is the fourth and the largest: the towns in the story have not
+ * moved, and the location strings on the contacts are unchanged. What moved is where
+ * OMNISCIENT_ draws them, which is a schematic on a 192x144 CRT and never was a survey -
+ * a globe you cannot click is worse than a headland in the wrong hemisphere.
+ *
+ * Mirela and Tomas stay neighbours, because they are family and share a town. Adaeze stays
+ * on Lagos, because that one is real and the label says so.
  */
 export function createSignals(): Signal[] {
   return [
     {
       id: MIRELA_SIGNAL,
       latitude: 44.2,
-      longitude: 28.6,
+      longitude: 26.0,
       name: 'Mirela Vasc',
       label: '"It worked yesterday."',
       state: SignalState.Waiting,
@@ -61,8 +81,8 @@ export function createSignals(): Signal[] {
        * water stayed in the story and the pin moved, exactly as it did for Tomas.
        */
       id: ILEANA_SIGNAL,
-      latitude: 36.1,
-      longitude: 17.4,
+      latitude: 41.5,
+      longitude: 61.0,
       name: 'Ileana Marku',
       label: 'There is nobody left who knows.',
       // Arrives once Mirela's request is closed.
@@ -81,8 +101,8 @@ export function createSignals(): Signal[] {
        *
        * His dialogue moved with it: he no longer says she is down the hill.
        */
-      latitude: 51.4,
-      longitude: 41.8,
+      latitude: 50.4,
+      longitude: 38.0,
       name: 'Tomas Vasc',
       label: 'The harbour light keeps going out.',
       // Appears once Mirela's request resolves - because that is what caused it.
@@ -91,13 +111,13 @@ export function createSignals(): Signal[] {
     },
     {
       /**
-       * Inland and well clear of the coast the other four share, because five points in
-       * one bay is one point on a whole-globe view - a lesson this file has now learned
-       * three times.
+       * Inland and well clear of the coast the others share, because five points in one
+       * bay is one point on a whole-globe view - a lesson this file has now learned four
+       * times. See the note at the top for the fourth and largest.
        */
       id: VASILE_SIGNAL,
-      latitude: 40.4,
-      longitude: -3.7,
+      latitude: 35.5,
+      longitude: 95.0,
       name: 'Vasile Crâstea',
       label: 'The pump is running and nothing is coming out.',
       state: SignalState.Dormant,
@@ -110,8 +130,8 @@ export function createSignals(): Signal[] {
        * it has caught this three times.
        */
       id: DORIN_SIGNAL,
-      latitude: 58.6,
-      longitude: 16.2,
+      latitude: 43.5,
+      longitude: 127.0,
       name: 'Dorin Apostol',
       label: 'She always picks up.',
       state: SignalState.Dormant,
@@ -120,8 +140,8 @@ export function createSignals(): Signal[] {
     {
       /** South and west of everything else, clear of the other six. */
       id: SANDA_SIGNAL,
-      latitude: 27.2,
-      longitude: -12.6,
+      latitude: 39.5,
+      longitude: -97.0,
       name: 'Sanda Petrescu',
       label: 'There is a man behind me.',
       state: SignalState.Dormant,
@@ -152,8 +172,8 @@ export function createSignals(): Signal[] {
     // never openable, never explained. Most players will not notice it. That is correct.
     {
       id: 'anomaly',
-      latitude: 12.0,
-      longitude: -80.0,
+      latitude: -11.5,
+      longitude: -57.0,
       name: '',
       label: 'Unknown source.',
       state: SignalState.Unknown,

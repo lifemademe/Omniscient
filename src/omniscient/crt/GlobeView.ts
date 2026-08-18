@@ -95,17 +95,51 @@ const PALETTE = {
 const DEG = Math.PI / 180;
 
 /**
- * How far off centre the caller may drift while the globe keeps turning.
+ * The globe turns all the way round, always, and the RATE is what carries the attention.
  *
- * 0.45rad is about 26 degrees, which on this projection leaves the marker well inside the
- * front of the sphere rather than out on the limb where it is foreshortened to a smear and
- * awkward to hit. Widen it and the sweep is grander and the marker gets harder to click;
- * this is the trade, and clickable wins.
+ * ## What was here before, and why it never completed a turn
+ *
+ * Two fixes had been stacked on this. The first eased a waiting caller round to the front
+ * and stopped, which read as the globe never turning again - because something is waiting
+ * almost all the time, so "hold the caller at the front" resolved to "hold still, forever".
+ * The second replaced the stop with a sweep: keep moving, but only within 26 degrees either
+ * side of the caller, reversing at the edges.
+ *
+ * That is a 52-degree wobble. The globe never showed the other 308 degrees of itself again
+ * after the first request arrived, which is what "it is supposed to rotate 360 degrees"
+ * means and it is a fair description of a planet the player was only ever shown one face of.
+ *
+ * ## One direction, always, with the speed doing the work
+ *
+ * The requirement was never "keep the caller centred", it was "let the player reach the
+ * caller". Those come apart the moment you are allowed to vary the rate: the globe turns
+ * continuously in one direction and completes every revolution, but it CRAWLS while the
+ * caller is across the front of the sphere and hurries across the empty back.
+ *
+ * Integrated over a full turn at 1/240s steps, that gives:
+ *
+ *   - a revolution in 29.6s, so the world is a world again
+ *   - 10.6s of every turn with the caller within 35 degrees of front-centre, where the
+ *     marker is big and square-on and easy to hit - up from 7.6s under plain drift
+ *   - only 5.2s beyond 120 degrees, so the far side is somewhere it passes through rather
+ *     than somewhere it sits
+ *
+ * It is also the better fiction, and closer to what the sweep was reaching for. The machine
+ * is not staring at one town and it is not idly spinning; it is going round the whole world
+ * and slowing down over the person who is talking.
  */
-const HOLD_ARC = 0.45;
-
-/** Sweep speed as a fraction of the idle drift. A third: alive, not busy. */
-const SWEEP_RATE = 0.34;
+/** Rate at the very front, in rad/s. Slower than the old idle drift, on purpose. */
+const ATTEND_SLOW = 0.1;
+/** Rate at the very back. Five times the front, which is what buys the revolution back. */
+const ATTEND_FAST = 0.5;
+/**
+ * How sharply the rate falls off approaching the front.
+ *
+ * Above 1 so the slow band is WIDE and the transition is gentle: at 1.0 the rate is linear
+ * in the angle and the globe visibly changes pace, which reads as a stutter. 1.4 spends
+ * most of the deceleration far from the front, where nobody is looking at the speed.
+ */
+const ATTEND_FALLOFF = 1.4;
 
 interface Projected {
   x: number;
@@ -116,38 +150,38 @@ interface Projected {
 
 export class GlobeView {
   private rotation = 0;
-  /** Which way the attention sweep is currently drifting. See advance. */
-  private sweep: 1 | -1 = 1;
 
   constructor(
     private readonly surface: PixelSurface,
     private signals: Signal[] = []
   ) {}
 
+  /**
+   * How far round the globe has turned, wrapped to [0, 2pi).
+   *
+   * Exposed so preview-stuck can assert the thing this class has now got wrong twice: that
+   * a revolution actually completes while somebody is waiting. Read-only, and nothing in
+   * the game reads it - if the harness cannot see the state, the harness cannot hold it.
+   */
+  public get heading(): number {
+    return this.rotation;
+  }
+
   public setSignals(signals: Signal[]): void {
     this.signals = signals;
   }
 
   /**
-   * Turn the globe.
+   * Turn the globe. Always the same way, always all the way round.
    *
-   * ## The machine turns to look at whoever is calling
+   * With nothing waiting it drifts at the caller's rate, as it always has. With somebody
+   * waiting the rate varies instead of the direction: see the note on ATTEND_SLOW for the
+   * measured shape of it, and for the two earlier attempts that traded the revolution away
+   * to keep the caller reachable.
    *
-   * It used to drift, always, at a constant 0.16 rad/s - which is a 39 second rotation, so
-   * a signal spent about twenty seconds of every turn on the far side of the world. Twenty
-   * seconds in which the panel says "1 waiting, answerable now", the footer says SELECT A
-   * SIGNAL, and there is nothing on screen to select. Caught it by capturing the globe six
-   * times over twenty seconds rather than once: the single frame that started this looked
-   * exactly like a missing feature.
-   *
-   * So when something is waiting, the globe eases that signal round to the front and holds
-   * it there. Twice drift speed, along the shorter way round, and it stops when it arrives.
-   * Which is also the better fiction: OMNISCIENT_ has no hands and no face, and this is the
-   * one gesture it has - somebody starts talking and the machine turns towards them.
-   *
-   * With nothing waiting it drifts as before. §54 warns against constant motion for its own
-   * sake, and an idle globe that never moves at all is a picture rather than an instrument;
-   * the difference is that the motion now means something when it stops.
+   * The direction never changes and the rate never reaches zero, which together are the
+   * whole guarantee - every signal on the globe comes round to the front, on its own, in
+   * under half a minute, without the player having to do anything.
    */
   public advance(deltaTime: number, speed = 0.16): void {
     const attend = this.rotationForWaiting();
@@ -157,38 +191,14 @@ export class GlobeView {
       return;
     }
 
-    // Wrapped to [-pi, pi] so it takes the short way round rather than unwinding most of a
-    // turn to reach a point a few degrees behind it.
+    // Wrapped to [-pi, pi]: how far the caller still is from front-centre, signed. Only its
+    // MAGNITUDE is used - the sign used to pick a direction, and picking a direction is
+    // exactly what stopped the globe completing a turn.
     const gap = Math.atan2(Math.sin(attend - this.rotation), Math.cos(attend - this.rotation));
+    const away = Math.min(1, Math.abs(gap) / Math.PI);
+    const rate = ATTEND_SLOW + (ATTEND_FAST - ATTEND_SLOW) * away ** ATTEND_FALLOFF;
 
-    /*
-     * Outside the window, go and get it. Inside, keep moving.
-     *
-     * This used to stop dead once the signal reached the front, and stopping was the whole
-     * of the bug reported twice as the globe never turning again. Something is waiting
-     * almost all the time - resolving a request sets the NEXT one to Waiting on the same
-     * tick - so "hold the caller at the front" resolved to "hold still, forever, from the
-     * first request onward". §54 warns against motion for its own sake and an instrument
-     * that never moves at all is the other failure: it reads as a picture of a globe.
-     *
-     * So it sweeps. Within a 26-degree window either side of whoever is calling it keeps
-     * turning, slowly, and reverses at the edges; beyond that window it eases back at
-     * twice drift speed the way it always did. The caller stays where the player can
-     * reach them - which was the point - and the world stays alive, which was the cost.
-     *
-     * It is also the better read of the fiction. The machine is not staring at one town;
-     * it is listening to everything and keeping half an ear on the one that is talking.
-     */
-    if (Math.abs(gap) > HOLD_ARC) {
-      const step = Math.sign(gap) * Math.min(Math.abs(gap), speed * 2 * deltaTime);
-      this.rotation = (this.rotation + step) % (Math.PI * 2);
-      // Head back out the way it came in, rather than snapping to a fixed direction.
-      this.sweep = gap > 0 ? -1 : 1;
-      return;
-    }
-
-    if (gap * this.sweep < -HOLD_ARC * 0.92) this.sweep = -this.sweep as 1 | -1;
-    this.rotation = (this.rotation + this.sweep * deltaTime * speed * SWEEP_RATE) % (Math.PI * 2);
+    this.rotation = (this.rotation + rate * deltaTime) % (Math.PI * 2);
   }
 
   /**

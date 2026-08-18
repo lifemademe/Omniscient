@@ -28,6 +28,7 @@ import { flows, wetted } from '../src/omniscient/mission/pipes.js';
 import type { DeviceSubmission } from '../src/omniscient/mission/device.js';
 import type { Device } from '../src/omniscient/mission/types.js';
 import type { PipeGrid } from '../src/omniscient/mission/pipes.js';
+import { GlobeView, SignalState } from '../src/omniscient/crt/GlobeView.js';
 import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
 
 const SEED = 0x0c151e;
@@ -239,6 +240,63 @@ function checkPipeGrid(label: string, grid: PipeGrid): void {
     `${label}: it takes real work - at least 3 pieces must move`,
     fewest >= 3,
     `fewest is ${fewest} of ${free.length}`
+  );
+}
+
+/**
+ * The globe has to keep turning while somebody is waiting.
+ *
+ * Two fixes to GlobeView.advance have traded the revolution away to keep a caller
+ * reachable: the first held the caller at front-centre and stopped dead, the second swept
+ * inside a 52-degree window. Both shipped, both were reported as the globe not rotating,
+ * and neither was visible in a type or a screenshot of a single frame - you have to watch
+ * it for half a minute to see that it never comes round.
+ *
+ * So: run it with a signal waiting and require a full turn, plus a decent stretch of that
+ * turn with the caller where the player can actually click them.
+ */
+function checkGlobeTurns(): void {
+  const surface = null as unknown as ConstructorParameters<typeof GlobeView>[0];
+  const globe = new GlobeView(surface, [
+    {
+      id: 'probe',
+      latitude: 44.2,
+      longitude: 26,
+      label: '',
+      name: 'probe',
+      state: SignalState.Waiting,
+    },
+  ]);
+
+  const step = 1 / 60;
+  let turned = 0;
+  let previous = globe.heading;
+  let dwell = 0;
+  let seconds = 0;
+  while (turned < Math.PI * 2 && seconds < 300) {
+    globe.advance(step);
+    seconds += step;
+    let delta = globe.heading - previous;
+    if (delta < -Math.PI) delta += Math.PI * 2;
+    turned += delta;
+    previous = globe.heading;
+    // Front-centre is where the longitude plus the rotation sums to zero.
+    const gap = Math.atan2(
+      Math.sin(-26 * (Math.PI / 180) - globe.heading),
+      Math.cos(-26 * (Math.PI / 180) - globe.heading)
+    );
+    if (Math.abs(gap) <= (35 * Math.PI) / 180) dwell += step;
+  }
+
+  check(
+    'the globe completes a revolution with a signal waiting',
+    turned >= Math.PI * 2,
+    `${seconds.toFixed(1)}s`
+  );
+  check(
+    'and the caller is near the front long enough to click',
+    dwell >= 8,
+    `${dwell.toFixed(1)}s of it within 35 degrees`
   );
 }
 
@@ -736,6 +794,9 @@ console.log('\n=== THE PIPE GRID ===\n');
  * Every pipe grid in the campaign. There is one today; the loop is so a second cannot
  * ship without being held to the same shape as the first.
  */
+console.log('');
+console.log('=== THE GLOBE ===');
+checkGlobeTurns();
 console.log('');
 console.log('=== THE PIPE RUNS ===');
 console.log('');
