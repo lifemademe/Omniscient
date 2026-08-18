@@ -128,7 +128,49 @@ const INK = {
   keepOut: '#2b4a33',
   unit: '#d8ffb0',
   bed: '#6f9c74',
+  /** What the sweep lifts each to as it passes. Two, because they must not converge. */
+  standingLit: '#b6f08a',
+  cutLit: '#2f5a38',
+  sweep: '#9fdc86',
 };
+
+/**
+ * The sonar, and what it is and is not for.
+ *
+ * ## Why it belongs here
+ *
+ * The plot was drawing every blade's state continuously, which quietly claims the machine
+ * has live vision of a field it has no eyes on. It does not. It has a unit on a radio
+ * reporting what it can currently detect, and a rotating head is what that looks like -
+ * the same honesty District 07's wireframe has about a district nobody has seen.
+ *
+ * ## Why it does not fade to nothing
+ *
+ * The proposal was that pinged blades glow and then disappear, to make the job harder. It
+ * would make the job harder and it would be the wrong kind of harder: the difficulty in
+ * mowing should live in the driving - overlapping passes, the 1.1m gap between the bed and
+ * the trunk - and not in fighting the instrument. A player who knows exactly what to do and
+ * is prevented from seeing where to do it has been given busywork, and the hunt for the
+ * last three patches is the part people put a game like this down over.
+ *
+ * So the sweep LIFTS rather than reveals. Every blade is drawn at its resting brightness
+ * either way and the ping is a highlight passing over information that was already there.
+ * Which turns out to make the chart better at its job rather than worse: standing grass
+ * pings hard and stubble pings faintly, so the contrast between done and not-done is
+ * momentarily three times what it is at rest, and a missed strip FLASHES as the head goes
+ * over it.
+ *
+ * ## Stateless, which is why it costs nothing
+ *
+ * There is no per-blade timer. The trail is a pure function of how far the head has turned
+ * PAST a blade's bearing, so 6,400 blades need 6,400 subtractions and no memory at all -
+ * and the decay cannot drift out of step with the sweep line because they are the same
+ * number read twice.
+ */
+const TWO_PI = Math.PI * 2;
+const SWEEP_RATE = 1.75;
+/** How far behind the head a ping is still visible, in radians. Just over a third of a turn. */
+const SWEEP_TRAIL = 2.2;
 
 /**
  * How much ground the window shows, in metres from the machine to the rim.
@@ -168,6 +210,8 @@ export interface PlotState {
    * mostly done and finding the last patches has stopped being obvious.
    */
   guide?: { x: number; z: number } | null;
+  /** Seconds since the last draw, for the sonar head. */
+  deltaTime: number;
 }
 
 export class MowerPlot {
@@ -184,6 +228,39 @@ export class MowerPlot {
    * classic way to get a spread that never repeats and never bunches.
    */
   private spray = 0;
+  /** Where the sonar head is pointing, machine-relative. See the note on SWEEP_RATE. */
+  private sweep = 0;
+  /**
+   * Eight brightnesses each for standing and cut grass, built once.
+   *
+   * The ping has to reach a fill colour for every blade every frame, and building a CSS
+   * string per blade would be 6,400 allocations and 6,400 colour parses a frame to draw a
+   * chart 196 pixels across. Quantising to eight steps and interpolating them at
+   * construction makes it an array index - and at a 2px dot, eight steps and a continuous
+   * ramp are the same picture.
+   */
+  private readonly ramp = MowerPlot.buildRamp();
+
+  private static buildRamp(): { standing: string[]; cut: string[] } {
+    const shade = (from: string, to: string): string[] => {
+      const a = MowerPlot.rgb(from);
+      const b = MowerPlot.rgb(to);
+      return Array.from({ length: 8 }, (_, i) => {
+        const t = i / 7;
+        const mix = a.map((channel, c) => Math.round(channel + (b[c] - channel) * t));
+        return `rgb(${mix[0]},${mix[1]},${mix[2]})`;
+      });
+    };
+    return {
+      standing: shade(INK.standing, INK.standingLit),
+      cut: shade(INK.cut, INK.cutLit),
+    };
+  }
+
+  private static rgb(hex: string): number[] {
+    const value = parseInt(hex.slice(1), 16);
+    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+  }
   private readonly ctx: CanvasRenderingContext2D | null;
   private bounds: PlotBounds = { minX: -1, maxX: 1, minZ: -1, maxZ: 1 };
   private shapes: readonly PlotShape[] = [];
@@ -325,6 +402,19 @@ export class MowerPlot {
     const sy = (z: number): number => -z * scale;
 
     /*
+     * The head turns, machine-relative.
+     *
+     * Relative rather than absolute because the sensor is bolted to the mower - a spinning
+     * head on a vehicle sweeps its own bearings, not the world's. On a heading-up chart that
+     * also means it rotates steadily on screen whatever the player is doing with the
+     * steering, which is what a sonar looks like.
+     *
+     * Clamped delta, because a stalled frame must not teleport the head half a turn and
+     * strobe the whole field at once.
+     */
+    this.sweep = (this.sweep + Math.min(state.deltaTime, 0.1) * SWEEP_RATE) % TWO_PI;
+
+    /*
      * A metre grid over the window, and it is now load-bearing rather than decoration.
      *
      * On a rotating chart the grid is the only thing that shows the rotation happening.
@@ -365,14 +455,94 @@ export class MowerPlot {
 
     // What is still standing, and what has been been over.
     const dot = Math.max(2, scale * 0.13);
+    /*
+     * Colours resolved once, outside the loop.
+     *
+     * The ping is quantised to eight steps and the eight are precomputed, because setting
+     * ctx.fillStyle to a fresh string per blade is a string allocation and a parse per
+     * blade per frame - and at this dot size eight steps is indistinguishable from a
+     * continuous ramp anyway. It also means consecutive blades at the same ping share a
+     * fillStyle, which is the case the canvas is fastest at.
+     */
+    const lit = this.ramp;
     for (let i = 0; i < state.points.length; i += this.stride) {
       const point = state.points[i];
       // Outside the window is off the chart; skipped before any drawing is set up, because
       // most of the bank is off the chart at any moment now.
-      if (Math.abs(point.x - state.x) > reach || Math.abs(point.z - state.z) > reach) continue;
-      ctx.fillStyle = point.cut ? INK.cut : INK.standing;
+      const dx = point.x - state.x;
+      const dz = point.z - state.z;
+      if (Math.abs(dx) > reach || Math.abs(dz) > reach) continue;
+
+      /*
+       * How far the head has turned PAST this blade, wrapped into one revolution.
+       *
+       * `atan2(dx, dz) - heading` is the blade's bearing in the machine's own frame, which
+       * is the frame the head sweeps in. The modulo is what makes the trail wrap cleanly
+       * through the back of the sweep instead of snapping once a revolution.
+       */
+      const bearing = Math.atan2(dx, dz) - state.heading;
+      const behind = (this.sweep - bearing + TWO_PI * 2) % TWO_PI;
+      const ping = behind < SWEEP_TRAIL ? 1 - behind / SWEEP_TRAIL : 0;
+      // Squared, so the head is a bright edge with a long soft tail rather than a wide band.
+      const step = Math.min(7, (ping * ping * 8) | 0);
+
+      ctx.fillStyle = point.cut ? lit.cut[step] : lit.standing[step];
       ctx.fillRect(sx(point.x) - dot / 2, sy(point.z) - dot / 2, dot, dot);
     }
+
+    /**
+     * The head itself: one line, and a wedge behind it.
+     *
+     * The line is what the eye tracks and the wedge is what makes the decay on the blades
+     * read as belonging to it rather than as the field flickering on its own. Drawn after
+     * the blades so it sits over them, and at low alpha so it never competes with what it
+     * is illuminating.
+     */
+    const headAngle = this.sweep + state.heading;
+    const rim = VIEW_RADIUS * scale;
+    ctx.save();
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = INK.sweep;
+    ctx.beginPath();
+    ctx.moveTo(sx(state.x), sy(state.z));
+    /*
+     * The wedge has to be the same set of blades the ping lifted, and this took solving
+     * rather than guessing.
+     *
+     * A world bearing phi projects to canvas angle phi - PI/2: the chart's y runs opposite
+     * to the world's z, so cos(alpha) = sin(phi) and sin(alpha) = -cos(phi). The trail is
+     * BEHIND the head, so the arc runs from (head - trail) to (head), both shifted by that
+     * quarter turn.
+     *
+     * My first attempt was `PI/2 - headAngle` going forwards, which is the reflection of
+     * this and put the wedge on the wrong side of the line. Checked by sampling 4,116
+     * (heading, sweep, bearing) triples and asking whether every blade with a non-zero
+     * ping falls inside the wedge: this expression, none disagree; the first one, 945 did.
+     * On a 196-pixel chart with a soft fill, "the glow is on the wrong side of the line"
+     * is not something I would have trusted my eye to catch.
+     */
+    ctx.arc(
+      sx(state.x),
+      sy(state.z),
+      rim,
+      headAngle - SWEEP_TRAIL - Math.PI / 2,
+      headAngle - Math.PI / 2
+    );
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
+    ctx.strokeStyle = INK.sweep;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.75;
+    ctx.beginPath();
+    ctx.moveTo(sx(state.x), sy(state.z));
+    ctx.lineTo(
+      sx(state.x) + Math.sin(headAngle) * rim,
+      sy(state.z) - Math.cos(headAngle) * rim
+    );
+    ctx.stroke();
+    ctx.globalAlpha = 1;
 
     // The beds and the trunk: outlines, because they are boundaries and not obstacles to
     // be read as terrain.

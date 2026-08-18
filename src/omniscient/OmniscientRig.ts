@@ -2307,6 +2307,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       z: unit.drive.position.z,
       heading: unit.drive.facing,
       progress: done,
+      deltaTime,
       points: unit.field.plotPoints(),
       /*
        * Only once the easy sweep is behind them.
