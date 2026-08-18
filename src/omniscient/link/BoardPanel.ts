@@ -24,6 +24,7 @@
 
 import { initialBeam, stepBeam } from '../mission/beam.js';
 import { describe } from '../mission/pursuit.js';
+import { reached } from '../mission/pipes.js';
 import { narrow } from '../mission/traces.js';
 import { audio } from '../audio/ConsoleAudio.js';
 
@@ -363,7 +364,26 @@ const BOARD_CSS = `
 
    One character, invisible in review, and it only breaks the one rule that
    happens to follow it. See scripts/css-balanced.ts. */
-/* The pipe run: a grid of pieces, each one a button that turns a quarter on click. */
+/* -- The pipe run ---------------------------------------------------------------------
+   A grid of pieces, each one a button that turns a quarter on click.
+
+   ## Why the board shows the water
+
+   Asked, in as many words: "how am I supposed to solve this?" - and the honest answer was
+   that you were not, really. Nine box-drawing glyphs at 17px, no indication of which of the
+   two orange cells was the sump, no feedback of any kind until you pressed SEND IT and a man
+   told you it had come back on itself somewhere. That is not a topology puzzle, it is a
+   1-in-32 guess with a flavour text loss screen, and the only way to actually reason it out
+   was to run a flood fill in your head over a grid you could barely read.
+
+   So the run is WET. Every rotation floods from the sump and the pieces the water reaches
+   light up, so the player can see their own partial run growing and where it stops. That is
+   the whole difference between guessing and solving: you stop asking "is this right" and
+   start asking "why does it stop HERE", which is a question the board can answer.
+
+   It does not leak the answer and does not cross §157's boundary. The fill runs on the
+   board the player is looking at, using the rotations the player set, and every input to it
+   is already on their screen. It reports what they have built, not what they should. */
 .omni-board__pipes {
   display: grid;
   gap: 3px;
@@ -388,6 +408,7 @@ const BOARD_CSS = `
 }
 .omni-board__cell:hover { border-color: rgba(127, 224, 138, 0.75); }
 /* Fixed pieces are already plumbed in - dimmer, and they do not take a pointer. */
+
 /*
  * A blank is a slot with no pipe in it, NOT an absence.
  *
@@ -412,10 +433,56 @@ const BOARD_CSS = `
   color: rgba(127, 224, 138, 0.45);
   border-color: rgba(127, 224, 138, 0.14);
 }
-.omni-board__cell--end {
-  border-color: #e0a24c;
+/*
+ * ## These come after --fixed on purpose
+ *
+ * The .omni-board__cell--fixed rule sets its own colour and border-color, and both ends of the run
+ * are fixed pieces. Declared earlier, every one of these lost the cascade to it at equal
+ * specificity and the ends rendered as plain greyed-out tiles - which was the bug they were
+ * added to solve.
+ *
+ * The order is the strength of the statement: fixed is the weakest thing a cell can say
+ * about itself, which end of the run it is beats that, and having water in it beats
+ * everything, because that is the one thing the player is actively watching change.
+ *
+ * (--end, which used to live here and painted both ends the same amber, is gone: an end
+ * that does not say WHICH end is most of why the board could not be reasoned about.)
+ *
+ * No backticks anywhere in this block. The whole stylesheet is a template literal and one
+ * backtick closes it - the same trap the .omni-trace comment above already records, and it
+ * caught me again two hundred lines further down.
+ */
+/* Water in the pipe. Brighter and warmer-edged than a dry piece, so a partial run reads as
+   a line growing out of the sump rather than as a scatter of selected tiles. */
+.omni-board__cell--wet {
+  border-color: rgba(143, 214, 232, 0.85);
+  background: rgba(20, 58, 74, 0.9);
+  color: #bfe6f4;
+}
+/* The two ends, told apart. They were both the same orange, so nothing on the board said
+   which one the water starts at - and the prompt names them in an order the board does not
+   repeat. Cool for the sump, because that is where water arrives from; amber for the
+   outfall, because that is the one the whole request is trying to reach. */
+.omni-board__cell--source {
+  border-color: rgba(143, 214, 232, 0.9);
+  color: #8fd6e8;
+}
+.omni-board__cell--drain {
+  border-color: rgba(224, 162, 76, 0.9);
   color: #e0a24c;
 }
+.omni-board__legend {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(159, 216, 168, 0.62);
+}
+.omni-board__legend b { font-weight: normal; }
+.omni-board__legend .sump { color: #8fd6e8; }
+.omni-board__legend .outfall { color: #e0a24c; }
 /* The lock: a row of pins, each carrying the position it has been given in the order. */
 .omni-board__pins { display: flex; gap: 8px; flex-wrap: wrap; }
 .omni-board__pin {
@@ -893,12 +960,12 @@ export class BoardPanel {
     grid.cells.forEach((cell, index) => {
       const button = document.createElement('button');
       button.type = 'button';
-      const ends = index === grid.source || index === grid.drain;
       button.className = [
         'omni-board__cell',
         cell.fixed ? 'omni-board__cell--fixed' : '',
         cell.shape === 'blank' ? 'omni-board__cell--blank' : '',
-        ends ? 'omni-board__cell--end' : '',
+        index === grid.source ? 'omni-board__cell--source' : '',
+        index === grid.drain ? 'omni-board__cell--drain' : '',
       ]
         .filter(Boolean)
         .join(' ');
@@ -908,6 +975,7 @@ export class BoardPanel {
           event.preventDefault();
           audio.play('seat');
           this.rotations[index] = (this.rotations[index] + 1) % 4;
+          this.paintFlow(grid);
           if (this.view) this.refresh(this.view);
         });
       }
@@ -917,6 +985,35 @@ export class BoardPanel {
     });
 
     this.grid.appendChild(board);
+
+    /*
+     * The legend, because the prompt names the sump and the outfall and the board never did.
+     * Two words and two colours - the cheapest possible way to turn "two orange squares"
+     * into "this end and that end".
+     */
+    const legend = document.createElement('div');
+    legend.className = 'omni-board__legend';
+    const sump = document.createElement('span');
+    sump.innerHTML = '<b class="sump">&#9633;</b> sump';
+    const outfall = document.createElement('span');
+    outfall.innerHTML = '<b class="outfall">&#9633;</b> outfall';
+    legend.append(sump, outfall);
+    this.grid.appendChild(legend);
+
+    this.paintFlow(grid);
+  }
+
+  /**
+   * Light the pieces the water currently reaches.
+   *
+   * Called on build and after every turn. The fill is nine cells - there is no reason to be
+   * clever about when it runs, and running it every time is what makes it feel live.
+   */
+  private paintFlow(grid: PipeGridView): void {
+    const wet = reached(grid, this.rotations);
+    this.cellButtons.forEach((button, index) => {
+      button.classList.toggle('omni-board__cell--wet', wet.has(index));
+    });
   }
 
   /**
@@ -1727,7 +1824,12 @@ export class BoardPanel {
       this.status.className = view.note
         ? 'omni-board__status omni-board__status--score'
         : 'omni-board__status';
-      this.status.textContent = view.note ?? 'turn the pieces until it runs';
+      /*
+       * The hint says what the lit cells MEAN. Feedback nobody has been told how to read is
+       * decoration, and this is the sentence that turns it into an instrument.
+       */
+      this.status.textContent =
+        view.note ?? 'lit pieces have water in them - turn the rest until it reaches the outfall';
       this.wires.replaceChildren();
       return;
     }

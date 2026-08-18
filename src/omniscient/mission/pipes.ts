@@ -110,7 +110,15 @@ export function flows(grid: PipeGrid, rotations: number[]): boolean {
  * - it is the plumber's own observation, because a person holding a hose can hear how far
  * down the run the water is getting.
  */
-export function wetted(grid: PipeGrid, rotations: number[]): number {
+/**
+ * Which cells the water actually gets to, from the source, as things stand.
+ *
+ * Split out of `wetted` so the console can draw it. That is not a leak of the answer
+ * (§157): this is a flood fill over the board the player is looking at, using the
+ * rotations the player themselves set, and every input to it is already on their screen.
+ * It tells them what they have built, not what they should build.
+ */
+export function reached(grid: PipeGrid, rotations: number[]): Set<number> {
   const { columns, rows, cells, source } = grid;
   const seen = new Set<number>([source]);
   const queue = [source];
@@ -133,7 +141,10 @@ export function wetted(grid: PipeGrid, rotations: number[]): number {
       queue.push(next);
     }
   }
+  return seen;
+}
 
-  const plumbed = cells.filter((cell) => cell.shape !== 'blank').length;
-  return plumbed === 0 ? 0 : seen.size / plumbed;
+export function wetted(grid: PipeGrid, rotations: number[]): number {
+  const plumbed = grid.cells.filter((cell) => cell.shape !== 'blank').length;
+  return plumbed === 0 ? 0 : reached(grid, rotations).size / plumbed;
 }

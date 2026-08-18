@@ -1,3 +1,4 @@
+import './.virtual-entry.js';
 import './game-data.js';
 import './omniscient/art/brickwork.js';
 import './omniscient/art/certainty.js';
