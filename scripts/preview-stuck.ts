@@ -135,11 +135,43 @@ function solveDevice(device: Device): DeviceSubmission {
     return { kind: 'unit', cleared: 1 };
   }
 
+  /**
+   * Exhaustive, which is what the note above already claimed and what this was not.
+   *
+   * It used to be a greedy sweep - turn each piece to whichever rotation wets the most of
+   * the run, repeat. That is a hill climb, and a hill climb sits down in the first local
+   * optimum it finds. It happened to solve the old grid and it does not solve the current
+   * one, so redesigning the cellar's run turned three beat-graph checks red without a
+   * single thing being wrong with the beat graph.
+   *
+   * A harness that fails when the CONTENT changes is worse than no harness: it teaches you
+   * to edit the test. The question here is only ever "can this request reach an ending",
+   * so it should answer that for any grid a person could be handed, not for grids that
+   * happen to suit a heuristic.
+   *
+   * Seven movable pieces is 16,384 arrangements and it runs in milliseconds. The greedy
+   * sweep stays as a fallback for a grid too big to enumerate - there is none today, and
+   * silently taking twenty minutes would be a worse failure than an imperfect answer.
+   */
   const cells = device.grid.cells;
   const turnable = cells.map((c, i) => (c.fixed ? -1 : i)).filter((i) => i >= 0);
   const rotations = cells.map(() => 0);
-  // Greedy sweep: turn each free piece to whichever rotation wets the most of the run,
-  // repeatedly, until it flows or nothing improves.
+
+  const arrangements = 4 ** turnable.length;
+  if (arrangements <= 1_000_000) {
+    for (let n = 0; n < arrangements; n++) {
+      let v = n;
+      for (const i of turnable) {
+        rotations[i] = v & 3;
+        v >>= 2;
+      }
+      if (flows(device.grid, rotations)) return { kind: 'pipes', rotations };
+    }
+    // Nothing flows. Returning the last arrangement lets the caller report a stuck beat,
+    // which is exactly the finding this script exists to surface.
+    return { kind: 'pipes', rotations };
+  }
+
   for (let pass = 0; pass < 6; pass++) {
     if (flows(device.grid, rotations)) break;
     for (const i of turnable) {

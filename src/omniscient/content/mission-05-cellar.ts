@@ -31,38 +31,54 @@ export const FACT_PUMP_IS_FINE = 'cellar-pump-is-fine';
 export const FACT_CELLAR_RUN = 'cellar-run-to-the-outfall';
 
 /**
- * The run under the school, four columns by three.
+ * The run under the school. Three by three, and every slot holds a piece.
  *
- * Verified by brute force before a word of dialogue was written: 256 of the 16,384
- * possible arrangements carry water, which is about one in sixty-four. Solvable without
- * being a lottery, and - because the grader is a flood fill rather than a stored answer -
- * every one of those 256 is accepted.
+ * ## Why it stopped being four by three
  *
- * The sump and the outfall are fixed, because a puzzle in which every piece moves has no
- * landmarks and nothing to reason from. Those two are the parts of this run that have
- * never been touched.
+ * It used to be a twelve-slot board with three of the slots blank - a ragged nine-piece run
+ * inside a rectangle. Read as broken every single time it was looked at, and the reason is
+ * simple: cell 0 was blank, so the top row began one slot in, and a row that starts further
+ * right than the rows under it looks like a layout fault no matter what is or is not drawn
+ * in the empty slot. Making the blanks visible as sockets helped and did not fix it, because
+ * the question the shape provokes - "why is that row shifted" - is a better question than
+ * any answer a blank can give.
+ *
+ * So there are no blanks. Nine slots, nine pieces, a square board. The topology is the
+ * puzzle; the outline of the board never was, and it was costing more than it gave.
+ *
+ * ## Verified against the shipped grader, not by eye
+ *
+ * 512 of the 16,384 possible arrangements carry water - one in thirty-two - and because the
+ * grader is a flood fill rather than a stored answer, every one of those 512 is accepted.
+ *
+ * The tee in the middle is authored a quarter turn out of true, which is the most hostile
+ * starting position this shape set allows: swept over all 16,384 authored assignments, no
+ * arrangement forces more than three of the seven movable pieces to be turned, and this one
+ * forces three. Left at zero the player could have solved it by nudging two.
+ *
+ * The sump and the outfall are fixed, at opposite corners, because a puzzle in which every
+ * piece moves has no landmarks and nothing to reason from. Those two are the parts of this
+ * run that have never been touched.
  */
 const CELLAR_RUN: PipeGrid = {
-  columns: 4,
+  columns: 3,
   rows: 3,
   cells: [
-    { shape: 'blank' },
     { shape: 'bend' },
     { shape: 'bend' },
     // The outfall through the wall to the ditch. Nobody has ever moved this.
     { shape: 'straight', turn: 1, fixed: true },
     { shape: 'bend' },
-    { shape: 'straight' },
-    { shape: 'straight' },
-    { shape: 'blank' },
+    // A quarter out. See the note above - this is the piece doing the work.
+    { shape: 'tee', turn: 1 },
+    { shape: 'bend' },
     // The sump, where the pump pushes into the run.
     { shape: 'straight', turn: 1, fixed: true },
-    { shape: 'straight' },
     { shape: 'bend' },
-    { shape: 'blank' },
+    { shape: 'bend' },
   ],
-  source: 8,
-  drain: 3,
+  source: 6,
+  drain: 2,
 };
 
 export const MISSION_05: MissionDefinition = {
