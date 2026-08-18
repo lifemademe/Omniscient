@@ -68,6 +68,22 @@ export interface RiggedOptions {
   height: number;
   /** The same world-space targets the procedural generator is given. */
   handsOn?: { left?: THREE.Vector3; right?: THREE.Vector3 };
+  /**
+   * Settle the wrists back toward the pose the model shipped in.
+   *
+   * Opt-in, and it has nothing to do with the hand IK - a contact with no `handsOn` never
+   * runs a solver at all, so a wrist that looks wrong on one of those is the CLIP's wrist.
+   * Reported on Dorin, who has no hand targets by design: the lock is out of his reach from
+   * anywhere he can stand, so his arms are pure animation, and the Mixamo idle he shares
+   * with the rest of the cast holds its hands at an angle that reads as a break rather than
+   * a rest on somebody standing with his arms down.
+   *
+   * Only the two hand bones, and only partially. The forearm keeps every frame the
+   * animator gave it, so the arm still breathes and still gestures; what stops is the last
+   * joint being carried somewhere the rest of the body is not going. Blended rather than
+   * clamped, because a wrist pinned exactly to rest stops moving and reads as a prosthetic.
+   */
+  settleWrists?: number;
   /** Draw a marker at each target, so a screenshot shows whether the hand arrived. */
   showTargets?: boolean;
 }
@@ -897,6 +913,24 @@ const ARRIVE = 0.06;
        * mixer writes every bone it animates every frame, so IK has to run after it or it
        * is gone by the next tick.
        */
+      /*
+       * The wrists, before the hand IK and after the clip.
+       *
+       * After the mixer for the same reason everything else here is: a clip writes every
+       * bone it animates every frame, so anything done before it is gone. Before the IK
+       * because when a contact HAS hand targets the solver owns the wrist outright and this
+       * would be fighting it - `hold` gates the IK below, and where the IK is in charge
+       * this simply does not get the chance to run first.
+       */
+      const settle = options.settleWrists ?? 0;
+      if (settle > 0) {
+        for (const named of ['left', 'right'] as const) {
+          const bone = contact.bones[named === 'left' ? 'lefthand' : 'righthand'];
+          const rest = contact.rest[named === 'left' ? 'lefthand' : 'righthand'];
+          if (bone && rest) bone.quaternion.slerp(rest, Math.min(1, settle));
+        }
+      }
+
       if (hold >= 1) return;
       for (const named of ['left', 'right'] as const) {
         const target = options.handsOn?.[named];

@@ -181,6 +181,7 @@ function addContact(
       // The longest clip in the file - see riggedContact.ts for why not the first.
       clip: true,
       handsOn: placement.handsOn,
+      settleWrists: placement.settleWrists,
     });
     /**
      * Gestures, as prop actions.
@@ -6268,11 +6269,18 @@ function buildNightDoor(scene: ContactScene): void {
    *
    * ## Where
    *
-   * The right-hand sill, which was solved rather than picked. Measured against the default
-   * shot it sits 4.8m out and 21 degrees off the axis - comfortably inside frame, well clear
-   * of the door, and above Dorin's head so it never crowds him. The bin lid was the other
-   * candidate and came out at 24 degrees, right on the edge, which is the worst place to put
-   * something whose entire job is being noticed by accident.
+   * The LEFT sill, at its inner end, and the move is a lesson about where "in frame" ends.
+   *
+   * It was on the right sill, which is genuinely in shot - 20 degrees off the axis, well
+   * inside a 37 degree half-angle. And it is invisible in play, because the console panel
+   * covers the right third of the screen and the right sill lands at 75% across. Being
+   * inside the frustum is not the same as being on screen when a third of the screen has a
+   * telephone on it.
+   *
+   * Measured in SCREEN FRACTION instead: the left sill's inner end lands at 18% across and
+   * 69% down. Clear of the console, clear of the door, and clear of Dorin, who stands on
+   * the right. The sill's far end is at 6%, which is against the edge, so it sits at the
+   * end nearest the door rather than in the middle of the sill.
    *
    * Turned to face the door, because a cat watching the thing the player is watching is
    * funnier and more alive than a cat facing out. It has an opinion about this.
@@ -6285,9 +6293,10 @@ function buildNightDoor(scene: ContactScene): void {
    * that sticks out, with its back to the glass - which is where a cat sits.
    */
   const cat = buildCat({
-    at: new THREE.Vector3(DOOR_X + 2.05, 0.765, -0.225),
-    // Its own +z is forward, so this points it down the wall at the doorway.
-    facing: -1.45,
+    at: new THREE.Vector3(DOOR_X - 1.45, 0.765, -0.225),
+    // Its own +z is forward. From the left sill the door is to its RIGHT, so the sign
+    // flips with the side it is sitting on.
+    facing: 1.45,
     seed: 'rasca-cat',
   });
   scene.registerProp('cat', cat.root, { idle: cat.idle });
@@ -6523,6 +6532,8 @@ function buildNightDoor(scene: ContactScene): void {
    * framing's own 12mm offset and put the brass 8mm under the surface.
    */
   const LEAF_FRONT = LEAF_Z + PROUD_AT + PROUD / 2;
+  /** Keyhole height. Under the handle at 1.02, which is where a mortice keyhole lives. */
+  const LOCK_Y = 0.94;
   for (const [w, h, ox, oy] of [
     // Stiles, full height, one each side.
     [STILE, DOOR.h, -(DOOR.w - STILE) / 2, DOOR.h / 2],
@@ -6590,9 +6601,46 @@ function buildNightDoor(scene: ContactScene): void {
   ] as const) {
     // Just proud of the slab so it does not z-fight with the leaf it is set into.
     const glazing = new THREE.PlaneGeometry(0.29, 0.66);
-    // Set into the opening: behind the framing's face, in front of the slab.
     glazing.translate(DOOR.x + ox, 1.5, LEAF_Z + 0.021);
     doorRoot.add(meshOf(name, ontoHinge(glazing), MAT.doorGlass));
+
+    /**
+     * A sliver of sky in the top of the pane.
+     *
+     * Reported as "what are the two dark parts on the door?", which is the right question
+     * to ask of what was there. Glass at night IS nearly black, so the colour was honest -
+     * what was missing is that a pane never returns ONE value. It shows sky at the top and
+     * a dark street at the bottom, and a single flat tone with no variation in it is
+     * exactly what a hole looks like.
+     *
+     * Small and high. A reflection that filled the pane would read as frosted glass.
+     */
+    const sheen = new THREE.PlaneGeometry(0.29, 0.19);
+    sheen.translate(DOOR.x + ox, 1.735, LEAF_Z + 0.022);
+    doorRoot.add(meshOf(`${name}Sheen`, ontoHinge(sheen), MAT.doorSheen));
+
+    /**
+     * And the bead, which is the half that actually fixes it.
+     *
+     * A bead is the thin fillet of timber holding a pane into a door, and it is the one
+     * detail that reads at any distance: a bright line all the way round the dark, catching
+     * the porch lamp. Without it there is nothing between the panel and the void, and the
+     * eye quite correctly reports a hole.
+     */
+    const bead: THREE.BufferGeometry[] = [];
+    for (const [w, h, bx, by] of [
+      [0.318, 0.016, 0, 0.338],
+      [0.318, 0.016, 0, -0.338],
+      [0.016, 0.66, -0.151, 0],
+      [0.016, 0.66, 0.151, 0],
+    ] as const) {
+      const stick = new THREE.BoxGeometry(w, h, 0.018);
+      stick.translate(DOOR.x + ox + bx, 1.5 + by, LEAF_Z + 0.027);
+      bead.push(stick);
+    }
+    doorRoot.add(
+      meshOf(`${name}Bead`, ontoHinge(mergeGeometries(bead, false) ?? bead[0]), MAT.doorLeaf)
+    );
   }
 
   /**
@@ -6665,10 +6713,21 @@ function buildNightDoor(scene: ContactScene): void {
    * 80 is the floor, not a preference: the rose is 36mm in radius and the escutcheon 35mm,
    * so anything under 71mm has them touching. This leaves 9mm of daylight between them.
    */
-  const HANDLE_Y = 0.94;
+  const HANDLE_Y = 1.02;
   const handleAt = new THREE.Vector3(DOOR.x + 0.35, HANDLE_Y, LEAF_FRONT + 0.03);
 
   // The rose stays put; only the lever turns, so it belongs with the static furniture.
+  /*
+   * And the keyhole goes UNDERNEATH it, which is the way round a mortice lock is fitted.
+   *
+   * It was the other way about - cylinder at 1020 with the lever 80mm below - and that is a
+   * nightlatch arrangement, where the cylinder is up near eye level and nowhere near the
+   * handle. On a door with a mortice lock the spindle is at handle height and the keyhole
+   * is directly below it, because they are the same lock case: the follower turns the latch
+   * and the key throws the bolt under it.
+   *
+   * The camera shot that pushes in on the lock moves with it - see registerShot('lock').
+   */
   const rose = new THREE.CylinderGeometry(0.03, 0.033, 0.016, 12);
   rose.rotateX(Math.PI / 2);
   rose.translate(handleAt.x, handleAt.y, LEAF_FRONT + 0.008);
@@ -6905,7 +6964,7 @@ function buildNightDoor(scene: ContactScene): void {
    */
   const lockRoot = ENGINE.SceneNode.create({
     name: 'Lock',
-    position: new THREE.Vector3(DOOR.w - 0.11, 1.02, LEAF_FRONT + 0.26 + 0.004),
+    position: new THREE.Vector3(DOOR.w - 0.11, LOCK_Y, LEAF_FRONT + 0.26 + 0.004),
   });
   const escutcheon = new THREE.CylinderGeometry(0.035, 0.035, 0.012, 12);
   escutcheon.rotateX(Math.PI / 2);
@@ -7162,6 +7221,17 @@ function buildNightDoor(scene: ContactScene): void {
      * it and Dorin says what he is doing.
      */
     reach: 0.9,
+    /*
+     * And settle his wrists.
+     *
+     * Reported as a hand bent oddly on the idle, with the reasonable question of whether
+     * the hand IK was doing it. It was not - he has no hand targets, so no solver ever
+     * touches him, and what was showing is the shared Mixamo idle's own wrist angle on
+     * somebody standing with his arms down rather than holding anything. Two thirds of the
+     * way back to the pose the model shipped in, which takes the break out and leaves the
+     * hand still moving with the arm.
+     */
+    settleWrists: 0.65,
     // Two in the morning, cold, and his mother has not answered since yesterday.
     liveliness: 1.25,
   });
@@ -7321,8 +7391,10 @@ function buildNightDoor(scene: ContactScene): void {
    * described.
    */
   scene.registerShot('lock', {
-    position: new THREE.Vector3(-0.1, 1.15, 1.05),
-    target: new THREE.Vector3(0.2, 1.02, -0.22),
+    position: new THREE.Vector3(-0.1, 1.12, 1.05),
+    // Follows the keyhole down when it moved under the handle. A shot aimed at where the
+    // lock used to be is a push-in on a door handle.
+    target: new THREE.Vector3(0.2, 0.94, -0.22),
     duration: 2.0,
   });
 

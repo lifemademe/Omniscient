@@ -20,6 +20,13 @@ import { createCharacter } from '../geometry/character.js';
 import type { BodyMaterial, CharacterParams, CharacterPiece } from '../geometry/character.js';
 
 export interface CharacterPlacement extends CharacterParams {
+  /**
+   * Blend the wrists back toward the model's own rest pose, 0 to 1.
+   *
+   * Only meaningful for a RIGGED contact, and only for one with no hand targets - where
+   * there is a target the solver owns the wrist. See `settleWrists` in riggedContact.ts.
+   */
+  settleWrists?: number;
   position: THREE.Vector3;
   rotation?: THREE.Euler;
   /**

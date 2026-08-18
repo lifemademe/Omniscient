@@ -515,6 +515,14 @@ export const MAT = {
    * which is exactly how a dark house looks from the step.
    */
   doorGlass: new THREE.MeshBasicMaterial({ color: '#2c3138', toneMapped: false }),
+  /**
+   * The bit of sky a night pane returns, in its top corner.
+   *
+   * Unlit like the glass under it and only a few levels above it - a reflection you can
+   * NAME is a mirror, and this is 4mm float glass in a front door. It exists so the pane is
+   * not one flat value, because one flat value is what a hole is.
+   */
+  doorSheen: new THREE.MeshBasicMaterial({ color: '#3d454f', toneMapped: false }),
   /** The landing light upstairs. The only other lit thing on the street. */
   landingLight: new THREE.MeshBasicMaterial({ color: '#e8d6ad', toneMapped: false }),
   /**
