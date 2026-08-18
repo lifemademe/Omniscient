@@ -624,16 +624,6 @@ export const MAT = {
   valveWheel: standard('#c25c40', 0.82, 0.05),
 
   /**
-   * Cast iron, for the lifted inspection covers.
-   *
-   * Written for three lifted cover plates that are no longer in the scene - the player could
-   * not tell what they were for and they went. It stays because the bolted collars round the
-   * junction boxes are the same iron and want the same tone: warm and dark, and below the
-   * pipework in value, so a lid sits down onto its box instead of off it.
-   */
-  coverPlate: standard('#463f37', 0.88, 0.2),
-
-  /**
    * The valve's actuator. Dark, because MAT.equipment was not.
    *
    * `equipment` is #6c6e6f at roughness 0.62, and under the run wash it rendered near the

@@ -42,6 +42,7 @@ import {
 import { decorMesh } from '../art/mesh.js';
 import { CERTAINTY } from '../art/certainty.js';
 import { createFloodwater } from '../art/floodwater.js';
+import { createRipples } from '../art/ripples.js';
 import { createTorchlight } from '../art/torchlight.js';
 import { applyFloodstain } from '../art/floodstain.js';
 import { applySaltRust } from '../art/saltrust.js';
@@ -5786,6 +5787,26 @@ function buildFloodedCellar(scene: ContactScene): void {
    * Only after the front has passed - beads on a dry run would be the leak the mission
    * explicitly does not have.
    */
+  /**
+   * Rings on the flood.
+   *
+   * The water is one quad with a ripple in its normals: it catches the lamp, it shifts, and
+   * it is perfectly still. Still is what a plane does, and a cellar that is actively filling
+   * should not look settled. Rings say it is being fed from somewhere, and they cost no
+   * light, no shadow and no second surface.
+   *
+   * Bounded to the part of the floor the camera can actually see - an ambient ring behind
+   * the lens is a wasted draw and, worse, a wasted event, because the pool is finite and one
+   * spent off-screen is one not available where a drip is about to land.
+   */
+  const ripples = createRipples({
+    level: WATER_LEVEL,
+    bounds: [-3.1, 3.1, -1.8, 2.2],
+    every: 2.2,
+    seed: 'cellar-ripples',
+  });
+  scene.registerProp('ripples', ripples.root, { idle: (dt) => ripples.idle(dt) });
+
   const drips = ENGINE.SceneNode.create({ name: 'RunDrips', position: new THREE.Vector3() });
   const dripBodies = joins.map((at, i) => {
     const bead = new THREE.SphereGeometry(0.019, 6, 5);
@@ -5795,7 +5816,7 @@ function buildFloodedCellar(scene: ContactScene): void {
     node.position.copy(at);
     node.visible = false;
     drips.add(node);
-    return { node, at, phase: range(rng, 0, 3.2) };
+    return { node, at, phase: range(rng, 0, 3.2), landed: false };
   });
 
   const DRIP_PERIOD = 3.2;
@@ -5815,6 +5836,8 @@ function buildFloodedCellar(scene: ContactScene): void {
           const swell = 0.25 + (t / 0.76) * 0.75;
           drip.node.scale.set(swell, swell, swell);
           drip.node.position.copy(drip.at);
+          // The next drop is forming, so the last one has landed and its latch can reset.
+          drip.landed = false;
         } else {
           const fall = (t - 0.76) / 0.18;
           drip.node.scale.set(1, 1, 1);
@@ -5825,6 +5848,18 @@ function buildFloodedCellar(scene: ContactScene): void {
             drip.at.y - (drip.at.y - WATER_Y) * fall * fall,
             drip.at.z
           );
+          /*
+           * The ring, at the instant it arrives.
+           *
+           * This is the whole reason the ripples exist: a drop that falls into water and
+           * leaves no mark is a drop falling in front of water. Fired once per cycle on a
+           * latch rather than on a frame comparison, because at 200fps `fall >= 1` is true
+           * for several frames running and that would stack four rings on one impact.
+           */
+          if (!drip.landed && fall >= 0.98) {
+            drip.landed = true;
+            ripples.splash(drip.at.x, drip.at.z, 1);
+          }
         }
       }
     },
@@ -5847,59 +5882,86 @@ function buildFloodedCellar(scene: ContactScene): void {
   scene.registerProp('outfall', meshOf('Outfall', outfall, wettable(MAT.steel, 3.05)));
 
   /**
-   * Three inspection covers, up - and what is left of them.
+   * The three settable junctions - and the fourth attempt at what they should look like.
    *
-   * ## Both halves of this read as plates on a floor, so both halves are gone
+   * ## The floor has to stay empty water
    *
-   * There were two objects here and the player asked what each of them was, which is the
-   * only review that counts. The openings were 520mm dark slabs at y = 0.02 - under a water
-   * line at 0.22, so they never read as holes at all, they read as black tiles lying in the
-   * water. The lids were 540mm plates leaning on the back wall, and a plate is what they
-   * looked like however much rim and slot detail went onto them.
+   * This object has now been, in order: three dark slabs lying flat under the flood, three
+   * plates leaning against the back wall, and three boxes standing out of the water. Each
+   * one was reported by the player as an unidentifiable rectangle, and each time I made the
+   * NEXT rectangle more legible instead of asking why a rectangle was there at all.
    *
-   * I spent this session making the lids more legible AS PLATES - a rim in a contrasting
-   * value, lifting slots, a warmer iron - and legibility was never the problem. Nobody could
-   * tell what they were FOR. Three more grey rectangles in a room that already has boxes,
-   * a bench, a bulkhead and six metres of pipework is clutter, and clutter beside the run is
-   * the worst place for it: it competes with the one object the request is about.
+   * The answer, on the third strike, is that the floor of this room is a still sheet of
+   * water, and anything set down on it competes with the pipework for attention while
+   * telling the player nothing. It is clutter whatever shape it is.
    *
-   * What survives is the junction boxes themselves, which is what Vasile actually describes
-   * - "three boxes, and every one of them can be turned" - standing proud of the water where
-   * they can be seen and counted, instead of being implied by three dark squares.
+   * ## Levers, on the run, where the plumbing already is
+   *
+   * Vasile's line is "every one of them can be turned to send it on a different way", and a
+   * lever cock is exactly that object: a tee off the main with a handle on it. Small,
+   * unmistakably plumbing, and the same family as the stopcock at the other end - so the
+   * three things the player must set now rhyme with the one thing the machine will turn.
+   *
+   * On the run at 1.35m rather than in the water at 0.2m, which puts them in the same band
+   * of the frame as the pipe, the valve and Vasile's hands, and leaves the flood as the one
+   * unbroken surface it should always have been.
    */
   const openings: THREE.BufferGeometry[] = [];
   const collars: THREE.BufferGeometry[] = [];
+  /*
+   * Spaced to clear the two things they must not hide behind or crowd.
+   *
+   * The first pass put them at -1.5, -0.4 and 0.7, and the leftmost landed directly behind
+   * Vasile at x = -1.15 - so the player could count two junctions in a request that turns on
+   * there being three. They sit between him and the stopcock at 1.4 instead, which is also
+   * the readable order: the man, the three things to set, the thing that gets turned.
+   */
   for (let i = 0; i < 3; i++) {
-    const x = -1.5 + i * 1.5;
+    const x = -0.45 + i * 0.7;
+    // The tee body, sitting on the near face of the run. Metal, like the pipe it taps.
+    const tee = new THREE.CylinderGeometry(0.075, 0.075, 0.11, 8);
+    tee.rotateX(Math.PI / 2);
+    tee.translate(x, runY, -1.94);
+    collars.push(tee);
     /*
-     * A box, standing out of the water rather than a hole lying under it.
+     * The handle: a flat lever, each at its own angle.
      *
-     * 340mm tall against a water line at 220mm, so the top 120mm and the lid on it are
-     * clear of the surface - that is what makes three of them countable from the camera,
-     * and countable is the whole requirement: the request is "set the run", and the player
-     * has to see how many things there are to set.
+     * Different angles because they are set differently - that is the fiction of the puzzle,
+     * three junctions left however the last people to touch them left them - and because
+     * three identical levers read as a manufactured rack rather than as fifty years of other
+     * people's decisions.
      */
-    const box = new THREE.BoxGeometry(0.34, 0.34, 0.3);
-    box.translate(x, 0.17, -0.9);
-    openings.push(box);
-    // The bolted rim round its top, which is the only detail it needs to stop being a cube.
-    const collar = new THREE.BoxGeometry(0.38, 0.035, 0.34);
-    collar.translate(x, 0.352, -0.9);
-    collars.push(collar);
-
+    const lever = new THREE.BoxGeometry(0.028, 0.21, 0.032);
+    lever.translate(0, 0.095, 0);
+    lever.rotateZ(range(rng, -0.7, 0.7) + (i - 1) * 0.35);
+    lever.translate(x, runY, -1.86);
+    openings.push(lever);
+    // A boss where the lever meets the tee, so the handle has something to pivot on.
+    const boss = new THREE.CylinderGeometry(0.032, 0.032, 0.06, 6);
+    boss.rotateX(Math.PI / 2);
+    boss.translate(x, runY, -1.87);
+    collars.push(boss);
   }
   scene.registerProp(
     'covers',
-    meshOf('Covers', mergeGeometries(openings, false) ?? openings[0], MAT.equipment),
+    meshOf('Covers', mergeGeometries(openings, false) ?? openings[0], MAT.valveWheel),
     {
-      // Inked: the three junction boxes. What the request is a search along.
+      /*
+       * Inked: the three handles. What the request is a search along.
+       *
+       * Only the HANDLES are painted - the tee bodies and bosses are metal like the pipe
+       * they tap. Painting the whole assembly made each one an orange hook; a real lever
+       * cock is a metal fitting with a coloured handle, and the paint is on the handle
+       * precisely because the handle is the part you are meant to find. Same red as the
+       * stopcock, so the player connects "these three turn" with "and then that one turns".
+       */
       inked: true,
-      anchors: { default: new THREE.Vector3(0, 0.5, -0.9) },
+      anchors: { default: new THREE.Vector3(0.25, runY + 0.17, -1.86) },
     }
   );
   scene.registerProp(
     'cover-collars',
-    meshOf('CoverCollars', mergeGeometries(collars, false) ?? collars[0], MAT.coverPlate)
+    meshOf('CoverCollars', mergeGeometries(collars, false) ?? collars[0], MAT.metal)
   );
 
   /**
@@ -6366,10 +6428,10 @@ function buildFloodedCellar(scene: ContactScene): void {
     target: new THREE.Vector3(-0.3, 0.6, -1.35),
   });
   scene.registerShot('covers', {
-    position: new THREE.Vector3(0.9, 1.15, 1.1),
-    // Target lifted from 0.2 to 0.32: the covers used to be flat plates on the floor and
-    // are now boxes standing 340mm out of the water, so the shot has to look at the tops.
-    target: new THREE.Vector3(-0.4, 0.32, -1.0),
+    // Follows the junctions up onto the run. They were on the floor and this looked down at
+    // the floor; they are lever cocks on the pipe now, so it looks along it.
+    position: new THREE.Vector3(1.55, 1.62, 0.75),
+    target: new THREE.Vector3(0.15, 1.36, -1.9),
     duration: 2.2,
   });
   /**
@@ -6431,6 +6493,9 @@ function buildFloodedCellar(scene: ContactScene): void {
     // anybody saying it.
     ['marks', CERTAINTY.SHAPED],
     ['cover-collars', CERTAINTY.SHAPED],
+    // The rings are unlit and are not a thing the machine is uncertain about - they are the
+    // water moving, and the water is the one fact nobody in this call disputes.
+    ['ripples', CERTAINTY.KNOWN],
     /*
      * The stopcock is KNOWN from the first frame, and it is the only thing down here that
      * is. Everything else in the cellar the machine has been told about; the actuator on

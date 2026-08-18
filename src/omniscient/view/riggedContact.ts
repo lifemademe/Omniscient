@@ -34,6 +34,7 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { debakeHighlights } from '../art/debake.js';
 import { HIPS, loadGesture, type GestureName } from './gestures.js';
 
 /**
@@ -997,6 +998,35 @@ const ARRIVE = 0.06;
       loaded.scale.multiplyScalar(scale);
     }
     loaded.updateMatrixWorld(true);
+
+    /**
+     * Take the generator's studio lights out of the skin.
+     *
+     * Every character here comes out of Tripo, which works from photographs and paints the
+     * highlights that were on the real garment straight into the base colour. On Vasile's
+     * near-black work shirt that is patches at 240/255 in cloth at 30 - and because they are
+     * attached to the mesh, they slide across the fabric as he moves, which is what "the
+     * sparkling light on Vasile's body" was.
+     *
+     * Applied to every rigged contact rather than to the one who was noticed: they all come
+     * from the same generator with the same problem, and the pass is a no-op on a texture
+     * that has no baked highlights in it. Measured on Vasile's 2048 map it rewrites 0.17% of
+     * texels, takes the worst speck from 239 to 125, and leaves his face untouched.
+     *
+     * Once per material, not once per mesh - a character is usually one texture over several
+     * meshes, and debaking it twice would eat the garment's own weave the second time round.
+     */
+    const debaked = new Set<THREE.Texture>();
+    loaded.traverse((child) => {
+      const mesh = child as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        const map = (material as THREE.MeshStandardMaterial).map;
+        if (!map || debaked.has(map)) continue;
+        debaked.add(map);
+        debakeHighlights(map);
+      }
+    });
 
     loaded.traverse((child) => {
       if (child.type === 'Bone' || /mixamorig/i.test(child.name)) {
