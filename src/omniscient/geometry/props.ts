@@ -251,15 +251,47 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
      * where the back of a set actually is once its cover is off.
      */
     const mouthZ = -depth / 2 + BAY.depth + 0.006;
-    const shell = new THREE.CylinderGeometry(radius, radius * 0.94, length, 10);
+
+    /*
+     * The face of the bay floor the sockets stand on.
+     *
+     * Named, because two things were being placed against it by arithmetic that happened
+     * to agree with it and then stopped mentioning it. The plate is 6mm thick, centred
+     * 3mm behind this, so this is its outer face - the surface the player is looking at
+     * when they look into the open back.
+     */
+    const plateFace = -depth / 2 + BAY.depth;
+
+    /*
+     * A millimetre deeper than it needs to be, and that millimetre is the fix.
+     *
+     * The shell ended exactly on the plate's inner face at -0.079. Coincident faces are a
+     * coin toss for the depth buffer, and the only reason this pair was not visibly
+     * fighting is that both happened to be pointing away from the camera and getting
+     * culled - which is luck, not construction, and it stops being true the moment the
+     * set is turned.
+     */
+    const shell = new THREE.CylinderGeometry(radius, radius * 0.94, length + 0.002, 10);
     shell.rotateX(Math.PI / 2);
-    shell.translate(x, connectorY, mouthZ - length / 2);
+    shell.translate(x, connectorY, mouthZ - length / 2 + 0.001);
     fittings.push(shell);
 
-    // A raised collar where the socket is screwed through the bay floor.
+    /*
+     * The collar, standing ON the bay floor rather than inside it.
+     *
+     * This is the z-fighting reported at the back of the set, on the surface touching the
+     * connector, and it was exact: the collar was centred at -0.0820 with a 6mm length,
+     * and the bay floor plate is centred at -0.0820 with a 6mm thickness. Two solids in
+     * precisely the same slab of space, so every pixel of the collar was a tie.
+     *
+     * It reads as a raised ring where the socket is screwed through the panel, so it
+     * belongs in FRONT of the panel. Sunk half a millimetre into it rather than butted
+     * against it, because sharing one plane is the thing that just went wrong - an
+     * overlap has no tie to lose.
+     */
     const collar = new THREE.CylinderGeometry(radius * 1.22, radius * 1.22, 0.006, 10);
     collar.rotateX(Math.PI / 2);
-    collar.translate(x, connectorY, mouthZ - 0.003);
+    collar.translate(x, connectorY, plateFace - 0.0025);
     fittings.push(collar);
 
     /**

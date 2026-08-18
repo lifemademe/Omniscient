@@ -94,6 +94,19 @@ const PALETTE = {
 
 const DEG = Math.PI / 180;
 
+/**
+ * How far off centre the caller may drift while the globe keeps turning.
+ *
+ * 0.45rad is about 26 degrees, which on this projection leaves the marker well inside the
+ * front of the sphere rather than out on the limb where it is foreshortened to a smear and
+ * awkward to hit. Widen it and the sweep is grander and the marker gets harder to click;
+ * this is the trade, and clickable wins.
+ */
+const HOLD_ARC = 0.45;
+
+/** Sweep speed as a fraction of the idle drift. A third: alive, not busy. */
+const SWEEP_RATE = 0.34;
+
 interface Projected {
   x: number;
   y: number;
@@ -103,6 +116,8 @@ interface Projected {
 
 export class GlobeView {
   private rotation = 0;
+  /** Which way the attention sweep is currently drifting. See advance. */
+  private sweep: 1 | -1 = 1;
 
   constructor(
     private readonly surface: PixelSurface,
@@ -145,9 +160,35 @@ export class GlobeView {
     // Wrapped to [-pi, pi] so it takes the short way round rather than unwinding most of a
     // turn to reach a point a few degrees behind it.
     const gap = Math.atan2(Math.sin(attend - this.rotation), Math.cos(attend - this.rotation));
-    if (Math.abs(gap) < 0.002) return;
-    const step = Math.sign(gap) * Math.min(Math.abs(gap), speed * 2 * deltaTime);
-    this.rotation = (this.rotation + step) % (Math.PI * 2);
+
+    /*
+     * Outside the window, go and get it. Inside, keep moving.
+     *
+     * This used to stop dead once the signal reached the front, and stopping was the whole
+     * of the bug reported twice as the globe never turning again. Something is waiting
+     * almost all the time - resolving a request sets the NEXT one to Waiting on the same
+     * tick - so "hold the caller at the front" resolved to "hold still, forever, from the
+     * first request onward". §54 warns against motion for its own sake and an instrument
+     * that never moves at all is the other failure: it reads as a picture of a globe.
+     *
+     * So it sweeps. Within a 26-degree window either side of whoever is calling it keeps
+     * turning, slowly, and reverses at the edges; beyond that window it eases back at
+     * twice drift speed the way it always did. The caller stays where the player can
+     * reach them - which was the point - and the world stays alive, which was the cost.
+     *
+     * It is also the better read of the fiction. The machine is not staring at one town;
+     * it is listening to everything and keeping half an ear on the one that is talking.
+     */
+    if (Math.abs(gap) > HOLD_ARC) {
+      const step = Math.sign(gap) * Math.min(Math.abs(gap), speed * 2 * deltaTime);
+      this.rotation = (this.rotation + step) % (Math.PI * 2);
+      // Head back out the way it came in, rather than snapping to a fixed direction.
+      this.sweep = gap > 0 ? -1 : 1;
+      return;
+    }
+
+    if (gap * this.sweep < -HOLD_ARC * 0.92) this.sweep = -this.sweep as 1 | -1;
+    this.rotation = (this.rotation + this.sweep * deltaTime * speed * SWEEP_RATE) % (Math.PI * 2);
   }
 
   /**

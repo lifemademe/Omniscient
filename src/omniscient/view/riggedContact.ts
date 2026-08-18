@@ -378,6 +378,20 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
   let gestureAction: THREE.AnimationAction | null = null;
   let gestureLeft = 0;
   let hold = 0;
+  /**
+   * Whether the gesture now playing is allowed to take the hands off their targets.
+   *
+   * Reported on Ileana: she spreads her hands when her request is solved, which is
+   * the nod clip's arms playing back on a woman whose whole pose is two hands flat on
+   * a table. A gesture suspends the hand IK entirely, so for the length of the clip
+   * she stops holding the table and does whatever a Mixamo actor with nothing in
+   * front of them does.
+   *
+   * Which is right for a point - the arm IS the gesture - and for a recoil, where the
+   * whole body goes. It is wrong for a nod, because nodding is a head, and nobody
+   * lifts their hands off a table to agree with somebody.
+   */
+  let gestureTakesHands = true;
 
   const contact: RiggedContact = {
     root,
@@ -398,6 +412,7 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
      * cached across all seven contacts.
      */
     gesture: (name) => {
+      gestureTakesHands = name !== 'nod';
       void loadGesture(name).then((clip) => {
         if (!clip || !mixer) return;
         gestureAction?.fadeOut(0.25);
@@ -417,7 +432,10 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
 
       if (gestureLeft > 0) {
         gestureLeft -= deltaTime;
-        hold = Math.min(1, hold + deltaTime * 4);
+        // Only ramps for a gesture that owns the arms - see gestureTakesHands. A nod
+        // leaves this at zero, so the IK below keeps running underneath the clip and
+        // the hands stay where the scene put them while the head does the work.
+        if (gestureTakesHands) hold = Math.min(1, hold + deltaTime * 4);
         if (gestureLeft <= 0) {
           gestureAction?.fadeOut(0.3);
           gestureAction = null;
