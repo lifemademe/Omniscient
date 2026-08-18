@@ -3459,6 +3459,37 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   const drive = new MowerDrive(mower, mowingField, DRIVEABLE, KEEP_OFF);
   drive.place(home.x, home.z, home.heading);
 
+  /**
+   * Putting this set back, which is three things a cue moves.
+   *
+   * The limbs, the shade and the bank - captured now, before any cue has touched them, so
+   * "the way it was found" is a fact rather than a guess. The mower is parked from `home`
+   * for the same reason: after a mow it is wherever the player abandoned it, which for a
+   * machine that is supposed to be waiting at the end of the row is the wrong first
+   * impression.
+   */
+  const asFound = neighbourTree.cutLimbs.map((cut) => ({
+    node: cut.node,
+    position: cut.node.position.clone(),
+    quaternion: cut.node.quaternion.clone(),
+    scale: cut.node.scale.clone(),
+  }));
+  const shadeAt = shadeMesh.position.x;
+  const shadeOpacity = (shadeMesh.material as THREE.MeshBasicMaterial).opacity;
+
+  scene.onReset(() => {
+    for (const limb of asFound) {
+      limb.node.position.copy(limb.position);
+      limb.node.quaternion.copy(limb.quaternion);
+      limb.node.scale.copy(limb.scale);
+    }
+    shadeMesh.position.setX(shadeAt);
+    (shadeMesh.material as THREE.MeshBasicMaterial).opacity = shadeOpacity;
+    mowingField.reset();
+    drive.place(home.x, home.z, home.heading);
+    mower.beacon.visible = false;
+  });
+
   scene.remoteUnit = {
     drive,
     field: mowingField,

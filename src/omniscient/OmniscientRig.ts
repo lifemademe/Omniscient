@@ -1719,14 +1719,34 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * over from there - so it still reads as looking through OMNISCIENT_'s own display,
    * while the points stay big enough to click.
    */
+  /**
+   * Back to the globe, and it now leaves the way solving leaves.
+   *
+   * Reported as ending a call feeling faster than finishing one, and it was: this did a
+   * 1.6s move and nothing else, while `returnHome` fires the green warp and blends the CRT
+   * curvature back over 2 seconds. Two exits from the same place, one of which was a cut
+   * and one a transition - and the one that felt cheap was the one the player takes when
+   * they are unsure, which is the worst place in the game to feel like you have been
+   * hurried out.
+   *
+   * The warp is doing real work rather than decorating. The cut from somebody's cellar to
+   * a screen sixty units away is the hardest edit here, and green at the edges is what
+   * says who is doing the moving. It was written for the other door and there was never a
+   * reason it belonged to only one of them.
+   */
   private showGlobe(): void {
+    const warpContainer = this.getWorld()?.gameContainer;
+    if (warpContainer) playWarp(warpContainer);
+    setRetroLook('console');
+
     this.setPhase(Phase.Choosing);
     this.screen = Screen.Globe;
     this.phone?.setVisible(false);
 
-    this.moveTo(SCREEN_SHOT, 1.6);
-    // Hand over once the push-in has arrived, not before - the transition is the point.
-    this.globeHandoff = 1.5;
+    // Matched to returnHome's 2.0s. The handover still lands just before the move ends, so
+    // the globe is under the camera by the time it settles rather than arriving after it.
+    this.moveTo(SCREEN_SHOT, 2.0);
+    this.globeHandoff = 1.9;
   }
 
   /**
@@ -2064,6 +2084,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
 
     this.scene = next;
+    /*
+     * Undo the last attempt before showing it, not after.
+     *
+     * A diorama survives between requests - it is procedural geometry and rebuilding it
+     * would hitch the cut - so a set that was solved is still solved when it is opened
+     * again. Reset before `activate` so the first frame the player sees is the room in its
+     * unsolved state; the other order shows one frame of the previous ending.
+     */
+    this.scene?.reset();
     this.scene?.activate();
 
     /**
@@ -2177,6 +2206,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private plot: MowerPlot | null = null;
   /** Seconds to keep driving after the job is done, so the last pass can be watched. */
   private driveHold = 0;
+  /** Blades cut since the last score pop, and how long ago that was. */
+  private driveScore = 0;
+  private driveScoreHold = 0;
 
   /**
    * Sign into the unit this diorama has parked on it.
@@ -2193,6 +2225,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.driveHold = 0;
     unit.drive.engage(true);
     this.driveKeys.attach();
+
+    /*
+     * The console goes away, because for the next minute it is not what the player is
+     * doing.
+     *
+     * It is a panel for TALKING to somebody and there is nobody to talk to while the
+     * machine is out - Adaeze is forty metres away watching. Leaving it up also leaves the
+     * text input focused, which is the practical half: every key the driving needs is a
+     * character, and a console with focus swallows all of them.
+     */
+    this.phone?.setVisible(false);
 
     const container = this.getWorld()?.gameContainer;
     if (container) this.plot ??= new MowerPlot(container);
@@ -2228,7 +2271,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
     unit.drive.engage(false);
     this.driveKeys.detach();
     this.plot?.setVisible(false);
+    this.plot?.clearPops();
+    this.driveScore = 0;
+    this.driveScoreHold = 0;
     this.driving = null;
+    // And she is back on the line. Only when the request is carrying on - on the way out of
+    // the diorama the console is being put away with everything else.
+    if (returnCamera) this.phone?.setVisible(true);
 
     // Back to the room, eased this time - the machine is letting go rather than taking
     // hold, and the shot it returns to is a composed one again.
@@ -2248,7 +2297,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const unit = this.driving;
     if (!unit) return;
 
-    unit.drive.update(deltaTime, this.driveKeys.read());
+    const cut = unit.drive.update(deltaTime, this.driveKeys.read());
     this.cutTo(unit.drive.shot());
 
     const progress = unit.field.progress();
@@ -2272,6 +2321,27 @@ export class OmniscientRig extends ENGINE.SceneNode {
           ? unit.field.nearestUncut(unit.drive.position.x, unit.drive.position.z)
           : null,
     });
+
+    /*
+     * Score pops, off the same number the cut returns.
+     *
+     * The one piece of arcade in this game and it is here for a reason a serious one would
+     * accept: a rotary deck going through long grass gives almost no feedback per blade,
+     * because a blade is 2.6cm wide and there are two hundred of them per square metre.
+     * The work is legible in aggregate and invisible per moment. A number that leaves the
+     * machine every time it eats something makes the moment-to-moment readable, which is
+     * the difference between mowing and pushing a camera around a field.
+     *
+     * Accumulated and flushed rather than one per blade - forty blades a frame would be
+     * forty labels, which is a slot machine.
+     */
+    this.driveScore += cut;
+    this.driveScoreHold += deltaTime;
+    if (this.driveScore > 0 && this.driveScoreHold > 0.22) {
+      this.plot?.pop(this.driveScore);
+      this.driveScore = 0;
+      this.driveScoreHold = 0;
+    }
 
     if (progress < unit.target) return;
 

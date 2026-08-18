@@ -31,10 +31,18 @@ const CSS = `
 .omni-plot {
   position: absolute;
   left: 50%;
-  bottom: 18px;
-  transform: translateX(-50%);
-  width: 208px;
-  padding: 8px 8px 6px;
+  bottom: 20px;
+  /*
+   * Scaled up on arrival as well as faded.
+   *
+   * Reported as taking a while to notice, and fading a small panel in at the bottom of a
+   * 3D view is about the quietest way there is to introduce a control surface. It now
+   * arrives - 0.86 to 1 over a quarter second, which is under the threshold of feeling
+   * like an animation and over the threshold of catching an eye that is looking at a field.
+   */
+  transform: translateX(-50%) scale(0.86);
+  width: 214px;
+  padding: 9px 9px 7px;
   background: rgba(9, 20, 13, 0.82);
   border: 1px solid rgba(143, 190, 147, 0.45);
   border-radius: 3px;
@@ -43,10 +51,42 @@ const CSS = `
   color: #8fbe93;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 260ms ease;
+  transition: opacity 260ms ease, transform 260ms cubic-bezier(0.2, 1.3, 0.4, 1);
   z-index: 40;
 }
-.omni-plot--on { opacity: 1; }
+.omni-plot--on { opacity: 1; transform: translateX(-50%) scale(1); }
+/*
+ * Where the score pops live: over the middle of the screen, not over the chart.
+ *
+ * They are feedback about the thing being cut, and the thing being cut is under the
+ * machine in the main view. Putting them on the panel would have the player reading the
+ * corner of the screen for confirmation of something happening in the centre of it.
+ */
+.omni-pops {
+  position: absolute;
+  left: 50%;
+  top: 58%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 39;
+  font-family: 'Courier New', Courier, monospace;
+}
+.omni-pop {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 15px;
+  font-weight: bold;
+  color: #d8ffb0;
+  text-shadow: 0 0 6px rgba(20, 50, 24, 0.9);
+  white-space: nowrap;
+  animation: omni-pop-rise 780ms ease-out forwards;
+}
+@keyframes omni-pop-rise {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+  18% { opacity: 1; transform: translate(-50%, -76%) scale(1.06); }
+  100% { opacity: 0; transform: translate(-50%, -190%) scale(1); }
+}
 .omni-plot__head {
   display: flex;
   justify-content: space-between;
@@ -56,7 +96,21 @@ const CSS = `
   margin-bottom: 5px;
   opacity: 0.78;
 }
-.omni-plot__canvas { display: block; width: 192px; height: 132px; }
+/*
+ * Square canvas, round window.
+ *
+ * The chart turns with the machine now, so it has to be circular - a rotating square
+ * shows corners of ground on the diagonals and none on the axes, and the amount of world
+ * visible would change as the player steered. A circle is the only shape whose contents
+ * do not depend on its heading.
+ */
+.omni-plot__canvas {
+  display: block;
+  width: 196px;
+  height: 196px;
+  border-radius: 50%;
+  border: 1px solid rgba(143, 190, 147, 0.3);
+}
 .omni-plot__keys {
   margin-top: 5px;
   font-size: 9px;
@@ -75,6 +129,16 @@ const INK = {
   unit: '#d8ffb0',
   bed: '#6f9c74',
 };
+
+/**
+ * How much ground the window shows, in metres from the machine to the rim.
+ *
+ * 4.5 puts the whole 3.45m width of the bank across the chart with a little either side,
+ * so a player driving up the middle can see both edges at once - which is the one
+ * measurement they need, because the job is passes down a strip. Wider and the blades
+ * become dust; tighter and they cannot see the far edge to aim at.
+ */
+const VIEW_RADIUS = 4.5;
 
 export interface PlotBounds {
   minX: number;
@@ -111,6 +175,15 @@ export class MowerPlot {
   private readonly canvas: HTMLCanvasElement;
   private readonly progressLabel: HTMLSpanElement;
   private status!: HTMLDivElement;
+  private pops!: HTMLDivElement;
+  /**
+   * Where the next pop goes, advanced by the golden ratio.
+   *
+   * Not random. Math.random on a burst of these clusters visibly - two or three land on
+   * top of each other and leave a gap elsewhere - while stepping by 0.618 of a turn is the
+   * classic way to get a spread that never repeats and never bunches.
+   */
+  private spray = 0;
   private readonly ctx: CanvasRenderingContext2D | null;
   private bounds: PlotBounds = { minX: -1, maxX: 1, minZ: -1, maxZ: 1 };
   private shapes: readonly PlotShape[] = [];
@@ -144,9 +217,9 @@ export class MowerPlot {
 
     this.canvas = document.createElement('canvas');
     this.canvas.className = 'omni-plot__canvas';
-    // Drawn at twice the CSS size so the unit marker and the grid are not mush.
-    this.canvas.width = 384;
-    this.canvas.height = 264;
+    // Square, and drawn at twice the CSS size so the marker and the grid are not mush.
+    this.canvas.width = 392;
+    this.canvas.height = 392;
     this.ctx = this.canvas.getContext('2d');
 
     const keys = document.createElement('div');
@@ -156,6 +229,40 @@ export class MowerPlot {
 
     this.root.append(head, this.canvas, keys);
     container.appendChild(this.root);
+
+    this.pops = document.createElement('div');
+    this.pops.className = 'omni-pops';
+    container.appendChild(this.pops);
+  }
+
+  /**
+   * A number leaving the machine, because it ate something.
+   *
+   * Scattered rather than stacked. Two labels in the same place read as one label
+   * flickering, and the whole value of this is that it should feel like a spray of
+   * clippings coming off the deck - so each one takes a random offset inside a small box
+   * around the centre.
+   *
+   * The element removes itself. A pop is 780ms of CSS animation and nothing needs to
+   * remember it afterwards; keeping a list of them so they could be cleaned up on teardown
+   * would be more bookkeeping than the thing being bookkept.
+   */
+  public pop(amount: number): void {
+    if (!this.pops) return;
+    const label = document.createElement('div');
+    label.className = 'omni-pop';
+    label.textContent = `+${amount}`;
+    this.spray = (this.spray + 0.618) % 1;
+    const angle = this.spray * Math.PI * 2;
+    label.style.left = `${Math.cos(angle) * 46}px`;
+    label.style.top = `${Math.sin(angle) * 26}px`;
+    label.addEventListener('animationend', () => label.remove());
+    this.pops.appendChild(label);
+  }
+
+  /** Cancel anything still in flight, so a release does not leave numbers on screen. */
+  public clearPops(): void {
+    this.pops?.replaceChildren();
   }
 
   /** The ground this plot covers, and the things on it that cannot be driven over. */
@@ -179,50 +286,97 @@ export class MowerPlot {
 
     const w = this.canvas.width;
     const h = this.canvas.height;
-    const spanX = this.bounds.maxX - this.bounds.minX;
-    const spanZ = this.bounds.maxZ - this.bounds.minZ;
-    /*
-     * One scale for both axes, chosen from whichever is tighter.
+
+    /**
+     * ## Heading up, machine centred
      *
-     * Fitting x and z independently would stretch the plot to the panel, and a chart of
-     * ground whose aspect does not match the ground is worse than no chart - the player
-     * uses it to judge whether they can fit down the side of a bed.
+     * This was north-up and whole-bank, and it was the wrong chart for the job. A fixed
+     * map is what you want when you are choosing a route on a table; it is close to
+     * useless when you are steering, because it asks you to do the rotation in your head
+     * every frame. Reported exactly that way: left, right, front and back were not
+     * readable off it.
+     *
+     * So the plot turns with the unit and the unit stays in the middle. Up the chart is
+     * always straight ahead, a mark to the right of centre is a mark to the right of the
+     * machine, and steering toward something on the plot is a matter of turning until it is
+     * above you. Nothing has to be interpreted.
+     *
+     * The cost is that the bank as a whole is no longer laid out in front of the player,
+     * which is why the scale is fixed rather than fitted: a constant metres-per-pixel means
+     * the chart reads as a WINDOW onto the ground moving under it, and a window is a thing
+     * whose contents can be trusted to mean the same size all the time. A fitted scale that
+     * changed as the machine moved would be a chart that lies about distance.
      */
-    const scale = Math.min((w - 16) / spanX, (h - 16) / spanZ);
-    const originX = w / 2 - ((this.bounds.minX + this.bounds.maxX) / 2) * scale;
-    // North is -z, which is up the tunnel and away from the camera. Same as the district.
-    const originY = h / 2 + ((this.bounds.minZ + this.bounds.maxZ) / 2) * scale;
-    const sx = (x: number): number => originX + x * scale;
-    const sy = (z: number): number => originY - z * scale;
+    const scale = (w * 0.5 - 10) / VIEW_RADIUS;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(w / 2, h / 2, w / 2 - 2, 0, Math.PI * 2);
+    ctx.clip();
 
     ctx.fillStyle = INK.back;
     ctx.fillRect(0, 0, w, h);
 
-    // A metre grid, so the sizes on the chart mean something.
+    ctx.translate(w / 2, h / 2);
+    // Negative, because the world turns the opposite way to the thing looking at it.
+    ctx.rotate(-state.heading);
+    ctx.translate(-state.x * scale, state.z * scale);
+
+    const sx = (x: number): number => x * scale;
+    const sy = (z: number): number => -z * scale;
+
+    /*
+     * A metre grid over the window, and it is now load-bearing rather than decoration.
+     *
+     * On a rotating chart the grid is the only thing that shows the rotation happening.
+     * Without it a plot that turns under a centred marker looks like a plot that is not
+     * turning at all - the marker is still, the dots move, and there is nothing to say
+     * whether the machine swung or the ground slid.
+     *
+     * Drawn a little past the window so no line stops inside the circle.
+     */
+    const reach = VIEW_RADIUS * 1.5;
     ctx.strokeStyle = INK.grid;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    for (let x = Math.ceil(this.bounds.minX); x <= this.bounds.maxX; x++) {
-      ctx.moveTo(sx(x), sy(this.bounds.maxZ));
-      ctx.lineTo(sx(x), sy(this.bounds.minZ));
+    for (let x = Math.floor(state.x - reach); x <= state.x + reach; x++) {
+      ctx.moveTo(sx(x), sy(state.z - reach));
+      ctx.lineTo(sx(x), sy(state.z + reach));
     }
-    for (let z = Math.ceil(this.bounds.minZ); z <= this.bounds.maxZ; z++) {
-      ctx.moveTo(sx(this.bounds.minX), sy(z));
-      ctx.lineTo(sx(this.bounds.maxX), sy(z));
+    for (let z = Math.floor(state.z - reach); z <= state.z + reach; z++) {
+      ctx.moveTo(sx(state.x - reach), sy(z));
+      ctx.lineTo(sx(state.x + reach), sy(z));
     }
     ctx.stroke();
 
+    /*
+     * The edge of the ground, so the player can see where they are about to run out of it.
+     *
+     * The old chart had the bank's boundary as the frame of the panel and did not need to
+     * draw it. A window has to.
+     */
+    ctx.strokeStyle = INK.keepOut;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(
+      sx(this.bounds.minX),
+      sy(this.bounds.maxZ),
+      (this.bounds.maxX - this.bounds.minX) * scale,
+      (this.bounds.maxZ - this.bounds.minZ) * scale
+    );
+
     // What is still standing, and what has been been over.
-    const dot = Math.max(1.5, scale * 0.11);
+    const dot = Math.max(2, scale * 0.13);
     for (let i = 0; i < state.points.length; i += this.stride) {
       const point = state.points[i];
+      // Outside the window is off the chart; skipped before any drawing is set up, because
+      // most of the bank is off the chart at any moment now.
+      if (Math.abs(point.x - state.x) > reach || Math.abs(point.z - state.z) > reach) continue;
       ctx.fillStyle = point.cut ? INK.cut : INK.standing;
       ctx.fillRect(sx(point.x) - dot / 2, sy(point.z) - dot / 2, dot, dot);
     }
 
     // The beds and the trunk: outlines, because they are boundaries and not obstacles to
     // be read as terrain.
-    ctx.strokeStyle = INK.keepOut;
+    ctx.strokeStyle = INK.bed;
     ctx.lineWidth = 2;
     for (const shape of this.shapes) {
       ctx.beginPath();
@@ -231,47 +385,62 @@ export class MowerPlot {
     }
 
     /*
-     * The unit itself: an arrowhead, not a dot.
+     * And where to go next, drawn as a line from the machine.
      *
-     * The single most useful thing this chart can tell the player is which way the machine
-     * is pointing, because that is what the controls act on and the first-person view can
-     * only show them where it is ALREADY going. A dot would make them steer by trial.
-     */
-    const px = sx(state.x);
-    const py = sy(state.z);
-    const nose = scale * 0.34;
-    const wing = scale * 0.2;
-    const dirX = Math.sin(state.heading);
-    const dirZ = Math.cos(state.heading);
-    ctx.fillStyle = INK.unit;
-    ctx.beginPath();
-    ctx.moveTo(px + dirX * nose, py - dirZ * nose);
-    ctx.lineTo(px - dirX * wing + dirZ * wing, py + dirZ * wing + dirX * wing);
-    ctx.lineTo(px - dirX * wing - dirZ * wing, py + dirZ * wing - dirX * wing);
-    ctx.closePath();
-    ctx.fill();
-
-    /*
-     * And where to go next, drawn as a line from the machine rather than as a marker.
+     * A dot on a chart is a place; a line from you to it is a direction, and on a
+     * heading-up plot that line points at the same angle on screen as the turn the player
+     * has to make. Steering is now "turn until the dashed line is vertical", which is not
+     * something they have to be told. Dashed so it cannot be mistaken for anything on the
+     * ground.
      *
-     * A dot on a chart is a place; a line from you to it is a direction, and a direction
-     * is what somebody steering actually needs. Dashed so it cannot be mistaken for
-     * anything on the ground.
+     * Clamped to the rim when the target is off the window, because the last uncut patch
+     * is often further than 4.5m and an arrow that vanishes exactly when it becomes useful
+     * is worse than no arrow.
      */
     if (state.guide) {
+      const dx = state.guide.x - state.x;
+      const dz = state.guide.z - state.z;
+      const far = Math.hypot(dx, dz);
+      const shown = Math.min(far, VIEW_RADIUS * 0.88);
+      const gx = sx(state.x + (dx / far) * shown);
+      const gy = sy(state.z + (dz / far) * shown);
+
       ctx.strokeStyle = INK.bed;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
       ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.lineTo(sx(state.guide.x), sy(state.guide.z));
+      ctx.moveTo(sx(state.x), sy(state.z));
+      ctx.lineTo(gx, gy);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.fillStyle = INK.bed;
       ctx.beginPath();
-      ctx.arc(sx(state.guide.x), sy(state.guide.z), 3, 0, Math.PI * 2);
+      ctx.arc(gx, gy, 4, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    ctx.restore();
+
+    /**
+     * The unit, drawn last and in SCREEN space.
+     *
+     * Outside the rotation on purpose. The machine is the one thing on this chart that
+     * never moves and never turns, because the chart moves and turns around it - so it is
+     * an arrowhead at the centre pointing straight up, always. That is what makes up mean
+     * ahead: there is a fixed thing to be ahead OF.
+     */
+    const cx = w / 2;
+    const cy = h / 2;
+    const nose = scale * 0.42;
+    const wing = scale * 0.26;
+    ctx.fillStyle = INK.unit;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - nose);
+    ctx.lineTo(cx + wing, cy + wing);
+    ctx.lineTo(cx, cy + wing * 0.35);
+    ctx.lineTo(cx - wing, cy + wing);
+    ctx.closePath();
+    ctx.fill();
 
     this.progressLabel.textContent = `${Math.round(state.progress * 100)}%`;
     this.status.textContent = statusFor(state.progress, state.guide != null);

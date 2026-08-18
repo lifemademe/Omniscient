@@ -565,6 +565,13 @@ export class BoardPanel {
   private order: string[] = [];
   /** The one thing out of the bag the player has hold of. */
   private held: string | null = null;
+  /**
+   * The grounds unit's one control, kept because it outlives its own build.
+   *
+   * See `refresh` - the board is cached by prompt and this button survives between
+   * playthroughs, which made a one-shot `disabled` permanent.
+   */
+  private takeButton: HTMLButtonElement | null = null;
   private kitButtons = new Map<string, HTMLButtonElement>();
   /** Live chase state, while a beam device is up. */
   private chase: BeamState | null = null;

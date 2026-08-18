@@ -520,6 +520,48 @@ export class ContactScene extends ENGINE.SceneNode {
    */
   public remoteUnit: RemoteUnit | null = null;
 
+  /**
+   * How to put this set back the way it was found.
+   *
+   * Registered by the builder, run on every mount. A diorama is not rebuilt between
+   * attempts - it is expensive procedural geometry and rebuilding it would hitch the
+   * transition - so anything a cue MOVED is still moved when the player comes back, and a
+   * request that can be re-opened has to be able to undo itself.
+   *
+   * Reported on Adaeze: end the call after cutting the branches, come back, and the limbs
+   * are still on the grass where they fell. The mission had reset and the world had not,
+   * so the player was being asked to diagnose a tunnel whose problem was visibly already
+   * solved.
+   *
+   * Per-scene rather than generic on purpose. A generic version would have to snapshot
+   * every transform in the subtree on first build and restore all of them, which is both
+   * more code and less correct - only the builder knows that the shade plane's opacity
+   * matters and the cloud layer's drift does not.
+   */
+  private resets: Array<() => void> = [];
+
+  /** Called by a builder for anything a cue can disturb. */
+  public onReset(undo: () => void): void {
+    this.resets.push(undo);
+  }
+
+  /**
+   * Put everything back. Safe to call on a set that has never been played.
+   *
+   * Each undo is isolated: a throw in one must not leave the rest of the room half
+   * restored, because the failure mode of that is a scene which is wrong in a way nobody
+   * can reproduce.
+   */
+  public reset(): void {
+    for (const undo of this.resets) {
+      try {
+        undo();
+      } catch (error) {
+        console.warn('[contact-view] reset step failed', error);
+      }
+    }
+  }
+
   private aimHandler: ((to: number) => void) | null = null;
 
   public onAim(handler: (to: number) => void): void {

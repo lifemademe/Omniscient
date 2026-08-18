@@ -290,12 +290,24 @@ export class MowingField {
   }
 
   /**
-   * Take a blade down, by rewriting only the scale of its instance matrix.
+   * Take a blade down, by rewriting the scale of its instance matrix.
    *
-   * Decomposed and recomposed rather than scaling the middle column directly, because a
-   * blade is not axis-aligned - the meadow leans and turns every one of them - so column 1
-   * is not (0, scaleY, 0) and multiplying it in place would shear the blade rather than
-   * shorten it.
+   * Decomposed and recomposed rather than scaling a column in place, because a blade is not
+   * axis-aligned - the meadow turns every one of them - so multiplying a column would shear
+   * the blade rather than shorten it.
+   *
+   * ## Y AND Z, and this was the bug
+   *
+   * A blade's vertices are (+/-halfWidth, t, t*t*0.34): it rises in y and LEANS FORWARD in
+   * z, and the meadow scales it with `scale.set(width, tall, tall)` - so its height lives
+   * in two axes, not one. Scaling y alone did not shorten a blade, it flattened one: 9% of
+   * its height and still 100% of its forward reach, which is a full-length blade lying on
+   * the ground.
+   *
+   * Which is exactly how it was reported - the plot said cut and the field did not look
+   * cut. The plot reads the `cut` flags, so it was telling the truth about the bookkeeping;
+   * the bookkeeping was right and the geometry was doing something else. Any check that
+   * counted blades or trusted the chart would have passed.
    */
   private shorten(blade: Blade, factor = STUBBLE): void {
     const matrix = new THREE.Matrix4();
@@ -305,6 +317,7 @@ export class MowingField {
     blade.mesh.getMatrixAt(blade.index, matrix);
     matrix.decompose(at, turn, size);
     size.y *= factor;
+    size.z *= factor;
     matrix.compose(at, turn, size);
     blade.mesh.setMatrixAt(blade.index, matrix);
     blade.mesh.instanceMatrix.needsUpdate = true;
