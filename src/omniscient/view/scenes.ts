@@ -1254,9 +1254,13 @@ function buildRepairShop(scene: ContactScene): void {
      * The left hand rests flat behind the set and the right sits nearer the front edge,
      * because a person working with something does not place their hands symmetrically.
      */
+    /*
+     * Moved back 0.12 with her - see the position below - so the solved pose is
+     * untouched and only where she stands has changed.
+     */
     handsOn: {
-      left: new THREE.Vector3(-0.36, 0.79, -0.72),
-      right: new THREE.Vector3(-0.44, 0.79, -1.1),
+      left: new THREE.Vector3(-0.36, 0.79, -0.84),
+      right: new THREE.Vector3(-0.44, 0.79, -1.22),
     },
       // Goggles pushed up. She works on other people's electronics all day.
       headgear: 'band',
@@ -1295,7 +1299,19 @@ function buildRepairShop(scene: ContactScene): void {
       garment: '#42525c',
       underlayer: '#c2b79c',
     },
-    position: new THREE.Vector3(-0.72, 0, -1.02),
+    /*
+     * Back 0.12, off the bench.
+     *
+     * She stood at z -1.02 and the bench top runs from -0.95 to -0.05, so her centre
+     * cleared the far edge by 7cm and the front of her did not: a torso is about
+     * 16cm deep, which put her front surface a hand's width inside the top, at the
+     * height her hips are. Reported as being inside the table.
+     *
+     * The hand targets moved by the same 0.12 so the pose she is solved into is
+     * exactly the pose she had - the left hand is still flat on the bench behind the
+     * set, clear of the transmitter's x span, and nothing about the arms changes.
+     */
+    position: new THREE.Vector3(-0.72, 0, -1.14),
     /**
      * Turned toward the set, which she was not.
      *

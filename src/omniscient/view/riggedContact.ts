@@ -377,6 +377,23 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
    */
   /** The breathing loop. Faded down while a gesture owns the body - see gesture. */
   let baseAction: THREE.AnimationAction | null = null;
+/** Seconds for a gesture to take the arms off their targets. Matches its own fade-in. */
+const TAKE = 0.25;
+
+/**
+ * Seconds for the arms to come back.
+ *
+ * One number for three things that used to be three: the clip's fade-out, the
+ * breathing loop's fade-in, and the IK ramp. They were 0.3, 0.3 and 0.42, so the
+ * hand was still travelling under its own steam for a tenth of a second after the
+ * clip that had been holding it let go - a kink partway through the move, on top of
+ * the ends being linear. Landing them together is most of what makes this one
+ * motion instead of three overlapping ones.
+ *
+ * Longer than the 0.42 it replaces because it is a long way from pointing at a
+ * radio to flat on a bench, and that travel was being done in under half a second.
+ */
+const RELEASE = 0.5;
   let gestureAction: THREE.AnimationAction | null = null;
   let gestureLeft = 0;
   let hold = 0;
@@ -440,14 +457,14 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
         // Only ramps for a gesture that owns the arms - see gestureTakesHands. A nod
         // leaves this at zero, so the IK below keeps running underneath the clip and
         // the hands stay where the scene put them while the head does the work.
-        if (gestureTakesHands) hold = Math.min(1, hold + deltaTime * 4);
+        if (gestureTakesHands) hold = Math.min(1, hold + deltaTime / TAKE);
         if (gestureLeft <= 0) {
-          gestureAction?.fadeOut(0.3);
-          baseAction?.fadeIn(0.3);
+          gestureAction?.fadeOut(RELEASE);
+          baseAction?.fadeIn(RELEASE);
           gestureAction = null;
         }
       } else if (hold > 0) {
-        hold = Math.max(0, hold - deltaTime * 2.4);
+        hold = Math.max(0, hold - deltaTime / RELEASE);
       }
 
       /*
@@ -466,7 +483,20 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
             target,
             poleFor(root, sideFor[named]),
             contact.rest,
-            1 - hold
+            /*
+             * Eased, and this is the whole of the reported roughness.
+             *
+             * The weight was `1 - hold` off a linear ramp, so the hand left the
+             * clip's pose at full speed on the first frame of the release and
+             * arrived at the bench at full speed on the last. A blend with a
+             * velocity step at each end reads as two snaps with a slide between
+             * them, which is exactly what a hand coming off a point looked like.
+             *
+             * Smoothstep starts and ends at zero velocity, so it leaves the
+             * gesture and settles onto the bench instead of being switched
+             * between them.
+             */
+            1 - hold * hold * (3 - 2 * hold)
           );
         }
       }
