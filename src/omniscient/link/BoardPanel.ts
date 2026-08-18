@@ -403,6 +403,21 @@ const BOARD_CSS = `
   color: #7fe08a;
 }
 /* The one just added. Fades to the others' weight, so the eye is pulled to it once. */
+/* The run that lost him. Present enough to read the verdict against, quiet enough that it
+   is obviously not the one being built. */
+.omni-hop__step--lost {
+  border-left-color: rgba(168, 64, 47, 0.5);
+  background: rgba(24, 12, 10, 0.5);
+  color: rgba(159, 216, 168, 0.34);
+}
+.omni-hop__step--lost b { color: rgba(168, 96, 80, 0.75); }
+.omni-hop__again {
+  padding: 4px 2px 2px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #a8402f;
+}
 .omni-hop__step--new {
   border-left-color: #e0a24c;
   background: rgba(38, 30, 12, 0.7);
@@ -1280,6 +1295,8 @@ export class BoardPanel {
     this.hopIndex = 0;
     this.picks = [];
     this.pursuitTrail = [];
+    this.pursuitLost = [];
+    this.pursuitNote = null;
 
     const panel = document.createElement('div');
     panel.className = 'omni-trace';
@@ -1310,14 +1327,73 @@ export class BoardPanel {
    */
   private pursuitTrail: Array<{ cam: string; where: string }> = [];
 
+  /**
+   * The run that lost him, kept until the player starts a new one.
+   *
+   * A wrong chase used to leave the player nowhere to go: the trail was played out, the
+   * board said TRAIL ENDS, and the only control on screen was a SEND IT that would post the
+   * identical wrong route again. The runtime always intended a retry - `onWrong` returns to
+   * the same beat - but the panel is cached by render key, so `build()` never ran and the
+   * chase kept its old picks.
+   *
+   * Throwing the route away the instant it fails is the other wrong answer. The note says
+   * WHICH hop went wrong, and that sentence is useless if the thing it refers to has just
+   * been deleted. So the failed run stays, greyed, until the first pick of the new one.
+   */
+  private pursuitLost: Array<{ cam: string; where: string }> = [];
+  /** The last verdict shown, so a new one is an edge rather than a state. */
+  private pursuitNote: string | null = null;
+
   private refreshPursuit(): void {
     const view = this.view;
     if (!view || view.kind !== 'pursuit' || !this.pursuitParts) return;
+
+    /*
+     * A verdict the player has not seen yet means the run they just sent came back wrong -
+     * a right one moves the beat on and this board goes away. Rack the chase up again so
+     * there is something to do about it.
+     *
+     * Edge-triggered on the note's text, because the note stays on the view for as long as
+     * the beat does; comparing against the last one shown is what turns "there is a note"
+     * into "a new thing just happened".
+     */
+    if (view.note && view.note !== this.pursuitNote) {
+      this.pursuitNote = view.note;
+      if (this.pursuitTrail.length > 0) {
+        this.pursuitLost = this.pursuitTrail;
+        this.pursuitTrail = [];
+        this.picks = [];
+        this.hopIndex = 0;
+      }
+    }
 
     const { trail, sighting, options } = this.pursuitParts;
     for (const child of Array.from(options.children)) child.remove();
 
     trail.replaceChildren();
+    this.pursuitLost.forEach((step, index) => {
+      const row = document.createElement('div');
+      row.className = 'omni-hop__step omni-hop__step--lost';
+      const cam = document.createElement('b');
+      cam.textContent = `${index + 1}. ${step.cam}`;
+      const where = document.createElement('span');
+      where.textContent = step.where;
+      row.append(cam, where);
+      trail.appendChild(row);
+    });
+    if (this.pursuitLost.length > 0) {
+      const gap = document.createElement('div');
+      gap.className = 'omni-hop__again';
+      /*
+       * Says what actually happens. The chase restarts from the scene, not from the hop
+       * that failed - the picks go up as one route and there is nothing in the view that
+       * says which hop the runtime disliked except the sentence in the note, so resuming
+       * partway would be the panel guessing. Two clicks to redo, on a three-hop chase.
+       */
+      gap.textContent = 'LOST HIM - picking him up again from the scene';
+      trail.appendChild(gap);
+    }
+
     this.pursuitTrail.forEach((step, index) => {
       const row = document.createElement('div');
       const newest = index === this.pursuitTrail.length - 1;
@@ -1371,6 +1447,9 @@ export class BoardPanel {
       row.addEventListener('mousedown', (event) => {
         event.preventDefault();
         audio.play('seat');
+        // The new run replaces the failed one the moment it starts. Until then both are on
+        // screen, which is what makes "on the 3rd hop" mean anything.
+        this.pursuitLost = [];
         // Captured before the hop moves on - see pursuitTrail for why it cannot be
         // recomputed afterwards.
         this.pursuitTrail.push({ cam: id.textContent ?? '', where: where.textContent ?? '' });
