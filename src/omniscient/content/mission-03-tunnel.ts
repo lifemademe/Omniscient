@@ -677,15 +677,34 @@ export const MISSION_03: MissionDefinition = {
       id: 'the-unit',
       framing: 'camera.pan:tunnel-rows',
       tempo: Tempo.Respond,
+      /**
+       * She answers the question that was asked, and THEN the machine comes up.
+       *
+       * This said "it is the green one, by the corner post" - which is an answer to "where
+       * is the mower?", and the player got here by asking what is around the bed. So the
+       * one beat where their deduction pays off had her replying to a question nobody had
+       * put, and the second act's whole premise arrived as a non-sequitur.
+       *
+       * The order matters more than the words. OMNISCIENT_ works it out, she CONFIRMS it -
+       * which is the shape of every diagnosis in this game, and the only moment in this
+       * request where the player gets told they were right about something they were not led
+       * to - and only then does the question of who is going to deal with it come up. She
+       * cannot, and there is a machine that can.
+       */
       say:
-        'It is the green one, by the corner post. The switch on the handle is already over - ' +
-        'it has been waiting for somebody to call it since my father died.',
+        'Around it? ... Ah. Yes. Yes, look at it - the whole strip between that bank and the '
+        + 'boundary has closed over. It is up past the boards.\n\n'
+        + 'I have not been down that side since the spring. Why would I, nothing was growing. '
+        + 'So it has had the whole season to itself, and now I have given those seedlings '
+        + 'their light back it is going to drink it first.',
       device: {
         kind: 'unit',
         prompt:
-          'The little mower is at the end of the row - my father put a radio in it years ago ' +
-          'so it could be run from the house. I cannot do that bank by hand tonight and have ' +
-          'anything left for the picking. If you can reach it, reach it.',
+          'And I cannot do that bank by hand tonight and have anything left for the picking.\n\n'
+          + 'There is the little mower, though - the green one by the corner post. My father '
+          + 'put a radio in it years ago so it could be run from the house, and the switch on '
+          + 'the handle is still over. It has been waiting for somebody to call it since he '
+          + 'died. If you can reach it, reach it.',
         take: 'unit.take',
         accept: 'TAKE THE UNIT',
         wrongSay: '',
