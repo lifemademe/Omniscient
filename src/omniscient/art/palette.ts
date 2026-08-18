@@ -517,6 +517,24 @@ export const MAT = {
   doorGlass: new THREE.MeshBasicMaterial({ color: '#2c3138', toneMapped: false }),
   /** The landing light upstairs. The only other lit thing on the street. */
   landingLight: new THREE.MeshBasicMaterial({ color: '#e8d6ad', toneMapped: false }),
+  /**
+   * Inside the house, seen from the step.
+   *
+   * Unlit, and darker than anything else in the scene by a distance. A hall at two in the
+   * morning with one light on upstairs is not dim, it is BLACK - and the value of that is
+   * entirely relative: the doorway has to read as deeper than the night outside it, or the
+   * opened door looks like a hole onto the street rather than into a house.
+   */
+  hallDark: new THREE.MeshBasicMaterial({ color: '#0a0c0f', toneMapped: false }),
+  /**
+   * The landing light lying on the hall floor at the far end.
+   *
+   * The same warm as `landingLight` and a third of its value, because this is that lamp
+   * arriving round a corner and down a staircase rather than the lamp itself. It is the
+   * only thing in the hall and it is what the whole request has been about - he has been
+   * looking up at that window since the first line.
+   */
+  landingSpill: new THREE.MeshBasicMaterial({ color: '#4a4030', toneMapped: false }),
   /** Old copper, gone dull. One of the four hands that built Vasile's run. */
   copper: standard('#8a5a3c', 0.6, 0.35),
   /**

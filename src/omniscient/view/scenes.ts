@@ -5911,9 +5911,83 @@ function buildNightDoor(scene: ContactScene): void {
     { idle: (deltaTime) => stepWind(deltaTime) }
   );
 
-  const front = new THREE.BoxGeometry(7, WALL_TOP, 0.3);
-  front.translate(0, WALL_TOP / 2, -0.4);
-  scene.registerProp('front', meshOf('Front', front, MAT.wall));
+  /**
+   * The house front, with a hole in it for the door.
+   *
+   * It was one 7-metre box and the door was a leaf laid over the outside of it, which
+   * worked perfectly until the moment the request is entirely about: the door swings and
+   * there is solid wall behind it. Reported as "another door behind the door", which is
+   * what a door-shaped rectangle of wall in a doorway looks like.
+   *
+   * Three pieces round an opening rather than a CSG subtract. The wall is a box and the
+   * opening is a rectangle in it, so the panels either side and the lintel over the top ARE
+   * the wall - there is nothing to boolean, and a subtract would spend a mesh operation and
+   * a pile of triangles to arrive at the same three boxes.
+   *
+   * The opening is 4cm wider than the leaf each side and 3cm over its head. A door that
+   * exactly fills its frame cannot be seen to be in a frame, and every real one has a gap
+   * you can feel the draught through.
+   */
+  const REVEAL = 0.04;
+  const openLeft = DOOR_X - 0.92 / 2 - REVEAL;
+  const openRight = DOOR_X + 0.92 / 2 + REVEAL;
+  const openHead = 2.02 + 0.03;
+
+  const front: THREE.BufferGeometry[] = [];
+  for (const [from, to] of [
+    [-3.5, openLeft],
+    [openRight, 3.5],
+  ] as const) {
+    const panel = new THREE.BoxGeometry(to - from, WALL_TOP, 0.3);
+    panel.translate((from + to) / 2, WALL_TOP / 2, -0.4);
+    front.push(panel);
+  }
+  const lintel = new THREE.BoxGeometry(openRight - openLeft, WALL_TOP - openHead, 0.3);
+  lintel.translate((openLeft + openRight) / 2, openHead + (WALL_TOP - openHead) / 2, -0.4);
+  front.push(lintel);
+  scene.registerProp(
+    'front',
+    meshOf('Front', mergeGeometries(front, false) ?? front[0], MAT.wall)
+  );
+
+  /**
+   * And what is on the other side of it, because now there is an other side.
+   *
+   * A hole in a wall at night shows whatever is behind the wall, which here is the night
+   * backdrop - so cutting the opening without this would trade a door-shaped wall for a
+   * door-shaped hole through the house onto the sky. Worse than the bug it fixes.
+   *
+   * A shallow box, unlit and nearly black, with its faces turned inward. It only has to
+   * survive being looked into from the doorstep for the two seconds the door is open, and
+   * at that angle a hall is a dark volume with a floor catching a little light and
+   * something faint at the far end of it.
+   */
+  const hallRoot = ENGINE.SceneNode.create({ name: 'Hall' });
+  const HALL_D = 2.4;
+  const hall = new THREE.BoxGeometry(1.6, 2.4, HALL_D);
+  hall.translate(DOOR_X, 1.2, -0.55 - HALL_D / 2);
+  // Inside out: the player is in the box, so the faces have to point at them.
+  const hallMesh = meshOf('HallShell', hall, MAT.hallDark);
+  (hallMesh.material as THREE.Material).side = THREE.BackSide;
+  hallRoot.add(hallMesh);
+
+  /**
+   * The landing light, arriving down the stairs.
+   *
+   * §187, and it is the observation the mission already carries: the upstairs light has
+   * been on since he got here and he keeps looking at it. When the door finally opens, the
+   * one thing in that hallway is that light lying on the floor at the far end - which is
+   * the answer to the question he has been asking for the whole request, delivered by the
+   * set rather than by a line.
+   *
+   * Unlit and dim. A real light source here would spill out of the doorway onto the step
+   * and give the game away before the door is open.
+   */
+  const spill = new THREE.PlaneGeometry(0.9, 1.5);
+  spill.rotateX(-Math.PI / 2);
+  spill.translate(DOOR_X + 0.1, 0.02, -0.55 - HALL_D + 0.8);
+  hallRoot.add(meshOf('HallSpill', spill, MAT.landingSpill));
+  scene.registerProp('hall', hallRoot);
 
   /**
    * -- The step, and what lives on it ---------------------------------------------------
@@ -6061,17 +6135,115 @@ function buildNightDoor(scene: ContactScene): void {
   // -- The door -------------------------------------------------------------
   const DOOR = { w: 0.92, h: 2.02, x: DOOR_X };
 
-  const leaf = new THREE.BoxGeometry(DOOR.w, DOOR.h, 0.06);
-  leaf.translate(DOOR.x, DOOR.h / 2, -0.26);
-  const doorMesh = meshOf('Door', leaf, MAT.timberDark);
+  /**
+   * A panelled door, because this one is looked at for the whole request.
+   *
+   * It was a single 0.06m slab - correct as a blocking pass and wrong as the object every
+   * shot in this mission is pointed at. A front door of this age is a frame of stiles and
+   * rails with thinner panels sunk into it, and that construction is the entire read: the
+   * shadows in the recesses are what make it timber rather than a painted rectangle, and
+   * under a single low porch light they are the only modelling on it.
+   *
+   * Built as a carcass with the panels set BACK, rather than as raised mouldings on a flat
+   * face. Same silhouette, half the geometry, and the shading works out the same way round
+   * because what the eye reads is the shadow line at the edge of the recess.
+   *
+   * Four panels: two tall below the lock, two short above, with the glazed pair at the top
+   * where the light comes through. That is the commonest front door in the country this
+   * street is pretending to be, and it puts glass exactly where BREAK_GLASS wants it.
+   */
+  const LEAF_Z = -0.26;
+  const STILE = 0.11;
+  const carcass: THREE.BufferGeometry[] = [];
+
+  // The frame of the door itself: two stiles, three rails.
+  for (const [w, h, ox, oy] of [
+    [STILE, DOOR.h, -(DOOR.w - STILE) / 2, DOOR.h / 2],
+    [STILE, DOOR.h, (DOOR.w - STILE) / 2, DOOR.h / 2],
+    [DOOR.w, 0.13, 0, DOOR.h - 0.065],
+    // The lock rail, thicker, at the height the lock goes through it.
+    [DOOR.w, 0.2, 0, 1.02],
+    [DOOR.w, 0.17, 0, 0.085],
+  ] as const) {
+    const piece = new THREE.BoxGeometry(w, h, 0.06);
+    piece.translate(DOOR.x + ox, oy, LEAF_Z);
+    carcass.push(piece);
+  }
+
+  // The panels, sunk 18mm into the carcass so each one has a shadow round it.
+  for (const [w, h, ox, oy] of [
+    [0.31, 0.72, -0.19, 0.6],
+    [0.31, 0.72, 0.19, 0.6],
+    [0.31, 0.7, -0.19, 1.5],
+    [0.31, 0.7, 0.19, 1.5],
+  ] as const) {
+    const panel = new THREE.BoxGeometry(w, h, 0.024);
+    panel.translate(DOOR.x + ox, oy, LEAF_Z - 0.018);
+    carcass.push(panel);
+  }
+
+  const doorMesh = meshOf('Door', mergeGeometries(carcass, false) ?? carcass[0], MAT.timberDark);
 
   const doorRoot = ENGINE.SceneNode.create({
     name: 'DoorRoot',
     // Hinged on the left edge, so opening it swings rather than slides.
     position: new THREE.Vector3(DOOR.x - DOOR.w / 2, 0, -0.26),
   });
-  leaf.translate(-(DOOR.x - DOOR.w / 2), 0, 0.26);
+  /*
+   * Everything on the leaf is built in world coordinates and then shifted onto the hinge,
+   * which is what `doorRoot` sits on. One translate for the lot rather than authoring every
+   * part in hinge space, so the numbers above can be read against the door's own width.
+   */
+  const ontoHinge = (geometry: THREE.BufferGeometry): THREE.BufferGeometry =>
+    geometry.translate(-(DOOR.x - DOOR.w / 2), 0, 0.26);
+  ontoHinge(doorMesh.geometry);
   doorRoot.add(doorMesh);
+
+  /**
+   * The glass, and it goes ON the door.
+   *
+   * It was registered as its own prop at the door's position, so it stayed exactly where it
+   * was when the door swung - a pane of glass hanging in an empty doorway. Same family of
+   * fault as the missing opening and reported as part of it.
+   */
+  const glazing = new THREE.PlaneGeometry(0.31, 0.7);
+  glazing.translate(DOOR.x - 0.19, 1.5, LEAF_Z - 0.02);
+  doorRoot.add(meshOf('DoorGlassLeft', ontoHinge(glazing), MAT.doorGlass));
+  const glazingRight = new THREE.PlaneGeometry(0.31, 0.7);
+  glazingRight.translate(DOOR.x + 0.19, 1.5, LEAF_Z - 0.02);
+  doorRoot.add(meshOf('DoorGlassRight', ontoHinge(glazingRight), MAT.doorGlass));
+
+  /**
+   * The furniture: letterbox, knocker, number.
+   *
+   * Three small brass things and they do more for the scene than the panels do. A door with
+   * nothing on it is a door nobody uses; a letterbox is the detail that says post comes
+   * here, and the knocker is the one he has not used - because using it would wake the
+   * street, which is a fact about his situation stated in an object.
+   */
+  const furniture: THREE.BufferGeometry[] = [];
+  const letterbox = new THREE.BoxGeometry(0.26, 0.045, 0.02);
+  letterbox.translate(DOOR.x, 1.02, LEAF_Z - 0.035);
+  furniture.push(letterbox);
+
+  const knockerPlate = new THREE.CylinderGeometry(0.035, 0.035, 0.016, 10);
+  knockerPlate.rotateX(Math.PI / 2);
+  knockerPlate.translate(DOOR.x, 1.46, LEAF_Z - 0.033);
+  furniture.push(knockerPlate);
+  const knockerRing = new THREE.TorusGeometry(0.038, 0.008, 6, 14);
+  knockerRing.translate(DOOR.x, 1.415, LEAF_Z - 0.036);
+  furniture.push(knockerRing);
+
+  // The number, as two short bars. Legible as digits at this distance and cheaper than any
+  // attempt to actually shape them.
+  for (const ox of [-0.03, 0.03] as const) {
+    const digit = new THREE.BoxGeometry(0.016, 0.07, 0.012);
+    digit.translate(DOOR.x + ox, 1.74, LEAF_Z - 0.032);
+    furniture.push(digit);
+  }
+  doorRoot.add(
+    meshOf('DoorFurniture', ontoHinge(mergeGeometries(furniture, false) ?? furniture[0]), MAT.brass)
+  );
   /** The turning part of the lock, built below and driven by the door's own cue. */
   let lockPlug: ENGINE.SceneNode | null = null;
 
@@ -6095,6 +6267,23 @@ function buildNightDoor(scene: ContactScene): void {
        * beat the player earned and the door opening is only its consequence.
        */
       open: (tweener, node) => {
+        /*
+         * The pick comes out first.
+         *
+         * It is parented to the plug, which is parented to the door - so a door that swings
+         * with a pick still in it takes the pick, the wrench and Dorin's hand round with it
+         * into the hall. Two seconds is exactly the gap the note below already builds in
+         * before the door starts to move, so this fits inside it without changing the
+         * timing of the beat.
+         */
+        tweener.add(
+          (t: number) => {
+            pick.position.set(0, 0, 0.16 * t);
+            pick.scale.setScalar(Math.max(0.001, 1 - t));
+          },
+          { duration: 0.5, easing: Ease.outCubic, channel: 'lock-pick' }
+        );
+
         // Turn, catch, turn, catch, give. Each pair is a pin binding and then dropping.
         const STAIRS: Array<[at: number, to: number]> = [
           [0, 0],
@@ -6132,11 +6321,6 @@ function buildNightDoor(scene: ContactScene): void {
       },
     },
   });
-
-  // The glass panel he is being tempted to put in.
-  const pane = new THREE.PlaneGeometry(DOOR.w * 0.62, DOOR.h * 0.3);
-  pane.translate(DOOR.x, DOOR.h * 0.68, -0.22);
-  scene.registerProp('pane', meshOf('Pane', pane, MAT.doorGlass));
 
   const frame: THREE.BufferGeometry[] = [];
   for (const [w, h, x, y] of [
@@ -6594,7 +6778,7 @@ function buildNightDoor(scene: ContactScene): void {
     ['door', CERTAINTY.SHAPED],
     ['door-frame', CERTAINTY.SHAPED],
     ['upper-frame', CERTAINTY.SHAPED],
-    ['pane', CERTAINTY.SHAPED],
+
     ['porch', CERTAINTY.SHAPED],
     ['porch-hood', CERTAINTY.SHAPED],
     ['porch-bulb', CERTAINTY.SHAPED],
