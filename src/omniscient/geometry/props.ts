@@ -236,29 +236,26 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
    * Unlit, like the vents and the socket bores. The inside of a case is dark because it is
    * inside, and nothing the work lamp does should change that.
    */
-  const CAVITY = { depth: BAY.depth };
-  {
-    /*
-     * A millimetre proud of the carcass, and that millimetre is the actual z-fight.
-     *
-     * Reported twice at the back of the set. The first fix moved the socket collar,
-     * which was genuinely coplanar and was genuinely not what the player was looking
-     * at: the collar is a 4cm ring, and this is the entire floor of the bay.
-     *
-     * The carcass stops at -0.0850 - it is the case minus the depth of the well - and
-     * this plate was laid at -0.0850 to -0.0790, so its front face and the carcass's
-     * rear face were the same plane, both facing the camera, both drawn. Every pixel
-     * of the well's floor was a tie between a dark chassis panel and the warm case,
-     * which is why it shimmered across the whole opening rather than at one edge.
-     *
-     * Set proud rather than sunk, because it is a liner dropped into the well and a
-     * liner sits on top of what it lines. It also keeps the collar's geometry above
-     * valid: that ring now overlaps this plate instead of sharing a face with it.
-     */
-    const plate = new THREE.BoxGeometry(BAY.width, BAY.height, 0.006);
-    plate.translate(0, height / 2, -depth / 2 + BAY.depth - 0.001);
-    chassis.push(plate);
-  }
+  /*
+   * THE FLOOR OF THE BAY IS THE CASE, and there is no panel over it.
+   *
+   * There was: a dark liner covering the whole opening, in a material chosen to be dark
+   * but lit. It came out brown on screen, which is exactly what the note on that material
+   * predicts for the material it replaced - the transmitter is `inked`, the certainty law
+   * pulls an inked prop toward amber and lifts its chroma, and a dark neutral panel under
+   * that pull is a brown one. Choosing a different dark colour only changes how long it
+   * takes to get there.
+   *
+   * So nothing is laid over it. The carcass already ends at -0.085 - it is the case minus
+   * the depth of the well - and that rear face IS the floor the player looks at, in the
+   * same material as the rest of the housing. It cannot fail to match the body, whatever
+   * the light or the law does, because it is the body: one pressed box with a well in the
+   * back of it, which is what the thing is.
+   *
+   * It also retires the z-fight rather than mitigating it. The plate and the carcass were
+   * the coplanar pair reported twice; a millimetre of clearance was the second fix and
+   * this is the first one that removes the surface instead of moving it.
+   */
 
   const socket = (x: number, radius: number, length: number): void => {
     /*
