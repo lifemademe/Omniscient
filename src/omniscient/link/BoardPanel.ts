@@ -353,45 +353,6 @@ const BOARD_CSS = `
   cursor: pointer;
 }
 .omni-board__send:disabled { opacity: 0.35; cursor: default; }
-/*
- * The grounds unit's one control, and it has to LOOK like the only thing on the board.
- *
- * Reported as not looking like a button, and it was not - it inherited nothing, so it was
- * browser-default text sitting in the middle of a panel whose every other control is a
- * bordered box in green phosphor. This is the send button's language, scaled up: it is not
- * one option among several like a bag item, it is the whole device, so it takes the full
- * width and enough weight to read as the thing to press.
- *
- * The pulse is the other half. Everywhere else in this console a button appears next to
- * something to study and waits; this one appears with nothing to study, and a control that
- * is the only way forward should say so rather than sit there politely.
- */
-.omni-board__unit {
-  grid-column: 1 / -1;
-  display: flex;
-  justify-content: center;
-  padding: 6px 2px 2px;
-}
-.omni-board__take {
-  padding: 11px 26px;
-  border: 1px solid rgba(127, 224, 138, 0.85);
-  border-radius: 3px;
-  background: rgba(22, 58, 30, 0.95);
-  color: #dcf7de;
-  font: inherit;
-  font-size: 13px;
-  font-weight: bold;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  cursor: pointer;
-  box-shadow: 0 0 0 rgba(127, 224, 138, 0.5);
-  animation: omni-take-pulse 2s ease-in-out infinite;
-}
-.omni-board__take:hover { background: rgba(30, 78, 40, 0.95); }
-.omni-board__take:disabled { opacity: 0.35; cursor: default; animation: none; }
-@keyframes omni-take-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(127, 224, 138, 0.36); }
-  55% { box-shadow: 0 0 0 5px rgba(127, 224, 138, 0); }
 }
 /* The pipe run: a grid of pieces, each one a button that turns a quarter on click. */
 .omni-board__pipes {
@@ -581,6 +542,14 @@ function clueLabel(clue: ClueId, evidence: Evidence): string | null {
   }
 }
 
+/**
+ * What the commit button says when nothing has renamed it.
+ *
+ * A constant because two places write it now - the build and every refresh - and a literal
+ * in both is a pair of strings waiting to disagree.
+ */
+const SEND_LABEL = 'Send it';
+
 export class BoardPanel {
   public readonly element: HTMLDivElement;
 
@@ -605,13 +574,6 @@ export class BoardPanel {
   private order: string[] = [];
   /** The one thing out of the bag the player has hold of. */
   private held: string | null = null;
-  /**
-   * The grounds unit's one control, kept because it outlives its own build.
-   *
-   * See `refresh` - the board is cached by prompt and this button survives between
-   * playthroughs, which made a one-shot `disabled` permanent.
-   */
-  private takeButton: HTMLButtonElement | null = null;
   private kitButtons = new Map<string, HTMLButtonElement>();
   /** Live chase state, while a beam device is up. */
   private chase: BeamState | null = null;
@@ -687,7 +649,7 @@ export class BoardPanel {
      * It said "Tell her", which was written when Ileana was the only person with a device
      * and read as a bug the moment Vasile got one. A shared panel cannot carry a pronoun.
      */
-    this.send.textContent = 'Send it';
+    this.send.textContent = SEND_LABEL;
     /*
      * `click`, and the submit goes first.
      *
@@ -832,10 +794,9 @@ export class BoardPanel {
       return;
     }
 
-    if (view.kind === 'unit') {
-      this.buildUnit(view.accept);
-      return;
-    }
+    // The unit draws nothing here. Its only control is the footer's commit button, which
+    // `refresh` renames - see the note where buildUnit used to be.
+    if (view.kind === 'unit') return;
 
     const people = document.createElement('div');
     people.className = 'omni-board__column';
@@ -1243,38 +1204,19 @@ export class BoardPanel {
    * see SessionController, which rebuilds these field by field on the way out.
    */
   /**
-   * A machine offered: one line and one button.
+   * A machine offered builds NOTHING in the grid.
    *
-   * The whole of this device's console presence, on purpose. Every other board here is
-   * something to be studied - a grid, a bag, a set of photographs - and this one is a
-   * question with a yes in it, because the studying happens in a field afterwards. Adding
-   * gauges or a readout would be the console pretending to be part of a job it is about
-   * to be excluded from.
+   * It had its own oversized button in the board's body, which put two controls on one panel
+   * for one action: a big one in the middle saying TAKE THE UNIT, and the footer's Send it
+   * underneath it greyed out and doing nothing. The disabled one was the one every other
+   * device has trained the player to press.
    *
-   * It submits immediately rather than arming a Send, and that is the exception to the
-   * rule the other devices follow. Send exists because a pick can be wrong and the player
-   * deserves the beat before committing; taking the controls of a mower cannot be wrong,
-   * and the confirmation step the runtime wraps every device in has already been through
-   * "are you sure" by the time this is on screen.
+   * So the unit uses the SEND BUTTON, which is where this panel's commit has always lived.
+   * See `refresh`, which relabels it, and `submit`, which handles the payload. There is
+   * nothing else to draw - no grid of parts, no photographs, no wires - just the prompt
+   * above and the commit below, which is this panel with everything unnecessary removed
+   * rather than a special case bolted onto it.
    */
-  private buildUnit(accept: string): void {
-    const row = document.createElement('div');
-    row.className = 'omni-board__unit';
-
-    const button = document.createElement('button');
-    button.className = 'omni-board__take';
-    button.type = 'button';
-    button.textContent = accept;
-    button.addEventListener('click', () => {
-      button.disabled = true;
-      this.dispatch({ kind: 'device', submission: { kind: 'unit', cleared: 0 } });
-      audio.play('transmit');
-    });
-
-    row.appendChild(button);
-    this.grid.appendChild(row);
-  }
-
   private buildKit(items: Array<{ id: string; name: string; note: string }>): void {
     const shelf = document.createElement('div');
     shelf.className = 'omni-kit';
@@ -1584,6 +1526,13 @@ export class BoardPanel {
     const view = this.view;
     if (!view) return;
 
+    if (view.kind === 'unit') {
+      // `cleared: 0` asks for the controls; the rig reports the real figure once the bank is
+      // done. Both halves travel this one channel - see MissionRuntime.submitDevice.
+      this.dispatch({ kind: 'device', submission: { kind: 'unit', cleared: 0 } });
+      return;
+    }
+
     if (view.kind === 'lock') {
       if (!this.order.length) return;
       this.dispatch({
@@ -1634,6 +1583,26 @@ export class BoardPanel {
   }
 
   private refresh(view: DeviceView): void {
+    /**
+     * The commit button, named and enabled for the board that is actually up.
+     *
+     * On every refresh rather than once at build, and that is the whole lesson of the bug
+     * this replaces. A board is cached by its render key, so its DOM outlives the device
+     * that configured it - the unit's own button kept a `disabled` from one playthrough into
+     * the next and could not be pressed on a second visit. Anything that depends on the
+     * CURRENT device has to be written every present, not on whichever build happened first.
+     *
+     * The label is restored for every other board because this button is shared. A panel
+     * that forgot to put "Send it" back would offer Tomas his bag under a heading about
+     * taking a mower.
+     */
+    if (view.kind === 'unit') {
+      this.send.textContent = view.accept;
+      // Nothing to choose, so nothing to wait for. Every other board gates this on a pick.
+      this.send.disabled = false;
+    } else {
+      this.send.textContent = SEND_LABEL;
+    }
 
     if (view.kind === 'kit') {
       this.refreshKit();
