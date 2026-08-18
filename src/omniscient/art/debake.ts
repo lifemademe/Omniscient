@@ -50,13 +50,16 @@ export interface DebakeOptions {
   /**
    * How far above its neighbourhood a texel may sit before it is pulled back, 0-1.
    *
-   * 0.22 is about 56/255. Below that the fabric's own weave and print start being flattened,
+   * 0.18 is about 46/255. Below that the fabric's own weave and print start being flattened,
    * which costs the garment its texture to fix a problem it does not have.
    */
   threshold?: number;
   /** How much of the excess to remove. 1 flattens the speck completely into its surroundings. */
   strength?: number;
-  /** Blur size, in texels. Small means "local", which is the whole idea. */
+  /**
+   * How many texels the neighbourhood spans. This is the setting that decides whether the
+   * pass works at all - see the note on the default below.
+   */
   blur?: number;
 }
 
@@ -68,7 +71,22 @@ export interface DebakeOptions {
  * highlights is a worse character, not a missing one.
  */
 export function debakeHighlights(texture: THREE.Texture, options: DebakeOptions = {}): boolean {
-  const { threshold = 0.22, strength = 0.85, blur = 24 } = options;
+  /**
+   * ## The neighbourhood has to be WIDER than the thing being removed
+   *
+   * The first version used a 24-texel neighbourhood and did almost nothing - captured, the
+   * specks on Vasile's shirt were pixel-identical before and after, and I had already
+   * reported it fixed off a thumbnail. Measuring the texture says why: the baked highlights
+   * are blobs 10 to 30 texels across, so a 24-texel blur averages mostly the blob itself and
+   * each speck ends up compared against its own brightness, where it looks perfectly normal.
+   *
+   * At 64 the neighbourhood is comfortably larger than a speck and still much smaller than a
+   * garment, which is the window where the two are separable. Measured over the whole map:
+   * speck texels go from a mean of 195 to 103 and a peak of 242 to 130, while skin loses 0.9
+   * of its mean 96 - under one per cent. Wider than this costs the face more than it gains
+   * on the cloth.
+   */
+  const { threshold = 0.18, strength = 0.95, blur = 64 } = options;
 
   if (typeof document === 'undefined') return false;
   const source = texture.image as (HTMLImageElement | ImageBitmap | HTMLCanvasElement) | undefined;
@@ -88,18 +106,42 @@ export function debakeHighlights(texture: THREE.Texture, options: DebakeOptions 
     return false;
   }
 
-  /*
-   * The neighbourhood, via the GPU: down to `blur` pixels across and back up with the
-   * browser's own smoothing. That IS a blur, it is bilinear, and it costs two draws instead
-   * of a couple of hundred million multiply-adds in JavaScript.
+  /**
+   * The neighbourhood, by halving repeatedly.
+   *
+   * ## One big drawImage does not blur, it aliases
+   *
+   * The obvious version asks the canvas to draw a 2048 image into a 32-pixel one with
+   * `imageSmoothingEnabled`, and it looks like it works. It does not. A single drawImage
+   * reducing by 64x samples roughly bilinearly around each destination pixel, which at that
+   * ratio means it reads about four source texels out of every four thousand - a point
+   * sample, not an average. The "blurred" copy came out as sparse noise, so most specks were
+   * compared against a texel that happened to be inside the speck, and survived.
+   *
+   * This shipped, and I reported it fixed twice: once off a thumbnail where the shirt looked
+   * matte, and once off a numpy model of the same algorithm - and PIL's resize DOES filter
+   * properly on downscale, so the model was right about the maths and wrong about the
+   * platform. The only thing that caught it was measuring the same body pixels in two
+   * captures and finding 131 specks before and 128 after.
+   *
+   * Halving is the fix and it is the standard one: a 2:1 reduction is the ratio bilinear
+   * sampling is exact for, so each step is a true box filter and the chain of them is a real
+   * blur. Eleven draws at most, all of them tiny after the first.
    */
-  const small = document.createElement('canvas');
-  small.width = Math.max(2, Math.round(width / blur));
-  small.height = Math.max(2, Math.round(height / blur));
-  const smallCtx = small.getContext('2d', { willReadFrequently: true });
-  if (!smallCtx) return false;
-  smallCtx.imageSmoothingEnabled = true;
-  smallCtx.drawImage(canvas, 0, 0, small.width, small.height);
+  let step: HTMLCanvasElement = canvas;
+  let reduced = 1;
+  while (reduced < blur) {
+    const half = document.createElement('canvas');
+    half.width = Math.max(1, Math.floor(step.width / 2));
+    half.height = Math.max(1, Math.floor(step.height / 2));
+    const halfCtx = half.getContext('2d', { willReadFrequently: true });
+    if (!halfCtx) return false;
+    halfCtx.imageSmoothingEnabled = true;
+    halfCtx.drawImage(step, 0, 0, half.width, half.height);
+    step = half;
+    reduced *= 2;
+    if (half.width <= 2 || half.height <= 2) break;
+  }
 
   const blurred = document.createElement('canvas');
   blurred.width = width;
@@ -107,7 +149,9 @@ export function debakeHighlights(texture: THREE.Texture, options: DebakeOptions 
   const blurredCtx = blurred.getContext('2d', { willReadFrequently: true });
   if (!blurredCtx) return false;
   blurredCtx.imageSmoothingEnabled = true;
-  blurredCtx.drawImage(small, 0, 0, width, height);
+  // Back up in one go, which is an UPSCALE - and bilinear upscaling is exact, so this one
+  // really is just interpolation between the averages computed above.
+  blurredCtx.drawImage(step, 0, 0, width, height);
 
   const image = ctx.getImageData(0, 0, width, height);
   const local = blurredCtx.getImageData(0, 0, width, height);

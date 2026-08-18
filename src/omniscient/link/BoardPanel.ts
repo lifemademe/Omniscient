@@ -353,7 +353,16 @@ const BOARD_CSS = `
   cursor: pointer;
 }
 .omni-board__send:disabled { opacity: 0.35; cursor: default; }
-}
+/* No stray brace here. The one that used to be on this line was never opened, and
+   CSS recovery does not just ignore it: the parser takes it as the start of the
+   NEXT rule's selector, so the prelude became "} .omni-board__pipes", which is not
+   a selector, so that entire rule was DROPPED. The .omni-board__pipes rule is what makes
+   the pipe run a grid - without it the board fell back to block layout and the
+   cells, which are display:flex and therefore block-level, stacked into a single
+   column. Vasile's four-by-three run rendered as twelve tiles in a line.
+
+   One character, invisible in review, and it only breaks the one rule that
+   happens to follow it. See scripts/css-balanced.ts. */
 /* The pipe run: a grid of pieces, each one a button that turns a quarter on click. */
 .omni-board__pipes {
   display: grid;
