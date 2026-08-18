@@ -27,8 +27,11 @@
  * Bucketing by half-metre cell at setup makes it a lookup of nine cells.
  */
 
-import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
+
+// Type-only: nothing here calls into the engine, it only names its node types. Which also
+// means this module loads outside a browser, and the cut can be tested without a scene.
+import type * as ENGINE from '@gnsx/genesys.js';
 
 import { CUT_WIDTH, DECK_Y, MOWER_SPEED, MOWER_TURN } from '../geometry/mower.js';
 
@@ -198,6 +201,74 @@ export class MowingField {
     }
     this.cutCount = 0;
     this.weedCutCount = 0;
+  }
+
+  /**
+   * The nearest thing still standing, or null when the bank is done.
+   *
+   * This is the fix for the tail of a mowing game, which is otherwise the worst part of
+   * it. The first eighty percent is a pleasant sweep; the last ten is hunting three
+   * survivors in a corner because the deck is 0.5m wide and the passes did not quite
+   * overlap. That is not difficulty, it is a search task nobody asked for, and it is the
+   * exact thing that would make a player put this down two minutes before the payoff.
+   *
+   * Rings outward from the machine's own cell rather than scanning the bank, so it costs
+   * the same whether it finds something in the first ring or the twentieth, and it stops
+   * the moment it does.
+   */
+  public nearestUncut(x: number, z: number): { x: number; z: number } | null {
+    const cx = Math.floor(x / CELL);
+    const cz = Math.floor(z / CELL);
+    const span = Math.ceil(
+      Math.max(this.bounds.maxX - this.bounds.minX, this.bounds.maxZ - this.bounds.minZ) / CELL
+    );
+
+    let bestX = 0;
+    let bestZ = 0;
+    let best = Infinity;
+
+    for (let ring = 0; ring <= span; ring++) {
+      /*
+       * Do not stop at the first ring that contains something.
+       *
+       * A ring is a SQUARE shell, so the far corner of ring N is 1.4 cells further out
+       * than its near edge - and a blade sitting in the next ring straight ahead can be
+       * closer than one found diagonally in this one. Returning early was measurably
+       * wrong: against a brute-force scan it picked a blade 0.09m away when one at 0.07m
+       * existed. On a chart 192 pixels wide that is not a visible error, which is exactly
+       * why it would have survived being looked at.
+       *
+       * Every point in this shell is at least (ring - 1) cells away, so once that floor
+       * passes what has already been found, nothing further out can beat it.
+       */
+      if (best < Infinity && (ring - 1) * CELL > Math.sqrt(best)) break;
+
+      for (let ix = cx - ring; ix <= cx + ring; ix++) {
+        for (let iz = cz - ring; iz <= cz + ring; iz++) {
+          // Only the shell of the ring - the inside was searched on the previous pass.
+          if (ring > 0 && Math.abs(ix - cx) !== ring && Math.abs(iz - cz) !== ring) continue;
+          const key = `${ix}:${iz}`;
+
+          for (const list of [
+            { indices: this.cells.get(key), items: this.blades as Array<{ x: number; z: number; cut: boolean }> },
+            { indices: this.weedCells.get(key), items: this.weeds as Array<{ x: number; z: number; cut: boolean }> },
+          ]) {
+            for (const index of list.indices ?? []) {
+              const item = list.items[index];
+              if (item.cut) continue;
+              const distance = (item.x - x) ** 2 + (item.z - z) ** 2;
+              if (distance >= best) continue;
+              best = distance;
+              bestX = item.x;
+              bestZ = item.z;
+            }
+          }
+        }
+      }
+
+    }
+
+    return best < Infinity ? { x: bestX, z: bestZ } : null;
   }
 
   /** Every blade position, for the overhead plot to draw as a coverage map. */

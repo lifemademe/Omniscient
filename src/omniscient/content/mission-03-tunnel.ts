@@ -138,6 +138,51 @@ export const MISSION_03: MissionDefinition = {
       // Only visible once somebody has looked outside rather than at the equipment.
       revealedBy: 'pattern-found',
     },
+    {
+      /**
+       * The ground, planted early and cashed late.
+       *
+       * Available as soon as the player has seen which side is failing, and deliberately
+       * NOT presented as a cause. It is an observation about the same side, and it sits in
+       * the console doing nothing until the shade is dealt with - at which point it is the
+       * only thing left between the seedlings and the light they have just been given, and
+       * the player has already read it.
+       *
+       * That ordering is the whole design. A second act the player has never heard of
+       * arrives as a chore; one they noticed forty seconds ago and could not act on
+       * arrives as the other shoe dropping.
+       */
+      id: 'hint-ground',
+      summary: 'The ground on the failing side has **gone over**',
+      detail:
+        'The strip between that bank and the boundary is knee-deep - grass gone to seed, '
+        + 'and thick weed right up against the boards. The other side is walked flat. '
+        + 'Whatever else is wrong with those rows, they are also competing for what little '
+        + 'reaches them.',
+      keywords: ['ground', 'grass', 'weeds', 'overgrown'],
+      cue: 'camera.pan:the-bank',
+      revealedBy: 'pattern-found',
+    },
+    {
+      /**
+       * The machine, in the console, before it is offered.
+       *
+       * §187 asks that the world contain what the player needs rather than the dialogue
+       * announcing it, and a machine that only exists in the sentence which hands it over
+       * is announced. Read here it is a fact about her smallholding - there is a mower, it
+       * has a radio in it - and the player can be turning that over long before the
+       * request needs it.
+       */
+      id: 'hint-mower',
+      summary: 'There is a machine on the network here',
+      detail:
+        'A small grounds unit is parked at the end of the row with a radio set into the '
+        + 'housing - an old conversion, and still answering. It is hers, it is on her '
+        + 'ground, and it is reachable from here.',
+      keywords: ['mower', 'machine', 'unit', 'network'],
+      cue: 'prop.highlight:mower',
+      revealedBy: 'pattern-found',
+    },
   ],
 
   confirmations: {
@@ -206,6 +251,27 @@ export const MISSION_03: MissionDefinition = {
     },
     {
       /**
+       * The glasshouse, which is a lead and not a clue.
+       *
+       * §159 is firm that a wrong turn has to teach something, and this one does. A player
+       * who suspects the water, the feed or the power is suspecting something SHARED, and
+       * the other place her supply reaches is the fastest test of a shared cause. It is
+       * fine in there. That does not name the tree, but it kills every systemic
+       * explanation at once and leaves something local to one side of one tunnel - which
+       * is the shape of the real answer.
+       *
+       * So it misleads the way a real investigation misleads: by being a reasonable thing
+       * to check that happens not to be it.
+       */
+      id: 'CHECK_GLASS',
+      requires: [
+        [...TERMS.inspect, ...TERMS.describe, 'check', 'try'],
+        ['glasshouse', 'greenhouse', 'glass', 'seedhouse'],
+      ],
+      priority: 3,
+    },
+    {
+      /**
        * Asking about the ground on the dark side.
        *
        * Reachable but not signposted until she has said the light is back, which is the
@@ -246,6 +312,7 @@ export const MISSION_03: MissionDefinition = {
         ASK_PATTERN: { to: 'pattern-found', environment: 'camera.pan:tunnel-rows,prop.point:contact' },
         CHECK_WATER: { to: 'water-fine', environment: 'prop.point:contact' },
         CHECK_POWER: { to: 'power-fine', environment: 'prop.point:contact' },
+        CHECK_GLASS: { to: 'glasshouse' },
         LOOK_OUTSIDE: { to: 'outside', environment: 'prop.point:contact' },
         ADMIT_UNCERTAINTY: { to: 'uncertain', environment: 'prop.point:contact' },
       },
@@ -263,6 +330,7 @@ export const MISSION_03: MissionDefinition = {
         ASK_PATTERN: { to: 'pattern-found', environment: 'camera.pan:tunnel-rows' },
         CHECK_WATER: { to: 'water-fine' },
         CHECK_POWER: { to: 'power-fine' },
+        CHECK_GLASS: { to: 'glasshouse' },
         LOOK_OUTSIDE: { to: 'outside' },
         ADMIT_UNCERTAINTY: { to: 'uncertain' },
       },
@@ -281,6 +349,7 @@ export const MISSION_03: MissionDefinition = {
         ASK_PATTERN: { to: 'pattern-found', environment: 'camera.pan:tunnel-rows' },
         CHECK_WATER: { to: 'water-fine' },
         CHECK_POWER: { to: 'power-fine' },
+        CHECK_GLASS: { to: 'glasshouse' },
       },
       onUnrecognised: { to: 'clarify' },
     },
@@ -299,10 +368,11 @@ export const MISSION_03: MissionDefinition = {
       say:
         'Water is fine. The drip line runs wet to the last row and the soil is damp on both ' +
         'sides - I checked that first, it is always the water. Only it is not, this time.',
-      suggest: ['which rows are dying', 'check the pump and fan', 'look outside the tunnel'],
+      suggest: ['which rows are dying', 'check the glasshouse', 'look outside the tunnel'],
       on: {
         ASK_PATTERN: { to: 'pattern-found', environment: 'camera.pan:tunnel-rows' },
         CHECK_POWER: { to: 'power-fine' },
+        CHECK_GLASS: { to: 'glasshouse' },
         LOOK_OUTSIDE: { to: 'outside' },
       },
       onUnrecognised: { to: 'clarify' },
@@ -319,6 +389,7 @@ export const MISSION_03: MissionDefinition = {
       on: {
         ASK_PATTERN: { to: 'pattern-found', environment: 'camera.pan:tunnel-rows' },
         CHECK_WATER: { to: 'water-fine' },
+        CHECK_GLASS: { to: 'glasshouse' },
         LOOK_OUTSIDE: { to: 'outside' },
       },
       onUnrecognised: { to: 'clarify' },
@@ -339,7 +410,44 @@ export const MISSION_03: MissionDefinition = {
         LOOK_OUTSIDE: { to: 'outside', environment: 'prop.highlight:shade' },
         CHECK_WATER: { to: 'water-fine' },
         CHECK_POWER: { to: 'power-fine' },
+        CHECK_GLASS: { to: 'glasshouse' },
         CUT_BACK: { to: 'outside', environment: 'prop.highlight:neighbour-tree' },
+        MOVE_SEEDLINGS: { to: 'lost' },
+      },
+      onUnrecognised: { to: 'clarify' },
+    },
+
+    {
+      /**
+       * The other growing space, and it is fine.
+       *
+       * The trap in §163 is that two consecutive electrical faults have trained the player
+       * to look for a broken device. This is the version of that trap for a player who has
+       * got past it and is now looking for a broken SYSTEM - the supply, the feed, the
+       * water - which is a smarter wrong answer and deserves a better refusal than "no".
+       *
+       * She checks and reports, and what she reports quietly does the player a favour.
+       * Everything shared between the two buildings is working, so whatever is wrong is
+       * not shared: it is local to one side of one tunnel. That is most of the way to a
+       * shadow, and the player got there by being wrong.
+       *
+       * No fact is learned. It rules things out rather than establishing one, and putting
+       * an entry on the tree for "the glasshouse is fine" would be recording the absence
+       * of a problem as knowledge.
+       */
+      id: 'glasshouse',
+      framing: 'camera.pan:glasshouse',
+      tempo: Tempo.Respond,
+      say:
+        'The glasshouse? It is doing better than the tunnel is, if I am honest. Same water, '
+        + 'same feed, same hands - and the tomatoes in there are away.\n\n'
+        + 'Which I suppose tells you something. If it were the supply it would be both.',
+      suggest: ['which rows are dying', 'look outside the tunnel'],
+      on: {
+        ASK_PATTERN: { to: 'pattern-found', environment: 'camera.pan:tunnel-rows' },
+        LOOK_OUTSIDE: { to: 'outside' },
+        CHECK_WATER: { to: 'water-fine' },
+        CHECK_POWER: { to: 'power-fine' },
         MOVE_SEEDLINGS: { to: 'lost' },
       },
       onUnrecognised: { to: 'clarify' },

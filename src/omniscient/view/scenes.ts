@@ -3432,14 +3432,39 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   mowingField.addWeeds(bankWeeds);
   mowingField.addWeeds(bankDocks);
 
+  /**
+   * The ground it may drive on, which is BIGGER than the ground it must clear.
+   *
+   * Measured, and this was a real blocker rather than a nicety. The drive clamps the
+   * machine's centre half a body inside its bounds, and the deck only reaches 0.25m past
+   * that - so with one rectangle serving as both the grass extent and the driving limit,
+   * a 0.31m rim of the bank was physically unreachable. Simulated: a tidy overlapping
+   * sweep topped out at 87.2%, against a target of 90. The request could not be finished
+   * by playing it correctly, which is the worst kind of bug to ship because it looks like
+   * the player's fault.
+   *
+   * Letting it drive off the edge of the grass fixes it. Not symmetric, though: the
+   * seaward side stops short of z = -5 because that is the waterline, and the tunnel side
+   * is safe to extend because the beds' own keep-out circles reach x = -2.2 and stop it
+   * long before the hoops do.
+   */
+  const DRIVEABLE: FieldBounds = {
+    minX: BANK.minX - 0.45,
+    maxX: BANK.maxX + 0.45,
+    minZ: Math.max(BANK.minZ - 0.45, -4.8),
+    maxZ: BANK.maxZ + 0.45,
+  };
+
   const home = { x: -2.6, z: 3.5, heading: Math.PI };
-  const drive = new MowerDrive(mower, mowingField, BANK, KEEP_OFF);
+  const drive = new MowerDrive(mower, mowingField, DRIVEABLE, KEEP_OFF);
   drive.place(home.x, home.z, home.heading);
 
   scene.remoteUnit = {
     drive,
     field: mowingField,
-    bounds: BANK,
+    // The plot draws what can be driven, not just what is grass - otherwise the machine
+    // appears to leave the chart every time it turns round at the end of a pass.
+    bounds: DRIVEABLE,
     shapes: KEEP_OFF,
     home,
     /*
@@ -3850,6 +3875,36 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     position: new THREE.Vector3(1.4, 2.6, 3.8),
     target: new THREE.Vector3(-2.5, 3.0, -0.6),
     duration: 2.4,
+  });
+  /**
+   * The glasshouse, which is not the answer.
+   *
+   * A shot for a lead that goes nowhere, and it earns its place by going nowhere
+   * USEFULLY. A player who suspects the water, the feed or the power is suspecting
+   * something SHARED, and the fastest way to test a shared cause is to look at the other
+   * place the same supply reaches. It is fine in there. That does not name the tree, but
+   * it rules out every systemic explanation at once and leaves only something local to
+   * one side of one tunnel - which is the shape of the real answer.
+   *
+   * Framed across the beds so the tunnel is in the foreground of the shot. The building
+   * is nine metres past it and this is the only angle where both are in frame, which
+   * quietly makes the comparison the beat is about.
+   */
+  scene.registerShot('glasshouse', {
+    position: new THREE.Vector3(0.6, 2.2, 3.0),
+    target: new THREE.Vector3(-8.4, 1.3, -5.8),
+    duration: 2.6,
+  });
+  /**
+   * Down the bank, which is where the second act happens.
+   *
+   * Along the strip rather than across it, so the player sees how far it runs. A shot
+   * square-on would show a wall of grass and no length, and the length is the job.
+   */
+  scene.registerShot('the-bank', {
+    position: new THREE.Vector3(-2.6, 1.5, 5.2),
+    target: new THREE.Vector3(-3.0, 0.35, -2.4),
+    duration: 2.2,
   });
   /**
    * Adaeze is standing in it, describing it.

@@ -95,12 +95,22 @@ export interface PlotState {
   heading: number;
   progress: number;
   points: ReadonlyArray<{ x: number; z: number; cut: boolean }>;
+  /**
+   * The nearest thing still standing, once it is worth pointing at.
+   *
+   * Null early on, deliberately. At the start of the job everything is standing and an
+   * arrow saying "grass, over there" is noise that teaches the player to ignore the one
+   * place the game will later put something they need. It appears when the sweep is
+   * mostly done and finding the last patches has stopped being obvious.
+   */
+  guide?: { x: number; z: number } | null;
 }
 
 export class MowerPlot {
   private readonly root: HTMLDivElement;
   private readonly canvas: HTMLCanvasElement;
   private readonly progressLabel: HTMLSpanElement;
+  private status!: HTMLDivElement;
   private readonly ctx: CanvasRenderingContext2D | null;
   private bounds: PlotBounds = { minX: -1, maxX: 1, minZ: -1, maxZ: 1 };
   private shapes: readonly PlotShape[] = [];
@@ -142,6 +152,7 @@ export class MowerPlot {
     const keys = document.createElement('div');
     keys.className = 'omni-plot__keys';
     keys.textContent = 'W A S D  /  ARROWS';
+    this.status = keys;
 
     this.root.append(head, this.canvas, keys);
     container.appendChild(this.root);
@@ -240,6 +251,51 @@ export class MowerPlot {
     ctx.closePath();
     ctx.fill();
 
+    /*
+     * And where to go next, drawn as a line from the machine rather than as a marker.
+     *
+     * A dot on a chart is a place; a line from you to it is a direction, and a direction
+     * is what somebody steering actually needs. Dashed so it cannot be mistaken for
+     * anything on the ground.
+     */
+    if (state.guide) {
+      ctx.strokeStyle = INK.bed;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(sx(state.guide.x), sy(state.guide.z));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = INK.bed;
+      ctx.beginPath();
+      ctx.arc(sx(state.guide.x), sy(state.guide.z), 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
     this.progressLabel.textContent = `${Math.round(state.progress * 100)}%`;
+    this.status.textContent = statusFor(state.progress, state.guide != null);
   }
+}
+
+/**
+ * What the panel says under the chart.
+ *
+ * The one place this game nudges, and it is worth being careful about the register. Adaeze
+ * does not say any of this - she is standing in a field forty metres away and the console
+ * is behind the player - so it is the UNIT reporting, in the flat voice a machine reports
+ * in. No praise, no exclamation, no score. A groundskeeping unit tells you the state of
+ * the bank and what it is waiting for.
+ *
+ * The progression matters more than the words. The first line is an instruction, because
+ * a player who has just been handed controls does not yet know that driving over grass is
+ * the verb. The middle is a plain figure, which is its own encouragement - a number that
+ * moves when you act is the oldest reason in games to keep acting. The last one exists
+ * because that is where people give up.
+ */
+function statusFor(progress: number, guided: boolean): string {
+  if (progress < 0.06) return 'DRIVE OVER THE STANDING GRASS';
+  if (progress < 0.55) return 'CLEARING — HOLD YOUR LINE';
+  if (progress < 1) return guided ? 'MISSED PATCHES MARKED' : 'ALMOST CLEAR';
+  return 'BANK CLEAR';
 }

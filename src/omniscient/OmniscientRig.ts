@@ -2252,12 +2252,25 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.cutTo(unit.drive.shot());
 
     const progress = unit.field.progress();
+    const done = progress / unit.target;
     this.plot?.draw({
       x: unit.drive.position.x,
       z: unit.drive.position.z,
       heading: unit.drive.facing,
-      progress: progress / unit.target,
+      progress: done,
       points: unit.field.plotPoints(),
+      /*
+       * Only once the easy sweep is behind them.
+       *
+       * Early on everything is standing and pointing at "some grass" teaches the player
+       * that the marker means nothing - which is the worst possible lesson to have taught
+       * by the time the marker is the only way to find the last three patches. Held back
+       * to 55% so its first appearance is also its first use.
+       */
+      guide:
+        done > 0.55
+          ? unit.field.nearestUncut(unit.drive.position.x, unit.drive.position.z)
+          : null,
     });
 
     if (progress < unit.target) return;
