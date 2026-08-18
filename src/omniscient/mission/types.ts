@@ -286,6 +286,23 @@ export interface Beat {
    */
   framing?: string;
   /**
+   * The gesture the contact makes on ARRIVING here, as a `prop.<name>:contact` cue.
+   *
+   * Same argument as `framing`, and it was proved the same way. Authored on transitions
+   * first, a recoil had to be repeated on all five routes into the beat where the wall
+   * gives way - and on four of those beats the repeat collided with the point that leaves
+   * the opening, so two gestures landed on one edge and the second crossfaded over the
+   * first. A reaction belongs to the thing being reacted to, which is a beat.
+   *
+   * `point` is the exception and stays on transitions, because it is the only one that is
+   * genuinely about DEPARTURE: the contact showing the player the thing on the way out of
+   * the opening, to five different destinations. See mission-01's opening.
+   *
+   * A transition that carries its own gesture wins, so a route in can still do something
+   * different. See MissionRuntime.environmentFor.
+   */
+  gesture?: string;
+  /**
    * Present on a beat that puts a device up instead of asking for a sentence. The text
    * input stays live, so a player can still talk to the contact while it is open.
    */

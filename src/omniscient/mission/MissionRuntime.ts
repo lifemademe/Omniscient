@@ -16,6 +16,15 @@ import { gradeDevice } from './device.js';
 import { readsAsYesNo, resolveIntent } from './intent.js';
 import { HOLD_FRAMING } from './types.js';
 
+/**
+ * A cue that moves the contact's body rather than the room.
+ *
+ * Only used to answer "did this route already ask for a gesture", so it matches the
+ * shape rather than the four names - a fifth clip added to gestures.ts should not have
+ * to be added here as well to keep working.
+ */
+const GESTURE_CUE = /^prop\.(point|surprised|reacting|nod)/;
+
 import type { DeviceSubmission } from './device.js';
 
 import type { KnowledgeStore } from '../knowledge/KnowledgeStore.js';
@@ -313,7 +322,7 @@ export class MissionRuntime {
 
     return {
       say: next.say,
-      environment: this.framingFor(transition, next),
+      environment: this.environmentFor(transition, next),
       vfx: transition.vfx,
       learned,
       outcome: next.outcome,
@@ -348,16 +357,33 @@ export class MissionRuntime {
    * throw the camera back to the establishing shot - punishing the player for the
    * parser's failure, and taking away the thing they were looking at while they retype.
    */
-  private framingFor(transition: BeatTransition, beat: Beat): string {
+  private environmentFor(transition: BeatTransition, beat: Beat): string {
     const cues = (transition.environment ?? '')
       .split(',')
       .map((cue) => cue.trim())
       .filter(Boolean);
 
-    if (cues.some((cue) => cue.startsWith('camera.'))) return cues.join(',');
-    if (beat.framing === HOLD_FRAMING) return cues.join(',');
+    /*
+     * The gesture, and here the DESTINATION wins - which is the opposite of the framing
+     * rule below, on purpose.
+     *
+     * A transition's gesture is `point`: the contact showing the player the thing on the
+     * way out of the opening. A beat's is a reaction to what has just happened. Where
+     * both apply the reaction is the true one every time - telling Vasile to cut into a
+     * live run and arriving at the beat where the wall lets go should not be a man
+     * gesturing helpfully at his pipework.
+     *
+     * So the beat's gesture replaces any the route was carrying, rather than being
+     * skipped by it. Getting this backwards is not a crash; it is a point where a recoil
+     * should be, on four edges, which is the kind of thing that ships.
+     */
+    const out = beat.gesture ? cues.filter((cue) => !GESTURE_CUE.test(cue)) : [...cues];
+    if (beat.gesture) out.push(beat.gesture);
 
-    return [beat.framing ?? 'camera.pan:default', ...cues].join(',');
+    if (cues.some((cue) => cue.startsWith('camera.'))) return out.join(',');
+    if (beat.framing === HOLD_FRAMING) return out.join(',');
+
+    return [beat.framing ?? 'camera.pan:default', ...out].join(',');
   }
 
   /**

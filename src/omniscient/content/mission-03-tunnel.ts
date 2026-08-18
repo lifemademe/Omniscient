@@ -226,11 +226,11 @@ export const MISSION_03: MissionDefinition = {
         'check the pump and fan',
       ],
       on: {
-        ASK_PATTERN: { to: 'pattern-found', environment: 'camera.pan:tunnel-rows' },
-        CHECK_WATER: { to: 'water-fine' },
-        CHECK_POWER: { to: 'power-fine' },
-        LOOK_OUTSIDE: { to: 'outside' },
-        ADMIT_UNCERTAINTY: { to: 'uncertain' },
+        ASK_PATTERN: { to: 'pattern-found', environment: 'camera.pan:tunnel-rows,prop.point:contact' },
+        CHECK_WATER: { to: 'water-fine', environment: 'prop.point:contact' },
+        CHECK_POWER: { to: 'power-fine', environment: 'prop.point:contact' },
+        LOOK_OUTSIDE: { to: 'outside', environment: 'prop.point:contact' },
+        ADMIT_UNCERTAINTY: { to: 'uncertain', environment: 'prop.point:contact' },
       },
       onUnrecognised: { to: 'clarify' },
       onAmbiguous: { to: 'clarify' },
@@ -330,6 +330,7 @@ export const MISSION_03: MissionDefinition = {
 
     {
       id: 'outside',
+      gesture: 'prop.surprised:contact',
       framing: 'camera.push-in:neighbour-tree',
       tempo: Tempo.Respond,
       learn: [FACT_TREE_GREW],
@@ -355,6 +356,7 @@ export const MISSION_03: MissionDefinition = {
        * first one meant nothing.
        */
       id: 'lost',
+      gesture: 'prop.reacting:contact',
       framing: 'camera.pan:tunnel-rows',
       tempo: Tempo.Respond,
       say:
@@ -380,6 +382,7 @@ export const MISSION_03: MissionDefinition = {
        * payoff with a hole in front of it.
        */
       id: 'solved',
+      gesture: 'prop.nod:contact',
       framing: 'camera.pan:tunnel-rows',
       tempo: Tempo.Respond,
       say:

@@ -208,10 +208,10 @@ export const MISSION_05: MissionDefinition = {
         'still could not tell you where half of this pipe goes.',
       suggest: ['check the pump', 'follow the pipe', 'open the inspection covers'],
       on: {
-        ASK_PUMP: { to: 'pump-fine', learn: [FACT_PUMP_IS_FINE] },
-        ASK_RUN: { to: 'the-run', learn: [FACT_PIECEMEAL_PLUMBING] },
-        OPEN_COVERS: { to: 'covers' },
-        BREAK_IN: { to: 'flooded' },
+        ASK_PUMP: { to: 'pump-fine', environment: 'prop.point:contact', learn: [FACT_PUMP_IS_FINE] },
+        ASK_RUN: { to: 'the-run', environment: 'prop.point:contact', learn: [FACT_PIECEMEAL_PLUMBING] },
+        OPEN_COVERS: { to: 'covers', environment: 'prop.point:contact' },
+        BREAK_IN: { to: 'flooded', environment: 'prop.point:contact' },
       },
       onUnrecognised: { to: 'open-again' },
     },
@@ -309,6 +309,7 @@ export const MISSION_05: MissionDefinition = {
        * from the top of the stairs.
        */
       id: 'flooded',
+      gesture: 'prop.reacting:contact',
       tempo: Tempo.Act,
       say:
         'I have got the saw in it - oh. Oh, that is not - that is coming out of the wall ' +
@@ -326,6 +327,7 @@ export const MISSION_05: MissionDefinition = {
     },
     {
       id: 'solved',
+      gesture: 'prop.nod:contact',
       tempo: Tempo.Respond,
       say:
         'It is going. You can hear it change - that is it out through the wall and into ' +

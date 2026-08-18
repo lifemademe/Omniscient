@@ -245,10 +245,10 @@ export const MISSION_04: MissionDefinition = {
       learn: [FACT_NAMES_ON_PHOTOGRAPHS],
       suggest: ['tell me the names', 'why does it matter now', 'what happened to the papers'],
       on: {
-        LIST_NAMES: { to: 'names' },
-        ASK_WHY: { to: 'why' },
-        ASK_PAPERS: { to: 'papers', learn: [FACT_FLOOD_TOOK_RECORDS] },
-        WRITE_TO_EVERYONE: { to: 'scattergun' },
+        LIST_NAMES: { to: 'names', environment: 'prop.point:contact' },
+        ASK_WHY: { to: 'why', environment: 'prop.point:contact' },
+        ASK_PAPERS: { to: 'papers', environment: 'prop.point:contact', learn: [FACT_FLOOD_TOOK_RECORDS] },
+        WRITE_TO_EVERYONE: { to: 'scattergun', environment: 'prop.point:contact' },
       },
       onUnrecognised: { to: 'open-again' },
     },
@@ -319,6 +319,7 @@ export const MISSION_04: MissionDefinition = {
        * story, and there is no story in a spark she was never going to touch.
        */
       id: 'scattergun',
+      gesture: 'prop.reacting:contact',
       tempo: Tempo.Respond,
       say:
         'To everyone? Half these people are dead. You want me to put a letter through a ' +
@@ -368,6 +369,7 @@ export const MISSION_04: MissionDefinition = {
     },
     {
       id: 'solved',
+      gesture: 'prop.nod:contact',
       tempo: Tempo.Respond,
       say:
         'That is it. That is them. Aunt, cousin, grandmother, grandfather, niece. Two ' +

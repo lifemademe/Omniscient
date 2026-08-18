@@ -212,10 +212,10 @@ export const MISSION_06: MissionDefinition = {
         'same time, not tonight.',
       suggest: ['whose door is this', 'look at the lock', 'start on the pins'],
       on: {
-        ASK_WHY: { to: 'why' },
-        ASK_LOCK: { to: 'the-lock', learn: [FACT_OLD_LOCK_WORN] },
-        WORK_THE_LOCK: { to: 'working' },
-        BREAK_GLASS: { to: 'glass' },
+        ASK_WHY: { to: 'why', environment: 'prop.point:contact' },
+        ASK_LOCK: { to: 'the-lock', environment: 'prop.point:contact', learn: [FACT_OLD_LOCK_WORN] },
+        WORK_THE_LOCK: { to: 'working', environment: 'prop.point:contact' },
+        BREAK_GLASS: { to: 'glass', environment: 'prop.point:contact' },
       },
       onUnrecognised: { to: 'open-again' },
     },
@@ -305,6 +305,7 @@ export const MISSION_06: MissionDefinition = {
     },
     {
       id: 'glass',
+      gesture: 'prop.reacting:contact',
       tempo: Tempo.Act,
       say:
         'The glass. Right.\n\n...I have done it. I am in, and there is glass all through her ' +
@@ -325,6 +326,7 @@ export const MISSION_06: MissionDefinition = {
     },
     {
       id: 'solved',
+      gesture: 'prop.nod:contact',
       tempo: Tempo.Respond,
       say:
         'That is it - that is the whole thing turning. I am in.\n\n...She is on the landing. ' +

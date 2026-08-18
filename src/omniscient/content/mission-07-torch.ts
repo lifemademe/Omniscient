@@ -320,6 +320,7 @@ export const MISSION_07: MissionDefinition = {
     },
     {
       id: 'ran',
+      gesture: 'prop.reacting:contact',
       tempo: Tempo.Act,
       say:
         'I am running - I cannot, I cannot keep - he is right behind me, he is right - \n\n' +
@@ -340,6 +341,7 @@ export const MISSION_07: MissionDefinition = {
     },
     {
       id: 'caught',
+      gesture: 'prop.surprised:contact',
       tempo: Tempo.Act,
       say:
         'He is here - he is right here, he is at my - \n\n...He has said sorry. He said ' +
@@ -359,6 +361,7 @@ export const MISSION_07: MissionDefinition = {
     },
     {
       id: 'solved',
+      gesture: 'prop.nod:contact',
       framing: 'camera.push-in:follower',
       tempo: Tempo.Respond,
       say:

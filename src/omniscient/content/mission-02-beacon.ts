@@ -168,10 +168,10 @@ export const MISSION_02: MissionDefinition = {
         'I am halfway up the mast now.',
       suggest: ['follow the supply wire', 'when did it start', 'tell me about Mirela'],
       on: {
-        ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
-        ASK_TIMING: { to: 'timing' },
-        ASK_SISTER: { to: 'sister-blind' },
-        ADMIT_UNCERTAINTY: { to: 'timing' },
+        ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable,prop.point:contact' },
+        ASK_TIMING: { to: 'timing', environment: 'prop.point:contact' },
+        ASK_SISTER: { to: 'sister-blind', environment: 'prop.point:contact' },
+        ADMIT_UNCERTAINTY: { to: 'timing', environment: 'prop.point:contact' },
       },
       onUnrecognised: { to: 'clarify-blind' },
       onAmbiguous: { to: 'clarify-blind' },
@@ -262,15 +262,15 @@ export const MISSION_02: MissionDefinition = {
         ASK_FEED: {
           to: 'feed-confirmed',
           learn: [FACT_BEACON_DROPS_ON_KEYUP],
-          environment: 'prop.open:splice-box',
+          environment: 'prop.open:splice-box,prop.point:contact',
         },
         ASK_SISTER: {
           to: 'feed-confirmed',
           learn: [FACT_BEACON_DROPS_ON_KEYUP],
-          environment: 'prop.open:splice-box',
+          environment: 'prop.open:splice-box,prop.point:contact',
         },
-        ASK_TIMING: { to: 'timing-known' },
-        ADMIT_UNCERTAINTY: { to: 'timing-known' },
+        ASK_TIMING: { to: 'timing-known', environment: 'prop.point:contact' },
+        ADMIT_UNCERTAINTY: { to: 'timing-known', environment: 'prop.point:contact' },
       },
       onUnrecognised: { to: 'clarify-blind' },
       onAmbiguous: { to: 'clarify-blind' },
@@ -335,6 +335,7 @@ export const MISSION_02: MissionDefinition = {
        * rather than something the player can learn.
        */
       id: 'arc',
+      gesture: 'prop.reacting:contact',
       tempo: Tempo.Respond,
       say:
         'It flashed - the whole bracket lit up and I have let go of it. ' +
@@ -355,6 +356,7 @@ export const MISSION_02: MissionDefinition = {
 
     {
       id: 'isolator-fitted',
+      gesture: 'prop.nod:contact',
       framing: 'camera.push-in:beacon',
       tempo: Tempo.Respond,
       say:
