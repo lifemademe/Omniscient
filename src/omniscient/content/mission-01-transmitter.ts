@@ -200,10 +200,28 @@ export const MISSION_01: MissionDefinition = {
         'It worked yesterday. I switched it on this morning and got nothing at all - no sound, ' +
         'not even a hiss. The lamp on the front still comes on, so it is getting power. ' +
         'I have the back off already.',
+      /*
+       * "look at the set", not "look at the back of the set".
+       *
+       * The old chip promised the back and did not deliver it, and the reason is in the
+       * intent table rather than in the camera: INSPECT_CONNECTOR requires a word from
+       * TERMS.connector, and "back" is not one of them. So the sentence resolved to
+       * INSPECT_UNIT - look at the set - which is what the player then saw. A suggestion
+       * that reads as one action and fires another is worse than no suggestion, because
+       * the player learns the wrong vocabulary from it and blames the camera.
+       *
+       * "describe the set to me" went with it. It resolved to INSPECT_UNIT as well, so
+       * the opening offered three chips for two actions. The supply wire takes the slot -
+       * a real third line of enquiry, and the one that seeds the shared feed.
+       *
+       * Nothing is lost by not offering the connectors here. The intent is still in `on`
+       * below, so a player who types it goes straight there; this is the order the game
+       * RECOMMENDS, which is look at the thing before turning it round.
+       */
       suggest: [
-        'look at the back of the set',
+        'look at the set',
         'what happened to it recently',
-        'describe the set to me',
+        'follow the supply wire',
       ],
       on: {
         /*
@@ -247,7 +265,7 @@ export const MISSION_01: MissionDefinition = {
       tempo: Tempo.Respond,
       say: 'Say that again? I have my hands in it, I did not catch you.',
       suggest: [
-        'look at the back of the set',
+        'look at the set',
         'turn the power off',
         'what happened to it recently',
       ],
@@ -269,7 +287,10 @@ export const MISSION_01: MissionDefinition = {
       say:
         'That is alright. Honestly it is more than the last one told me. Where do you want me to start - ' +
         'the front of the set, or round the back where the wires go?',
-      suggest: ['look at the back of the set', 'describe the set to me', 'what happened to it recently'],
+      // She has just offered the front or "round the back where the wires go", so this is
+      // the one early beat where the connectors are worth suggesting - and here the chip
+      // says connectors, which is the word the intent actually needs.
+      suggest: ['look at the set', 'look at the connectors on the back', 'what happened to it recently'],
       on: {
         INSPECT_UNIT: { to: 'unit-overview', environment: 'camera.push-in:transmitter' },
         INSPECT_CONNECTOR: { to: 'connector-found', environment: 'camera.push-in:transmitter,prop.rotate:transmitter-rear' },
@@ -459,7 +480,24 @@ export const MISSION_01: MissionDefinition = {
           + 'her transmitter is still dead.',
         lesson:
           'Take the power off a set before anybody touches the inside of it.',
-        cooldownSeconds: 90,
+        /**
+         * No countdown on the first request, and this is the only one.
+         *
+         * Every other failure puts the contact red on the globe for a minute and a half or
+         * more, which works because there is always something else on the map to do while
+         * it runs. There is not, here. Mirela IS the tutorial: lose her at ninety seconds
+         * in and the game hands the player a globe with nothing answerable on it and asks
+         * them to wait - and the request they just failed is the one they most want to go
+         * straight back into, while they still remember what they did.
+         *
+         * The lesson is not in the wait. It is in the arc, the line she says afterwards,
+         * and the note §170 makes them write. All three have already happened by the time
+         * a countdown would start, so the countdown is only a locked door.
+         *
+         * The mechanic still gets taught - see writeNote in SessionController, which says
+         * in as many words that later requests will not come back this quickly.
+         */
+        cooldownSeconds: 0,
       },
     },
 

@@ -275,6 +275,57 @@ export const TERMINAL_CSS = `
   border-top: 1px solid #23422c;
   padding: 8px 10px 10px;
 }
+/*
+ * The note flag - the one thing on screen that says the box below has changed job.
+ *
+ * A lost request already turns the panel red, changes the placeholder and pushes a line
+ * into the log saying a note is wanted, and it was still being missed: the red is around
+ * the whole frame, the placeholder is grey text inside an empty field, and the log line
+ * scrolls. None of them are AT the input.
+ *
+ * So this sits directly on top of it, in the amber the failure lesson already uses -
+ * green is the machine talking, red is what went wrong, amber is the player's turn.
+ */
+.omni-note-flag {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 7px;
+  padding: 5px 8px;
+  border: 1px solid #6b5518;
+  border-left: 2px solid #c9a227;
+  background: rgba(201, 162, 39, 0.08);
+  color: #e0c265;
+  font-size: 10px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+.omni-note-flag[hidden] { display: none; }
+/* A cursor, not a warning triangle. It points at the field rather than at the mistake. */
+.omni-note-flag::before {
+  content: '';
+  width: 7px;
+  height: 11px;
+  background: #c9a227;
+  animation: omni-note-blink 1.1s steps(1, end) infinite;
+}
+@keyframes omni-note-blink {
+  0%, 55% { opacity: 1; }
+  56%, 100% { opacity: 0.15; }
+}
+/*
+ * And the field itself, so the flag and the box read as one thing.
+ *
+ * Colour and caret only. The input is declared border:none twelve lines down, so the
+ * obvious border-bottom here would have been a rule that overrides nothing and changes no
+ * pixels - the shape of "fix" this project keeps having to un-write.
+ *
+ * (No backticks in this block, either. It lives inside a template literal, and the pair
+ * that used to sit around that border:none ended the string.)
+ */
+.omni-terminal--note .omni-terminal__input { color: #e0c265; caret-color: #c9a227; }
+.omni-terminal--note .omni-terminal__input::placeholder { color: #8a7434; }
+.omni-terminal--note .omni-terminal__caret { color: #c9a227; }
 .omni-terminal__hint {
   font-size: 10px;
   letter-spacing: 0.12em;
@@ -414,6 +465,8 @@ export class LocalSurface implements InterventionSurface {
    * declining to work, which is how a player concludes a game is broken.
    */
   private endButton: HTMLElement | null = null;
+  /** The amber flag above the input while a lost request is waiting for its note. */
+  private noteFlag: HTMLDivElement | null = null;
 
   constructor(private readonly container: HTMLElement) {}
 
@@ -485,6 +538,13 @@ export class LocalSurface implements InterventionSurface {
     const hint = document.createElement('div');
     hint.className = 'omni-terminal__hint';
 
+    // Sits between the hint and the input, so it is the last thing read before the box.
+    const noteFlag = document.createElement('div');
+    noteFlag.className = 'omni-note-flag';
+    noteFlag.textContent = 'Note required - type it below and send';
+    noteFlag.hidden = true;
+    this.noteFlag = noteFlag;
+
     const entry = document.createElement('div');
     entry.className = 'omni-terminal__entry';
     const caret = document.createElement('span');
@@ -497,7 +557,7 @@ export class LocalSurface implements InterventionSurface {
     input.spellcheck = false;
     input.placeholder = 'transmit...';
     entry.append(caret, input);
-    foot.append(suggestions, hint, entry);
+    foot.append(suggestions, hint, noteFlag, entry);
 
     root.append(session, head, where, tabs, log, panel, extra, foot);
 
@@ -813,6 +873,8 @@ export class LocalSurface implements InterventionSurface {
     this.contactElement = null;
     this.hintElement = null;
     this.suggestElement = null;
+    this.noteFlag = null;
+    this.endButton = null;
     this.renderedSuggestKey = '';
     this.handlers.clear();
     this.renderedCount = 0;
@@ -839,6 +901,8 @@ export class LocalSurface implements InterventionSurface {
       this.endButton.setAttribute('aria-disabled', locked ? 'true' : 'false');
       this.endButton.title = locked ? 'Write your note first' : '';
     }
+    if (this.noteFlag) this.noteFlag.hidden = !locked;
+    this.root?.classList.toggle('omni-terminal--note', locked);
 
     if (!this.logElement || !this.contactElement || !this.inputElement || !this.hintElement) {
       return;

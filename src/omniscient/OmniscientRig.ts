@@ -186,6 +186,15 @@ const HOME_DWELL = 5.5;
  */
 const RESOLVE_HOLD = 4.6;
 
+/**
+ * Seconds the Contact View is held after the note is written, before the camera leaves.
+ *
+ * Longer than RESOLVE_HOLD because there is more to read - the recorded note comes back,
+ * and after it the line about what happens to the request now - and because a player who
+ * has just lost one is being told the rules rather than watching a payoff.
+ */
+const NOTE_HOLD = 7.5;
+
 /** The diorama atmosphere. Tuned to a room, not to a world - see mountScene. */
 const FOG_NEAR = 3.5;
 const FOG_FAR = 26;
@@ -224,6 +233,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private pauseRemaining = 0;
   /** Seconds left holding the Contact View after a resolution. Zero when not holding. */
   private resolveHold = 0;
+  /** Counting down to leaving a LOST request - see closeLostRequest. */
+  private lostHold = 0;
 
   private phase: Phase = Phase.Menu;
   private screen: Screen = Screen.Tree;
@@ -1577,6 +1588,25 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private leaveContact(): void {
     if (this.phase !== Phase.Contact) return;
 
+    /*
+     * A lost request that is already on its way out leaves by the other door.
+     *
+     * END CALL unlocks the moment the note is written, and the hold that follows keeps the
+     * console up for another seven seconds so the note and the line about what happens
+     * next can be read - which leaves a window where this method is reachable for a
+     * request `onRequestLost` has already put back. Running the body below would decrement
+     * `queueIndex` a second time for the same request and hand the player somebody else's
+     * mission, and then the expiring hold would call `showGlobe` on top of it.
+     *
+     * So the click means "I have read it" rather than "leave": drop the hold and take the
+     * lost-request exit now.
+     */
+    if (this.lostHold > 0) {
+      this.lostHold = 0;
+      this.leaveLostRequest();
+      return;
+    }
+
     const contactId = this.queue[this.queueIndex - 1]?.mission.contactId;
     if (contactId) {
       this.setSignalState(contactId, SignalState.Waiting);
@@ -1686,13 +1716,24 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const contactId = this.queue[this.queueIndex - 1]?.mission.contactId;
     if (!contactId) return;
 
+    /*
+     * A failure may waive its countdown, and the first request does - see its
+     * `cooldownSeconds`. Zero means the request goes straight back to answerable rather
+     * than red, so the contact is already green by the time the player reaches the globe.
+     *
+     * Guarded rather than assumed: `signal.cooldown = 0` with the state still set to
+     * Cooldown would leave a red marker with no Answer button waiting on a countdown that
+     * has already finished, which GlobeScreen's own note calls a cooldown that never ends.
+     */
     const signal = this.signals.find((s) => s.id === contactId);
+    const waits = failure.cooldownSeconds > 0;
     if (signal) {
-      signal.state = SignalState.Cooldown;
-      signal.cooldown = failure.cooldownSeconds;
+      signal.state = waits ? SignalState.Cooldown : SignalState.Waiting;
+      signal.cooldown = waits ? failure.cooldownSeconds : undefined;
     }
-    this.openable.delete(contactId);
-    // Back in the queue: when the cooldown lapses it can be attempted again.
+    if (waits) this.openable.delete(contactId);
+    // Back in the queue: when the cooldown lapses - or at once, above - it can be
+    // attempted again.
     this.queueIndex -= 1;
 
     // Deliberately NOT leaving the Contact View here. The globe is already updating
@@ -1727,6 +1768,19 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * the globe - where the contact they just lost is now red and counting down.
    */
   private closeLostRequest(): void {
+    if (this.phase !== Phase.Contact) return;
+
+    /*
+     * Not straight out. The note is followed by two more lines - what was recorded, and
+     * what now happens to the request - and closing on the same tick showed them for no
+     * frames at all. Same fault RESOLVE_HOLD exists to fix at the other end of a request,
+     * and the same fix: hold, let it be read, then leave.
+     */
+    this.lostHold = NOTE_HOLD;
+  }
+
+  /** The hold above, expired. */
+  private leaveLostRequest(): void {
     if (this.phase !== Phase.Contact) return;
 
     this.session?.end();
@@ -2034,6 +2088,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
       if (this.resolveHold <= 0) {
         this.resolveHold = 0;
         this.returnHome();
+      }
+    }
+
+    // And the same for a lost one, so the note and what follows it can be read.
+    if (this.lostHold > 0) {
+      this.lostHold -= deltaTime;
+      if (this.lostHold <= 0) {
+        this.lostHold = 0;
+        this.leaveLostRequest();
       }
     }
 

@@ -286,7 +286,9 @@ export const MISSION_06: MissionDefinition = {
         'Wrench is in. I am on the pins.\n\nTell me the order and I will follow it - and if ' +
         'I get one wrong the set drops and we start again, so think first and then say all ' +
         'of it.',
-      suggest: ['go back over the lock'],
+      // Same dead chip as the cellar's: ASK_LOCK needs an inspect or describe word, and
+      // "go back over" carries none of them.
+      suggest: ['tell me about the lock again'],
       device: {
         kind: 'lock',
         prompt: 'Name the order the pins bind in.',

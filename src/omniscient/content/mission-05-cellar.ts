@@ -282,7 +282,10 @@ export const MISSION_05: MissionDefinition = {
         'digging. Some of these are still set for whatever was here before the last lot ' +
         'changed it.\n\nI will turn whichever you tell me. Just tell me the whole thing at ' +
         'once, because I cannot hold it.',
-      suggest: ['go back over the pipe'],
+      // "go back over the pipe" resolved to nothing - ASK_RUN needs a word from the first
+      // group and "go", "back" and "over" are all outside it, so the one chip on this beat
+      // answered "say that again". A suggestion that does not resolve is worse than none.
+      suggest: ['tell me about the pipe run again'],
       device: {
         kind: 'pipes',
         prompt: 'Set the run from the sump to the outfall.',

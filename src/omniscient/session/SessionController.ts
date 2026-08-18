@@ -282,8 +282,37 @@ export class SessionController {
   private writeNote(text: string): void {
     if (!this.runtime || !this.contact || !text.trim()) return;
 
+    const cooldown = this.failed?.cooldownSeconds ?? 0;
+
     this.knowledge.writeNote(this.runtime.definition.id, this.contact.id, text);
     this.push({ source: 'system', name: 'OMNISCIENT_', body: `recorded: ${text.trim()}` });
+
+    /*
+     * Then say what happens to the request, because nothing else does.
+     *
+     * A lost request goes red on the globe and counts down, and the only place that was
+     * ever explained is a number on a marker the player has to go and find. Told here, in
+     * the log they are already reading, at the one moment they have just been made to
+     * think about the mistake.
+     *
+     * Two versions, because the first request has no countdown at all - see its failure
+     * in mission-01. Reading "she will call back in a minute and a half" and then finding
+     * her green immediately would teach the mechanic wrong on the one attempt where the
+     * player is most likely to be learning it.
+     */
+    this.push({
+      source: 'system',
+      name: 'OMNISCIENT_',
+      body:
+        cooldown > 0
+          ? `${this.contact.name} is off the air for about ${Math.round(cooldown / 30) * 0.5} `
+            + 'minutes. The request comes back when the countdown on the globe runs out, and '
+            + 'your note is in Records waiting for it.'
+          : 'The request is still open - it is back on the globe now, and your note is in '
+            + 'Records waiting for it. Later ones will not come back so quickly: a lost '
+            + 'request goes red and counts down before you can try it again.',
+    });
+
     this.failed = null;
     this.present();
     this.hooks.onNoteRecorded?.();
