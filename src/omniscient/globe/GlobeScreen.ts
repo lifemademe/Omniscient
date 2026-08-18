@@ -726,7 +726,16 @@ export class GlobeScreen {
     const seen = new Set<string>();
     const showing = this.globe
       .getProjectedSignals()
-      .filter((p) => p.visible && !p.signal.hidden && p.signal.state !== SignalState.Unknown);
+      .filter(
+        (p) =>
+          p.visible &&
+          !p.signal.hidden &&
+          p.signal.state !== SignalState.Unknown &&
+          // Answered contacts have no dot on the globe any more, so they must not keep a
+          // label either - see GlobeView.colorFor. A name hanging off nothing is worse
+          // than the dot was.
+          p.signal.state !== SignalState.Resolved
+      );
 
     /**
      * Spread labels that land on top of each other.

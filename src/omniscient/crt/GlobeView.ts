@@ -361,9 +361,27 @@ export class GlobeView {
     switch (signal.state) {
       case SignalState.Active:
         return PALETTE.active;
+      /*
+       * Answered, and off the map.
+       *
+       * These used to sit here dim and permanent, on §163's argument that the world
+       * remembers what you did. It does - the count in the margin still rises and the
+       * knowledge tree still grows - but the globe is the thing the player SCANS, and
+       * every solved contact left on it is one more dot to check and discard on every
+       * pass. That gets worse with every request answered, which is precisely
+       * backwards: the map should get easier to read as the player gets better, not
+       * harder.
+       *
+       * Null rather than hidden, so they are still in `signals` and still counted
+       * under ANSWERED. Taken off the map, not out of the record.
+       */
       case SignalState.Resolved:
-      // Deliberately identical: the difference between "done" and "not yet" is not the
-      // player's to see on the globe, only in what the tooltip says when they ask.
+        return null;
+      /*
+       * Present, not asking yet - and these DO stay. A dim dot is what makes the
+       * globe a world with people on it rather than a list of open tickets, and it
+       * is the only thing left promising that there is more coming.
+       */
       case SignalState.Dormant:
         return PALETTE.resolved;
       case SignalState.Waiting:
