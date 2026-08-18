@@ -205,6 +205,22 @@ export const MISSION_03: MissionDefinition = {
       priority: 2,
     },
     {
+      /**
+       * Asking about the ground on the dark side.
+       *
+       * Reachable but not signposted until she has said the light is back, which is the
+       * point at which it becomes a sensible question rather than a random one - a player
+       * who asks about weeds before the shade is dealt with is guessing, and the beat they
+       * would land on does not exist yet.
+       */
+      id: 'CLEAR_GROUND',
+      requires: [
+        ['cut', 'clear', 'mow', 'mower', 'machine', 'unit', 'deal', 'run'],
+        ['weeds', 'weed', 'grass', 'bank', 'ground', 'growth', 'overgrown', 'it', 'them'],
+      ],
+      priority: 3,
+    },
+    {
       id: 'ADMIT_UNCERTAINTY',
       requires: [[...TERMS.uncertain]],
       priority: 4,
@@ -342,7 +358,7 @@ export const MISSION_03: MissionDefinition = {
       suggest: ['cut the branches back'],
       affirmIntent: 'CUT_BACK',
       on: {
-        CUT_BACK: { to: 'solved', environment: 'prop.clear:neighbour-tree' },
+        CUT_BACK: { to: 'light-back', environment: 'prop.clear:neighbour-tree' },
         MOVE_SEEDLINGS: { to: 'lost' },
       },
       onUnrecognised: { to: 'clarify' },
@@ -382,15 +398,100 @@ export const MISSION_03: MissionDefinition = {
        * purely to be told it had worked. A payoff that needs a filler turn to arrive is a
        * payoff with a hole in front of it.
        */
-      id: 'solved',
+      /**
+       * The light is back, and the row is still losing.
+       *
+       * This used to be the end of the request, and the request was three questions long -
+       * the thinnest in the game. It is now the hinge between two acts, and the second act
+       * exists because the first one left something behind that the player can SEE: the
+       * shade is gone off the failing bank and the bank is still a foot deep in grass that
+       * nobody has cut since the spring, for the same reason it was shaded, which is that
+       * she stopped going down the dark side.
+       *
+       * So the diagnosis has not changed and nothing already written is wrong. The tree
+       * was the cause of the shade and the shade was the cause of the neglect, and the
+       * neglect is standing right there competing with her seedlings for what the tree has
+       * just handed back.
+       */
+      id: 'light-back',
       gesture: 'prop.nod:contact',
       framing: 'camera.pan:tunnel-rows',
       tempo: Tempo.Respond,
       say:
         'I have the saw... there. The low limbs are off and the light is on those rows for ' +
-        'the first time in weeks - you can see the line where the shadow was. They will come ' +
-        'back. Thin for a fortnight, and then they will come back. There was never anything ' +
-        'wrong with them. Nothing was broken. It just grew.',
+        'the first time in weeks - you can see the line where the shadow was.\n\n' +
+        'But look at the ground on that side. I have not been down there since the spring - ' +
+        'why would I, nothing was growing - and it has closed right over. It is up past the ' +
+        'boards. Whatever light I have just given those seedlings, that is drinking it first.',
+      suggest: ['clear the ground on that side'],
+      affirmIntent: 'CLEAR_GROUND',
+      on: {
+        CLEAR_GROUND: { to: 'the-unit' },
+      },
+      onUnrecognised: { to: 'the-unit' },
+    },
+
+    {
+      /**
+       * The machine, offered.
+       *
+       * §187 is the whole reason this beat can exist. OMNISCIENT_ has no hands and this is
+       * not a pair of hands - it is a groundskeeping unit sitting on her smallholding with
+       * a receiver in it, and signing into equipment that is already on the network is
+       * what the player has been doing to a municipal camera system in District 07 since
+       * that request was written. The machine does not touch the grass. It logs in to the
+       * thing that does.
+       *
+       * She has to say she cannot do it herself, and the reason has to be good, or the
+       * device is a minigame with a excuse taped to it. Hers is that she is one person, it
+       * is the end of the day, and the light she has just won back is on a clock.
+       */
+      id: 'the-unit',
+      framing: 'camera.pan:tunnel-rows',
+      tempo: Tempo.Respond,
+      say:
+        'It is the green one, by the corner post. The switch on the handle is already over - ' +
+        'it has been waiting for somebody to call it since my father died.',
+      device: {
+        kind: 'unit',
+        prompt:
+          'The little mower is at the end of the row - my father put a radio in it years ago ' +
+          'so it could be run from the house. I cannot do that bank by hand tonight and have ' +
+          'anything left for the picking. If you can reach it, reach it.',
+        take: 'unit.take',
+        accept: 'TAKE THE UNIT',
+        wrongSay: '',
+        onSolved: { to: 'solved' },
+        onWrong: { to: 'solved' },
+      },
+      /*
+       * A chip as well as the button, and the stuck-checker was right to insist.
+       *
+       * This beat loops to itself on anything it does not recognise, which is correct - the
+       * machine is on offer and nothing else is happening until it is taken - but it left
+       * the beat with no way forward that the audit could SEE. The audit cannot see a
+       * device button, and it should not have to: a player who types something the parser
+       * misses while a board is up gets a beat with no chips on it, and "the answer is over
+       * there in the console" is exactly the kind of thing that is obvious to whoever wrote
+       * it and to nobody else.
+       */
+      suggest: ['mow the bank'],
+      on: {
+        CLEAR_GROUND: { to: 'the-unit' },
+      },
+      onUnrecognised: { to: 'the-unit' },
+    },
+
+    {
+      id: 'solved',
+      gesture: 'prop.nod:contact',
+      framing: 'camera.pan:tunnel-rows',
+      tempo: Tempo.Respond,
+      say:
+        'It is down. All of it, right up to the boards - I can see the soil on that side for ' +
+        'the first time since the spring.\n\n' +
+        'They will come back now. Thin for a fortnight, and then they will come back. There ' +
+        'was never anything wrong with them. Nothing was broken. It just grew.',
       on: {},
       outcome: {
         kind: OutcomeKind.Solved,

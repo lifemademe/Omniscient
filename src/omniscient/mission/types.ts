@@ -149,7 +149,8 @@ export type Device =
   | TraceBoard
   | PursuitBoard
   | TrailBoard
-  | KitBoard;
+  | KitBoard
+  | GroundsUnit;
 
 /**
  * What the contact has on them, and which of it does the job.
@@ -193,6 +194,33 @@ export interface KitItem {
    * SessionController's device mapping - so it cannot be read off the wire.
    */
   remark: string;
+}
+
+/**
+ * A machine on the set, offered to the player to operate.
+ *
+ * The odd one out in this union and worth saying why it belongs in it anyway. Every other
+ * device here is a PANEL: the player reads something, decides, and submits an answer, and
+ * the console renders the whole of it. This one is a vehicle in the world, and the console
+ * renders none of it - it says the unit is on the network and hands over.
+ *
+ * It is still a device, because the shape the mission cares about is identical. There is a
+ * prompt in the contact's voice, there is a thing the player does, and there is a graded
+ * outcome that routes to `onSolved` or `onWrong`. Making it a device rather than a new kind
+ * of beat means it inherits the confirmation step, the failure note, the transitions and
+ * the records for free, and a mission author does not have to learn a second way to say
+ * "and then this happens".
+ *
+ * The grading is trivial - you either cleared the bank or you did not - and that is correct
+ * rather than lazy. §157 says the evaluator never decides what is true; here the ground
+ * itself is the record, and the runtime is only told what it already showed the player.
+ */
+export interface GroundsUnit extends DeviceBase {
+  kind: 'unit';
+  /** Cue that hands the player the machine. Fired when they accept. */
+  take: string;
+  /** What the console offers, in the contact's voice - "let me run the mower". */
+  accept: string;
 }
 
 export interface DeviceBase {

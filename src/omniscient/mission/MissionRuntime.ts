@@ -333,6 +333,22 @@ export class MissionRuntime {
      * in `confirm`, so a yes is what resolves or loses the request and nothing has been
      * spent before it.
      */
+    /**
+     * Taking the machine is not answering the device.
+     *
+     * The grounds unit sends twice on one channel: `cleared: 0` when the player presses
+     * yes, and the real figure when the rig has finished with it. The first is a request
+     * for the controls and must not be graded - grading a submission the moment the
+     * player accepts would resolve the request before they had cut a blade.
+     *
+     * So the accept returns nothing but the cue that hands the machine over, and the beat
+     * does not move. The rig fires `take`, the player drives, and the second submission
+     * comes back through this same door with something to grade.
+     */
+    if (device.kind === 'unit' && submission.kind === 'unit' && submission.cleared <= 0) {
+      return { say: '', learned: [], clarifying: false, environment: device.take };
+    }
+
     if (device.kind === 'kit' && submission.kind === 'kit') {
       const picked = device.items.find((item) => item.id === submission.itemId);
       this.pendingDevice = submission;

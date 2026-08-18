@@ -113,6 +113,15 @@ export type DeviceView =
     }
   | { kind: 'pipes'; prompt: string; grid: PipeView; note?: string }
   /**
+   * A machine offered, rather than a panel shown.
+   *
+   * The thinnest view in this union by a long way, and it should be: everything the player
+   * does with a grounds unit happens in the world, not on the console. All the console
+   * needs to render is the offer and a button that says yes, because the moment they press
+   * it they are looking at a field through a mower's eyes and the console is behind them.
+   */
+  | { kind: 'unit'; prompt: string; accept: string; note?: string }
+  /**
    * The surveillance board.
    *
    * The whole fleet crosses the link, unfiltered. That is deliberate and it is the one
@@ -283,7 +292,18 @@ export type PlayerMessage =
         | { kind: 'traces'; traceId: string }
         | { kind: 'pursuit'; picks: string[] }
         | { kind: 'trail'; picks: string[] }
-        | { kind: 'kit'; itemId: string };
+        | { kind: 'kit'; itemId: string }
+        /**
+         * Taking the machine, not finishing with it.
+         *
+         * `cleared: 0` on the way out. This message is the player pressing yes, and the
+         * work has not started - the runtime reads it as "hand them the unit" and fires
+         * the take cue, and the rig submits again with the real figure once the bank is
+         * done. Sending the accept and the result down the same channel keeps the whole
+         * exchange inside the device contract instead of giving the mower a private route
+         * into the session.
+         */
+        | { kind: 'unit'; cleared: number };
     };
 
 export interface InterventionSurface {

@@ -32,7 +32,9 @@ export type DeviceSubmission =
   /** The fragments the player says are the same car. Order does not matter - time decides. */
   | { kind: 'trail'; picks: string[] }
   /** The one thing out of the bag the player says will do it. */
-  | { kind: 'kit'; itemId: string };
+  | { kind: 'kit'; itemId: string }
+  /** How much of the bank the unit actually cleared, 0 to 1. */
+  | { kind: 'unit'; cleared: number };
 
 export interface DeviceResult {
   solved: boolean;
@@ -92,6 +94,21 @@ export function gradeDevice(device: Device, submission: DeviceSubmission): Devic
       // player already watched the whole thing happen.
       const held = ending.held.toFixed(1);
       return { solved: false, note: `you had the light on him for ${held} seconds` };
+    }
+
+    case 'unit': {
+      /*
+       * The ground is the record.
+       *
+       * Nothing is being judged here that the player has not already watched happen -
+       * they drove over the bank and the bank went down, and this only writes the result
+       * of that where the mission can read it. The rig does not hand control back until
+       * the unit's own target is met, so a submission that arrives at all has succeeded;
+       * the check is for the case where a request ends some other way while the machine
+       * is still out there.
+       */
+      if (submission.kind !== 'unit') return { solved: false };
+      return { solved: submission.cleared >= 1 };
     }
 
     case 'kit': {

@@ -124,6 +124,17 @@ function solveDevice(device: Device): DeviceSubmission {
     return { kind: 'kit', itemId: device.answer };
   }
 
+  /*
+   * The grounds unit is not solvable from here either, and for a more basic reason than
+   * the bag: its answer is not a value, it is several thousand blades of grass in a scene
+   * this script never builds. A solved submission is the honest stand-in - the question
+   * this script exists to ask is whether a request can get STUCK, and driving the mower
+   * cannot fail, only take a while.
+   */
+  if (device.kind === 'unit') {
+    return { kind: 'unit', cleared: 1 };
+  }
+
   const cells = device.grid.cells;
   const turnable = cells.map((c, i) => (c.fixed ? -1 : i)).filter((i) => i >= 0);
   const rotations = cells.map(() => 0);

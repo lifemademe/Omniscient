@@ -719,7 +719,9 @@ export class BoardPanel {
                   ? `pursuit|${view.prompt}|${view.hops.length}`
                   : view.kind === 'trail'
                     ? `trail|${view.prompt}|${view.trail.fragments.length}`
-                    : `kit|${view.prompt}|${view.items.map((i) => i.id).join(',')}`;
+                    : view.kind === 'unit'
+                      ? `unit|${view.prompt}`
+                      : `kit|${view.prompt}|${view.items.map((i) => i.id).join(',')}`;
     if (key !== this.renderedKey) {
       this.renderedKey = key;
       this.links.clear();
@@ -780,6 +782,11 @@ export class BoardPanel {
 
     if (view.kind === 'kit') {
       this.buildKit(view.items);
+      return;
+    }
+
+    if (view.kind === 'unit') {
+      this.buildUnit(view.accept);
       return;
     }
 
@@ -1188,6 +1195,39 @@ export class BoardPanel {
    * The panel has no idea which is right. It never receives the answer or the reasons -
    * see SessionController, which rebuilds these field by field on the way out.
    */
+  /**
+   * A machine offered: one line and one button.
+   *
+   * The whole of this device's console presence, on purpose. Every other board here is
+   * something to be studied - a grid, a bag, a set of photographs - and this one is a
+   * question with a yes in it, because the studying happens in a field afterwards. Adding
+   * gauges or a readout would be the console pretending to be part of a job it is about
+   * to be excluded from.
+   *
+   * It submits immediately rather than arming a Send, and that is the exception to the
+   * rule the other devices follow. Send exists because a pick can be wrong and the player
+   * deserves the beat before committing; taking the controls of a mower cannot be wrong,
+   * and the confirmation step the runtime wraps every device in has already been through
+   * "are you sure" by the time this is on screen.
+   */
+  private buildUnit(accept: string): void {
+    const row = document.createElement('div');
+    row.className = 'omni-board__unit';
+
+    const button = document.createElement('button');
+    button.className = 'omni-board__take';
+    button.type = 'button';
+    button.textContent = accept;
+    button.addEventListener('click', () => {
+      button.disabled = true;
+      this.dispatch({ kind: 'device', submission: { kind: 'unit', cleared: 0 } });
+      audio.play('transmit');
+    });
+
+    row.appendChild(button);
+    this.grid.appendChild(row);
+  }
+
   private buildKit(items: Array<{ id: string; name: string; note: string }>): void {
     const shelf = document.createElement('div');
     shelf.className = 'omni-kit';

@@ -31,6 +31,8 @@ const RESOLVE_STAGGER = 0.18;
 import { seedFrom } from '../core/rng.js';
 import { Ease, Tweener } from '../core/tween.js';
 
+import type { FieldBounds, MowerDrive, MowingField } from './mowing.js';
+
 export interface CameraShot {
   position: THREE.Vector3;
   target: THREE.Vector3;
@@ -70,6 +72,27 @@ export interface CueResult {
   shotDuration?: number;
   /** Set when a prop action implies an effect at a point in the world. */
   effectPosition?: THREE.Vector3;
+}
+
+/**
+ * A machine on the set that the player can take over.
+ *
+ * The rig drives it; the diorama owns it. Everything here is what the rig needs and
+ * nothing is what it needs to KNOW - it never learns what a mower is, only that there is
+ * something it can steer, a chart it can draw, and a number that says when the job is
+ * done.
+ */
+export interface RemoteUnit {
+  drive: MowerDrive;
+  field: MowingField;
+  /** The ground the plot covers. */
+  bounds: FieldBounds;
+  /** Beds, trunks and people, for the plot to outline. */
+  shapes: ReadonlyArray<{ x: number; z: number; radius: number }>;
+  /** Where it is parked, for the handover shot and for putting it back. */
+  home: { x: number; z: number; heading: number };
+  /** Fraction of the bank that counts as finished. */
+  target: number;
 }
 
 @ENGINE.GameClass()
@@ -483,6 +506,19 @@ export class ContactScene extends ENGINE.SceneNode {
    * Null means the shared air, which is still correct for six of the eight.
    */
   public air: { color: string; near: number; far: number } | null = null;
+
+  /**
+   * Equipment on this set that OMNISCIENT_ can sign into and operate.
+   *
+   * Declared by the builder because the machine's reach is a fact about the PLACE, not
+   * about the mission: a smallholding with a groundskeeping unit on it has one whether the
+   * player ever uses it, and a cellar does not. Same reasoning as `air` and `scanTargets` -
+   * the diorama states what it contains and the rig decides what to do about it.
+   *
+   * Null on seven of the eight sets, which is correct. This is not a mode the game is in;
+   * it is a thing that happens to be parked in one field.
+   */
+  public remoteUnit: RemoteUnit | null = null;
 
   private aimHandler: ((to: number) => void) | null = null;
 

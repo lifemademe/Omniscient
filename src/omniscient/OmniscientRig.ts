@@ -29,6 +29,8 @@ import { audio } from './audio/ConsoleAudio.js';
 import { installCursor } from './art/cursor.js';
 import { installRetro, setRetroLook } from './art/retro.js';
 import { ScanTargets } from './link/ScanTargets.js';
+import { MowerPlot } from './link/MowerPlot.js';
+import { DriveKeys } from './view/mowing.js';
 import { installSceneJump } from './dev/SceneJump.js';
 import { playWarp } from './art/warp.js';
 import { applyShadowPolicy } from './art/shadows.js';
@@ -62,6 +64,8 @@ import { VFX_LIBRARY } from './vfx/library.js';
  */
 const VFX_PARKED = new THREE.Vector3(0, -1000, 0);
 import { buildContactScene } from './view/scenes.js';
+
+import type { RemoteUnit } from './view/ContactScene.js';
 
 import type { Signal } from './crt/GlobeView.js';
 import type { MenuAction } from './menu/MainMenu.js';
@@ -1690,6 +1694,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     audio.setOnAir(false);
     this.post?.clearOutlineSelection();
 
+    this.releaseUnit(false);
     this.session?.end();
     this.scene?.deactivate();
     this.scene = null;
@@ -1917,6 +1922,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private leaveLostRequest(): void {
     if (this.phase !== Phase.Contact) return;
 
+    this.releaseUnit(false);
     this.session?.end();
     this.scene?.deactivate();
     this.scene = null;
@@ -1993,6 +1999,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * it. The warp is over the top of this and the retro look has just changed on the same
      * tick, so the medium is already announcing the cut.
      */
+    this.releaseUnit(false);
     this.post?.clearOutlineSelection();
     this.scene?.deactivate();
     this.scene = null;
@@ -2048,6 +2055,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   /** Swap the diorama. One scene is live at a time - §133 foregrounds a single contact. */
   private mountScene(sceneId: string): void {
+    this.releaseUnit(false);
     this.scene?.deactivate();
 
     const next = this.scenes.get(sceneId) ?? null;
@@ -2155,7 +2163,143 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.applyEnvironmentCue(this.overhead ? 'camera.pan:overview' : 'camera.pan:default');
   }
 
+  /**
+   * The machine the player is currently signed into, if any.
+   *
+   * §187 again, from the other side. Seven of the eight sets are places the machine can
+   * only look at; this is the one that has equipment on it with a radio, and driving that
+   * equipment is not a new kind of thing for OMNISCIENT_ to do - it is what the player
+   * already does to a camera network in District 07. The difference is that a mower
+   * changes the world it is in, and a camera does not.
+   */
+  private driving: RemoteUnit | null = null;
+  private readonly driveKeys = new DriveKeys();
+  private plot: MowerPlot | null = null;
+  /** Seconds to keep driving after the job is done, so the last pass can be watched. */
+  private driveHold = 0;
+
+  /**
+   * Sign into the unit this diorama has parked on it.
+   *
+   * Deliberately silent if there is nothing to take. A mission that asks a cellar for a
+   * mower has made a mistake, but it is not a mistake worth crashing a request over - the
+   * beat carries on and the player is simply not handed anything.
+   */
+  private takeUnit(): void {
+    const unit = this.scene?.remoteUnit;
+    if (!unit || this.driving) return;
+
+    this.driving = unit;
+    this.driveHold = 0;
+    unit.drive.engage(true);
+    this.driveKeys.attach();
+
+    const container = this.getWorld()?.gameContainer;
+    if (container) this.plot ??= new MowerPlot(container);
+    this.plot?.setGround(unit.bounds, unit.shapes, unit.field.total);
+    this.plot?.setVisible(true);
+
+    /*
+     * Cut to the machine rather than easing to it.
+     *
+     * Everywhere else in this game the camera moves, because it is a camera being pointed
+     * at a place. This is not that: it is a different SET OF EYES coming online, and a
+     * two-second glide from a composed shot of a field into the back of a mower says the
+     * camera flew there. Signing into a device is instantaneous or it is not signing in.
+     */
+    this.cameraTweener.clear();
+    this.cutTo(unit.drive.shot());
+  }
+
+  /**
+   * Hand it back, park it, and let the request carry on.
+   *
+   * `returnCamera` is false on every path that is leaving the diorama anyway. The player
+   * can hang up in the middle of a mow, and a release that always pulled the camera back
+   * to the room's default shot would start a 1.8s move to a set that is being put away on
+   * the same tick - which is the camera going somewhere nobody asked it to on the way out.
+   * Signing out of the machine and going home are two different things and only one of
+   * them owns the camera.
+   */
+  private releaseUnit(returnCamera = true): void {
+    const unit = this.driving;
+    if (!unit) return;
+
+    unit.drive.engage(false);
+    this.driveKeys.detach();
+    this.plot?.setVisible(false);
+    this.driving = null;
+
+    // Back to the room, eased this time - the machine is letting go rather than taking
+    // hold, and the shot it returns to is a composed one again.
+    const back = returnCamera ? this.scene?.getShot('default') : null;
+    if (back) this.moveTo(back, 1.8);
+  }
+
+  /**
+   * Drive, cut, and draw - in that order, every frame the player has the unit.
+   *
+   * The camera is set from the machine AFTER it has moved, never before, for the same
+   * reason the reticles are re-pinned after the camera: a view derived from a position is
+   * a frame stale the moment it is computed first, and at 1.5m/s that is a picture that
+   * lags the controls.
+   */
+  private tickDriving(deltaTime: number): void {
+    const unit = this.driving;
+    if (!unit) return;
+
+    unit.drive.update(deltaTime, this.driveKeys.read());
+    this.cutTo(unit.drive.shot());
+
+    const progress = unit.field.progress();
+    this.plot?.draw({
+      x: unit.drive.position.x,
+      z: unit.drive.position.z,
+      heading: unit.drive.facing,
+      progress: progress / unit.target,
+      points: unit.field.plotPoints(),
+    });
+
+    if (progress < unit.target) return;
+
+    /*
+     * Done, but not done YET.
+     *
+     * Snatching the camera away on the frame the last blade falls means the player never
+     * sees the finished bank from the machine - the reward for the work is a cut. The hold
+     * lets the last pass finish under its own steam, and then the room comes back.
+     */
+    this.driveHold += deltaTime;
+    if (this.driveHold < 1.6) return;
+    this.releaseUnit();
+    /*
+     * And tell the request, through the same door the console uses.
+     *
+     * `cleared: 1` is the second half of the exchange the accept opened - see
+     * MissionRuntime.submitDevice. The rig does not decide what that means; it reports
+     * that the bank is down and the mission's own onSolved decides what follows.
+     */
+    this.session?.submitDevice({ kind: 'unit', cleared: 1 });
+  }
+
+  /**
+   * The one cue the rig answers itself instead of handing to the diorama.
+   *
+   * `unit.take` is not a camera move or a prop animation - it is a change in what the
+   * player IS for the next minute - so a scene that only knows how to point cameras and
+   * tween props has nothing useful to do with it. Intercepted here, before dispatch, and
+   * everything else falls through untouched.
+   *
+   * Written as a cue rather than as a new field on Beat because that is how the content
+   * already asks for things to happen, and a mission should not have to learn a second
+   * vocabulary to say "hand them the mower".
+   */
   private applyEnvironmentCue(cue: string): void {
+    if (cue.startsWith('unit.take')) {
+      this.takeUnit();
+      return;
+    }
+
     const result = this.scene?.applyCue(cue);
     if (!result) return;
 
@@ -2220,6 +2364,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
 
     this.cameraTweener.update(deltaTime);
+
+    /*
+     * Driving, before anything that reads the camera.
+     *
+     * After the tweener so a move that was still running when the player took the
+     * controls loses - the machine is the camera now and a half-finished push-in fighting
+     * it for the transform would read as the mower being dragged. Before the reticles and
+     * the plot for the reason given on tickDriving: everything downstream is derived from
+     * where the camera ended up.
+     */
+    if (this.driving) this.tickDriving(deltaTime);
 
     // Re-pin after the camera has moved, never before: the reticles are screen positions
     // derived from it, and updating them first puts every annotation one frame behind the

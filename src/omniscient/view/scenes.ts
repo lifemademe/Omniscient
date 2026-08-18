@@ -49,6 +49,9 @@ import { createStarfield } from '../art/starfield.js';
 import { applyWaterline } from '../art/waterline.js';
 import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { placeRigged } from './riggedContact.js';
+import { MowerDrive, MowingField } from './mowing.js';
+
+import type { FieldBounds } from './mowing.js';
 import { ACCENT, LIGHT, MAP, MAT } from '../art/palette.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
 import { createRng, jitter, range, seedFrom } from '../core/rng.js';
@@ -57,6 +60,7 @@ import type { Rng } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
 import { createFieldBackdrop, createNightBackdrop } from '../geometry/backdrop.js';
 import { buildTree } from '../geometry/tree.js';
+import { buildMower } from '../geometry/mower.js';
 import { clouds } from '../geometry/clouds.js';
 import { DISTRICT_CITY, DISTRICT_FLEET, DISTRICT_SIZE } from '../content/district-07.js';
 import { CELL, cellToWorld } from '../geometry/wireCity.js';
@@ -3315,6 +3319,136 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     // runs while this diorama is the one on screen.
     { idle: (deltaTime) => stepWind(deltaTime) }
   );
+
+  /**
+   * -- The bank, and the machine that deals with it -------------------------------------
+   *
+   * ## Where it is, and why there
+   *
+   * A strip down the WEST flank of the tunnel, which is the failing side. That is not an
+   * arbitrary place to put a gameplay object: it is the shaded side, and the reason it is
+   * shaded is the reason nothing has been cut there. Adaeze weeds where she works and she
+   * has stopped going down the dark side, so the grass that runs up against the failing
+   * bed is the grass nobody has touched since the spring. The mission's cause and the
+   * minigame's playing field are the same fact seen twice.
+   *
+   * It also fits. The strip runs from the tunnel's hoop feet at x = -2.05 out past the
+   * neighbour's trunk, and past the tunnel ends there is open ground in both directions -
+   * so a 0.62m unit has somewhere to turn round, which a 1.1m corridor alone would not
+   * give it.
+   *
+   * ## Denser and taller than the field it sits in
+   *
+   * Its own meadow rather than a knob on the main one, because the whole point is CONTRAST.
+   * The field around it is cut to 0.18-0.40 and this is 0.34-0.72 at two and a half times
+   * the density, so the bank reads as a different thing from the lawn before the player is
+   * told it is - and once it has been mown, the same comparison runs the other way.
+   */
+  const BANK: FieldBounds = { minX: -5.4, maxX: -1.95, minZ: -4.6, maxZ: 4.2 };
+
+  const bankGrass = meadow(rng, {
+    at: new THREE.Vector3((BANK.minX + BANK.maxX) / 2, 0, (BANK.minZ + BANK.maxZ) / 2),
+    width: BANK.maxX - BANK.minX,
+    depth: BANK.maxZ - BANK.minZ,
+    /*
+     * About 210 blades per square metre against the field's 84. Overgrown is a density
+     * statement before it is a height one - long thin grass reads as a hayfield, and what
+     * has actually happened here is that a patch nobody walks on has closed over.
+     */
+    count: 6400,
+    height: [0.34, 0.72],
+    bladesPerClump: [4, 7],
+    bareBelow: 0.02,
+    // Half again as many seed heads as the field, standing higher. This is the silhouette
+    // that says nobody has been down here.
+    seedHeads: { share: 0.09, height: [0.7, 1.05] },
+    clear: [{ centre: new THREE.Vector3(-3.7, 0, -0.4), radius: 0.75 }],
+    y: 0,
+  });
+  scene.registerProp('bank', bankGrass);
+
+  /**
+   * The weeds in it, which are the part Adaeze can name.
+   *
+   * Same two species as the field so nothing new is introduced, but bigger and packed -
+   * and unlike the field scatter these are allowed right up against the bed frame, because
+   * crowding the failing bed is the entire complaint. `flatten` in the mowing field takes
+   * them down; they are worth three blades each to the progress count, since a player who
+   * clears the grass and leaves the docks standing has not done the job.
+   */
+  const bankWeeds = scatter(rng, {
+    modelUrl: '@project/assets/models/Plants/SM_WildGrass_01.glb',
+    at: new THREE.Vector3(-2.75, 0, -0.2),
+    width: 1.5,
+    depth: 7.6,
+    count: 34,
+    scale: [0.5, 0.85],
+    clear: [{ centre: new THREE.Vector3(-3.7, 0, -0.4), radius: 0.8 }],
+    y: 0.01,
+  });
+  scene.registerProp('bank-weeds', bankWeeds);
+
+  const bankDocks = scatter(rng, {
+    modelUrl: '@project/assets/models/Plants/SM_WildCarrot_01.glb',
+    at: new THREE.Vector3(-2.6, 0, 0.4),
+    width: 1.2,
+    depth: 6.8,
+    count: 16,
+    scale: [0.42, 0.66],
+    clear: [{ centre: new THREE.Vector3(-3.7, 0, -0.4), radius: 0.8 }],
+    y: 0.01,
+  });
+  scene.registerProp('bank-docks', bankDocks);
+
+  /**
+   * The unit, parked at the tunnel's near corner where she left it.
+   *
+   * Registered as a prop so it is put away with the rest of the diorama, and placed at the
+   * END of the bank rather than in the middle of it: a machine parked in the long grass
+   * would already have flattened a patch, and the first thing the player should see when
+   * they take it over is the whole job still in front of them.
+   */
+  const mower = buildMower('GroundsUnit');
+  scene.registerProp('mower', mower.root);
+
+  /**
+   * What it must not drive into.
+   *
+   * The beds are rectangles and these are circles, which is a deliberate simplification -
+   * a circle round each bed's near and far half keeps the machine off the timber without
+   * needing a real collision pass, and being slightly generous is the right error to make
+   * for something the player is steering in a 1.1m gap.
+   */
+  const KEEP_OFF = [
+    { x: -1.05, z: -1.4, radius: 1.15 },
+    { x: -1.05, z: 1.0, radius: 1.15 },
+    { x: -3.7, z: -0.4, radius: 0.72 },
+    // Adaeze herself. The machine is hers and it is not going to run over her.
+    { x: -1.12, z: 2.72, radius: 0.6 },
+  ];
+
+  const mowingField = new MowingField(BANK);
+  mowingField.addMeadow(bankGrass);
+  mowingField.addWeeds(bankWeeds);
+  mowingField.addWeeds(bankDocks);
+
+  const home = { x: -2.6, z: 3.5, heading: Math.PI };
+  const drive = new MowerDrive(mower, mowingField, BANK, KEEP_OFF);
+  drive.place(home.x, home.z, home.heading);
+
+  scene.remoteUnit = {
+    drive,
+    field: mowingField,
+    bounds: BANK,
+    shapes: KEEP_OFF,
+    home,
+    /*
+     * Not 100%. A blade wedged against the trunk that the deck physically cannot reach
+     * would make the job impossible, and hunting the last three blades in a 30m2 bank is
+     * not the game - the game is the sweep. Nine tenths is unmistakably "done" to look at.
+     */
+    target: 0.9,
+  };
 
   /**
    * -- A boundary, because a field without one just stops --------------------------------

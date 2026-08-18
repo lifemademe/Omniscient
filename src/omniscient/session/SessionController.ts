@@ -190,7 +190,16 @@ export class SessionController {
    * the transcript still reads as a conversation somebody had - "Petra is your aunt" is
    * what was actually said, and `{petra: 'aunt'}` is only how it travelled.
    */
-  private submitDevice(submission: DeviceSubmission): void {
+  /**
+   * Public because one device is not driven from the console.
+   *
+   * Every other board submits from the surface, over the transport, and this stays an
+   * internal detail. The grounds unit is operated in the world, so the thing that knows
+   * the job is finished is the rig - and it has to be able to say so through the same door
+   * the console uses, or the mower would need a private route into the session and the
+   * device contract would stop being the only way a request can be resolved.
+   */
+  public submitDevice(submission: DeviceSubmission): void {
     if (!this.runtime || !this.contact || this.runtime.isFinished) return;
 
     const device = this.runtime.getCurrentBeat().device;
@@ -544,6 +553,10 @@ export class SessionController {
         reveal: device.reveal,
         note,
       };
+    }
+
+    if (device.kind === 'unit') {
+      return { kind: 'unit', prompt: device.prompt, accept: device.accept, note };
     }
 
     return {
