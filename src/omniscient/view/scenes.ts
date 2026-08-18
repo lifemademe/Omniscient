@@ -45,6 +45,7 @@ import { createFloodwater } from '../art/floodwater.js';
 import { createTorchlight } from '../art/torchlight.js';
 import { applyFloodstain } from '../art/floodstain.js';
 import { applySaltRust } from '../art/saltrust.js';
+import { createStarfield } from '../art/starfield.js';
 import { applyWaterline } from '../art/waterline.js';
 import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { placeRigged } from './riggedContact.js';
@@ -1668,6 +1669,35 @@ function buildBeaconMast(scene: ContactScene): void {
     backdropRoot.add(meshOf(part.name, part.geometry, part.material));
   }
   scene.registerProp('backdrop', backdropRoot);
+
+  /**
+   * Stars, and Tomas's own evidence asks for them.
+   *
+   * His weather hint is "Clear sky all day. No storm, no wind, no spray off the sea" -
+   * the player is being told to rule the weather out, and the cheapest way to make that
+   * land is a sky they can see is clear. The skylight below has carried a note since it
+   * was written about "the difference between a night with stars in it and a black hole
+   * with objects in it", and until now there were no stars anywhere in the game.
+   *
+   * It is also most of this frame. A headland at sea level with a mast up the middle
+   * leaves the top two thirds to the sky, and that sky was a painted gradient with
+   * nothing in it.
+   *
+   * Radius 44, inside the backdrop's SKY_RADIUS of 52, because the sky here is a painted
+   * canvas rather than an absence - a dome outside it would be behind an opaque surface
+   * and draw nothing at all.
+   *
+   * The floor is 0.10 rather than 0 so nothing is drawn below about the height of the
+   * default camera. Stars in the sea are worse than no stars.
+   */
+  scene.registerProp(
+    'stars',
+    (() => {
+      const node = ENGINE.SceneNode.create({ name: 'Stars', position: new THREE.Vector3() });
+      node.add(createStarfield({ radius: 44, count: 1100, floor: 0.1, seed: 'portu-vech-night' }));
+      return node;
+    })()
+  );
 
   /**
    * Night cloud, which is mostly an absence.
