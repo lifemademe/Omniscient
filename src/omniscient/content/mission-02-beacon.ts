@@ -41,6 +41,11 @@ export const FACT_FEED_NEEDS_ISOLATOR = 'feed_needs_isolator';
  * is not a distractor, it is a hint - the player eliminates it without thinking and the
  * puzzle gets easier by exactly one.
  *
+ * The `wrong` lines are what HAPPENED, not what he said instead. He fits whatever he is
+ * told to fit - see the note on `fitted-wrong` for why a tradesman who knows better
+ * does it anyway - so each one is that part going in, and the light going out again
+ * with it in.
+ *
  * NOTHING IS CUT. That is worth saying at the top, because the word "separate" was read
  * as a broken wire needing something conductive to bridge it, by the first person to
  * play this. There is no break anywhere in the request: one supply feeds two households,
@@ -58,24 +63,27 @@ const TOMAS_BAG = [
     name: 'Insulating tape',
     note: 'Half a roll. Always have it.',
     wrong:
-      'Tape? That covers a bare wire up. It does not change what is joined to what - ' +
-      'and the join down there is meant to be a join, it is just feeding two things.',
+      'Wrapped the whole join, three turns. It is a neat job and the light has just gone ' +
+      'out again while I was looking at it. All I have done is cover it up so I cannot ' +
+      'see it any more.',
   },
   {
     id: 'block',
     name: 'Terminal block',
     note: 'Four ways. For joining a wire to a wire.',
     wrong:
-      'That is for putting two wires together. They are already together - that is the ' +
-      'whole trouble. It would hold the same fault tighter, that is all.',
+      'Both wires into the block, screwed down tight. Tighter than they were.\n\n' +
+      'And out it goes again. They were already joined - I have just made a better job of the ' +
+      'thing that is wrong.',
   },
   {
     id: 'fuse',
     name: 'Cartridge fuse',
     note: 'A couple of spares in the tin. Fifteen amp.',
     wrong:
-      'A fuse waits for something to go badly wrong and then cuts everything. Nothing ' +
-      'here is going badly wrong - the light just keeps standing aside for her.',
+      'Fuse is in. Nothing has blown, because nothing here is a fault - and there it ' +
+      'goes out again anyway. A fuse waits for something to go badly wrong. This has ' +
+      'never been going badly wrong.',
   },
   {
     id: 'isolator',
@@ -87,14 +95,18 @@ const TOMAS_BAG = [
     name: 'Three core flex',
     note: 'A few metres of it, coiled on my belt.',
     wrong:
-      'More cable on the same supply is more of what I have got. It has to come off ' +
-      'that line somewhere or it is the same line.',
+      'Run a new length down to the light, off the same join.\n\n' +
+      'Same supply, new cable, same dark. I have used my spare flex to build the fault ' +
+      'a second time.',
   },
   {
     id: 'ties',
     name: 'Cable ties',
     note: 'A handful. They hold everything up here together.',
-    wrong: 'They will tidy it. They will not change a thing about where the power goes.',
+    wrong:
+      'Dressed the whole run, tied off every foot of it. It looks like somebody who ' +
+      'knows what they are doing did it.\n\n' +
+      'And it is out again. It is tidy now. That is all it is.',
   },
 ] as const;
 
@@ -561,14 +573,54 @@ export const MISSION_02: MissionDefinition = {
           // rather than on the sentence that proposes one.
           environment: 'prop.steady:beacon',
         },
-        // Back to the bag. A wrong pick costs the item's own explanation and nothing else.
-        onWrong: { to: 'the-bag' },
-        wrongSay: 'No - hold on.',
+        // A wrong part is fitted and the request is lost with it. See `fitted-wrong`.
+        onWrong: { to: 'fitted-wrong' },
+        wrongSay: 'Right. If you say so.',
       },
       on: {
         ASK_FEED: { to: 'the-bag' },
       },
       onUnrecognised: { to: 'the-bag' },
+    },
+    {
+      /**
+       * He fits what he is told to fit, and that is the request.
+       *
+       * The obvious objection is that a rigger who can name every part in his own bag
+       * would never put insulating tape on a load-sharing fault. He would not, on his
+       * own. He is not on his own - he is up a mast in the dark at the end of a bad day,
+       * talking to something that has already been right about his sister's shop, and he
+       * has been asked a direct question and given a direct answer.
+       *
+       * That is the whole game and this is the first time it costs anything. §155 wants
+       * failure to be genuinely reachable or the learning loop is decorative; the
+       * machine's authority is the danger, and the only way to say so is to let it be.
+       *
+       * One beat for all five wrong parts, because what he fitted is spoken on the way in
+       * - the item's own line - and what it cost is the same whichever it was. He got it
+       * wrong on the machine's word, in front of a harbour master who is already asking.
+       */
+      id: 'fitted-wrong',
+      gesture: 'prop.reacting:contact',
+      framing: 'camera.pan:default',
+      tempo: Tempo.Respond,
+      say:
+        'That is me done. I have had my hands in a live join on your say so and the ' +
+        'light is still going out.\n\n' +
+        'I am coming down. The harbour master can put a lamp on the wall tonight and I ' +
+        'will look at it myself in the morning.',
+      on: {},
+      failure: {
+        summary:
+          'You named a part and Tomas fitted it. It was not the one that separates the ' +
+          'two feeds, the harbour light is still dropping every time his sister sends, ' +
+          'and he has come down off the mast.',
+        lesson:
+          'Two things sharing one supply have to be given separate feeds. Joining them, ' +
+          'insulating them or protecting them changes nothing about what is drawing on ' +
+          'the line.',
+        cooldownSeconds: 90,
+      },
     },
     {
       id: 'isolator-fitted',
