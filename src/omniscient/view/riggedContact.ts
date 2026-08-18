@@ -375,8 +375,6 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
    * released them would be a person pointing while still holding the table - so the
    * takeover is a ramp in both directions and the IK is blended out rather than switched.
    */
-  /** The breathing loop. Faded down while a gesture owns the body - see gesture. */
-  let baseAction: THREE.AnimationAction | null = null;
 /** Seconds for a gesture to take the arms off their targets. Matches its own fade-in. */
 const TAKE = 0.25;
 
@@ -413,22 +411,51 @@ const RELEASE = 0.5;
   let gestureTakesHands = true;
 
   /**
-   * Bone keys the breathing loop actually writes.
+   * The breathing loop, and the flag that says whether it is currently in charge.
    *
-   * The reason the game needed this is the pose reported after a point: not the
-   * gesture, not the idle, and permanent. A gesture clip animates far more of the
-   * skeleton than a six second breath does - shoulders, spine, neck, the whole
-   * pointing side - and when it fades to nothing, every bone it touched that the
-   * breathing clip does NOT touch has no-one left writing it. It keeps the last
-   * value it was given, which is the clamped final frame of the gesture, forever.
+   * Measured off a capture rather than reasoned about, after one wrong diagnosis. In the
+   * region of frame Mirela occupies, the recording changes by 8 to 13 pixels a frame
+   * before a gesture - that is her breathing - and by 0 to 2 afterwards. The idle does
+   * not come back. Everything else about the sequence was correct: the point plays, the
+   * arm returns, and then she is a photograph.
    *
-   * The arms hid it for a while because the hand IK runs afterwards and drags them
-   * back to the bench regardless. Everything above the shoulders had nothing.
+   * The first theory was that the gesture moves bones the idle never writes, so they keep
+   * the clip's last value with nobody to take them back. It is a real failure mode and it
+   * is not this one: the GLB's idle carries 65 rotated bones, which is the whole skeleton
+   * including the head and neck that visibly stay thrown back. Something was holding them
+   * rather than nothing driving them.
    */
-  const baseTracks = new Set<string>();
-
-  /** Bones the running gesture owns that the idle will not take back, and where they were. */
-  let orphans: Array<{ bone: THREE.Object3D; from: THREE.Quaternion; rest: THREE.Quaternion }> = [];
+  let baseAction: THREE.AnimationAction | null = null;
+  /**
+   * Put the idle back, without asking three.js nicely.
+   *
+   * The gesture used to be faded out and the breathing loop faded in, which is the
+   * textbook crossfade and left her a photograph: measured off a capture, her region of
+   * frame changes by 8 to 13 pixels a frame while she breathes and by 0 to 2 after any
+   * gesture. The loop never came back. Rather than keep bisecting whose weight
+   * bookkeeping was wrong, this states the ending outright - stop the one-shot, and put
+   * the loop back at full weight, playing.
+   *
+   * `stop()` rather than `fadeOut()` on the gesture is the load-bearing half. A LoopOnce
+   * action with `clampWhenFinished` holds its last frame and stays bound; stopping it
+   * unbinds it, which is what lets go of the head and neck that were staying thrown back
+   * long after the arm had come home.
+   *
+   * It is allowed to be this blunt because of where the camera is. Her hands are behind
+   * her own bench and the shot is chest-up; the only part of the release anybody can see
+   * is the head and shoulders settling, and those are on the idle either way.
+   */
+  const release = (): void => {
+    gestureAction?.stop();
+    gestureAction = null;
+    if (baseAction) {
+      baseAction.stopFading();
+      baseAction.enabled = true;
+      baseAction.paused = false;
+      baseAction.setEffectiveWeight(1);
+      if (!baseAction.isRunning()) baseAction.play();
+    }
+  };
 
   const contact: RiggedContact = {
     root,
@@ -452,10 +479,9 @@ const RELEASE = 0.5;
       gestureTakesHands = name !== 'nod';
       void loadGesture(name).then((clip) => {
         if (!clip || !mixer) return;
-        gestureAction?.fadeOut(0.25);
-        // Down, not off. It comes back under the gesture's own fade at the end, so
-        // she is breathing again before the clip has finished letting go.
-        baseAction?.fadeOut(0.25);
+        // Whatever was running, end it outright before starting this one.
+        release();
+        baseAction?.setEffectiveWeight(0);
         const action = mixer.clipAction(clip);
         action.reset();
         action.setLoop(THREE.LoopOnce, 1);
@@ -464,29 +490,9 @@ const RELEASE = 0.5;
         action.play();
         gestureAction = action;
         gestureLeft = clip.duration;
-
-        /*
-         * Everything this clip moves that the breath will not move back.
-         *
-         * Collected at the start rather than the end because the clip is what knows,
-         * and collected per gesture because a point and a nod orphan different bones.
-         * The `from` quaternion is filled in when the release begins - at this moment
-         * the gesture has not moved anything yet.
-         */
-        orphans = [];
-        for (const track of clip.tracks) {
-          if (!track.name.endsWith('.quaternion')) continue;
-          const key = boneKey(track.name.split('.')[0]);
-          if (baseTracks.has(key)) continue;
-          const bone = contact.bones[key];
-          const rest = contact.rest[key];
-          if (bone && rest) orphans.push({ bone, from: new THREE.Quaternion(), rest });
-        }
-        // Printed because it is the whole diagnosis in one number: zero means the idle
-        // covers this clip and the stuck pose was something else.
-        console.log(`[gesture] ${name}: ${orphans.length} bones the idle will not take back`);
       });
     },
+
 
     idle: (deltaTime: number) => {
       if (mixer) mixer.update(deltaTime);
@@ -497,37 +503,10 @@ const RELEASE = 0.5;
         // leaves this at zero, so the IK below keeps running underneath the clip and
         // the hands stay where the scene put them while the head does the work.
         if (gestureTakesHands) hold = Math.min(1, hold + deltaTime / TAKE);
-        if (gestureLeft <= 0) {
-          gestureAction?.fadeOut(RELEASE);
-          baseAction?.fadeIn(RELEASE);
-          gestureAction = null;
-          // Where the clip left them, so they can be carried home from there rather
-          // than snapped to rest the instant the fade starts.
-          for (const orphan of orphans) orphan.from.copy(orphan.bone.quaternion);
-        }
+        if (gestureLeft <= 0) release();
       } else if (hold > 0) {
         hold = Math.max(0, hold - deltaTime / RELEASE);
       }
-
-      /*
-       * Carry the orphaned bones back to the file's own rest pose.
-       *
-       * After the mixer, for the same reason the IK is: the mixer writes what it
-       * writes every frame and anything set before it is gone. On the same eased
-       * curve as the hands, so the shoulders and the spine arrive when the hand does
-       * and the whole release is one movement.
-       *
-       * Cleared at the end rather than left running, so this costs nothing on the
-       * overwhelming majority of frames, which have no gesture anywhere near them.
-       */
-      if (orphans.length > 0 && gestureLeft <= 0) {
-        const home = 1 - hold * hold * (3 - 2 * hold);
-        for (const orphan of orphans) {
-          orphan.bone.quaternion.slerpQuaternions(orphan.from, orphan.rest, home);
-        }
-        if (hold <= 0) orphans = [];
-      }
-
       /*
        * Then the hands, on top of whatever the clip just did to the arms - except while a
        * gesture owns them. The ORDER is still the point (see the interface note): the
@@ -688,9 +667,6 @@ const RELEASE = 0.5;
          * a point: it was a point and an idle, halfway between, with the arms drifting
          * outward to somewhere neither clip ever goes.
          */
-        for (const track of wanted.tracks) {
-          if (track.name.endsWith('.quaternion')) baseTracks.add(boneKey(track.name.split('.')[0]));
-        }
         baseAction = mixer.clipAction(wanted);
         baseAction.play();
       }
