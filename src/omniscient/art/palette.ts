@@ -537,6 +537,21 @@ export const MAT = {
    */
   doorLeaf: standard('#2f3a30', 0.72),
   /**
+   * The sunk panels of that door, and they are a MATERIAL rather than a shape.
+   *
+   * Shadow casting is off across this whole project - the rig spans sixty units and one
+   * shadow map cannot cover both ends - so a panel recessed 24mm into a leaf receives
+   * exactly the same light as the framing around it and reads as a painted rectangle. The
+   * door was modelled correctly and rendered flat, and no amount of extra relief was going
+   * to change that.
+   *
+   * So the recess is expressed the way flat-shaded games have always expressed it: in
+   * VALUE. Same hue, a third of the way to black, which is what the inside of a moulding
+   * looks like anyway. It costs one material and it is the only thing that makes the door
+   * read as joinery from six metres in a scene with one lamp in it.
+   */
+  doorPanel: standard('#1f2720', 0.78),
+  /**
    * Eyeshine.
    *
    * Unlit, and that is the entire point rather than a shortcut: a tapetum lucidum does not

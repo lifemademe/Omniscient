@@ -5935,18 +5935,70 @@ function buildNightDoor(scene: ContactScene): void {
   const openRight = DOOR_X + 0.92 / 2 + REVEAL;
   const openHead = 2.02 + 0.03;
 
-  const front: THREE.BufferGeometry[] = [];
-  for (const [from, to] of [
-    [-3.5, openLeft],
-    [openRight, 3.5],
-  ] as const) {
-    const panel = new THREE.BoxGeometry(to - from, WALL_TOP, 0.3);
-    panel.translate((from + to) / 2, WALL_TOP / 2, -0.4);
-    front.push(panel);
-  }
-  const lintel = new THREE.BoxGeometry(openRight - openLeft, WALL_TOP - openHead, 0.3);
-  lintel.translate((openLeft + openRight) / 2, openHead + (WALL_TOP - openHead) / 2, -0.4);
-  front.push(lintel);
+  /**
+   * A wall with holes in it, worked out rather than hand-cut.
+   *
+   * The first version handled one opening by writing out the two panels and the lintel by
+   * name, which was fine for a door and does not extend - and the windows needed openings
+   * too, for a reason that took a screenshot to see: a "recessed" window box placed inside
+   * a solid wall is invisible, so the only version that rendered was one sitting FLUSH with
+   * the brick, which is a dark panel and not a window. Reported as opaque windows, and it
+   * was not the glass, it was the hole.
+   *
+   * Slab decomposition: cut the wall into vertical bands at every opening edge, then cut
+   * each band horizontally around whichever openings fall in it. Produces a handful of
+   * boxes, handles any number of openings at any heights, and cannot leave a gap because
+   * every band is covered from the bottom of the wall to the top.
+   */
+  const cutWall = (
+    openings: ReadonlyArray<{ x0: number; x1: number; y0: number; y1: number }>
+  ): THREE.BufferGeometry[] => {
+    const pieces: THREE.BufferGeometry[] = [];
+    const edges = [...new Set([-3.5, 3.5, ...openings.flatMap((o) => [o.x0, o.x1])])].sort(
+      (a, b) => a - b
+    );
+
+    for (let i = 0; i < edges.length - 1; i++) {
+      const x0 = edges[i];
+      const x1 = edges[i + 1];
+      if (x1 - x0 < 1e-4) continue;
+      const mid = (x0 + x1) / 2;
+
+      // Which openings this band passes through, bottom to top.
+      const through = openings
+        .filter((o) => mid > o.x0 && mid < o.x1)
+        .sort((a, b) => a.y0 - b.y0);
+
+      let y = 0;
+      for (const opening of through) {
+        if (opening.y0 - y > 1e-4) {
+          const piece = new THREE.BoxGeometry(x1 - x0, opening.y0 - y, 0.3);
+          piece.translate(mid, (y + opening.y0) / 2, -0.4);
+          pieces.push(piece);
+        }
+        y = Math.max(y, opening.y1);
+      }
+      if (WALL_TOP - y > 1e-4) {
+        const piece = new THREE.BoxGeometry(x1 - x0, WALL_TOP - y, 0.3);
+        piece.translate(mid, (y + WALL_TOP) / 2, -0.4);
+        pieces.push(piece);
+      }
+    }
+    return pieces;
+  };
+
+  /** Where the neighbours' windows go. Referenced again below to fill them. */
+  const WINDOWS = [-1, 1].map((side) => ({
+    x0: DOOR_X + side * 2.05 - 0.53,
+    x1: DOOR_X + side * 2.05 + 0.53,
+    y0: 0.78,
+    y1: 2.09,
+  }));
+
+  const front = cutWall([
+    { x0: openLeft, x1: openRight, y0: 0, y1: openHead },
+    ...WINDOWS,
+  ]);
   /**
    * Brick, and the repeat is the whole of getting it right.
    *
@@ -6095,25 +6147,30 @@ function buildNightDoor(scene: ContactScene): void {
   const terrace: THREE.BufferGeometry[] = [];
   const terraceDark: THREE.BufferGeometry[] = [];
   const terraceGlass: THREE.BufferGeometry[] = [];
+  const terraceRoom: THREE.BufferGeometry[] = [];
 
   for (const side of [-1, 1] as const) {
     const wx = DOOR_X + side * 2.05;
 
     /*
-     * The reveal is the hole; the glass is what is in it.
+     * Behind the opening, a dark room; in it, glass.
      *
-     * Both were dark timber, so a neighbour's window read as a boarded-up opening - which
-     * is a completely different thing to say about a street. The recess stays timber
-     * because it is a frame, and the pane in front of it takes the same glass the front
-     * door uses, so the whole terrace agrees about what a window is at night: nearly black,
-     * and just slightly the wrong black.
+     * The wall is genuinely cut now, so this is a box BEHIND the hole rather than a box
+     * standing in front of the brick pretending to be one. The old version was flush with
+     * the wall face with the pane buried 3mm inside it, which is why the glass never
+     * appeared and the window read as a solid dark panel.
+     *
+     * The room is the same near-black the hall uses, so every unlit interior in the scene
+     * agrees, and the pane sits in the opening in the door's own glass - so the terrace has
+     * one answer for what a window is at night: nearly black, and just slightly the wrong
+     * black.
      */
-    const reveal = new THREE.BoxGeometry(1.06, 1.34, 0.12);
-    reveal.translate(wx, 1.42, -0.31);
-    terraceDark.push(reveal);
+    const behind = new THREE.BoxGeometry(1.02, 1.27, 0.5);
+    behind.translate(wx, 1.435, -0.62);
+    terraceRoom.push(behind);
 
-    const pane = new THREE.PlaneGeometry(1.0, 1.28);
-    pane.translate(wx, 1.42, -0.253);
+    const pane = new THREE.PlaneGeometry(1.05, 1.3);
+    pane.translate(wx, 1.435, -0.268);
     terraceGlass.push(pane);
 
     // Sill and head, which are what actually make it read as a window from across a road.
@@ -6126,11 +6183,13 @@ function buildNightDoor(scene: ContactScene): void {
 
     // Glazing bars: one vertical, one horizontal. Two boxes, and without them the recess
     // is a hole in a wall rather than a window.
+    // In front of the glass rather than level with the brick, which is where they were -
+    // co-planar with the old flush box and z-fighting it.
     const bar = new THREE.BoxGeometry(0.035, 1.3, 0.04);
-    bar.translate(wx, 1.42, -0.25);
+    bar.translate(wx, 1.435, -0.255);
     terrace.push(bar);
     const transom = new THREE.BoxGeometry(1.02, 0.035, 0.04);
-    transom.translate(wx, 1.72, -0.25);
+    transom.translate(wx, 1.72, -0.255);
     terrace.push(transom);
   }
 
@@ -6181,6 +6240,10 @@ function buildNightDoor(scene: ContactScene): void {
     'terrace-glass',
     meshOf('TerraceGlass', mergeGeometries(terraceGlass, false) ?? terraceGlass[0], MAT.doorGlass)
   );
+  scene.registerProp(
+    'terrace-room',
+    meshOf('TerraceRoom', mergeGeometries(terraceRoom, false) ?? terraceRoom[0], MAT.hallDark)
+  );
 
   /**
    * A cat.
@@ -6202,8 +6265,15 @@ function buildNightDoor(scene: ContactScene): void {
    * Turned to face the door, because a cat watching the thing the player is watching is
    * funnier and more alive than a cat facing out. It has an opinion about this.
    */
+  /*
+   * On the sill, not in the wall.
+   *
+   * It was at z = -0.26 and the brickwork runs from -0.55 to -0.25, so the entire cat was
+   * inside the front of the house. The sill projects to -0.19, so this puts it on the part
+   * that sticks out, with its back to the glass - which is where a cat sits.
+   */
   const cat = buildCat({
-    at: new THREE.Vector3(DOOR_X + 2.05, 0.765, -0.26),
+    at: new THREE.Vector3(DOOR_X + 2.05, 0.765, -0.225),
     // Its own +z is forward, so this points it down the wall at the doorway.
     facing: -1.45,
     seed: 'rasca-cat',
@@ -6422,7 +6492,6 @@ function buildNightDoor(scene: ContactScene): void {
    */
   const leafSlab = new THREE.BoxGeometry(DOOR.w, DOOR.h, 0.036);
   leafSlab.translate(DOOR.x, DOOR.h / 2, LEAF_Z);
-  carcass.push(leafSlab);
 
   /*
    * The framing, standing proud toward the street.
@@ -6447,6 +6516,15 @@ function buildNightDoor(scene: ContactScene): void {
     carcass.push(piece);
   }
 
+  /*
+   * Two meshes, because the panelling is carried by value and not by relief.
+   *
+   * The slab is the darker `doorPanel` and the framing over it is `doorLeaf`, so what shows
+   * between the stiles and rails reads as sunk. With shadows off across the project a 24mm
+   * recess receives identical light to the wood beside it - the door was modelled right and
+   * rendered as a plain slab, which is what it was reported as.
+   */
+  const panelMesh = meshOf('DoorPanels', leafSlab, MAT.doorPanel);
   const doorMesh = meshOf('Door', mergeGeometries(carcass, false) ?? carcass[0], MAT.doorLeaf);
 
   const doorRoot = ENGINE.SceneNode.create({
@@ -6461,6 +6539,8 @@ function buildNightDoor(scene: ContactScene): void {
    */
   const ontoHinge = (geometry: THREE.BufferGeometry): THREE.BufferGeometry =>
     geometry.translate(-(DOOR.x - DOOR.w / 2), 0, 0.26);
+  ontoHinge(panelMesh.geometry);
+  doorRoot.add(panelMesh);
   ontoHinge(doorMesh.geometry);
   doorRoot.add(doorMesh);
 
@@ -7121,6 +7201,7 @@ function buildNightDoor(scene: ContactScene): void {
     ['terrace', CERTAINTY.SHAPED],
     ['terrace-dark', CERTAINTY.SHAPED],
     ['terrace-glass', CERTAINTY.SHAPED],
+    ['terrace-room', CERTAINTY.SHAPED],
     /*
      * The cat is DESCRIBED, and it is the one thing here the machine is not guessing at.
      *

@@ -240,7 +240,20 @@ export class ContactScene extends ENGINE.SceneNode {
       inked?: boolean;
     } = {}
   ): void {
-    this.add(node);
+    /*
+     * Adopt it only if nothing else has it.
+     *
+     * `add` REPARENTS - three removes a node from its current parent before taking it - so
+     * registering a prop that a builder had deliberately hung off something else silently
+     * tore it away and left its position, still expressed in the old parent's space, being
+     * read in this one. The lock was parented to the door so it would swing with it, and
+     * this line put it back on the scene root with its door-local x of 0.81, which landed
+     * it on the brickwork a metre to the right of the doorway. Reported exactly that way.
+     *
+     * A prop that already has a parent has been placed on purpose. Registering it is asking
+     * for it to be nameable, cueable and resettable - not for it to be moved.
+     */
+    if (!node.parent) this.add(node);
     this.props.set(id, {
       node,
       actions: options.actions ?? {},
