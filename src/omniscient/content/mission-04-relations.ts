@@ -128,6 +128,31 @@ export const MISSION_04: MissionDefinition = {
         'need to. They already knew.',
       keywords: ['photographs', 'names', 'box'],
       cue: 'prop.highlight:photo-box',
+      /*
+       * The box gives up what is in it.
+       *
+       * Reported as the room having nothing to act on: the shoebox pulses when this
+       * hint is opened and there is no way to tell what to do with it. Everything the
+       * player needed came from Ileana, and §131 asks the environment to carry usable
+       * evidence rather than atmosphere about the evidence.
+       *
+       * Names and faces only. No relationship appears on any of these and none ever
+       * can: the request IS that nobody wrote the relationships down because they all
+       * already knew them, and she is the last one who does. A print saying
+       * 'grandmother' would end the mission on the spot.
+       *
+       * `age` reaches the hair and nothing else - see link/photographs. Sofia and
+       * Grigore were old when these were taken, which the player can see and which
+       * settles nothing on its own: the board offers grandmother AND aunt, and being
+       * old is no help in choosing between them without what Ileana says.
+       */
+      photographs: [
+        { id: 'petra', name: 'Petra', age: 0.3 },
+        { id: 'andrei', name: 'Andrei', age: 0.1 },
+        { id: 'sofia', name: 'Sofia', age: 0.9 },
+        { id: 'grigore', name: 'Grigore', age: 0.8 },
+        { id: 'marta', name: 'Marta', age: 0.1 },
+      ],
     },
     {
       id: 'hint-tideline',

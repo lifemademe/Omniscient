@@ -400,6 +400,9 @@ export class SessionController {
       summary: hint.summary,
       detail: this.opened.has(hint.id) ? hint.detail : undefined,
       keywords: hint.keywords,
+      // Gated with the detail, for the same reason: an unopened observation is a line
+      // on a phone, and the box has not been looked in yet.
+      photographs: this.opened.has(hint.id) ? hint.photographs : undefined,
     }));
 
     const definition = this.runtime.definition;

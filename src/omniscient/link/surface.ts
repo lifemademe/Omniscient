@@ -1,4 +1,5 @@
 import type { BeamSpec } from '../mission/beam.js';
+import type { PhotoSpec } from './photographs.js';
 import type { Trail } from '../mission/breadcrumbs.js';
 import type { Hop } from '../mission/pursuit.js';
 import type { ClueId, Evidence, Trace } from '../mission/traces.js';
@@ -41,6 +42,8 @@ export interface HintView {
   detail?: string;
   /** Words to emphasise: the vocabulary the player can use back. */
   keywords?: string[];
+  /** Prints to lay out under the detail, front up, turnable. */
+  photographs?: PhotoSpec[];
 }
 
 /** A recorded fact, shown in RECORDS when relevant to the open request (§19). */

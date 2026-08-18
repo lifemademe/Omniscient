@@ -11,6 +11,7 @@
 
 import type { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import type { IntentDefinition } from './intent.js';
+import type { PhotoSpec } from '../link/photographs.js';
 import type { BeamSpec } from './beam.js';
 import type { LockSpec } from './lock.js';
 import type { PipeGrid } from './pipes.js';
@@ -64,6 +65,17 @@ export interface MissionHint {
   keywords?: string[];
   /** Contact View cue fired when opened, e.g. "prop.highlight:connector-b". */
   cue?: string;
+  /**
+   * Things in the box, shown as prints the player can turn over.
+   *
+   * A hint is normally a sentence about something in the room; this is the one that
+   * hands the room's contents over. Authored as people rather than as pictures - a name
+   * and roughly how old they look - because what a print of them looks like is the
+   * console's business, not the mission's. See link/photographs.
+   *
+   * They carry no relationships and must not. See the same note.
+   */
+  photographs?: PhotoSpec[];
   /**
    * Hidden until the beat that makes it observable. A hint about the back of the set is
    * not available until somebody has turned the set around.

@@ -22,6 +22,9 @@
 import { injectConsoleChrome } from './console-chrome.js';
 import { audio } from '../audio/ConsoleAudio.js';
 
+import { createPhotographs } from './photographs.js';
+
+import type { PhotoSpec } from './photographs.js';
 import type {
   HintView,
   InterventionSurface,
@@ -328,6 +331,60 @@ export const TERMINAL_CSS = `
   text-transform: uppercase;
   margin-bottom: 4px;
   color: #7fe08a;
+}
+/*
+ * The shoebox, opened.
+ *
+ * Laid out as a row of prints rather than a list of names, because the point is that
+ * they are objects somebody kept - and because a name in a list is the thing the mission
+ * is careful NOT to give away for free. You turn one over to read it.
+ */
+.omni-plates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 9px;
+}
+.omni-plate {
+  position: relative;
+  width: 66px;
+  height: 84px;
+  padding: 0;
+  border: 1px solid #23422c;
+  background: #0d160f;
+  cursor: pointer;
+  /* Sat askew in the box. Nobody stacks photographs square. */
+  transition: transform 120ms ease, border-color 120ms ease;
+}
+.omni-plate:nth-child(2n) { transform: rotate(1.4deg); }
+.omni-plate:nth-child(3n) { transform: rotate(-1.8deg); }
+.omni-plate:hover { border-color: #4f9a5e; transform: translateY(-2px) rotate(0deg); }
+.omni-plate img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+/* Which way up it is, for anybody who has turned several. */
+.omni-plate__face {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 1px 0 2px;
+  background: rgba(6, 12, 8, 0.72);
+  color: #4f9a5e;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+}
+.omni-plates__note {
+  width: 100%;
+  margin-top: 2px;
+  color: #3f6b48;
+  font-size: 10px;
+  letter-spacing: 0.08em;
 }
 .omni-terminal__foot {
   border-top: 1px solid #23422c;
@@ -1166,6 +1223,7 @@ export class LocalSurface implements InterventionSurface {
       detail.className = 'omni-item__detail';
       this.appendEmphasised(detail, hint.detail, hint.keywords);
       item.appendChild(detail);
+      if (hint.photographs?.length) item.appendChild(this.renderPlates(hint.photographs));
     } else {
       const meta = document.createElement('span');
       meta.className = 'omni-item__meta';
@@ -1175,6 +1233,58 @@ export class LocalSurface implements InterventionSurface {
 
     item.addEventListener('click', () => this.dispatch({ kind: 'hint', hintId: hint.id }));
     return item;
+  }
+
+  /**
+   * The prints from an opened box, front up, one turn each.
+   *
+   * Built as buttons inside a button, which is invalid HTML and works, and is still the
+   * wrong shape - so the click is stopped from reaching the hint behind it, or turning a
+   * photograph would also re-fire the hint's own cue and pulse the box in the room every
+   * time somebody read a name.
+   *
+   * The name is drawn INTO the image rather than written beside it. That is the whole
+   * gesture: the back of a photograph is where it is written, and having to turn it over
+   * is what makes five names feel like five objects instead of a list. It also keeps this
+   * clear of the safe-UI rule by construction - nothing here builds markup from a string.
+   */
+  private renderPlates(specs: PhotoSpec[]): HTMLElement {
+    const strip = document.createElement('div');
+    strip.className = 'omni-plates';
+
+    for (const plate of createPhotographs(specs)) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'omni-plate';
+
+      const image = document.createElement('img');
+      image.src = plate.front;
+      // Untrusted-safe: alt is a text attribute, and it is what a screen reader gets.
+      image.alt = 'a photograph';
+
+      const face = document.createElement('span');
+      face.className = 'omni-plate__face';
+      face.textContent = 'turn over';
+
+      let front = true;
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        front = !front;
+        image.src = front ? plate.front : plate.back;
+        image.alt = front ? 'a photograph' : 'the back of a photograph';
+        face.textContent = front ? 'turn over' : 'turn back';
+      });
+
+      button.append(image, face);
+      strip.appendChild(button);
+    }
+
+    const note = document.createElement('span');
+    note.className = 'omni-plates__note';
+    note.textContent = 'Names on the backs. Nobody wrote down how they are related - only she knows that.';
+    strip.appendChild(note);
+
+    return strip;
   }
 
   private renderRecord(record: RecordView): HTMLElement {
