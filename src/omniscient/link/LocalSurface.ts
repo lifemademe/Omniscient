@@ -737,6 +737,8 @@ export class LocalSurface implements InterventionSurface {
 
   private readonly handlers = new Set<(message: PlayerMessage) => void>();
   private renderedCount = 0;
+  /** Who the log currently belongs to. See the reset in `present`. */
+  private talkingTo: string | null = null;
   private tab: Tab = 'chat';
   private lastState: SurfaceState | null = null;
   /**
@@ -1232,6 +1234,7 @@ export class LocalSurface implements InterventionSurface {
     this.renderedSuggestKey = '';
     this.handlers.clear();
     this.renderedCount = 0;
+    this.talkingTo = null;
   }
 
   public onMessage(handler: (message: PlayerMessage) => void): () => void {
@@ -1366,11 +1369,28 @@ export class LocalSurface implements InterventionSurface {
     // The whole panel goes red, not just the notice inside it.
     this.root?.classList.toggle('omni-terminal--lost', state.failure !== undefined);
 
-    // Append only what is new, so the log does not flicker or lose scroll position.
-    if (state.transcript.length < this.renderedCount) {
+    /*
+     * Append only what is new, so the log does not flicker or lose scroll position - but
+     * start clean whenever the person on the line changes.
+     *
+     * The old guard inferred a new session from the transcript getting SHORTER, and that
+     * misses the case it most needs to catch. Open Dorin, read his opening line, hang up:
+     * the log has one entry and `renderedCount` is 1. Open Vasile: his transcript also
+     * starts at one entry, `1 < 1` is false, nothing is cleared, and the append loop starts
+     * at index 1 of a one-item array - so Dorin's opening stays on screen and Vasile's is
+     * never drawn at all. Reported exactly that way.
+     *
+     * Keyed on WHO is talking rather than on how much they have said. A session is a person
+     * on a line; when that changes, everything the last one said belongs to a different
+     * conversation. The length check stays underneath it for the case where the same
+     * contact is re-opened after a failure.
+     */
+    const talkingTo = state.contactName;
+    if (talkingTo !== this.talkingTo || state.transcript.length < this.renderedCount) {
       this.logElement.replaceChildren();
       this.renderedCount = 0;
     }
+    this.talkingTo = talkingTo;
     /**
      * One blip per line that arrives, and a stagger so they do not all land at once.
      *

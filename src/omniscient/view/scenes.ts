@@ -5654,24 +5654,78 @@ function buildFloodedCellar(scene: ContactScene): void {
     position: new THREE.Vector3(-1.15, 0, -1.6),
     rotation: new THREE.Euler(0, 0.7, 0),
     /**
-     * One hand on the pipe he is talking about.
+     * No hand target, and this is the third contact to arrive at that answer.
      *
-     * Not on an inspection cover: those are at floor level and a standing man cannot
-     * reach one - measured, 0.68 against an arm that is 0.63. The run along the wall at
-     * 1.35 is chest height and is the thing his whole opening line is about.
+     * It was on the pipe, which is the right thing for him to be touching - it is what his
+     * opening line is about - and the target was REACHABLE, 0.51m against a 0.63m arm. It
+     * was also 0.46m BEHIND HIM. The whole run sits at z = -1.95 on the wall, he stands at
+     * -1.6 facing the camera, so there is no point on that pipe he can reach without
+     * putting his arm round his own back, and the solver did exactly as it was told.
+     * Reported as his left hand bent backwards.
+     *
+     * No placement fixes it either: standing him behind the pipe puts him inside the wall,
+     * and turning him to face along it turns his face out of the shot. The pipe is on a
+     * wall and he has to stand in front of it looking at the camera, which means his hands
+     * are his own.
+     *
+     * The run is pointed at by the hint cue instead, which is what that cue is for.
      */
-    handsOn: {
-      left: new THREE.Vector3(-1.45, 1.35, -1.95),
-    },
+    settleWrists: 0.6,
     liveliness: 1.15,
   });
 
   // -- Light -----------------------------------------------------------------
   // One bulkhead lamp on the wall and a cold spill off the water. A cellar has no windows,
   // so this is the only room in the game lit entirely by its own fittings.
+  /**
+   * The bulkhead, which was a sphere.
+   *
+   * Reported as not recognisable, and it was not a lamp - it was a 120mm ball of emissive
+   * material stuck on a wall, so with bloom over it the only thing on screen was an orange
+   * disc. Nothing about it said fitting, and the brightest object in the room read as a
+   * smudge.
+   *
+   * A bulkhead is three things and it needs all three: a plate bolted to the wall, a
+   * diffuser standing off it, and a WIRE GUARD over that. The guard is what makes it
+   * recognisable - unmistakably industrial, exactly what a school cellar has because
+   * somebody will eventually put a ladder through it, and nothing else in the game has one.
+   * It also breaks the bloom into ribs instead of letting it stay a circle, which is most
+   * of what turns a blob into a lamp.
+   */
   const lampAt = new THREE.Vector3(-0.4, 2.05, -2.0);
-  const shade = new THREE.SphereGeometry(0.12, 10, 8);
-  shade.translate(lampAt.x, lampAt.y, lampAt.z + 0.1);
+  const housing: THREE.BufferGeometry[] = [];
+
+  const plate = new THREE.CylinderGeometry(0.15, 0.16, 0.035, 12);
+  plate.rotateX(Math.PI / 2);
+  plate.translate(lampAt.x, lampAt.y, lampAt.z + 0.018);
+  housing.push(plate);
+
+  /*
+   * The guard: a rim and four ribs over the front of the glass.
+   *
+   * Modelled rather than suggested, because at this distance each rib is a couple of pixels
+   * and the SILHOUETTE is the entire read - a lamp with bars across it is a bulkhead, and
+   * a lamp without them is a bulb.
+   */
+  const rim = new THREE.TorusGeometry(0.132, 0.008, 5, 14);
+  rim.translate(lampAt.x, lampAt.y, lampAt.z + 0.135);
+  housing.push(rim);
+  for (let i = 0; i < 4; i++) {
+    const rib = new THREE.TorusGeometry(0.135, 0.007, 4, 10, Math.PI);
+    rib.rotateY(Math.PI / 2);
+    rib.rotateZ(Math.PI / 2 + (i * Math.PI) / 4);
+    rib.translate(lampAt.x, lampAt.y, lampAt.z + 0.02);
+    housing.push(rib);
+  }
+  scene.registerProp(
+    'bulkhead-guard',
+    meshOf('BulkheadGuard', mergeGeometries(housing, false) ?? housing[0], MAT.metal)
+  );
+
+  // The diffuser, squashed against the plate the way a bulkhead's glass is.
+  const shade = new THREE.SphereGeometry(0.115, 12, 9);
+  shade.scale(1, 1, 0.78);
+  shade.translate(lampAt.x, lampAt.y, lampAt.z + 0.085);
   scene.registerProp('bulkhead', meshOf('Bulkhead', shade, MAT.lamp));
 
   scene.registerProp(
@@ -5781,6 +5835,9 @@ function buildFloodedCellar(scene: ContactScene): void {
     ['side-wall', CERTAINTY.SHAPED],
     ['ceiling', CERTAINTY.SHAPED],
     ['joists', CERTAINTY.SHAPED],
+    // The guard is metal on a wall like everything else down here; the diffuser inside it
+    // is unlit and takes no grading at all.
+    ['bulkhead-guard', CERTAINTY.SHAPED],
     ['light-fitting', CERTAINTY.SHAPED],
     ['bulb', CERTAINTY.SHAPED],
     // The chalk marks are evidence the machine can see for itself once it is drawing the
