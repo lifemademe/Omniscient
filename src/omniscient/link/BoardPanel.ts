@@ -35,6 +35,20 @@ import type { DeviceView, PlayerMessage } from './surface.js';
 const STYLE_ID = 'omniscient-board-styles';
 
 const BOARD_CSS = `
+/*
+ * The panel bounds ITSELF, and the working area is what gives way.
+ *
+ * Reported as the send button being unclickable after picking from the bag, which it
+ * was - by being off the bottom of the screen. The panel sits in the console column
+ * above the input, its height was whatever its contents came to, and six items two
+ * across is tall enough to push its own foot past the edge. The button was enabled
+ * the whole time and simply not in the room.
+ *
+ * So: a ceiling on the panel, the head and the foot fixed, and the grid taking
+ * whatever is left and scrolling inside it. The send button cannot leave the screen
+ * now however many things a contact has in their bag, which is the property worth
+ * having - a device the player can see and not reach is worse than no device.
+ */
 .omni-board {
   display: flex;
   flex-direction: column;
@@ -42,7 +56,10 @@ const BOARD_CSS = `
   padding: 12px 14px 14px;
   border-top: 1px solid rgba(127, 224, 138, 0.22);
   background: rgba(6, 14, 9, 0.5);
+  max-height: 52vh;
+  min-height: 0;
 }
+.omni-board__head, .omni-board__foot { flex: none; }
 .omni-board__head {
   display: flex;
   align-items: baseline;
@@ -72,7 +89,7 @@ const BOARD_CSS = `
 .omni-board--folded .omni-board__stage,
 .omni-board--folded .omni-board__foot { display: none; }
 /* The wires are drawn on a layer behind the boxes, sized to the grid. */
-.omni-board__stage { position: relative; }
+.omni-board__stage { position: relative; flex: 1; min-height: 0; display: flex; }
 .omni-board__wires {
   position: absolute;
   inset: 0;
@@ -97,7 +114,9 @@ const BOARD_CSS = `
   grid-template-columns: 1fr auto 1fr;
   gap: 8px 26px;
   align-items: start;
-  max-height: 38vh;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
