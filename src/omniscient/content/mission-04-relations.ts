@@ -251,6 +251,29 @@ export const MISSION_04: MissionDefinition = {
     },
   ],
 
+  /*
+   * NOBODY IN THIS ROOM GESTURES, and it is the only room like that.
+   *
+   * Three reports, three different clips, the same sentence each time: she tilts, she
+   * turns, she moves when she should not. It stopped being a search for the wrong clip
+   * once they were measured against each other.
+   *
+   *   Pointing Forward  left arm 57deg yaw, right thigh 36, feet 27-30
+   *   Reacting          a whole-body recoil; the legs swing through a full wrap
+   *   Sarcastic Nod     head 10deg yaw / 14deg pitch, left shoulder 8deg
+   *
+   * Even the smallest of them is 8 to 14 degrees of movement, and that is fine on six
+   * of the seven contacts. It is not fine on this one, and the reason is the camera
+   * rather than the clip: she is framed from across a table at chest height with both
+   * hands pinned to its near edge. There is no room in that composition for her to move
+   * in, so any movement is the whole frame moving. Mirela does the same nod at a bench
+   * with a metre of air around her and it reads as a person agreeing.
+   *
+   * She still breathes - the idle runs, as it does for everybody. What she does not do
+   * is perform, which is §209's rule anyway and happens to be exactly who she is: the
+   * one person in the cast whose stillness is not exhaustion, sitting in her dead
+   * grandmother's front room having stopped, which is the reason she is calling at all.
+   */
   beats: [
     {
       id: 'open',
@@ -365,7 +388,6 @@ export const MISSION_04: MissionDefinition = {
        * story, and there is no story in a spark she was never going to touch.
        */
       id: 'scattergun',
-      gesture: 'prop.reacting:contact',
       tempo: Tempo.Respond,
       say:
         'To everyone? Half these people are dead. You want me to put a letter through a ' +
@@ -415,7 +437,6 @@ export const MISSION_04: MissionDefinition = {
     },
     {
       id: 'solved',
-      gesture: 'prop.nod:contact',
       tempo: Tempo.Respond,
       say:
         'That is it. That is them. Aunt, cousin, grandmother, grandfather, niece. Two ' +
