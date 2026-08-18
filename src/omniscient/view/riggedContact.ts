@@ -412,6 +412,24 @@ const RELEASE = 0.5;
    */
   let gestureTakesHands = true;
 
+  /**
+   * Bone keys the breathing loop actually writes.
+   *
+   * The reason the game needed this is the pose reported after a point: not the
+   * gesture, not the idle, and permanent. A gesture clip animates far more of the
+   * skeleton than a six second breath does - shoulders, spine, neck, the whole
+   * pointing side - and when it fades to nothing, every bone it touched that the
+   * breathing clip does NOT touch has no-one left writing it. It keeps the last
+   * value it was given, which is the clamped final frame of the gesture, forever.
+   *
+   * The arms hid it for a while because the hand IK runs afterwards and drags them
+   * back to the bench regardless. Everything above the shoulders had nothing.
+   */
+  const baseTracks = new Set<string>();
+
+  /** Bones the running gesture owns that the idle will not take back, and where they were. */
+  let orphans: Array<{ bone: THREE.Object3D; from: THREE.Quaternion; rest: THREE.Quaternion }> = [];
+
   const contact: RiggedContact = {
     root,
     bones: {},
@@ -446,6 +464,27 @@ const RELEASE = 0.5;
         action.play();
         gestureAction = action;
         gestureLeft = clip.duration;
+
+        /*
+         * Everything this clip moves that the breath will not move back.
+         *
+         * Collected at the start rather than the end because the clip is what knows,
+         * and collected per gesture because a point and a nod orphan different bones.
+         * The `from` quaternion is filled in when the release begins - at this moment
+         * the gesture has not moved anything yet.
+         */
+        orphans = [];
+        for (const track of clip.tracks) {
+          if (!track.name.endsWith('.quaternion')) continue;
+          const key = boneKey(track.name.split('.')[0]);
+          if (baseTracks.has(key)) continue;
+          const bone = contact.bones[key];
+          const rest = contact.rest[key];
+          if (bone && rest) orphans.push({ bone, from: new THREE.Quaternion(), rest });
+        }
+        // Printed because it is the whole diagnosis in one number: zero means the idle
+        // covers this clip and the stuck pose was something else.
+        console.log(`[gesture] ${name}: ${orphans.length} bones the idle will not take back`);
       });
     },
 
@@ -462,9 +501,31 @@ const RELEASE = 0.5;
           gestureAction?.fadeOut(RELEASE);
           baseAction?.fadeIn(RELEASE);
           gestureAction = null;
+          // Where the clip left them, so they can be carried home from there rather
+          // than snapped to rest the instant the fade starts.
+          for (const orphan of orphans) orphan.from.copy(orphan.bone.quaternion);
         }
       } else if (hold > 0) {
         hold = Math.max(0, hold - deltaTime / RELEASE);
+      }
+
+      /*
+       * Carry the orphaned bones back to the file's own rest pose.
+       *
+       * After the mixer, for the same reason the IK is: the mixer writes what it
+       * writes every frame and anything set before it is gone. On the same eased
+       * curve as the hands, so the shoulders and the spine arrive when the hand does
+       * and the whole release is one movement.
+       *
+       * Cleared at the end rather than left running, so this costs nothing on the
+       * overwhelming majority of frames, which have no gesture anywhere near them.
+       */
+      if (orphans.length > 0 && gestureLeft <= 0) {
+        const home = 1 - hold * hold * (3 - 2 * hold);
+        for (const orphan of orphans) {
+          orphan.bone.quaternion.slerpQuaternions(orphan.from, orphan.rest, home);
+        }
+        if (hold <= 0) orphans = [];
       }
 
       /*
@@ -627,6 +688,9 @@ const RELEASE = 0.5;
          * a point: it was a point and an idle, halfway between, with the arms drifting
          * outward to somewhere neither clip ever goes.
          */
+        for (const track of wanted.tracks) {
+          if (track.name.endsWith('.quaternion')) baseTracks.add(boneKey(track.name.split('.')[0]));
+        }
         baseAction = mixer.clipAction(wanted);
         baseAction.play();
       }
