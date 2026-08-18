@@ -453,6 +453,16 @@ const RELEASE = 0.5;
     if (!baseAction) return;
     baseAction.enabled = true;
     baseAction.paused = false;
+    /*
+     * `weight` directly, and never `setEffectiveWeight`.
+     *
+     * The two are not interchangeable here. `_updateWeight` computes
+     * `this.weight * interpolant`, so `weight` is the CEILING a fade ramps toward
+     * and the interpolant is the ramp - and `setEffectiveWeight` additionally calls
+     * `stopFading()`, which throws away a crossfade that is halfway through.
+     * Assigning the ceiling leaves the ramp alone.
+     */
+    baseAction.weight = 1;
     if (!baseAction.isRunning()) baseAction.play();
   };
 
@@ -521,8 +531,20 @@ const RELEASE = 0.5;
         action.reset();
         action.setLoop(THREE.LoopOnce, 1);
         action.clampWhenFinished = true;
+        /*
+         * Weight one, and let the crossfade do the ramping.
+         *
+         * This said `setEffectiveWeight(0)` and that one line was the T-pose. Weight
+         * is a multiplier, not a starting value: `_updateWeight` returns
+         * `this.weight * interpolant`, so zeroing it meant the fade-in ramped 0 to 1
+         * and was multiplied by nothing the whole way. The clip never gained any
+         * weight at all while the idle faded out underneath it, so the sum went to
+         * ZERO - and a bone with no action driving it is drawn at the bind pose.
+         * Not a glimpse of one either: it was the entire gesture.
+         */
+        action.enabled = true;
+        action.weight = 1;
         action.play();
-        action.setEffectiveWeight(0);
         // Idle 1 -> 0 and the clip 0 -> 1 over the same quarter second, so the two
         // always add to one and nothing is ever left to the bind pose.
         if (baseAction) baseAction.crossFadeTo(action, TAKE, false);
