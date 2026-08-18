@@ -388,9 +388,23 @@ const BOARD_CSS = `
 }
 .omni-board__cell:hover { border-color: rgba(127, 224, 138, 0.75); }
 /* Fixed pieces are already plumbed in - dimmer, and they do not take a pointer. */
+/*
+ * A blank is a slot with no pipe in it, NOT an absence.
+ *
+ * These were fully transparent, and the player read the first row as "shifted". It is not
+ * shifted - cell 0 of Vasile's run is blank, so row 0's leftmost slot is empty - but with
+ * the slot invisible there is nothing to say so. The board's own rectangle vanishes, and
+ * with it the frame of reference the whole puzzle is reasoned against: you cannot see that
+ * the run is four wide, so a row starting further right looks like a mistake.
+ *
+ * Drawn as a recessed socket instead. Dashed and very low contrast so it never competes
+ * with a piece or invites a click, dark enough to read as a hole in the board rather than a
+ * tile on it - and present, so the grid is a grid.
+ */
 .omni-board__cell--blank {
-  border-color: transparent;
-  background: transparent;
+  border-style: dashed;
+  border-color: rgba(127, 224, 138, 0.16);
+  background: rgba(3, 9, 5, 0.6);
   cursor: default;
 }
 .omni-board__cell--fixed {
