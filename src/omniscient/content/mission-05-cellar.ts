@@ -46,12 +46,26 @@ export const FACT_CELLAR_RUN = 'cellar-run-to-the-outfall';
  * So there are no blanks. Nine slots, nine pieces, a square board. The topology is the
  * puzzle; the outline of the board never was, and it was costing more than it gave.
  *
+ * ## Every piece has exactly two openings, and that is deliberate
+ *
+ * The middle was a tee. A tee has three openings, so water entering it leaves by two, and
+ * one of those branches inevitably ends at a piece that does not accept it - reported by the
+ * player as the centre routing water to a pipe connected to nothing. They were right, and it
+ * is worse than a legibility problem: a branch is not what "a run from the sump to the
+ * outfall" means. The fiction is one line of pipe, and a tee makes it a tree.
+ *
+ * With only straights and bends the wet cells can only ever form a single path, so the
+ * highlight reads as a run growing rather than as water spilling somewhere pointless. It
+ * cost nothing: the same 512 solutions, the same one in thirty-two, the same three pieces
+ * minimum, the same eleven per cent at rest. preview-stuck now asserts it.
+ *
  * ## Verified against the shipped grader, not by eye
  *
  * 512 of the 16,384 possible arrangements carry water - one in thirty-two - and because the
  * grader is a flood fill rather than a stored answer, every one of those 512 is accepted.
+ * It does not flow as presented: water reaches 11% of what it could.
  *
- * The tee in the middle is authored a quarter turn out of true, which is the most hostile
+ * The middle piece is authored a quarter turn out of true, which is the most hostile
  * starting position this shape set allows: swept over all 16,384 authored assignments, no
  * arrangement forces more than three of the seven movable pieces to be turned, and this one
  * forces three. Left at zero the player could have solved it by nudging two.
@@ -70,7 +84,7 @@ const CELLAR_RUN: PipeGrid = {
     { shape: 'straight', turn: 1, fixed: true },
     { shape: 'bend' },
     // A quarter out. See the note above - this is the piece doing the work.
-    { shape: 'tee', turn: 1 },
+    { shape: 'straight', turn: 1 },
     { shape: 'bend' },
     // The sump, where the pump pushes into the run.
     { shape: 'straight', turn: 1, fixed: true },

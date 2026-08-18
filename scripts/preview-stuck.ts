@@ -27,6 +27,7 @@ import { flows, wetted } from '../src/omniscient/mission/pipes.js';
 
 import type { DeviceSubmission } from '../src/omniscient/mission/device.js';
 import type { Device } from '../src/omniscient/mission/types.js';
+import type { PipeGrid } from '../src/omniscient/mission/pipes.js';
 import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
 
 const SEED = 0x0c151e;
@@ -190,6 +191,57 @@ function solveDevice(device: Device): DeviceSubmission {
   }
   return { kind: 'pipes', rotations };
 }
+/**
+ * What a pipe grid has to be, checked rather than trusted.
+ *
+ * Three of these were found by a player looking at the board, one after another: it did not
+ * fill its own rectangle, the middle piece branched, and one arrangement of it was solvable
+ * by nudging two pieces. None of them is a crash, none shows up in a type, and each one had
+ * to be noticed by eye before anybody knew.
+ *
+ * The last one is the reason this is worth automating. Authored turns are four numbers a
+ * designer types, and getting them wrong does not break the puzzle - it makes it trivial,
+ * silently, in a way that only shows up if somebody counts.
+ */
+function checkPipeGrid(label: string, grid: PipeGrid): void {
+  check(
+    `${label}: the board is full - ${grid.cells.length} cells for ${grid.columns}x${grid.rows}`,
+    grid.cells.length === grid.columns * grid.rows
+  );
+  const blanks = grid.cells.filter((c) => c.shape === 'blank').length;
+  check(`${label}: no blank slots - a ragged board reads as a broken one`, blanks === 0);
+  const branching = grid.cells.filter((c) => c.shape === 'tee' || c.shape === 'cross').length;
+  check(
+    `${label}: no branching pieces - a run is a line, not a tree`,
+    branching === 0,
+    branching ? `${branching} tee/cross` : undefined
+  );
+
+  const free = grid.cells.map((c, i) => (c.fixed ? -1 : i)).filter((i) => i >= 0);
+  const rot = new Array(grid.cells.length).fill(0);
+  let solved = 0;
+  let fewest = 99;
+  for (let n = 0; n < 4 ** free.length; n++) {
+    let v = n;
+    for (const i of free) {
+      rot[i] = v & 3;
+      v >>= 2;
+    }
+    if (!flows(grid, rot)) continue;
+    solved += 1;
+    const turns = free.filter((i) => rot[i] !== 0).length;
+    if (turns < fewest) fewest = turns;
+  }
+  const zero = new Array(grid.cells.length).fill(0);
+  check(`${label}: it is solvable`, solved > 0, `${solved} of ${4 ** free.length}`);
+  check(`${label}: it is not already solved`, !flows(grid, zero));
+  check(
+    `${label}: it takes real work - at least 3 pieces must move`,
+    fewest >= 3,
+    `fewest is ${fewest} of ${free.length}`
+  );
+}
+
 let failures = 0;
 
 function check(label: string, ok: boolean, detail?: string): void {
@@ -677,6 +729,20 @@ console.log('\n=== THE PIPE GRID ===\n');
       led.push({ at: t, to: followerAt(chase.beam, t + 0.35) });
     }
     check('leading the follower wins it', replayBeam(chase.beam, led).blinded);
+  }
+}
+
+/*
+ * Every pipe grid in the campaign. There is one today; the loop is so a second cannot
+ * ship without being held to the same shape as the first.
+ */
+console.log('');
+console.log('=== THE PIPE RUNS ===');
+console.log('');
+for (const mission of [MISSION_01, MISSION_02, MISSION_03, MISSION_04, MISSION_05, MISSION_06, MISSION_07, MISSION_08]) {
+  for (const beat of mission.beats) {
+    if (beat.device?.kind !== 'pipes') continue;
+    checkPipeGrid(`${mission.id}/${beat.id}`, beat.device.grid);
   }
 }
 
