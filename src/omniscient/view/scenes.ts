@@ -6186,6 +6186,61 @@ function buildNightDoor(scene: ContactScene): void {
   plug.add(meshOf('Keyway', keyway, MAT.dark));
   lockRoot.add(plug);
   lockPlug = plug;
+
+  /**
+   * The pick, in the keyway.
+   *
+   * ## Why it is parented to the plug and not the plate
+   *
+   * Because it is in the cylinder. A pick sits in the keyway with the tension wrench under
+   * it, and when a pin sets and the plug gives, the pick goes round with it - that is what
+   * "the cylinder gave" MEANS to the man holding it. Parenting it here gets that for free
+   * and makes it impossible to get wrong: there is no second rotation to keep in step,
+   * because there is only one rotation.
+   *
+   * ## Two pieces, because one of them snaps
+   *
+   * A pick that fails does not bend, it shears - they are 0.5mm spring steel and they go
+   * with a crack. So the tip is its own node: on a drop it stays in the keyway for a moment
+   * while the handle comes away, which is the picture anybody who has broken one recognises.
+   *
+   * Small. The shaft is 4mm across against a 44mm escutcheon, which is the real ratio and
+   * is why it reads as a tool rather than a screwdriver.
+   */
+  const pick = ENGINE.SceneNode.create({ name: 'Pick', position: new THREE.Vector3() });
+  const pickTip = ENGINE.SceneNode.create({ name: 'PickTip', position: new THREE.Vector3() });
+  const tipBar = new THREE.BoxGeometry(0.004, 0.011, 0.03);
+  // Sitting low in the keyway, where a pick rides under the pins rather than up the middle.
+  tipBar.translate(0, -0.005, 0.012);
+  pickTip.add(meshOf('PickTipBar', tipBar, MAT.metal));
+  pick.add(pickTip);
+
+  const pickShaft = new THREE.BoxGeometry(0.004, 0.009, 0.086);
+  pickShaft.translate(0, -0.005, 0.07);
+  pick.add(meshOf('PickShaft', pickShaft, MAT.metal));
+  // The handle: the flat somebody actually holds, turned across the shaft.
+  const pickGrip = new THREE.BoxGeometry(0.016, 0.004, 0.042);
+  pickGrip.translate(0, -0.005, 0.132);
+  pick.add(meshOf('PickGrip', pickGrip, MAT.dark));
+
+  /*
+   * The tension wrench, which never moves and never breaks.
+   *
+   * Below the pick and turned into the bottom of the keyway. It is the thing the plug is
+   * being turned AGAINST, so without it on screen the cylinder appears to rotate because
+   * the pick asked it to - and the whole reason a dropped set drops is that this is holding
+   * pressure the moment the pick leaves.
+   */
+  const wrenchArm = new THREE.BoxGeometry(0.005, 0.011, 0.026);
+  wrenchArm.translate(0, -0.012, 0.01);
+  pick.add(meshOf('WrenchArm', wrenchArm, MAT.metal));
+  const wrenchTail = new THREE.BoxGeometry(0.005, 0.03, 0.005);
+  wrenchTail.translate(0, -0.026, 0.0);
+  pick.add(meshOf('WrenchTail', wrenchTail, MAT.metal));
+
+  // Not in the lock until somebody starts work on it.
+  pick.visible = false;
+  plug.add(pick);
   /**
    * The cylinder turns as the pins go up, and springs back when they drop.
    *
@@ -6220,11 +6275,102 @@ function buildNightDoor(scene: ContactScene): void {
     inked: true,
     anchors: { default: new THREE.Vector3(0, 0, 0.06) },
     actions: {
-      /** One more pin up: a few degrees of give against the wrench. */
+      /**
+       * He gets to work: the pick goes in.
+       *
+       * Fired by the transition into the device beat rather than on the first press,
+       * because by then he has already said "wrench is in, I am on the pins" - and an empty
+       * keyway under that line is the world contradicting the man.
+       */
+      pick: (tweener) => {
+        pick.visible = true;
+        pickTip.visible = true;
+        pickTip.position.set(0, 0, 0);
+        pickTip.rotation.set(0, 0, 0);
+        tweener.add(
+          (t: number) => {
+            pick.position.set(0, 0, 0.09 * (1 - t));
+            pick.scale.setScalar(1);
+            pick.rotation.set(0, 0, 0);
+          },
+          { duration: 0.42, easing: Ease.outCubic, channel: 'lock-pick' }
+        );
+      },
+
+      /** One more pin up: a few degrees of give against the wrench, pick and all. */
       set: (tweener) => turnPlug(tweener, Math.min(Math.PI / 2, plugSet + PLUG_STEP), 0.26, Ease.outCubic),
-      /** The set drops. Everything falls and the plug goes home. */
-      drop: (tweener) => turnPlug(tweener, 0, 0.34, Ease.inCubic),
+
+      /**
+       * The set drops, and the pick shears.
+       *
+       * One tween in three phases rather than three tweens, because the Tweener has no
+       * delay and a sequence assembled from channels would be three things racing. The
+       * phases are the shape of the event: it binds and jumps, the handle comes away while
+       * the tip stays in the keyway, and then he has another one in and is ready to go
+       * again.
+       *
+       * He does not run out. A broken pick is a cost the player watches rather than a
+       * resource to manage - the mission is a memory puzzle and adding an economy to it
+       * would be a second game standing in front of the first.
+       */
+      drop: (tweener) => {
+        turnPlug(tweener, 0, 0.34, Ease.inCubic);
+        tweener.add(
+          (t: number) => {
+            if (t < 0.18) {
+              // Binding. It loads up and skips in the keyway before it goes.
+              const bind = t / 0.18;
+              pick.position.set(0, 0, 0.004 * Math.sin(bind * Math.PI * 3));
+              pick.rotation.set(0, 0, 0.05 * Math.sin(bind * Math.PI * 4));
+              pick.scale.setScalar(1);
+              pickTip.visible = true;
+              return;
+            }
+            if (t < 0.52) {
+              // Snapped. The handle comes back and away; the tip is left in the lock.
+              const away = (t - 0.18) / 0.34;
+              pick.position.set(0.02 * away, -0.05 * away * away, 0.16 * away);
+              pick.rotation.set(0.9 * away, 0, 1.6 * away);
+              pick.scale.setScalar(Math.max(0.001, 1 - away));
+              // The tip rides the parent away, so it is pushed back to stay put.
+              pickTip.position.set(-0.02 * away, 0.05 * away * away, -0.16 * away);
+              return;
+            }
+            // A fresh one, in and seated. He carries more than one.
+            const back = (t - 0.52) / 0.48;
+            pickTip.position.set(0, 0, 0);
+            pick.rotation.set(0, 0, 0);
+            pick.scale.setScalar(1);
+            pick.position.set(0, 0, 0.11 * (1 - back));
+          },
+          { duration: 1.05, easing: Ease.linear, channel: 'lock-pick' }
+        );
+      },
     },
+  });
+
+  /**
+   * Putting this doorstep back, which nothing was doing.
+   *
+   * The request can be re-opened and the diorama is not rebuilt, so everything the lock
+   * cues had moved was still moved: a cylinder standing at whatever angle the last attempt
+   * left it, a pick in the keyway, and - if they had solved it - the door standing open
+   * while Dorin explains that he cannot get in.
+   *
+   * The plug's own counter is reset alongside its rotation. It is the number the `set`
+   * action steps, so leaving it behind would have the next attempt's first pin starting
+   * from wherever the last one finished.
+   */
+  scene.onReset(() => {
+    plugSet = 0;
+    if (lockPlug) lockPlug.rotation.set(0, 0, 0);
+    pick.visible = false;
+    pick.position.set(0, 0, 0);
+    pick.rotation.set(0, 0, 0);
+    pick.scale.setScalar(1);
+    pickTip.visible = true;
+    pickTip.position.set(0, 0, 0);
+    doorRoot.rotation.set(0, 0, 0);
   });
 
   // -- The landing window he keeps looking at -------------------------------

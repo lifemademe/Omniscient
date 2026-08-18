@@ -294,7 +294,10 @@ export const MISSION_06: MissionDefinition = {
        */
       suggest: ['start on the pins - I will call the order'],
       on: {
-        WORK_THE_LOCK: { to: 'working' },
+        // The pick goes into the keyway as he says the wrench is in - see the `pick`
+        // action on the lock. An empty keyway under that line is the world contradicting
+        // the man.
+        WORK_THE_LOCK: { to: 'working', environment: 'prop.pick:lock' },
         ASK_WHY: { to: 'why' },
         BREAK_GLASS: { to: 'glass' },
       },
