@@ -289,6 +289,103 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
   socket(width * 0.16 + jitter(rng, 0.01), 0.032, 0.06);
 
   /**
+   * The lead, plugged into the small socket.
+   *
+   * Two sockets with nothing in either is a photograph of a part, not the back of a set
+   * that worked yesterday. A plug seated in one of them is most of what says this is a
+   * machine somebody uses: it gives the bay a reason to be open, it puts something in
+   * the well at a size the inspection shot can read, and it makes the empty socket
+   * beside it look empty ON PURPOSE.
+   *
+   * The SMALL socket, and that is the whole reason it is not the big one. Connector B is
+   * the fault - green crust right across it - and the request turns on the player asking
+   * to see it and Mirela scraping it back to bright metal. A lead in the way would have
+   * to come out first, and covering the one piece of evidence in the room with an object
+   * added for set dressing is the exact §131 failure: the environment carrying decoration
+   * instead of information. B stays bare, which now reads as a socket with its lead off
+   * rather than as a socket nobody thought about.
+   *
+   * ## Why the tail is short and stays inside the set's own footprint
+   *
+   * `prop.rotate:transmitter-rear` turns the whole node 180 degrees about Y to show the
+   * back. Anything built as part of this prop turns with it. A mains lead run out to the
+   * bench - which is what a real one does, and what I built first - sweeps a 30cm arc
+   * through the benchtop and out into the room every time the player asks to see the
+   * back, and ends the move lying across the front of the set.
+   *
+   * So the lead does what a lead does when its far end is unplugged: it comes out of the
+   * socket, over the rim of the bay, and hangs down the back of the case. Every point on
+   * it is within the case's own silhouette, so the spin carries it round intact. The cut
+   * end is parked 2mm inside the bottom frame panel, which hides the open tube - a cable
+   * has two ends and only one of them is anybody's business here.
+   */
+  {
+    const plugX = -width * 0.2;
+    const socketEnd = -depth / 2 + BAY.depth + 0.006 - 0.05;
+
+    /*
+     * The plug is split across two materials because it is made of two things.
+     *
+     * Barrel and grip ring are `fittings`, which is MAT.metal - painted metal at 0.65
+     * metalness, the same as the brackets. The boot and the cable are `chassis`, which is
+     * MAT.equipmentBack: 0.92 rough, no metal, effectively matte rubber. Run the whole
+     * plug through `fittings` and the lead comes out as chrome pipework bent round the
+     * back of the set, which is a plumbing fixture rather than a wire.
+     *
+     * `chassis` was built for the inside of the bay and this is the second thing in it,
+     * which is a stretch of the name and not of the intent - it is the bucket for "dark
+     * but lit", and a black lead hanging against a warm brown case is exactly that.
+     */
+    // Barrel, over the socket rather than butted against it - a plug that meets a socket
+    // exactly at the seam reads as two pieces touching, which is what it is.
+    const barrel = new THREE.CylinderGeometry(0.021, 0.021, 0.032, 10);
+    barrel.rotateX(Math.PI / 2);
+    barrel.translate(plugX, connectorY, socketEnd - 0.006);
+    fittings.push(barrel);
+
+    // The knurled ring you actually grip. 5mm, and it is the only part of the plug that
+    // is a different diameter, which is enough to stop the whole thing reading as a peg.
+    const ring = new THREE.CylinderGeometry(0.024, 0.024, 0.005, 10);
+    ring.rotateX(Math.PI / 2);
+    ring.translate(plugX, connectorY, socketEnd - 0.02);
+    fittings.push(ring);
+
+    /*
+     * Strain relief, tapering into the cable.
+     *
+     * Wide end first, because `rotateX(PI / 2)` sends +Y to +Z and the sockets above are
+     * built on that same assumption - radiusTop lands on the inner face, radiusBottom on
+     * the outer. Written the other way round it is still a cone, still 28mm long, and
+     * still passes every check except looking right: a boot that flares as it leaves the
+     * plug is a trumpet.
+     */
+    const boot = new THREE.CylinderGeometry(0.018, 0.008, 0.028, 8);
+    boot.rotateX(Math.PI / 2);
+    boot.translate(plugX, connectorY, socketEnd - 0.036);
+    chassis.push(boot);
+
+    /*
+     * The hang. Out past the rim at -0.17, down the back of the case, and in again to
+     * finish inside the bottom frame.
+     *
+     * Checked against the case rather than eyeballed: below the bay opening the frame
+     * panel occupies z -0.17 to -0.085, so the two low points sit at -0.190 and -0.176,
+     * clear of its face by 20mm and 6mm against a 5mm tube. Sideways it stays between
+     * x -0.104 and -0.129, inside the bay's own half-width of 0.135, so it never fouls
+     * the side panels either.
+     */
+    const hang = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(plugX, connectorY, -depth / 2),
+      new THREE.Vector3(plugX - 0.004, connectorY - 0.009, -0.196),
+      new THREE.Vector3(plugX - 0.018, connectorY - 0.032, -0.201),
+      new THREE.Vector3(plugX - 0.025, connectorY - 0.060, -0.190),
+      new THREE.Vector3(plugX - 0.022, connectorY - 0.080, -0.176),
+      new THREE.Vector3(plugX - 0.014, connectorY - 0.086, -0.168),
+    ]);
+    chassis.push(new THREE.TubeGeometry(hang, 30, 0.005, 7, false));
+  }
+
+  /**
    * Ventilation, uneven so the object looks used rather than extruded.
    *
    * These are fittings rather than body, and that is a texturing decision as much as a
