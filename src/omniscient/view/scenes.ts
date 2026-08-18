@@ -44,6 +44,7 @@ import { CERTAINTY } from '../art/certainty.js';
 import { createFloodwater } from '../art/floodwater.js';
 import { createTorchlight } from '../art/torchlight.js';
 import { applyFloodstain } from '../art/floodstain.js';
+import { applySaltRust } from '../art/saltrust.js';
 import { applyWaterline } from '../art/waterline.js';
 import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { placeRigged } from './riggedContact.js';
@@ -2094,6 +2095,33 @@ function buildBeaconMast(scene: ContactScene): void {
       decay: 1.5,
     })
   );
+
+  /**
+   * Salt and rust on everything the weather can reach - see art/saltrust.
+   *
+   * This room had no material pass at all, which showed: a headland mast above a harbour,
+   * painted the same clean blue-grey from its feet to its light, as though it had been
+   * delivered that morning. Mirela's shop earns its age from flood staining and Ileana's
+   * from the same; this one had nothing, and it is the structure in the game with the
+   * worst life - bolted to a clifftop in the spray, and old enough that the harbour
+   * master takes its light for granted.
+   *
+   * From the deck at 0 to the lamp at 5.6, so the gradient runs the actual height of the
+   * thing: scabbed around the feet where the spray gets, sound up at the head.
+   *
+   * Applied to the whole scene rather than to the mast alone, on purpose. The corrosion
+   * is keyed to world position, so it runs continuously off the mast onto the platform,
+   * the rails and the splice box instead of stopping at a seam - which is what makes them
+   * read as one structure that has stood there together, rather than parts.
+   */
+  scene.registerFinisher(() => {
+    const weathered = applySaltRust(scene as unknown as THREE.Object3D, {
+      foot: 0,
+      head: 5.6,
+      strength: 0.9,
+    });
+    if (!weathered) console.warn('[scene] salt and rust touched nothing on the mast');
+  });
 
   scene.registerShot('default', {
     // Holds Tomas, the bracket and the light above him, at his own eye level rather than

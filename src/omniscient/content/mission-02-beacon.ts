@@ -265,10 +265,22 @@ export const MISSION_02: MissionDefinition = {
           learn: [FACT_BEACON_DROPS_ON_KEYUP],
           environment: 'prop.open:splice-box,prop.point:contact',
         },
+        /*
+         * He is asked about his sister, so the shot stays on him.
+         *
+         * This landed on `feed-confirmed`, whose framing is the join on the bracket -
+         * correct for the beat and wrong for this route into it. Asking a man about
+         * his sister and being shown a junction box is the camera answering a
+         * different question, and it was reported as exactly that.
+         *
+         * The box still opens. That is the world responding to what he has just
+         * worked out, and it is waiting for the player the moment they look. What
+         * changes is that the callback lands on his face rather than on a cable.
+         */
         ASK_SISTER: {
           to: 'feed-confirmed',
           learn: [FACT_BEACON_DROPS_ON_KEYUP],
-          environment: 'prop.open:splice-box,prop.point:contact',
+          environment: 'camera.pan:default,prop.open:splice-box,prop.point:contact',
         },
         ASK_TIMING: { to: 'timing-known', environment: 'prop.point:contact' },
         ADMIT_UNCERTAINTY: { to: 'timing-known', environment: 'prop.point:contact' },
@@ -291,10 +303,22 @@ export const MISSION_02: MissionDefinition = {
           learn: [FACT_BEACON_DROPS_ON_KEYUP],
           environment: 'prop.open:splice-box',
         },
+        /*
+         * He is asked about his sister, so the shot stays on him.
+         *
+         * This landed on `feed-confirmed`, whose framing is the join on the bracket -
+         * correct for the beat and wrong for this route into it. Asking a man about
+         * his sister and being shown a junction box is the camera answering a
+         * different question, and it was reported as exactly that.
+         *
+         * The box still opens. That is the world responding to what he has just
+         * worked out, and it is waiting for the player the moment they look. What
+         * changes is that the callback lands on his face rather than on a cable.
+         */
         ASK_SISTER: {
           to: 'feed-confirmed',
           learn: [FACT_BEACON_DROPS_ON_KEYUP],
-          environment: 'prop.open:splice-box',
+          environment: 'camera.pan:default,prop.open:splice-box',
         },
       },
       onUnrecognised: { to: 'clarify-blind' },
