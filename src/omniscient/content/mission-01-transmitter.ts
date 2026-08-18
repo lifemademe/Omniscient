@@ -211,18 +211,21 @@ export const MISSION_01: MissionDefinition = {
        * the player learns the wrong vocabulary from it and blames the camera.
        *
        * "describe the set to me" went with it. It resolved to INSPECT_UNIT as well, so
-       * the opening offered three chips for two actions. The supply wire takes the slot -
-       * a real third line of enquiry, and the one that seeds the shared feed.
+       * the opening offered three chips for two actions.
        *
-       * Nothing is lost by not offering the connectors here. The intent is still in `on`
-       * below, so a player who types it goes straight there; this is the order the game
-       * RECOMMENDS, which is look at the thing before turning it round.
+       * Two now, and that is the whole list on purpose. The supply wire briefly took the
+       * third slot and came out: it is a real line of enquiry, but it is the one that
+       * seeds a callback two requests away rather than one that moves THIS diagnosis, and
+       * offering it beside the two that do told the player it was worth the same. The
+       * first thing anybody sees in this game is a menu of what a question looks like -
+       * two good ones read as a shape to copy, three read as a list to work through.
+       *
+       * Nothing is lost by the ones not offered. Every intent is still in `on` below, so
+       * a player who types the connectors, the supply or the power goes straight there;
+       * this is only the order the game RECOMMENDS, which is look at the thing, then ask
+       * what happened to it.
        */
-      suggest: [
-        'look at the set',
-        'what happened to it recently',
-        'follow the supply wire',
-      ],
+      suggest: ['look at the set', 'what happened to it recently'],
       on: {
         /*
          * She points at the set on whatever the player says first.
