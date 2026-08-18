@@ -251,6 +251,20 @@ export const MAT = {
   /** Worked earth. Darker and redder than MAT.ground, which is a track somebody walks on. */
   soil: standard('#5a4028', 0.98),
   /**
+   * A raised bed that gets watered every day, which is a different material from dirt.
+   *
+   * MAT.soil is worked earth in the open - dry on top, half sand on this coastline,
+   * and pale enough that seedlings sit ON it rather than in it. A propagation bed is
+   * compost: darker, redder, and damp all the way through, which is most of what
+   * makes it read as fertile rather than as a box of ground.
+   *
+   * Its own entry rather than a darker MAT.soil, because MAT.soil is also the track
+   * outside and the field beyond it, and neither of those has been watered this
+   * morning. Roughness at the ceiling: wet compost has no sheen at all, and any
+   * specular on it reads instantly as plastic.
+   */
+  bedSoil: standard('#3a2a1c', 1),
+  /**
    * The sun, seen. Unlit and unfogged - it is 60m out, past everything that lights or hazes,
    * and it has to be the brightest thing in the frame by a clear margin or it reads as a
    * pale moon.

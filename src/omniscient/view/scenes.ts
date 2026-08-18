@@ -2404,7 +2404,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   );
   scene.registerProp(
     'bed-soil',
-    meshOf('BedSoil', mergeGeometries(bedSoil, false) ?? bedSoil[0], MAT.soil)
+    meshOf('BedSoil', mergeGeometries(bedSoil, false) ?? bedSoil[0], MAT.bedSoil)
   );
 
   /**
@@ -2649,9 +2649,21 @@ function buildSeedlingTunnel(scene: ContactScene): void {
      * have to crouch, which is precisely the pose that defeated the previous attempt and
      * still needs a staging answer rather than a tuning one.
      */
-    handsOn: {
-      left: new THREE.Vector3(-1.55, 0.95, 2.6),
-    },
+    /*
+     * No hand target, because there is nothing in front of her to put a hand on.
+     *
+     * The note above wanted her at the mouth of the tunnel with a hand on the frame,
+     * and the number never matched the staging: the beds run to z +0.30 and she stands
+     * at +2.72, two and a half metres past their near end, turned to face the camera.
+     * So the frame she was reaching for was 0.28m BEHIND her and the solver did the
+     * only thing it could, which is send the arm backwards. Reported as her left arm
+     * bent behind her.
+     *
+     * The fix is not a better target. She is where the composition wants her - out in
+     * the meadow, facing the lens, with her failing rows behind her shoulder - and
+     * putting a hand back on the frame means turning her away from the shot. So her
+     * hands are her own, and the idle has them.
+     */
   });
 
   // -- Light ----------------------------------------------------------------
@@ -2707,7 +2719,8 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * the aim corrected the ground fell to luma 67, which is dusk. This is what an
        * afternoon costs once the light is going the right way.
        */
-      intensity: 5.2,
+      // Up from 5.2, so the key leads. See the fill below for the arithmetic.
+      intensity: 8,
       color: new THREE.Color('#fff1d8'),
     })
 
@@ -2838,7 +2851,21 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * blue of the sky overhead at the moment the sun is orange on the horizon.
        */
       position: new THREE.Vector3(-0.9, 3.0, 5.0),
-      intensity: 22,
+      /*
+       * Down from 22, and this is the number that was stopping this room having a sun.
+       *
+       * A point light at 22 with decay 1.15 arrives at her from three metres at about
+       * 22 / 3^1.15 = 6.1 effective, against a key of 5.2. That is a one-to-one
+       * key-to-fill ratio, which is not afternoon light - it is a photograph taken
+       * with the flash on. Nothing can read as sunlit while the fill matches the sun,
+       * however warm the sun is or however hard it casts.
+       *
+       * At 9 it arrives at about 2.5 against a key of 8, which is a bit over three to
+       * one - the ratio you get outdoors on a clear day with the sky doing the
+       * filling. Kept rather than cut because it is what keeps a contact's face off
+       * black on the shadow side, which is the one thing this scene may not trade.
+       */
+      intensity: 9,
       color: new THREE.Color('#7d9ecc'),
       distance: 18,
       decay: 1.15,
@@ -3071,7 +3098,18 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * It costs nothing measurable because the whole field is one InstancedMesh: the extra
        * blades are extra matrices in a buffer, not extra draw calls.
        */
-      count: 150000,
+      /*
+       * 260000 across 26x22 is about 455 blades per square metre, up from 262.
+       *
+       * Asked for as more cover rather than more height, which is the right instinct and
+       * the note above already knows why: coverage here is not one number. The count goes
+       * up, the clumps get SMALLER so the same budget spreads over half again as many
+       * crowns, and the bare threshold drops so the thin ground fills instead of being
+       * culled to nothing. Three controls pulling the same way.
+       *
+       * Still one InstancedMesh, so this is a longer buffer and not more draw calls.
+       */
+      count: 260000,
       /**
        * Up from 0.07-0.2, which was mown lawn.
        *
@@ -3098,9 +3136,10 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * through. Knee height rather than shin, because nobody has cut this since the
        * lamps... since the spring, and the theme of the jam is Overgrown.
        */
-      height: [0.24, 0.52],
-      bladesPerClump: [4, 8],
-      bareBelow: 0.26,
+      // Shorter, as asked - dense rather than deep. Cover is the goal, not a hayfield.
+      height: [0.18, 0.40],
+      bladesPerClump: [3, 6],
+      bareBelow: 0.14,
       /**
        * And the layer above it.
        *
@@ -3110,7 +3149,9 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * read as long rather than as thick - and a mown lawn has none by definition, which
        * is the theme stated in one prop.
        */
-      seedHeads: { share: 0.05, height: [0.62, 0.95] },
+      // The weeds stay, at the same share of a bigger field. They are the thing
+      // holding the silhouette up now the grass under them is shorter.
+      seedHeads: { share: 0.05, height: [0.5, 0.8] },
       keepOffBeach: 3.2,
       clear: KEEP_CLEAR,
       y: 0,
@@ -3246,9 +3287,19 @@ function buildSeedlingTunnel(scene: ContactScene): void {
          * a low one, and a broad soft band is calmer to look at than a narrow hot stripe -
          * which is the brief for this whole scene.
          */
-        deep: '#3f7f96',
-        shallow: '#79bfc0',
-        crest: '#b6dcd6',
+        /*
+         * Tropical, to the reference. The old set was a temperate lake - a grey-blue
+         * deep at #3f7f96 running to a soft #79bfc0 - which is water under cloud.
+         *
+         * What makes the reference read as warm shallow sea is SATURATION and the
+         * distance between the two ends: a deep that is properly blue, a shallow that
+         * is properly green, and enough gap between them that the gradient reads as
+         * depth rather than as one colour lit unevenly. The crest goes paler with
+         * them so the tops still catch.
+         */
+        deep: '#1d7fa6',
+        shallow: '#4fd0c6',
+        crest: '#b7f0e2',
         glint: '#fdf6e6',
         foam: '#f2f7f1',
         sunX: LAKE_SUN_X,
