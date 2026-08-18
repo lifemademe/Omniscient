@@ -6020,12 +6020,20 @@ function buildNightDoor(scene: ContactScene): void {
   });
   const brickWall = brickMaps ? MAT.wall.clone() : MAT.wall;
   if (brickMaps) {
+    /*
+     * The colour map only, and the wall keeps its own roughness.
+     *
+     * The generator returns no normal or roughness map now - see the note at the top of
+     * brickwork.ts. This scene has one lamp and the project casts no shadows, so a normal
+     * map on a wall was asking a renderer that cannot shade small relief to shade small
+     * relief; what it actually produced was a faint regular grid, which is the exact thing
+     * that made the brick read as tiling.
+     *
+     * Roughness stays where MAT.wall had it, so the brick shades the same way every other
+     * flat surface in the game does.
+     */
     brickWall.map = brickMaps.map;
-    brickWall.normalMap = brickMaps.normalMap;
-    brickWall.roughnessMap = brickMaps.roughnessMap;
     brickWall.color = new THREE.Color('#ffffff');
-    brickWall.roughness = 1;
-    brickWall.normalScale = new THREE.Vector2(0.75, 0.75);
     brickWall.needsUpdate = true;
   }
 

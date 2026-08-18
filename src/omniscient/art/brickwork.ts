@@ -1,46 +1,59 @@
 /**
- * Brick, drawn rather than photographed.
+ * Brick, PAINTED.
  *
- * ## Why a generator and not a texture file
+ * ## The art direction, stated, because three passes at this ignored it
  *
- * Same reason as every other surface in this project: an imported brick photograph would
- * be the one thing in the game that came from a camera, sitting next to seven scenes built
- * out of flat colour and hard edges. It would also tile, and brick is the single worst
- * surface to tile visibly because the eye counts courses.
+ * This project's own law says SHAPED means "flat-shaded, cold, no maps", and surface.ts
+ * says in as many words that a flat surface "is not a textured surface with a weak normal
+ * map". Everything in this game is flat colour, hard edges and quantised paint banding, and
+ * nothing in it casts a shadow. A normal-mapped, per-brick-noise, thirty-one-across brick
+ * material is a HERO SURFACE - and this is a wall behind a man picking a lock.
  *
- * ## What actually makes brick read as brick
+ * So the earlier versions were failing at something they should not have been attempting.
+ * They simulated masonry: every brick present, every joint drawn, a normal map for light
+ * that has nowhere to come from. That is how you get a wall which measures correctly and
+ * reads as tiling, which is exactly what happened, twice - first at the wrong size, then at
+ * the right one.
  *
- * 1. **The mortar, not the bricks.** A wall is a grid of dark lines with colour between
- *    them. Get the lines right - thin, recessed, unbroken horizontally, staggered
- *    vertically - and almost any colour in the gaps reads as masonry.
- * 2. **Per-brick colour variation, and a lot of it.** Real stock brick runs from pink
- *    through buff to nearly black in the same wall. A single colour with noise over it
- *    reads as a printed pattern; individually tinted bricks read as fired clay.
- * 3. **Half-bond.** Every other course offset by half a brick. Aligned courses are
- *    breeze-block, and the eye knows the difference without being able to name it.
- * 4. **The normal map carries the mortar, the colour map carries the clay.** Recessed
- *    joints are what catch a low light across a wall, and this scene has exactly one low
- *    light. Without a normal map a brick wall lit from the side is a flat photograph of a
- *    brick wall.
+ * ## What a painter does instead
  *
- * Returns the same `SurfaceMaps` shape the painted-metal generator does, so it drops into
- * `texturedFrom` and inherits the family's paint banding.
+ * Anybody painting a brick wall for a set does four things, and the order is the method:
+ *
+ * 1. **A flat tone, blotched.** Most of the read is large soft variation across the wall -
+ *    damp, sun, sixty years. It is what the eye sees first and it has nothing to do with
+ *    bricks.
+ * 2. **Courses implied, not drawn.** A BROKEN line at each course. Continuous rules read as
+ *    tile; the eye completes a broken line into a course by itself and gets a wall.
+ * 3. **A few bricks picked out.** Eight or ten in a hundred, given their own tone. Those are
+ *    what say "brick"; the rest are allowed to stay a flat field. Drawing every brick is
+ *    what makes a grid.
+ * 4. **Almost no perp joints.** The vertical joint is the most repetitive mark on a wall and
+ *    the first thing a painter drops. A third of them, short of the bed joints, so they
+ *    never close the grid back up.
+ *
+ * ## No normal map at all
+ *
+ * Deliberately null, and it is the change that matters most. Shadow casting is off across
+ * the whole project and this scene has one lamp, so a normal map here asks a renderer that
+ * cannot shade small relief to shade small relief. It cost an upload and bought a faint
+ * grid - which is worse than nothing, because a faint grid is still a grid.
  */
 
 import * as THREE from 'three';
 
-import { createRng, seedFrom } from '../core/rng.js';
+import { createRng, range, seedFrom } from '../core/rng.js';
 
 import type { SurfaceMaps } from './surface.js';
 
 export interface BrickOptions {
-  /** Average brick colour. Individual bricks scatter either side of it. */
+  /** The wall's tone. Most of the surface stays close to this. */
   color?: string;
-  /** The joint. Nearly always paler than the brick and always duller. */
+  /** The joint. It reads as the gap between bricks, so it is DARKER than the brick. */
   mortar?: string;
-  /** How far a brick's tint may stray from `color`, 0 to 1. See note 2. */
+  /** How far a picked-out brick may stray, 0 to 1. Only the picked ones move. */
   variation?: number;
-  /** Courses in the tile. More means smaller bricks for the same wall. */
+  /** Share of bricks given their own tone. Small on purpose - see note 3. */
+  picked?: number;
   courses?: number;
   seed?: string;
   size?: number;
@@ -53,54 +66,18 @@ function parse(hex: string): [number, number, number] {
   return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
 }
 
-/**
- * One tile of brickwork, as colour, normal and roughness.
- *
- * The tile is square and wraps in both directions, so the caller sets `repeat` to whatever
- * makes the courses the right height on their wall. Nothing here knows how big the wall is.
- */
 export function brickwork(options: BrickOptions = {}): SurfaceMaps | null {
   const {
-    color = '#8d6a52',
-    /*
-     * Darker than it was. Mortar is paler than brick and only just - #9a938a against a
-     * #7d5f4b brick is a 40-level gap, which under a warm porch lamp turned every joint
-     * into a bright line and the wall into a grid of tiles with light between them. Real
-     * mortar is a dirty grey that reads as the SHADOW between bricks, not as a highlight.
-     */
+    color = '#7d5f4b',
     mortar = '#6f675e',
-    /*
-     * Down from 0.22, which was a carnival.
-     *
-     * Reported as too colourful, and the number was simply wrong: 0.22 of 255 is +/-56 per
-     * channel, so neighbouring bricks could differ by over a hundred levels and the wall
-     * came out as confetti. Real stock brick varies, but within a family - the whole wall
-     * still reads as one colour from across a street. 0.055 is about +/-14, which is
-     * visible at arm's length and gone at twenty metres, exactly like the real thing.
-     */
-    variation = 0.055,
-    /**
-     * Courses in the tile - and this is the number that decides whether it reads as
-     * brickwork or as wallpaper.
-     *
-     * It is not about brick SIZE. At 16 courses over a 1.05m tile the module came out
-     * 217 x 66mm against a real 225 x 75, which is right to within a few millimetres - and
-     * it still did not look like a wall, because a 1.05m tile repeats 6.7 times across a
-     * 7m facade and brick is the one surface where the eye counts. Seven copies of the same
-     * five bricks is a pattern, and a pattern reads as tiling however well each tile is
-     * drawn.
-     *
-     * 32 courses over a 2.4m tile is the same brick at 225 x 75 exactly, repeating 2.9
-     * times instead - and with 10.7 bricks per course in the tile rather than 4.8, so the
-     * arrangement of light and dark ones has somewhere to hide.
-     */
+    variation = 0.14,
+    picked = 0.1,
     courses = 32,
     seed = 'brick',
-    // Doubled with the courses, so the resolution per brick is unchanged at 96px.
     size = 1024,
   } = options;
 
-  const key = `brick:${JSON.stringify([color, mortar, variation, courses, seed, size])}`;
+  const key = `brick:${JSON.stringify([color, mortar, variation, picked, courses, seed, size])}`;
   const cached = CACHE.get(key);
   if (cached !== undefined) return cached;
   if (typeof document === 'undefined') {
@@ -108,160 +85,149 @@ export function brickwork(options: BrickOptions = {}): SurfaceMaps | null {
     return null;
   }
 
-  const albedo = document.createElement('canvas');
-  const normal = document.createElement('canvas');
-  const rough = document.createElement('canvas');
-  for (const canvas of [albedo, normal, rough]) {
-    canvas.width = size;
-    canvas.height = size;
-  }
-  const ac = albedo.getContext('2d');
-  const nc = normal.getContext('2d');
-  const rc = rough.getContext('2d');
-  if (!ac || !nc || !rc) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
     CACHE.set(key, null);
     return null;
   }
 
   const rng = createRng(seedFrom(seed));
   const base = parse(color);
-  const joint = parse(mortar);
 
-  // Mortar everywhere, then bricks laid on top of it. Drawing the joints as gaps between
-  // rectangles is what keeps them a consistent width without any line-drawing at all.
-  ac.fillStyle = mortar;
-  ac.fillRect(0, 0, size, size);
-  // Neutral normal is (0.5, 0.5, 1) - flat. The joints are cut into it below.
-  nc.fillStyle = '#8080ff';
-  nc.fillRect(0, 0, size, size);
-  // Mortar is the roughest thing on a wall. White is fully rough.
-  rc.fillStyle = '#f0f0f0';
-  rc.fillRect(0, 0, size, size);
+  // 1: the flat tone.
+  ctx.fillStyle = color;
+  ctx.fillRect(0, 0, size, size);
+
+  /*
+   * ...and the blotching, which is most of the finished look.
+   *
+   * Big, soft, low-contrast: thirty patches up to a third of the tile across at a few per
+   * cent alpha. Individually invisible; collectively the thing that stops the wall being a
+   * colour swatch. Drawn BEFORE the courses so the joints sit over it and the variation
+   * reads as being in the brickwork rather than smeared on top of it.
+   */
+  for (let i = 0; i < 30; i++) {
+    const x = rng() * size;
+    const y = rng() * size;
+    const r = range(rng, size * 0.12, size * 0.38);
+    const tint = rng() > 0.45 ? '150, 110, 70' : '70, 74, 82';
+    const blot = ctx.createRadialGradient(x, y, 0, x, y, r);
+    blot.addColorStop(0, `rgba(${tint}, ${range(rng, 0.05, 0.13).toFixed(3)})`);
+    blot.addColorStop(1, `rgba(${tint}, 0)`);
+    ctx.fillStyle = blot;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
 
   const courseHeight = size / courses;
-  // Two-to-one is the proportion of a stretcher face, near enough at this scale.
-  /*
-   * A brick and its joints is 225 x 75mm, which is exactly 3 to 1.
-   *
-   * Was 2.1, which is stubby and reads as blockwork, then 3.3, which was the bare brick's
-   * ratio rather than the module's - a joint is 10mm on both axes, so it takes proportionally
-   * far more off the height than the width. Three is the number that matters, because it is
-   * the one the courses actually repeat on.
-   */
+  // A brick and its joints is 225 x 75mm, which is exactly three to one.
   const brickWidth = courseHeight * 3;
-  const joint2 = Math.max(2, Math.round(courseHeight * 0.13));
+  const joint = Math.max(1, Math.round(courseHeight * 0.11));
+
+  ctx.lineCap = 'butt';
 
   for (let row = 0; row < courses; row++) {
     const y = row * courseHeight;
-    // 3: half bond. Every other course starts half a brick along.
+    /*
+     * Half bond: the one piece of real bricklaying that has to survive stylisation.
+     * Aligned courses read as blockwork and everybody knows it without knowing why.
+     */
     const offset = row % 2 === 0 ? 0 : -brickWidth / 2;
-    for (let x = offset - brickWidth; x < size + brickWidth; x += brickWidth) {
-      const bx = x + joint2 / 2;
-      const by = y + joint2 / 2;
-      const bw = brickWidth - joint2;
-      const bh = courseHeight - joint2;
 
-      /*
-       * 2: each brick its own colour.
-       *
-       * Three independent channel offsets rather than one brightness, because a stock
-       * brick wall varies in HUE as much as in value - some are pink, some are grey, and a
-       * wall where every brick is the same colour at a different brightness reads as a
-       * pattern with a gradient over it.
-       */
+    /*
+     * 3: a few bricks picked out, before the joints so the lines run over them and they
+     * sit IN the coursing rather than on it. Each takes its own tint - warmer, cooler,
+     * lighter, darker - which is a wall of bricks fired in different parts of a kiln.
+     */
+    for (let x = offset - brickWidth; x < size + brickWidth; x += brickWidth) {
+      if (rng() > picked) continue;
       const shift = (): number => (rng() * 2 - 1) * variation * 255;
       const r = Math.max(0, Math.min(255, base[0] + shift()));
-      const g = Math.max(0, Math.min(255, base[1] + shift() * 0.7));
-      const b = Math.max(0, Math.min(255, base[2] + shift() * 0.7));
-      ac.fillStyle = `rgb(${r | 0},${g | 0},${b | 0})`;
-      ac.fillRect(bx, by, bw, bh);
+      const g = Math.max(0, Math.min(255, base[1] + shift() * 0.8));
+      const b = Math.max(0, Math.min(255, base[2] + shift() * 0.8));
+      ctx.fillStyle = `rgba(${r | 0},${g | 0},${b | 0},${range(rng, 0.5, 0.9).toFixed(2)})`;
+      ctx.fillRect(x + joint, y + joint, brickWidth - joint * 2, courseHeight - joint * 2);
+    }
 
-      // A few darker - overfired headers, damp, soot. Rarer and gentler than they were:
-      // at one in fourteen and up to 40% black they were reading as a chequerboard.
-      if (rng() < 0.045) {
-        ac.fillStyle = `rgba(20, 14, 12, ${0.08 + rng() * 0.12})`;
-        ac.fillRect(bx, by, bw, bh);
+    /*
+     * 2: the bed joint, broken.
+     *
+     * A run of segments with gaps at a varying alpha, never one rule across the tile. A
+     * continuous line at every course is a grid, and a grid is what the eye latches onto
+     * and then follows all the way to the seam where the tile repeats.
+     */
+    ctx.strokeStyle = mortar;
+    ctx.lineWidth = joint;
+    let x = offset - brickWidth;
+    while (x < size + brickWidth) {
+      const run = range(rng, brickWidth * 0.8, brickWidth * 3.4);
+      if (rng() > 0.16) {
+        ctx.globalAlpha = range(rng, 0.35, 0.8);
+        ctx.beginPath();
+        ctx.moveTo(x, y + joint / 2);
+        ctx.lineTo(x + run, y + joint / 2);
+        ctx.stroke();
       }
-
-      /*
-       * 4: the face is flat and proud, the joint around it is not.
-       *
-       * The brick face is painted neutral over the cut joint, so the only thing in the
-       * normal map is the step at the edge of each brick - which is exactly what a raking
-       * light finds on a real wall.
-       */
-      nc.fillStyle = '#8080ff';
-      nc.fillRect(bx, by, bw, bh);
-      // Bricks are smoother than mortar, and vary.
-      const smooth = 150 + rng() * 60;
-      rc.fillStyle = `rgb(${smooth | 0},${smooth | 0},${smooth | 0})`;
-      rc.fillRect(bx, by, bw, bh);
+      // The gap, and it is short: the course still has to READ as one line, just not be
+      // drawn as one.
+      x += run + range(rng, brickWidth * 0.06, brickWidth * 0.3);
     }
+
+    /*
+     * 4: a third of the perps, stopped short of the bed joints.
+     *
+     * The short stop is what stops them closing the grid back up. A perp that meets its bed
+     * joints at both ends draws a complete rectangle, and a wall of complete rectangles is
+     * the thing this whole file exists to avoid.
+     */
+    for (let bx = offset; bx < size + brickWidth; bx += brickWidth) {
+      if (rng() > 0.34) continue;
+      ctx.globalAlpha = range(rng, 0.3, 0.65);
+      const inset = courseHeight * range(rng, 0.12, 0.3);
+      ctx.beginPath();
+      ctx.moveTo(bx, y + inset);
+      ctx.lineTo(bx, y + courseHeight - inset);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
   }
 
   /*
-   * The bevel: a light edge on the top-left of every brick and a dark one on the bottom
-   * right, drawn into the normal map's red and green channels.
+   * And the dirt, last: broad vertical washes.
    *
-   * Cheaper and more controllable than deriving a normal map from a height field, and at
-   * this tile size the difference is invisible. Drawn after the faces so it survives them.
+   * Everything on a wall is put there by water running down it. Wide, very soft, very few -
+   * this is the layer that ties the courses back into one surface and stops the picked
+   * bricks reading as confetti.
    */
-  /*
-   * Down from 0.55. Every brick having a bright top-left and dark bottom-right at full
-   * strength is a hard four-sided grid, which is the other half of what made this read as
-   * tiling - real brick edges are arrises, not chamfers.
-   */
-  nc.globalAlpha = 0.32;
-  for (let row = 0; row < courses; row++) {
-    const y = row * courseHeight;
-    const offset = row % 2 === 0 ? 0 : -brickWidth / 2;
-    for (let x = offset - brickWidth; x < size + brickWidth; x += brickWidth) {
-      const bx = x + joint2 / 2;
-      const by = y + joint2 / 2;
-      const bw = brickWidth - joint2;
-      const bh = courseHeight - joint2;
-      // Facing up-left: normal tilts -x, +y.
-      nc.fillStyle = '#5fa0ff';
-      nc.fillRect(bx, by, bw, joint2);
-      nc.fillRect(bx, by, joint2, bh);
-      // Facing down-right.
-      nc.fillStyle = '#a060ff';
-      nc.fillRect(bx, by + bh - joint2, bw, joint2);
-      nc.fillRect(bx + bw - joint2, by, joint2, bh);
-    }
-  }
-  nc.globalAlpha = 1;
-
-  /*
-   * Weathering, last and over everything.
-   *
-   * Streaks running DOWN, because everything on a wall is put there by water. A few broad
-   * soft columns rather than noise - a wall is stained under its window sills and below its
-   * gutter joints, not evenly.
-   */
-  ac.globalAlpha = 0.09;
-  ac.fillStyle = '#2a2018';
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < 9; i++) {
     const x = rng() * size;
-    const w = 8 + rng() * 46;
-    const top = rng() * size * 0.6;
-    ac.fillRect(x, top, w, size - top);
+    const w = range(rng, size * 0.05, size * 0.22);
+    const wash = ctx.createLinearGradient(x, 0, x + w, 0);
+    wash.addColorStop(0, 'rgba(38, 30, 24, 0)');
+    wash.addColorStop(0.5, `rgba(38, 30, 24, ${range(rng, 0.05, 0.12).toFixed(3)})`);
+    wash.addColorStop(1, 'rgba(38, 30, 24, 0)');
+    ctx.fillStyle = wash;
+    ctx.fillRect(x, 0, w, size);
   }
-  ac.globalAlpha = 1;
 
-  const wrap = (canvas: HTMLCanvasElement, srgb: boolean): THREE.CanvasTexture => {
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = 4;
-    return texture;
-  };
+  const map = new THREE.CanvasTexture(canvas);
+  map.wrapS = THREE.RepeatWrapping;
+  map.wrapT = THREE.RepeatWrapping;
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.anisotropy = 4;
 
+  /*
+   * Colour only. See the header: no normal map and no roughness map.
+   *
+   * The material's own roughness scalar and the project's paint banding do the shading,
+   * which is the arrangement every other flat surface in this game already has.
+   */
   const maps: SurfaceMaps = {
-    map: wrap(albedo, true),
-    normalMap: wrap(normal, false),
-    roughnessMap: wrap(rough, false),
+    map,
+    normalMap: null,
+    roughnessMap: null,
     metalnessMap: null,
   };
   CACHE.set(key, maps);
