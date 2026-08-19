@@ -131,7 +131,7 @@ export const THE_SHAFT: World = {
      * The splitting wall, with 30px of daylight under it - the same gap as stage one, for the
      * same reason: a full body stands 40 tall and cannot pass, a legally split one can.
      */
-    { id: 'w1', x: 860, y: 0, w: 40, h: FLOOR - 30, open: false, lift: 0 },
+    { id: 'w1', x: 860, y: 0, w: 40, h: FLOOR - 30, open: false, lift: 0, sieve: 24 },
     /*
      * The heavy gate. Only the force button opens it.
      *

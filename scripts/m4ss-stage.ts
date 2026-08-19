@@ -134,10 +134,14 @@ console.log('\n=== M4SS STAGE ONE ===\n');
    * reason to go back, and reconnecting becomes optional decoration.
    */
   const gate = world.gates[0];
-  // The opening is the daylight UNDER the wall, not the wall's own height.
-  const opening = 620 - (gate.y + gate.h);
-  let fits = START_MASS;
-  while (fits > 2 && settledHeight(fits) > opening - 6) fits -= 1;
+  /*
+   * What fits is now STATED, not measured: the gate is a mass sieve and `sieve` is the
+   * ceiling. It used to be derived from settled height against the gap, and that derivation
+   * is the one this stage's biggest bypass hid behind - a crawling body flattens to ~15px
+   * whatever its mass, so the height arithmetic said 23 while the actual door let 40
+   * through. The sieve makes the design number the enforced number.
+   */
+  const fits = gate.sieve!;
   const fittedReach = fits * TUNING.reachPerMass;
   check(
     'a body small enough for the gap CANNOT reach the high growth',
@@ -573,6 +577,27 @@ console.log('\n=== M4SS STAGE ONE ===\n');
     button.pressed ? `body at ${home(state).x.toFixed(0)}` : `stuck at ${home(state).x.toFixed(0)}`
   );
   check('pressing the button opens the gate', gate.open);
+
+  /*
+   * The sieve holds. A FULL body driven at the shut gap for thirty seconds must stay on
+   * its own side - this is the bypass that shipped: crawlRelax flattens a crawling body
+   * under any gap a split body fits, so geometry alone cannot enforce the split.
+   */
+  const big = makeState(freshLab(), START_MASS);
+  const bx = 700 - home(big).x;
+  const by = 590 - home(big).y;
+  for (const p of big.particles) {
+    p.x += bx;
+    p.px += bx;
+    p.y += by;
+    p.py += by;
+  }
+  run(big, 30.0, () => ({ move: 1, anchor: null, recall: false }));
+  check(
+    'a FULL body cannot ooze under the shut gate',
+    home(big).x < 810 && mass(big) === START_MASS,
+    `ended at ${home(big).x.toFixed(0)} with mass ${mass(big)}, gate at 800`
+  );
   /*
    * Separately wired. Any button used to open every gate, which was harmless when there was
    * one of each and would have handed the player the exit for free the moment a second gate

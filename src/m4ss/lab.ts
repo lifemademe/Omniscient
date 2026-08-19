@@ -188,7 +188,7 @@ export const THE_LAB: World = {
    * stops MOST of them, and pressing the button is how the rest catches up.
    */
   gates: [
-    { id: 'wall', x: 800, y: 0, w: 40, h: 590, open: false, lift: 0 },
+    { id: 'wall', x: 800, y: 0, w: 40, h: 590, open: false, lift: 0, sieve: 24 },
     /*
      * The drawbridge, standing in front of the portal.
      *

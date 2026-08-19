@@ -125,6 +125,27 @@ export interface Gate {
    */
   mode?: 'lift' | 'bridge';
   /**
+   * The most mass, in grams, that can pass through this gate's gap while it is shut.
+   *
+   * The gap used to be enforced by geometry alone - the wall stops 30px above the floor,
+   * and a body taller than 30px cannot fit - and that was measured to be no enforcement at
+   * all: `crawlRelax` flattens a CRAWLING body to about 15px regardless of its mass, so a
+   * full 40-gram slime oozed under both stages' walls and the split, the clause the walls
+   * exist for, was optional. There is no gap height that separates the two, because the
+   * crawling heights of a full body and a legal split overlap completely.
+   *
+   * So the gap is a SIEVE, and it says so in grams. While the gate is shut, a body over
+   * this mass finds the gap solid; at or under it, the gap is open as before. The fiction
+   * supports it directly - this is a containment grate, and a grate passes small things
+   * and stops big ones - and the player-facing read is unchanged: "I am too big to fit"
+   * is exactly what it looks like either way.
+   *
+   * Enforced against the OWNED body only. Loose shed lumps always pass, because a grate
+   * that stops a fist-sized lump is a wall, and recall has to be able to pull your mass
+   * through an opened doorway regardless.
+   */
+  sieve?: number;
+  /**
    * Where a `bridge` lies once it is down. Ignored by `lift` gates.
    *
    * Stated by the designer rather than derived from a rotation, because what matters is the
@@ -1267,7 +1288,23 @@ export function step(state: MassState, input: Input): MassState {
     }
   }
 
-  for (const p of particles) collide(p, world);
+  /*
+   * The sieve rects: for every shut gate with a sieve the owned body is too big for, the
+   * gap below the gate becomes solid for owned particles this step. Computed once per step
+   * - the owned count does not change during the collision loop.
+   */
+  const sieves: Tile[] = [];
+  for (const gate of world.gates) {
+    if (gate.open || gate.sieve === undefined) continue;
+    if (state.owned.size <= gate.sieve) continue;
+    sieves.push({ x: gate.x, y: gate.y + gate.h, w: gate.w, h: world.height - (gate.y + gate.h) });
+  }
+  for (const p of particles) {
+    collide(p, world);
+    if (sieves.length > 0 && state.owned.has(p.id)) {
+      for (const rect of sieves) hitTile(p, rect, world);
+    }
+  }
 
   /*
    * The bottom of the world, where the mass finds its way home.

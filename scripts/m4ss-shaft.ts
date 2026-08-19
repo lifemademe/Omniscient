@@ -139,6 +139,19 @@ console.log('\n=== M4SS STAGE TWO ===\n');
   check('and opens the wall, so the mass left behind can be fetched', wall.open);
 }
 
+// ---------------------------------------------------------------- the sieve holds
+{
+  // Same bypass as stage one: a full body must not ooze under the splitting wall.
+  const big = makeState(freshShaft(), START_MASS);
+  place(big, 760, 1310);
+  run(big, 30.0, () => ({ move: 1, anchor: null, recall: false }));
+  check(
+    'a FULL body cannot ooze under the shut wall',
+    home(big).x < 870 && mass(big) === START_MASS,
+    `ended at ${home(big).x.toFixed(0)} with mass ${mass(big)}, wall at 860`
+  );
+}
+
 // ---------------------------------------------------------------- the reach economy
 {
   const state = makeState(freshShaft(), START_MASS);
