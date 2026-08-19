@@ -2022,6 +2022,96 @@ export function propTexture(seed: string, kind: 'fern' | 'shroom', size = 48): T
 }
 
 /**
+ * A foreground occluder sheet: the layer the parallax spec puts at 120%, and the one the
+ * stage never had. Near-black shapes IN FRONT of the play plane - the camera moves and
+ * they slide across the world faster than anything behind them, which is the strongest
+ * depth cue a 2D frame can buy.
+ *
+ * 'leaves' hangs foliage masses into the top of the sheet (the Gallery - the forest
+ * pressing in over the glass). 'pipes' juts service hardware in from one side (the Stack -
+ * the shaft is TIGHT, and the machinery does not care where the camera wants to look).
+ * Shapes keep to the sheet's own edge; the middle stays clear, because an occluder that
+ * covers gameplay is a bug with good intentions.
+ */
+export function occluderTexture(
+  seed: string,
+  kind: 'leaves' | 'pipes',
+  w = 1280,
+  h = 240,
+  side: 'left' | 'right' = 'left'
+): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+  const ink = kind === 'leaves' ? '#050a07' : '#04070a';
+  g.fillStyle = ink;
+
+  if (kind === 'leaves') {
+    // A broken mass along the top: big blob clusters, then strands hanging off them.
+    let edge = h * 0.22;
+    for (let x = 0; x < w; x++) {
+      if (x % 9 === 0) edge += range(rng, -7, 7);
+      edge = Math.max(h * 0.06, Math.min(h * 0.42, edge));
+      g.fillRect(x, 0, 1, Math.round(edge));
+    }
+    for (let i = 0; i < w / 60; i++) {
+      const bx = range(rng, 0, w);
+      blob(g, rng, bx, range(rng, h * 0.2, h * 0.5), range(rng, 16, 38), ink, 1.7);
+    }
+    for (let i = 0; i < w / 90; i++) {
+      let x = range(rng, 0, w);
+      const drop = range(rng, h * 0.35, h * 0.85);
+      for (let d = 0; d < drop; d++) {
+        if (d % 8 === 0) x += range(rng, -1.3, 1.3);
+        g.fillRect(Math.round(x), Math.round(d), 3, 1);
+      }
+      blob(g, rng, x + 1, drop, range(rng, 5, 11), ink, 1.5);
+    }
+  } else {
+    // Hardware from one side: a vertical run hugging the edge, stubs reaching inward.
+    const atLeft = side === 'left';
+    const edgeX = atLeft ? 0 : w;
+    const dir = atLeft ? 1 : -1;
+    // The wall run itself.
+    g.fillRect(atLeft ? 0 : w - 26, 0, 26, h);
+    // Stubs: pipes with flanges, a valve wheel on one.
+    const stubs = Math.round(h / 150);
+    for (let i = 0; i < stubs; i++) {
+      const sy = Math.round(((i + range(rng, 0.2, 0.8)) / stubs) * h);
+      const len = Math.round(range(rng, 50, 150));
+      const thick = Math.round(range(rng, 10, 22));
+      g.fillRect(atLeft ? 0 : w - len, sy, len, thick);
+      // The flange at the mouth.
+      g.fillRect(edgeX + dir * (len - 6) - (atLeft ? 0 : 8), sy - 4, 8, thick + 8);
+      // A drip of ooze off one stub in three.
+      if (rng() > 0.66) {
+        const dx = edgeX + dir * Math.round(len * range(rng, 0.4, 0.85));
+        const drop = Math.round(range(rng, 14, 44));
+        for (let d = 0; d < drop; d++) g.fillRect(dx, sy + thick + d, 2, 1);
+      }
+      // A valve wheel silhouette on one stub per sheet, roughly.
+      if (i === Math.floor(stubs / 2)) {
+        const vx = edgeX + dir * Math.round(len * 0.55);
+        const vy = sy + Math.round(thick / 2);
+        const r = 14;
+        for (let a = 0; a < 24; a++) {
+          const th = (a / 24) * Math.PI * 2;
+          g.fillRect(
+            Math.round(vx + Math.cos(th) * r),
+            Math.round(vy + Math.sin(th) * r),
+            2,
+            2
+          );
+        }
+        g.fillRect(vx - 2, vy - r, 4, r * 2);
+        g.fillRect(vx - r, vy - 2, r * 2, 4);
+      }
+    }
+  }
+
+  return pixelTexture(c);
+}
+
+/**
  * God rays: broad shafts of light with a DIRECTION, which is the one thing the old
  * uniform haze never had. Background1 in the reference set builds its whole value
  * structure out of them - the light says where the surface is, and everything is judged

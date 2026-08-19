@@ -41,6 +41,7 @@ import {
   godRayTexture,
   pipeStackTexture,
   markerTexture,
+  occluderTexture,
   gateTexture,
   glowTexture,
   interiorFadeTexture,
@@ -1076,6 +1077,42 @@ export class M4SSRig extends ENGINE.SceneNode {
       );
       sheet.position.set(world.width / 2, world.height / 2, layer.z);
       this.stage?.add(sheet);
+    }
+
+    /*
+     * The occluders: the 120% layer, in front of the play plane at z 70. World-fixed, so
+     * the perspective camera slides them across everything behind as it moves - the
+     * strongest depth cue in the frame and the one this stage never had. The Gallery
+     * hangs foliage into the top of the world; the Stack juts pipe hardware in from both
+     * side walls, so the climb reads as squeezing up a serviced shaft.
+     */
+    if (this.theme.occluders === 'leaves') {
+      const occ = decorMesh(
+        'Occluder',
+        new THREE.PlaneGeometry(world.width * 1.35, 260),
+        this.artMaterial({
+          map: occluderTexture(`occ-${this.theme.name}`, 'leaves', 1280, 240),
+          transparent: true,
+          depthWrite: false,
+        })
+      );
+      occ.position.set(world.width / 2, 96, 70);
+      this.stage?.add(occ);
+    } else {
+      const occH = Math.min(900, Math.round(world.height * 0.62));
+      (['left', 'right'] as const).forEach((side) => {
+        const occ = decorMesh(
+          'Occluder',
+          new THREE.PlaneGeometry(240, world.height * 1.12),
+          this.artMaterial({
+            map: occluderTexture(`occ-${this.theme.name}-${side}`, 'pipes', 220, occH, side),
+            transparent: true,
+            depthWrite: false,
+          })
+        );
+        occ.position.set(side === 'left' ? -30 : world.width + 30, world.height / 2, 70);
+        this.stage?.add(occ);
+      });
     }
 
     /*
