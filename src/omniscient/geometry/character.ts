@@ -157,30 +157,210 @@ export interface CharacterParts {
  */
 const CHAMFER_SCALE = 0.26;
 
-function slab(w: number, h: number, d: number, chamfer = 0.02): THREE.BufferGeometry {
-  const c = Math.min(chamfer * CHAMFER_SCALE, w * 0.35, h * 0.35, d * 0.35);
-  const shape = new THREE.Shape();
-  const hw = w / 2;
-  const hh = h / 2;
-  shape.moveTo(-hw + c, -hh);
-  shape.lineTo(hw - c, -hh);
-  shape.lineTo(hw, -hh + c);
-  shape.lineTo(hw, hh - c);
-  shape.lineTo(hw - c, hh);
-  shape.lineTo(-hw + c, hh);
-  shape.lineTo(-hw, hh - c);
-  shape.lineTo(-hw, -hh + c);
-  shape.closePath();
+/**
+ * Every mass in the body, as a rounded volume rather than a chamfered box.
+ *
+ * This function used to extrude a rectangle with the corners cut off, and it is the single
+ * reason the whole cast read as blocks: a chamfer is a box that has had its edges taken off,
+ * and no amount of taking edges off a box produces a body. Put one of these next to
+ * Mirela.glb - a Tripo mesh, twenty thousand smooth verts - and the difference that reads
+ * first is not detail or proportion, it is that hers is made of CURVES and mine was made of
+ * flats with the corners filed.
+ *
+ * So it is a rounded box now, built the standard way: take a subdivided box, clamp every
+ * vertex into an inner box inset by the radius, then push it back out along the direction it
+ * was clamped from. At radius approaching half the smallest dimension it becomes a capsule;
+ * at a third it is a soft slab that still has a direction. Normals are recomputed and
+ * smooth, so the key light rolls across a shoulder instead of stopping dead at a facet.
+ *
+ * The signature is unchanged on purpose. Forty call sites author this cast in widths,
+ * heights and depths, and every one of them still means what it meant - the `chamfer`
+ * argument is now read as a ROUNDNESS hint rather than an edge treatment, so a call that
+ * asked for a hard little bevel gets a firm form and one that asked for a big soft cut gets
+ * a soft one. Nothing needed rewriting to change the entire art style, which is the whole
+ * argument for having had one primitive in the first place.
+ */
+const ROUND_SEGMENTS = 6;
 
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: d - c,
-    bevelEnabled: true,
-    bevelThickness: c * 0.5,
-    bevelSize: c * 0.5,
-    bevelSegments: 1,
-    curveSegments: 1,
+function slab(w: number, h: number, d: number, chamfer = 0.02): THREE.BufferGeometry {
+  const smallest = Math.min(w, h, d);
+  /*
+   * How round, from 0.28 of the smallest dimension up to 0.5 (a full capsule).
+   *
+   * The old `chamfer` values ranged from about 0.03 of a piece to 0.3 of one, so they are
+   * remapped rather than used directly: what the call site was really expressing was "this
+   * is a crisp thing" or "this is a soft thing", and that intent survives the change of
+   * meaning even though the number cannot.
+   */
+  const softness = Math.min(1, (chamfer * CHAMFER_SCALE) / (smallest * 0.35));
+  const radius = Math.min(smallest * 0.499, smallest * (0.28 + 0.2 * softness));
+
+  const geometry = new THREE.BoxGeometry(
+    w,
+    h,
+    d,
+    ROUND_SEGMENTS,
+    ROUND_SEGMENTS,
+    ROUND_SEGMENTS
+  );
+  const pos = geometry.getAttribute('position');
+  const inner = new THREE.Vector3(w / 2 - radius, h / 2 - radius, d / 2 - radius);
+  const v = new THREE.Vector3();
+  const clamped = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    clamped.set(
+      Math.max(-inner.x, Math.min(inner.x, v.x)),
+      Math.max(-inner.y, Math.min(inner.y, v.y)),
+      Math.max(-inner.z, Math.min(inner.z, v.z))
+    );
+    v.sub(clamped);
+    const len = v.length();
+    if (len > 1e-6) v.multiplyScalar(radius / len);
+    pos.setXYZ(i, clamped.x + v.x, clamped.y + v.y, clamped.z + v.z);
+  }
+  pos.needsUpdate = true;
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/**
+ * A continuous surface swept through a stack of cross-sections.
+ *
+ * This is the primitive the cast was missing, and its absence was the real reason these
+ * figures did not read like the modelled ones - not the chamfers, and not the proportions.
+ * A Tripo character is ONE skinned surface. This generator built bodies as a pile of thirty
+ * separate overlapping volumes, so rounding those volumes just produced a pile of rounder
+ * lumps: every joint is still a place where two closed shapes intersect, and the eye finds
+ * every one of them.
+ *
+ * A loft has no joints. Give it rings - a height, a half-width, a half-depth, and a forward
+ * offset - and it produces a single closed skin through all of them with continuous normals,
+ * so a chest narrows into a waist and swells into a hip without anything crossing anything.
+ *
+ * Sections are superellipses rather than circles. A body is neither a cylinder nor a box; at
+ * an exponent near 2.4 the section is an ellipse with slightly firm sides, which is what a
+ * ribcage and a thigh both actually are.
+ */
+export interface LoftRing {
+  y: number;
+  halfW: number;
+  halfD: number;
+  /** Forward offset, for a chest that sits proud of the hips or a jaw that leads a skull. */
+  z?: number;
+  /** Section squareness. 2 is a pure ellipse; higher is firmer in the flanks. */
+  squareness?: number;
+}
+
+const LOFT_SEGMENTS = 20;
+
+function loft(rings: LoftRing[]): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const seg = LOFT_SEGMENTS;
+
+  for (const ring of rings) {
+    const n = ring.squareness ?? 2.4;
+    const e = 2 / n;
+    for (let i = 0; i < seg; i++) {
+      const t = (i / seg) * Math.PI * 2;
+      const c = Math.cos(t);
+      const sn = Math.sin(t);
+      // Superellipse. The sign work is what keeps it a closed loop through all four quadrants.
+      const x = ring.halfW * Math.sign(c) * Math.abs(c) ** e;
+      const z = ring.halfD * Math.sign(sn) * Math.abs(sn) ** e;
+      positions.push(x, ring.y, z + (ring.z ?? 0));
+    }
+  }
+
+  for (let r = 0; r < rings.length - 1; r++) {
+    const a = r * seg;
+    const b = (r + 1) * seg;
+    for (let i = 0; i < seg; i++) {
+      const j = (i + 1) % seg;
+      indices.push(a + i, b + i, a + j);
+      indices.push(a + j, b + i, b + j);
+    }
+  }
+
+  // Caps, as a fan to a centre vertex at each end.
+  const capAt = (ringIndex: number, flip: boolean): void => {
+    const ring = rings[ringIndex];
+    const centre = positions.length / 3;
+    positions.push(0, ring.y, ring.z ?? 0);
+    const base = ringIndex * seg;
+    for (let i = 0; i < seg; i++) {
+      const j = (i + 1) % seg;
+      if (flip) indices.push(centre, base + j, base + i);
+      else indices.push(centre, base + i, base + j);
+    }
+  };
+  capAt(0, true);
+  capAt(rings.length - 1, false);
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/**
+ * A limb as one tapering surface, with a slight swell at the muscle belly.
+ *
+ * `w` is the width at the top and `taper` the fraction of it left at the bottom. The mesh
+ * reference says limbs are consistently DEEPER than they are wide - the thigh measures 0.70
+ * wide for its depth and the shin 0.80 - which is the opposite of the square sections this
+ * generator used, and is most of why its arms read as pipes.
+ */
+function loftLimb(w: number, h: number, taper: number, bulge = 1.06): THREE.BufferGeometry {
+  const halfW = w / 2;
+  const halfD = halfW / 0.76;
+  const at = (t: number, k: number): LoftRing => ({
+    y: -h * t,
+    halfW: halfW * k,
+    halfD: halfD * k,
+    squareness: 2.3,
   });
-  geometry.translate(0, 0, -(d - c) / 2);
+  return loft([
+    at(0, 0.98),
+    at(0.18, bulge),
+    at(0.5, 1 - (1 - taper) * 0.45),
+    at(0.82, taper * 1.02),
+    at(1, taper * 0.9),
+  ]);
+}
+
+/**
+ * A rounded volume that is wider at one end than the other.
+ *
+ * Limbs are not prisms. An upper arm is thick at the shoulder and thin at the elbow, a thigh
+ * more so, and a forearm runs the other way at the wrist - and a cast built entirely from
+ * untapered pieces reads as scaffolding no matter how smooth each piece is. `taper` is the
+ * fraction of full width left at the BOTTOM (y negative), so 1 is a prism and 0.6 is a
+ * noticeable narrowing.
+ */
+function taperedSlab(
+  w: number,
+  h: number,
+  d: number,
+  chamfer: number,
+  taper: number
+): THREE.BufferGeometry {
+  const geometry = slab(w, h, d, chamfer);
+  if (taper === 1) return geometry;
+  const pos = geometry.getAttribute('position');
+  const half = h / 2;
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    // 0 at the bottom of the piece, 1 at the top.
+    const t = half === 0 ? 1 : (y + half) / (2 * half);
+    const k = taper + (1 - taper) * Math.max(0, Math.min(1, t));
+    pos.setX(i, pos.getX(i) * k);
+    pos.setZ(i, pos.getZ(i) * k);
+  }
+  pos.needsUpdate = true;
+  geometry.computeVertexNormals();
   return geometry;
 }
 
@@ -191,9 +371,12 @@ function limb(
   d: number,
   at: [number, number, number],
   rotZ = 0,
-  rotX = 0
+  rotX = 0,
+  taper = 0.78
 ): THREE.BufferGeometry {
-  const geometry = slab(w, h, d, Math.min(w, d) * 0.3);
+  // Tapered by default: every caller of this is an arm, a leg or a neck, and all three of
+  // those narrow away from the body. See taperedSlab.
+  const geometry = taperedSlab(w, h, d, Math.min(w, d) * 0.3, taper);
   if (rotZ) geometry.rotateZ(rotZ);
   if (rotX) geometry.rotateX(rotX);
   geometry.translate(at[0], at[1], at[2]);
@@ -362,10 +545,36 @@ export function createCharacter(params: CharacterParams): CharacterParts {
     hair: params.colors?.hair ?? pick(rng, PERSON.hair),
   };
 
-  // Proportion scaffold.
-  const legLength = height * 0.46;
-  const torsoHeight = height * 0.30;
-  const headHeight = height * 0.13 * headScale;
+  /*
+   * Proportion scaffold, measured off Mirela.glb rather than reasoned about.
+   *
+   * The generator and the modelled cast stand side by side in this game - one contact per
+   * scene, the same camera, the same lighting - so any disagreement about how a person is
+   * proportioned reads immediately as "that one is the fake". The bind pose of Mirela.glb
+   * was dumped and normalised to total height, and the numbers said something specific and
+   * unflattering: the limb RATIOS here were already right (forearm/upper arm 0.90 against
+   * her 0.89, shin/thigh 1.00 against 1.02) and the mass DISTRIBUTION was wrong in three
+   * places at once.
+   *
+   *                        was     Mirela.glb
+   *   hip height          0.460       0.556     legs half a head too short
+   *   torso, hip->shoulder 0.300      0.220     torso a head too long
+   *   head length         0.130       0.152     head too small
+   *   heads tall          7.69        6.58      the whole figure too lanky
+   *
+   * Seven-and-three-quarter heads is the proportion of an anatomy manual. Six-and-a-half is
+   * the proportion of a character, and it is the single biggest reason a blocky generated
+   * figure reads as a stylised person rather than as a mannequin - bigger than the chamfer
+   * work, bigger than the palette. The head is the anchor the eye measures everything else
+   * against, and this cast had been quietly telling the player it was a diagram.
+   *
+   * Leg and torso were re-split to put the hip where hers is. That change alone lengthens
+   * the stride and shortens the trunk, which is most of the difference between a figure
+   * that stands and one that slumps.
+   */
+  const legLength = height * 0.545;
+  const torsoHeight = height * 0.225;
+  const headHeight = height * 0.152 * headScale;
   const shoulderWidth = height * (0.20 + shoulders * 0.11);
   const hipWidth = shoulderWidth * (0.68 + build * 0.2);
   const torsoDepth = height * (0.085 + build * 0.05);
@@ -381,7 +590,17 @@ export function createCharacter(params: CharacterParams): CharacterParts {
 
   const hipY = legLength;
   const shoulderY = hipY + torsoHeight;
-  const headY = shoulderY + headHeight * 0.62;
+  /*
+   * The crown lands at full height, which it did not before.
+   *
+   * At 0.62 the head sat down inside the shoulders - fine when the head was small, and a
+   * figure with no neck the moment it grew. It then went to a full head-length, which was
+   * correct while the head was ONE piece centred on this point and wrong the moment it
+   * became a skull with a jaw under it: the jaw hangs a quarter of a head below centre, so
+   * the head effectively rose and the figure grew a stalk. 0.8 puts the underside of the
+   * jaw back down onto the top of the neck.
+   */
+  const headY = shoulderY + headHeight * 0.8;
 
   /**
    * Hand targets the arm could not actually get to.
@@ -412,12 +631,107 @@ export function createCharacter(params: CharacterParams): CharacterParts {
   /** The single hard accent. Buckles and goggle rims, and nothing else. */
   const metal: THREE.BufferGeometry[] = [];
 
-  // -- Head. Asymmetry in the jaw is what stops faces reading as identical. ----------
-  const headW = headHeight * range(rng, 0.72, 0.9);
-  const head = slab(headW, headHeight, headHeight * 0.82, headHeight * 0.18);
-  head.rotateX(lean * 0.4);
-  head.translate(jitter(rng, 0.006), headY, torsoDepth * 0.06);
-  skin.push(head);
+  /*
+   * -- Head ---------------------------------------------------------------------------
+   *
+   * Three pieces, not one, and that is the difference between a head and a lump on a neck.
+   *
+   * The cranium is wider than it is deep and tapers DOWN into the jaw, which is the single
+   * strongest cue that a rounded mass is a skull. The jaw is its own smaller volume set
+   * slightly forward, so the profile has a chin. The brow is a shallow bar above the eyes,
+   * and it earns its two triangles many times over: it is what casts the eyes into shadow
+   * under a key light, and eyes in shadow is most of what separates a face from a pattern.
+   *
+   * Everything is jittered per seed - width, jaw width, brow depth - so no two heads in the
+   * cast are the same shape rather than the same shape in different colours.
+   */
+  /*
+   * 0.68 of the head's HEIGHT, from the mesh rather than from taste.
+   *
+   * Mirela's head measures 0.135 wide, 0.194 deep and 0.198 tall. So width is 0.68 of
+   * height and depth is very nearly equal to it. The previous range topped out at 0.88,
+   * and because the depth below is derived from the width by the measured 0.70 ratio, a
+   * head that was too wide became a head that was HALF AGAIN deeper than it was tall - an
+   * egg pointing at the camera, with the brow, eyes and nose all buried inside it.
+   */
+  const headW = headHeight * range(rng, 0.7, 0.88);
+  const headSkew = jitter(rng, 0.006);
+
+  /*
+   * The skull, still assembled rather than lofted - and that is a retreat, recorded honestly.
+   *
+   * The torso below is one continuous surface and is better for it, so the head was lofted
+   * the same way: one skin from crown to chin, at the 0.70 width-to-depth the mesh measures.
+   * It read worse twice running. The first attempt made the skull deeper than it was tall
+   * and buried the brow, eyes and nose inside it. The second fixed the depth and the face
+   * was still gone, because the hair volumes are authored against THIS shape and a loft of
+   * the same nominal size does not present the same surface for them to sit on.
+   *
+   * A torso is one mass and lofts cleanly. A head is a skull, a jaw, a brow and a nose that
+   * hold a specific relationship to each other AND to the hair - getting that from a single
+   * swept surface means rebuilding the features and the hair against it in the same pass.
+   * That is a real piece of work rather than a tweak, and leaving a faceless figure in the
+   * game while it is attempted is worse than leaving this.
+   */
+  const cranium = taperedSlab(
+    headW,
+    headHeight * 0.62,
+    headHeight * 0.74,
+    headHeight * 0.3,
+    range(rng, 0.84, 0.92)
+  );
+  cranium.rotateX(lean * 0.4);
+  cranium.translate(headSkew, headY + headHeight * 0.14, torsoDepth * 0.06);
+  skin.push(cranium);
+
+  // The jaw: short, barely narrower than the skull, level with the face rather than ahead of
+  // it. An earlier version gave it 0.4 of a head length and pushed it forward, which is a
+  // muzzle - three pieces reading as a snout is worse than one reading as a lump.
+  const jawW = headW * range(rng, 0.84, 0.94);
+  const jaw = taperedSlab(
+    jawW,
+    headHeight * 0.26,
+    headHeight * 0.6,
+    headHeight * 0.26,
+    range(rng, 0.82, 0.92)
+  );
+  jaw.rotateX(lean * 0.4);
+  jaw.translate(headSkew, headY - headHeight * 0.13, torsoDepth * 0.06 + headHeight * 0.01);
+  skin.push(jaw);
+
+  const brow = slab(headW * 0.86, headHeight * 0.07, headHeight * 0.14, headHeight * 0.04);
+  brow.rotateX(lean * 0.4 - 0.06);
+  brow.translate(
+    headSkew,
+    headY + headHeight * 0.15,
+    torsoDepth * 0.06 + headHeight * range(rng, 0.27, 0.31)
+  );
+  skin.push(brow);
+
+  // A nose. One small wedge, and the only thing on this face that says which way it is
+  // pointing from the side - which is the angle half these figures are seen from.
+  const nose = taperedSlab(
+    headW * 0.14,
+    headHeight * 0.12,
+    headHeight * range(rng, 0.07, 0.11),
+    headHeight * 0.03,
+    range(rng, 1.0, 1.3)
+  );
+  nose.rotateX(lean * 0.4);
+  nose.translate(headSkew, headY + headHeight * 0.03, torsoDepth * 0.06 + headHeight * 0.34);
+  skin.push(nose);
+
+  // Ears, set back and low, at a slightly different height each side.
+  for (const side of [-1, 1] as const) {
+    const ear = slab(headHeight * 0.06, headHeight * 0.16, headHeight * 0.13, headHeight * 0.05);
+    ear.rotateX(lean * 0.4);
+    ear.translate(
+      headSkew + side * headW * 0.5,
+      headY + headHeight * 0.08 + jitter(rng, 0.004),
+      torsoDepth * 0.06 - headHeight * 0.02
+    );
+    skin.push(ear);
+  }
 
   /**
    * Two dark rectangles, and nothing else.
@@ -436,28 +750,73 @@ export function createCharacter(params: CharacterParams): CharacterParts {
    * read and this project has none - contact occlusion is screen-space and far too subtle
    * at this scale.
    */
-  const faceZ = torsoDepth * 0.06 + headHeight * 0.41;
-  const eyeW = headW * 0.17;
+  const faceZ = torsoDepth * 0.06 + headHeight * 0.32;
+  const eyeW = headW * 0.16;
   for (const side of [-1, 1] as const) {
-    const eye = slab(eyeW, headHeight * 0.13, headHeight * 0.05, eyeW * 0.2);
+    // Set BACK from the face plane and under the brow, so the socket shades them. They used
+    // to sit proud of the face, which reads as painted-on dots from every angle but dead on.
+    const eye = slab(eyeW, headHeight * 0.09, headHeight * 0.04, eyeW * 0.3);
     eye.rotateX(lean * 0.4);
-    eye.translate(side * headW * 0.23, headY + headHeight * 0.05, faceZ);
+    eye.translate(headSkew + side * headW * 0.22, headY + headHeight * 0.08, faceZ);
     eyes.push(eye);
   }
 
-  const neck = limb(limbThick * 0.9, headHeight * 0.3, limbThick * 0.9, [0, shoulderY + headHeight * 0.06, 0]);
+  /*
+   * Longer, because the head moved up and a neck has to reach it.
+   *
+   * At 0.3 of a head length this was a collar stud, and with the head where it is now there
+   * was 4cm of nothing between the shoulders and the jaw. 0.55, sitting a little over a
+   * quarter of a head above the shoulder line, closes the gap and overlaps both ends - a
+   * neck that stops short of the chin is the sort of thing that only shows up from one
+   * angle, in one shot, after everything else is finished.
+   */
+  /*
+   * Slightly barrelled rather than tapered: a neck is not a cone, and the default taper on
+   * `limb` narrowed it toward the jaw, which is exactly the wrong end. Long enough to reach
+   * from inside the collar to inside the jaw, so neither joint shows a seam from any angle.
+   */
+  const neck = limb(
+    limbThick * 0.92,
+    headHeight * 0.62,
+    limbThick * 0.92,
+    [0, shoulderY + headHeight * 0.26, 0],
+    0,
+    0,
+    1.04
+  );
   skin.push(neck);
 
-  // -- Torso: shoulders wide, waist narrower. The primary silhouette. ---------------
-  const chest = slab(shoulderWidth, torsoHeight * 0.58, torsoDepth, torsoDepth * 0.3);
-  chest.rotateX(lean);
-  chest.translate(0, shoulderY - torsoHeight * 0.28, 0);
-  cloth.push(chest);
-
-  const waist = slab(hipWidth, torsoHeight * 0.46, torsoDepth * 0.92, torsoDepth * 0.25);
-  waist.rotateX(lean * 0.6);
-  waist.translate(0, hipY + torsoHeight * 0.22, 0);
-  cloth.push(waist);
+  /*
+   * -- Torso: ONE surface, hips to shoulders ------------------------------------------
+   *
+   * This was a chest slab and a waist slab stacked on each other, and the note above them
+   * used to admit the problem: "two similar masses stacked, and the eye reads it as one long
+   * block". The belt was added to hide the seam. Both of those are treatments for a wound
+   * that did not need to exist.
+   *
+   * The ring stack is taken off Mirela.glb's own silhouette. Slicing her mesh horizontally
+   * and measuring the central cluster at every 5% of height gives a curve, and the curve is
+   * not subtle: widest at the chest (0.280 of body height), narrowest at the waist (0.200)
+   * at 60% up, and back out at the hip (0.246). A waist that is 71% of the chest is a real
+   * hourglass, and no arrangement of two boxes produces it.
+   *
+   * The forward offsets are the other half of it. The chest sits proud and the waist tucks
+   * back, which is what gives the figure a front from the side - the flat-fronted stack had
+   * the same profile from every angle.
+   */
+  const chestHalf = shoulderWidth * 0.5;
+  const waistHalf = chestHalf * (0.71 + build * 0.14);
+  const hipHalf = chestHalf * (0.86 + build * 0.1);
+  const torso = loft([
+    { y: hipY - torsoHeight * 0.06, halfW: hipHalf * 0.9, halfD: torsoDepth * 0.5, squareness: 2.6 },
+    { y: hipY + torsoHeight * 0.1, halfW: hipHalf, halfD: torsoDepth * 0.52, squareness: 2.6 },
+    { y: hipY + torsoHeight * 0.34, halfW: waistHalf, halfD: torsoDepth * 0.45, z: -torsoDepth * 0.03, squareness: 2.5 },
+    { y: hipY + torsoHeight * 0.62, halfW: chestHalf * 0.94, halfD: torsoDepth * 0.55, z: torsoDepth * 0.03, squareness: 2.4 },
+    { y: shoulderY - torsoHeight * 0.06, halfW: chestHalf, halfD: torsoDepth * 0.54, z: torsoDepth * 0.02, squareness: 2.4 },
+    { y: shoulderY + torsoHeight * 0.04, halfW: chestHalf * 0.9, halfD: torsoDepth * 0.46, squareness: 2.6 },
+  ]);
+  torso.rotateX(lean * 0.8);
+  cloth.push(torso);
 
   /**
    * The belt, which is the horizontal every one of these figures was missing.
