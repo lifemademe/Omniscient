@@ -2521,17 +2521,23 @@ export function pipeStackTexture(seed: string, w = 1280, h = 760): THREE.CanvasT
       // Weld seams.
       g.fillStyle = mixHex(body, '#000000', 0.3);
       g.fillRect(tx, ty + Math.round(th * 0.4), tw, 2);
-      // The pilot light: a lit gauge PANEL, not a pixel - the cold circuit still alive.
+      /*
+       * The pilot light, DIMMED to its depth. The first version panelled it in lampCore,
+       * which the Stack's palette lifts to clipping white - and since most tank bodies
+       * hide behind the level's floor tiles, the live capture showed the gauges alone,
+       * peeking through gaps as context-free white chips floating beside the gate. A
+       * midground light must never out-value the play plane: the panel now sits mixed
+       * well toward the tank's own body, no core pip, and reads as a distant service
+       * light whether or not its tank is visible.
+       */
       const gw = Math.max(8, Math.round(tw * 0.16));
       const gh = Math.max(6, Math.round(th * 0.12));
       const gx2 = tx + Math.round(tw * 0.62);
       const gy2 = ty + Math.round(th * 0.28);
-      g.fillStyle = mixHex(PAL.lampWarm, body, 0.45);
+      g.fillStyle = mixHex(PAL.lampWarm, body, 0.75);
       g.fillRect(gx2 - 1, gy2 - 1, gw + 2, gh + 2);
-      g.fillStyle = PAL.lampWarm;
+      g.fillStyle = mixHex(PAL.lampWarm, body, 0.5);
       g.fillRect(gx2, gy2, gw, gh);
-      g.fillStyle = PAL.lampCore;
-      g.fillRect(gx2 + 2, gy2 + 1, Math.round(gw * 0.4), Math.max(2, Math.round(gh * 0.4)));
     }
   }
 
