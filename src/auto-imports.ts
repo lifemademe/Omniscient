@@ -2,6 +2,7 @@ import './game-data.js';
 import './m4ss/lab.js';
 import './m4ss/M4SSRig.js';
 import './m4ss/mass.js';
+import './m4ss/shaft.js';
 import './m4ss/stageArt.js';
 import './m4ss/surface.js';
 import './omniscient/art/brickwork.js';

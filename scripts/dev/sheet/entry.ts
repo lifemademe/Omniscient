@@ -106,6 +106,7 @@ show('lip', art.lipTexture(S), 2);
 show('endCap', art.endCapTexture(S), 2);
 show('pool', art.poolTexture(S), 3);
 show('bush', art.bushTexture(S), 2);
+show('bushDead', art.bushTexture(S, 160, true), 2);
 show('vine', art.vineTexture(S), 3);
 show('spores', art.sporeTexture(S), 2);
 show('portal', art.portalTexture(S, 0), 3);

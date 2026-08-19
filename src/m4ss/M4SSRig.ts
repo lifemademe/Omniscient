@@ -25,6 +25,7 @@ import * as THREE from 'three';
 import { decorMesh } from '../omniscient/art/mesh.js';
 import { buildSurface } from './surface.js';
 import { freshLab } from './lab.js';
+import { freshShaft } from './shaft.js';
 import {
   atmosphereTexture,
   backdropTexture,
@@ -48,12 +49,23 @@ import {
   mass,
   maxSplit,
   owned,
+  crusherRect,
+  gateSolid,
   reachOf,
   split,
   step,
 } from './mass.js';
 
-import type { Anchor, Button, Gate, MassState } from './mass.js';
+import type { Anchor, Button, Crusher, Gate, MassState } from './mass.js';
+
+/**
+ * The stages, in order. The portal at the end of one loads the next.
+ *
+ * Each entry is a factory rather than a World, because a World is mutated by play - gates
+ * open, buttons latch, growths wake - and replaying a stage has to start from the authored
+ * numbers rather than from however the last attempt left them.
+ */
+const STAGES = [freshLab, freshShaft];
 
 /**
  * Level units are pixels; the engine works in metres. One node reconciles them.
@@ -143,8 +155,24 @@ export class M4SSRig extends ENGINE.SceneNode {
   private portalAt: { x: number; y: number } | null = null;
   private portalPhase = 0;
   private lastPortalStep = -1;
-  /** Set the frame the player reaches the portal. Stage one is over. */
+  /** Set the frame the player reaches the portal. The stage is over. */
   private cleared = false;
+  /**
+   * Which stage is loaded. The portal advances it.
+   *
+   * A list rather than a scene graph or a manifest, because there are two of them and the
+   * only thing a stage needs to be is a World. When a third arrives it goes on the end.
+   */
+  private stageIndex = 0;
+  /** Where the mouse is, in level coordinates. Drives the hover glow. */
+  private pointer: { x: number; y: number } | null = null;
+  /** The growth the pointer is over and the body could actually reach, if any. */
+  private hovered: Anchor | null = null;
+  private crusherNodes: Array<{ node: ENGINE.MeshNode; crusher: Crusher }> = [];
+  /** Both sprites for every growth, so waking one is a texture swap. */
+  private readonly growthArt = new Map<Anchor, { live: THREE.Texture; dead: THREE.Texture }>();
+  /** Smoothed camera height, in level coordinates. See viewCentre. */
+  private cameraY = 0;
 
   private readonly gateNodes: Array<{
     node: ENGINE.MeshNode;
@@ -267,7 +295,8 @@ export class M4SSRig extends ENGINE.SceneNode {
      * lighter. 40 reads as a thing you could pick up rather than a puddle, and the reach
      * economy was retuned around it rather than the other way round.
      */
-    this.state = makeState(freshLab(), 40);
+    this.state = makeState(STAGES[this.stageIndex](), 40);
+    this.cameraY = this.state.world.height / 2;
     const stage = ENGINE.SceneNode.create({ name: 'M4SSStage' });
     stage.scale.set(SCALE, -SCALE, SCALE);
     this.add(stage);
@@ -604,7 +633,7 @@ export class M4SSRig extends ENGINE.SceneNode {
         'Growth',
         new THREE.PlaneGeometry(150, 150),
         this.artMaterial({
-          map: bushTexture(`growth-${i}`),
+          map: bushTexture(`growth-${i}`, 160, a.live === false),
           transparent: true,
           depthWrite: false,
         })
@@ -612,6 +641,12 @@ export class M4SSRig extends ENGINE.SceneNode {
       node.position.set(a.x, a.y, 20);
       this.stage?.add(node);
       this.anchorNodes.set(a, node);
+      // Both sprites are generated up front, so waking a growth is a swap rather than a
+      // canvas render in the frame the player presses the button.
+      this.growthArt.set(a, {
+        live: bushTexture(`growth-${i}`, 160, false),
+        dead: bushTexture(`growth-${i}`, 160, true),
+      });
     });
 
     /*
@@ -633,6 +668,30 @@ export class M4SSRig extends ENGINE.SceneNode {
       node.position.set(gate.x + gate.w / 2, gate.y + gate.h / 2, -28);
       this.stage?.add(node);
       this.gateNodes.push({ node, gate, restY: gate.y + gate.h / 2 });
+    }
+
+    /*
+     * The presses.
+     *
+     * Deliberately the least organic thing in either stage: flat, cold, and a hue nothing
+     * else in the room uses. Everything here that can be interacted with is a plant or is
+     * warm; the one thing that can take mass off you should not look like it grew.
+     */
+    const crusherMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#5c6672'),
+      roughness: 0.55,
+      metalness: 0.35,
+      emissive: new THREE.Color('#0e1418'),
+    });
+    for (const crusher of world.crushers ?? []) {
+      const node = decorMesh(
+        'Crusher',
+        new THREE.BoxGeometry(crusher.w, crusher.h, 60),
+        crusherMaterial
+      );
+      node.position.set(crusher.x + crusher.w / 2, crusher.y + crusher.h / 2, -20);
+      this.stage?.add(node);
+      this.crusherNodes.push({ node, crusher });
     }
 
     const buttonMaterial = this.artMaterial({ color: new THREE.Color('#d8703c') });
@@ -1016,6 +1075,9 @@ export class M4SSRig extends ENGINE.SceneNode {
       }
     };
     const press = (e: MouseEvent): void => this.grab(e);
+    const hover = (e: MouseEvent): void => {
+      this.pointer = this.toLevel(e);
+    };
     const release = (): void => {
       this.latched = null;
     };
@@ -1024,7 +1086,9 @@ export class M4SSRig extends ENGINE.SceneNode {
     addEventListener('keyup', up);
     addEventListener('mousedown', press);
     addEventListener('mouseup', release);
+    addEventListener('mousemove', hover);
     this.detach.push(
+      () => removeEventListener('mousemove', hover),
       () => removeEventListener('keydown', down),
       () => removeEventListener('keyup', up),
       () => removeEventListener('mousedown', press),
@@ -1038,20 +1102,44 @@ export class M4SSRig extends ENGINE.SceneNode {
    * Generous, and deliberately so: this is a test of whether reaching feels good, and a
    * player who misses a 22px ring learns nothing about that.
    */
+  /**
+   * Screen to level coordinates.
+   *
+   * Pulled out of grab() when the hover glow needed the same arithmetic. It is measured
+   * against the CAMERA's centre rather than the world's, because the camera follows in a
+   * stage taller than the screen - reading it off the world centre worked perfectly in stage
+   * one and would put every click hundreds of pixels out in stage two.
+   */
+  private toLevel(event: MouseEvent): { x: number; y: number } | null {
+    const world = this.state?.world;
+    if (!world) return null;
+    const target = event.target as HTMLElement | null;
+    const rect = target?.getBoundingClientRect?.();
+    if (!rect || rect.width === 0) return null;
+
+    const height = (VIEW_WIDTH * rect.height) / rect.width;
+    const centre = this.viewCentre();
+    return {
+      x: centre.x + ((event.clientX - rect.left) / rect.width - 0.5) * VIEW_WIDTH,
+      y: centre.y + ((event.clientY - rect.top) / rect.height - 0.5) * height,
+    };
+  }
+
   private grab(event: MouseEvent): void {
     const world = this.state?.world;
     if (!world) return;
-    const target = event.target as HTMLElement | null;
-    const rect = target?.getBoundingClientRect?.();
-    if (!rect || rect.width === 0) return;
-
-    const height = (VIEW_WIDTH * rect.height) / rect.width;
-    const wx = world.width / 2 + ((event.clientX - rect.left) / rect.width - 0.5) * VIEW_WIDTH;
-    const wy = world.height / 2 + ((event.clientY - rect.top) / rect.height - 0.5) * height;
+    const at = this.toLevel(event);
+    if (!at) return;
+    const wx = at.x;
+    const wy = at.y;
 
     let best: Anchor | null = null;
     let bestD = 90;
     for (const a of world.anchors) {
+      // Dead growths are not targets. step() refuses them anyway, but latching onto one and
+      // watching nothing happen reads as the click being lost rather than as the plant being
+      // dead, and this is the stage where telling those apart is the puzzle.
+      if (a.live === false) continue;
       const d = Math.hypot(a.x - wx, a.y - wy);
       if (d < bestD) {
         bestD = d;
@@ -1083,7 +1171,21 @@ export class M4SSRig extends ENGINE.SceneNode {
      * takes the frame's delta gives a different answer on a different machine, and every
      * number measured about the reach would be true only on mine.
      */
-    this.carry = Math.min(this.carry + deltaTime, 0.25);
+    /*
+     * Slow motion, applied to REAL time rather than to the timestep.
+     *
+     * The step stays 1/120 for ever - every number measured about the reach, the swing and
+     * the pit is only true at that step, and a variable one would make them true on my
+     * machine and nowhere else. What slows is how many steps a wall-clock second buys.
+     *
+     * It exists for the shaft. A release at the top of one growth's circle reaches the next
+     * one in about a third of a second, which is not an aiming window, it is a reflex test.
+     * At 0.35 the same flight lasts most of a second and the player can look, decide, and
+     * click. The sim raises the flag on a fast release and decays it; all this does is spend
+     * it.
+     */
+    const scale = 1 - (1 - TUNING.slowmoScale) * state.slowmo;
+    this.carry = Math.min(this.carry + deltaTime * scale, 0.25);
     while (this.carry >= TUNING.dt) {
       step(state, { move, anchor: this.latched, recall: this.recalling });
       this.carry -= TUNING.dt;
@@ -1094,6 +1196,72 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.paintWorld(deltaTime);
     this.follow();
     this.paintHud();
+  }
+
+  /**
+   * The portal was reached, so load the next stage.
+   *
+   * Everything is torn down and rebuilt from the stage factory rather than patched, because
+   * a World is mutated by play and half the scene is generated from it - growth sprites are
+   * placed per anchor, gate meshes per gate, presses per crusher. Reusing the nodes would
+   * mean reconciling two lists for no gain; there are two stages and a rebuild costs one
+   * frame that the player spends looking at a portal flash anyway.
+   *
+   * On the last stage there is nowhere to go, so the portal simply stays flared. That is a
+   * placeholder for an ending rather than an ending, and it is better than looping the
+   * player back to stage one without a word.
+   */
+  private advance(): void {
+    if (this.stageIndex + 1 >= STAGES.length) return;
+    this.stageIndex += 1;
+
+    /*
+     * The whole stage node goes, and everything in it is built again.
+     *
+     * The camera and the lights are children of the RIG rather than of the stage, so they
+     * survive - which is what makes this cheap enough to be worth doing the blunt way.
+     * Everything else is generated from the World: a sprite per growth, a slab per gate, a
+     * press per crusher, a curtain per vine. Reconciling two of those lists against each
+     * other would be real machinery in service of saving one frame, and the frame in question
+     * is the one where the portal flares.
+     */
+    this.stage?.destroy();
+    this.stage = null;
+    this.anchorNodes.clear();
+    this.gateNodes.length = 0;
+    this.buttonNodes.length = 0;
+    this.crusherNodes = [];
+    this.growthArt.clear();
+    this.sporeLayers.length = 0;
+    this.vineMaps.length = 0;
+    this.body = null;
+    this.shine = null;
+    this.belly = null;
+    this.rim = null;
+    this.strays = null;
+    this.cord = null;
+    this.portal = null;
+    this.slimeGlow = null;
+    this.portalAt = null;
+
+    this.state = makeState(STAGES[this.stageIndex](), 40);
+    this.cleared = false;
+    this.latched = null;
+    this.hovered = null;
+    this.splitHold = 0;
+    this.carry = 0;
+    // Start looking at the bottom of the room, which is where the player is standing.
+    this.cameraY = this.state.world.height - VIEW_WIDTH / CAMERA_ASPECT / 2;
+
+    const stage = ENGINE.SceneNode.create({ name: 'M4SSStage' });
+    stage.scale.set(SCALE, -SCALE, SCALE);
+    this.add(stage);
+    this.stage = stage;
+
+    this.buildLevel();
+    this.buildPortal(this.state.world);
+    this.buildSlimeGlow();
+    this.buildSlime();
   }
 
   private replace(node: ENGINE.MeshNode | null, geometry: THREE.BufferGeometry): void {
@@ -1304,6 +1472,7 @@ export class M4SSRig extends ENGINE.SceneNode {
         if (d < 70) {
           this.cleared = true;
           this.portal.scale.set(1.25, 1.25, 1.25);
+          this.advance();
         }
       }
     }
@@ -1316,7 +1485,33 @@ export class M4SSRig extends ENGINE.SceneNode {
      * it, and there is no frame of that which is not a bug.
      */
     for (const { node, gate, restY } of this.gateNodes) {
-      node.position.y = restY - gate.lift * (gate.h + 4);
+      if (gate.mode === 'bridge') {
+        /*
+         * A drawbridge falls rather than lifts, and the animation is the whole point of it.
+         *
+         * Collision flipped the instant the button went down, exactly as it does for a lift
+         * gate - what is animated here is only what the player watches. And they must watch
+         * it: the button is a hundred and fifty pixels above the slab and eighty to the west,
+         * which is where it is precisely so the fall happens in view. A bridge that is simply
+         * already down when you look back is a door.
+         *
+         * Rotated about the hinge at its foot, so it sweeps through the arc rather than
+         * fading between two states. The position is interpolated toward where the fallen
+         * span sits, because the slab pivots about its base and its CENTRE therefore travels.
+         */
+        const t = gate.lift;
+        const eased = t * t * (3 - 2 * t);
+        node.rotation.z = eased * (Math.PI / 2);
+        const span = gate.span;
+        if (span) {
+          const downX = span.x + span.w / 2;
+          const downY = -(span.y + span.h / 2);
+          node.position.x = (gate.x + gate.w / 2) + (downX - (gate.x + gate.w / 2)) * eased;
+          node.position.y = restY + (downY - restY) * eased;
+        }
+      } else {
+        node.position.y = restY - gate.lift * (gate.h + 4);
+      }
     }
     for (const { node, button } of this.buttonNodes) {
       const material = node.material as THREE.MeshBasicMaterial;
@@ -1351,10 +1546,38 @@ export class M4SSRig extends ENGINE.SceneNode {
      * who cannot see what is in range cannot tell a mechanic from a bug in the two minutes
      * they will spend with this.
      */
+    for (const { node, crusher } of this.crusherNodes) {
+      const at = crusherRect(crusher);
+      node.position.set(at.x + at.w / 2, at.y + at.h / 2, -20);
+    }
+
     const mine = owned(state);
     if (mine.length === 0) return;
     const home = centroid(mine);
     const limit = reachOf(state);
+
+    /*
+     * Which growth the pointer is over, and whether it is worth lighting.
+     *
+     * Resolved here rather than on mousemove because it depends on the body's reach, which
+     * changes every frame as mass is shed and recovered. A hover computed at pointer-move
+     * time would go stale the moment the player split.
+     */
+    this.hovered = null;
+    if (this.pointer) {
+      let best: Anchor | null = null;
+      let bestD = 80;
+      for (const a of state.world.anchors) {
+        if (a.live === false) continue;
+        if (Math.hypot(a.x - home.x, a.y - home.y) > limit) continue;
+        const d = Math.hypot(a.x - this.pointer.x, a.y - this.pointer.y);
+        if (d < bestD) {
+          bestD = d;
+          best = a;
+        }
+      }
+      this.hovered = best;
+    }
     for (const [anchor, node] of this.anchorNodes) {
       const within = Math.hypot(anchor.x - home.x, anchor.y - home.y) <= limit;
       /*
@@ -1367,9 +1590,42 @@ export class M4SSRig extends ENGINE.SceneNode {
        * hue change, which is how the reference sheet distinguishes its interactables.
        */
       const material = node.material as THREE.MeshBasicMaterial;
-      material.color.set(anchor === this.latched ? '#ffffff' : within ? '#cfe8b4' : '#5a6f78');
-      // A growth you are hanging from is doing something, so it reads as bigger.
-      const scale = anchor === this.latched ? 1.16 : 1;
+      /*
+       * Four states, and they are ordered by what the player most needs to know.
+       *
+       * DEAD comes first and overrides everything. A red growth is not a growth you cannot
+       * quite reach, it is one that does not work, and the two must never be confusable -
+       * the whole second clause of stage two is the player learning to tell them apart from
+       * across a room. So it is a hue change where every other state here is a value change:
+       * red is the only warm thing in a green stage and it reads instantly.
+       *
+       * Then HELD, then HOVERED, then merely in reach. Hovering only lights a growth the
+       * body could actually get to, which makes the pointer a rangefinder rather than a
+       * cursor - sweeping it across the room answers "what can I do from here" without a
+       * single line of UI.
+       */
+      const dead = anchor.live === false;
+      const art = this.growthArt.get(anchor);
+      const wanted = art ? (dead ? art.dead : art.live) : null;
+      if (wanted && material.map !== wanted) {
+        material.map = wanted;
+        material.needsUpdate = true;
+      }
+      const hovered = !dead && anchor === this.hovered;
+      material.color.set(
+        dead
+          ? '#ffffff'
+          : anchor === this.latched
+            ? '#ffffff'
+            : hovered
+              ? '#f2ffd8'
+              : within
+                ? '#cfe8b4'
+                : '#5a6f78'
+      );
+      // A growth you are hanging from is doing something, so it reads as bigger. A hovered
+      // one leans toward that without arriving, so the two never look the same.
+      const scale = anchor === this.latched ? 1.16 : hovered ? 1.08 : 1;
       node.scale.set(scale, scale, scale);
     }
   }
@@ -1386,12 +1642,40 @@ export class M4SSRig extends ENGINE.SceneNode {
    * Following comes back when there is more level than screen, which is a real problem to
    * solve later and not one to invent now.
    */
+  /**
+   * Where the camera is looking, in level coordinates.
+   *
+   * The view is exactly VIEW_WIDTH across and VIEW_WIDTH/aspect tall. A stage that fits in
+   * that is framed whole and the camera never moves, which is what stage one wants: the
+   * slime lives on the floor, so centring on it puts half the frame underground.
+   *
+   * A stage taller than the view has to follow, and it follows only in Y. Following in X as
+   * well would mean the room drifting under the player on a level that is exactly as wide as
+   * the screen, for no gain. Clamped to the level's own bounds so the void never shows.
+   *
+   * Smoothed, and the smoothing is the part that matters: the body's centroid jumps around
+   * during a swing, and a camera locked to it makes the whole room shake at swing frequency.
+   */
+  private viewCentre(): { x: number; y: number } {
+    const world = this.state?.world;
+    if (!world) return { x: 0, y: 0 };
+    const viewHeight = VIEW_WIDTH / CAMERA_ASPECT;
+    if (world.height <= viewHeight) return { x: world.width / 2, y: world.height / 2 };
+    const body = this.state ? owned(this.state) : [];
+    const wanted =
+      body.length > 0
+        ? Math.max(viewHeight / 2, Math.min(world.height - viewHeight / 2, centroid(body).y))
+        : world.height - viewHeight / 2;
+    this.cameraY += (wanted - this.cameraY) * 0.08;
+    return { x: world.width / 2, y: this.cameraY };
+  }
+
   private follow(): void {
     if (!this.camera || !this.state) return;
     this.keepActive();
-    const world = this.state.world;
-    this.camera.position.copy(place(world.width / 2, world.height / 2).setZ(CAMERA_BACK));
-    this.aim(this.camera.position, place(world.width / 2, world.height / 2));
+    const at = this.viewCentre();
+    this.camera.position.copy(place(at.x, at.y).setZ(CAMERA_BACK));
+    this.aim(this.camera.position, place(at.x, at.y));
   }
 
   /**

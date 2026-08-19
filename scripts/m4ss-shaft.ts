@@ -49,6 +49,15 @@ function run(
   for (let i = 0; i < steps; i++) step(state, input(state));
 }
 
+/** Mean horizontal velocity of the owned body, in px/s. */
+function velocityX(state: MassState): number {
+  const mine = owned(state);
+  if (mine.length === 0) return 0;
+  let vx = 0;
+  for (const p of mine) vx += (p.x - p.px) / TUNING.dt;
+  return vx / mine.length;
+}
+
 /** Put the body somewhere without simulating the journey to it. */
 function place(state: MassState, x: number, y: number): void {
   const at = home(state);
@@ -247,6 +256,48 @@ console.log('\n=== M4SS STAGE TWO ===\n');
   });
   check('the presses travel their full stroke', seen.size > 20 && Math.max(...seen) >= press.travel - 2,
     `${seen.size} distinct positions, max ${Math.max(...seen)} of ${press.travel}`);
+}
+
+// ---------------------------------------------------------------- slow motion on release
+{
+  /*
+   * A fast release buys aiming time; a slow one must not.
+   *
+   * Gated on spin rather than on speed, so a body that happens to be moving quickly because
+   * it fell does not get the courtesy - and so that letting go while hanging still, which is
+   * what a player does when they change their mind, does not stutter the game.
+   */
+  const state = makeState(freshShaft(), START_MASS);
+  const g3 = state.world.anchors.find((a) => a.id === 'g3')!;
+  place(state, g3.x, g3.y + 120);
+  run(state, 6.0, (s) => ({
+    move: s.attached && Math.abs(s.spin) < TUNING.slowmoAt * 1.4 ? (velocityX(s) >= 0 ? 1 : -1) : 0,
+    anchor: g3,
+    recall: false,
+  }));
+  const spun = Math.abs(state.spin);
+  step(state, IDLE);
+  check(
+    'letting go of a fast swing slows time',
+    state.slowmo > 0.9,
+    `spin was ${spun.toFixed(1)} rad/s, threshold ${TUNING.slowmoAt}`
+  );
+
+  const gentle = makeState(freshShaft(), START_MASS);
+  place(gentle, g3.x, g3.y + 120);
+  run(gentle, 2.0, () => ({ move: 0, anchor: g3, recall: false }));
+  step(gentle, IDLE);
+  check(
+    'letting go of a hanging body does not',
+    gentle.slowmo === 0,
+    `spin was ${Math.abs(gentle.spin).toFixed(1)} rad/s`
+  );
+
+  // And it has to end on its own, or the stage is played in treacle from the first fling.
+  const decaying = makeState(freshShaft(), START_MASS);
+  decaying.slowmo = 1;
+  run(decaying, TUNING.slowmoSeconds + 0.2, () => IDLE);
+  check('and it wears off', decaying.slowmo === 0);
 }
 
 // ---------------------------------------------------------------- the heavy button

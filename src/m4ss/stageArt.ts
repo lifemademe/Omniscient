@@ -1164,11 +1164,33 @@ export function sporeTexture(seed: string, size = 256, count = 90): THREE.Canvas
  *
  * Drawn on a transparent canvas so it can sit as a billboard over the level.
  */
-export function bushTexture(seed: string, size = 160): THREE.CanvasTexture {
+export function bushTexture(seed: string, size = 160, dead = false): THREE.CanvasTexture {
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(size, size);
   const cx = size / 2;
   const cy = size * 0.58;
+
+  /*
+   * A dead growth is DRAWN dead, not tinted dead.
+   *
+   * The obvious implementation is to multiply the live sprite by red at runtime, and the
+   * comment on the reach tinting in M4SSRig already says why that fails: a flat ring can be
+   * switched green-to-red and stay legible, a painted sprite cannot - multiplying it turns a
+   * plant into a stain. It also collides with the tint that means "out of reach", and those
+   * two must never be confusable, because telling them apart IS the second clause of stage
+   * two.
+   *
+   * So red is its own palette through the same generator. Same silhouette, same leaf counts,
+   * same core in the same place - the player is looking at the same plant, and the only thing
+   * that has changed is that it has no light in it. The bioluminescent spores are dropped
+   * entirely rather than recoloured: they are the thing that says this plant is alive, and a
+   * dead one should not be shedding them.
+   */
+  const leafDark = dead ? '#5e2b22' : PAL.leafDark;
+  const leafMid = dead ? '#8a3a29' : PAL.leafMid;
+  const leafLit = dead ? '#b04f31' : PAL.leafLit;
+  const capDark = dead ? '#6b2f28' : PAL.capDark;
+  const capLit = dead ? '#9c4433' : PAL.capLit;
 
   // Roots and stems first, so everything else sits on them.
   g.strokeStyle = PAL.vineDark;
@@ -1208,7 +1230,7 @@ export function bushTexture(seed: string, size = 160): THREE.CanvasTexture {
    * spill sideways instead of standing straight up.
    */
   for (let i = 0; i < 22; i++) {
-    leaf(range(rng, Math.PI * 0.98, Math.PI * 2.02), range(rng, 34, 56), range(rng, 6, 13), PAL.leafDark);
+    leaf(range(rng, Math.PI * 0.98, Math.PI * 2.02), range(rng, 34, 56), range(rng, 6, 13), leafDark);
   }
   for (let i = 0; i < 18; i++) {
     // Off a ramp rather than one flat mid-green, so the clump has internal depth.
@@ -1216,11 +1238,11 @@ export function bushTexture(seed: string, size = 160): THREE.CanvasTexture {
       range(rng, Math.PI * 1.02, Math.PI * 1.98),
       range(rng, 26, 46),
       range(rng, 5, 11),
-      ramp(PAL.leafDark, PAL.leafLit, 5, 1 + Math.floor(rng() * 3))
+      ramp(leafDark, leafLit, 5, 1 + Math.floor(rng() * 3))
     );
   }
   for (let i = 0; i < 12; i++) {
-    leaf(range(rng, Math.PI * 1.08, Math.PI * 1.92), range(rng, 18, 34), range(rng, 3, 8), PAL.leafLit);
+    leaf(range(rng, Math.PI * 1.08, Math.PI * 1.92), range(rng, 18, 34), range(rng, 3, 8), leafLit);
   }
 
   /*
@@ -1235,14 +1257,14 @@ export function bushTexture(seed: string, size = 160): THREE.CanvasTexture {
     const mx = cx + range(rng, -34, 34);
     const my = cy + range(rng, -10, 12);
     const r = range(rng, 5, 9);
-    blob(g, rng, mx, my + 2, r * 0.35, PAL.leafDark, 0.5);
-    blob(g, rng, mx, my, r, PAL.capDark, 1.7);
-    blob(g, rng, mx, my - r * 0.35, r * 0.62, PAL.capLit, 1.9);
+    blob(g, rng, mx, my + 2, r * 0.35, leafDark, 0.5);
+    blob(g, rng, mx, my, r, capDark, 1.7);
+    blob(g, rng, mx, my - r * 0.35, r * 0.62, capLit, 1.9);
   }
 
   // Bioluminescent spores drifting off the clump. Cold against the warm green, and the thing
   // that says this plant is alive rather than painted on.
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < (dead ? 0 : 9); i++) {
     const sx = cx + range(rng, -46, 46);
     const sy = cy + range(rng, -40, 16);
     g.fillStyle = PAL.bioCyan;
@@ -1251,11 +1273,25 @@ export function bushTexture(seed: string, size = 160): THREE.CanvasTexture {
     g.fillRect(Math.round(sx), Math.round(sy), 1, 1);
   }
 
-  // The core: what the player is actually aiming at.
-  blob(g, rng, cx, cy - 6, 16, PAL.mossDark);
-  blob(g, rng, cx, cy - 6, 12, PAL.mossMid);
-  blob(g, rng, cx, cy - 7, 8, PAL.slime);
-  blob(g, rng, cx, cy - 8, 5, PAL.slimeGlow);
+  /*
+   * The core: what the player is actually aiming at.
+   *
+   * On a dead growth it is still THERE - same size, same place - and simply unlit. That is
+   * the difference between "you cannot use this yet" and "there is nothing here": the target
+   * is visible, so the route is readable from the floor of the room, which is the whole
+   * reason red growths exist rather than absent ones.
+   */
+  if (dead) {
+    blob(g, rng, cx, cy - 6, 16, '#4a2018');
+    blob(g, rng, cx, cy - 6, 12, '#6d2f21');
+    blob(g, rng, cx, cy - 7, 8, '#93412a');
+    blob(g, rng, cx, cy - 8, 5, '#bd5c38');
+  } else {
+    blob(g, rng, cx, cy - 6, 16, PAL.mossDark);
+    blob(g, rng, cx, cy - 6, 12, PAL.mossMid);
+    blob(g, rng, cx, cy - 7, 8, PAL.slime);
+    blob(g, rng, cx, cy - 8, 5, PAL.slimeGlow);
+  }
 
   return pixelTexture(c);
 }

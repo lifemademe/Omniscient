@@ -392,15 +392,20 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * "another thing the console does" rather than as a new idea under pressure.
        */
       { mission: MISSION_06, contact: DORIN },
-      /**
-       * Last, and the only beat in the game that runs in real time.
+      /*
+       * Sanda is CUT from this build.
        *
-       * §153 wants a game to move between tempos and this is the only Tempo.Act request
-       * there is. It arrives seventh on purpose: by now the player has met three devices
-       * and knows the console is something you work, so a live one lands as a spike rather
-       * than as the game changing genre in front of them.
+       * Hers is the only beat that runs in real time - Tempo.Act, a live request where the
+       * answer is when rather than what - and it is the one that is not ready. Left in the
+       * queue it would be offered, so it is removed from the queue rather than hidden on the
+       * globe: the globe is the only place a request can be opened, and a signal that is
+       * queued but undrawable is a mission the player is told about and cannot reach.
+       *
+       * Nothing else is deleted. mission-07-torch.ts, her contact record, her scene and her
+       * signal entry all stay exactly where they are, and putting the line below back is the
+       * whole of restoring her.
        */
-      { mission: MISSION_07, contact: SANDA },
+      // { mission: MISSION_07, contact: SANDA },
       /**
        * Eighth, and the only request that is not somebody asking for help.
        *
