@@ -37,7 +37,6 @@ import {
   createMeterFace,
   createPuddleSurface,
   createRatingPlate,
-  createUnknownSignal,
 } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
 import { CERTAINTY } from '../art/certainty.js';
@@ -9206,60 +9205,20 @@ function buildWireCity(scene: ContactScene): void {
     duration: 1.8,
   });
 
-  /**
-   * A signal the network has and cannot name - §52's bigger world, said in the room's
-   * own language. See createUnknownSignal for why it is amber.
+  /*
+   * The amber marker that used to float past the district is gone.
    *
-   * Placed ON the default shot's view axis, past the target, which is the one
-   * placement that needs no eye to check: every point on the line from a camera
-   * through its target is at the centre of frame. At 2.2 of the way it is 3.6 degrees
-   * off that axis once the height is levelled - still centre - and 375m out.
+   * It was §52's bigger world said in the room's own language - a signal the network has
+   * and cannot name, placed on the default shot's view axis 375m outside District 07. The
+   * placement was careful and the idea was sound, and it still read as a waypoint: an amber
+   * dot over a city is the universal symbol for somewhere you are meant to go, and this
+   * mission already asks the player to pick points on a map.
    *
-   * The distance is the point and it was wrong first time round. The district runs to
-   * 96 either side of the origin, not 24 - 24 is the cell COUNT and the cells are 8
-   * across - so the first placement put this marker inside the city near a corner,
-   * where an amber dot reads as a junction somebody has flagged. At 224 from the
-   * centre it is unmistakably not in District 07.
-   *
-   * It is not in the overhead, and should not be: that view exists to follow a car
-   * around the road network and frames the district. This is something you notice
-   * while being told about the district, from the shot the room opens on.
+   * The anomaly says the same thing better, and says it where the player is already
+   * scanning for signals - off the side of the globe, unnamed, in a screen whose whole
+   * job is telling you where things are. Two statements of one idea is one too many, and
+   * this was the one competing with a puzzle.
    */
-  {
-    const from = new THREE.Vector3(92, 34, 118);
-    const at = new THREE.Vector3(-10, 14, -18);
-    const where = from.clone().lerp(at, 2.2);
-    where.y = 14;
-
-    const texture = createUnknownSignal();
-    if (texture) {
-      const sprite = new THREE.Sprite(
-        new THREE.SpriteMaterial({
-          map: texture,
-          transparent: true,
-          depthWrite: false,
-          // Unlit and unfogged: it is a readout drawn over the world, not a thing in it.
-          fog: false,
-          toneMapped: false,
-          opacity: 0.9,
-        })
-      );
-      /*
-       * Constant on screen rather than shrinking with distance.
-       *
-       * With attenuation this would have to be sized against a 250m sightline in the
-       * default shot and a 108m one from overhead, and be wrong in one of them. A marker
-       * is a piece of interface; it should be the same size in both.
-       */
-      sprite.material.sizeAttenuation = false;
-      sprite.scale.set(0.22, 0.055, 1);
-      sprite.position.copy(where);
-
-      const node = ENGINE.SceneNode.create({ name: 'UnknownSignal', position: new THREE.Vector3() });
-      node.add(sprite);
-      scene.registerProp('unknown-signal', node);
-    }
-  }
 
   scene.registerShot('windscreen', {
     position: new THREE.Vector3(12, 2.2, 30),

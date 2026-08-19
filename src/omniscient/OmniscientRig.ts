@@ -1778,7 +1778,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
           !signal.hidden && signal.state === SignalState.Waiting && this.openable.has(signal.id)
       ).length;
 
-    while (answerable() < OmniscientRig.OPEN_AT_ONCE && this.offered < this.queue.length) {
+    /*
+     * After the first request, the whole world is on the globe.
+     *
+     * The quota existed to stop the opening being a wall of eight strangers, and for that
+     * one job it is right - Mirela has to be the only thing on screen, or "select a signal"
+     * is a menu rather than a person calling. Past her it was costing more than it bought:
+     * the globe spent the rest of the game holding five of eight, so it never became the
+     * populated world the screen is for, and a player who wanted to choose was choosing from
+     * a queue that had already chosen for them.
+     *
+     * Order still means something - the campaign is authored, and the beats are written
+     * assuming the earlier requests came first - but it is now the order they arrived in
+     * rather than a gate.
+     */
+    const anyResolved = this.signals.some((s) => s.state === SignalState.Resolved);
+    const quota = anyResolved ? this.queue.length : OmniscientRig.OPEN_AT_ONCE;
+    while (answerable() < quota && this.offered < this.queue.length) {
       const request = this.queue[this.offered];
       this.offered += 1;
       this.setSignalState(request.mission.contactId, SignalState.Waiting);

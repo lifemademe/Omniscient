@@ -29,6 +29,20 @@ export interface Signal {
   name: string;
   state: SignalState;
   /**
+   * Not on the planet.
+   *
+   * A signal with a latitude and longitude is a place, and the whole point of the anomaly is
+   * that it is not one. Sitting on the sphere it read as a town nobody had named - the
+   * strangeness was carried entirely by it blinking slower than everything else, which is a
+   * detail most players will never consciously register.
+   *
+   * Off the sphere it needs no explaining. There is a world, and there is something beside
+   * it, and the eye does the rest. It also stops rotating out of view, so it is always there
+   * when the player looks - which is worse for them and better for the game.
+   */
+  offworld?: boolean;
+
+  /**
    * Not on the globe at all yet.
    *
    * Different from Dormant, which is a signal you can see and cannot answer. Hidden is a
@@ -167,6 +181,21 @@ export class GlobeView {
     return this.rotation;
   }
 
+  /**
+   * Turn the world by hand.
+   *
+   * The globe has always turned on its own and never for the player, which makes it a
+   * display rather than an instrument - the one thing on this screen you cannot touch. A
+   * drag is the oldest gesture there is for a globe, and it costs one number.
+   *
+   * Nothing is clamped or eased here on purpose. The hand should feel directly connected to
+   * the world, and any smoothing between the mouse and the rotation is felt as lag by
+   * everybody who has ever spun one.
+   */
+  public turnBy(radians: number): void {
+    this.rotation = (this.rotation + radians) % (Math.PI * 2);
+  }
+
   public setSignals(signals: Signal[]): void {
     this.signals = signals;
   }
@@ -238,9 +267,20 @@ export class GlobeView {
    */
   public getProjectedSignals(): Array<{ signal: Signal; x: number; y: number; visible: boolean }> {
     return this.signals.map((signal) => {
-      const point = this.project(signal.latitude, signal.longitude);
+      const point = signal.offworld
+        ? this.projectOffworld()
+        : this.project(signal.latitude, signal.longitude);
       return { signal, x: point.x, y: point.y, visible: point.visible };
     });
+  }
+
+  /** Always visible, and never anywhere the world can rotate it to. */
+  private projectOffworld(): Projected {
+    return {
+      x: this.centreX + GlobeView.OFFWORLD.x * this.radius,
+      y: this.centreY + GlobeView.OFFWORLD.y * this.radius,
+      visible: true,
+    };
   }
 
   private get centreX(): number {
@@ -254,6 +294,15 @@ export class GlobeView {
   private get radius(): number {
     return Math.min(this.surface.width, this.surface.height) * 0.42;
   }
+
+  /**
+   * Where an off-world signal sits, in radii from the globe's centre.
+   *
+   * Beyond 1, so it is outside the sphere and never occluded by it, and high on the right
+   * where the panel furniture is thinnest. It does not turn with the world because it is not
+   * part of it.
+   */
+  private static readonly OFFWORLD = { x: 1.34, y: -0.72 };
 
   /** Orthographic projection of a lat/lon onto the screen. */
   private project(latitude: number, longitude: number): Projected {
@@ -342,7 +391,9 @@ export class GlobeView {
   private drawSignals(pulse: number, selectedId: string | null): void {
     for (const signal of this.signals) {
       if (signal.hidden) continue;
-      const point = this.project(signal.latitude, signal.longitude);
+      const point = signal.offworld
+        ? this.projectOffworld()
+        : this.project(signal.latitude, signal.longitude);
       if (!point.visible) continue;
 
       const color = this.colorFor(signal, pulse);

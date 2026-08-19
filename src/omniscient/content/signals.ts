@@ -202,14 +202,25 @@ export function createSignals(): Signal[] {
       state: SignalState.Dormant,
       hidden: true,
     },
-    // §169: an origin that should not exist. Visible for a few frames in every hundred,
-    // never openable, never explained. Most players will not notice it. That is correct.
+    /**
+     * §169: an origin that should not exist, and it is not on the planet.
+     *
+     * It used to sit in South America with no name, blinking a little slower than everything
+     * else - and that is all the strangeness it had, which is a detail almost nobody
+     * registers. Off the sphere it needs no explaining: there is a world, and there is
+     * something beside it. The latitude and longitude stay because the type wants them and
+     * because they are what it would read as if anybody ever put it back.
+     *
+     * Named now, too. "UNKNOWN" against seven people's names is the whole point - every
+     * other signal on the globe is somebody, and this one is a gap where a name goes.
+     */
     {
       id: 'anomaly',
       latitude: -11.5,
       longitude: -57.0,
-      name: '',
-      label: 'Unknown source.',
+      offworld: true,
+      name: 'UNKNOWN',
+      label: 'Origin does not resolve.',
       state: SignalState.Unknown,
       hidden: true,
     },

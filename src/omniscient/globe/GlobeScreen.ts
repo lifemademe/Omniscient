@@ -183,6 +183,11 @@ const GLOBE_CSS = `
   text-transform: uppercase;
   text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
 }
+/* Off the world, so its name hangs to the LEFT of the dot.
+   The anomaly sits outside the sphere near the right edge - 15px of surface remain, and a
+   left-aligned label would run off the screen. Everything else keeps the default. */
+.omni-globe__name--offworld { transform: translate(calc(-100% - 10px), -50%); }
+.omni-globe__name--unknown { color: #c2483a; }
 .omni-globe__name--waiting { color: #7fe08a; }
 .omni-globe__name--cooldown { color: #c2483a; }
 .omni-globe__name--resolved { color: #4a7355; }
@@ -381,6 +386,18 @@ export class GlobeScreen {
   private signals: Signal[] = [];
   private openable: ReadonlySet<string> = new Set();
   private selectedId: string | null = null;
+
+  /**
+   * Where the hand is, while it is on the world.
+   *
+   * Null when nobody is dragging. Held as the last x rather than a delta so the rotation
+   * follows the pointer exactly, including when the mouse leaves the canvas and comes back -
+   * a globe that keeps spinning because a mouseup happened somewhere else is the classic
+   * version of this bug.
+   */
+  private dragFrom: number | null = null;
+  /** Set once a drag has actually moved, so a click that wobbles is still a click. */
+  private dragged = false;
   /**
    * Name labels, created once and repositioned.
    *
@@ -547,6 +564,40 @@ export class GlobeScreen {
     // Clicking the canvas selects a point; clicking anywhere else clears the selection
     // and lets the globe turn again.
     stage.addEventListener('click', (event) => this.onStageClick(event));
+
+    /*
+     * Drag to turn.
+     *
+     * On the stage rather than the canvas because the canvas is pointer-events:none - the
+     * console frame around the globe is deliberately click-through, and the stage is what
+     * actually receives the mouse.
+     *
+     * `dragged` is the whole reason this does not eat clicks: a press that never moves more
+     * than a few pixels is a selection, and only a press that travels becomes a turn. Both
+     * gestures start identically and there is no other way to tell them apart.
+     */
+    stage.addEventListener('mousedown', (event) => {
+      this.dragFrom = event.clientX;
+      this.dragged = false;
+    });
+    stage.addEventListener('mousemove', (event) => {
+      if (this.dragFrom === null) return;
+      const moved = event.clientX - this.dragFrom;
+      if (Math.abs(moved) < 3 && !this.dragged) return;
+      this.dragged = true;
+      this.dragFrom = event.clientX;
+      /*
+       * Half a turn across the width of the stage. Enough that the whole world is reachable
+       * without lifting the mouse, and slow enough that a small correction stays small.
+       */
+      const width = stage.getBoundingClientRect().width || 1;
+      this.globe.turnBy((moved / width) * Math.PI);
+    });
+    const release = (): void => {
+      this.dragFrom = null;
+    };
+    stage.addEventListener('mouseup', release);
+    stage.addEventListener('mouseleave', release);
     root.addEventListener('click', (event) => {
       if (event.target === root) this.clearSelection();
     });
@@ -584,8 +635,12 @@ export class GlobeScreen {
     // request visibly becomes available again rather than silently reappearing.
     tickCooldowns(deltaTime, this.signals, this.onCooldownEnded);
 
-    // §99: clicking a point stops the world turning until the player looks away.
-    if (!this.selectedId) {
+    /*
+     * §99: clicking a point stops the world turning until the player looks away - and a hand
+     * on it stops it too. Letting go hands it straight back to the drift, with no easing:
+     * the machine simply resumes what it was doing, from wherever the player left it.
+     */
+    if (!this.selectedId && this.dragFrom === null) {
       this.globe.advance(deltaTime);
     }
 
@@ -688,6 +743,12 @@ export class GlobeScreen {
   }
 
   private onStageClick(event: MouseEvent): void {
+    // A press that travelled was a turn, not a selection. Consumed here rather than by
+    // suppressing the click, because the browser fires it either way.
+    if (this.dragged) {
+      this.dragged = false;
+      return;
+    }
     const rect = this.surface.canvas.getBoundingClientRect();
     const x = ((event.clientX - rect.left) / rect.width) * CANVAS_W;
     const y = ((event.clientY - rect.top) / rect.height) * CANVAS_H;
@@ -769,7 +830,9 @@ export class GlobeScreen {
       if (!spot) continue;
 
       seen.add(signal.id);
-      name.className = `omni-globe__name omni-globe__name--${this.stateClass(signal)}`;
+      name.className =
+        `omni-globe__name omni-globe__name--${this.stateClass(signal)}` +
+        (signal.offworld ? ' omni-globe__name--offworld' : '');
       name.style.left = `${spot.x * this.scale}px`;
       name.style.top = `${spot.y * this.scale}px`;
 
@@ -831,6 +894,9 @@ export class GlobeScreen {
   }
 
   private stateClass(signal: Signal): string {
+    // Its own colour, because it is not a person and must not read as one waiting to be
+    // answered. Red against seven greens is the whole statement.
+    if (signal.state === SignalState.Unknown) return 'unknown';
     if (signal.state === SignalState.Cooldown) return 'cooldown';
     if (signal.state === SignalState.Resolved || signal.state === SignalState.Dormant) {
       return 'resolved';
