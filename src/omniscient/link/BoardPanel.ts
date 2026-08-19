@@ -1424,10 +1424,26 @@ export class BoardPanel {
      * travel, which is only a judgement if they know roughly how fast he is going. Without
      * it the first hop is a guess and every hop after it is inference from that guess.
      * A dispatcher would say it, so he says it.
+     *
+     * ## And the turn is stated, for exactly the same reason
+     *
+     * "Straight ahead" is relative to the heading on THIS hop, and the car does not keep
+     * one heading - the shipped chase runs east, east, then south. The line used to restate
+     * the heading flatly every time, so a player who had just followed him two blocks east
+     * read "1 block straight ahead" on the third hop and got east, while the board meant
+     * south. Reported as: he is going east, then on 3 he is going south, how is that
+     * straight ahead?
+     *
+     * The information was all there and none of it was pointed at. A turn is the single
+     * most important thing that can happen between two sightings and it was being delivered
+     * in the same tone as everything else, as a subordinate clause. Now it leads.
      */
-    sighting.textContent =
-      `LAST CONFIRMED - heading ${hop.heading}, ${hop.seconds}s ago, doing about a block a `
-      + `second. Which one picks him up?`;
+    const turned = this.hopIndex > 0 && view.hops[this.hopIndex - 1].heading !== hop.heading;
+    sighting.textContent = turned
+      ? `HE TURNED - ${hop.heading} now, not ${view.hops[this.hopIndex - 1].heading}. That was `
+        + `${hop.seconds}s ago, still about a block a second. Ahead means ${hop.heading} from here.`
+      : `LAST CONFIRMED - still heading ${hop.heading}, ${hop.seconds}s ago, doing about a `
+        + `block a second. Which one picks him up?`;
 
     for (const option of hop.options) {
       const row = document.createElement('button');
@@ -1452,7 +1468,12 @@ export class BoardPanel {
         this.pursuitLost = [];
         // Captured before the hop moves on - see pursuitTrail for why it cannot be
         // recomputed afterwards.
-        this.pursuitTrail.push({ cam: id.textContent ?? '', where: where.textContent ?? '' });
+        this.pursuitTrail.push({
+          cam: id.textContent ?? '',
+          // The heading goes in the record too. Reading back "east, east, south" is how a
+          // player sees the shape of the route they built - and the turn they missed.
+          where: `${hop.heading} - ${where.textContent ?? ''}`,
+        });
         this.picks.push(option.id);
         this.hopIndex++;
         this.refreshPursuit();
