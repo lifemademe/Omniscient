@@ -400,6 +400,9 @@ const BOARD_CSS = `
   color: rgba(143, 214, 232, 0.8);
 }
 .omni-trace__jump:empty { display: none; }
+/* Quieter until the row is claimed: on an unclaimed row it is an offer, on a claimed one it
+   is a commitment, and the two should not shout equally. */
+.omni-trace__row:not(.omni-trace__row--picked) .omni-trace__jump { opacity: 0.55; }
 .omni-trace__jump--broken { color: #d1614a; }
 
 .omni-trace__row--broken {
@@ -1687,33 +1690,25 @@ export class BoardPanel {
       const what = document.createElement('span');
       what.className = 'omni-trace__detail';
       /**
-       * ONE distance, not two.
+       * No distance on the row at all. Only the jump line carries a number.
        *
-       * ## Why this board drops the sideways component
+       * ## Four wordings, four misreadings, one cause
        *
-       * The chase describes a camera as "4 blocks ahead, 3 blocks to the south" because that
-       * board genuinely needs both: being off his street is one of its three tests, and the
-       * sideways number is the one that fails it. This board has no such test. Coherence here
-       * is a single question - could a car cover that ground in that time - and it takes one
-       * number.
+       * This row has said "17 blocks ahead, 2 blocks to the west", then the same with the
+       * sideways part explained, then "19 blocks from where he was last seen". Every version
+       * was read as the distance the car had just driven, and every version was in fact the
+       * distance from where the cameras lost him. The last one was the worst, because "last
+       * seen" reads as "the one I claimed a moment ago" when you are going down a list.
        *
-       * Carrying the chase's two-part wording across anyway cost three separate misreadings
-       * in a row: that "17 blocks ahead" meant 17 blocks of driving, that a row's distance
-       * was measured from the previous ping, and that "21 ahead, 1 west" should somehow equal
-       * an 18-block jump. Every one of those was a player doing correct arithmetic on numbers
-       * the board had framed wrongly, and the framing was inherited rather than chosen.
-       *
-       * So: total distance from where the cameras lost him, added up along the streets,
-       * because that is the only figure the rule on this board consumes.
+       * The lesson is structural rather than editorial: ANY number on a row gets read as the
+       * jump, because the jump is the only number the player has been asked to think about.
+       * There is no phrasing that survives that. So the row carries none, and the one number
+       * on it is the one the rule consumes - see the jump line below.
        */
-      const away =
-        Math.abs(view.trail.from.x - fragment.cell.x) +
-        Math.abs(view.trail.from.y - fragment.cell.y);
-      what.textContent =
-        `${away} blocks from where he was last seen  -  ${fragment.detail}`;
+      what.textContent = fragment.detail;
 
       /**
-       * The jump from the previous claimed ping, filled in by refreshTrail.
+       * The jump, shown on EVERY row - claimed or not - and filled in by refreshTrail.
        *
        * ## The board was asking for a subtraction it never showed
        *
@@ -1811,29 +1806,29 @@ export class BoardPanel {
      * The same walk again, keeping the numbers this time so each claimed row can show what
      * it actually asks of the car.
      */
-    const jumps = new Map<string, { blocks: number; seconds: number; from: string }>();
-    at = view.trail.from;
-    since = 0;
-    /*
-     * `from` names the ping this was measured against, and it has to be named.
+    /**
+     * What every ping would ask of the car, from wherever the chain has got to.
      *
-     * "From the one before it" is unambiguous in the code and useless on screen: the
-     * previous CLAIMED ping can be several rows up, with unclaimed rows in between, so a
-     * player reading "18 blocks" against a row that says "21 blocks ahead" has no way to
-     * see what the 18 refers to. Reported as exactly that - how is 21 ahead and 1 west the
-     * same as 18 blocks? It is not; the 18 was from the +33s ping, four rows above.
+     * Not only the claimed ones. An unclaimed row measured from the last thing the player
+     * committed to answers the question they are actually holding - could he get here from
+     * where I have got to - before they have to click to find out. Claimed rows come out the
+     * same way, because for them the chain end IS the ping before them.
+     *
+     * `from` names it, because "the one before it" is unambiguous in the code and useless on
+     * screen: the previous claimed ping can be several rows up with unclaimed rows between,
+     * and a bare number has nothing to attach itself to.
      */
-    let previous = 'where the cameras lost him';
-    for (const fragment of picked) {
+    const jumps = new Map<string, { blocks: number; seconds: number; from: string }>();
+    for (const fragment of ordered) {
+      const earlier = picked.filter((other) => other.at < fragment.at);
+      const anchor = earlier[earlier.length - 1];
+      const cell = anchor ? anchor.cell : view.trail.from;
+      const when = anchor ? anchor.at : 0;
       jumps.set(fragment.id, {
-        blocks:
-          Math.abs(at.x - fragment.cell.x) + Math.abs(at.y - fragment.cell.y),
-        seconds: fragment.at - since,
-        from: previous,
+        blocks: Math.abs(cell.x - fragment.cell.x) + Math.abs(cell.y - fragment.cell.y),
+        seconds: fragment.at - when,
+        from: anchor ? `the +${anchor.at}s ping` : 'the last camera',
       });
-      at = fragment.cell;
-      since = fragment.at;
-      previous = `the +${fragment.at}s ping`;
     }
 
     Array.from(this.trailParts.list.children).forEach((row, i) => {
@@ -1843,10 +1838,19 @@ export class BoardPanel {
       const jump = row.querySelector('.omni-trace__jump');
       if (!jump) return;
       const step = jumps.get(id);
-      jump.textContent = step
-        ? `${step.blocks} blocks of driving in ${step.seconds}s, from ${step.from}`
-        : '';
-      jump.classList.toggle('omni-trace__jump--broken', broken.has(id));
+      if (!step) return;
+      jump.textContent =
+        `${step.blocks} blocks of driving in ${step.seconds}s, from ${step.from}`;
+      /*
+       * Red on any row he could not reach, claimed or not, so an impossible one can be seen
+       * and skipped rather than clicked and undone.
+       */
+      const reachable = couldReach(
+        { x: 0, y: 0 },
+        { x: step.blocks, y: 0 },
+        step.seconds
+      );
+      jump.classList.toggle('omni-trace__jump--broken', !reachable);
     });
 
     // Two is the fewest that can describe a journey, so anything less is not a claim yet.
