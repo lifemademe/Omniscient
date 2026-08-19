@@ -558,7 +558,15 @@ console.log('\n=== M4SS STAGE ONE ===\n');
   // and under the wall it is slower still, so the budget errs long: this measures WHETHER it
   // gets there. Driving stops at the button, because past it the chamber now ends in the
   // exit pit and a body that keeps marching east walks straight into it.
-  run(state, 35.0, (s) => ({ move: home(s).x < 880 ? 1 : 0, anchor: null, recall: false }));
+  /*
+   * Driven to 960, because the button moved to 940 and this still said 880.
+   *
+   * The body dutifully stopped sixty pixels short of the thing the check was about and the
+   * failure read as "a split body cannot fit under the wall". It fits fine; it was told to
+   * stop. Past the button the chamber ends in the exit pit, which is the reason there is a
+   * stopping point at all.
+   */
+  run(state, 45.0, (s) => ({ move: home(s).x < 960 ? 1 : 0, anchor: null, recall: false }));
   check(
     'a split body fits under the wall and reaches the button',
     button.pressed,

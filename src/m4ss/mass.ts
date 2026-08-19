@@ -569,41 +569,122 @@ export function centroid(group: Particle[]): { x: number; y: number } {
  * the fallback for a particle that is already inside without having crossed anything this
  * step, which is the only case where there is genuinely no better answer.
  */
-function hitTile(p: Particle, t: Tile): void {
+/** Is there other solid geometry at this point? Used to find a rect's INTERNAL faces. */
+function solidAt(world: World, x: number, y: number, except: Tile): boolean {
+  for (const t of world.tiles) {
+    if (t === except) continue;
+    if (x > t.x && x < t.x + t.w && y > t.y && y < t.y + t.h) return true;
+  }
+  for (const gate of world.gates) {
+    const s = gateSolid(gate);
+    if (!s || s === except) continue;
+    if (x > s.x && x < s.x + s.w && y > s.y && y < s.y + s.h) return true;
+  }
+  return false;
+}
+
+function hitTile(p: Particle, t: Tile, world: World): void {
   if (p.x < t.x || p.x > t.x + t.w || p.y < t.y || p.y > t.y + t.h) return;
   const left = p.x - t.x;
   const right = t.x + t.w - p.x;
   const top = p.y - t.y;
   const bottom = t.y + t.h - p.y;
-  let least = Math.min(left, right, top, bottom);
+
+  /*
+   * ## Faces that are not really there
+   *
+   * Two floors laid end to end share a seam, and the tile on the east side of it has a west
+   * FACE running the full depth of the level. Nothing is on the other side of that face - it
+   * is interior, buried in the neighbouring floor - but collision cannot tell, so a particle
+   * that has sunk ten pixels into the ground while walking finds a wall three pixels to its
+   * west and is pushed back east. The body stops dead at a join in the floor.
+   *
+   * That is what happened at the corridor/alcove seam in stage two: the heavy gate opened and
+   * the slime walked sixteen pixels in forty seconds. The same seam exists at every join in
+   * both stages; it only shows where the player has to walk across one.
+   *
+   * So a face is a candidate only if the space just beyond it is empty. Checked live rather
+   * than precomputed because gates move: a seam can be interior while a gate is shut and a
+   * real edge the moment it opens.
+   */
+  const faces: Array<{ depth: number; face: 'top' | 'bottom' | 'left' | 'right' }> = [];
+  /*
+   * The top face is ALWAYS a candidate, even when something is standing on this tile.
+   *
+   * Excluding it symmetrically was the obvious thing to write and it emptied the level onto
+   * the floor. The heavy gate stands on the alcove floor, so directly under the gate the
+   * floor's top face is buried in the gate, its left and right faces are buried in the
+   * neighbouring floors, and the only face left was the underside - the slime was expelled
+   * through the ground and fell seven hundred pixels. Capping the ejection distance stopped
+   * the fall and replaced it with the body crawling along INSIDE the floor, which is worse
+   * for being quieter.
+   *
+   * Up is the one direction that always resolves correctly, because whatever is above will
+   * take its own turn: pushed to the gate's underside, the particle is then pushed sideways
+   * out of the gate, which is exactly where it should end up. Only the horizontal faces and
+   * the underside are worth suppressing, and those are the ones the floor seam needs.
+   */
+  faces.push({ depth: top, face: 'top' });
+  if (!solidAt(world, p.x, t.y + t.h + 1, t)) faces.push({ depth: bottom, face: 'bottom' });
+  if (!solidAt(world, t.x - 1, p.y, t)) faces.push({ depth: left, face: 'left' });
+  if (!solidAt(world, t.x + t.w + 1, p.y, t)) faces.push({ depth: right, face: 'right' });
+
+  let pick = faces[0];
+  for (const f of faces) if (f.depth < pick.depth) pick = f;
 
   // Which faces it crossed on the way in this step. Usually none or one; two at a corner.
   const inLeft = p.px <= t.x;
   const inRight = p.px >= t.x + t.w;
   const inTop = p.py <= t.y;
   const inBottom = p.py >= t.y + t.h;
-  if (inLeft || inRight || inTop || inBottom) {
-    const horizontal = inLeft ? left : inRight ? right : Infinity;
-    const vertical = inTop ? top : inBottom ? bottom : Infinity;
+  const entered = faces.filter(
+    (f) =>
+      (f.face === 'left' && inLeft) ||
+      (f.face === 'right' && inRight) ||
+      (f.face === 'top' && inTop) ||
+      (f.face === 'bottom' && inBottom)
+  );
+  if (entered.length === 1) {
+    pick = entered[0];
+  } else if (entered.length > 1) {
     // At a corner, back out along whichever axis it was travelling faster - that is the one
     // that actually carried it in.
     const preferVertical = Math.abs(p.y - p.py) > Math.abs(p.x - p.px);
-    least = Math.min(horizontal, vertical);
-    if (horizontal !== Infinity && vertical !== Infinity) least = preferVertical ? vertical : horizontal;
+    const wanted = entered.filter((f) =>
+      preferVertical ? f.face === 'top' || f.face === 'bottom' : f.face === 'left' || f.face === 'right'
+    );
+    pick = wanted[0] ?? entered[0];
   }
+
+  /*
+   * Never eject further than a particle could plausibly have travelled.
+   *
+   * With interior faces excluded it is possible for the only remaining exit to be absurd. A
+   * particle wedged between the heavy gate and the floor it stands on has a floor whose top
+   * face is buried in the gate, whose left and right faces are buried in neighbouring floors,
+   * and whose only exposed face is the UNDERSIDE - 260px down. Collision duly expelled it
+   * through the bottom of the level, and since the body drags its own particles along, the
+   * slime poured through the ground and fell seven hundred pixels.
+   *
+   * A particle moves about four pixels in a step at swing speed. Anything claiming to need
+   * twenty-four is not a collision being resolved, it is a wedge being catapulted. Leave it
+   * where it is: it is stuck, which is the truth, and the body's own cohesion will work it
+   * free within a few frames.
+   */
+  if (pick.depth > 24) return;
 
   const vx = (p.x - p.px) * TUNING.friction;
   const vy = p.y - p.py;
-  if (least === top) {
+  if (pick.face === 'top') {
     p.y = t.y;
     p.py = p.y + vy * TUNING.bounce;
     p.px = p.x - vx;
     p.grounded = true;
-  } else if (least === bottom) {
+  } else if (pick.face === 'bottom') {
     p.y = t.y + t.h;
     p.py = p.y + vy * TUNING.bounce;
     p.px = p.x - vx;
-  } else if (least === left) {
+  } else if (pick.face === 'left') {
     p.x = t.x;
     p.px = p.x + (p.x - p.px) * TUNING.bounce;
   } else {
@@ -646,12 +727,12 @@ function insideAnySolid(p: Particle, world: World): boolean {
 
 function collide(p: Particle, world: World): void {
   p.grounded = false;
-  for (const t of world.tiles) hitTile(p, t);
+  for (const t of world.tiles) hitTile(p, t, world);
   for (const gate of world.gates) {
     const solid = gateSolid(gate);
-    if (solid) hitTile(p, solid);
+    if (solid) hitTile(p, solid, world);
   }
-  for (const c of world.crushers ?? []) hitTile(p, crusherRect(c));
+  for (const c of world.crushers ?? []) hitTile(p, crusherRect(c), world);
 }
 
 export function makeState(world: World, startMass: number): MassState {
