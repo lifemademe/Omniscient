@@ -390,20 +390,6 @@ const BOARD_CSS = `
    the pings one car could have driven between, and the moment two of them cannot both be
    him, say which two. Same medicine as the wet pipes - show the consequence of the player's
    own choices instead of grading them at the end. */
-/* The drive this row asks of the car, once claimed. Its own line under the detail, because
-   it is the number the decision is made on and it must not be at the end of a sentence. */
-.omni-trace__jump {
-  flex-basis: 100%;
-  padding-top: 2px;
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: rgba(143, 214, 232, 0.8);
-}
-.omni-trace__jump:empty { display: none; }
-/* Quieter until the row is claimed: on an unclaimed row it is an offer, on a claimed one it
-   is a commitment, and the two should not shout equally. */
-.omni-trace__row:not(.omni-trace__row--picked) .omni-trace__jump { opacity: 0.55; }
-.omni-trace__jump--broken { color: #d1614a; }
 
 .omni-trace__row--broken {
   border-color: rgba(168, 64, 47, 0.75);
@@ -1690,46 +1676,17 @@ export class BoardPanel {
       const what = document.createElement('span');
       what.className = 'omni-trace__detail';
       /**
-       * No distance on the row at all. Only the jump line carries a number.
+       * The drive, in the row, in front of the thing that recorded it.
        *
-       * ## Four wordings, four misreadings, one cause
-       *
-       * This row has said "17 blocks ahead, 2 blocks to the west", then the same with the
-       * sideways part explained, then "19 blocks from where he was last seen". Every version
-       * was read as the distance the car had just driven, and every version was in fact the
-       * distance from where the cameras lost him. The last one was the worst, because "last
-       * seen" reads as "the one I claimed a moment ago" when you are going down a list.
-       *
-       * The lesson is structural rather than editorial: ANY number on a row gets read as the
-       * jump, because the jump is the only number the player has been asked to think about.
-       * There is no phrasing that survives that. So the row carries none, and the one number
-       * on it is the one the rule consumes - see the jump line below.
+       * Every number on this row has been misread as the jump at some point, because the
+       * jump is the only number the player has been asked to think about. Rather than keep
+       * hunting for a phrasing that survives that, the row now carries the jump itself and
+       * nothing else - written out by refreshTrail, since it depends on what has been
+       * claimed above it.
        */
       what.textContent = fragment.detail;
 
-      /**
-       * The jump, shown on EVERY row - claimed or not - and filled in by refreshTrail.
-       *
-       * ## The board was asking for a subtraction it never showed
-       *
-       * Every row is described relative to WHERE THE CAMERAS LOST HIM - "17 blocks ahead, 2
-       * blocks to the west" is nineteen blocks from the start. The rule is about consecutive
-       * pings, so the number that decides anything is the difference between one row and the
-       * next: from the ping at +18s, that same +27s row is seven blocks, not nineteen.
-       *
-       * Reported as exactly that misreading - "so after 9 seconds he can drive 17 blocks?" -
-       * and it was the board's fault, not the player's. It printed absolute distances, stated
-       * a rule about relative ones, and left a two-axis subtraction with signs in it to be
-       * done in the head for every pair of nine rows.
-       *
-       * So the board does the subtraction and shows its result on the rows that have been
-       * claimed. It removes arithmetic, not deduction: which SET is one car, and which is the
-       * largest, is untouched.
-       */
-      const jump = document.createElement('span');
-      jump.className = 'omni-trace__jump';
-
-      row.append(when, what, jump);
+      row.append(when, what);
       row.addEventListener('mousedown', (event) => {
         event.preventDefault();
         audio.play('tap');
@@ -1776,9 +1733,9 @@ export class BoardPanel {
      * numbers, or work out which row a figure was measured against.
      */
     this.trailParts.headline.textContent =
-      `LAST SEEN heading ${view.trail.heading}, doing about a block a second. Claim the pings `
-      + `you think are him - the board works out how far he had to drive between each one. `
-      + `If that is further than he could get in the time, it was not the same car. `
+      `LAST SEEN heading ${view.trail.heading}, doing about a block a second. Each line says `
+      + `how far he would have had to drive to be there, and how long he had. Claim the ones `
+      + `he could have made - the red ones he could not. `
       + `${this.claimed.size} of ${view.trail.fragments.length} claimed as him.`;
 
     const ordered = [...view.trail.fragments].sort((a, b) => a.at - b.at);
@@ -1834,23 +1791,22 @@ export class BoardPanel {
     Array.from(this.trailParts.list.children).forEach((row, i) => {
       const id = ordered[i].id;
       row.classList.toggle('omni-trace__row--picked', this.claimed.has(id));
-      row.classList.toggle('omni-trace__row--broken', broken.has(id));
-      const jump = row.querySelector('.omni-trace__jump');
-      if (!jump) return;
+      const detail = row.querySelector('.omni-trace__detail');
       const step = jumps.get(id);
-      if (!step) return;
-      jump.textContent =
-        `${step.blocks} blocks of driving in ${step.seconds}s, from ${step.from}`;
+      if (!detail || !step) return;
       /*
-       * Red on any row he could not reach, claimed or not, so an impossible one can be seen
-       * and skipped rather than clicked and undone.
+       * "after 7 blocks and 8s, the barrier logged a vehicle" - the drive first, because it
+       * is the only part that decides anything, and the source after it, because it is the
+       * only part that gives the night any texture.
        */
-      const reachable = couldReach(
-        { x: 0, y: 0 },
-        { x: step.blocks, y: 0 },
-        step.seconds
-      );
-      jump.classList.toggle('omni-trace__jump--broken', !reachable);
+      detail.textContent =
+        `after ${step.blocks} blocks and ${step.seconds}s, ${ordered[i].detail}`;
+      /*
+       * Red on any row he could not have reached, claimed or not, so an impossible ping can
+       * be seen and skipped rather than clicked and undone.
+       */
+      const reachable = couldReach({ x: 0, y: 0 }, { x: step.blocks, y: 0 }, step.seconds);
+      row.classList.toggle('omni-trace__row--broken', !reachable);
     });
 
     // Two is the fewest that can describe a journey, so anything less is not a claim yet.
@@ -1876,7 +1832,7 @@ export class BoardPanel {
         ? 'ignore what recorded them - only how far and how long. start with one and add to it'
         : firstBroken
           ? `he could not have driven that far in that time - +${firstBroken.at}s is not the same car`
-          : `${this.claimed.size} claimed and he could have driven all of it - keep going until the trail leaves the district`);
+          : `${this.claimed.size} claimed, and one car could have driven all of it - send it`);
   }
 
   private buildBeam(): void {

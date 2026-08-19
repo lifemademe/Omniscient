@@ -9,7 +9,7 @@
  * should not also need to know how water finds a drain.
  */
 
-import { arrives, bestSets, drivable, isCoherent } from './breadcrumbs.js';
+import { drivable } from './breadcrumbs.js';
 import { CLUES, matches, satisfies } from './traces.js';
 import { replayBeam } from './beam.js';
 import { workLock } from './lock.js';
@@ -187,45 +187,33 @@ export function gradeDevice(device: Device, submission: DeviceSubmission): Devic
       const chosen = submission.picks;
 
       /**
-       * Graded by the rule, in two parts, and the second part is the whole puzzle.
+       * One rule: could one car have driven it?
        *
-       * COHERENT - could one car have driven between these, in time order, and arrived?
-       * MAXIMAL  - and is this all of them, or did the player leave some of him behind?
+       * ## What was here, and why it went
        *
-       * Coherence alone is not enough and that is not a detail: dropping a fragment from
-       * the middle hands the next jump all of the skipped time, so every subset of a real
-       * route is itself coherent. Without maximality a player could submit two pings and
-       * be right, which is how the first version of this device had fifteen answers.
-       */
-      /*
-       * Two failures, two sentences, because they send the player in opposite directions.
+       * This used to grade on three things - every jump possible, the chain arriving near
+       * the bridge, and the chain being the largest such set. All three are defensible in
+       * isolation and together they made the phase unplayable, because only the first was
+       * ever visible. A player could assemble a route with no impossible jump in it and be
+       * told no, twice, for reasons the board had never mentioned - and the second of those
+       * reasons, arrival, is the one that decides the puzzle.
        *
-       * A set with an impossible jump in it has one too many; a set that stops short has
-       * too few. Returning "it would have had to be in two places" for both - which is what
-       * this did - tells the second player to go hunting for a contradiction that is not
-       * there. {+8, +18, +33} is three jumps anybody could drive, and it was being called
-       * physically impossible.
+       * The board now states the whole test on every row: how far he would have had to
+       * drive, how long he had, and whether that is possible. Grading on anything the row
+       * does not show puts the player back to guessing.
+       *
+       * ## What it costs, stated plainly
+       *
+       * There are 71 sets of these nine pings with no impossible jump in them, so this is a
+       * puzzle that is hard to fail rather than hard to solve. That is a deliberate trade
+       * and it is the right way round for this phase: the difficulty of mission 08 was never
+       * meant to live here. It lives in the chase, and in the choice about the red cars.
        */
       if (!drivable(device.trail, chosen)) {
         return {
           solved: false,
           note: 'those are not one car - somewhere in there it would have had to be in two places',
         };
-      }
-
-      if (!arrives(device.trail, chosen)) {
-        // Says the trail stops too soon, never where it should have got to - naming that is
-        // naming the answer, and working out where he comes out IS the request.
-        return {
-          solved: false,
-          note: 'he could have driven all of that, but it stops in the middle of the district - he did not stop there',
-        };
-      }
-
-      const biggest = bestSets(device.trail)[0]?.length ?? chosen.length;
-      if (chosen.length < biggest) {
-        // Says that something is missing, never which - naming it would solve the rest.
-        return { solved: false, note: 'that holds together, but there is more of him out there' };
       }
       return { solved: true };
     }

@@ -19,7 +19,7 @@ import { MISSION_05 } from '../src/omniscient/content/mission-05-cellar.js';
 import { MISSION_06 } from '../src/omniscient/content/mission-06-lock.js';
 import { MISSION_07 } from '../src/omniscient/content/mission-07-torch.js';
 import { MISSION_08 } from '../src/omniscient/content/mission-08-district.js';
-import { bestSets } from '../src/omniscient/mission/breadcrumbs.js';
+import { bestSets, drivable } from '../src/omniscient/mission/breadcrumbs.js';
 import { narrow } from '../src/omniscient/mission/traces.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
 import { followerAt, replayBeam } from '../src/omniscient/mission/beam.js';
@@ -372,17 +372,17 @@ function checkShippedChase(): void {
 }
 
 /**
- * The cold trail fails in three different ways, and must say which.
+ * The cold trail has one rule, and the board shows it.
  *
- * A set can be wrong by containing a jump no car could make, by stopping short of anywhere
- * he could be going, or by being a real route with pieces of him left behind. Those send the
- * player in three different directions, and one of them used to answer for all three: a
- * perfectly drivable {+8, +18, +33} was told "somewhere in there it would have had to be in
- * two places", which sent them hunting for a contradiction that did not exist.
+ * It used to grade on three - every jump possible, the chain arriving near the bridge, and
+ * the chain being the largest such set - and only the first was ever visible. A player could
+ * build a route with no impossible jump in it and be refused twice for reasons nothing on
+ * screen had mentioned.
  *
- * Checked by submitting one of each and requiring three distinct notes.
+ * So the check is now about the reverse property: anything the board draws as possible must
+ * BE accepted. If those two ever disagree again, this fails.
  */
-function checkTrailSaysWhy(): void {
+function checkTrailMatchesTheBoard(): void {
   const trail = DISTRICT_TRAIL;
   const ordered = [...trail.fragments].sort((a, b) => a.at - b.at);
   const ids = (secs: number[]): string[] =>
@@ -395,27 +395,33 @@ function checkTrailSaysWhy(): void {
     onWrong: { to: 'y' },
     wrongSay: '',
   };
+  const grade = (secs: number[]): boolean =>
+    gradeDevice(device, { kind: 'trail', picks: ids(secs) }).solved;
 
-  const impossible = gradeDevice(device, { kind: 'trail', picks: ids([8, 22, 27]) });
-  const short = gradeDevice(device, { kind: 'trail', picks: ids([8, 18, 33]) });
-  const partial = gradeDevice(device, { kind: 'trail', picks: ids([8, 18, 38]) });
-  const right = gradeDevice(device, { kind: 'trail', picks: ids([8, 18, 27, 38]) });
+  check('an impossible jump is still refused', !grade([8, 22, 27]));
+  check('the full route is accepted', grade([8, 18, 27, 38]));
 
-  check('the answer is accepted', right.solved);
-  check('an impossible jump is rejected', !impossible.solved);
-  check('a trail that stops short is rejected', !short.solved);
-  check('a real route with pieces missing is rejected', !partial.solved);
+  /*
+   * The two that used to be refused for invisible reasons. Both are drivable, both look
+   * fine on the board, and both must now be taken.
+   */
+  check('a drivable route that stops early is accepted', grade([8, 18, 33]));
+  check('a drivable route with gaps in it is accepted', grade([8, 18, 38]));
 
-  const notes = [impossible.note, short.note, partial.note];
+  // And the general form: every set the board would draw as clean, the grader takes.
+  let disagreements = 0;
+  for (let mask = 1; mask < 1 << ordered.length; mask++) {
+    const picked = ordered.filter((_, k) => mask & (1 << k));
+    if (picked.length < 2) continue;
+    if (!drivable(trail, picked.map((f) => f.id))) continue;
+    if (!gradeDevice(device, { kind: 'trail', picks: picked.map((f) => f.id) }).solved) {
+      disagreements += 1;
+    }
+  }
   check(
-    'each failure says something different',
-    new Set(notes).size === 3 && notes.every(Boolean),
-    notes.map((n) => `"${(n ?? '').slice(0, 28)}..."`).join(' / ')
-  );
-  check(
-    'and the one that stops short does not claim two places',
-    !(short.note ?? '').includes('two places'),
-    short.note
+    'every drivable claim the board would show as clean is accepted',
+    disagreements === 0,
+    `${disagreements} refused`
   );
 }
 
@@ -919,7 +925,7 @@ checkEveryMissionHasASignal();
 checkGlobeTurns();
 console.log('');
 console.log('=== THE COLD TRAIL ===');
-checkTrailSaysWhy();
+checkTrailMatchesTheBoard();
 console.log('');
 console.log('=== THE CHASE THAT SHIPS ===');
 checkShippedChase();
