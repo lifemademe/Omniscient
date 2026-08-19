@@ -35,6 +35,7 @@ import {
   endCapTexture,
   canopyTexture,
   domeTexture,
+  eyeTexture,
   floorMistTexture,
   forestLayer,
   godRayTexture,
@@ -159,6 +160,11 @@ export class M4SSRig extends ENGINE.SceneNode {
 
   private body: ENGINE.MeshNode | null = null;
   private shine: ENGINE.MeshNode | null = null;
+  /** The specimen's eyes: two pupil planes riding the upper body. See paintSlime. */
+  private eyes: ENGINE.MeshNode[] = [];
+  /** Frames until the next blink starts; blink plays while blinkT > 0. */
+  private blinkWait = 400;
+  private blinkT = 0;
   /** Where the highlight has leaned to, smoothed. See paintSlime. */
   private shineLean = 0;
   private belly: ENGINE.MeshNode | null = null;
@@ -1412,6 +1418,22 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.cord = decorMesh('Tendril', empty.clone(), this.cordMaterial);
     this.cord.position.z = 4;
     this.stage?.add(this.cord);
+
+    /*
+     * The eyes. Two pupils, not a face rig: they ride the upper third of the owned body,
+     * lean into the direction of travel with the same smoothed value as the shine, and
+     * blink on a timer. Everything the reference slime's charm needs and nothing more.
+     */
+    this.eyes = [0, 1].map(() => {
+      const eye = decorMesh(
+        'SlimeEye',
+        new THREE.PlaneGeometry(9, 13),
+        this.artMaterial({ map: eyeTexture(), transparent: true, depthWrite: false })
+      );
+      eye.position.z = 5;
+      this.stage?.add(eye);
+      return eye;
+    });
   }
 
   /**
@@ -2087,6 +2109,40 @@ export class M4SSRig extends ENGINE.SceneNode {
       this.replace(this.cord, this.cordGeometry(home, state.tip, state.strain > 0));
     } else {
       this.replace(this.cord, new THREE.BufferGeometry());
+    }
+
+    /*
+     * The eyes, last, so they know where the body ended up this frame.
+     *
+     * Anchored at the 25th percentile of the body's own y (its upper shoulder) rather
+     * than its bounding top: while hanging, the shape runs all the way up the tendril,
+     * and eyes at the bounding top would sit on the arm. The percentile stays on the
+     * pooled bulb wherever the mass actually is. Hidden during a fast spin - a face that
+     * stays upright through a 360 reads as a sticker, and motion is allowed to blur.
+     */
+    const spinning = Math.abs(state.spin) > 2.5;
+    if (mine.length === 0 || spinning) {
+      for (const eye of this.eyes) eye.visible = false;
+    } else {
+      const ys = mine.map((q) => q.y).sort((a, b) => a - b);
+      const xs = mine.map((q) => q.x);
+      const cx = xs.reduce((a, b) => a + b, 0) / xs.length + this.shineLean * 1.4;
+      const top = ys[Math.floor(ys.length * 0.25)];
+      const k = Math.max(0.7, Math.min(1.3, Math.sqrt(mine.length / 40)));
+      // The blink: a long wait, then twelve frames of squash.
+      this.blinkWait -= 1;
+      if (this.blinkWait <= 0) {
+        this.blinkT = 12;
+        this.blinkWait = 500 + Math.floor(Math.random() * 400);
+      }
+      if (this.blinkT > 0) this.blinkT -= 1;
+      const squash = this.blinkT > 0 ? 0.15 : 1;
+      this.eyes.forEach((eye, i) => {
+        eye.visible = true;
+        eye.position.x = cx + (i === 0 ? -5.5 : 5.5) * k;
+        eye.position.y = top + 9 * k;
+        eye.scale.set(k, k * squash, 1);
+      });
     }
   }
 

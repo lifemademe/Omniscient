@@ -2556,6 +2556,30 @@ export function interiorFadeTexture(): THREE.CanvasTexture {
 }
 
 /**
+ * One eye for the specimen: a dark pupil with a catch-light.
+ *
+ * Every creature on the reference design sheet - the player slime in all five poses, every
+ * enemy - has two dot eyes with a light in them, and that is most of where the charm lives.
+ * Ours was an eyeless mass: technically a blob, emotionally a puddle. The pupil is the
+ * darkest green in the world rather than black so it still belongs to the body it sits on,
+ * and the catch-light is 2x2 - big enough to survive the display scale (the pass-11 rule).
+ */
+export function eyeTexture(w = 10, h = 14): THREE.CanvasTexture {
+  const { c, g } = surface(w, h);
+  const cx = w / 2;
+  const cy = h / 2;
+  g.fillStyle = mixHex(PAL.voidDeep, '#000000', 0.5);
+  for (let y = 0; y < h; y++) {
+    const t = (y - cy) / (h / 2 - 1);
+    const half = Math.round((w / 2 - 1) * Math.sqrt(Math.max(0, 1 - t * t)));
+    if (half > 0) g.fillRect(Math.round(cx - half), y, half * 2, 1);
+  }
+  g.fillStyle = '#ffffff';
+  g.fillRect(Math.round(cx), Math.round(cy - h * 0.22), 2, 2);
+  return pixelTexture(c);
+}
+
+/**
  * The shed-mass marker: a small down-chevron in the shed bar's own orange, hung above a
  * lump the player left behind. The HUD already counts what is missing; this says WHERE,
  * which is the half of the question a count cannot answer.
