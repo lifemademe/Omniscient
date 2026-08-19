@@ -283,7 +283,10 @@ console.log('\n=== M4SS STAGE TWO ===\n');
   const state = makeState(freshShaft(), START_MASS);
   const g3 = state.world.anchors.find((a) => a.id === 'g3')!;
   place(state, g3.x, g3.y + 120);
-  run(state, 6.0, (s) => ({
+  // Ten seconds, up from six: the pump is speed-gated now (the earned-swing change), so
+  // the same alternating driver builds spin more slowly. The threshold is unchanged - what
+  // took the old physics six seconds of pumping takes the honest physics ten.
+  run(state, 10.0, (s) => ({
     move: s.attached && Math.abs(s.spin) < TUNING.slowmoAt * 1.4 ? (velocityX(s) >= 0 ? 1 : -1) : 0,
     anchor: g3,
     recall: false,

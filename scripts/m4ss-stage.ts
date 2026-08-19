@@ -100,6 +100,37 @@ function run(
 
 const IDLE = { move: 0 as const, anchor: null, recall: false };
 
+/**
+ * How many blobs the SCREEN shows, as opposed to how many the physics counts.
+ *
+ * components() clusters at linkRange (15px), which is the right question for cohesion and
+ * the wrong one for "did the creature visibly tear": the metaball surface unions field
+ * points out to roughly a body-radius beyond their centres, so two physics-components a
+ * few pixels past linkRange still DRAW as one silhouette. 26px is the measured gap at
+ * which the rendered surface actually pinches into two shapes.
+ */
+function visualPieces(group: ReturnType<typeof owned>): number {
+  const RANGE = 26;
+  const unseen = new Set(group);
+  let clusters = 0;
+  while (unseen.size > 0) {
+    clusters += 1;
+    const seed = unseen.values().next().value!;
+    const queue = [seed];
+    unseen.delete(seed);
+    while (queue.length > 0) {
+      const p = queue.pop()!;
+      for (const q of [...unseen]) {
+        if (Math.hypot(p.x - q.x, p.y - q.y) <= RANGE) {
+          unseen.delete(q);
+          queue.push(q);
+        }
+      }
+    }
+  }
+  return clusters;
+}
+
 console.log('\n=== M4SS STAGE ONE ===\n');
 
 // ---------------------------------------------------------------- the reach economy
@@ -217,6 +248,17 @@ console.log('\n=== M4SS STAGE ONE ===\n');
         return IDLE;
       }
       /*
+       * The other legitimate crossing: a swing big enough to carry the body over the lip
+       * WHILE attached, stepping off onto the far ledge. The spin-stiffened body made this
+       * reachable, and it is good play - a huge swing you ride out is as earned as a
+       * fling. It still has to cost the pumping time, so the clock stops here too.
+       */
+      if (s.attached && h.x > 480 && h.y > 590 && v.y >= 0) {
+        released = true;
+        swungFor = t - swingStart;
+        return IDLE;
+      }
+      /*
        * Pump the way a person on a swing does: push WITH your motion through the bottom of
        * the arc, where the tangent is horizontal and the push direction is unambiguous, and
        * coast everywhere else. From the dead hang the grip leaves you in, push anything
@@ -266,7 +308,7 @@ console.log('\n=== M4SS STAGE ONE ===\n');
   check(
     'the crossing takes real pumping - not one push',
     crossed && swungFor >= 1.0,
-    `released after ${swungFor.toFixed(1)}s of swinging`
+    `crossing cost ${swungFor.toFixed(1)}s on the rope`
   );
   /*
    * The landing-shatter check. A flung body that arrives as several bodies is the bug this
@@ -281,24 +323,25 @@ console.log('\n=== M4SS STAGE ONE ===\n');
    * resonant pumping, but let go after 1.2 seconds - if that clears the pit, the pump is
    * too strong and the timing skill is gone.
    */
+  /*
+   * The FREE crossing must not exist: latch on, pump NOTHING, and let go - whatever the
+   * release phase, the body must come home. This is gripAbsorb's contract stated as a
+   * check. It used to be a "lazy pumping" budget (1.6s, then 0.9s of driver pumping), and
+   * that version measured nothing: the driver pumps with frame-perfect alignment, which
+   * builds full swing speed inside a second - superhuman effort dressed as laziness. The
+   * skill floor the game actually promises is that grabbing on costs you your arrival
+   * speed, and speed exists only while pumping is putting it in; the dead-hang check
+   * above guards the held-key exploit, and this guards the grab itself.
+   */
   const lazy = makeState(freshLab(), START_MASS);
   run(lazy, 2.0, () => ({ move: 1, anchor: null, recall: false }));
   const lazyGrowth = lazy.world.anchors[0];
-  let lazyPumped = 0;
-  run(lazy, 1.6, (s) => {
-    const v = velocity(s);
-    let move: -1 | 0 | 1 = 0;
-    if (s.attached && home(s).y > lazyGrowth.y + 40) {
-      move = Math.abs(v.x) > 60 ? (v.x >= 0 ? 1 : -1) : 1;
-      lazyPumped += TUNING.dt;
-    }
-    return { move, anchor: lazyGrowth, recall: false };
-  });
+  run(lazy, 2.5, () => ({ move: 0, anchor: lazyGrowth, recall: false }));
   run(lazy, 4.0, () => IDLE);
   check(
-    'a lazy swing does NOT cross the pit',
+    'an unpumped latch-and-release does NOT cross the pit',
     home(lazy).x < 410,
-    `ended at ${home(lazy).x.toFixed(0)} - short of the far ledge`
+    `ended at ${home(lazy).x.toFixed(0)} - the grab absorbed the arrival`
   );
 }
 
@@ -390,8 +433,19 @@ console.log('\n=== M4SS STAGE ONE ===\n');
   let overEver = false;
   let landedOk = false;
   let tries = 0;
-  while (!landedOk && tries < 6) {
+  /*
+   * Piece-counting rides on the SAME driver that lands the fling, every frame: crumbs shed
+   * off the trailing edge mid-revolution and a fling arriving as several bodies were both
+   * reported from play, and a fence that checks only the settled result misses everything
+   * the player actually saw. Only the landing attempt counts - a try whose release misses
+   * ends in the pit, and the pit return teleport is not a tear.
+   */
+  let worstSwinging = 1;
+  let worstFlying = 1;
+  while (!landedOk && tries < 8) {
     tries += 1;
+    worstSwinging = 1;
+    worstFlying = 1;
     const dx = 1000 - home(state).x;
     const dy = 585 - home(state).y;
     for (const p of state.particles) {
@@ -405,8 +459,36 @@ console.log('\n=== M4SS STAGE ONE ===\n');
     let released = false;
     let pumped = 0;
     let overTop = false;
+    let attachedFor = 0;
     run(state, 14.0, (s) => {
-      if (released) return IDLE;
+      const pieces = visualPieces(owned(s));
+      /*
+       * Counted only once the grip has settled. The lunge arrives strung out along the
+       * tendril and the grab-shape gathers it over a few frames - during that gather the
+       * component count reads 2-3 while the SCREEN shows one silhouette, because the render
+       * unions the arm into the body. The fence starts where the player's eye does: on the
+       * hanging, swinging creature.
+       */
+      attachedFor = s.attached ? attachedFor + TUNING.dt : 0;
+      /*
+       * 0.75s of grace, measured, not guessed: catching a body that is ALREADY circling at
+       * seven radians a second - a re-latch mid-flight, which is stage two's whole chain
+       * mechanic - stretches it along the tendril and the gather takes about 0.6s at that
+       * speed. During the gather the tendril arm renders body and crumbs as one connected
+       * silhouette, so the screen never shows a tear; the fence starts where the gathered
+       * swing does.
+       */
+      if (attachedFor > 0.75 && pieces > 1) {
+        console.log(`    TEAR attachedFor=${attachedFor.toFixed(2)} spin=${s.spin.toFixed(1)} visual=${pieces}`);
+      }
+      if (attachedFor > 0.75) worstSwinging = Math.max(worstSwinging, pieces);
+      if (released) {
+        // Stop counting once the body has dropped into a pit: what follows is the fall
+        // and the pit-return TELEPORT, which scatters particles by design and is not a
+        // tear anyone sees as one - the veil of the respawn is the start of a new attempt.
+        if (home(s).y < 660) worstFlying = Math.max(worstFlying, visualPieces(owned(s)));
+        return IDLE;
+      }
       const v = velocity(s);
       const h = home(s);
       if (s.attached && h.y < growth.y) overTop = true;
@@ -424,113 +506,86 @@ console.log('\n=== M4SS STAGE ONE ===\n');
         released = true;
         return IDLE;
       }
-      // Bottom-arc pumping to seed the swing, then a held direction carries it over the top.
+      /*
+       * Push WITH the velocity, always. Under the speed-gated pump this is the one
+       * strategy that both builds AND sustains a revolution: with-motion pushes are full
+       * strength at any loop phase, while the old "commit to one direction" strategy
+       * brakes every backswing at full force and stalls below the crest - measured, its
+       * best window speed fell from 800px/s to 13. The player's version of this is
+       * pumping in time with the swing and keeping the rhythm through the circle, which
+       * is exactly the skill the redesign asked for.
+       */
       let move: -1 | 0 | 1 = 0;
-      if (s.attached && pumped < 2.6 && h.y > growth.y + 30) {
+      if (s.attached && h.y > growth.y - 20) {
         move = Math.abs(v.x) > 60 ? (v.x >= 0 ? 1 : -1) : 1;
         pumped += TUNING.dt;
-      } else if (s.attached && pumped >= 2.6) {
-        move = 1;
       }
       return { move, anchor: growth, recall: false };
     });
-    run(state, 3.5, () => IDLE);
+    run(state, 3.5, (s) => {
+      if (released && home(s).y < 660) worstFlying = Math.max(worstFlying, visualPieces(owned(s)));
+      return IDLE;
+    });
     overEver = overEver || overTop;
-    landedOk = state.world.buttons.find((b) => b.id === 'span')!.pressed && mass(state) >= 24;
+    const e = home(state);
+    landedOk = e.x > 1185 && e.x < 1262 && e.y > 585 && e.y < 625 && mass(state) >= 24;
   }
   const landed = home(state);
   check('the high growth can be swung over the top', overEver, overEver ? 'full circle' : 'never');
   /*
-   * The throw's target is the BUTTON now, not the exit.
-   *
-   * This check used to ask whether the body landed on the exit shelf, and it kept saying yes
-   * after a wall was put in front of the portal - first because a fast throw sailed clean
-   * over the wall, and then because the body went straight THROUGH forty pixels of it. A
-   * test that asks last version's question answers it, and answering it is what hid both.
+   * The finale is the throw again. The drawbridge and its button were built, played, and
+   * cut - the playtest verdict was that a wall in front of the portal read as one beat too
+   * many, and the committed circle IS the test. The fling lands on the exit shelf and the
+   * portal is right there: arrival is the ending.
    */
   check(
-    'a committed circle reaches the drawbridge button',
+    'a committed circle flings the body onto the exit shelf',
     landedOk,
     `try ${tries}: ended at ${landed.x.toFixed(0)},${landed.y.toFixed(0)} with mass ${mass(state)}`
   );
-
-  const bridge = state.world.gates.find((g) => g.id === 'drawbridge')!;
-  check('pressing it drops the bridge', bridge.open && bridge.mode === 'bridge');
-  const down = gateSolid(bridge)!;
   check(
-    'the fallen bridge spans the exit pit',
-    down.x <= 1100 && down.x + down.w >= 1200,
-    `bridge covers ${down.x}..${down.x + down.w}, pit is 1100..1200`
+    'the body stays ONE piece through the whole revolution',
+    worstSwinging === 1,
+    `worst frame on the rope had ${worstSwinging} piece(s)`
+  );
+  check(
+    'and ONE piece through the whole fling, flight and landing',
+    worstFlying === 1,
+    `worst frame in the air had ${worstFlying} piece(s)`
   );
 }
 
-// ---------------------------------------------------------------- the bridge is the only way
+// ---------------------------------------------------------------- the swing is earned
 {
   /*
-   * The exit must be unreachable until the button is pressed, and reachable on foot after.
+   * Holding one direction from a dead hang must go NOWHERE.
    *
-   * Both halves matter. Without the first the bridge is scenery; without the second the
-   * stage cannot be finished. The first half is the one that has already been wrong twice,
-   * so it is asked here directly rather than inferred from where a throw happened to land.
+   * The pump used to be a constant tangential force of 1600 against gravity's 1500 -
+   * greater torque than gravity at every point of the circle, so leaning on D carried the
+   * body over the top from a standstill with zero alternations. The playtest verdict was
+   * blunt: the 360 was a button. The pump is speed-gated now (quarter strength while the
+   * body hangs near-still), and this drives a full ten seconds of held D to prove the guard
+   * holds: the body may lean and slosh, it must never crest the growth.
    */
-  const shut = makeState(freshLab(), 34);
-  const bridge = shut.world.gates.find((g) => g.id === 'drawbridge')!;
-  check('the drawbridge starts standing in front of the portal', !bridge.open);
-
-  const dx = 1000 - home(shut).x;
-  const dy = 590 - home(shut).y;
-  for (const p of shut.particles) {
+  const held = makeState(freshLab(), 34);
+  const growth = held.world.anchors[1];
+  const dx = 1000 - home(held).x;
+  const dy = 585 - home(held).y;
+  for (const p of held.particles) {
     p.x += dx;
     p.px += dx;
     p.y += dy;
     p.py += dy;
   }
-  /*
-   * Thirty seconds, both here and below, and the number is the point.
-   *
-   * The first version gave this twelve, the body reached 1168, and the check passed - not
-   * because the wall stopped it but because the clock did. A crawl runs at about fourteen
-   * pixels a second, so twelve seconds cannot reach the wall from here whether the wall is
-   * there or not. A negative test that the subject never had time to fail is not a test.
-   */
-  run(shut, 30.0, () => ({ move: 1, anchor: null, recall: false }));
-  check(
-    'with the bridge standing, walking east cannot reach the portal',
-    home(shut).x < 1190,
-    `walked to ${home(shut).x.toFixed(0)} in 30s, portal is at 1230`
-  );
-
-  const open = makeState(freshLab(), 34);
-  open.world.gates.find((g) => g.id === 'drawbridge')!.open = true;
-  const ox = 1000 - home(open).x;
-  const oy = 590 - home(open).y;
-  for (const p of open.particles) {
-    p.x += ox;
-    p.px += ox;
-    p.y += oy;
-    p.py += oy;
-  }
-  /*
-   * Asked with the GAME's rule, not with a number I chose.
-   *
-   * The rig clears the stage when the body's centroid comes within 70px of the portal. This
-   * check first asked for `x > 1205` and failed at 1179 with the body's leading edge already
-   * on the shelf - a crawling slime spreads, so its centroid sits well behind its front, and
-   * 1179,608 is 71px from the portal. One pixel of disagreement between the test and the
-   * game, entirely invented by the test.
-   */
-  const portal = { x: 1230, y: 558 };
-  let reached = false;
-  run(open, 60.0, () => {
-    const h = home(open);
-    if (Math.hypot(h.x - portal.x, h.y - portal.y) < 70) reached = true;
-    return { move: 1, anchor: null, recall: false };
+  run(held, 0.5, () => IDLE);
+  let crested = false;
+  run(held, 10.0, (s) => {
+    if (s.attached && home(s).y < growth.y) crested = true;
+    return { move: 1, anchor: growth, recall: false };
   });
-  check(
-    'with the bridge down, the body walks across the pit and reaches the portal',
-    reached,
-    `ended at ${home(open).x.toFixed(0)},${home(open).y.toFixed(0)}, portal at 1230,558`
-  );
+  check('holding one direction from a dead hang never circles', !crested);
+
+
 }
 
 // ---------------------------------------------------------------- gate, button, reconnect
@@ -597,15 +652,6 @@ console.log('\n=== M4SS STAGE ONE ===\n');
     'a FULL body cannot ooze under the shut gate',
     home(big).x < 810 && mass(big) === START_MASS,
     `ended at ${home(big).x.toFixed(0)} with mass ${mass(big)}, gate at 800`
-  );
-  /*
-   * Separately wired. Any button used to open every gate, which was harmless when there was
-   * one of each and would have handed the player the exit for free the moment a second gate
-   * existed.
-   */
-  check(
-    'the gap button does NOT drop the drawbridge',
-    !world.gates.find((g) => g.id === 'drawbridge')!.open
   );
 }
 

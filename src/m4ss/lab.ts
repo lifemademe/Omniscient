@@ -91,32 +91,16 @@ export const THE_LAB: World = {
      * short into the pit, and the pit hands the body back to the start of the room. Failure
      * costs the attempt, never the creature.
      */
-    { x: 1200, y: FLOOR, w: 60, h: DEEP },
-
     /*
-     * -- 5. the ledge over the exit pit, which is where the last swing now goes -----------
-     *
-     * The fling used to land on the exit shelf itself and the stage was over on touchdown.
-     * That made the whole finale one action, and it made the throw the only thing the high
-     * growth was for.
-     *
-     * Now the throw lands HERE, over the pit, and what is up here is a button rather than
-     * the exit. The pit is still uncrossable; pressing the button drops the wall in front of
-     * the portal flat across it, and the last thing the player does in stage one is walk
-     * over something they built. The exit stops being a place you are thrown at and becomes
-     * a place you open.
-     *
-     * It hangs entirely over the PIT and never over the shelf, which is the load-bearing
-     * detail: an overhang of even twenty pixels would let the player step off the right-hand
-     * end straight down onto the exit and the bridge would be scenery.
-     *
-     * Its east end runs flush into the standing drawbridge, and that is what makes it
-     * catchable. The throw arrives almost flat - it is near the top of its arc by the time it
-     * is over here - so a ledge with an open end is a ledge the body skids straight off. With
-     * the slab closing the end, an overshoot is stopped by the very thing the button is about
-     * to drop.
+     * The lip moved from 1200 to 1185 when the swing was re-earned. The speed-gated pump
+     * tops out near 500px/s at release where the old constant-force pump gave 800, and the
+     * measured landing of a full-committed fling under the new physics is ~1196 - eleven
+     * pixels short of the old lip, every try, forever. Fifteen pixels of shelf is the
+     * difference between "the finale demands your best swing" and "the finale is a lie".
+     * The pit is still 85px of uncrossable nothing on foot.
      */
-    { x: 1105, y: 530, w: 91, h: 40 },
+    { x: 1185, y: FLOOR, w: 75, h: DEEP },
+
   ],
 
   /**
@@ -189,70 +173,6 @@ export const THE_LAB: World = {
    */
   gates: [
     { id: 'wall', x: 800, y: 0, w: 40, h: 590, open: false, lift: 0, sieve: 24 },
-    /*
-     * The drawbridge, standing in front of the portal.
-     *
-     * Shut, it is a wall on the lip of the exit shelf: the portal is visible behind it from
-     * the moment the player enters the chamber and cannot be touched. Open, it is not gone -
-     * it has fallen west across the exit pit and become the floor over it.
-     *
-     * That is why it is a bridge rather than a door. A door removed would leave the pit, and
-     * the pit is the thing actually stopping you; the same slab lying down solves both, and
-     * solves them with one object the player watched fall. The button is a hundred and fifty
-     * pixels up and eighty west of here precisely so the fall happens somewhere the player is
-     * looking at from the outside.
-     *
-     * Its standing position also catches an over-thrown fling and drops it in the pit, which
-     * is the same forgiveness the rest of the stage runs on - the pit hands the body back.
-     *
-     * ## Why it is 220 tall and not 124
-     *
-     * At 124 the top sat at 496, and a fling released near the top of the circle passes that
-     * x at about 497 - so a strong throw sailed over the wall, landed on the exit shelf, and
-     * walked into the portal without ever pressing the button. The bridge was decorative and
-     * the harness said PASS, because the harness was still asking the old question.
-     *
-     * Measured against the fastest release the swing can produce, not the one the harness
-     * happens to use: over the top at 600px/s clears y 446 at this x, and at an implausible
-     * 800 it clears 418. The top is at 400 so that neither does. A wall sized by the throw a
-     * TEST performs is a wall sized by the throw I thought of.
-     *
-     * It follows that the slab is 220 long, so the bridge it makes is 220 long, which reaches
-     * well past the pit and lies on the chamber floor. That is honest rather than awkward -
-     * a drawbridge that exactly fills its gap is a plank, and one that overshoots looks like
-     * something that was standing a moment ago.
-     *
-     * ## And why it is 40 wide
-     *
-     * At 14 the body went straight through it. Collision resolves a particle out of the
-     * NEAREST face, so a soft body pressing on a thin slab shoves its own front particles
-     * past the midline, at which point the nearest face is the far one and they pop out on
-     * the other side and drag the rest after them. Forty is what the stage's other wall has
-     * always been, and it is not a coincidence that the other wall never had this problem.
-     */
-    {
-      id: 'drawbridge',
-      x: 1196,
-      y: 400,
-      w: 40,
-      h: 220,
-      open: false,
-      lift: 0,
-      mode: 'bridge',
-      /*
-       * As thick as every other floor in the level, and for the same reason the slab is 40
-       * wide rather than 14.
-       *
-       * A sixteen-pixel deck is thinner than the depth a piled body sinks to. Collision
-       * expels a particle from its nearest face, so one pressed ten pixels into a sixteen
-       * deep plank is nearer the UNDERSIDE, gets pushed down through it, and falls into the
-       * pit the bridge was built to close. The body walked halfway across and dropped.
-       *
-       * The floors are 120 thick and none of them has ever done this. What the player sees
-       * is the renderer's business - it draws a plank - but what they walk on is a floor.
-       */
-      span: { x: 976, y: FLOOR, w: 260, h: DEEP },
-    },
   ],
 
   /**
@@ -297,14 +217,6 @@ export const THE_LAB: World = {
      * is enough to feel a shed body's fifteen pixels a second without it becoming an errand.
      */
     { id: 'gap', x: 940, y: 604, radius: 26, pressed: false, opens: ['wall'] },
-    /*
-     * The drawbridge button, on the ledge over the exit pit.
-     *
-     * Reachable only off a committed circle on the high growth. It opens the bridge and
-     * nothing else - the two buttons in this stage are wired separately now, where before
-     * any button opened every gate.
-     */
-    { id: 'span', x: 1150, y: 512, radius: 26, pressed: false, opens: ['drawbridge'] },
   ],
 };
 

@@ -346,6 +346,8 @@ export const TUNING = {
   tension: 950,
   maxTension: 14000,
   damping: 0.986,
+  /** Damping while airborne off a fling - see the drag note in the integrator. */
+  flightDamping: 0.9975,
   /** Raised from 2600 - the crawl read as sluggish even with the relaxises doing their part. */
   move: 3300,
   friction: 0.55,
@@ -387,7 +389,7 @@ export const TUNING = {
    * pit, and no amount of patience could cross; 1600 sits comfortably above it, and the
    * crossing takes the second-or-two of honest pumping the release window implies.
    */
-  swingPump: 1600,
+  swingPump: 1000,
   /** Below this the rope is too short to swing on and the body just hangs against the growth. */
   minSwing: 26,
   /** How long a fling's slow motion lasts, in simulated seconds. */
@@ -427,13 +429,25 @@ export const TUNING = {
    */
   swingHold: 0.35,
   /**
+   * How much MORE shape-hold a fast revolution gets, per radian/second of spin.
+   *
+   * 0.35 alone kept the body whole through the swings the old physics produced; the
+   * earned 360 spins faster, and at speed the outer particles need more centripetal
+   * correction than a fixed hold supplies - the body shed crumbs off its trailing edge
+   * every revolution, which read as the creature disintegrating. Scaling the hold with
+   * spin keeps the slack, saggy hang at low speed (where the sag IS the character) and
+   * stiffens exactly when the physics demands it. Capped in the apply step - a hold
+   * above ~0.85 reads as a plank on a stick.
+   */
+  swingHoldPerSpin: 0.14,
+  /**
    * How much stronger cohesion and tension are at regroup 1. See MassState.regroup.
    *
    * 1.6 means 2.6x at the moment of release. High enough that a landing at full swing speed
    * stays one body; it decays before the player is back to fine manoeuvring, so the slime
    * does not feel starched.
    */
-  regroupBoost: 1.6,
+  regroupBoost: 2.4,
   /** Seconds for regroup to ease off - counted from touchdown, not from release. */
   regroupTime: 0.9,
   /**
@@ -899,30 +913,36 @@ export function step(state: MassState, input: Input): MassState {
             along: (p.x - home.x) * nx + (p.y - home.y) * ny,
             across: (p.x - home.x) * -ny + (p.y - home.y) * nx,
           }));
-          let aMin = Infinity;
-          let aMax = -Infinity;
-          let cMin = Infinity;
-          let cMax = -Infinity;
-          for (const r of raw) {
-            if (r.along < aMin) aMin = r.along;
-            if (r.along > aMax) aMax = r.along;
-            if (r.across < cMin) cMin = r.across;
-            if (r.across > cMax) cMax = r.across;
-          }
-          const aHalf = Math.max(1, (aMax - aMin) / 2);
-          const cHalf = Math.max(1, (cMax - cMin) / 2);
           /*
-           * Negated on the way in, and the minus signs are load-bearing: this block measures
-           * on the body-to-anchor axis (dx points UP at the growth), while the constraint
-           * block that applies the shape works on anchor-to-body (pointing down). Recorded
-           * un-flipped, the teardrop applied upside down - wide at the growth, pinched at
-           * the bottom, an onion on a string. Negating both components is the 180 degree
-           * turn that puts the two frames in agreement.
+           * Normalised by PERCENTILE bounds with clamping, not by min/max, and the
+           * difference is one particle. The grab fires while the tendril is still
+           * extended, so the tip is a far outlier on the along-axis; min/max put the
+           * whole range at that outlier's mercy, and the tip mapped to the teardrop's
+           * extreme slot alone - thirty-plus pixels from the next particle, hanging
+           * there through entire revolutions as a permanently detached crumb, measured.
+           * The 8th/92nd percentiles ignore outliers, and the clamp folds them into the
+           * end slots beside their neighbours. (Pure rank-packing was tried first and
+           * broke the 360 outright - forcing uniform density re-proportions the body.)
+           *
+           * The negation is load-bearing, same as it always was: this block measures on
+           * the body-to-anchor axis and the apply step works anchor-to-body, so the shape
+           * goes in rotated 180 degrees or it comes out an onion on a string.
            */
+          const byAlong = raw.map((r) => r.along).sort((a, b) => a - b);
+          const byAcross = raw.map((r) => r.across).sort((a, b) => a - b);
+          const pct = (sorted: number[], q: number): number =>
+            sorted[Math.min(sorted.length - 1, Math.max(0, Math.round(q * (sorted.length - 1))))];
+          const aLo = pct(byAlong, 0.08);
+          const aHi = pct(byAlong, 0.92);
+          const cLo = pct(byAcross, 0.08);
+          const cHi = pct(byAcross, 0.92);
+          const aHalf = Math.max(1, (aHi - aLo) / 2);
+          const cHalf = Math.max(1, (cHi - cLo) / 2);
+          const clamp = (v: number): number => Math.max(-1, Math.min(1, v));
           state.swingShape = raw.map((r) => ({
             id: r.id,
-            along: -(r.along - (aMin + aHalf)) / aHalf,
-            across: -(r.across - (cMin + cHalf)) / cHalf,
+            along: -clamp((r.along - (aLo + aHalf)) / aHalf),
+            across: -clamp((r.across - (cLo + cHalf)) / cHalf),
           }));
         }
         if (input.move !== 0) {
@@ -931,9 +951,38 @@ export function step(state: MassState, input: Input): MassState {
           const tx = home.y - anchor.y;
           const ty = -(home.x - anchor.x);
           const tl = Math.hypot(tx, ty) || 1;
+          /*
+           * The pump only works WITH the swing, and that one rule is the entire skill.
+           *
+           * It used to be a constant tangential force, and the constant was 1600 against
+           * gravity's 1500 - which means holding one key out-torqued gravity at every point
+           * of the circle, and a player who latched on and leaned on D went over the top
+           * from a dead hang without a single alternation. The 360 was a button.
+           *
+           * Now the force is gated by the body's own tangential speed. Moving, a push in
+           * the direction of travel is full strength and a push against it brakes at full
+           * strength - both are the player doing something real. Near-still, the push is a
+           * QUARTER strength: enough to lean the hang and seed the first swing, far too
+           * weak to fight gravity round the circle. Building amplitude therefore takes
+           * what a real swing takes - push right while moving right, push left while
+           * moving left, timed to the arc - and the 360 becomes something you EARN: pump
+           * to a full-height swing first, then commit to one direction and carry it over.
+           * Once the body is circling, the held key stays aligned with the motion the
+           * whole way round, so the revolution sustains itself - the trick is no longer
+           * free, it is the reward.
+           */
+          let vtx = 0;
+          let vty = 0;
           for (const p of mine) {
-            p.ax += (tx / tl) * input.move * T.swingPump;
-            p.ay += (ty / tl) * input.move * T.swingPump;
+            vtx += p.x - p.px;
+            vty += p.y - p.py;
+          }
+          const tangentialSpeed =
+            Math.abs((vtx / mine.length) * (tx / tl) + (vty / mine.length) * (ty / tl)) / dt;
+          const gate = tangentialSpeed < 60 ? 0.25 : 1;
+          for (const p of mine) {
+            p.ax += (tx / tl) * input.move * T.swingPump * gate;
+            p.ay += (ty / tl) * input.move * T.swingPump * gate;
           }
         }
       } else {
@@ -975,7 +1024,42 @@ export function step(state: MassState, input: Input): MassState {
     // Letting go keeps the velocity the swing built and drops the constraint. That IS the
     // fling - there is no launch impulse anywhere, and adding one made it feel like a cannon
     // rather than like letting go of something.
-    if (state.swingShape.length > 0) state.regroup = 1;
+    if (state.swingShape.length > 0) {
+      state.regroup = 1;
+      /*
+       * The spin is bled into the throw at the instant of release.
+       *
+       * A body released off a fast revolution is rotating rigidly - every particle carries
+       * centroid velocity PLUS omega-cross-r, and at the spins the earned 360 reaches, that
+       * relative term is hundreds of pixels a second of internal shear. Left in, the body
+       * keeps spinning in flight and centrifugal force does exactly what it does: the fling
+       * arrived as five to eight pieces, measured. No amount of glue fixes a velocity
+       * problem after the distances have opened (the regroup comment already knew this
+       * about landings).
+       *
+       * So the rotation dies AT release: every owned particle keeps the centroid's velocity
+       * and a quarter of its own relative motion - enough wobble to still read as goo mid-
+       * air, nowhere near enough shear to tear. Physically this is the honest reading: a
+       * creature without a skeleton has nothing to store angular momentum IN, and what it
+       * absorbs, it keeps as squish. The centroid velocity - the throw the player earned -
+       * is untouched.
+       */
+      const flung = owned(state);
+      let cvx = 0;
+      let cvy = 0;
+      for (const p of flung) {
+        cvx += p.x - p.px;
+        cvy += p.y - p.py;
+      }
+      cvx /= Math.max(1, flung.length);
+      cvy /= Math.max(1, flung.length);
+      for (const p of flung) {
+        const rvx = p.x - p.px - cvx;
+        const rvy = p.y - p.py - cvy;
+        p.px = p.x - cvx - rvx * 0.25;
+        p.py = p.y - cvy - rvy * 0.25;
+      }
+    }
     /*
      * A fast release buys aiming time. See MassState.slowmo.
      *
@@ -1136,8 +1220,20 @@ export function step(state: MassState, input: Input): MassState {
       p.y += fall + T.gravity * dt * dt;
       continue;
     }
-    const vx = (p.x - p.px) * T.damping;
-    const vy = (p.y - p.py) * T.damping;
+    /*
+     * A freshly flung body flies through AIR, not through the soup the swing hangs in.
+     *
+     * The global damping (0.986 per step, ~82% of velocity gone per second) exists so an
+     * unpumped pendulum dies inside two seconds - the right feel on the rope, and a wall
+     * in flight: the earned swing releases near 500px/s where the old free-energy pump
+     * gave 800, and under swing-drag that throw died 11px short of the exit shelf every
+     * try, forever. While the regroup flag is fresh - the second or so after a release -
+     * drag eases toward air and the throw carries. It decays with the flag, so by the
+     * time the body is crawling again the pendulum-killing soup is back.
+     */
+    const drag = T.damping + (T.flightDamping - T.damping) * Math.min(1, state.regroup * 1.4);
+    const vx = (p.x - p.px) * drag;
+    const vy = (p.y - p.py) * drag;
     p.px = p.x;
     p.py = p.y;
     p.x += vx + p.ax * dt * dt;
@@ -1272,6 +1368,34 @@ export function step(state: MassState, input: Input): MassState {
         const size = Math.sqrt(state.swingShape.length) * T.rest;
         const halfLength = size * 0.62;
         const halfWidth = size * 0.4;
+        // Stiffer as the spin climbs - see swingHoldPerSpin. Capped short of plank.
+        const hold = Math.min(0.95, T.swingHold + Math.abs(state.spin) * T.swingHoldPerSpin);
+
+        /*
+         * Above two radians a second, internal slosh bleeds 6% a frame - relative to the
+         * body's mean velocity, so the pendulum itself loses nothing. Gated on spin
+         * because an ungated version of this damping was tried and it broke the pump:
+         * building a swing IS putting asymmetric velocity into the body, and damping that
+         * at low spin ate the energy as fast as the player added it. Past two rad/s the
+         * pumping is done and the crumbs start - a particle knocked loose at speed goes
+         * ballistic for several frames and renders as a separate blob, measured at 47
+         * frames per committed circle before this.
+         */
+        if (Math.abs(state.spin) > 2) {
+          let mvx = 0;
+          let mvy = 0;
+          for (const p of mine) {
+            mvx += p.x - p.px;
+            mvy += p.y - p.py;
+          }
+          mvx /= Math.max(1, mine.length);
+          mvy /= Math.max(1, mine.length);
+          for (const p of mine) {
+            p.px += (p.x - p.px - mvx) * 0.06;
+            p.py += (p.y - p.py - mvy) * 0.06;
+          }
+        }
+
         for (const slot of state.swingShape) {
           const p = by.get(slot.id);
           if (!p) continue;
@@ -1281,8 +1405,8 @@ export function step(state: MassState, input: Input): MassState {
           const across = slot.across * halfWidth * width;
           const tx = centre.x + nx * along + -ny * across;
           const ty = centre.y + ny * along + nx * across;
-          const mx = (tx - p.x) * T.swingHold;
-          const my = (ty - p.y) * T.swingHold;
+          const mx = (tx - p.x) * hold;
+          const my = (ty - p.y) * hold;
           p.x += mx;
           p.y += my;
           p.px += mx;
