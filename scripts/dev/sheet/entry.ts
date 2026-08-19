@@ -99,6 +99,14 @@ function show(label: string, tex: { image: CanvasImageSource & { width: number; 
 }
 
 const S = 'm4ss';
+// Both stage identities, side by side - the thumbnail test happens here first.
+art.setStageTheme(art.THEME_GALLERY);
+show('stone-gallery', art.stoneTexture(S), 3);
+show('wall-gallery', art.stoneTexture(S, 128, 96, 'wall'), 3);
+art.setStageTheme(art.THEME_STACK);
+show('stone-stack', art.stoneTexture(S), 3);
+show('wall-stack', art.stoneTexture(S, 128, 96, 'wall'), 3);
+art.setStageTheme(art.THEME_GALLERY);
 show('backdrop', art.backdropTexture(S).texture);
 show('atmosphere', art.atmosphereTexture(S));
 show('stone', art.stoneTexture(S), 3);

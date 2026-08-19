@@ -481,97 +481,241 @@ export function stoneTexture(
   h = 96,
   variant: 'floor' | 'wall' = 'floor'
 ): THREE.CanvasTexture {
-  if (variant === 'wall') {
-    const rng = createRng(seedFrom(seed + '-wall'));
-    const { c, g } = surface(w, h);
-    // Base: darker than the floor stone by a step.
-    g.fillStyle = mixHex(PAL.stoneDark, '#000000', 0.25);
-    g.fillRect(0, 0, w, h);
-    // Big blocks, half-offset rows, dark seams.
-    const bw = 64;
-    const bh = 48;
-    for (let row = 0; row < h / bh; row++) {
-      const off = row % 2 === 0 ? 0 : bw / 2;
-      for (let col = -1; col < w / bw + 1; col++) {
-        const x = col * bw + off;
-        g.fillStyle = mixHex(PAL.stoneDark, PAL.stoneMid, range(rng, 0.1, 0.45));
-        g.fillRect(x + 2, row * bh + 2, bw - 4, bh - 4);
-        // A faint top-edge light per block - stacked, softly lit from the play space.
-        g.fillStyle = mixHex(PAL.stoneMid, PAL.stoneLit, 0.3);
-        g.fillRect(x + 2, row * bh + 2, bw - 4, 2);
+  /*
+   * Rewritten to the tile reference (exec-*.png in the reference set), which does three
+   * things the old block grid never did:
+   *
+   *  - The stones are ROUNDED, individually shaded pebbles in courses of mixed sizes, not
+   *    square blocks. Rounding is corner cuts on integer pixels - never a curve.
+   *  - The ooze lives in the SEAMS. The lab pumped culture medium through this masonry,
+   *    and it still seeps: chartreuse pockets at grout junctions, drips running down the
+   *    faces below them. Seam colour = player colour, which is the story doing the work.
+   *  - The lab is IN the stone: rusted pipe runs with riveted plates weave through the
+   *    tilework. Horizontal runs on the floor variant, vertical on the wall variant, both
+   *    full-span so the pattern tiles without a visible joint.
+   *
+   * Both variants share one stone vocabulary at two scales, so walls read as STACKED
+   * (bigger stones, wider grout, longer drip stains) and floors read as WALKED (smaller
+   * stones, moss crown), while still being one quarry.
+   */
+  const isWall = variant === 'wall';
+  const rng = createRng(seedFrom(seed + (isWall ? '-wall' : '')));
+  const { c, g } = surface(w, h);
+
+  // Grout first: the darkest thing in the texture, so every gap reads as depth.
+  const grout = mixHex(PAL.voidDeep, '#000000', 0.35);
+  g.fillStyle = grout;
+  g.fillRect(0, 0, w, h);
+
+  const STEPS = 7;
+
+  /**
+   * One PILLOWED stone. The first draft drew flat plates with a one-pixel lip and they
+   * read as UI buttons on a black board. The reference's stones are volumes: a lit
+   * crown fading through the body to a shadowed foot, rough speckle in the interior,
+   * and an inner shadow hugging the bottom-right - all of which happens INSIDE the
+   * silhouette, which is what makes a rock a rock and not a rectangle.
+   */
+  const stone = (x: number, y: number, sw: number, sh: number, pick: number): void => {
+    const cut = sh > 14 ? 2 : 1;
+    // The body, shaded in thirds: crown value, mid value, foot value.
+    const crown = ramp(PAL.stoneDark, PAL.stoneEdge, STEPS, Math.min(STEPS - 1, pick + 2));
+    const mid = ramp(PAL.stoneDark, PAL.stoneEdge, STEPS, pick);
+    const foot = ramp(PAL.stoneDark, PAL.stoneEdge, STEPS, Math.max(0, pick - 2));
+    const topH = Math.max(2, Math.round(sh * 0.3));
+    const midH = Math.max(2, Math.round(sh * 0.45));
+    g.fillStyle = crown;
+    g.fillRect(x + cut, y, sw - cut * 2, sh);
+    g.fillRect(x, y + cut, sw, sh - cut * 2);
+    g.fillStyle = mid;
+    g.fillRect(x, y + topH, sw, sh - topH - cut);
+    g.fillRect(x + cut, y + topH, sw - cut * 2, sh - topH);
+    g.fillStyle = foot;
+    g.fillRect(x, y + topH + midH, sw, Math.max(0, sh - topH - midH - cut));
+    g.fillRect(x + cut, y + topH + midH, sw - cut * 2, Math.max(0, sh - topH - midH));
+    // The inner shadow, hugging the right edge - the side away from the key light.
+    g.fillStyle = foot;
+    g.fillRect(x + sw - cut - 2, y + topH, 2, sh - topH - cut);
+    // Speckle: a few rough flecks per stone, one step off their band's value.
+    const flecks = Math.round((sw * sh) / 160);
+    for (let f = 0; f < flecks; f++) {
+      const fx = x + Math.round(range(rng, 2, sw - 4));
+      const fy = y + Math.round(range(rng, 2, sh - 3));
+      const band = fy < y + topH ? pick + 2 : fy < y + topH + midH ? pick : pick - 2;
+      g.fillStyle = ramp(
+        PAL.stoneDark,
+        PAL.stoneEdge,
+        STEPS,
+        Math.max(0, Math.min(STEPS - 1, band + (rng() > 0.5 ? 1 : -1)))
+      );
+      g.fillRect(fx, fy, 2, 1);
+    }
+    // A crack, sparingly.
+    if (rng() > 0.8 && sh > 12) {
+      g.fillStyle = grout;
+      let cx2 = x + Math.round(range(rng, 4, sw - 5));
+      for (let cy = y + 2; cy < y + sh - 2; cy++) {
+        g.fillRect(cx2, cy, 1, 1);
+        cx2 += Math.round(range(rng, -1, 1));
       }
     }
-    // Water stains running down, seeded, sparse.
-    for (let i = 0; i < 5; i++) {
-      const sx = Math.round(range(rng, 4, w - 6));
-      const drop = Math.round(range(rng, h * 0.3, h * 0.95));
-      g.fillStyle = mixHex(PAL.stoneDark, '#000000', 0.35);
-      for (let d = 0; d < drop; d++) g.fillRect(sx, d, 2, 1);
+  };
+
+  /*
+   * Courses of pebbles, mixed sizes. Junction points (where grout lines meet) are
+   * collected as the candidate homes for ooze pockets.
+   */
+  const junctions: Array<{ x: number; y: number }> = [];
+  const rowBase = isWall ? 30 : 20;
+  const rowVar = isWall ? 10 : 8;
+  const gap = isWall ? 3 : 2;
+  let y = -Math.round(range(rng, 0, rowBase / 2));
+  while (y < h) {
+    const rowH = Math.round(range(rng, rowBase, rowBase + rowVar));
+    let x = -Math.round(range(rng, 0, 26));
+    while (x < w) {
+      const sw = Math.round(range(rng, isWall ? 34 : 24, isWall ? 60 : 46));
+      const pick = Math.floor((rng() * 0.6 + rng() * 0.6) * STEPS * (isWall ? 0.7 : 0.83));
+      stone(x, y, sw, rowH - gap, pick);
+      // The occasional small stone pair instead of one wide one.
+      if (rng() > 0.75 && sw > 34) {
+        g.fillStyle = grout;
+        g.fillRect(x + Math.round(sw / 2) - 1, y, 3, rowH - gap);
+        stone(x + Math.round(sw / 2) + 2, y + 2, Math.round(sw / 2) - 2, rowH - gap - 4,
+          Math.max(0, pick - 1));
+      }
+      x += sw + gap;
+      if (x > 0 && x < w) junctions.push({ x, y: y + rowH - gap });
     }
-    // Moss flecks in the seams.
-    for (let i = 0; i < 26; i++) {
+    y += rowH;
+  }
+
+  /*
+   * The pipes, woven through the masonry. Full-span so the texture tiles: a horizontal
+   * run wraps in x by construction, a vertical run wraps in y. Rust body, lit top edge,
+   * riveted joint plates, and a stain bleeding off the underside.
+   */
+  /*
+   * A pipe is corroded MB-dark metal, not timber: the first draft used the rust ramp as
+   * the body colour and the pipe read as a wooden beam. The body is a cold metal mix one
+   * step off the stone (so it belongs to the same wet room), rust appears only as PATINA
+   * blotches creeping from the joints, and the lit edge is thin and cool.
+   */
+  const metalDark = mixHex(PAL.stoneDark, PAL.rustDark, 0.35);
+  const metalMid = mixHex(PAL.stoneMid, PAL.rustDark, 0.3);
+  const metalLit = mixHex(PAL.stoneLit, PAL.rustMid, 0.25);
+  const pipe = (at: number): void => {
+    const thick = Math.round(range(rng, 5, 7));
+    const along = (isWall ? h : w) as number;
+    const px = at;
+    // Body with a thin lit edge on the light side.
+    if (isWall) {
+      g.fillStyle = mixHex(metalDark, '#000000', 0.4);
+      g.fillRect(px - 1, 0, thick + 2, h);
+      g.fillStyle = metalMid;
+      g.fillRect(px, 0, thick, h);
+      g.fillStyle = metalLit;
+      g.fillRect(px, 0, 1, h);
+      g.fillStyle = metalDark;
+      g.fillRect(px + thick - 2, 0, 2, h);
+    } else {
+      g.fillStyle = mixHex(metalDark, '#000000', 0.4);
+      g.fillRect(0, px - 1, w, thick + 2);
+      g.fillStyle = metalMid;
+      g.fillRect(0, px, w, thick);
+      g.fillStyle = metalLit;
+      g.fillRect(0, px, w, 1);
+      g.fillStyle = metalDark;
+      g.fillRect(0, px + thick - 2, w, 2);
+    }
+    // Joints: clamp collars every few stones, with rust bleeding away from each.
+    for (let j = Math.round(range(rng, 6, 24)); j < along; j += Math.round(range(rng, 30, 48))) {
+      if (isWall) {
+        g.fillStyle = metalDark;
+        g.fillRect(px - 2, j, thick + 4, 5);
+        g.fillStyle = metalLit;
+        g.fillRect(px - 2, j, thick + 4, 1);
+      } else {
+        g.fillStyle = metalDark;
+        g.fillRect(j, px - 2, 5, thick + 4);
+        g.fillStyle = metalLit;
+        g.fillRect(j, px - 2, 5, 1);
+      }
+      // Rust patina creeping from the joint, in blotches that thin with distance.
+      for (let b = 0; b < 7; b++) {
+        const d = Math.round(range(rng, 1, 14));
+        const off = Math.round(range(rng, 0, thick - 1));
+        g.fillStyle = b < 3 ? PAL.rustMid : PAL.rustDark;
+        if (isWall) g.fillRect(px + off, j + (rng() > 0.5 ? d : -d), 2, 2);
+        else g.fillRect(j + (rng() > 0.5 ? d : -d), px + off, 2, 2);
+      }
+    }
+    // The leak stain under a horizontal run.
+    if (!isWall) {
+      const lx = Math.round(range(rng, 8, w - 10));
+      g.fillStyle = mixHex(PAL.stoneDark, '#000000', 0.4);
+      const stainLen = Math.round(range(rng, 10, 26));
+      for (let d = 0; d < stainLen; d++) {
+        if (px + thick + d < h) g.fillRect(lx, px + thick + d, 2, 1);
+      }
+    }
+  };
+  // One run per tile; the wall gets a second thin one some of the time.
+  pipe(isWall ? Math.round(range(rng, 14, w - 24)) : Math.round(range(rng, h * 0.3, h * 0.75)));
+  if (isWall && rng() > 0.55) pipe(Math.round(range(rng, 14, w - 24)));
+
+  /*
+   * The ooze: culture medium seeping at grout junctions. Pockets sit IN the seam; drips
+   * run DOWN the stone faces below the pocket, shaded along their length; the brightest
+   * pips are 2x2 so they survive downsampling (the pass-11 lesson).
+   */
+  const pockets = isWall ? 4 : 6;
+  for (let i2 = 0; i2 < pockets && junctions.length > 0; i2++) {
+    const j = junctions[Math.floor(rng() * junctions.length)];
+    const px = Math.max(4, Math.min(w - 8, j.x - 1));
+    const py = Math.max(2, Math.min(h - 4, j.y));
+    /*
+     * The channel: the medium FLOODS a run of the horizontal seam, brightest at the
+     * junction and darkening toward both ends, so the seam reads as full rather than
+     * dotted. The first draft placed six-pixel pips and they vanished at game scale.
+     */
+    const run = Math.round(range(rng, 10, 26));
+    for (let d = -run; d <= run; d++) {
+      const t = Math.abs(d) / run;
+      const cx3 = px + d;
+      if (cx3 < 0 || cx3 >= w) continue;
+      g.fillStyle = t < 0.25 ? PAL.mossLit : t < 0.6 ? PAL.mossMid : PAL.mossDark;
+      g.fillRect(cx3, py, 1, 2);
+    }
+    // The bulb at the junction and its drip: a fat head tapering to a thread.
+    g.fillStyle = PAL.slime;
+    g.fillRect(px - 1, py - 1, 4, 3);
+    g.fillStyle = PAL.slimeGlow;
+    g.fillRect(px, py, 2, 2);
+    const drop = Math.round(range(rng, 8, isWall ? 34 : 18));
+    for (let d = 0; d < drop; d++) {
+      const t = d / drop;
+      g.fillStyle = t < 0.3 ? PAL.slime : t < 0.7 ? PAL.mossLit : PAL.mossMid;
+      const dw = t < 0.35 ? 3 : t < 0.75 ? 2 : 1;
+      if (py + 2 + d < h) g.fillRect(px + Math.floor((3 - dw) / 2), py + 2 + d, dw, 1);
+    }
+    // The hanging bead at the tip of a long drip.
+    if (drop > 14 && py + 3 + drop < h) {
+      g.fillStyle = PAL.slime;
+      g.fillRect(px, py + 2 + drop, 2, 2);
+    }
+  }
+
+  // Moss: the floor wears a crown along its walked edge; the wall only flecks.
+  if (isWall) {
+    for (let i2 = 0; i2 < 20; i2++) {
       g.fillStyle = rng() > 0.5 ? PAL.mossDark : mixHex(PAL.mossDark, PAL.mossMid, 0.5);
       g.fillRect(Math.round(range(rng, 0, w)), Math.round(range(rng, 0, h)), 2, 1);
     }
-    return pixelTexture(c);
+  } else {
+    mossRun(g, rng, 0, w, 0, 14);
   }
 
-  const rng = createRng(seedFrom(seed));
-  const { c, g } = surface(w, h);
-
-  g.fillStyle = PAL.stoneDark;
-  g.fillRect(0, 0, w, h);
-
-  // Blocks in courses, offset row to row so no vertical seam runs the height of the slab.
-  let y = 0;
-  let course = 0;
-  while (y < h) {
-    const rowH = Math.round(range(rng, 16, 26));
-    let x = -Math.round(range(rng, 0, 30)) - course * 11;
-    while (x < w) {
-      const bw = Math.round(range(rng, 22, 40));
-      /*
-       * Seven steps of stone, not three.
-       *
-       * Blocks are picked off a ramp from the darkest stone to the lit edge, weighted toward
-       * the middle so the wall still reads as one material rather than as a chequerboard.
-       * The extra steps cost nothing to draw and are most of what separates a worked surface
-       * from a filled rectangle.
-       */
-      const STEPS = 7;
-      const pick = Math.floor((rng() * 0.6 + rng() * 0.6) * STEPS * 0.83);
-      const base = ramp(PAL.stoneDark, PAL.stoneEdge, STEPS, pick);
-      g.fillStyle = base;
-      g.fillRect(x + 1, y + 1, bw - 2, rowH - 2);
-      // A lit top lip on each block, one step above the block's own value so the light reads
-      // as falling on THAT stone rather than as a constant applied to every stone.
-      g.fillStyle = ramp(PAL.stoneDark, PAL.stoneEdge, STEPS, pick + 2);
-      g.fillRect(x + 1, y + 1, bw - 2, 1);
-      // And a shaded foot, which the previous version had no equivalent of at all.
-      g.fillStyle = ramp(PAL.stoneDark, PAL.stoneEdge, STEPS, Math.max(0, pick - 2));
-      g.fillRect(x + 1, y + rowH - 3, bw - 2, 1);
-      // Cracks, sparingly. Every block having one reads as noise rather than as age.
-      if (rng() > 0.78) {
-        g.fillStyle = PAL.stoneDark;
-        const cx = x + Math.round(range(rng, 4, bw - 6));
-        let cy = y + 3;
-        let wander = cx;
-        while (cy < y + rowH - 3) {
-          g.fillRect(wander, cy, 1, 1);
-          wander += Math.round(range(rng, -1, 1));
-          cy += 1;
-        }
-      }
-      // Moss in the seam under every block.
-      if (rng() > 0.35) mossRun(g, rng, x + 1, x + bw - 1, y + rowH - 2, Math.round(range(rng, 3, 10)));
-      x += bw;
-    }
-    y += rowH;
-    course += 1;
-  }
-
-  // The top surface: where the moss really lives.
-  mossRun(g, rng, 0, w, 0, 14);
   return pixelTexture(c);
 }
 
