@@ -31,6 +31,14 @@ import * as THREE from 'three';
 export interface FieldPoint {
   x: number;
   y: number;
+  /**
+   * This point's own field radius, overriding the surface-wide one.
+   *
+   * Added for the swing arm: the chain of points running up to a growth wants to thin as it
+   * goes, and a per-point radius is the only dial that can do that inside one surface. Body
+   * particles leave it unset and keep behaving exactly as before.
+   */
+  r?: number;
 }
 
 export interface SurfaceOptions {
@@ -64,8 +72,9 @@ function sample(points: FieldPoint[], x: number, y: number, r2: number): number 
     const dx = x - p.x;
     const dy = y - p.y;
     const d2 = dx * dx + dy * dy;
-    if (d2 >= r2) continue;
-    const t = 1 - d2 / r2;
+    const pr2 = p.r === undefined ? r2 : p.r * p.r;
+    if (d2 >= pr2) continue;
+    const t = 1 - d2 / pr2;
     total += t * t;
   }
   return total;
