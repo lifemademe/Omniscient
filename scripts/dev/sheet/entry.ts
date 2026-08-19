@@ -23,6 +23,18 @@ function show(label: string, tex: { image: CanvasImageSource & { width: number; 
   view.width = src.width * zoom;
   view.height = src.height * zoom;
   const g = view.getContext('2d')!;
+  /*
+   * Fill with the stage's own dark ground first.
+   *
+   * Half these textures are transparent sprites - the portal, the bush, the spores, the
+   * glow - and a transparent PNG is shown against WHITE by every image viewer there is. A
+   * pale mint membrane meant to be the brightest thing in a dark cavern looks blown out on
+   * white and perfectly judged on black, and there is no way to tell which you are looking
+   * at unless the ground is stated. So state it: this is roughly the value the stage's haze
+   * sits at, and everything is judged against that.
+   */
+  g.fillStyle = '#16211d';
+  g.fillRect(0, 0, view.width, view.height);
   // Nearest-neighbour, or a zoomed pixel-art texture is judged through a blur.
   g.imageSmoothingEnabled = false;
   g.drawImage(src, 0, 0, view.width, view.height);

@@ -1242,15 +1242,65 @@ export function portalTexture(seed: string, phase: number, size = 128): THREE.Ca
   const { c, g } = surface(size, size);
   const cx = size / 2;
 
-  // The membrane: concentric bands, brightest in the middle, offset by phase.
-  for (let r = 44; r > 0; r -= 2) {
-    const t = r / 44;
-    const wave = (Math.sin(t * 9 - phase * 6) + 1) * 0.5;
-    g.fillStyle = mixHex(PAL.portalCore, PAL.portalRim, t * 0.8 + wave * 0.2);
-    for (let dy = -r; dy <= r; dy++) {
-      const half = Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)) * 0.72);
-      if (half <= 0) continue;
-      g.fillRect(cx - half, Math.round(size * 0.54 + dy), half * 2, 1);
+  /*
+   * The membrane, as an IRIS: dark down the throat, brightening outward to a hot rim.
+   *
+   * It was twenty-two two-pixel rings mixed linearly from core to rim, which is a smooth
+   * gradient wearing a ring costume - the steps were far too small and too even to read as
+   * steps. Rendered on its own it was a flat mint egg, the only true gradient in a stage that
+   * refuses gradients everywhere else, and bright enough to swallow the arch it sits in.
+   *
+   * Two changes make it a portal instead of an egg:
+   *
+   *   The bands are FEW and WIDE. Seven, off a fixed ramp, so every edge between them is a
+   *   visible step. That is the whole difference between painted and rendered.
+   *
+   *   The centre is DARK. A portal is a hole, and a hole is dark in the middle - light piled
+   *   in the centre is an egg, a pearl, a bubble, anything but a way through. The brightness
+   *   goes to the rim, where the membrane meets the stone, which also stops it competing
+   *   with the arch and gives the arch something to be silhouetted against.
+   *
+   * `phase` ripples the band BOUNDARIES rather than their colours - the radius is perturbed
+   * by an angular wave before it is quantised, so the rings breathe and wobble like liquid
+   * held in a frame. Shifting colours instead just made the whole thing pulse, which reads as
+   * a status light.
+   */
+  const shell = [
+    mixHex(PAL.voidDeep, PAL.portalRim, 0.15),
+    mixHex(PAL.voidDeep, PAL.portalRim, 0.35),
+    mixHex(PAL.voidDeep, PAL.portalRim, 0.62),
+    PAL.portalRim,
+    mixHex(PAL.portalRim, PAL.portalCore, 0.4),
+    mixHex(PAL.portalRim, PAL.portalCore, 0.7),
+    PAL.portalCore,
+  ];
+  const my = size * 0.54;
+  const rx = 44 * 0.72;
+  const ry = 44;
+  for (let dy = -ry; dy <= ry; dy++) {
+    for (let dx = -rx; dx <= rx; dx++) {
+      const u = Math.sqrt((dx / rx) ** 2 + (dy / ry) ** 2);
+      if (u > 1) continue;
+      const theta = Math.atan2(dy, dx);
+      /*
+       * Ripple the boundary, not the colour. Two frequencies so it does not read as a cog.
+       *
+       * Amplitude has to stay small against the band WIDTH, not against the radius. At 0.05
+       * on bands 1/7 wide the wobble was a third of a whole band and the membrane came out
+       * as a five-pointed star - the same arithmetic slip as the lamp pools and the spores,
+       * a number authored in one space and spent in another. Higher frequencies too: five
+       * lobes is a shape, thirteen is a texture.
+       */
+      const ripple = 0.018 * Math.sin(theta * 7 + phase * 4) + 0.011 * Math.sin(theta * 13 - phase * 7);
+      /*
+       * Raised to a power so the bands are not evenly spaced: a wide dark throat, then rings
+       * that tighten outward to a thin hot rim where the membrane meets the stone. Evenly
+       * spaced, the two brightest bands owned two fifths of the sprite and the whole thing
+       * read as a pale blob with a hole in it.
+       */
+      const band = Math.max(0, Math.min(6, Math.floor((u + ripple) ** 3.2 * 7)));
+      g.fillStyle = shell[band];
+      g.fillRect(Math.round(cx + dx), Math.round(my + dy), 1, 1);
     }
   }
 
