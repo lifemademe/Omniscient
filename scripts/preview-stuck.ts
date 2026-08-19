@@ -19,6 +19,7 @@ import { MISSION_05 } from '../src/omniscient/content/mission-05-cellar.js';
 import { MISSION_06 } from '../src/omniscient/content/mission-06-lock.js';
 import { MISSION_07 } from '../src/omniscient/content/mission-07-torch.js';
 import { MISSION_08 } from '../src/omniscient/content/mission-08-district.js';
+import { MISSION_09 } from '../src/omniscient/content/mission-09-specimen.js';
 import { bestSets, drivable } from '../src/omniscient/mission/breadcrumbs.js';
 import { narrow } from '../src/omniscient/mission/traces.js';
 import { KnowledgeStore } from '../src/omniscient/knowledge/KnowledgeStore.js';
@@ -29,7 +30,8 @@ import type { DeviceSubmission } from '../src/omniscient/mission/device.js';
 import type { Device } from '../src/omniscient/mission/types.js';
 import type { PipeGrid } from '../src/omniscient/mission/pipes.js';
 import { GlobeView, SignalState } from '../src/omniscient/crt/GlobeView.js';
-import { createSignals } from '../src/omniscient/content/signals.js';
+import { createSignals, M4SS_SIGNAL } from '../src/omniscient/content/signals.js';
+import { COASTLINES } from '../src/omniscient/crt/coastlines.js';
 import { DISTRICT_PURSUIT } from '../src/omniscient/content/district-07.js';
 import { auditPursuit } from '../src/omniscient/mission/pursuit.js';
 import { DISTRICT_TRAIL } from '../src/omniscient/content/district-07.js';
@@ -321,7 +323,7 @@ function checkGlobeTurns(): void {
  * The campaign, in order. Built inline in OmniscientRig rather than exported, so this
  * mirrors it - and the reverse check below is what catches the mirror going stale.
  */
-const CAMPAIGN = [MISSION_01, MISSION_02, MISSION_03, MISSION_04, MISSION_05, MISSION_06, MISSION_07, MISSION_08];
+const CAMPAIGN = [MISSION_01, MISSION_02, MISSION_03, MISSION_04, MISSION_05, MISSION_06, MISSION_07, MISSION_08, MISSION_09];
 
 function checkEveryMissionHasASignal(): void {
   const signals = createSignals();
@@ -333,14 +335,73 @@ function checkEveryMissionHasASignal(): void {
       signal ? `${signal.name || '(unnamed)'}` : 'NOT ON THE GLOBE - unreachable'
     );
   }
-  // And the reverse, which is how a signal quietly becomes scenery.
+  /*
+   * And the reverse, which is how a signal quietly becomes scenery.
+   *
+   * This briefly allowed an "intercepted" exemption for M4SS, back when the station was
+   * opened by a special case in OmniscientRig.openSignal and had no mission behind it. It
+   * has one now - Keller, a scene, beats, an outcome - so the exemption is gone and the
+   * check is back to its strict form. The anomaly is the only signal that is genuinely
+   * unopenable, and that is its entire purpose: §169 wants something on this globe the
+   * player cannot have.
+   */
   for (const signal of signals) {
     if (signal.id === 'anomaly') continue;
     check(
-      `signal "${signal.id}" belongs to a mission`,
+      `signal "${signal.id}" can be opened`,
       CAMPAIGN.some((m) => m.contactId === signal.id)
     );
   }
+
+  /*
+   * The station is on the globe, and it is at sea.
+   *
+   * Both halves matter. Every other pin is checked to be ashore - a marker in the middle of
+   * an ocean is normally a bug - so an ocean pin has to be asserted rather than tolerated, or
+   * the next person to tidy the coordinates will move it onto land as a fix.
+   */
+  const station = signals.find((s) => s.id === M4SS_SIGNAL);
+  check('M4SS: the station is on the globe', station !== undefined);
+  check(
+    'M4SS: the station is at sea - it is the only signal that should be',
+    station !== undefined && !onLand(station.longitude, station.latitude),
+    station ? `${Math.abs(station.longitude)}W ${Math.abs(station.latitude)}S` : 'missing'
+  );
+  const others = signals.filter((s) => s.id !== M4SS_SIGNAL && !s.offworld);
+  const nearest = station
+    ? Math.min(
+        ...others.map((s) =>
+          Math.hypot(
+            ((s.longitude - station.longitude + 540) % 360) - 180,
+            s.latitude - station.latitude
+          )
+        )
+      )
+    : 0;
+  check(
+    'M4SS: the station is a long way from anybody',
+    nearest > 30,
+    `${nearest.toFixed(1)} deg to the nearest signal`
+  );
+}
+
+/** Point-in-polygon against the globe's own coastline data - the map the player sees. */
+function onLand(longitude: number, latitude: number): boolean {
+  for (const ring of COASTLINES) {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i];
+      const [xj, yj] = ring[j];
+      if (
+        yi > latitude !== yj > latitude &&
+        longitude < ((xj - xi) * (latitude - yi)) / (yj - yi) + xi
+      ) {
+        inside = !inside;
+      }
+    }
+    if (inside) return true;
+  }
+  return false;
 }
 
 /**

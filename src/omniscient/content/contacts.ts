@@ -11,6 +11,21 @@
 
 import type { Contact } from '../mission/types.js';
 
+/**
+ * The eighth voice, and the only one who did not ask for help.
+ *
+ * Everybody else on this globe has a fault they want fixed. Keller has a specimen she wants
+ * a second opinion on, from the only machine that answers - which is a different kind of
+ * request and reads as one the moment her contact view comes up and there is no room in it,
+ * only a screen.
+ */
+export const KELLER: Contact = {
+  id: 'm4ss',
+  name: 'Dana Keller',
+  location: 'Pelagic station, South Pacific',
+  teaser: 'STATION 9 - SPECIMEN OUTSIDE CONTAINMENT',
+};
+
 export const MIRELA: Contact = {
   id: 'mirela',
   name: 'Mirela Vasc',

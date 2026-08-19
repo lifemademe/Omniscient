@@ -21,6 +21,7 @@ import { MISSION_05 } from './content/mission-05-cellar.js';
 import { MISSION_06 } from './content/mission-06-lock.js';
 import { MISSION_07 } from './content/mission-07-torch.js';
 import { MISSION_08 } from './content/mission-08-district.js';
+import { MISSION_09 } from './content/mission-09-specimen.js';
 import { createScreenGlass } from './art/glass.js';
 import { PAINT_UNIFORMS } from './art/painterly.js';
 import { decorMesh } from './art/mesh.js';
@@ -37,7 +38,7 @@ import { applyShadowPolicy } from './art/shadows.js';
 import { SystemPanel } from './menu/SystemPanel.js';
 import { createSeaLife } from './geometry/seaLife.js';
 import { WINDOW_VIEW } from './geometry/room.js';
-import { createSignals, MIRELA_SIGNAL, REVEALED_AFTER_FIRST } from './content/signals.js';
+import { createSignals, M4SS_SIGNAL, MIRELA_SIGNAL, REVEALED_AFTER_FIRST } from './content/signals.js';
 import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
 import { TunePanel } from './dev/TunePanel.js';
@@ -51,6 +52,8 @@ import { LocalSurface } from './link/LocalSurface.js';
 import { RemoteSurface } from './link/RemoteSurface.js';
 import { SurfaceGroup } from './link/SurfaceGroup.js';
 import { GlobeScreen } from './globe/GlobeScreen.js';
+import { KELLER } from './content/contacts.js';
+import { M4SSRig } from '../m4ss/M4SSRig.js';
 import { Picker } from './input/Picker.js';
 import { MainMenu } from './menu/MainMenu.js';
 import { SessionController } from './session/SessionController.js';
@@ -111,6 +114,9 @@ enum Screen {
 
 /** Where the workstation sits, far from the dioramas so shots never overlap. */
 const WORKSTATION_ORIGIN = new THREE.Vector3(0, 0, -60);
+
+/** M4SS's own patch of empty world - see enterM4SS. Well clear of every diorama. */
+const M4SS_ORIGIN = new THREE.Vector3(0, 400, 0);
 
 /**
  * The machine, three-quarter on. §129 wants this to be the shot a player screenshots at
@@ -320,6 +326,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
    */
   private camera: ENGINE.ViewTargetCameraNode | null = null;
   private readonly cameraTweener = new Tweener();
+
+  /**
+   * M4SS, while it is running.
+   *
+   * Null the rest of the time - the room is built on entry and thrown away on exit rather
+   * than parked, because it takes the camera and the keyboard for as long as it exists and a
+   * dormant copy of it holding either would be a very confusing bug in the game around it.
+   */
+  private m4ss: M4SSRig | null = null;
+  private onM4SSKey: ((event: KeyboardEvent) => void) | null = null;
+  /** The fog range to put back when M4SS closes - see enterM4SS. */
+  private m4ssFog: { near: number; far: number } | null = null;
   private readonly cameraPosition = new THREE.Vector3(0.5, 1.35, 1.5);
   private readonly cameraTarget = new THREE.Vector3(0, 0.85, -0.5);
 
@@ -392,6 +410,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * if the player has already spent the whole game being useful.
        */
       { mission: MISSION_08, contact: LUCIAN },
+      /**
+       * Ninth, and the only request from outside the world the other eight share.
+       *
+       * It is last for the same reason Lucian is second-to-last: the player has spent the
+       * whole game being useful to people who had a fault, and Keller does not have one.
+       * Arriving here first would make it a curiosity; arriving here after eight repairs
+       * makes it the request that does not fit, which is what it is.
+       */
+      { mission: MISSION_09, contact: KELLER },
     ];
 
     this.buildScenes();
@@ -1792,6 +1819,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * assuming the earlier requests came first - but it is now the order they arrived in
      * rather than a gate.
      */
+    /*
+     * The station is handed out by the loop below like every other request now - it has a
+     * mission, a contact and an outcome, so the special case that used to sit here is gone.
+     */
     const anyResolved = this.signals.some((s) => s.state === SignalState.Resolved);
     const quota = anyResolved ? this.queue.length : OmniscientRig.OPEN_AT_ONCE;
     while (answerable() < quota && this.offered < this.queue.length) {
@@ -1803,6 +1834,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   private openSignal(signalId: string): void {
+    /*
+     * The station used to be intercepted here and dropped the player straight into M4SS.
+     * It is a proper request now - Keller, a scene, and a conversation that ends at an icon
+     * - so it goes through the queue like everybody else, and the game is launched from a
+     * beat cue rather than from the globe. See MISSION_09.
+     */
     const index = this.queue.findIndex((request) => request.mission.contactId === signalId);
     if (index < 0 || !this.session) return;
 
@@ -1835,6 +1872,110 @@ export class OmniscientRig extends ENGINE.SceneNode {
       dustNode.startEmitting();
     }
     this.session.start(request.mission, request.contact);
+  }
+
+  /**
+   * Open the station: hand the whole screen to M4SS.
+   *
+   * A clean swap rather than a diorama. Every other contact is a room this rig builds, lights
+   * and points its one camera at - M4SS is a different game with its own camera, its own
+   * lighting and its own idea of what a metre is, and trying to host it as a set would mean
+   * reconciling all three. Handing over the view-target stack costs nothing and reconciles
+   * none of it.
+   *
+   * Built far enough out that nothing here is behind it. The workstation is at z -60 and the
+   * dioramas are further along again; M4SS gets its own patch of empty world, because its
+   * camera looks along -Z at a room 26 units wide and would happily frame somebody's cellar.
+   */
+  private enterM4SS(): void {
+    if (this.m4ss) return;
+
+    audio.play('connect');
+    audio.setOnAir(true);
+    this.setSignalState(M4SS_SIGNAL, SignalState.Active);
+
+    this.globeScreen?.detach();
+    this.phone?.setVisible(false);
+    this.menu?.setEnabled(false);
+
+    /*
+     * Push the fog out of the way first.
+     *
+     * FOG_FAR is 26, tuned so a diorama a few units across has depth and the workstation at
+     * z -60 is not fogged out of existence. M4SS's camera sits 68.5 units back from a room
+     * 26 wide, so every single surface in it is past the far plane: the first build of this
+     * handover came up as a flat blue-grey silhouette with the geometry and the HUD both
+     * perfectly correct, which reads as a broken shader rather than as depth cue doing
+     * exactly what it was asked to. There is no "off" on FogNode, so the range goes far
+     * enough away to be nothing, and comes back on exit.
+     */
+    this.m4ssFog = this.fog
+      ? { near: this.fog.getFogNear(), far: this.fog.getFogFar() }
+      : null;
+    this.fog?.setFogNear(1e6);
+    this.fog?.setFogFar(1e7);
+
+    const rig = M4SSRig.create({ name: 'M4SSRig', position: M4SS_ORIGIN });
+    this.add(rig);
+    rig.mount();
+    this.m4ss = rig;
+
+    /*
+     * Escape is the way out, and it is the ONLY way out.
+     *
+     * M4SS owns the keyboard and the mouse while it runs - A/D, space, Q and every click go
+     * to the slime - so there is no room for an on-screen control that the game around it
+     * would have to keep out of the way of. One key, held on window so it fires wherever the
+     * focus went.
+     */
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      this.exitM4SS();
+    };
+    window.addEventListener('keydown', onKey);
+    this.onM4SSKey = onKey;
+  }
+
+  /**
+   * Come back to the machine.
+   *
+   * Order matters: unmount first so M4SS stops re-asserting its camera every frame, THEN take
+   * the view-target stack back. Reversed, this rig activates its camera and M4SS immediately
+   * takes it again on the next tick, and the screen never returns.
+   */
+  private exitM4SS(): void {
+    if (!this.m4ss) return;
+
+    if (this.onM4SSKey) window.removeEventListener('keydown', this.onM4SSKey);
+    this.onM4SSKey = null;
+
+    this.m4ss.unmount();
+    this.m4ss.removeFromParent();
+    this.m4ss = null;
+
+    if (this.m4ssFog && this.fog) {
+      this.fog.setFogNear(this.m4ssFog.near);
+      this.fog.setFogFar(this.m4ssFog.far);
+    }
+    this.m4ssFog = null;
+
+    this.camera?.setActive(true);
+    audio.setOnAir(false);
+
+    /*
+     * Back to Keller, not to the globe.
+     *
+     * M4SS is opened from inside her contact view now, so closing it has to put the player
+     * back in the conversation they left - with the file window still open on the desktop
+     * behind them and a beat waiting on what they thought. Returning to the globe here
+     * would end the request the moment the player looked at the thing it was about.
+     */
+    this.phone?.setVisible(true);
+    this.setPhase(Phase.Contact);
+    this.screen = Screen.Tree;
+    const shot = this.scene?.getShot('default');
+    if (shot) this.moveTo(shot, 1.6);
   }
 
   /**
@@ -2430,6 +2571,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private applyEnvironmentCue(cue: string): void {
     if (cue.startsWith('unit.take')) {
       this.takeUnit();
+      return;
+    }
+
+    /*
+     * `game.launch:m4ss` - a beat handing the screen to another game.
+     *
+     * Intercepted here, beside unit.take, for the same reason that one is: the scene has no
+     * business knowing this exists. From the diorama's point of view the file simply opened;
+     * everything after that is the rig's problem.
+     */
+    if (cue.startsWith('game.launch')) {
+      this.enterM4SS();
       return;
     }
 

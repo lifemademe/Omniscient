@@ -50,6 +50,13 @@ import { brickwork } from '../art/brickwork.js';
 import { applyWaterline } from '../art/waterline.js';
 import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { placeRigged } from './riggedContact.js';
+import {
+  buildStationScreen,
+  SCREEN_H,
+  SCREEN_W,
+  StationDesktop,
+} from './stationDesk.js';
+import { CRTSurface } from '../crt/CRTSurface.js';
 import { MowerDrive, MowingField } from './mowing.js';
 
 import type { FieldBounds } from './mowing.js';
@@ -144,6 +151,15 @@ const meshOf = decorMesh;
  * reversible per character rather than all or nothing.
  */
 const RIGGED_CAST: Record<string, string> = {
+  /*
+   * Mirela is MODELLED again.
+   *
+   * She was taken out of this map for one job - standing the generator next to the rest of
+   * the cast in the same room, under the same key light, so the two could be compared - and
+   * that comparison has been made. The generator is not close enough to put in a shipping
+   * scene beside seven Tripo characters, so she goes back. Her GLB remains the reference the
+   * proportion scaffold in geometry/character.ts was measured against.
+   */
   Mirela: '@project/assets/models/Mirela.glb',
   Tomas: '@project/assets/models/Tomas.glb',
   Adaeze: '@project/assets/models/Adaeze.glb',
@@ -9245,6 +9261,86 @@ function buildWireCity(scene: ContactScene): void {
    */
 }
 
+/**
+ * MISSION 09 - Station 9, and the only contact view in the game with no room in it.
+ *
+ * The camera opens hard on Keller's monitor and never leaves it. That is the whole idea:
+ * every other request in OMNISCIENT_ asks the player to read a place, and this one has
+ * nothing to read except a file somebody is deciding whether to open. There is a desk, a
+ * wall and a lamp behind the screen, and they exist only so the monitor is an object in a
+ * room rather than a texture on the frame - they are never in focus and never referred to.
+ *
+ * The desktop is a live 192x144 CRT buffer, redrawn every frame through the prop's idle
+ * hook. See stationDesk.ts.
+ */
+function buildStationDesk(scene: ContactScene): void {
+  /*
+   * No haze, no daylight, no lights at all.
+   *
+   * There is exactly one object in this scene and its material is unlit. Fog would put a
+   * grey wash over the only thing the scene exists to show, and a key light would do
+   * nothing to a MeshBasicMaterial except cost a shadow pass.
+   */
+  scene.atmosphere = false;
+  scene.daylight = 0;
+
+  const surface = new CRTSurface({
+    width: SCREEN_W,
+    height: SCREEN_H,
+    background: '#2b3a54',
+  });
+  const desktop = new StationDesktop(surface);
+  const screen = buildStationScreen(surface);
+  scene.add(screen.root);
+
+  /*
+   * The desktop, registered as a prop so the mission can talk to it.
+   *
+   * `idle` is what makes the screen alive at all - the clock moves, the caret blinks, the
+   * window grows - and the three actions are the only vocabulary the conversation needs:
+   * point at the file, open it, put it back.
+   */
+  scene.registerProp('desktop', screen.root, {
+    idle: (dt) => desktop.advance(dt),
+    actions: {
+      select: () => {
+        desktop.state = 'selected';
+      },
+      open: () => {
+        desktop.state = 'opening';
+      },
+      close: () => {
+        desktop.state = 'idle';
+      },
+    },
+  });
+
+  /*
+   * One shot, and it is the screen filling the frame.
+   *
+   * 0.312 rather than the exact 0.318 the arithmetic gives, so the quad slightly overfills
+   * and the player never catches an edge of it against the void. There is no second shot on
+   * this scene and no camera move anywhere in the mission: a desktop that drifts is a
+   * desktop being filmed, and this one is being LOOKED at.
+   */
+  scene.registerShot('default', {
+    position: new THREE.Vector3(0, 0, 0.312),
+    target: new THREE.Vector3(0, 0, 0),
+    duration: 1.6,
+  });
+  scene.registerShot('room', {
+    position: new THREE.Vector3(0, 0, 0.312),
+    target: new THREE.Vector3(0, 0, 0),
+    duration: 1.6,
+  });
+  scene.registerShot('file', {
+    position: new THREE.Vector3(0, 0, 0.312),
+    target: new THREE.Vector3(0, 0, 0),
+    duration: 1.6,
+  });
+}
+
+ContactScene.registerBuilder('scene-station-desk', buildStationDesk);
 ContactScene.registerBuilder('scene-repair-shop', buildRepairShop);
 ContactScene.registerBuilder('scene-beacon-mast', buildBeaconMast);
 ContactScene.registerBuilder('scene-seedling-tunnel', buildSeedlingTunnel);

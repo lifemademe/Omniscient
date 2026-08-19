@@ -35,6 +35,14 @@ export const VASILE_SIGNAL = 'vasile';
 export const DORIN_SIGNAL = 'dorin';
 export const SANDA_SIGNAL = 'sanda';
 export const LUCIAN_SIGNAL = 'lucian';
+/**
+ * The one contact that is not a request and not a person.
+ *
+ * Kept out of the campaign queue on purpose - it has no beats, no dialogue and no contact
+ * card, because opening it does not start a conversation. It starts M4SS. See
+ * OmniscientRig.openSignal, which intercepts this id before the queue lookup.
+ */
+export const M4SS_SIGNAL = 'm4ss';
 
 /**
  * §96 caps conscious attention at five. The globe honours that: five nameable people at
@@ -199,6 +207,37 @@ export function createSignals(): Signal[] {
       name: 'Lucian Barbu',
       label: 'District 07 - routine audit.',
       // Last, and only after Sanda. See the queue in OmniscientRig.
+      state: SignalState.Dormant,
+      hidden: true,
+    },
+    /**
+     * A station, and the only signal on this globe that is not on land.
+     *
+     * Everything else here is somebody in a town, and this file has bent geography four
+     * times to keep those clickable and ashore - there is a point-in-polygon check against
+     * COASTLINES precisely because a pin in the middle of an ocean is a bug. This one is in
+     * the middle of an ocean deliberately, which is why it is called out here rather than
+     * quietly slipped into the list.
+     *
+     * 150W 20S is the most isolated point available on this map: 69 degrees of open water to
+     * the nearest other signal, in the gap the seven named people leave behind them. A player
+     * turning the globe past the last continent finds one light a long way from anywhere,
+     * which is the entire pitch for what is inside it. It is also unreachable by any of the
+     * reasoning the rest of the game teaches - nobody drove there, nobody's neighbour saw
+     * anything - and that is the point too.
+     *
+     * There IS somebody on the other end, and her name is the first thing about this signal
+     * that is out of place. Seven Romanian names and a Nigerian one share this globe; the
+     * eighth is an American at a station in the middle of the Pacific, which tells the player
+     * where she is not from before she says a word. M4SS is not her name. It is what she
+     * called the thing she is watching.
+     */
+    {
+      id: M4SS_SIGNAL,
+      latitude: -20.0,
+      longitude: -150.0,
+      name: 'Dana Keller',
+      label: 'Specimen is outside containment.',
       state: SignalState.Dormant,
       hidden: true,
     },
