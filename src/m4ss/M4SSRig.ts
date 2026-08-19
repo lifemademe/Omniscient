@@ -22,6 +22,7 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { decorMesh } from '../omniscient/art/mesh.js';
 import { buildSurface } from './surface.js';
 import { freshLab } from './lab.js';
 import {
@@ -39,6 +40,25 @@ import {
 
 import type { Anchor, MassState } from './mass.js';
 
+/**
+ * Level units are pixels; the engine works in metres. One node reconciles them.
+ *
+ * ## Why this exists
+ *
+ * The level is authored 1280 x 720 with y DOWN, because that matches every tile editor and
+ * every screenshot and is far easier to reason about. The engine is built for rooms a few
+ * units across - OmniscientRig's whole workshop is about eight - and at 1280 the camera came
+ * out roughly a hundred times too close, with a seven-unit strip of moss filling a quarter
+ * of the screen.
+ *
+ * So everything the level contains hangs off one node scaled by SCALE with a NEGATIVE y,
+ * which converts pixels to metres and flips the axis in the same transform. Children are
+ * then placed in raw level coordinates and never think about either. The camera lives
+ * outside it, in metres, because a camera inside a mirrored parent is a camera that has to
+ * be reasoned about twice.
+ */
+const SCALE = 0.02;
+
 /** World units across the frame. The level is authored in these. */
 const VIEW_WIDTH = 1000;
 /**
@@ -51,28 +71,26 @@ const VIEW_WIDTH = 1000;
  */
 const CAMERA_FOV = 12;
 const CAMERA_ASPECT = 16 / 9;
-const CAMERA_BACK = VIEW_WIDTH / (2 * Math.tan((CAMERA_FOV * Math.PI) / 360) * CAMERA_ASPECT);
+const CAMERA_BACK =
+  (VIEW_WIDTH * SCALE) / (2 * Math.tan((CAMERA_FOV * Math.PI) / 360) * CAMERA_ASPECT);
+
+/** Level coordinates to world metres. The stage's own transform does this for children. */
+function place(x: number, y: number, z = 0): THREE.Vector3 {
+  return new THREE.Vector3(x * SCALE, -y * SCALE, z * SCALE);
+}
 
 /** Reused, because building a Matrix4 every frame to aim a camera is a frame of garbage. */
 const AIM = new THREE.Matrix4();
 /** How much of the body is shed per second of held Space. */
 const SPLIT_RATE = 0.8;
 
-/**
- * y is DOWN in the level data and up in three.
- *
- * Authoring a side-on level with y down matches every tile editor and every screenshot, so
- * the whole simulation works that way and exactly one function flips it. Doing it in more
- * than one place is how a platform ends up above the ceiling.
- */
-function flip(x: number, y: number, z = 0): THREE.Vector3 {
-  return new THREE.Vector3(x, -y, z);
-}
 
 @ENGINE.GameClass()
 export class M4SSRig extends ENGINE.SceneNode {
   private state: MassState | null = null;
   private camera: ENGINE.ViewTargetCameraNode | null = null;
+  /** Everything in level coordinates hangs off this. See SCALE. */
+  private stage: ENGINE.SceneNode | null = null;
 
   private body: ENGINE.MeshNode | null = null;
   private rim: ENGINE.MeshNode | null = null;
@@ -88,27 +106,49 @@ export class M4SSRig extends ENGINE.SceneNode {
   private carry = 0;
   private readonly detach: Array<() => void> = [];
 
+  /**
+   * DoubleSide, and it is not optional.
+   *
+   * The contour is a flat triangle fan per marching-squares cell, and the winding of those
+   * fans follows the case table rather than any convention - in a coordinate system that is
+   * also y-flipped. So roughly half the slime faces away from the camera, and with the
+   * default FrontSide it is simply not drawn. What that looks like is an empty level, which
+   * reads as the simulation being broken and is not.
+   *
+   * Emissive carries most of the colour because the slime should glow slightly in a dark
+   * facility, and because it makes the body legible before any light is tuned.
+   */
   private readonly slimeMaterial = new THREE.MeshStandardMaterial({
     color: new THREE.Color('#79d9b0'),
     roughness: 0.35,
-    metalness: 0.1,
-    emissive: new THREE.Color('#0f3a2c'),
+    metalness: 0.05,
+    emissive: new THREE.Color('#2f9a74'),
+    side: THREE.DoubleSide,
   });
   private readonly rimMaterial = new THREE.MeshBasicMaterial({
     color: new THREE.Color('#2f6b57'),
+    side: THREE.DoubleSide,
   });
   private readonly strayMaterial = new THREE.MeshStandardMaterial({
     color: new THREE.Color('#71879a'),
     roughness: 0.65,
+    emissive: new THREE.Color('#20303c'),
+    side: THREE.DoubleSide,
   });
   private readonly cordMaterial = new THREE.MeshBasicMaterial({
     color: new THREE.Color('#8fd6e8'),
+    side: THREE.DoubleSide,
   });
 
   public override beginPlay(): boolean {
     if (!super.beginPlay()) return false;
 
     this.state = makeState(freshLab(), 45);
+    const stage = ENGINE.SceneNode.create({ name: 'M4SSStage' });
+    stage.scale.set(SCALE, -SCALE, SCALE);
+    this.add(stage);
+    this.stage = stage;
+
     this.buildCamera();
     this.buildLights();
     this.buildLevel();
@@ -136,23 +176,28 @@ export class M4SSRig extends ENGINE.SceneNode {
     const camera = ENGINE.ViewTargetCameraNode.create({
       name: 'M4SSCamera',
       fov: CAMERA_FOV,
-      near: 1,
-      far: CAMERA_BACK * 2,
+      near: 0.1,
+      far: CAMERA_BACK * 4,
       // Without this the node exists and the engine keeps rendering from its own camera -
       // which looks exactly like a broken scene rather than a missing flag.
       startActive: true,
-      position: flip(world.width / 2, world.height / 2, CAMERA_BACK),
+      position: place(world.width / 2, world.height / 2).setZ(CAMERA_BACK),
     });
     this.add(camera);
     this.camera = camera;
-    this.aim(flip(world.width / 2, world.height / 2, CAMERA_BACK), flip(world.width / 2, world.height / 2));
+    this.aim(
+      place(world.width / 2, world.height / 2).setZ(CAMERA_BACK),
+      place(world.width / 2, world.height / 2)
+    );
   }
 
   private buildLights(): void {
     const key = ENGINE.DirectionalLightNode.create({
       name: 'M4SSKey',
-      position: flip(300, 100, 700),
-      intensity: 2.1,
+      position: place(300, 100).setZ(CAMERA_BACK),
+      // Bright, because the scene's tone mapping runs at exposure 0.5 and this room has no
+      // sky. Tuned by looking at it rather than by reasoning about it.
+      intensity: 6.5,
       color: new THREE.Color('#ffe9c9'),
     });
     key.castShadow = false;
@@ -161,48 +206,57 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.add(
       ENGINE.HemisphereLightNode.create({
         name: 'M4SSFill',
-        intensity: 1.1,
+        intensity: 3.4,
         color: new THREE.Color('#8ea6c8'),
         groundColor: new THREE.Color('#2a2140'),
       })
     );
   }
 
+  /**
+   * The room.
+   *
+   * Every mesh goes through decorMesh, which is not a style preference - it passes
+   * `physicsOptions: { enabled: false }`. A MeshNode created without that gets physics by
+   * default and falls, so the first version of this built the level correctly and then
+   * dropped it out of frame while the camera watched. What that looks like is a dark plane
+   * sloping across the screen, which reads as a broken camera and is not one.
+   */
   private buildLevel(): void {
     const world = this.state?.world;
     if (!world) return;
 
     const stone = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#3a3654'),
+      color: new THREE.Color('#5b5480'),
       roughness: 0.95,
     });
     const moss = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#4d7a45'),
+      color: new THREE.Color('#77b96a'),
       roughness: 0.9,
     });
 
     for (const t of world.tiles) {
       const slab = new THREE.BoxGeometry(t.w, t.h, 60);
-      const node = ENGINE.MeshNode.create({ name: 'Tile', geometry: slab, material: stone });
-      node.position.copy(flip(t.x + t.w / 2, t.y + t.h / 2, -30));
+      const node = decorMesh('Tile', slab, stone);
+      node.position.set(t.x + t.w / 2, t.y + t.h / 2, -30);
       this.add(node);
 
       // A lip of overgrowth on every top face. The theme, doing the level's outlining for it.
       const lip = new THREE.BoxGeometry(t.w, 7, 62);
-      const green = ENGINE.MeshNode.create({ name: 'Moss', geometry: lip, material: moss });
-      green.position.copy(flip(t.x + t.w / 2, t.y + 3, -30));
+      const green = decorMesh('Moss', lip, moss);
+      green.position.set(t.x + t.w / 2, t.y + 3, -30);
       this.add(green);
     }
 
     const anchorGeometry = new THREE.TorusGeometry(11, 3, 6, 14);
     for (const a of world.anchors) {
-      const node = ENGINE.MeshNode.create({
-        name: 'GrowthPoint',
-        geometry: anchorGeometry,
-        material: new THREE.MeshBasicMaterial({ color: new THREE.Color('#7fe08a') }),
-      });
-      node.position.copy(flip(a.x, a.y, 20));
-      this.add(node);
+      const node = decorMesh(
+        'GrowthPoint',
+        anchorGeometry,
+        new THREE.MeshBasicMaterial({ color: new THREE.Color('#7fe08a') })
+      );
+      node.position.set(a.x, a.y, 20);
+      this.stage?.add(node);
       this.anchorNodes.set(a, node);
     }
 
@@ -212,33 +266,29 @@ export class M4SSRig extends ENGINE.SceneNode {
       emissive: new THREE.Color('#4a3a10'),
     });
     world.food.forEach((f, index) => {
-      const node = ENGINE.MeshNode.create({
-        name: 'Biomass',
-        geometry: new THREE.SphereGeometry(4 + f.mass * 0.14, 8, 6),
-        material: biomass,
-      });
-      node.position.copy(flip(f.x, f.y, 10));
-      this.add(node);
+      const node = decorMesh('Biomass', new THREE.SphereGeometry(4 + f.mass * 0.14, 8, 6), biomass);
+      node.position.set(f.x, f.y, 10);
+      this.stage?.add(node);
       this.foodNodes.push({ node, index });
     });
   }
 
   private buildSlime(): void {
     const empty = new THREE.BufferGeometry();
-    this.rim = ENGINE.MeshNode.create({ name: 'SlimeRim', geometry: empty.clone(), material: this.rimMaterial });
+    this.rim = decorMesh('SlimeRim', empty.clone(), this.rimMaterial);
     this.rim.position.z = -2;
-    this.add(this.rim);
+    this.stage?.add(this.rim);
 
-    this.body = ENGINE.MeshNode.create({ name: 'Slime', geometry: empty.clone(), material: this.slimeMaterial });
-    this.add(this.body);
+    this.body = decorMesh('Slime', empty.clone(), this.slimeMaterial);
+    this.stage?.add(this.body);
 
-    this.strays = ENGINE.MeshNode.create({ name: 'Strays', geometry: empty.clone(), material: this.strayMaterial });
+    this.strays = decorMesh('Strays', empty.clone(), this.strayMaterial);
     this.strays.position.z = -4;
-    this.add(this.strays);
+    this.stage?.add(this.strays);
 
-    this.cord = ENGINE.MeshNode.create({ name: 'Tendril', geometry: empty.clone(), material: this.cordMaterial });
+    this.cord = decorMesh('Tendril', empty.clone(), this.cordMaterial);
     this.cord.position.z = 4;
-    this.add(this.cord);
+    this.stage?.add(this.cord);
   }
 
   // -- input ------------------------------------------------------------------------------
@@ -349,12 +399,13 @@ export class M4SSRig extends ENGINE.SceneNode {
     if (!state) return;
 
     // The level is y-down and the world is y-up, so the contour is built flipped.
-    const mine = owned(state).map((p) => ({ x: p.x, y: -p.y }));
+    // Level coordinates: the stage flips and scales them.
+    const mine = owned(state).map((p) => ({ x: p.x, y: p.y }));
     this.replace(this.body, buildSurface(mine, { cell: 4 }));
     // A second contour at a lower threshold is a rim: the same shape, slightly fatter.
     this.replace(this.rim, buildSurface(mine, { cell: 5, threshold: 0.72 }));
 
-    const strandedPoints = loose(state).map((p) => ({ x: p.x, y: -p.y }));
+    const strandedPoints = loose(state).map((p) => ({ x: p.x, y: p.y }));
     this.replace(this.strays, buildSurface(strandedPoints, { cell: 5 }));
 
     if (state.tip && !state.attached && mine.length > 0) {
@@ -372,9 +423,9 @@ export class M4SSRig extends ENGINE.SceneNode {
     straining: boolean
   ): THREE.BufferGeometry {
     const ax = from.x;
-    const ay = -from.y;
+    const ay = from.y;
     const bx = to.x;
-    const by = -to.y;
+    const by = to.y;
     const dx = bx - ax;
     const dy = by - ay;
     const len = Math.hypot(dx, dy) || 1;
@@ -422,15 +473,23 @@ export class M4SSRig extends ENGINE.SceneNode {
     }
   }
 
-  /** The camera drifts after the body rather than tracking it, so small wobbles do not swim. */
+  /**
+   * The whole room, held still.
+   *
+   * It followed the body, and that was wrong for this level before it was wrong for any
+   * other reason: the slime lives on the floor, so centring on it puts half the frame below
+   * the ground and the ledge the whole test is about off the top. One room that fits on one
+   * screen needs no camera work at all, and a greybox with a moving camera is a greybox with
+   * two things that can be wrong.
+   *
+   * Following comes back when there is more level than screen, which is a real problem to
+   * solve later and not one to invent now.
+   */
   private follow(): void {
-    const state = this.state;
-    if (!state || !this.camera) return;
-    const mine = owned(state);
-    if (mine.length === 0) return;
-    const home = centroid(mine);
-    this.camera.position.lerp(flip(home.x, home.y, CAMERA_BACK), 0.06);
-    this.aim(this.camera.position, flip(home.x, home.y));
+    if (!this.camera || !this.state) return;
+    const world = this.state.world;
+    this.camera.position.copy(place(world.width / 2, world.height / 2).setZ(CAMERA_BACK));
+    this.aim(this.camera.position, place(world.width / 2, world.height / 2));
   }
 
   /**
