@@ -33,10 +33,14 @@ import {
   atmosphereTexture,
   backdropTexture,
   endCapTexture,
+  canopyTexture,
+  forestLayer,
   gateTexture,
   glowTexture,
+  interiorFadeTexture,
   plateTexture,
   propTexture,
+  vignetteTexture,
   lipTexture,
   poolTexture,
   sporeTexture,
@@ -230,8 +234,14 @@ export class M4SSRig extends ENGINE.SceneNode {
   private crusherNodes: Array<{ node: ENGINE.MeshNode; crusher: Crusher }> = [];
   /** Both sprites for every growth, so waking one is a texture swap. */
   private readonly growthArt = new Map<Anchor, { live: THREE.Texture; dead: THREE.Texture }>();
+  /** The ember halo behind each dead growth; hidden the frame its growth wakes. */
+  private readonly emberNodes = new Map<Anchor, ENGINE.MeshNode>();
   /** The halo that sits behind whichever reachable growth the pointer is over. */
   private hoverHalo: ENGINE.MeshNode | null = null;
+  /** The frame-closers: canopy across the view top, vignette over the whole view. They
+   * follow the camera in follow(), so a scrolling stage stays closed at every height. */
+  private canopy: ENGINE.MeshNode | null = null;
+  private vignette: ENGINE.MeshNode | null = null;
   /** Smoothed camera height, in level coordinates. See viewCentre. */
   private cameraY = 0;
 
@@ -592,6 +602,23 @@ export class M4SSRig extends ENGINE.SceneNode {
       this.stage?.add(node);
 
       /*
+       * The interior fade: lit at the walked edge, falling to dark below. A tall tile
+       * repeating one 128x96 stone texture reads as wallpaper; the references light the
+       * SURFACE of a mass and let its body go dark, so the eye gets a lit edge on
+       * something solid instead of a patterned rectangle. Only tiles deep enough to have
+       * an interior get one - a thin ledge is all surface.
+       */
+      if (t.h > 120) {
+        const fade = decorMesh(
+          'TileFade',
+          new THREE.PlaneGeometry(t.w, t.h - 36),
+          this.artMaterial({ map: interiorFadeTexture(), transparent: true, depthWrite: false })
+        );
+        fade.position.set(t.x + t.w / 2, t.y + 36 + (t.h - 36) / 2, 0.4);
+        this.stage?.add(fade);
+      }
+
+      /*
        * A vine curtain over every top edge.
        *
        * This replaces the flat green lip. The lip was doing a real job - outlining the
@@ -721,6 +748,30 @@ export class M4SSRig extends ENGINE.SceneNode {
         live: bushTexture(`growth-${i}`, 160, false),
         dead: bushTexture(`growth-${i}`, 160, true),
       });
+      /*
+       * A dead growth smoulders. The darker forest and the vignette cost the red plant
+       * most of its pop - and it is the one object whose legibility is a MECHANIC (stage
+       * two's second clause is telling red from green across a room). A dim ember-red
+       * halo, additive, constant: not alive light, a warning light. Removed by the same
+       * teardown as everything else, and left in place when the growth wakes because the
+       * paintWorld pass hides it the frame `live` flips.
+       */
+      if (a.live === false) {
+        const ember = decorMesh(
+          'DeadEmber',
+          new THREE.PlaneGeometry(190, 190),
+          this.artMaterial({
+            map: glowTexture('ember-glow', '#c4553f'),
+            transparent: true,
+            opacity: 0.4,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          })
+        );
+        ember.position.set(a.x, a.y, 17);
+        this.stage?.add(ember);
+        this.emberNodes.set(a, ember);
+      }
     });
 
     /*
@@ -905,6 +956,63 @@ export class M4SSRig extends ENGINE.SceneNode {
     );
     backdrop.position.set(world.width / 2, world.height / 2, -320);
     this.stage?.add(backdrop);
+
+    /*
+     * The forest, as three parallax planes between the haze and the play space.
+     *
+     * The references take their depth from four or five organic layers fading into the
+     * haze; the game had one plane with structures painted INTO it, which can neither
+     * parallax nor be tuned. Each layer is silhouettes only - a silhouette's job is its
+     * edge - and each sits at its own depth, so the perspective camera hands back real
+     * parallax in the tall stage for free. Colours walk from just-off-haze to
+     * near-foreground dark; the lantern glows at -200 light the middle layer, which is
+     * what makes them read as IN the forest rather than stickers on it.
+     */
+    const layers: Array<{ depth: 0 | 1 | 2; z: number; colour: string; drift: number }> = [
+      { depth: 0, z: -280, colour: '#22332e', drift: 1.0 },
+      { depth: 1, z: -210, colour: '#18271f', drift: 1.0 },
+      { depth: 2, z: -120, colour: '#0e1a13', drift: 1.0 },
+    ];
+    for (const layer of layers) {
+      const texH = Math.min(900, Math.round(world.height * 0.62));
+      const sheet = decorMesh(
+        'Forest',
+        new THREE.PlaneGeometry(world.width * 1.5, world.height * 1.18),
+        this.artMaterial({
+          map: forestLayer(`forest-${layer.depth}`, layer.depth, layer.colour, 1280, texH),
+          transparent: true,
+          depthWrite: false,
+        })
+      );
+      sheet.position.set(world.width / 2, world.height / 2, layer.z);
+      this.stage?.add(sheet);
+    }
+
+    /*
+     * The frame-closers. Every reference is CLOSED at the top and dark in the corners -
+     * leaves hang into the first hundred pixels and a vignette holds the eye in - where
+     * the game ran bright to all four edges and read as a diagram of a place. Both follow
+     * the camera (see follow()), so the tall stage stays framed at every height.
+     */
+    this.canopy = decorMesh(
+      'Canopy',
+      new THREE.PlaneGeometry(VIEW_WIDTH * 1.1, 180),
+      this.artMaterial({
+        map: canopyTexture(`canopy-${world.width}`, 1280, 180),
+        transparent: true,
+        depthWrite: false,
+      })
+    );
+    this.canopy.position.set(world.width / 2, 60, 45);
+    this.stage?.add(this.canopy);
+
+    this.vignette = decorMesh(
+      'Vignette',
+      new THREE.PlaneGeometry(VIEW_WIDTH * 1.06, (VIEW_WIDTH / CAMERA_ASPECT) * 1.08),
+      this.artMaterial({ map: vignetteTexture(), transparent: true, depthWrite: false })
+    );
+    this.vignette.position.set(world.width / 2, world.height / 2, 50);
+    this.stage?.add(this.vignette);
 
     /*
      * Real glow sprites at the lanterns, in front of the backdrop they hang in.
@@ -1530,6 +1638,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.buttonNodes.length = 0;
     this.crusherNodes = [];
     this.growthArt.clear();
+    this.emberNodes.clear();
     this.sporeLayers.length = 0;
     this.vineMaps.length = 0;
     this.body = null;
@@ -1542,6 +1651,8 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.slimeGlow = null;
     this.portalAt = null;
     this.hoverHalo = null;
+    this.canopy = null;
+    this.vignette = null;
 
     this.state = makeState(STAGES[this.stageIndex](), 40);
     this.cleared = false;
@@ -2018,6 +2129,8 @@ export class M4SSRig extends ENGINE.SceneNode {
        * single line of UI.
        */
       const dead = anchor.live === false;
+      const ember = this.emberNodes.get(anchor);
+      if (ember) ember.visible = dead;
       const art = this.growthArt.get(anchor);
       const wanted = art ? (dead ? art.dead : art.live) : null;
       if (wanted && material.map !== wanted) {
@@ -2087,6 +2200,17 @@ export class M4SSRig extends ENGINE.SceneNode {
     if (!this.camera || !this.state) return;
     this.keepActive();
     const at = this.viewCentre();
+    // Keep the frame closed wherever the camera is: canopy pinned to the view top,
+    // vignette centred on the view. Both live in level space, so this is a reposition,
+    // not a reparent.
+    if (this.canopy) {
+      this.canopy.position.x = at.x;
+      this.canopy.position.y = at.y - VIEW_WIDTH / CAMERA_ASPECT / 2 + 62;
+    }
+    if (this.vignette) {
+      this.vignette.position.x = at.x;
+      this.vignette.position.y = at.y;
+    }
     /*
      * The kick: a fast decaying wobble, position only, never the aim. 5px at its hardest
      * - the point is that the DOOR was heavy, not that the camera operator was shot.

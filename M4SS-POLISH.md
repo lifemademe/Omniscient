@@ -226,3 +226,20 @@ What the last four passes established, and what to carry into stage two:
   palette judged before the curve that was written to survive it. Five sightings. Whenever a
   constant crosses a scale factor, check it in the space it lands in.
 | 24 | invention: decor | Floor props - ferns and mushroom clusters scattered on walkable tops, seeded per stage, derived from tile geometry (never authored spots), skipping the first metre of each tile so nothing crowds a button or a landing lip | All axes in range, deltas ±0.2 - the audit cannot see props this small, which is expected: they are composition, not distribution. Two prop kinds only, fern (leaf ramp) and mushroom (cap accents), because the stage already speaks those two families and a third would be a new word used once. Verified live in play mode on the shaft: they read as small life that asks for nothing. NOTE: this pass ran during the playtest-fix session, against a new capture geometry (editor window crop rather than shot.ps1), so the stored-state deltas from pass 23 are not comparable - the REGRESSED lines it printed on first run were the crop change plus the drawbridge's deliberate removal, not art regressions. |
+
+## The environment redo (passes 25-30)
+
+The bar moved: not "inside the reference spread" but "reads like the reference". Judged
+frame-against-frame with the reference set and the composition rules of top-tier 2D
+platformers (Hollow Knight's layered depth, closed frames, lit-edge masses). Five live
+capture-critique cycles, every one of which found the next fault:
+
+| 25 | The backdrop stops being one plane: three parallax FOREST layers (silhouette trunks, branches, canopies) at -280/-210/-120, faintest to near-black, with the lantern glows lighting the middle layer; a CANOPY overhang and a stepped VIGNETTE close the frame at the top and corners, both following the camera; tall tiles get an interior fade - lit at the walked edge, dark below | The references' depth is four or five organic planes; painted-in structures can neither parallax nor be tuned. The frame was open on all four sides and read as a diagram of a place. |
+| 26 | The old midground machinery cut 9 to 5 and OVERGROWN (clumps breaking every top edge, strands down the faces); trunks get gnarl - low-frequency bulges riding the taper and a root flare over the first 150 rows | The pass-25 capture: clean rectangles among organic silhouettes read as stickers, and the trunks were parallel poles - the first flare was hidden entirely below the floor line. |
+| 27 | Far ruin towers become GHOSTS: 35% alpha over the haze instead of any flat colour; lit panes stay at 80% | Two colour-matching attempts failed identically - the haze is a sixteen-step ramp, so one flat colour matches at one height and fights everywhere else. Transparency follows the gradient for free. |
+| 28 | Dead growths SMOULDER: a dim ember-red additive halo, constant, hidden the frame the growth wakes | The darker forest and the vignette cost the red plant its pop, and its legibility is a MECHANIC - stage two's second clause is telling red from green across a room. |
+| 29 | Canopies grow FROM their trunks: the biggest clump sits on the head, each further clump smaller and overlapping the last | The live capture showed dark slabs floating beside their trees - clusters scattered 1.6 trunk-widths from a head that had tapered to a point. |
+| 30 | Canopy strands clamped 14 rows clear of the texture bottom | A strand touching the last row bleeds at the plane boundary and draws a faint full-width hairline across the sky. |
+
+Both stages verified live at 240fps. The gameplay harnesses passed after every pass - no
+art change moved a platform.

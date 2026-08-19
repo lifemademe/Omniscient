@@ -576,6 +576,15 @@ export function backdropTexture(
    * The dome is kept for the ones that have it - this is a greenhouse laboratory - but it now
    * shares the profile, so a bite can take a piece out of the dome too.
    */
+  /*
+   * Ghosts, not shapes: 35% alpha over the haze gradient. Two colour-matching attempts
+   * failed the same way - the haze is a sixteen-step vertical RAMP, so any single flat
+   * colour matches it at one height and fights it everywhere else (the towers span a
+   * third of that ramp). Transparency is the only match that follows the gradient for
+   * free: the towers inherit the haze at their own height and read as things standing IN
+   * it. The deepest layer in the frame finally behaves like the deepest layer.
+   */
+  g.globalAlpha = 0.35;
   g.fillStyle = PAL.voidMid;
   for (let i = 0; i < 7; i++) {
     const bx = Math.round(range(rng, 0, w));
@@ -628,15 +637,19 @@ export function backdropTexture(
       }
     }
 
-    // Lit panes, the only warm thing in the distance.
+    // Lit panes, the only warm thing in the distance. Nearly opaque against the ghost
+    // body - a lit window is the one part of a ruin the eye should still find.
     if (rng() > 0.5) {
+      g.globalAlpha = 0.8;
       g.fillStyle = '#4a7f5f';
       for (let k = 0; k < 5; k++) {
         g.fillRect(bx + Math.round(range(rng, 3, bw - 6)), baseY - Math.round(range(rng, 6, bh - 6)), 3, 4);
       }
+      g.globalAlpha = 0.35;
       g.fillStyle = PAL.voidMid;
     }
   }
+  g.globalAlpha = 1;
 
   /*
    * A midground band of machinery, between the far silhouettes and the level.
@@ -651,7 +664,13 @@ export function backdropTexture(
    * distinct enough that the eye reads depth instead of a flat field.
    */
   const midY = Math.round(h * 0.42);
-  for (let i = 0; i < 9; i++) {
+  /*
+   * Five, down from nine: the forest parallax layers occupy the middle distance now, and
+   * nine machines fought them for it. What remains is machinery being EATEN - every top
+   * edge grown over, strands hanging off the faces - because a clean rectangle among
+   * organic silhouettes reads as a sticker, and the pass-25 critique caught exactly that.
+   */
+  for (let i = 0; i < 5; i++) {
     const bx = Math.round(range(rng, -20, w));
     /*
      * Rusted iron, sitting in the dark band.
@@ -707,6 +726,26 @@ export function backdropTexture(
       if (rng() > 0.45) {
         g.fillStyle = tone;
         g.fillRect(bx + Math.round(pw * 0.7), py, ph, Math.round(range(rng, 20, 70)));
+      }
+    }
+
+    /*
+     * The growth takes it back: dark clumps breaking the top line, strands down the face.
+     * The clump colour is the forest's, not the machine's - it is the SAME growth that
+     * owns the rest of the frame, reaching in from the layer in front.
+     */
+    const eat = mixHex(PAL.voidMid, PAL.leafDark, 0.55);
+    const topY = midY - Math.round(range(rng, 40, 110));
+    for (let k = 0; k < 4; k++) {
+      blob(g, rng, bx + range(rng, 0, 60), topY + range(rng, -6, 8), range(rng, 7, 16), eat, 1.5);
+    }
+    for (let k = 0; k < 3; k++) {
+      let sx = bx + range(rng, 4, 56);
+      const drop = range(rng, 18, 70);
+      g.fillStyle = eat;
+      for (let d = 0; d < drop; d++) {
+        if (d % 7 === 0) sx += range(rng, -1, 1);
+        g.fillRect(Math.round(sx), topY + d, 2, 1);
       }
     }
   }
@@ -1683,6 +1722,211 @@ export function propTexture(seed: string, kind: 'fern' | 'shroom', size = 48): T
       g.fillStyle = PAL.bioCyan;
       g.fillRect(Math.round(mx - 1), Math.round(base - tall + 2), 2, 1);
     }
+  }
+  return pixelTexture(c);
+}
+
+/**
+ * One parallax layer of overgrowth, as pure silhouette.
+ *
+ * The reference frames get their depth from four or five planes of organic shapes fading
+ * into the haze - trunks, canopies, root masses, hanging moss - and the game had ONE
+ * backdrop plane with structures painted into it. Painted-in depth cannot parallax and
+ * cannot be tuned; planes can do both. Each layer is a transparent sheet of silhouettes
+ * in a single colour, because a silhouette's whole job is its EDGE - interior detail at
+ * these depths would fight the gameplay plane for attention and lose the depth read that
+ * flatness buys.
+ *
+ * depth 0 is the faintest and simplest (canopy masses, thin trunks), 2 the boldest
+ * (gnarled trunks with root flares and hanging strands). The caller picks the colour so
+ * each stage can pull the forest toward its own haze.
+ */
+export function forestLayer(
+  seed: string,
+  depth: 0 | 1 | 2,
+  colour: string,
+  w = 1280,
+  h = 760
+): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+  g.fillStyle = colour;
+
+  const trunks = [4, 5, 6][depth];
+  const baseY = h;
+
+  for (let i = 0; i < trunks; i++) {
+    const tx = ((i + 0.2 + rng() * 0.6) / trunks) * w;
+    const trunkW = [18, 26, 40][depth] * range(rng, 0.7, 1.3);
+    const trunkH = h * range(rng, 0.55, 0.95);
+    const lean = range(rng, -0.16, 0.16);
+
+    /*
+     * The trunk: a wandering column, drawn as rows so the profile can breathe. Width
+     * tapers with height and the wander is low-frequency - a trunk that jitters per-row
+     * reads as static, one that drifts reads as grown.
+     */
+    let cx = tx;
+    let drift = 0;
+    const knots = range(rng, 0.02, 0.045);
+    const knotPhase = range(rng, 0, Math.PI * 2);
+    for (let y = 0; y < trunkH; y++) {
+      const k = y / trunkH;
+      if (y % 9 === 0) drift = range(rng, -1.4, 1.4);
+      cx += lean * 0.7 + drift * 0.12;
+      /*
+       * Gnarl: a low-frequency bulge riding the taper, plus a root flare over the first
+       * 150 rows. The first draft flared only the bottom 30 - which the floor tiles then
+       * covered entirely - and tapered linearly, and the pass-25 capture showed exactly
+       * what that buys: parallel poles. A trunk is a muscle, not a bar.
+       */
+      const bulge = 1 + Math.sin(y * knots + knotPhase) * 0.22;
+      const flare = y < 150 ? 1 + ((150 - y) / 150) ** 2 * 1.6 : 1;
+      const wHere = trunkW * (1 - k * 0.55) * bulge * flare;
+      g.fillRect(Math.round(cx - wHere / 2), baseY - y, Math.round(wHere), 1);
+
+      // Branches: sparse, arcing away and thinning to nothing.
+      if (depth > 0 && k > 0.35 && rng() < 0.045) {
+        const dir = rng() > 0.5 ? 1 : -1;
+        let bx = cx;
+        let by = baseY - y;
+        const blen = range(rng, 30, 90) * (1 - k * 0.4);
+        for (let b = 0; b < blen; b++) {
+          const bk = b / blen;
+          bx += dir * (1.2 - bk * 0.5);
+          by -= 0.55 + bk * 0.35;
+          const bw = Math.max(1, Math.round(5 * (1 - bk)));
+          g.fillRect(Math.round(bx - bw / 2), Math.round(by), bw, 1);
+        }
+        // A canopy clump at the branch tip, on the two nearer depths.
+        if (depth > 0) {
+          blob(g, rng, bx, by, range(rng, 10, 22) * (depth === 2 ? 1.2 : 1), colour, 1.6);
+        }
+      }
+    }
+
+    /*
+     * The canopy mass over the trunk head - CONNECTED to it. The first draft scattered
+     * clumps up to 1.6 trunk-widths sideways from a head that had tapered nearly to a
+     * point, and the live capture showed the result: dark slabs floating beside their
+     * trees. A canopy is a pyramid standing on its trunk: the biggest clump sits ON the
+     * head, and each further clump is smaller, closer in value to the last, and OVERLAPS
+     * the previous one - grown out of it, not placed near it.
+     */
+    const headY = baseY - trunkH;
+    let clumpX = cx;
+    let clumpY = headY + 6;
+    blob(g, rng, clumpX, clumpY, range(rng, 20, 30), colour, 1.6);
+    for (let cl = 0; cl < 2 + depth; cl++) {
+      clumpX += range(rng, -trunkW * 0.7, trunkW * 0.7);
+      clumpY += range(rng, -12, 4);
+      blob(g, rng, clumpX, clumpY, range(rng, 12, 22), colour, 1.6);
+    }
+
+    // Hanging strands off the canopy, nearest layer only - moss needs to be close to read.
+    if (depth === 2) {
+      for (let m = 0; m < 4; m++) {
+        let mx = cx + range(rng, -trunkW * 1.8, trunkW * 1.8);
+        const drop = range(rng, 26, 90);
+        for (let d = 0; d < drop; d++) {
+          if (d % 8 === 0) mx += range(rng, -1, 1);
+          g.fillRect(Math.round(mx), Math.round(headY + d), 2, 1);
+        }
+      }
+    }
+  }
+
+  return pixelTexture(c);
+}
+
+/**
+ * The canopy overhang: near-black foliage hanging into the top of the frame.
+ *
+ * Every reference frame is CLOSED at the top - leaves, branches and moss hang into the
+ * first hundred pixels, so the bright playfield sits inside a dark surround instead of
+ * running off the screen edge. The game's frame was open on all four sides, which is a
+ * large part of why the references read as places and the stage read as a diagram.
+ */
+export function canopyTexture(seed: string, w = 1280, h = 180): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+  const ink = '#0a120e';
+  g.fillStyle = ink;
+
+  // The solid mass along the top, its lower boundary wandering.
+  let edge = h * 0.32;
+  for (let x = 0; x < w; x++) {
+    if (x % 7 === 0) edge += range(rng, -6, 6);
+    edge = Math.max(h * 0.14, Math.min(h * 0.55, edge));
+    g.fillRect(x, 0, 1, Math.round(edge));
+  }
+
+  // Leaf clumps breaking the boundary.
+  for (let i = 0; i < w / 26; i++) {
+    const x = range(rng, 0, w);
+    blob(g, rng, x, range(rng, h * 0.25, h * 0.6), range(rng, 10, 26), ink, 1.6);
+  }
+
+  /*
+   * Hanging strands, some with a leaf tip - none allowed within 14 rows of the texture's
+   * bottom. A strand (or its tip blob) that touches the last row bleeds at the plane
+   * boundary and draws a faint FULL-WIDTH hairline across the sky, which is exactly what
+   * the live capture showed at the canopy's edge. The clamp costs nothing visible; the
+   * longest strands already read as long.
+   */
+  for (let i = 0; i < w / 40; i++) {
+    let x = range(rng, 0, w);
+    const drop = Math.min(h - 24, range(rng, h * 0.3, h * 0.9));
+    for (let d = 0; d < drop; d++) {
+      if (d % 9 === 0) x += range(rng, -1.2, 1.2);
+      g.fillRect(Math.round(x), Math.round(d), 2, 1);
+    }
+    if (rng() > 0.4) blob(g, rng, x, Math.min(h - 14, drop), range(rng, 4, 9), ink, 1.4);
+  }
+
+  return pixelTexture(c);
+}
+
+/**
+ * The vignette: a soft dark surround, drawn once, stretched over the view.
+ *
+ * Rendered as coarse concentric steps rather than a smooth radial so it stays in the
+ * stage's banded language. The corners take most of the weight; the centre is untouched.
+ */
+export function vignetteTexture(size = 256): THREE.CanvasTexture {
+  const { c, g } = surface(size, size);
+  const cx = size / 2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (x - cx) / cx;
+      const dy = (y - cx) / cx;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      const a = Math.max(0, (d - 0.62) / 0.55);
+      const stepped = Math.min(0.5, Math.floor(a * 7) / 7) * 0.55;
+      if (stepped <= 0) continue;
+      g.fillStyle = `rgba(4, 10, 8, ${stepped.toFixed(3)})`;
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+  return pixelTexture(c);
+}
+
+/**
+ * A vertical depth fade for tile interiors: transparent at the top, dark at the bottom.
+ *
+ * Large stone expanses repeated one 128x96 texture and read as wallpaper - the reference
+ * (and every top-tier 2D platformer) lights the SURFACE of a mass and lets its interior
+ * fall to dark, so the eye reads a lit edge on a solid body instead of a patterned
+ * rectangle. One 8x64 gradient, stretched per tile; the steps keep it banded.
+ */
+export function interiorFadeTexture(): THREE.CanvasTexture {
+  const { c, g } = surface(8, 64);
+  for (let y = 0; y < 64; y++) {
+    const k = y / 63;
+    const a = Math.min(0.62, Math.floor(k * 8) / 8) * 0.72;
+    if (a <= 0) continue;
+    g.fillStyle = `rgba(5, 9, 7, ${a.toFixed(3)})`;
+    g.fillRect(0, y, 8, 1);
   }
   return pixelTexture(c);
 }
