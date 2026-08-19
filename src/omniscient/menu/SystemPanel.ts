@@ -31,6 +31,7 @@
  */
 
 import { audio } from '../audio/ConsoleAudio.js';
+import { clearM4ssStage, clearSave } from '../session/persistence.js';
 import { ACCENT } from '../art/palette.js';
 
 const STYLE_ID = 'omniscient-system-panel';
@@ -108,6 +109,8 @@ export class SystemPanel {
   private onKey: ((event: KeyboardEvent) => void) | null = null;
   private focused = 0;
   private rows: HTMLElement[] = [];
+  /** Armed/fired by the RESET row. Set in buildSettings. */
+  private fireReset: (() => void) | null = null;
 
   public constructor(private readonly container: HTMLElement) {
     if (!document.getElementById(STYLE_ID)) {
@@ -170,6 +173,8 @@ export class SystemPanel {
       }
       if (event.key === 'ArrowLeft') this.nudge(-1);
       if (event.key === 'ArrowRight') this.nudge(1);
+      // Enter activates the focused row - only RESET has an activation.
+      if (event.key === 'Enter' && this.focused === 1) this.fireReset?.();
       this.paint();
     };
     window.addEventListener('keydown', this.onKey);
@@ -213,7 +218,44 @@ export class SystemPanel {
 
     row.append(label, bar, value);
     frame.appendChild(row);
-    this.rows = [row];
+
+    /*
+     * RESET, with a two-step arm. A one-click erase next to the volume bar is a disaster
+     * waiting for a mis-click; the row arms on the first activation ("SURE? CLICK AGAIN")
+     * and erases on the second, and closing the panel disarms it. Erasing reloads the
+     * page - a reset that leaves the current session's state alive is not a reset, it is
+     * a lie with a delay on it.
+     */
+    const reset = document.createElement('div');
+    reset.className = 'omni-sys__row';
+    const resetLabel = document.createElement('div');
+    resetLabel.className = 'omni-sys__label';
+    resetLabel.textContent = 'RESET SAVE';
+    const resetValue = document.createElement('div');
+    resetValue.className = 'omni-sys__value';
+    resetValue.textContent = 'erase all progress';
+    reset.append(resetLabel, resetValue);
+    let armed = false;
+    const fire = (): void => {
+      if (!armed) {
+        armed = true;
+        resetValue.textContent = 'SURE? CLICK AGAIN';
+        audio.play('reject');
+        return;
+      }
+      clearSave();
+      clearM4ssStage();
+      audio.play('failed');
+      window.setTimeout(() => window.location.reload(), 250);
+    };
+    reset.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      fire();
+    });
+    this.fireReset = fire;
+    frame.appendChild(reset);
+
+    this.rows = [row, reset];
   }
 
   private buildCredits(frame: HTMLElement): void {

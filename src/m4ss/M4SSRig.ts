@@ -35,6 +35,7 @@ import {
   endCapTexture,
   canopyTexture,
   forestLayer,
+  markerTexture,
   gateTexture,
   glowTexture,
   interiorFadeTexture,
@@ -55,6 +56,7 @@ import {
   TUNING,
   absorbTouching,
   centroid,
+  components,
   loose,
   makeState,
   mass,
@@ -236,6 +238,12 @@ export class M4SSRig extends ENGINE.SceneNode {
   private readonly growthArt = new Map<Anchor, { live: THREE.Texture; dead: THREE.Texture }>();
   /** The ember halo behind each dead growth; hidden the frame its growth wakes. */
   private readonly emberNodes = new Map<Anchor, ENGINE.MeshNode>();
+  /** The constant presence halo behind each LIVE growth. */
+  private readonly presenceNodes = new Map<Anchor, ENGINE.MeshNode>();
+  /** Up to three chevrons hung over shed lumps. See paintWorld. */
+  private readonly shedMarkers: ENGINE.MeshNode[] = [];
+  /** A growth clicked from out of reach flashes and says so. {anchor, seconds left}. */
+  private denied: { anchor: Anchor; t: number } | null = null;
   /** The halo that sits behind whichever reachable growth the pointer is over. */
   private hoverHalo: ENGINE.MeshNode | null = null;
   /** The frame-closers: canopy across the view top, vignette over the whole view. They
@@ -588,17 +596,45 @@ export class M4SSRig extends ENGINE.SceneNode {
      * reads as one quarry.
      */
     const stoneMap = stoneTexture('m4ss-stone');
+    const wallMap = stoneTexture('m4ss-stone', 128, 96, 'wall');
 
     for (const t of world.tiles) {
-      const face = stoneMap.clone();
+      /*
+       * WALL or FLOOR is a shape question: boundary slabs and tall masses stack, walked
+       * surfaces spread. One texture for both was the playtest's complaint ("the tiles
+       * for the ground and the walls are the same") and it was right - a room whose
+       * ground and walls share a material has no gravity in its art.
+       */
+      const isWall = t.h > t.w * 1.6;
+      const face = (isWall ? wallMap : stoneMap).clone();
       face.needsUpdate = true;
-      face.repeat.set(Math.max(1, t.w / 128), Math.max(1, t.h / 96));
+      face.repeat.set(t.w / 128, t.h / 96);
+      /*
+       * WORLD-ALIGNED offsets: the pattern's origin is the world's, not the tile's, so
+       * two tiles that touch continue each other's blocks instead of restarting the
+       * pattern at their own corner - which was the visible seam the playtest called
+       * "not seamless". One texture, offset per tile, globally continuous.
+       */
+      face.offset.set((t.x % 128) / 128, 1 - ((t.y + t.h) % 96) / 96);
+      /*
+       * The slab behind the art is near-black SHADOW, not lit stone: the box's 3D side
+       * faces were catching the camera's perspective and reading as "a flat 2D game with
+       * a 3D background". Dark sides read as the shadow under an edge - depth without
+       * the diorama look.
+       */
       const node = decorMesh(
         'Tile',
-        new THREE.BoxGeometry(t.w, t.h, 60),
+        new THREE.BoxGeometry(t.w, t.h, 44),
+        new THREE.MeshStandardMaterial({ color: new THREE.Color('#08100c'), roughness: 1 })
+      );
+      node.position.set(t.x + t.w / 2, t.y + t.h / 2, -24);
+      const front = decorMesh(
+        'TileFace',
+        new THREE.PlaneGeometry(t.w, t.h),
         this.artMaterial({ map: face })
       );
-      node.position.set(t.x + t.w / 2, t.y + t.h / 2, -30);
+      front.position.set(0, 0, 23);
+      node.add(front);
       this.stage?.add(node);
 
       /*
@@ -732,7 +768,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     world.anchors.forEach((a, i) => {
       const node = decorMesh(
         'Growth',
-        new THREE.PlaneGeometry(150, 150),
+        new THREE.PlaneGeometry(176, 176),
         this.artMaterial({
           map: bushTexture(`growth-${i}`, 160, a.live === false),
           transparent: true,
@@ -742,6 +778,27 @@ export class M4SSRig extends ENGINE.SceneNode {
       node.position.set(a.x, a.y, 20);
       this.stage?.add(node);
       this.anchorNodes.set(a, node);
+      /*
+       * A live growth carries its own PRESENCE - a dim constant halo in the slime's
+       * green, well under the hover halo's brightness. The playtest said the growths
+       * were "not noticeable", and it was right: the one thing the player must find to
+       * play at all had less light than the decorative lanterns. Every glowing thing in
+       * this palette speaks to the player; the growths now speak first.
+       */
+      const presence = decorMesh(
+        'GrowthPresence',
+        new THREE.PlaneGeometry(230, 230),
+        this.artMaterial({
+          map: glowTexture('presence-glow', '#7fe0a0'),
+          transparent: true,
+          opacity: a.live === false ? 0 : 0.22,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      presence.position.set(a.x, a.y, 16);
+      this.stage?.add(presence);
+      this.presenceNodes.set(a, presence);
       // Both sprites are generated up front, so waking a growth is a swap rather than a
       // canvas render in the frame the player presses the button.
       this.growthArt.set(a, {
@@ -853,20 +910,22 @@ export class M4SSRig extends ENGINE.SceneNode {
       let planted = 0;
       for (const tile of world.tiles) {
         if (tile.w < 160 || tile.y < 100) continue;
-        const count = Math.floor(tile.w / 170);
-        for (let i = 0; i < count && planted < 14; i++) {
+        const count = Math.floor(tile.w / 140);
+        for (let i = 0; i < count && planted < 22; i++) {
           const px = tile.x + 40 + ((i + 0.3 + rng() * 0.5) / count) * (tile.w - 80);
           const kind = rng() > 0.45 ? 'fern' : 'shroom';
+          // 62px, up from 44: at 44 the playtest could not find them at all. Decoration
+          // that needs pointing out is not decorating anything.
           const node = decorMesh(
             'FloorProp',
-            new THREE.PlaneGeometry(44, 44),
+            new THREE.PlaneGeometry(62, 62),
             this.artMaterial({
               map: propTexture(`prop-${planted}`, kind as 'fern' | 'shroom'),
               transparent: true,
               depthWrite: false,
             })
           );
-          node.position.set(px, tile.y - 20, 12);
+          node.position.set(px, tile.y - 27, 12);
           this.stage?.add(node);
           planted += 1;
         }
@@ -994,11 +1053,20 @@ export class M4SSRig extends ENGINE.SceneNode {
      * the game ran bright to all four edges and read as a diagram of a place. Both follow
      * the camera (see follow()), so the tall stage stays framed at every height.
      */
+    /*
+     * The canopy map CLAMPS. pixelTexture defaults to RepeatWrapping, and on this one
+     * plane that wrap drew a faint full-width hairline across the sky: sampling the
+     * texture's bottom edge bled the SOLID TOP ROW around from the other side. Two rounds
+     * of clamping the drawn strands could not fix what was never a drawing problem.
+     */
+    const canopyMap = canopyTexture(`canopy-${world.width}`, 1280, 180);
+    canopyMap.wrapS = THREE.ClampToEdgeWrapping;
+    canopyMap.wrapT = THREE.ClampToEdgeWrapping;
     this.canopy = decorMesh(
       'Canopy',
       new THREE.PlaneGeometry(VIEW_WIDTH * 1.1, 180),
       this.artMaterial({
-        map: canopyTexture(`canopy-${world.width}`, 1280, 180),
+        map: canopyMap,
         transparent: true,
         depthWrite: false,
       })
@@ -1165,7 +1233,7 @@ export class M4SSRig extends ENGINE.SceneNode {
 
     const node = decorMesh(
       'Portal',
-      new THREE.PlaneGeometry(150, 150),
+      new THREE.PlaneGeometry(176, 176),
       this.artMaterial({
         map: portalTexture('portal', 0),
         transparent: true,
@@ -1299,13 +1367,22 @@ export class M4SSRig extends ENGINE.SceneNode {
       'letter-spacing:1px;display:flex;justify-content:space-between">',
       '<span>specimen M4SS</span><span style="color:#8fe0a2">LIVE</span></div>',
       '<div style="padding:8px 10px 10px">',
+      '<div style="display:flex;align-items:center;gap:7px">',
+      // The specimen glyph: a green blob with its own glow, the HUD's one piece of the
+      // creature. A gauge with a face on it reads as a creature meter, not a fuel bar.
+      '<div style="width:13px;height:11px;border-radius:52% 48% 55% 45%;background:#8fe8a8;',
+      'box-shadow:0 0 7px #4fae6e"></div>',
       '<div data-role="label" style="letter-spacing:2px;opacity:0.85;font-size:10px">MASS</div>',
-      '<div style="position:relative;height:12px;margin-top:5px;background:#0b0e12;',
+      '</div>',
+      '<div style="position:relative;height:13px;margin-top:5px;background:#0b0e12;',
       'border:1px solid #3a4d6b">',
       '<div data-role="mass" style="position:absolute;left:0;top:0;bottom:0;width:0%;',
-      'background:#7ee08a"></div>',
+      'background:linear-gradient(180deg,#a5f0bc,#5fc98f)"></div>',
       '<div data-role="shed" style="position:absolute;right:0;top:0;bottom:0;width:0%;',
-      'background:#e07a3c"></div>',
+      'background:linear-gradient(180deg,#f4a05c,#d8703c)"></div>',
+      // Segment ticks over both fills: a specimen gauge, calibrated, not a paint bar.
+      '<div style="position:absolute;inset:0;background:repeating-linear-gradient(90deg,',
+      'transparent 0 9px,rgba(11,14,18,0.85) 9px 11px)"></div>',
       '</div>',
       '<div data-role="note" style="margin-top:6px;opacity:0.75;font-size:10px">&nbsp;</div>',
       '</div>',
@@ -1350,8 +1427,25 @@ export class M4SSRig extends ENGINE.SceneNode {
           : `MASS  ${held}    REACH ${Math.round(reachOf(state))}px`;
     }
     if (this.hudNote) {
-      this.hudNote.textContent =
-        away > 0 ? `${away} left behind - hold Q to call it back` : String.fromCharCode(160);
+      /*
+       * The sieve says why it stopped you. An over-mass body pressed against a shut gap
+       * was an invisible wall - the playtest read it as the level breaking. The gap's
+       * rule (grams, not geometry) is invisible by nature, so the HUD carries it at the
+       * moment it binds and at no other time.
+       */
+      let note = away > 0 ? `${away} left behind - hold Q to call it back` : String.fromCharCode(160);
+      const at = owned(state).length > 0 ? centroid(owned(state)) : null;
+      if (at) {
+        for (const gate of state.world.gates) {
+          if (gate.open || gate.sieve === undefined) continue;
+          const nearGap = Math.abs(at.x - (gate.x + gate.w / 2)) < 90 && at.y > gate.y + gate.h - 80;
+          if (nearGap && owned(state).length > gate.sieve) {
+            note = `too big for the gap - hold SPACE to shed below ${gate.sieve + 1}`;
+            break;
+          }
+        }
+      }
+      this.hudNote.textContent = note;
     }
   }
 
@@ -1455,6 +1549,23 @@ export class M4SSRig extends ENGINE.SceneNode {
       if (d < bestD) {
         bestD = d;
         best = a;
+      }
+    }
+    /*
+     * Out of reach is ANSWERED, not swallowed. The old behaviour latched the intent, sent
+     * the tendril, and let it fall short - which reads as a dropped click, and the
+     * playtest asked for "a reasonable distance the mass should be from a growth". The
+     * distance already exists (reach = mass times REACH_PER_MASS, it is the game's whole
+     * economy); what was missing was the game SAYING so at the moment of the click.
+     */
+    if (best && this.state) {
+      const bodyAt = centroid(owned(this.state));
+      const span = Math.hypot(best.x - bodyAt.x, best.y - bodyAt.y);
+      if (span > reachOf(this.state)) {
+        this.denied = { anchor: best, t: 0.6 };
+        if (this.hudNote) this.hudNote.textContent = 'out of reach - grow closer or shed less';
+        this.latched = null;
+        return;
       }
     }
     this.latched = best;
@@ -1639,6 +1750,9 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.crusherNodes = [];
     this.growthArt.clear();
     this.emberNodes.clear();
+    this.presenceNodes.clear();
+    this.shedMarkers.length = 0;
+    this.denied = null;
     this.sporeLayers.length = 0;
     this.vineMaps.length = 0;
     this.body = null;
@@ -2089,6 +2203,50 @@ export class M4SSRig extends ENGINE.SceneNode {
       this.hovered = best;
     }
 
+    /*
+     * Shed-mass markers: a chevron over each lump left behind, up to three, bobbing.
+     * The HUD counts what is missing; these say WHERE - the half of the question a
+     * count cannot answer, and the playtest asked for exactly this.
+     */
+    {
+      const clusters = components(loose(state))
+        .filter((cluster) => cluster.length >= 2)
+        .sort((a, b) => b.length - a.length)
+        .slice(0, 3);
+      while (this.shedMarkers.length < clusters.length) {
+        const marker = decorMesh(
+          'ShedMarker',
+          new THREE.PlaneGeometry(26, 26),
+          this.artMaterial({ map: markerTexture(), transparent: true, depthWrite: false })
+        );
+        marker.position.set(-999, -999, 34);
+        this.stage?.add(marker);
+        this.shedMarkers.push(marker);
+      }
+      this.shedMarkers.forEach((marker, i) => {
+        const cluster = clusters[i];
+        marker.visible = Boolean(cluster);
+        if (!cluster) return;
+        const c = centroid(cluster);
+        marker.position.x = c.x;
+        marker.position.y = c.y - 34 + Math.sin(this.artClock * 3 + i) * 4;
+      });
+    }
+
+    // A growth clicked from beyond reach flashes warm and the HUD says why. Without this
+    // the tendril reaches, falls short, and retracts - which reads as a dropped click.
+    if (this.denied) {
+      this.denied.t -= 1 / 60;
+      const node = this.anchorNodes.get(this.denied.anchor);
+      if (node) {
+        const material = node.material as THREE.MeshBasicMaterial;
+        if (this.denied.t > 0) material.color.set('#e0a060');
+        else this.denied = null;
+      } else {
+        this.denied = null;
+      }
+    }
+
     // The halo follows the hover, breathing slightly so it reads as live, not painted.
     if (this.hoverHalo) {
       const material = this.hoverHalo.material as THREE.MeshBasicMaterial;
@@ -2131,6 +2289,12 @@ export class M4SSRig extends ENGINE.SceneNode {
       const dead = anchor.live === false;
       const ember = this.emberNodes.get(anchor);
       if (ember) ember.visible = dead;
+      const presence = this.presenceNodes.get(anchor);
+      if (presence) {
+        (presence.material as THREE.MeshBasicMaterial).opacity = dead
+          ? 0
+          : 0.18 + Math.sin(this.artClock * 2.2 + anchor.x) * 0.05;
+      }
       const art = this.growthArt.get(anchor);
       const wanted = art ? (dead ? art.dead : art.live) : null;
       if (wanted && material.map !== wanted) {
@@ -2138,6 +2302,7 @@ export class M4SSRig extends ENGINE.SceneNode {
         material.needsUpdate = true;
       }
       const hovered = !dead && anchor === this.hovered;
+      if (this.denied && this.denied.anchor === anchor && this.denied.t > 0) continue;
       material.color.set(
         dead
           ? '#ffffff'

@@ -282,15 +282,23 @@ console.log('\n=== M4SS STAGE TWO ===\n');
    */
   const state = makeState(freshShaft(), START_MASS);
   const g3 = state.world.anchors.find((a) => a.id === 'g3')!;
-  place(state, g3.x, g3.y + 120);
-  // Ten seconds, up from six: the pump is speed-gated now (the earned-swing change), so
-  // the same alternating driver builds spin more slowly. The threshold is unchanged - what
-  // took the old physics six seconds of pumping takes the honest physics ten.
-  run(state, 10.0, (s) => ({
-    move: s.attached && Math.abs(s.spin) < TUNING.slowmoAt * 1.4 ? (velocityX(s) >= 0 ? 1 : -1) : 0,
-    anchor: g3,
-    recall: false,
-  }));
+  /*
+   * Close beneath the pivot, arriving SIDEWAYS. Straight below at rest is the pendulum's
+   * pathological start (the seed kick peaks under the pump's speed gate on a short rope),
+   * and an offset placement falls out of reach before the tendril can cross the gap. A
+   * real mid-chain latch arrives moving - this stands in for the fling that brought you.
+   */
+  place(state, g3.x, g3.y + 110);
+  for (const p of state.particles) p.px = p.x + 150 * TUNING.dt;
+  // The proven resonance driver from the stage-one 360 block: push WITH the velocity,
+  // always. The old bottom-arc-gated pump stopped building once the plumper hanging shape
+  // added drag; this one is the strategy the game actually teaches.
+  run(state, 10.0, (s) => {
+    if (!s.attached) return { move: 0 as const, anchor: g3, recall: false };
+    if (Math.abs(s.spin) >= TUNING.slowmoAt * 1.4) return { move: 0 as const, anchor: g3, recall: false };
+    const vx = velocityX(s);
+    return { move: (Math.abs(vx) > 60 ? (vx >= 0 ? 1 : -1) : 1) as 1 | -1, anchor: g3, recall: false };
+  });
   const spun = Math.abs(state.spin);
   step(state, IDLE);
   check(

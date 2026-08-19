@@ -1734,6 +1734,38 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * the two moments the world durably changes. Mid-mission progress is deliberately not
    * saved (see persistence.ts): a refresh mid-request costs the attempt, never the game.
    */
+  /**
+   * The save receipt: a low-right line during the mission-complete transition. DOM rather
+   * than CRT because it must be legible over whatever the camera is doing, and gone in
+   * three seconds. Same typographic voice as the console chrome.
+   */
+  private flashSaveNote(): void {
+    const container = this.getWorld()?.gameContainer;
+    if (!container) return;
+    const note = document.createElement('div');
+    note.textContent = 'WRITING TO TAPE ...';
+    note.style.cssText = [
+      'position:absolute',
+      'right:26px',
+      'bottom:22px',
+      'z-index:30',
+      'color:#7fe08a',
+      'font:12px "Courier New",monospace',
+      'letter-spacing:0.2em',
+      'opacity:0',
+      'transition:opacity 0.6s ease',
+      'pointer-events:none',
+    ].join(';');
+    container.appendChild(note);
+    requestAnimationFrame(() => (note.style.opacity = '0.85'));
+    window.setTimeout(() => {
+      note.textContent = 'TAPE WRITTEN';
+      note.style.opacity = '0.5';
+    }, 1900);
+    window.setTimeout(() => (note.style.opacity = '0'), 2700);
+    window.setTimeout(() => note.remove(), 3400);
+  }
+
   private persist(): void {
     /*
      * "Last played" only counts while it is unfinished. A resolved request writes null -
@@ -2391,6 +2423,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.topUpGlobe();
     this.persist();
+    /*
+     * Say that the save happened, where the eye is not. "Progress saves" is a promise a
+     * player cannot verify without quitting, so a small diegetic line - WRITING TO TAPE -
+     * sits in the lower right through the ride home and fades. The persist() above is the
+     * fact; this is the receipt.
+     */
+    this.flashSaveNote();
 
     /*
      * The last answer arms the ending. Everything in the queue resolved - not merely

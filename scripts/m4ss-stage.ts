@@ -402,7 +402,11 @@ console.log('\n=== M4SS STAGE ONE ===\n');
   run(state, 1.2, () => IDLE);
   split(state, 0.5, 1);
   const shedBefore = centroid(loose(state));
-  run(state, 3.0, () => ({ move: 1, anchor: null, recall: false }));
+  // 1.6s, down from 3.0: the crawl was raised to 4300 on playtest feedback, and three
+  // seconds now carries the body clean off the starting ledge into the pit - whose
+  // handback then teleports it right back beside the shed, which is what this check
+  // exists to say must NOT happen by welding. Distance walked is the assertion, not time.
+  run(state, 1.6, () => ({ move: 1, anchor: null, recall: false }));
   const kept = home(state);
   const shed = centroid(loose(state));
   check(

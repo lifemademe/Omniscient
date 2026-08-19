@@ -294,6 +294,15 @@ export interface MassState {
    */
   swingShape: Array<{ id: number; along: number; across: number }>;
   /**
+   * Where the body last stood SAFELY - grounded, whole, on real floor. The pit hands a
+   * fallen body back HERE, not to the start of the room. It used to respawn at world.start,
+   * and the playtest read that as an invisible wall: stage one's exit pit sits just past
+   * the button, so every attempt to walk east teleported the player back across the whole
+   * room - "the button is blocking my movement". Losing a few seconds of progress is a
+   * lesson; losing the whole room is a punishment for exploring.
+   */
+  lastSafe: { x: number; y: number };
+  /**
    * 1 the moment a fling is released off a fast swing, easing to 0.
    *
    * The rig turns this into real time, not simulated time - the step is fixed at 1/120 and
@@ -359,7 +368,8 @@ export const TUNING = {
   /** Damping while airborne off a fling - see the drag note in the integrator. */
   flightDamping: 0.9975,
   /** Raised from 2600 - the crawl read as sluggish even with the relaxises doing their part. */
-  move: 3300,
+  /** Raised again on playtest feedback - the crawl read as slow even after 3300. */
+  move: 4300,
   friction: 0.55,
   bounce: 0.05,
   /**
@@ -480,8 +490,8 @@ export const TUNING = {
    * body ~60 long along the rope. The thing holds on with part of itself; it does not
    * dangle from a hook.
    */
-  taperTop: 0.35,
-  taperBottom: 1.1,
+  taperTop: 0.5,
+  taperBottom: 1.15,
   /** The floor under splitting: you can never keep less than this fraction of startMass. */
   keepAtLeast: 0.2,
   /**
@@ -804,6 +814,7 @@ export function makeState(world: World, startMass: number): MassState {
     justGripped: false,
     swingShape: [],
     startMass,
+    lastSafe: { x: world.start.x, y: world.start.y },
     slowmo: 0,
     regroup: 0,
     snapped: 0,
@@ -1100,14 +1111,34 @@ export function step(state: MassState, input: Input): MassState {
    * a bottomless pit to press Q.
    */
   if (input.recall) {
+    /*
+     * Q calls home the NEAREST shed lump, and only that one. Recalling everything at once
+     * dragged every loose cluster toward the body simultaneously, and lumps on the way
+     * met each other and welded into one - the playtest read it as "Q joins two shed
+     * masses together", which hands back a merge the player never asked for and empties
+     * the strategic value of having left mass in two places. One lump at a time is also
+     * simply legible: press Q, watch the closest piece come home, press again.
+     */
     const home = centroid(owned(state));
-    for (const p of particles) {
-      if (state.owned.has(p.id)) continue;
-      const dx = home.x - p.x;
-      const dy = home.y - p.y;
-      const d = Math.hypot(dx, dy) || 1;
-      p.ax += (dx / d) * T.recall;
-      p.ay += (dy / d) * T.recall - T.gravity * 0.9;
+    const clusters = components(loose(state));
+    let nearest: Particle[] | null = null;
+    let best = Infinity;
+    for (const cluster of clusters) {
+      const c = centroid(cluster);
+      const d = Math.hypot(c.x - home.x, c.y - home.y);
+      if (d < best) {
+        best = d;
+        nearest = cluster;
+      }
+    }
+    if (nearest) {
+      for (const p of nearest) {
+        const dx = home.x - p.x;
+        const dy = home.y - p.y;
+        const d = Math.hypot(dx, dy) || 1;
+        p.ax += (dx / d) * T.recall;
+        p.ay += (dy / d) * T.recall - T.gravity * 0.9;
+      }
     }
   }
 
@@ -1376,8 +1407,10 @@ export function step(state: MassState, input: Input): MassState {
          * toward the arm that the render extends up to the growth.
          */
         const size = Math.sqrt(state.swingShape.length) * T.rest;
-        const halfLength = size * 0.62;
-        const halfWidth = size * 0.4;
+        // Plumper than it was (0.62/0.4): the hanging body read as a strand on the
+        // rope, and a slime's weight should pool. Shorter, wider, rounder.
+        const halfLength = size * 0.54;
+        const halfWidth = size * 0.48;
         // Stiffer as the spin climbs - see swingHoldPerSpin. Capped short of plank.
         const hold = Math.min(0.95, T.swingHold + Math.abs(state.spin) * T.swingHoldPerSpin);
 
@@ -1520,13 +1553,14 @@ export function step(state: MassState, input: Input): MassState {
         state.owned.add(p.id);
       });
     } else {
-      // The whole body fell. Stand it back up at the start, in its birth arrangement.
+      // The whole body fell. Stand it back up at the LAST SAFE FOOTING, in its birth
+      // arrangement - see MassState.lastSafe for why this is not the start of the room.
       const golden = Math.PI * (3 - Math.sqrt(5));
       fallen.forEach((p, i) => {
         const r = T.rest * 0.62 * Math.sqrt(i);
         const a = i * golden;
-        p.x = world.start.x + Math.cos(a) * r;
-        p.y = world.start.y + Math.sin(a) * r;
+        p.x = state.lastSafe.x + Math.cos(a) * r;
+        p.y = state.lastSafe.y + Math.sin(a) * r;
         p.px = p.x;
         p.py = p.y;
         state.owned.add(p.id);
@@ -1570,6 +1604,28 @@ export function step(state: MassState, input: Input): MassState {
      */
     if (down * 10 >= mine.length) {
       state.regroup = Math.max(0, state.regroup - dt / T.regroupTime);
+    }
+  }
+
+  /*
+   * The safe-footing tracker. Grounded on real floor (not the kill plane), whole, and not
+   * mid-swing: that spot is where the pit hands a fallen body back. Sampled with a margin
+   * from platform edges by requiring MOST of the body grounded - a body teetering on a lip
+   * records the lip, and respawning on a lip that crumbled you into the pit once already
+   * is not safety.
+   */
+  {
+    const mine = owned(state);
+    if (mine.length > 0 && !state.attached) {
+      let grounded = 0;
+      for (const p of mine) if (p.grounded) grounded += 1;
+      if (grounded / mine.length > 0.55) {
+        const c = centroid(mine);
+        if (c.y < world.height - 20) {
+          state.lastSafe.x = c.x;
+          state.lastSafe.y = c.y - 10;
+        }
+      }
     }
   }
 

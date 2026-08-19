@@ -367,7 +367,54 @@ function mossRun(
  * vertically and is not asked to - platforms are drawn with the top of the texture at the
  * top of the platform, which is where all the light and all the moss is.
  */
-export function stoneTexture(seed: string, w = 128, h = 96): THREE.CanvasTexture {
+/**
+ * `wall` variant: bigger, darker blocks with vertical water-stain streaks, for the
+ * boundary walls and tall masses. Floors and walls used one texture and the playtest saw
+ * it immediately: a room where the ground and the walls are the same material has no
+ * gravity in its art. Walls read as STACKED (big blocks, dark seams, streaks running
+ * down); floors read as WALKED (smaller blocks, lit tops).
+ */
+export function stoneTexture(
+  seed: string,
+  w = 128,
+  h = 96,
+  variant: 'floor' | 'wall' = 'floor'
+): THREE.CanvasTexture {
+  if (variant === 'wall') {
+    const rng = createRng(seedFrom(seed + '-wall'));
+    const { c, g } = surface(w, h);
+    // Base: darker than the floor stone by a step.
+    g.fillStyle = mixHex(PAL.stoneDark, '#000000', 0.25);
+    g.fillRect(0, 0, w, h);
+    // Big blocks, half-offset rows, dark seams.
+    const bw = 64;
+    const bh = 48;
+    for (let row = 0; row < h / bh; row++) {
+      const off = row % 2 === 0 ? 0 : bw / 2;
+      for (let col = -1; col < w / bw + 1; col++) {
+        const x = col * bw + off;
+        g.fillStyle = mixHex(PAL.stoneDark, PAL.stoneMid, range(rng, 0.1, 0.45));
+        g.fillRect(x + 2, row * bh + 2, bw - 4, bh - 4);
+        // A faint top-edge light per block - stacked, softly lit from the play space.
+        g.fillStyle = mixHex(PAL.stoneMid, PAL.stoneLit, 0.3);
+        g.fillRect(x + 2, row * bh + 2, bw - 4, 2);
+      }
+    }
+    // Water stains running down, seeded, sparse.
+    for (let i = 0; i < 5; i++) {
+      const sx = Math.round(range(rng, 4, w - 6));
+      const drop = Math.round(range(rng, h * 0.3, h * 0.95));
+      g.fillStyle = mixHex(PAL.stoneDark, '#000000', 0.35);
+      for (let d = 0; d < drop; d++) g.fillRect(sx, d, 2, 1);
+    }
+    // Moss flecks in the seams.
+    for (let i = 0; i < 26; i++) {
+      g.fillStyle = rng() > 0.5 ? PAL.mossDark : mixHex(PAL.mossDark, PAL.mossMid, 0.5);
+      g.fillRect(Math.round(range(rng, 0, w)), Math.round(range(rng, 0, h)), 2, 1);
+    }
+    return pixelTexture(c);
+  }
+
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(w, h);
 
@@ -887,58 +934,46 @@ export function endCapTexture(seed: string, w = 64, h = 128): THREE.CanvasTextur
  * surface in a side-on scene that can plausibly mirror the light source. The bright bands
  * across it are reflections, and they are the brightest pixels in the level by a wide margin.
  */
+/*
+ * Redrawn after the playtest called these "black oval shaped artifacts in the ground" -
+ * which is what they were: a dark ellipse with a thin highlight, reading as a hole. Water
+ * in a bioluminescent cavern should GLOW: the body is lit teal, the rim catches the moss
+ * light, and a couple of cyan sparks sit on the surface. The brightest pixels in the level
+ * still live here, which was always the pool's actual job.
+ */
 export function poolTexture(seed: string, w = 128, h = 32): THREE.CanvasTexture {
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(w, h);
-  const midY = Math.round(h * 0.55);
+  const cx = w / 2;
+  const cy = h * 0.42;
 
-  // The water body: an irregular lens, darker than the stone it sits on.
-  for (let x = 0; x < w; x++) {
-    const t = x / w;
-    // Thickest in the middle, tapering to nothing at both ends, with a wobbling edge.
-    const depth = Math.round(
-      Math.sin(t * Math.PI) * (h * 0.4) + range(rng, -1.2, 1.2)
-    );
-    if (depth <= 0) continue;
-    for (let dy = -depth; dy <= depth; dy++) {
-      const d = Math.abs(dy) / depth;
-      g.fillStyle = ramp(PAL.voidDeep, PAL.hazeNear, 5, Math.round((1 - d) * 3));
-      g.fillRect(x, midY + dy, 1, 1);
+  // The water body: banded teal, lit from within, widest band brightest at the surface.
+  const fills = [
+    mixHex(PAL.bioCyan, PAL.voidDeep, 0.55),
+    mixHex(PAL.bioCyan, PAL.voidDeep, 0.3),
+    mixHex(PAL.bioCyan, PAL.bioCore, 0.25),
+  ];
+  fills.forEach((fill, i2) => {
+    const rx = (w / 2 - 3) * (1 - i2 * 0.16);
+    const ry = (h / 2 - 2) * (1 - i2 * 0.22);
+    g.fillStyle = fill;
+    for (let dy = -ry; dy <= ry; dy++) {
+      const half = Math.round(rx * Math.sqrt(Math.max(0, 1 - (dy / ry) ** 2)));
+      if (half > 0) g.fillRect(Math.round(cx - half), Math.round(cy + dy + i2), half * 2, 1);
     }
+  });
+
+  // The surface line: the brightest stroke in the level, broken so it reads as ripple.
+  g.fillStyle = mixHex(PAL.bioCore, '#ffffff', 0.4);
+  for (let x = 6; x < w - 6; x += Math.round(range(rng, 5, 12))) {
+    g.fillRect(x, Math.round(cy - 1), Math.round(range(rng, 3, 7)), 1);
   }
 
-  /*
-   * Reflections: two or three horizontal bands of near-white.
-   *
-   * Horizontal because that is what a flat water surface does with a light above it, and
-   * banded rather than a gradient for the same reason everything else here is banded. These
-   * are wide - a third of the pool at a time - which is the whole difference between this and
-   * the pips that failed.
-   */
-  for (let i = 0; i < 3; i++) {
-    const by = midY + Math.round(range(rng, -h * 0.18, h * 0.22));
-    const bx = Math.round(range(rng, w * 0.1, w * 0.5));
-    const bw = Math.round(range(rng, w * 0.18, w * 0.4));
-    const bright = i === 0 ? PAL.spec : ramp(PAL.hazeNear, PAL.spec, 4, 2);
-    g.fillStyle = bright;
-    g.fillRect(bx, by, bw, 1);
-    if (rng() > 0.4) {
-      g.fillStyle = ramp(PAL.hazeNear, PAL.spec, 4, 1);
-      g.fillRect(bx - Math.round(bw * 0.2), by + 1, Math.round(bw * 1.2), 1);
-    }
-  }
-
-  // A wet rim where the water meets the stone, and a few drips over the front edge.
-  for (let x = 0; x < w; x++) {
-    const t = x / w;
-    const depth = Math.round(Math.sin(t * Math.PI) * (h * 0.4));
-    if (depth <= 1) continue;
-    g.fillStyle = ramp(PAL.mossMid, PAL.spec, 5, 2);
-    g.fillRect(x, midY - depth, 1, 1);
-    if (rng() > 0.9) {
-      g.fillStyle = PAL.slimeGlow;
-      g.fillRect(x, midY + depth, 1, Math.round(range(rng, 1, 4)));
-    }
+  // Two sparks sitting on the water.
+  for (let i2 = 0; i2 < 2; i2++) {
+    const sx = Math.round(cx + range(rng, -w * 0.3, w * 0.3));
+    g.fillStyle = PAL.bioCore;
+    g.fillRect(sx, Math.round(cy - 2), 2, 2);
   }
 
   return pixelTexture(c);
@@ -1927,6 +1962,23 @@ export function interiorFadeTexture(): THREE.CanvasTexture {
     if (a <= 0) continue;
     g.fillStyle = `rgba(5, 9, 7, ${a.toFixed(3)})`;
     g.fillRect(0, y, 8, 1);
+  }
+  return pixelTexture(c);
+}
+
+/**
+ * The shed-mass marker: a small down-chevron in the shed bar's own orange, hung above a
+ * lump the player left behind. The HUD already counts what is missing; this says WHERE,
+ * which is the half of the question a count cannot answer.
+ */
+export function markerTexture(size = 26): THREE.CanvasTexture {
+  const { c, g } = surface(size, size);
+  const cx = size / 2;
+  for (let row = 0; row < 7; row++) {
+    const half = 9 - row;
+    if (half <= 0) break;
+    g.fillStyle = row < 2 ? '#f4a05c' : '#d8703c';
+    g.fillRect(Math.round(cx - half), size - 10 + row - 6, half * 2, 2);
   }
   return pixelTexture(c);
 }
