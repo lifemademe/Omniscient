@@ -27,13 +27,27 @@ import type { World } from './mass.js';
 /** Floor height, so the platforms line up by construction rather than by my arithmetic. */
 const FLOOR = 620;
 
+/*
+ * How far a floor reaches DOWN, and it is not a cosmetic number.
+ *
+ * The floors used to be 120 thick, ending at 740, while the plane that catches anything
+ * leaving the world sits at 880. That left a 140px corridor running under the entire level -
+ * and a body that fell into the exit pit walked along it, eastward, and came up through the
+ * exit shelf from below. Stage one could be finished by holding D.
+ *
+ * 300 puts every floor's underside past the plane, so there is nowhere under the level to
+ * be. A pit is a hole with nothing beside it at any depth, which is what a pit is. None of
+ * this is visible: the world is 720 tall and all of it is off the bottom of the screen.
+ */
+const DEEP = 300;
+
 export const THE_LAB: World = {
   width: 1280,
   height: 720,
   start: { x: 140, y: 560 },
   tiles: [
     // -- 1. the ledge you start on, and the pit ------------------------------------------
-    { x: 0, y: FLOOR, w: 300, h: 120 },
+    { x: 0, y: FLOOR, w: 300, h: DEEP },
     // The far side. 320px of nothing between them - walking is not an option, and there is
     // deliberately no lip to try it from.
     /*
@@ -46,7 +60,7 @@ export const THE_LAB: World = {
      * and comes home to try again - only a built-up swing throws far enough. The pit hands
      * back what falls in, so the price of learning the timing is seconds, not mass.
      */
-    { x: 480, y: FLOOR, w: 320, h: 120 },
+    { x: 480, y: FLOOR, w: 320, h: DEEP },
 
     // -- walls, so a swing that goes badly has somewhere to end ---------------------------
     { x: -40, y: 0, w: 60, h: 720 },
@@ -60,7 +74,7 @@ export const THE_LAB: World = {
      * asks the player to crawl through. A slime small enough to fit under the wall fitted
      * straight down the hole.
      */
-    { x: 800, y: FLOOR, w: 300, h: 120 },
+    { x: 800, y: FLOOR, w: 300, h: DEEP },
 
     /*
      * -- 4. the exit: a shelf across a hundred pixels of nothing --------------------------
@@ -77,7 +91,32 @@ export const THE_LAB: World = {
      * short into the pit, and the pit hands the body back to the start of the room. Failure
      * costs the attempt, never the creature.
      */
-    { x: 1200, y: FLOOR, w: 60, h: 120 },
+    { x: 1200, y: FLOOR, w: 60, h: DEEP },
+
+    /*
+     * -- 5. the ledge over the exit pit, which is where the last swing now goes -----------
+     *
+     * The fling used to land on the exit shelf itself and the stage was over on touchdown.
+     * That made the whole finale one action, and it made the throw the only thing the high
+     * growth was for.
+     *
+     * Now the throw lands HERE, over the pit, and what is up here is a button rather than
+     * the exit. The pit is still uncrossable; pressing the button drops the wall in front of
+     * the portal flat across it, and the last thing the player does in stage one is walk
+     * over something they built. The exit stops being a place you are thrown at and becomes
+     * a place you open.
+     *
+     * It hangs entirely over the PIT and never over the shelf, which is the load-bearing
+     * detail: an overhang of even twenty pixels would let the player step off the right-hand
+     * end straight down onto the exit and the bridge would be scenery.
+     *
+     * Its east end runs flush into the standing drawbridge, and that is what makes it
+     * catchable. The throw arrives almost flat - it is near the top of its arc by the time it
+     * is over here - so a ledge with an open end is a ledge the body skids straight off. With
+     * the slab closing the end, an overshoot is stopped by the very thing the button is about
+     * to drop.
+     */
+    { x: 1105, y: 530, w: 91, h: 40 },
   ],
 
   /**
@@ -108,7 +147,7 @@ export const THE_LAB: World = {
      * bottom sits 10px above the ledge it launched from, and the sweep's right edge - rope
      * plus half a body, 455 - stays clear of the landing lip at 480.
      */
-    { x: 310, y: 470, rope: 120 },
+    { x: 390, y: 470, rope: 120 },
     /*
      * The high one, on a deliberately short rope.
      *
@@ -148,7 +187,73 @@ export const THE_LAB: World = {
    * body cannot pass, and a legally-split one can. The wall does not stop the player, it
    * stops MOST of them, and pressing the button is how the rest catches up.
    */
-  gates: [{ x: 800, y: 0, w: 40, h: 590, open: false, lift: 0 }],
+  gates: [
+    { id: 'wall', x: 800, y: 0, w: 40, h: 590, open: false, lift: 0 },
+    /*
+     * The drawbridge, standing in front of the portal.
+     *
+     * Shut, it is a wall on the lip of the exit shelf: the portal is visible behind it from
+     * the moment the player enters the chamber and cannot be touched. Open, it is not gone -
+     * it has fallen west across the exit pit and become the floor over it.
+     *
+     * That is why it is a bridge rather than a door. A door removed would leave the pit, and
+     * the pit is the thing actually stopping you; the same slab lying down solves both, and
+     * solves them with one object the player watched fall. The button is a hundred and fifty
+     * pixels up and eighty west of here precisely so the fall happens somewhere the player is
+     * looking at from the outside.
+     *
+     * Its standing position also catches an over-thrown fling and drops it in the pit, which
+     * is the same forgiveness the rest of the stage runs on - the pit hands the body back.
+     *
+     * ## Why it is 220 tall and not 124
+     *
+     * At 124 the top sat at 496, and a fling released near the top of the circle passes that
+     * x at about 497 - so a strong throw sailed over the wall, landed on the exit shelf, and
+     * walked into the portal without ever pressing the button. The bridge was decorative and
+     * the harness said PASS, because the harness was still asking the old question.
+     *
+     * Measured against the fastest release the swing can produce, not the one the harness
+     * happens to use: over the top at 600px/s clears y 446 at this x, and at an implausible
+     * 800 it clears 418. The top is at 400 so that neither does. A wall sized by the throw a
+     * TEST performs is a wall sized by the throw I thought of.
+     *
+     * It follows that the slab is 220 long, so the bridge it makes is 220 long, which reaches
+     * well past the pit and lies on the chamber floor. That is honest rather than awkward -
+     * a drawbridge that exactly fills its gap is a plank, and one that overshoots looks like
+     * something that was standing a moment ago.
+     *
+     * ## And why it is 40 wide
+     *
+     * At 14 the body went straight through it. Collision resolves a particle out of the
+     * NEAREST face, so a soft body pressing on a thin slab shoves its own front particles
+     * past the midline, at which point the nearest face is the far one and they pop out on
+     * the other side and drag the rest after them. Forty is what the stage's other wall has
+     * always been, and it is not a coincidence that the other wall never had this problem.
+     */
+    {
+      id: 'drawbridge',
+      x: 1196,
+      y: 400,
+      w: 40,
+      h: 220,
+      open: false,
+      lift: 0,
+      mode: 'bridge',
+      /*
+       * As thick as every other floor in the level, and for the same reason the slab is 40
+       * wide rather than 14.
+       *
+       * A sixteen-pixel deck is thinner than the depth a piled body sinks to. Collision
+       * expels a particle from its nearest face, so one pressed ten pixels into a sixteen
+       * deep plank is nearer the UNDERSIDE, gets pushed down through it, and falls into the
+       * pit the bridge was built to close. The body walked halfway across and dropped.
+       *
+       * The floors are 120 thick and none of them has ever done this. What the player sees
+       * is the renderer's business - it draws a plank - but what they walk on is a floor.
+       */
+      span: { x: 976, y: FLOOR, w: 260, h: DEEP },
+    },
+  ],
 
   /**
    * The button, on the far side of the wall and nowhere near the exit.
@@ -160,7 +265,25 @@ export const THE_LAB: World = {
    * from the growth because pressing the button must not also be arriving - the player has to
    * press it, go back west for their mass, and come east again.
    */
-  buttons: [{ x: 872, y: 604, radius: 26, pressed: false }],
+  buttons: [
+    /*
+     * Moved east from 872, away from the gap.
+     *
+     * At 872 it sat thirty pixels past the wall, and a body that had just squeezed under
+     * pressed it while still half inside the doorway - the crawl was over before it had
+     * started and the cost of being small never registered. A hundred pixels of open floor
+     * is enough to feel a shed body's fifteen pixels a second without it becoming an errand.
+     */
+    { id: 'gap', x: 940, y: 604, radius: 26, pressed: false, opens: ['wall'] },
+    /*
+     * The drawbridge button, on the ledge over the exit pit.
+     *
+     * Reachable only off a committed circle on the high growth. It opens the bridge and
+     * nothing else - the two buttons in this stage are wired separately now, where before
+     * any button opened every gate.
+     */
+    { id: 'span', x: 1150, y: 512, radius: 26, pressed: false, opens: ['drawbridge'] },
+  ],
 };
 
 /** A fresh copy - the gate and the button are mutated by play, and the harness runs this many times. */

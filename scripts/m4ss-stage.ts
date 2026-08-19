@@ -21,6 +21,7 @@ import {
   absorbTouching,
   centroid,
   components,
+  gateSolid,
   loose,
   makeState,
   mass,
@@ -429,17 +430,102 @@ console.log('\n=== M4SS STAGE ONE ===\n');
       }
       return { move, anchor: growth, recall: false };
     });
-    run(state, 2.5, () => IDLE);
+    run(state, 3.5, () => IDLE);
     overEver = overEver || overTop;
-    const e = home(state);
-    landedOk = e.x > 1200 && e.x < 1262 && e.y > 585 && e.y < 625 && mass(state) >= 24;
+    landedOk = state.world.buttons.find((b) => b.id === 'span')!.pressed && mass(state) >= 24;
   }
   const landed = home(state);
   check('the high growth can be swung over the top', overEver, overEver ? 'full circle' : 'never');
+  /*
+   * The throw's target is the BUTTON now, not the exit.
+   *
+   * This check used to ask whether the body landed on the exit shelf, and it kept saying yes
+   * after a wall was put in front of the portal - first because a fast throw sailed clean
+   * over the wall, and then because the body went straight THROUGH forty pixels of it. A
+   * test that asks last version's question answers it, and answering it is what hid both.
+   */
   check(
-    'a committed circle flings the body onto the exit shelf',
+    'a committed circle reaches the drawbridge button',
     landedOk,
     `try ${tries}: ended at ${landed.x.toFixed(0)},${landed.y.toFixed(0)} with mass ${mass(state)}`
+  );
+
+  const bridge = state.world.gates.find((g) => g.id === 'drawbridge')!;
+  check('pressing it drops the bridge', bridge.open && bridge.mode === 'bridge');
+  const down = gateSolid(bridge)!;
+  check(
+    'the fallen bridge spans the exit pit',
+    down.x <= 1100 && down.x + down.w >= 1200,
+    `bridge covers ${down.x}..${down.x + down.w}, pit is 1100..1200`
+  );
+}
+
+// ---------------------------------------------------------------- the bridge is the only way
+{
+  /*
+   * The exit must be unreachable until the button is pressed, and reachable on foot after.
+   *
+   * Both halves matter. Without the first the bridge is scenery; without the second the
+   * stage cannot be finished. The first half is the one that has already been wrong twice,
+   * so it is asked here directly rather than inferred from where a throw happened to land.
+   */
+  const shut = makeState(freshLab(), 34);
+  const bridge = shut.world.gates.find((g) => g.id === 'drawbridge')!;
+  check('the drawbridge starts standing in front of the portal', !bridge.open);
+
+  const dx = 1000 - home(shut).x;
+  const dy = 590 - home(shut).y;
+  for (const p of shut.particles) {
+    p.x += dx;
+    p.px += dx;
+    p.y += dy;
+    p.py += dy;
+  }
+  /*
+   * Thirty seconds, both here and below, and the number is the point.
+   *
+   * The first version gave this twelve, the body reached 1168, and the check passed - not
+   * because the wall stopped it but because the clock did. A crawl runs at about fourteen
+   * pixels a second, so twelve seconds cannot reach the wall from here whether the wall is
+   * there or not. A negative test that the subject never had time to fail is not a test.
+   */
+  run(shut, 30.0, () => ({ move: 1, anchor: null, recall: false }));
+  check(
+    'with the bridge standing, walking east cannot reach the portal',
+    home(shut).x < 1190,
+    `walked to ${home(shut).x.toFixed(0)} in 30s, portal is at 1230`
+  );
+
+  const open = makeState(freshLab(), 34);
+  open.world.gates.find((g) => g.id === 'drawbridge')!.open = true;
+  const ox = 1000 - home(open).x;
+  const oy = 590 - home(open).y;
+  for (const p of open.particles) {
+    p.x += ox;
+    p.px += ox;
+    p.y += oy;
+    p.py += oy;
+  }
+  /*
+   * Asked with the GAME's rule, not with a number I chose.
+   *
+   * The rig clears the stage when the body's centroid comes within 70px of the portal. This
+   * check first asked for `x > 1205` and failed at 1179 with the body's leading edge already
+   * on the shelf - a crawling slime spreads, so its centroid sits well behind its front, and
+   * 1179,608 is 71px from the portal. One pixel of disagreement between the test and the
+   * game, entirely invented by the test.
+   */
+  const portal = { x: 1230, y: 558 };
+  let reached = false;
+  run(open, 60.0, () => {
+    const h = home(open);
+    if (Math.hypot(h.x - portal.x, h.y - portal.y) < 70) reached = true;
+    return { move: 1, anchor: null, recall: false };
+  });
+  check(
+    'with the bridge down, the body walks across the pit and reaches the portal',
+    reached,
+    `ended at ${home(open).x.toFixed(0)},${home(open).y.toFixed(0)}, portal at 1230,558`
   );
 }
 
@@ -479,6 +565,15 @@ console.log('\n=== M4SS STAGE ONE ===\n');
     button.pressed ? `body at ${home(state).x.toFixed(0)}` : `stuck at ${home(state).x.toFixed(0)}`
   );
   check('pressing the button opens the gate', gate.open);
+  /*
+   * Separately wired. Any button used to open every gate, which was harmless when there was
+   * one of each and would have handed the player the exit for free the moment a second gate
+   * existed.
+   */
+  check(
+    'the gap button does NOT drop the drawbridge',
+    !world.gates.find((g) => g.id === 'drawbridge')!.open
+  );
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} FAILED\n`);

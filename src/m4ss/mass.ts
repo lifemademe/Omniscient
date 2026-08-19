@@ -61,8 +61,23 @@ export interface Tile {
  * than what it is in the room.
  */
 export interface Anchor {
+  /** Needed only by growths a button switches on. See `live`. */
+  id?: string;
   x: number;
   y: number;
+  /**
+   * Whether this growth can be latched onto right now.
+   *
+   * Undefined means always - most growths are simply there. `false` is a RED growth: the
+   * plant is visibly present and visibly dead, and a button somewhere brings it to life.
+   *
+   * Dead rather than absent, because the two teach opposite things. A growth that appears
+   * when you press a button is a reward you did not know was coming; a growth that is
+   * already hanging there in red is a QUESTION - the player can see exactly where the route
+   * goes and has to work out what makes it usable. The whole design of stage two is that
+   * you can always see the way through and not always take it.
+   */
+  live?: boolean;
   /**
    * The rope length to settle to, if the designer wants one.
    *
@@ -88,20 +103,91 @@ export interface Anchor {
  * discover that on.
  */
 export interface Gate {
+  id?: string;
   x: number;
   y: number;
   w: number;
   h: number;
   open: boolean;
-  /** 0 shut, 1 fully up. Drives the mesh only. */
+  /** 0 shut, 1 fully through its travel. Drives the mesh only. */
   lift: number;
+  /**
+   * What opening it DOES.
+   *
+   * `lift` (the default) slides the slab up and out of the way: solid when shut, nothing at
+   * all when open. That is a door.
+   *
+   * `bridge` falls flat instead, and this is the more interesting one - it is solid in both
+   * states, in two different places. Standing, it is a wall you cannot pass; down, it is a
+   * FLOOR across the pit it was standing beside. Opening it does not remove an obstacle, it
+   * builds a route, which means the button that drops it is not "unlock" but "make the last
+   * gap walkable" - and the player has to be somewhere else to press it.
+   */
+  mode?: 'lift' | 'bridge';
+  /**
+   * Where a `bridge` lies once it is down. Ignored by `lift` gates.
+   *
+   * Stated by the designer rather than derived from a rotation, because what matters is the
+   * rect the player can stand on, and deriving it from the pivot and the slab's dimensions
+   * put it one wall-thickness out every time I tried.
+   */
+  span?: { x: number; y: number; w: number; h: number };
 }
 
 export interface Button {
+  id?: string;
   x: number;
   y: number;
   radius: number;
   pressed: boolean;
+  /**
+   * Which gates this opens, by id. Undefined opens EVERY gate, which is stage one's wiring
+   * from back when there was one button and one gate, and is kept so that stage reads the
+   * same as it always did.
+   */
+  opens?: string[];
+  /** Which red growths this brings to life, by id. */
+  activates?: string[];
+  /**
+   * Impact speed needed to trigger it, in px/s. Undefined means any touch will do.
+   *
+   * This is the wall button: a slime that crawls into it does nothing, and one that arrives
+   * off a full revolution sets it off. It makes momentum a KEY rather than only a way to
+   * travel - the player has to build a swing they do not need for distance, purely because
+   * the door is heavy.
+   */
+  force?: number;
+}
+
+/**
+ * A slab that moves on a timer and takes mass off anything it closes on.
+ *
+ * It is solid the whole time - it pushes, it carries, you can ride it. What makes it a
+ * hazard is only that it can push you somewhere there is no room, and the rule for that is
+ * deliberately mechanical rather than a damage zone: you lose mass when the crusher has
+ * pushed you INTO something else, which is what being crushed is.
+ *
+ * Nothing dies. The caught particles stop being yours and squirt out of the gap as a loose
+ * lump, which you can come back for with Q. That keeps the conservation rule the whole
+ * simulation is built on - particles are never created or destroyed - and it keeps stage
+ * one's promise that failure costs the attempt and never the creature. A mistimed run
+ * through a press is expensive and recoverable, which is the right price for a timing test.
+ */
+export interface Crusher {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** How far it travels from its rest position, in px. */
+  travel: number;
+  /** Which way it travels. Vertical presses are the default. */
+  axis?: 'x' | 'y';
+  /** Seconds for one out-and-back. */
+  period: number;
+  /** 0..1, so a row of them can be offset into a wave rather than moving as one. */
+  phase: number;
+  /** Current offset along `axis`. Written by step; read by the renderer. */
+  at: number;
 }
 
 export interface World {
@@ -112,6 +198,7 @@ export interface World {
   anchors: Anchor[];
   gates: Gate[];
   buttons: Button[];
+  crushers?: Crusher[];
 }
 
 export interface Input {
@@ -168,6 +255,20 @@ export interface MassState {
    * whenever nothing is attached.
    */
   swingShape: Array<{ id: number; along: number; across: number }>;
+  /**
+   * 1 the moment a fling is released off a fast swing, easing to 0.
+   *
+   * The rig turns this into real time, not simulated time - the step is fixed at 1/120 and
+   * always will be, because every number measured about the reach is only true at that step.
+   * What slows is how many steps a wall-clock second buys.
+   *
+   * It exists because releasing at speed asks two things of the player in the same instant:
+   * pick the moment, and pick the next growth. At full speed the flight between two growths
+   * in a vertical shaft is a fraction of a second, which is not an aiming window, it is a
+   * reflex test. Stretching it is the difference between a chain of grabs being a plan and
+   * being luck.
+   */
+  slowmo: number;
 }
 
 export const TUNING = {
@@ -261,6 +362,23 @@ export const TUNING = {
   swingPump: 1600,
   /** Below this the rope is too short to swing on and the body just hangs against the growth. */
   minSwing: 26,
+  /** How long a fling's slow motion lasts, in simulated seconds. */
+  slowmoSeconds: 0.9,
+  /**
+   * How slow it goes at full effect - real time is multiplied by this.
+   *
+   * 0.35 rather than something more dramatic. The body is still flying and the player is
+   * still steering it; below about a third the fling stops reading as a fling and starts
+   * reading as a pause, and the arc loses the weight that made it worth building.
+   */
+  slowmoScale: 0.35,
+  /**
+   * Spin, in radians per second, above which a release is worth slowing down for.
+   *
+   * A slow release is a drop, not a fling, and slowing time for a drop makes the whole game
+   * feel like it is buffering.
+   */
+  slowmoAt: 2.6,
   /**
    * How much of the body's arrival speed survives the grab.
    *
@@ -431,13 +549,49 @@ export function centroid(group: Particle[]): { x: number; y: number } {
  * be a very slow bug to find, because it would only show up as the slime behaving oddly in
  * one corner of one level.
  */
+/**
+ * Push one particle out of one solid rect.
+ *
+ * ## Out of the face it came IN through, not the nearest one
+ *
+ * Nearest-face is the obvious rule and it is wrong for a soft body, in a way that only shows
+ * up at speed. A blob arriving at a wall stops its front particles and keeps pushing with
+ * everything behind them; cohesion shoves the front ones past the slab's midline; and from
+ * there the nearest face is the FAR one, so they are helpfully expelled out the other side
+ * and drag the rest of the body after them. The stage-one wall never showed it because the
+ * only thing that ever touches that wall is a shed body crawling at fifteen pixels a second.
+ * The drawbridge showed it immediately: a fling at 800px/s went through forty pixels of
+ * stone as though it were a curtain, landed on the exit shelf, and the harness reported PASS
+ * because it was still asking whether the body reached the shelf.
+ *
+ * So the entry face wins where there is one - if the particle was left of the slab last step
+ * and is inside it now, it goes back out the left, however deep it got. Nearest-face remains
+ * the fallback for a particle that is already inside without having crossed anything this
+ * step, which is the only case where there is genuinely no better answer.
+ */
 function hitTile(p: Particle, t: Tile): void {
   if (p.x < t.x || p.x > t.x + t.w || p.y < t.y || p.y > t.y + t.h) return;
   const left = p.x - t.x;
   const right = t.x + t.w - p.x;
   const top = p.y - t.y;
   const bottom = t.y + t.h - p.y;
-  const least = Math.min(left, right, top, bottom);
+  let least = Math.min(left, right, top, bottom);
+
+  // Which faces it crossed on the way in this step. Usually none or one; two at a corner.
+  const inLeft = p.px <= t.x;
+  const inRight = p.px >= t.x + t.w;
+  const inTop = p.py <= t.y;
+  const inBottom = p.py >= t.y + t.h;
+  if (inLeft || inRight || inTop || inBottom) {
+    const horizontal = inLeft ? left : inRight ? right : Infinity;
+    const vertical = inTop ? top : inBottom ? bottom : Infinity;
+    // At a corner, back out along whichever axis it was travelling faster - that is the one
+    // that actually carried it in.
+    const preferVertical = Math.abs(p.y - p.py) > Math.abs(p.x - p.px);
+    least = Math.min(horizontal, vertical);
+    if (horizontal !== Infinity && vertical !== Infinity) least = preferVertical ? vertical : horizontal;
+  }
+
   const vx = (p.x - p.px) * TUNING.friction;
   const vy = p.y - p.py;
   if (least === top) {
@@ -458,12 +612,46 @@ function hitTile(p: Particle, t: Tile): void {
   }
 }
 
+/**
+ * The rect a gate occupies right now, or null if it is not in the way of anything.
+ *
+ * A lift gate is its own slab while shut and nothing once open. A bridge is its slab while
+ * shut and its `span` once down - solid in both states, which is the entire point of it.
+ */
+export function gateSolid(gate: Gate): Tile | null {
+  if (gate.mode === 'bridge') return gate.open ? (gate.span ?? null) : gate;
+  return gate.open ? null : gate;
+}
+
+/** Where a crusher's slab is this instant. */
+export function crusherRect(c: Crusher): Tile {
+  return c.axis === 'x'
+    ? { x: c.x + c.at, y: c.y, w: c.w, h: c.h }
+    : { x: c.x, y: c.y + c.at, w: c.w, h: c.h };
+}
+
+function insideAnySolid(p: Particle, world: World): boolean {
+  for (const t of world.tiles) {
+    if (p.x > t.x && p.x < t.x + t.w && p.y > t.y && p.y < t.y + t.h) return true;
+  }
+  for (const gate of world.gates) {
+    const solid = gateSolid(gate);
+    if (!solid) continue;
+    if (p.x > solid.x && p.x < solid.x + solid.w && p.y > solid.y && p.y < solid.y + solid.h) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function collide(p: Particle, world: World): void {
   p.grounded = false;
   for (const t of world.tiles) hitTile(p, t);
   for (const gate of world.gates) {
-    if (!gate.open) hitTile(p, gate);
+    const solid = gateSolid(gate);
+    if (solid) hitTile(p, solid);
   }
+  for (const c of world.crushers ?? []) hitTile(p, crusherRect(c));
 }
 
 export function makeState(world: World, startMass: number): MassState {
@@ -483,6 +671,7 @@ export function makeState(world: World, startMass: number): MassState {
     justGripped: false,
     swingShape: [],
     startMass,
+    slowmo: 0,
     regroup: 0,
     snapped: 0,
     time: 0,
@@ -511,7 +700,14 @@ export function step(state: MassState, input: Input): MassState {
   const T = TUNING;
   const { particles, world } = state;
   const dt = T.dt;
-  const anchor = input.anchor;
+  /*
+   * A red growth is not something you can aim at.
+   *
+   * Refused here rather than in the rig, so it is refused for the harness, for a replay and
+   * for anything else that ever drives this - the rule is a property of the world, not of
+   * the mouse.
+   */
+  const anchor = input.anchor && input.anchor.live !== false ? input.anchor : null;
 
   for (const p of particles) {
     p.ax = 0;
@@ -671,6 +867,13 @@ export function step(state: MassState, input: Input): MassState {
     // fling - there is no launch impulse anywhere, and adding one made it feel like a cannon
     // rather than like letting go of something.
     if (state.swingShape.length > 0) state.regroup = 1;
+    /*
+     * A fast release buys aiming time. See MassState.slowmo.
+     *
+     * Gated on spin rather than on speed, because spin is what the player built. A body that
+     * happens to be moving quickly because it fell does not get the courtesy.
+     */
+    if (state.swingShape.length > 0 && Math.abs(state.spin) >= T.slowmoAt) state.slowmo = 1;
     state.swingRadius = 0;
     state.spin = 0;
     state.justGripped = false;
@@ -1018,7 +1221,28 @@ export function step(state: MassState, input: Input): MassState {
      * and doomed; nothing returns to it, and once its last particle crosses the plane the
      * wholesale respawn below stands the creature back up at the start.
      */
-    const alive = owned(state).filter((p) => !fell.has(p.id) && p.y < world.height);
+    /*
+     * A host has to be standing on something the level actually offers.
+     *
+     * `p.y < world.height` was the old test and it is far too generous: world.height is 720
+     * and the deepest floor SURFACE is 620, so every point in that hundred-pixel band counts
+     * as alive while being inside the geometry or inside a pit. Two failures came out of it,
+     * and the second is the worse one.
+     *
+     * The treadmill: a body falling down a shaft always has a few particles still in the
+     * band, so the ones that cross the plane return to them, a few pixels up, for ever.
+     *
+     * The teleport: if two particles are squeezed up the side of the exit shelf and land ON
+     * it, they are hosts - and every other particle in the body returns to them. The slime
+     * fell into the pit with the drawbridge standing and reassembled itself at the portal.
+     * A rule meant to hand back a drip handed back the whole creature, to the exit.
+     *
+     * So the line is the deepest surface anything can stand on, plus one particle spacing.
+     * Below that you are in a shaft, and nothing returns to a body in a shaft.
+     */
+    let standLine = 0;
+    for (const t of world.tiles) standLine = Math.max(standLine, t.y);
+    const alive = owned(state).filter((p) => !fell.has(p.id) && p.y < standLine + T.rest);
     if (alive.length > 0) {
       /*
        * Each return lands directly on top of a specific body particle - one rest-spacing
@@ -1091,26 +1315,98 @@ export function step(state: MassState, input: Input): MassState {
   }
 
   /*
+   * Crushers.
+   *
+   * Moved AFTER collision, so a particle resolves against last frame's slab position and is
+   * then swept by this frame's. Moving them first means a fast press teleports through a
+   * body between two frames and nothing ever registers as caught.
+   */
+  for (const c of world.crushers ?? []) {
+    const cycle = (state.time / c.period + c.phase) % 1;
+    // Cosine, so it dwells at both ends. A linear press has no moment where the gap is open
+    // and waiting, and a timing puzzle needs one.
+    c.at = c.travel * (0.5 - 0.5 * Math.cos(cycle * Math.PI * 2));
+    const rect = crusherRect(c);
+    for (const p of particles) {
+      if (p.x <= rect.x || p.x >= rect.x + rect.w) continue;
+      if (p.y <= rect.y || p.y >= rect.y + rect.h) continue;
+      /*
+       * Inside the slab. Push it out the nearest face, and if that lands it inside something
+       * else, it was CAUGHT - there was nowhere for it to go, which is the definition.
+       *
+       * Checking where it would end up rather than measuring a gap is what makes this
+       * reliable. Gap arithmetic needs to know which surface the press is closing against,
+       * and a body can be caught against a tile, a shut gate, another crusher or the level
+       * wall. "Push it out and see if it fits" needs to know none of that.
+       */
+      const outs = [
+        { x: rect.x - p.x - 1, y: 0 },
+        { x: rect.x + rect.w - p.x + 1, y: 0 },
+        { x: 0, y: rect.y - p.y - 1 },
+        { x: 0, y: rect.y + rect.h - p.y + 1 },
+      ];
+      outs.sort((a, b) => Math.hypot(a.x, a.y) - Math.hypot(b.x, b.y));
+      const test = { ...p, x: p.x + outs[0].x, y: p.y + outs[0].y };
+      const trapped = insideAnySolid(test, world);
+      p.x = test.x;
+      p.y = test.y;
+      if (!trapped) {
+        // Carried, not crushed. Keep its velocity so riding a press feels like riding it.
+        p.px = p.x - (test.x - p.x);
+        continue;
+      }
+      /*
+       * Crushed. Ownership is what is lost, not the particle - it squirts out along the
+       * press's long axis as loose mass and can be recalled with Q once the way is clear.
+       */
+      state.owned.delete(p.id);
+      const spill = 90 + (p.id % 7) * 12;
+      if (c.axis === 'x') {
+        p.py = p.y + (p.id % 2 ? spill : -spill) * dt;
+      } else {
+        p.px = p.x + (p.id % 2 ? spill : -spill) * dt;
+      }
+    }
+  }
+
+  /*
    * Buttons.
    *
    * Pressed by any owned particle, and they stay pressed. A button that releases when you
    * step off would mean holding it down with mass you split off for the purpose, which is a
-   * good puzzle and a different one - this gate exists to let the player go BACK for what
-   * they left, so it must not shut behind them.
+   * good puzzle and a different one - stage one's gate exists to let the player go BACK for
+   * what they left, so it must not shut behind them.
+   *
+   * `force` is what makes a button a target rather than a place. Below it, arriving does
+   * nothing; the player has to bring speed they did not otherwise need, which is the only
+   * reason anyone would build a full revolution they are not going to travel on.
    */
   for (const button of world.buttons) {
     if (button.pressed) continue;
     for (const p of particles) {
       if (!state.owned.has(p.id)) continue;
       if (Math.hypot(p.x - button.x, p.y - button.y) > button.radius) continue;
+      if (button.force !== undefined) {
+        const speed = Math.hypot(p.x - p.px, p.y - p.py) / dt;
+        if (speed < button.force) continue;
+      }
       button.pressed = true;
-      for (const gate of world.gates) gate.open = true;
+      for (const gate of world.gates) {
+        if (!button.opens || (gate.id && button.opens.includes(gate.id))) gate.open = true;
+      }
+      for (const id of button.activates ?? []) {
+        const grown = world.anchors.find((a) => a.id === id);
+        if (grown) grown.live = true;
+      }
       break;
     }
   }
   for (const gate of world.gates) {
     if (gate.open && gate.lift < 1) gate.lift = Math.min(1, gate.lift + dt * 1.2);
   }
+
+  // Slow motion decays on its own; the rig sets it and reads it back to scale real time.
+  if (state.slowmo > 0) state.slowmo = Math.max(0, state.slowmo - dt / T.slowmoSeconds);
 
   state.time += dt;
   return state;
