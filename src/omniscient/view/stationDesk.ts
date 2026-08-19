@@ -19,6 +19,7 @@
  * is a block fill - and the whole desktop repaints only when something on it changed.
  */
 
+import { isM4ssContained } from '../session/persistence.js';
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
@@ -327,12 +328,20 @@ export class StationDesktop {
       ctx.fillRect(x + w - 38 + i * 12, y + 3, 9, 7);
     }
 
+    /*
+     * The one live datum on the whole desktop. Once the player has taken the specimen to
+     * the second portal, the file stops describing an emergency: BREACHED goes green,
+     * and the feed is ARCHIVED because there is nothing left to watch. Read fresh on
+     * every draw rather than cached - the flag flips while this screen is off-camera,
+     * and a cached copy would report the breach forever.
+     */
+    const contained = isM4ssContained();
     const rows: Array<[string, string, string]> = [
       ['MASS', '40 units', C.label],
-      ['CONTAINMENT', 'BREACHED', C.warn],
+      ['CONTAINMENT', contained ? 'CONTAINED' : 'BREACHED', contained ? C.live : C.warn],
       ['LAST FIX', 'SUBLEVEL 2', C.label],
       ['OBSERVED', '11 days', C.label],
-      ['FEED', 'LIVE', C.live],
+      ['FEED', contained ? 'ARCHIVED' : 'LIVE', contained ? C.label : C.live],
     ];
     rows.forEach(([k, v, colour], i) => {
       const ry = y + 26 + i * 16;
@@ -342,7 +351,7 @@ export class StationDesktop {
       ctx.fillStyle = mix(C.panel, C.label, 0.12);
       ctx.fillRect(x + 8, ry + 10, w - 16, 1);
     });
-    textAt(ctx, x + 10, y + h - 16, 'TAKING THE FEED', C.screenCyan, 1);
+    textAt(ctx, x + 10, y + h - 16, contained ? 'NOTHING TO TAKE' : 'TAKING THE FEED', C.screenCyan, 1);
   }
 
   // -- chrome --------------------------------------------------------------------------

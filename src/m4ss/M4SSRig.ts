@@ -26,7 +26,7 @@ import { decorMesh } from '../omniscient/art/mesh.js';
 import { buildSurface } from './surface.js';
 import { freshLab } from './lab.js';
 import { freshShaft } from './shaft.js';
-import { loadM4ssStage, saveM4ssStage } from '../omniscient/session/persistence.js';
+import { loadM4ssStage, saveM4ssContained, saveM4ssStage } from '../omniscient/session/persistence.js';
 import {
   atmosphereTexture,
   backdropTexture,
@@ -158,6 +158,18 @@ export class M4SSRig extends ENGINE.SceneNode {
   private lastPortalStep = -1;
   /** Set the frame the player reaches the portal. The stage is over. */
   private cleared = false;
+  /**
+   * Called a beat after the LAST portal is reached, if anybody is listening.
+   *
+   * OmniscientRig sets this to its own exit: M4SS runs inside Keller's contact view, so
+   * finishing the specimen hands the screen back to the conversation it interrupted, with
+   * her desktop file already flipped to CONTAINED behind it. Left null - the standalone
+   * `?game=m4ss` boot - the end state simply holds on screen, which is the right ending
+   * for a build with no console to return to.
+   */
+  public onContained: (() => void) | null = null;
+  /** Seconds until onContained fires. -1 is disarmed. See contain(). */
+  private containedDelay = -1;
   /**
    * Which stage is loaded. The portal advances it.
    *
@@ -1196,6 +1208,10 @@ export class M4SSRig extends ENGINE.SceneNode {
      * it.
      */
     const scale = 1 - (1 - TUNING.slowmoScale) * state.slowmo;
+    if (this.containedDelay > 0) {
+      this.containedDelay -= deltaTime;
+      if (this.containedDelay <= 0) this.onContained?.();
+    }
     this.carry = Math.min(this.carry + deltaTime * scale, 0.25);
     while (this.carry >= TUNING.dt) {
       step(state, { move, anchor: this.latched, recall: this.recalling });
@@ -1222,6 +1238,21 @@ export class M4SSRig extends ENGINE.SceneNode {
    * placeholder for an ending rather than an ending, and it is better than looping the
    * player back to stage one without a word.
    */
+  /**
+   * The last portal. The specimen is contained, and the file knows it.
+   *
+   * The flag is written IMMEDIATELY, before the dwell - if the tab dies during the pause,
+   * the containment still happened. The dwell exists so the player sees the words over the
+   * flared portal before the screen is taken away; handing back to Keller on the same
+   * frame as the arrival made the whole ending subliminal.
+   */
+  private contain(): void {
+    saveM4ssContained();
+    if (this.hudLabel) this.hudLabel.textContent = 'SPECIMEN CONTAINED';
+    if (this.hudNote) this.hudNote.textContent = this.onContained ? 'returning to the feed' : 'the record is closed';
+    this.containedDelay = 2.8;
+  }
+
   private advance(): void {
     if (this.stageIndex + 1 >= STAGES.length) return;
     this.stageIndex += 1;
@@ -1484,7 +1515,8 @@ export class M4SSRig extends ENGINE.SceneNode {
         if (d < 70) {
           this.cleared = true;
           this.portal.scale.set(1.25, 1.25, 1.25);
-          this.advance();
+          if (this.stageIndex + 1 < STAGES.length) this.advance();
+          else this.contain();
         }
       }
     }

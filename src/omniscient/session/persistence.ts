@@ -135,9 +135,34 @@ export function saveM4ssStage(stage: number): void {
   }
 }
 
+/**
+ * Set the day stage two's portal is reached. This is the flag Keller's desktop reads:
+ * the specimen file flips from BREACHED to CONTAINED, which is M4SS closing its own loop
+ * inside the fiction - the game the console launched reports back to the console.
+ */
+const CONTAINED_KEY = 'omniscient.m4ss.contained';
+
+export function saveM4ssContained(): void {
+  try {
+    window.localStorage?.setItem(CONTAINED_KEY, '1');
+  } catch {
+    // See saveGame.
+  }
+}
+
+export function isM4ssContained(): boolean {
+  try {
+    return window.localStorage?.getItem(CONTAINED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** A new game resets the whole specimen record: the stage AND the containment. */
 export function clearM4ssStage(): void {
   try {
     window.localStorage?.removeItem(M4SS_KEY);
+    window.localStorage?.removeItem(CONTAINED_KEY);
   } catch {
     // See clearSave.
   }

@@ -64,6 +64,7 @@ import { KELLER } from './content/contacts.js';
 import { M4SSRig } from '../m4ss/M4SSRig.js';
 import { Picker } from './input/Picker.js';
 import { MainMenu } from './menu/MainMenu.js';
+import { EndingPanel } from './menu/EndingPanel.js';
 import { SessionController } from './session/SessionController.js';
 import { VFX_LIBRARY } from './vfx/library.js';
 
@@ -312,6 +313,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private signals: Signal[] = createSignals();
   /** Signals that map to a mission still in the queue. */
   private openable = new Set<string>([MIRELA_SIGNAL]);
+  /**
+   * The ending, armed and delivered.
+   *
+   * `endingDelay` counts down from the moment the LAST request resolves, so the growth
+   * reveal and the walk home land before the machine speaks - an ending that interrupts
+   * the reveal it is celebrating would step on its own moment. -1 is disarmed. The shown
+   * flag exists because "all resolved" stays true forever afterwards, and the transmission
+   * is a thing that happens once, on the transition, never on a restored save.
+   */
+  private endingPanel: EndingPanel | null = null;
+  private endingDelay = -1;
+  private endingShown = false;
 
   /**
    * Every diorama, built once at construction and kept hidden until its request opens.
@@ -1995,6 +2008,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const rig = M4SSRig.create({ name: 'M4SSRig', position: M4SS_ORIGIN });
     this.add(rig);
     rig.mount();
+    /*
+     * Finishing the specimen hands the screen back by itself. Escape remains the way OUT
+     * of an unfinished run; containment is the way THROUGH, and it returns to the same
+     * place - Keller's conversation - with the desktop file flipped to CONTAINED behind
+     * it, because the flag was written before the handback.
+     */
+    rig.onContained = () => this.exitM4SS();
     this.m4ss = rig;
 
     /*
@@ -2304,6 +2324,55 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.topUpGlobe();
     this.persist();
+
+    /*
+     * The last answer arms the ending. Everything in the queue resolved - not merely
+     * offered, RESOLVED - is the one condition; a lost request in cooldown keeps the
+     * machine honestly unfinished until it is answered too.
+     */
+    const allResolved = this.queue.every(
+      (request) =>
+        this.signals.find((signal) => signal.id === request.mission.contactId)?.state ===
+        SignalState.Resolved
+    );
+    if (allResolved && !this.endingShown) this.endingDelay = 7.0;
+  }
+
+  /**
+   * The machine's own transmission. See EndingPanel for the delivery and content/ending
+   * for the words; what belongs to the rig is the camera and the once-ness.
+   *
+   * The camera pulls slowly back and slightly up from the home shot - the machine seen
+   * whole, at the distance of somebody standing up from the chair after a long shift.
+   * Twelve seconds, so it is still finishing as the first lines type; the pull IS the
+   * ending's establishing move, not a transition into it.
+   */
+  private openEnding(): void {
+    if (this.endingShown) return;
+    this.endingShown = true;
+
+    const container = this.getWorld()?.gameContainer;
+    if (!container) return;
+
+    const away = HOME_SHOT.position.clone().sub(HOME_SHOT.target).multiplyScalar(1.85);
+    const pullback: CameraShot = {
+      position: HOME_SHOT.target.clone().add(away).add(new THREE.Vector3(0, 0.55, 0)),
+      target: HOME_SHOT.target.clone(),
+    };
+    this.moveTo(pullback, 12.0);
+
+    const resolved = this.queue.filter(
+      (request) =>
+        this.signals.find((signal) => signal.id === request.mission.contactId)?.state ===
+        SignalState.Resolved
+    ).length;
+
+    this.endingPanel = new EndingPanel(container, () => {
+      this.endingPanel = null;
+      // The player leaves the machine the way they found it: on, at the desk.
+      this.moveTo(HOME_SHOT, HOME_SHOT.duration ?? 2.0);
+    });
+    this.endingPanel.open(this.knowledge, resolved, this.queue.length);
   }
 
   /** The shared atmosphere, retuned per diorama - see mountScene. */
@@ -2732,6 +2801,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
 
     this.cameraTweener.update(deltaTime);
+
+    // The ending: armed by the last resolve, delivered after the reveal has landed.
+    if (this.endingDelay > 0) {
+      this.endingDelay -= deltaTime;
+      if (this.endingDelay <= 0) this.openEnding();
+    }
+    this.endingPanel?.update(deltaTime);
 
     /*
      * Driving, before anything that reads the camera.
