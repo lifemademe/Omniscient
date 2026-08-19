@@ -570,6 +570,18 @@ export interface MissionDefinition {
   intents: IntentDefinition[];
   beats: Beat[];
   openingBeatId: string;
+  /**
+   * Spoken by the contact before the opening beat when they are re-contacted after a
+   * LOST attempt - the standing's `lost` count is the trigger, so it never fires on a
+   * first meeting or after a clean solve.
+   *
+   * One line, in their voice, acknowledging that a last time happened. This is the
+   * cheapest reactivity in the whole game and it buys the most: a world that pretends a
+   * failure never happened tells the player their actions are weightless, and a world
+   * that mentions it - once, without bitterness, because punishing a retry teaches
+   * people not to retry - reads as a world that was running while they were away.
+   */
+  reopeningSay?: string;
   /** Present when this mission gates on earlier knowledge. */
   requires?: MissionRequirement;
 }

@@ -69,6 +69,8 @@ export const MISSION_04: MissionDefinition = {
   sceneId: 'scene-cleared-house',
   archetype: 'diagnosis',
   objective: 'Work out how Ileana’s family are related, so she can address the letters.',
+  // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
+  reopeningSay: 'I put the letters away for a while, after last time. They are back on the table now.',
   // Nothing is on fire and nobody is in danger. §154: not every request gets a countdown,
   // and a request about a funeral is the last one that should have a clock on it.
   urgency: Urgency.Calm,

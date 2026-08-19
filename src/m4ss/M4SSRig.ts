@@ -1073,6 +1073,15 @@ export class M4SSRig extends ENGINE.SceneNode {
   private buildHud(): void {
     const container = this.getWorld()?.gameContainer;
     if (!container) return;
+    /*
+     * Styled as a Pelagic OS window, because that is what it IS in the fiction: M4SS is a
+     * containment sim running on Keller's machine, and the player is watching its live
+     * feed. The old HUD was green-on-black console chrome - the OTHER game's aesthetic -
+     * which put two operating systems on screen at once. The palette here is lifted
+     * straight from stationDesk's C table: same title-bar blue, same panel, same warn
+     * orange, so the file on her desktop and the window over the feed are visibly the
+     * same software.
+     */
     const hud = document.createElement('div');
     hud.style.cssText = [
       'position:absolute',
@@ -1081,23 +1090,29 @@ export class M4SSRig extends ENGINE.SceneNode {
       'top:64px',
       'z-index:20',
       'width:260px',
-      'padding:10px 12px',
-      'background:rgba(6,14,10,0.72)',
-      'border-left:2px solid #7fe08a',
-      'color:#cfe9d2',
+      'background:rgba(27,35,49,0.88)', // stationDesk C.panel
+      'border:1px solid #2f5f8f',
+      'box-shadow:0 2px 12px rgba(0,0,0,0.45)',
+      'color:#e6ecf4', // C.label
       'font:11px/1.5 "Courier New",monospace',
       'pointer-events:none',
     ].join(';');
     hud.innerHTML = [
-      '<div data-role="label" style="letter-spacing:2px;opacity:0.75">MASS</div>',
-      '<div style="position:relative;height:12px;margin-top:5px;background:rgba(0,0,0,0.55);',
-      'border:1px solid rgba(127,224,138,0.35)">',
+      // The title bar, straight off the specimen window on her desktop.
+      '<div style="background:#2f5f8f;color:#ffffff;padding:3px 8px;font-size:10px;',
+      'letter-spacing:1px;display:flex;justify-content:space-between">',
+      '<span>specimen M4SS</span><span style="color:#8fe0a2">LIVE</span></div>',
+      '<div style="padding:8px 10px 10px">',
+      '<div data-role="label" style="letter-spacing:2px;opacity:0.85;font-size:10px">MASS</div>',
+      '<div style="position:relative;height:12px;margin-top:5px;background:#0b0e12;',
+      'border:1px solid #3a4d6b">',
       '<div data-role="mass" style="position:absolute;left:0;top:0;bottom:0;width:0%;',
-      'background:#5fc98f"></div>',
+      'background:#7ee08a"></div>',
       '<div data-role="shed" style="position:absolute;right:0;top:0;bottom:0;width:0%;',
-      'background:#d8703c"></div>',
+      'background:#e07a3c"></div>',
       '</div>',
-      '<div data-role="note" style="margin-top:6px;opacity:0.8">&nbsp;</div>',
+      '<div data-role="note" style="margin-top:6px;opacity:0.75;font-size:10px">&nbsp;</div>',
+      '</div>',
     ].join('');
     container.appendChild(hud);
     this.hud = hud;

@@ -42,6 +42,8 @@ export const MISSION_03: MissionDefinition = {
   sceneId: 'scene-seedling-tunnel',
   archetype: 'diagnosis',
   objective: 'Find out what is killing one side of Adaeze’s seedlings.',
+  // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
+  reopeningSay: 'We lost two more trays after last time. The rest are holding on, just.',
   /**
    * Two jobs, and the counter is here because the second one is a surprise.
    *

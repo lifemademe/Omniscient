@@ -34,6 +34,8 @@ export const MISSION_09: MissionDefinition = {
   sceneId: 'scene-station-desk',
   archetype: 'diagnosis',
   objective: 'Look at what Dana Keller has been watching, and tell her what you see.',
+  // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
+  reopeningSay: 'The feed has not improved since last time. Neither has my patience with it.',
   urgency: Urgency.Calm,
 
   hiddenTruth: {

@@ -58,6 +58,15 @@ export interface Signal {
    * zero. §98: this makes failure cost something without creating a dead end.
    */
   cooldown?: number;
+  /**
+   * Blink-rate multiplier while Waiting. 1 is the resting heartbeat; an urgent request
+   * beats faster. Set by the rig from the mission's authored urgency - the globe knows
+   * nothing about missions, it just blinks at the pace it is told. This is the field
+   * that finally READS `urgency`: the value was authored on every mission since the
+   * start and consumed by nothing, which §157 would call a promise the pipeline breaks
+   * silently.
+   */
+  pace?: number;
 }
 
 export enum SignalState {
@@ -445,9 +454,13 @@ export class GlobeView {
        */
       case SignalState.Dormant:
         return PALETTE.resolved;
-      case SignalState.Waiting:
-        // Blink: on for most of the cycle, briefly off. Reads as a heartbeat.
-        return pulse < 0.78 ? PALETTE.waiting : PALETTE.terminator;
+      case SignalState.Waiting: {
+        // Blink: on for most of the cycle, briefly off. Reads as a heartbeat - and an
+        // urgent one beats faster, which is how urgency reaches the player's eye before
+        // any text does. See Signal.pace.
+        const phase = (pulse * (signal.pace ?? 1)) % 1;
+        return phase < 0.78 ? PALETTE.waiting : PALETTE.terminator;
+      }
       case SignalState.Cooldown:
         // Red, and blinking harder than a waiting signal - something went wrong here.
         return pulse < 0.5 ? PALETTE.cooldown : PALETTE.terminator;

@@ -69,6 +69,8 @@ export const MISSION_08: MissionDefinition = {
   sceneId: 'scene-wire-city',
   archetype: 'diagnosis',
   objective: 'Find the car that left the scene, and where it is going.',
+  // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
+  reopeningSay: 'Dispatch logged how our last attempt went. I would rather this one read differently.',
   /**
    * Soft, not Timed.
    *

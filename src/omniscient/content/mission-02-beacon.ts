@@ -125,6 +125,8 @@ export const MISSION_02: MissionDefinition = {
   sceneId: 'scene-beacon-mast',
   archetype: 'diagnosis',
   objective: 'Find out why the harbour light keeps going out, and make it hold.',
+  // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
+  reopeningSay: 'It went out twice more since last time. I kept the log going anyway.',
   urgency: Urgency.Timed,
 
   hiddenTruth: {

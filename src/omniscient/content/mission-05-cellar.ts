@@ -102,6 +102,8 @@ export const MISSION_05: MissionDefinition = {
   sceneId: 'scene-flooded-cellar',
   archetype: 'diagnosis',
   objective: 'Find out where the water is going, and get it out of the cellar.',
+  // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
+  reopeningSay: 'You again. The water is still coming in, if that matters.',
   /**
    * Soft, not Timed.
    *

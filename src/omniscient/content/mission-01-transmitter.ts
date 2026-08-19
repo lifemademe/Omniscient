@@ -35,6 +35,8 @@ export const MISSION_01: MissionDefinition = {
   sceneId: 'scene-repair-shop',
   archetype: 'diagnosis',
   objective: 'Find out why Mirela’s transmitter has stopped, and get it working.',
+  // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
+  reopeningSay: 'You are back. The set is still dead - I have not touched anything since we spoke.',
   urgency: Urgency.Calm,
 
   hiddenTruth: {

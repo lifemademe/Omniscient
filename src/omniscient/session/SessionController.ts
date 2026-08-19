@@ -64,6 +64,8 @@ const TEMPO_HINT: Record<Tempo, string> = {
 
 export class SessionController {
   private runtime: MissionRuntime | null = null;
+  /** Mission ids whose lost-attempt line has been said. Once per relationship, ever. */
+  private readonly acknowledgedLoss = new Set<string>();
   private contact: Contact | null = null;
   private transcript: TranscriptEntry[] = [];
   private unsubscribe: (() => void) | null = null;
@@ -164,6 +166,19 @@ export class SessionController {
       name: 'OMNISCIENT_',
       body: `incoming request - ${contact.location}`,
     });
+
+    /*
+     * The one line of memory between attempts. See MissionDefinition.reopeningSay -
+     * standing.lost is the trigger, so a first meeting and a re-open after a solve are
+     * both silent, and the line lands exactly once per relationship: the FIRST re-contact
+     * after things went wrong is the moment the acknowledgement means something, and by
+     * the second the relationship has moved on.
+     */
+    const standing = this.knowledge.getStanding(definition.contactId);
+    if (definition.reopeningSay && standing.lost > 0 && !this.acknowledgedLoss.has(definition.id)) {
+      this.acknowledgedLoss.add(definition.id);
+      this.push({ source: 'contact', name: contact.name, body: definition.reopeningSay });
+    }
 
     const opening = this.runtime.open();
     this.push({ source: 'contact', name: contact.name, body: opening.say });

@@ -94,6 +94,8 @@ export const MISSION_06: MissionDefinition = {
   sceneId: 'scene-night-door',
   archetype: 'diagnosis',
   objective: 'Get Dorin through his mother’s door without breaking it.',
+  // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
+  reopeningSay: 'The door has not moved. Neither have I, much.',
   urgency: Urgency.Timed,
 
   hiddenTruth: {

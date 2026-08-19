@@ -82,6 +82,7 @@ import type { RemoteUnit } from './view/ContactScene.js';
 import type { Signal } from './crt/GlobeView.js';
 import type { MenuAction } from './menu/MainMenu.js';
 import type { Contact, MissionDefinition, MissionFailure } from './mission/types.js';
+import { Urgency } from './mission/types.js';
 import type { CameraShot, ContactScene } from './view/ContactScene.js';
 
 /** Stable per-playthrough seed. §123: the same knowledge must draw the same tree. */
@@ -446,6 +447,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
        */
       { mission: MISSION_09, contact: KELLER },
     ];
+
+    /*
+     * Hand each signal its blink pace from the mission's authored urgency. Done once -
+     * the queue is fixed, so a contact's urgency never changes - and here rather than at
+     * offer time so no offer path can forget it.
+     */
+    for (const { mission } of this.queue) {
+      const signal = this.signals.find((s) => s.id === mission.contactId);
+      if (!signal) continue;
+      signal.pace =
+        mission.urgency === Urgency.Critical ? 3 : mission.urgency === Urgency.Timed ? 2 : 1;
+    }
 
     this.buildScenes();
     this.buildCamera();
