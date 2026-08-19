@@ -189,6 +189,30 @@ export class M4SSRig extends ENGINE.SceneNode {
   /** Buttons and gates already announced, so a pressed state does not re-fire per frame. */
   private readonly heardButtons = new Set<object>();
   private readonly heardGates = new Set<object>();
+
+  // -- juice: bursts, shake, and the warp between stages -----------------------------------
+  /**
+   * Live burst particles. A burst is eight to fourteen unlit pixel quads thrown from a
+   * point, pulled down by half gravity, dead inside half a second. Deliberately the whole
+   * particle system: anything fancier starts competing with the spores and the slime for
+   * attention, and a burst's job is to mark a POINT for a beat, not to be weather.
+   */
+  private readonly bursts: Array<{
+    node: ENGINE.MeshNode;
+    vx: number;
+    vy: number;
+    life: number;
+  }> = [];
+  /** Camera kick, seconds remaining. Set by the heavy button; decays in follow(). */
+  private shake = 0;
+  /**
+   * The between-stages warp. `out` pulls the body into the portal behind a rising veil;
+   * the swap happens at full white; `in` lifts the veil off the new stage. The sim does
+   * not step while this runs - the creature is IN the portal, not standing beside it
+   * waiting for a curtain.
+   */
+  private warp: { t: number; out: boolean } | null = null;
+  private warpVeil: HTMLElement | null = null;
   /**
    * Which stage is loaded. The portal advances it.
    *
@@ -1265,11 +1289,13 @@ export class M4SSRig extends ENGINE.SceneNode {
       this.containedDelay -= deltaTime;
       if (this.containedDelay <= 0) this.onContained?.();
     }
+    const warping = this.tickWarp(deltaTime);
     this.carry = Math.min(this.carry + deltaTime * scale, 0.25);
     while (this.carry >= TUNING.dt) {
-      step(state, { move, anchor: this.latched, recall: this.recalling });
+      if (!warping) step(state, { move, anchor: this.latched, recall: this.recalling });
       this.carry -= TUNING.dt;
     }
+    this.tickBursts(deltaTime);
     if (this.recalling) {
       const came = absorbTouching(state);
       if (came > 0 && this.absorbCooldown <= 0) {
@@ -1312,6 +1338,71 @@ export class M4SSRig extends ENGINE.SceneNode {
     if (this.hudLabel) this.hudLabel.textContent = 'SPECIMEN CONTAINED';
     if (this.hudNote) this.hudNote.textContent = this.onContained ? 'returning to the feed' : 'the record is closed';
     this.containedDelay = 2.8;
+  }
+
+  /**
+   * Start the between-stages transition. The swap itself still happens in advance() -
+   * this only decides WHEN the player is allowed to see it: behind a veil, after the
+   * body has visibly gone somewhere. The previous version advanced on the same frame the
+   * portal was touched, which made finishing a stage feel like a level-select, not an
+   * arrival.
+   */
+  private beginWarp(): void {
+    if (this.warp) return;
+    const container = this.getWorld()?.gameContainer;
+    if (container) {
+      const veil = document.createElement('div');
+      // The portal's own colour, not white: a white flash reads as a screenshot being
+      // taken. This reads as being inside the thing you just entered.
+      veil.style.cssText =
+        'position:absolute;inset:0;background:#bff2e4;opacity:0;pointer-events:none;z-index:30';
+      container.appendChild(veil);
+      this.warpVeil = veil;
+    }
+    this.warp = { t: 0, out: true };
+  }
+
+  /** Drive the warp. Returns true while it owns the frame - the sim does not step under it. */
+  private tickWarp(deltaTime: number): boolean {
+    const warp = this.warp;
+    const state = this.state;
+    if (!warp || !state) return false;
+    warp.t += deltaTime;
+
+    if (warp.out) {
+      /*
+       * The body is drawn INTO the portal: every particle closes 14% of its remaining
+       * distance per tick, which is an exponential ease nobody has to author. The sim is
+       * frozen, so these writes are animation, not physics - by the time the sim runs
+       * again this body has been rebuilt for the next stage anyway.
+       */
+      const at = this.portalAt;
+      if (at) {
+        for (const q of owned(state)) {
+          q.x += (at.x - q.x) * 0.14;
+          q.y += (at.y - q.y) * 0.14;
+          q.px = q.x;
+          q.py = q.y;
+        }
+      }
+      this.portalPhase += deltaTime * 5;
+      if (this.warpVeil) this.warpVeil.style.opacity = String(Math.min(1, warp.t / 0.55));
+      if (warp.t >= 0.6) {
+        this.advance();
+        warp.out = false;
+        warp.t = 0;
+      }
+      return true;
+    }
+
+    if (this.warpVeil) this.warpVeil.style.opacity = String(Math.max(0, 1 - warp.t / 0.7));
+    if (warp.t >= 0.75) {
+      this.warpVeil?.remove();
+      this.warpVeil = null;
+      this.warp = null;
+    }
+    // The veil is lifting off a live stage: let the sim run underneath it.
+    return false;
   }
 
   private advance(): void {
@@ -1357,6 +1448,8 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.heardButtons.clear();
     this.heardGates.clear();
     this.wasOwned = 0;
+    for (const b of this.bursts) b.node.destroy();
+    this.bursts.length = 0;
     // Start looking at the bottom of the room, which is where the player is standing.
     this.cameraY = this.state.world.height - VIEW_WIDTH / CAMERA_ASPECT / 2;
 
@@ -1403,6 +1496,15 @@ export class M4SSRig extends ENGINE.SceneNode {
      */
     if (!this.justSplit && state.snapped === this.wasSnapped && mine.length < this.wasOwned) {
       this.voice.play('crush');
+      /*
+       * The crush is the one event allowed to borrow the fling's slow motion. Half a
+       * second at half depth: enough that the player SEES what the press took - the
+       * moment costs mass, and a cost nobody witnessed is a bug report - without the
+       * full held-breath treatment the fling earns.
+       */
+      state.slowmo = Math.max(state.slowmo, 0.5);
+      const at = centroid(mine.length > 0 ? mine : state.particles);
+      this.burst(at.x, at.y, '#4e7a52', 14, 260);
     }
     this.justSplit = false;
 
@@ -1416,13 +1518,23 @@ export class M4SSRig extends ENGINE.SceneNode {
     }
     const airborne = mine.length > 0 && grounded / mine.length < 0.2;
     if (airborne) this.fallSpeed = vy / Math.max(1, mine.length);
-    if (this.wasAirborne && !airborne && this.fallSpeed > 260) this.voice.play('land');
+    if (this.wasAirborne && !airborne && this.fallSpeed > 260) {
+      this.voice.play('land');
+      // Dust at the body's underside, scaled by how hard the fall was.
+      const at = centroid(mine);
+      let low = 0;
+      for (const q of mine) low = Math.max(low, q.y);
+      this.burst(at.x, low, '#6b7a6b', this.fallSpeed > 500 ? 10 : 6, 150);
+    }
 
     // The level's own machinery announces its transitions.
     for (const button of world.buttons) {
       if (button.pressed && !this.heardButtons.has(button)) {
         this.heardButtons.add(button);
         this.voice.play(button.force !== undefined ? 'heavy' : 'button');
+        this.burst(button.x, button.y - 6, '#ffd27a', 8, 190);
+        // The heavy button is the one place the camera itself flinches. See follow().
+        if (button.force !== undefined) this.shake = 0.35;
       }
     }
     for (const gate of world.gates) {
@@ -1647,7 +1759,7 @@ export class M4SSRig extends ENGINE.SceneNode {
           this.cleared = true;
           this.portal.scale.set(1.25, 1.25, 1.25);
           this.voice.play('portal');
-          if (this.stageIndex + 1 < STAGES.length) this.advance();
+          if (this.stageIndex + 1 < STAGES.length) this.beginWarp();
           else this.contain();
         }
       }
@@ -1725,6 +1837,13 @@ export class M4SSRig extends ENGINE.SceneNode {
     for (const { node, crusher } of this.crusherNodes) {
       const at = crusherRect(crusher);
       node.position.set(at.x + at.w / 2, at.y + at.h / 2, -20);
+    }
+
+    // Pressed buttons sit down into their sockets. Eased, so the press reads as travel
+    // rather than as a swap; level space is y-down, so +y is into the floor.
+    for (const { node, button } of this.buttonNodes) {
+      const target = button.y + 6 + (button.pressed ? 7 : 0);
+      node.position.y += (target - node.position.y) * 0.25;
     }
 
     const mine = owned(state);
@@ -1850,8 +1969,60 @@ export class M4SSRig extends ENGINE.SceneNode {
     if (!this.camera || !this.state) return;
     this.keepActive();
     const at = this.viewCentre();
+    /*
+     * The kick: a fast decaying wobble, position only, never the aim. 5px at its hardest
+     * - the point is that the DOOR was heavy, not that the camera operator was shot.
+     * Deterministic (a sine, not a random walk), so captures are reproducible.
+     */
+    if (this.shake > 0) {
+      const k = this.shake / 0.35;
+      at.x += Math.sin(this.shake * 70) * 5 * k;
+      at.y += Math.cos(this.shake * 55) * 3 * k;
+    }
     this.camera.position.copy(place(at.x, at.y).setZ(CAMERA_BACK));
     this.aim(this.camera.position, place(at.x, at.y));
+  }
+
+  /** Throw a burst of pixel quads from a point. See the bursts field for the philosophy. */
+  private burst(x: number, y: number, colour: string, count = 10, speed = 220): void {
+    for (let i = 0; i < count; i++) {
+      // Fanned by index, not by random - same burst every time, like everything else here.
+      const a = (i / count) * Math.PI * 2 + 0.4;
+      const v = speed * (0.55 + 0.45 * ((i * 7) % 5) / 4);
+      const size = 3 + ((i * 3) % 3) * 2;
+      const node = decorMesh(
+        'Burst',
+        new THREE.PlaneGeometry(size, size),
+        this.artMaterial({ color: new THREE.Color(colour), transparent: true, depthWrite: false })
+      );
+      node.position.set(x, y, 26);
+      this.stage?.add(node);
+      this.bursts.push({
+        node,
+        vx: Math.cos(a) * v,
+        vy: Math.sin(a) * v * 0.8 - 120,
+        life: 0.45,
+      });
+    }
+  }
+
+  /** Advance and cull the bursts. Level space is y-down; gravity pulls positive. */
+  private tickBursts(deltaTime: number): void {
+    for (let i = this.bursts.length - 1; i >= 0; i--) {
+      const b = this.bursts[i];
+      b.life -= deltaTime;
+      if (b.life <= 0) {
+        b.node.destroy();
+        this.bursts.splice(i, 1);
+        continue;
+      }
+      b.vy += 750 * deltaTime;
+      b.node.position.x += b.vx * deltaTime;
+      b.node.position.y -= b.vy * deltaTime;
+      const material = b.node.material as THREE.MeshBasicMaterial;
+      material.opacity = Math.min(1, b.life / 0.2);
+    }
+    if (this.shake > 0) this.shake = Math.max(0, this.shake - deltaTime);
   }
 
   /**
