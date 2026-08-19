@@ -220,6 +220,13 @@ export interface World {
   gates: Gate[];
   buttons: Button[];
   crushers?: Crusher[];
+  /**
+   * Wall stencils. Pure decor - the sim never reads them - but they are LEVEL data
+   * because where a control is taught is a level-design decision: the marking sits at the
+   * first place the verb is needed, and a second stage that assumes the verbs carries
+   * none. See stageArt.signTexture for why they are paint rather than HUD.
+   */
+  signs?: Array<{ x: number; y: number; lines: string[]; scale?: number }>;
 }
 
 export interface Input {

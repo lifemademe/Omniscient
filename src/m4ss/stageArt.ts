@@ -26,6 +26,8 @@
 
 import * as THREE from 'three';
 
+import { PIXEL_FONT } from '../omniscient/view/pixelFont.js';
+
 import { createRng, range, seedFrom } from '../omniscient/core/rng.js';
 
 import type { Rng } from '../omniscient/core/rng.js';
@@ -1180,11 +1182,18 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
    * two must never be confusable, because telling them apart IS the second clause of stage
    * two.
    *
-   * So red is its own palette through the same generator. Same silhouette, same leaf counts,
-   * same core in the same place - the player is looking at the same plant, and the only thing
-   * that has changed is that it has no light in it. The bioluminescent spores are dropped
-   * entirely rather than recoloured: they are the thing that says this plant is alive, and a
-   * dead one should not be shedding them.
+   * So red is its own palette through the same generator - and its own SILHOUETTE, which is
+   * the half that matters more. Hue alone would make stage two unplayable for anyone with
+   * red-green colour blindness, which is one player in twelve, and the mechanic these plants
+   * carry is the stage's whole second clause. So a dead growth also WILTS: the live plant
+   * fans its leaves upward, the dead one's droop level and below, shorter and thinner, with
+   * withered strands hanging off the clump. In greyscale - which is the honest test - the
+   * two read as different plants at a glance, and the harness measures exactly that.
+   *
+   * The core stays in the same place at the same size, unlit: the target is visible, so the
+   * route stays readable from the floor, which is why red growths exist rather than absent
+   * ones. The bioluminescent spores are dropped entirely rather than recoloured - they are
+   * the thing that says this plant is alive, and a dead one should not be shedding them.
    */
   const leafDark = dead ? '#5e2b22' : PAL.leafDark;
   const leafMid = dead ? '#8a3a29' : PAL.leafMid;
@@ -1229,20 +1238,27 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
    * and the lengths both roughly doubled, and the arc widened past the horizontal so leaves
    * spill sideways instead of standing straight up.
    */
+  // Dead leaves hang at and below the horizontal; live ones fan the full arc upward.
+  const arc = (from: number, to: number): number =>
+    dead
+      ? // Two droops, one each side, none rising past ~20 degrees above level.
+        (rng() > 0.5 ? range(rng, Math.PI * 0.82, Math.PI * 1.08) : range(rng, Math.PI * 1.92, Math.PI * 2.18))
+      : range(rng, from, to);
+  const sag = dead ? 0.72 : 1;
   for (let i = 0; i < 22; i++) {
-    leaf(range(rng, Math.PI * 0.98, Math.PI * 2.02), range(rng, 34, 56), range(rng, 6, 13), leafDark);
+    leaf(arc(Math.PI * 0.98, Math.PI * 2.02), range(rng, 34, 56) * sag, range(rng, 6, 13) * sag, leafDark);
   }
   for (let i = 0; i < 18; i++) {
     // Off a ramp rather than one flat mid-green, so the clump has internal depth.
     leaf(
-      range(rng, Math.PI * 1.02, Math.PI * 1.98),
-      range(rng, 26, 46),
-      range(rng, 5, 11),
+      arc(Math.PI * 1.02, Math.PI * 1.98),
+      range(rng, 26, 46) * sag,
+      range(rng, 5, 11) * sag,
       ramp(leafDark, leafLit, 5, 1 + Math.floor(rng() * 3))
     );
   }
   for (let i = 0; i < 12; i++) {
-    leaf(range(rng, Math.PI * 1.08, Math.PI * 1.92), range(rng, 18, 34), range(rng, 3, 8), leafLit);
+    leaf(arc(Math.PI * 1.08, Math.PI * 1.92), range(rng, 18, 34) * sag, range(rng, 3, 8) * sag, leafLit);
   }
 
   /*
@@ -1271,6 +1287,26 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
     g.fillRect(Math.round(sx), Math.round(sy), 2, 2);
     g.fillStyle = PAL.bioCore;
     g.fillRect(Math.round(sx), Math.round(sy), 1, 1);
+  }
+
+  if (dead) {
+    /*
+     * Withered strands, the silhouette's second tell: nothing on the live plant hangs.
+     * Slightly wandering verticals off the underside of the clump, in the stem colour,
+     * with a curled tip. Length is most of the sprite's lower half, so the droop reads
+     * at level scale, not only in close-up.
+     */
+    for (let i = 0; i < 5; i++) {
+      let x = cx + range(rng, -34, 34);
+      const drop = range(rng, 26, 44);
+      g.fillStyle = i % 2 ? PAL.vineDark : leafDark;
+      for (let dy = 0; dy < drop; dy++) {
+        g.fillRect(Math.round(x), Math.round(cy + 8 + dy), 2, 1);
+        if (dy % 6 === 0) x += range(rng, -1.2, 1.2);
+      }
+      // The curl at the tip.
+      g.fillRect(Math.round(x + 1), Math.round(cy + 8 + drop), 3, 2);
+    }
   }
 
   /*
@@ -1432,6 +1468,65 @@ export function portalTexture(seed: string, phase: number, size = 128): THREE.Ca
     g.fillRect(Math.round(vx), 20, 1, Math.round(range(rng, 8, 30)));
   }
 
+  return pixelTexture(c);
+}
+
+/**
+ * A stencilled wall marking, for teaching controls without a tutorial.
+ *
+ * The judge's first forty seconds with M4SS were going to be spent clicking and finding
+ * nothing, because the controls - A/D, hold LMB, hold Space, Q - were stated nowhere in
+ * the game. The obvious fix is a HUD overlay, and it is wrong here: this stage has spent
+ * twenty-three polish passes becoming a place, and a floating "PRESS SPACE" would cost
+ * more atmosphere than it teaches.
+ *
+ * So the controls are painted ON THE FACILITY, at the point of need, in Pelagic OS's own
+ * 3x5 face - the same letterforms as Keller's desktop, because the sim and the desktop
+ * are the same operating system. Faded and weathered: a seeded fraction of pixels are
+ * dropped and the rest sit at stencil-paint opacity, so they read as markings a
+ * technician left years ago, not as UI. The fiction even supports the content - somebody
+ * had to run this containment rig before you.
+ */
+export function signTexture(seed: string, lines: string[], scale = 4): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const glyphW = 4 * scale; // 3px face + 1px gap
+  const glyphH = 6 * scale;
+  const widest = Math.max(...lines.map((line) => line.length));
+  const { c, g } = surface(widest * glyphW + scale * 2, lines.length * glyphH + scale * 2);
+
+  /*
+   * Stencil paint: a pale moss-grey, brighter than the stone it sits on and dimmer than
+   * anything alive. Authored bright like the rest of the palette - the ACES pass at
+   * exposure 0.5 takes it back down to "old paint" on screen.
+   */
+  const INK = '#b8ceb4';
+  lines.forEach((line, row) => {
+    let x = scale;
+    const top = scale + row * glyphH;
+    for (const ch of line) {
+      const rows = PIXEL_FONT[ch] ?? PIXEL_FONT[ch.toUpperCase()];
+      if (rows) {
+        rows.forEach((bits, ry) => {
+          for (let bx = 0; bx < bits.length; bx++) {
+            if (bits[bx] !== '1') continue;
+            /*
+             * Weathering by FADE, never by dropout. Dropping pixels was tried at two
+             * rates and both broke letterforms - on a 3x5 face one pixel is a fifteenth
+             * of the glyph, and HOLD read as KOLD at either setting, because the seed is
+             * fixed and the same load-bearing pixel flaked every time. Uneven opacity
+             * gives the same "old paint" read and cannot change what a letter IS.
+             */
+            g.globalAlpha = 0.55 + rng() * 0.45;
+            g.fillStyle = INK;
+            g.fillRect(x + bx * scale, top + ry * scale, scale, scale);
+          }
+        });
+      }
+      x += glyphW;
+    }
+  });
+
+  g.globalAlpha = 1;
   return pixelTexture(c);
 }
 

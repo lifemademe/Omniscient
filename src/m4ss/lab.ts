@@ -256,6 +256,22 @@ export const THE_LAB: World = {
   ],
 
   /**
+   * The teaching, painted on the facility.
+   *
+   * Four stencils, one per verb, each at the first place its verb is needed and nowhere
+   * else: movement on the starting ledge, the latch under the first growth, the split at
+   * the wall that demands it, the recall just past that wall - which is exactly where the
+   * player is standing when they first want their mass back. Stage two authors none,
+   * because by then the verbs are the player's.
+   */
+  signs: [
+    { x: 96, y: 566, lines: ['A D', 'MOVE'] },
+    { x: 320, y: 380, lines: ['HOLD LMB', 'ON GROWTH'] },
+    { x: 700, y: 520, lines: ['HOLD SPACE', 'SHED MASS'] },
+    { x: 952, y: 520, lines: ['Q', 'RECALL'] },
+  ],
+
+  /**
    * The button, on the far side of the wall and nowhere near the exit.
    *
    * Just past the wall, and nowhere near the second growth.
@@ -294,5 +310,6 @@ export function freshLab(): World {
     anchors: THE_LAB.anchors.map((a) => ({ ...a })),
     gates: THE_LAB.gates.map((g) => ({ ...g })),
     buttons: THE_LAB.buttons.map((b) => ({ ...b })),
+    signs: (THE_LAB.signs ?? []).map((sign) => ({ ...sign, lines: [...sign.lines] })),
   };
 }

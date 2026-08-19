@@ -40,6 +40,7 @@ import {
   bushTexture,
   PAL,
   portalTexture,
+  signTexture,
   stoneTexture,
   vineTexture,
 } from './stageArt.js';
@@ -737,6 +738,23 @@ export class M4SSRig extends ENGINE.SceneNode {
       this.stage?.add(node);
       this.crusherNodes.push({ node, crusher });
     }
+
+    /*
+     * The wall stencils. Sized from the texture's own aspect so the pixels stay square -
+     * a stretched stencil reads as a decal, a square-pixel one reads as paint.
+     */
+    (world.signs ?? []).forEach((sign, i) => {
+      const map = signTexture(`sign-${i}`, sign.lines, sign.scale ?? 4);
+      const image = map.image as { width: number; height: number };
+      const wide = image.width * 0.55;
+      const node = decorMesh(
+        'Stencil',
+        new THREE.PlaneGeometry(wide, wide * (image.height / image.width)),
+        this.artMaterial({ map, transparent: true, opacity: 0.8, depthWrite: false })
+      );
+      node.position.set(sign.x, sign.y, 3);
+      this.stage?.add(node);
+    });
 
     const buttonMaterial = this.artMaterial({ color: new THREE.Color('#d8703c') });
     for (const button of world.buttons) {
