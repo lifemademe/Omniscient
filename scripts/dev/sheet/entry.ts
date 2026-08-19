@@ -16,6 +16,55 @@ import * as art from '../../../src/m4ss/stageArt.js';
 
 const wrap = document.getElementById('sheet') as HTMLElement;
 
+/*
+ * Show the textures through the SCENE'S TONE CURVE, not raw.
+ *
+ * This is the fault that mattered most, and it invalidated every brightness judgement made
+ * off the first version of this sheet. `assets/default.genesys-scene` sets ACES filmic tone
+ * mapping at exposure 0.5, and `lift()` in stageArt.ts exists precisely to pre-compensate for
+ * it - the palette is authored bright, by a value-dependent gain of 1.15 to 2.3, because the
+ * curve is about to take it back. So the raw texture is SUPPOSED to look blown out. Judging
+ * it raw means condemning every colour in the stage for doing its job.
+ *
+ * `?raw` shows the source values instead, for when the question is about the authored palette
+ * rather than about what ships.
+ *
+ * Ported from three.js's ACESFilmicToneMapping: decode sRGB, scale by exposure/0.6, through
+ * the ACES input matrix, the RRT+ODT fit, the output matrix, then encode sRGB again.
+ */
+const RAW = new URLSearchParams(location.search).has('raw');
+const EXPOSURE = 0.5;
+
+const IN_MAT = [
+  [0.59719, 0.35458, 0.04823],
+  [0.076, 0.90834, 0.01566],
+  [0.0284, 0.13383, 0.83777],
+];
+const OUT_MAT = [
+  [1.60475, -0.53108, -0.07367],
+  [-0.10208, 1.10813, -0.00605],
+  [-0.00327, -0.07276, 1.07602],
+];
+
+const toLinear = (v: number): number => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+const toSrgb = (v: number): number => (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055);
+const apply = (m: number[][], v: number[]): number[] =>
+  m.map((row) => row[0] * v[0] + row[1] * v[1] + row[2] * v[2]);
+
+function toneMap(px: Uint8ClampedArray): void {
+  for (let i = 0; i < px.length; i += 4) {
+    let c = [toLinear(px[i] / 255), toLinear(px[i + 1] / 255), toLinear(px[i + 2] / 255)];
+    c = c.map((v) => (v * EXPOSURE) / 0.6);
+    c = apply(IN_MAT, c);
+    // RRT and ODT fit.
+    c = c.map((v) => (v * (v + 0.0245786) - 0.000090537) / (v * (0.983729 * v + 0.432951) + 0.238081));
+    c = apply(OUT_MAT, c);
+    for (let k = 0; k < 3; k++) {
+      px[i + k] = Math.round(Math.max(0, Math.min(1, toSrgb(Math.max(0, Math.min(1, c[k]))))) * 255);
+    }
+  }
+}
+
 function show(label: string, tex: { image: CanvasImageSource & { width: number; height: number } }, zoom = 1) {
   const cell = document.createElement('figure');
   const src = tex.image;
@@ -38,8 +87,13 @@ function show(label: string, tex: { image: CanvasImageSource & { width: number; 
   // Nearest-neighbour, or a zoomed pixel-art texture is judged through a blur.
   g.imageSmoothingEnabled = false;
   g.drawImage(src, 0, 0, view.width, view.height);
+  if (!RAW) {
+    const px = g.getImageData(0, 0, view.width, view.height);
+    toneMap(px.data);
+    g.putImageData(px, 0, 0);
+  }
   const cap = document.createElement('figcaption');
-  cap.textContent = `${label}  ${src.width}x${src.height}${zoom > 1 ? ` (x${zoom})` : ''}`;
+  cap.textContent = `${label}  ${src.width}x${src.height}${zoom > 1 ? ` (x${zoom})` : ''}${RAW ? '  RAW' : '  ACES 0.5'}`;
   cell.append(view, cap);
   wrap.append(cell);
 }

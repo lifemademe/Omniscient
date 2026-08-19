@@ -454,14 +454,58 @@ export function backdropTexture(
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(w, h);
 
-  // Vertical haze ramp, banded.
+  /*
+   * Vertical haze ramp: sixteen bands, DITHERED across every boundary.
+   *
+   * Sixteen hard bands left a visible contour line every thirty-six rows. Measured, the steps
+   * are only three or four values out of 255 - which sounds like nothing, and is nothing in
+   * the midtones, but this ramp spends most of its length near black where a four-value step
+   * is a large perceptual one, and it spends it across the widest flat field in the stage.
+   * Mach banding does the rest. It read as a black strip bolted across the top of the sky.
+   *
+   * Adding bands is the wrong fix twice over: smaller steps still band, and every band is a
+   * palette entry. The pixel-art answer to a large smooth field has always been to DITHER,
+   * and it is better than merely not-banding - it puts texture into the one part of the frame
+   * that had none, which is the same complaint the audit has been making about flat area
+   * since pass 1.
+   *
+   * Ordered 4x4 Bayer, so the pattern is stable and regular rather than noisy: a random
+   * dither in a still background crawls the moment anything scrolls past it.
+   *
+   * Written through ImageData rather than fills. The dithered pattern is per-pixel, and
+   * 590,000 one-pixel `fillRect` calls to generate one background is not a thing to do at
+   * mount time.
+   */
   const bands = 16;
+  const shades: number[][] = [];
   for (let i = 0; i < bands; i++) {
     const t = i / (bands - 1);
     const col = t < 0.55 ? mixHex(PAL.voidDeep, PAL.hazeFar, t / 0.55) : mixHex(PAL.hazeFar, PAL.hazeNear, (t - 0.55) / 0.45);
-    g.fillStyle = col;
-    g.fillRect(0, Math.round((i / bands) * h), w, Math.ceil(h / bands));
+    shades.push([1, 3, 5].map((k) => parseInt(col.slice(k, k + 2), 16)));
   }
+  const BAYER = [
+    [0, 8, 2, 10],
+    [12, 4, 14, 6],
+    [3, 11, 1, 9],
+    [15, 7, 13, 5],
+  ];
+  const haze = g.createImageData(w, h);
+  for (let y = 0; y < h; y++) {
+    // Where this row sits between two bands. The fraction is what gets dithered.
+    const f = (y / h) * (bands - 1);
+    const lo = Math.min(bands - 1, Math.floor(f));
+    const hi = Math.min(bands - 1, lo + 1);
+    const frac = f - lo;
+    for (let x = 0; x < w; x++) {
+      const pick = frac * 16 > BAYER[y & 3][x & 3] ? shades[hi] : shades[lo];
+      const o = (y * w + x) * 4;
+      haze.data[o] = pick[0];
+      haze.data[o + 1] = pick[1];
+      haze.data[o + 2] = pick[2];
+      haze.data[o + 3] = 255;
+    }
+  }
+  g.putImageData(haze, 0, 0);
 
   /*
    * A glow behind the middle of the stage, banded into rings.
@@ -962,19 +1006,48 @@ export function glowTexture(seed: string, colour: string, size = 128): THREE.Can
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(size, size);
   const cx = size / 2;
-  const RINGS = 6;
 
-  for (let i = RINGS; i >= 1; i--) {
-    const t = i / RINGS;
-    const r = (size / 2) * t;
-    // Alpha falls off with the square, which is what light does, quantised to the ring.
-    g.fillStyle = mixHex('#000000', colour, (1 - t) ** 2 * 0.85 + 0.04);
-    for (let dy = -r; dy <= r; dy++) {
-      const half = Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
-      if (half <= 0) continue;
-      g.fillRect(Math.round(cx - half), Math.round(cx + dy), half * 2, 1);
+  /*
+   * Falloff with the square of the distance, quantised to ten steps and DITHERED between
+   * them, reaching exactly zero at the edge of the sprite.
+   *
+   * It was six hard rings, and both halves of that were wrong. Six is few enough that each
+   * boundary is a visible circle, so an additive halo drew a set of concentric hoops around
+   * every lantern. And the outermost ring was floored at 4% of the colour rather than at
+   * zero, which under additive blending is a faint but perfectly crisp disc edge - a hard
+   * circular line in mid-air at the exact radius of the sprite. Nothing found either of them
+   * in eighteen passes of game captures, because a lantern halo is small, dim, and sitting
+   * in front of a busy backdrop.
+   *
+   * Ten steps rather than sixty-four: this still has to be pixel art, and the dither is what
+   * makes ten enough. Same ordered Bayer as the haze ramp, for the same reason - a random
+   * dither in a halo crawls when the thing it is attached to moves.
+   */
+  const STEPS = 10;
+  const BAYER = [
+    [0, 8, 2, 10],
+    [12, 4, 14, 6],
+    [3, 11, 1, 9],
+    [15, 7, 13, 5],
+  ];
+  const rgb = [1, 3, 5].map((k) => parseInt(colour.slice(k, k + 2), 16));
+  const img = g.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = Math.sqrt((x - cx) ** 2 + (y - cx) ** 2) / (size / 2);
+      // Zero outside the sprite, and zero AT the edge, so there is no disc to see.
+      const fall = u >= 1 ? 0 : (1 - u) ** 2;
+      const f = fall * STEPS;
+      const step = Math.floor(f) + (f % 1 > BAYER[y & 3][x & 3] / 16 ? 1 : 0);
+      const k = Math.min(STEPS, step) / STEPS;
+      const o = (y * size + x) * 4;
+      img.data[o] = Math.round(rgb[0] * k);
+      img.data[o + 1] = Math.round(rgb[1] * k);
+      img.data[o + 2] = Math.round(rgb[2] * k);
+      img.data[o + 3] = 255;
     }
   }
+  g.putImageData(img, 0, 0);
 
   // A few motes caught in the near field, so the glow has something in it.
   for (let i = 0; i < 14; i++) {
