@@ -316,7 +316,13 @@ export const MISSION_03: MissionDefinition = {
           'unit', 'around', 'beside', 'next', 'what', 'edge'],
         ['weeds', 'weed', 'grass', 'bank', 'ground', 'growth', 'overgrown', 'bed', 'boards'],
       ],
-      priority: 3,
+      /*
+       * 4, one above LOOK_OUTSIDE, because the chip "what is around that bed" scores both
+       * equally - 'what'+'around' satisfy either group pair - and a tie makes the machine
+       * ask a clarifying question about its own suggestion. When a sentence names the bed
+       * or the ground, the ground is what it is about.
+       */
+      priority: 4,
     },
     {
       id: 'ADMIT_UNCERTAINTY',

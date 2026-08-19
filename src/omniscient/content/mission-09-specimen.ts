@@ -98,13 +98,17 @@ export const MISSION_09: MissionDefinition = {
       id: 'ASK_SPECIMEN',
       requires: [
         [...TERMS.describe, ...TERMS.inspect],
-        ['specimen', 'mass', 'm4ss', 'thing', 'it', 'creature', 'sample'],
+        // 'screen' and its siblings catch the chip "what is on your screen" - asking what
+        // she is looking at IS asking about the specimen, and resolved to nothing before.
+        ['specimen', 'mass', 'm4ss', 'thing', 'it', 'creature', 'sample', 'screen', 'desktop', 'watching', 'monitor'],
       ],
     },
     {
       id: 'ASK_STATION',
       requires: [
-        [...TERMS.describe],
+        // 'are' and 'who', because the chip is "are you alone out there" and TERMS.describe
+        // has no verb that appears in it - the game suggested a phrase it could not read.
+        [...TERMS.describe, 'are', 'who'],
         ['station', 'there', 'alone', 'crew', 'anyone', 'you', 'nine'],
       ],
     },
@@ -130,6 +134,41 @@ export const MISSION_09: MissionDefinition = {
         ['file', 'folder', 'specimen', 'm4ss', 'feed', 'recording', 'icon'],
       ],
       priority: 3,
+    },
+    {
+      /*
+       * The verdict itself, and the bug it exists to fix: the `watching` beat SUGGESTS
+       * "it is deliberate" and "it is only physics", and neither phrase resolved to any
+       * intent - every intent above demands an inspect/describe verb plus a topic noun,
+       * and a verdict has neither. The player clicked the game's own chip and got
+       * "Sorry - say that again?", twice, which is the one thing §159 exists to prevent:
+       * the machine teaching a phrase and then refusing to understand it.
+       *
+       * One group, judgement words only, priority 0 - any sentence that ALSO carries an
+       * inspect verb and a topic still resolves to the richer intents above.
+       */
+      id: 'GIVE_VERDICT',
+      requires: [
+        [
+          'deliberate',
+          'deciding',
+          'decides',
+          'decision',
+          'choosing',
+          'chooses',
+          'choice',
+          'intent',
+          'intentional',
+          'alive',
+          'thinking',
+          'physics',
+          'random',
+          'mechanical',
+          'instinct',
+          'reflex',
+          'accident',
+        ],
+      ],
     },
   ],
 
@@ -258,6 +297,9 @@ export const MISSION_09: MissionDefinition = {
       learn: [FACT_SPECIMEN_MASS],
       suggest: ['it is deliberate', 'it is only physics'],
       on: {
+        // The chips lead here. Whichever side of the argument the player takes, Keller's
+        // answer is the same thanks - she asked for a second observer, not agreement.
+        GIVE_VERDICT: { to: 'verdict' },
         ASK_SPECIMEN: { to: 'verdict' },
         ASK_CONTAINMENT: { to: 'verdict' },
         OPEN_FILE: { to: 'verdict' },

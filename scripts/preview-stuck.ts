@@ -11,6 +11,7 @@
  */
 
 import { MIRELA } from '../src/omniscient/content/contacts.js';
+import { resolveIntent } from '../src/omniscient/mission/intent.js';
 import { MISSION_01 } from '../src/omniscient/content/mission-01-transmitter.js';
 import { MISSION_02 } from '../src/omniscient/content/mission-02-beacon.js';
 import { MISSION_03 } from '../src/omniscient/content/mission-03-tunnel.js';
@@ -999,6 +1000,50 @@ for (const mission of [MISSION_01, MISSION_02, MISSION_03, MISSION_04, MISSION_0
     checkPipeGrid(`${mission.id}/${beat.id}`, beat.device.grid);
   }
 }
+
+/*
+ * Every chip the game offers must be understood by the beat that offers it.
+ *
+ * Mission 09 shipped with the `watching` beat suggesting "it is deliberate" and "it is
+ * only physics" while no intent in the mission could resolve either phrase - the player
+ * clicked the game's own suggestion and was told "Sorry - say that again?", twice, which
+ * is the exact §159 violation this file exists to prevent, and nothing here checked it,
+ * because every existing walk follows suggestions FROM THE OPENING and that beat is only
+ * reached through a cue. So: every suggest phrase, on every beat, of every mission, must
+ * resolve to an intent that the SAME beat routes or affirms. No walking required - the
+ * promise a chip makes is local to the beat it is drawn on.
+ */
+console.log('\n--- every suggestion is understood by its own beat ---\n');
+/*
+ * Resolved against the intents the BEAT allows, exactly as MissionRuntime.respond does -
+ * the first draft of this guard resolved against the whole mission table and flagged two
+ * chips that work perfectly in play, because the runtime's per-beat filter is load-bearing
+ * (it is how mission 01 makes "clean the connector now" read as the unsafe live-clean at
+ * the beat where the power is still on). A guard that tests a different mechanism than
+ * the game runs is a guard that cries wolf.
+ */
+let orphanChips = 0;
+for (const mission of CAMPAIGN) {
+  for (const beat of mission.beats) {
+    const allowed = mission.intents.filter(
+      (intent) => intent.id in beat.on || intent.id === beat.affirmIntent
+    );
+    for (const phrase of beat.suggest ?? []) {
+      const reading = resolveIntent(phrase, allowed);
+      if (reading.kind !== 'matched') {
+        orphanChips += 1;
+        check(
+          `${mission.id}/${beat.id}: chip "${phrase}" is understood`,
+          false,
+          reading.kind === 'ambiguous'
+            ? `ambiguous between ${reading.candidates.map((c) => c.intentId).join(' / ')}`
+            : 'resolves to nothing the beat routes'
+        );
+      }
+    }
+  }
+}
+check('every suggestion chip in the campaign is understood by its beat', orphanChips === 0);
 
 console.log(
   failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} CHECK(S) FAILED\n`

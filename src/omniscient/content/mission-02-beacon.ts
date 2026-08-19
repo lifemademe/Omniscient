@@ -211,7 +211,9 @@ export const MISSION_02: MissionDefinition = {
     {
       id: 'ASK_FEED',
       requires: [
-        [...TERMS.inspect, ...TERMS.describe, 'trace', 'follow'],
+        // 'go' and 'over': the bag beat's own chip is "go back over the join", and neither
+        // word was in this group - the game suggested a phrase it could not read.
+        [...TERMS.inspect, ...TERMS.describe, 'trace', 'follow', 'go', 'over'],
         ['supply', 'wire', 'line', 'cable', 'lead', 'split', 'splitter', 'mast', 'join', 'joined', 'splice'],
       ],
       priority: 3,

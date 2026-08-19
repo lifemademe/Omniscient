@@ -2821,24 +2821,38 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * vocabulary to say "hand them the mower".
    */
   private applyEnvironmentCue(cue: string): void {
-    if (cue.startsWith('unit.take')) {
-      this.takeUnit();
-      return;
-    }
-
     /*
-     * `game.launch:m4ss` - a beat handing the screen to another game.
-     *
-     * Intercepted here, beside unit.take, for the same reason that one is: the scene has no
-     * business knowing this exists. From the diorama's point of view the file simply opened;
-     * everything after that is the rig's problem.
+     * SPLIT FIRST. The cue grammar is comma-separated and ContactScene.applyCue splits
+     * internally - which meant the rig's own intercepts below only fired when their cue
+     * happened to be FIRST in the string. Mission 09 launched M4SS with
+     * 'prop.open:desktop, game.launch:m4ss': startsWith saw 'prop.open', the scene
+     * dutifully opened the desktop window and dropped the launch cue it does not know,
+     * and the player sat in a conversation about a game that never started. The whole
+     * class of bug dies here: every part is inspected for rig-level cues, and only the
+     * remainder is handed to the scene, rejoined so its own splitting still applies.
      */
-    if (cue.startsWith('game.launch')) {
-      this.enterM4SS();
-      return;
+    const parts = cue.split(',').map((part) => part.trim()).filter(Boolean);
+    const forScene: string[] = [];
+    for (const part of parts) {
+      if (part.startsWith('unit.take')) {
+        this.takeUnit();
+        continue;
+      }
+      /*
+       * `game.launch:m4ss` - a beat handing the screen to another game. Intercepted here,
+       * beside unit.take: the scene has no business knowing this exists. From the
+       * diorama's point of view the file simply opened; everything after that is the
+       * rig's problem.
+       */
+      if (part.startsWith('game.launch')) {
+        this.enterM4SS();
+        continue;
+      }
+      forScene.push(part);
     }
+    if (forScene.length === 0) return;
 
-    const result = this.scene?.applyCue(cue);
+    const result = this.scene?.applyCue(forScene.join(', '));
     if (!result) return;
 
     if (result.shot) {

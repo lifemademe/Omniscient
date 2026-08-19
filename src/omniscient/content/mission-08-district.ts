@@ -228,7 +228,13 @@ export const MISSION_08: MissionDefinition = {
        * the machine is actually going to do either way.
        */
       id: 'WATCH_ONLY',
-      requires: [['watch', 'nothing', 'wait', 'follow', 'observe', 'tell him', 'where']],
+      /*
+       * 'where' came out of this list. At priority 8 it outbid ASK_WHERE (priority 2) for
+       * the game's own chip "where did you lose it?" - a question about the car resolving
+       * to "just watch him", which the beat then could not route. The watching phrasings
+       * that actually need this intent all carry one of the words that remain.
+       */
+      requires: [['watch', 'nothing', 'wait', 'follow', 'observe', 'tell him']],
       boosts: [['just', 'only', 'do not', 'dont', 'leave', 'let']],
       priority: 8,
     },
