@@ -976,10 +976,17 @@ export function backdropTexture(
      * pushes it toward the values of the gameplay plane, and a background that competes with
      * the foreground is worse than one that is slightly too dark.
      */
+    /*
+     * Cooled in the redo. The rust dial was set when this band was the only second hue in
+     * the frame; the play plane's pipes and patina carry the rust now, and the first live
+     * capture of the redo had one of these slabs as the most saturated object on screen -
+     * a floating orange platform in a world that had just gone cold. Background structures
+     * hold background values in the steel family, warm only faintly.
+     */
     const tone = mixHex(
-      mixHex(PAL.voidMid, PAL.rustDark, range(rng, 0.35, 0.9)),
-      PAL.rustMid,
-      range(rng, 0, 0.45)
+      mixHex(PAL.voidMid, PAL.rustDark, range(rng, 0.25, 0.5)),
+      PAL.stoneMid,
+      range(rng, 0.2, 0.5)
     );
 
     if (rng() > 0.5) {
@@ -992,8 +999,8 @@ export function backdropTexture(
       for (let k = 0; k < 5; k++) {
         g.fillRect(bx, midY - th + Math.round((k / 5) * th), tw, 2);
       }
-      // A lit sliver down one side, so the cylinder reads as round.
-      g.fillStyle = mixHex(tone, PAL.rustLit, 0.65);
+      // A lit sliver down one side, so the cylinder reads as round - steel light, not rust.
+      g.fillStyle = mixHex(tone, PAL.stoneEdge, 0.6);
       g.fillRect(bx + tw - 4, midY - th, 3, th);
       // Contents, faintly.
       if (rng() > 0.55) {
@@ -1007,7 +1014,7 @@ export function backdropTexture(
       const ph = Math.round(range(rng, 9, 18));
       g.fillStyle = tone;
       g.fillRect(bx, py, pw, ph);
-      g.fillStyle = mixHex(tone, PAL.rustLit, 0.6);
+      g.fillStyle = mixHex(tone, PAL.stoneEdge, 0.55);
       g.fillRect(bx, py, pw, 2);
       g.fillStyle = mixHex(tone, PAL.voidDeep, 0.55);
       for (let k = 0; k < 3; k++) {
@@ -1876,50 +1883,91 @@ export function signTexture(seed: string, lines: string[], scale = 4): THREE.Can
  * would read as newer than the room it locks.
  */
 export function gateTexture(seed: string, w = 40, h = 590): THREE.CanvasTexture {
+  /*
+   * Repainted off the first live capture of the redo, where the old rust-plate version
+   * was the single worst thing in the frame: the tallest, warmest, most saturated shape
+   * on screen, reading as a wooden watchtower and out-shouting the player, the growths
+   * and the portal at once. The bible's value hierarchy puts a gate THIRD - behind the
+   * player and the interactables - so a containment bulkhead is COLD dark steel that
+   * holds the wall's own values, with exactly two quiet announcements: a worn warning
+   * band at the foot (where the door meets what it shuts on), and one small status lamp.
+   * Rust survives only as patina bleeding from the plate seams, same as the stone pipes.
+   */
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(w, h);
 
-  // Plates: horizontal bands of rust, each its own shade off the ramp.
-  const plateH = 46;
+  const steelDark = mixHex(PAL.stoneDark, PAL.rustDark, 0.25);
+  const steelMid = mixHex(PAL.stoneMid, PAL.rustDark, 0.2);
+  const steelLit = mixHex(PAL.stoneLit, PAL.rustMid, 0.15);
+
+  // Plates: tall inset panels of cold steel, each a half-step off its neighbours.
+  const plateH = 58;
   for (let y = 0; y < h; y += plateH) {
-    g.fillStyle = mixHex(PAL.rustDark, PAL.rustMid, range(rng, 0.15, 0.6));
+    g.fillStyle = mixHex(steelDark, steelMid, range(rng, 0.2, 0.7));
     g.fillRect(0, y, w, plateH);
-    // The seam between plates, dark, with a lit edge below it - light falls from above.
-    g.fillStyle = mixHex(PAL.rustDark, '#000000', 0.4);
-    g.fillRect(0, y, w, 2);
-    g.fillStyle = mixHex(PAL.rustMid, PAL.lampWarm, 0.12);
-    g.fillRect(0, y + 2, w, 1);
-  }
-
-  // Two vertical rails with rivets, holding the plates together.
-  for (const rx of [5, w - 8]) {
-    g.fillStyle = mixHex(PAL.rustDark, '#000000', 0.25);
-    g.fillRect(rx, 0, 3, h);
-    g.fillStyle = mixHex(PAL.rustMid, PAL.lampWarm, 0.2);
-    for (let y = plateH / 2; y < h; y += plateH) {
-      g.fillRect(rx, Math.round(y), 2, 2);
+    // The inset: a darker margin, then the panel face one step lighter.
+    g.fillStyle = mixHex(steelDark, '#000000', 0.35);
+    g.fillRect(0, y, w, 3);
+    g.fillRect(0, y, 2, plateH);
+    g.fillRect(w - 2, y, 2, plateH);
+    g.fillStyle = steelLit;
+    g.fillRect(2, y + 3, w - 4, 1);
+    // Rust patina creeping from the seam, sparse blotches thinning downward.
+    for (let b = 0; b < 5; b++) {
+      const bx = Math.round(range(rng, 2, w - 4));
+      const by = y + Math.round(range(rng, 3, 14));
+      g.fillStyle = b < 2 ? PAL.rustMid : PAL.rustDark;
+      g.fillRect(bx, by, 2, Math.round(range(rng, 1, 3)));
     }
   }
 
-  // The hazard band: worn chevrons, low, where the door meets whatever it crushes.
-  const bandY = h - 84;
-  g.fillStyle = mixHex(PAL.lampWarm, PAL.rustDark, 0.35);
-  g.fillRect(0, bandY, w, 18);
-  g.fillStyle = mixHex(PAL.rustDark, '#000000', 0.35);
-  for (let x = -18; x < w; x += 12) {
-    for (let i = 0; i < 6; i++) {
-      g.fillRect(x + i, bandY + i * 3, 6, 3);
+  // The warning band at the foot: worn chevrons, muted, half scoured away.
+  const bandY = h - 66;
+  g.fillStyle = mixHex(PAL.lampWarm, steelDark, 0.55);
+  g.fillRect(0, bandY, w, 14);
+  g.fillStyle = mixHex(steelDark, '#000000', 0.3);
+  for (let x = -14; x < w; x += 10) {
+    for (let i = 0; i < 5; i++) {
+      g.fillRect(x + i, bandY + i * 3, 5, 3);
     }
   }
+  // The scour: strips of the band worn back to steel.
+  for (let i = 0; i < 4; i++) {
+    g.fillStyle = steelMid;
+    g.fillRect(Math.round(range(rng, 0, w - 6)), bandY + Math.round(range(rng, 0, 10)), Math.round(range(rng, 3, 8)), 3);
+  }
 
-  // Weathering: flecks of darker rust, seeded, sparse.
-  for (let i = 0; i < (w * h) / 260; i++) {
-    g.fillStyle = mixHex(PAL.rustDark, '#000000', range(rng, 0.2, 0.55));
+  // The status lamp: one small lit eye at mid-height - powered, watching, shut.
+  const ly = Math.round(h * 0.42);
+  g.fillStyle = mixHex(PAL.lampWarm, steelDark, 0.4);
+  g.fillRect(Math.round(w / 2) - 3, ly - 1, 6, 6);
+  g.fillStyle = PAL.lampWarm;
+  g.fillRect(Math.round(w / 2) - 2, ly, 4, 4);
+  g.fillStyle = PAL.lampCore;
+  g.fillRect(Math.round(w / 2) - 1, ly + 1, 2, 2);
+
+  // Weathering: cold flecks, and wet streaks running from the plate seams.
+  for (let i = 0; i < (w * h) / 300; i++) {
+    g.fillStyle = mixHex(steelDark, '#000000', range(rng, 0.2, 0.5));
     g.fillRect(Math.round(range(rng, 0, w)), Math.round(range(rng, 0, h)), 2, 1);
   }
+  for (let i = 0; i < 4; i++) {
+    const sx = Math.round(range(rng, 3, w - 4));
+    const sy = Math.round(range(rng, 0, h * 0.7));
+    g.fillStyle = mixHex(steelDark, '#000000', 0.4);
+    const runLen = Math.round(range(rng, 16, 50));
+    for (let d = 0; d < runLen; d++) {
+      if (sy + d < h) g.fillRect(sx, sy + d, 1, 1);
+    }
+  }
 
-  // Moss takes the bottom, same run the platforms wear.
+  // Moss takes the bottom, same run the platforms wear; ooze seeps one seam.
   mossRun(g, rng, 0, w, h - 12, 12);
+  const oy = Math.round(h * 0.62);
+  g.fillStyle = PAL.mossMid;
+  g.fillRect(0, oy, w, 2);
+  g.fillStyle = PAL.mossLit;
+  g.fillRect(Math.round(w * 0.3), oy, Math.round(w * 0.3), 1);
 
   return pixelTexture(c);
 }
@@ -2226,10 +2274,10 @@ export function domeTexture(seed: string, w = 1280, h = 520): THREE.CanvasTextur
    * whatever pane they cross, never black.
    */
   const paneRamp = [
-    mixHex(PAL.hazeNear, PAL.bioCyan, 0.22),
-    mixHex(PAL.hazeNear, PAL.bioCyan, 0.08),
-    mixHex(PAL.hazeFar, PAL.hazeNear, 0.65),
-    mixHex(PAL.hazeFar, PAL.hazeNear, 0.35),
+    mixHex(PAL.hazeNear, PAL.bioCyan, 0.35),
+    mixHex(PAL.hazeNear, PAL.bioCyan, 0.18),
+    mixHex(PAL.hazeFar, PAL.hazeNear, 0.85),
+    mixHex(PAL.hazeFar, PAL.hazeNear, 0.55),
   ];
   const rib = mixHex(PAL.hazeFar, PAL.voidMid, 0.55);
   const ribLit = mixHex(rib, PAL.hazeNear, 0.5);
@@ -2318,8 +2366,10 @@ export function domeTexture(seed: string, w = 1280, h = 520): THREE.CanvasTextur
     g.fillRect(cx - drumHalf, baseY, drumHalf * 2, drumH);
     g.fillStyle = ribLit;
     g.fillRect(cx - drumHalf, baseY, drumHalf * 2, 2);
-    g.fillStyle = rib;
-    for (let px2 = cx - drumHalf; px2 <= cx + drumHalf; px2 += 14) {
+    // Panelling every 24px at low contrast: at 14px and full rib value the live capture
+    // read the drum as chain-link noise behind the platform signs.
+    g.fillStyle = mixHex(paneRamp[3], rib, 0.5);
+    for (let px2 = cx - drumHalf; px2 <= cx + drumHalf; px2 += 24) {
       g.fillRect(px2, baseY, 2, drumH);
     }
     // The doorway, dark, with a warm interior sliver on one side.
@@ -2329,6 +2379,45 @@ export function domeTexture(seed: string, w = 1280, h = 520): THREE.CanvasTextur
     g.fillRect(doorX, baseY + Math.round(drumH * 0.25), doorW, Math.round(drumH * 0.75));
     g.fillStyle = mixHex(PAL.lampWarm, PAL.voidDeep, 0.5);
     g.fillRect(doorX + doorW - 2, baseY + Math.round(drumH * 0.35), 2, Math.round(drumH * 0.6));
+
+    /*
+     * The forest takes it back. The pass-40 capture showed the drum ending in two hard
+     * straight lines - a cornice stripe and a base stripe - cutting clean across the
+     * frame, and a structure with clean edges among organic silhouettes reads as a
+     * sticker (the machinery band learned this in pass 26). So: growth clumps breaking
+     * the cornice, strands hanging down the glass, moss beards under the base, and the
+     * drum's foot dissolving into dark rather than stopping on a line.
+     */
+    const eat = mixHex(PAL.voidMid, PAL.leafDark, 0.5);
+    // Clumps riding the cornice, biggest at the drum's corners.
+    for (let k = 0; k < Math.max(4, Math.round(drumHalf / 40)); k++) {
+      const ex = cx + Math.round(range(rng, -drumHalf, drumHalf));
+      blob(g, rng, ex, baseY + range(rng, -4, 4), range(rng, 7, 16), eat, 1.6);
+    }
+    blob(g, rng, cx - drumHalf, baseY, range(rng, 12, 20), eat, 1.7);
+    blob(g, rng, cx + drumHalf, baseY, range(rng, 12, 20), eat, 1.7);
+    // Strands down the glass, sparse, hanging from the lower rib ring.
+    for (let k = 0; k < 5; k++) {
+      let sx = cx + Math.round(range(rng, -radius * 0.8, radius * 0.8));
+      const sy = baseY - Math.round(rows * range(rng, 0.1, 0.3));
+      const drop = range(rng, 14, 46);
+      g.fillStyle = eat;
+      for (let d = 0; d < drop; d++) {
+        if (d % 7 === 0) sx += range(rng, -1, 1);
+        g.fillRect(Math.round(sx), sy + d, 2, 1);
+      }
+    }
+    // The foot dissolves: stepped dark rows swallowing the drum's last quarter.
+    const sink = mixHex(PAL.voidDeep, '#000000', 0.2);
+    for (let d = 0; d < Math.round(drumH * 0.45); d++) {
+      const t = d / (drumH * 0.45);
+      g.globalAlpha = 0.25 + Math.floor(t * 5) / 5 * 0.75;
+      g.fillStyle = sink;
+      g.fillRect(cx - drumHalf - 6, baseY + drumH - d, drumHalf * 2 + 12, 1);
+    }
+    g.globalAlpha = 1;
+    // Moss beard under the cornice lip.
+    mossRun(g, rng, cx - drumHalf, cx + drumHalf, baseY + 2, 8);
   };
 
   // One grand dome off-centre and two smaller flanks - a facility, not a monument. Base

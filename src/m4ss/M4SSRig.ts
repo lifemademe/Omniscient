@@ -1179,7 +1179,14 @@ export class M4SSRig extends ENGINE.SceneNode {
      * ground line and pipe stacks stand on it, and centring either leaves it floating in
      * the middle of the sky.
      */
-    arch.position.set(world.width / 2, world.height - archH / 2 - world.height * 0.04, -240);
+    /*
+     * -190, not -240: at -240 the middle forest layer (-210) and the additive haze both
+     * sat in front of the dome and ate it - the first live capture showed towers where
+     * the greenhouse should be. At -190 the dome stands in front of the middle forest
+     * and the lantern glows (-200), behind the near trunks (-120): among the trees, not
+     * behind the forest.
+     */
+    arch.position.set(world.width / 2, world.height - archH / 2 - world.height * 0.04, -190);
     this.stage?.add(arch);
 
     /*
