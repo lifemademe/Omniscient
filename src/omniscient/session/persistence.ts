@@ -61,6 +61,14 @@ export interface SaveData {
   openable: string[];
   /** Which M4SS stage the specimen file is on. */
   m4ssStage: number;
+  /**
+   * The contact whose request the player most recently OPENED. CONTINUE uses it: if that
+   * request is still unresolved, restoring drops the player into its contact view rather
+   * than onto the globe, because "where was I" is the first question a returning player
+   * asks and the globe answers it with seven dots. Null when the last thing played was
+   * finished - a finished story has no "where was I".
+   */
+  lastPlayedContactId?: string | null;
 }
 
 export function saveGame(data: Omit<SaveData, 'version'>): void {

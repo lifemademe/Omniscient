@@ -89,6 +89,33 @@ export interface KnowledgeEvent {
  * The rule these have to satisfy: every request moves the tree exactly one stage on a
  * direct route. Sprout, Branching, Interwoven, Canopy.
  */
+/**
+ * The floor a SOLVED REQUEST puts under the stage, indexed by requests resolved.
+ *
+ * The fact thresholds below were tuned when three missions existed and the eighth request
+ * could complete with the tree stuck two stages short - whether it did depended on which
+ * optional beats a player happened to walk, which made the finale's tree a lottery. The
+ * jam build has eight resolvable requests (Sanda is cut), and the promise the CRT makes is
+ * simple: the tree grows when you finish someone's problem, and it is FULLY GROWN when you
+ * have finished them all.
+ *
+ * So completion is a floor, not a replacement - facts still grow branches mid-mission and
+ * a fact-rich route can run ahead of this table, but the eighth solve lands Transcendent
+ * whatever route the player took, because the ending stands on that image. If Sanda's
+ * request is ever restored this table stretches to nine entries and everything else holds.
+ */
+const SOLVED_FLOOR: readonly GrowthStage[] = [
+  GrowthStage.Sprout, //        0 solved
+  GrowthStage.Sapling, //       1
+  GrowthStage.Branching, //     2
+  GrowthStage.Interwoven, //    3
+  GrowthStage.Canopy, //        4
+  GrowthStage.Canopy, //        5
+  GrowthStage.Overgrown, //     6
+  GrowthStage.Overgrown, //     7
+  GrowthStage.Transcendent, //  8 - everyone answered, the tree is the whole screen
+];
+
 const STAGE_THRESHOLDS: ReadonlyArray<{ stage: GrowthStage; facts: number; connections: number }> = [
   { stage: GrowthStage.Transcendent, facts: 14, connections: 4 },
   { stage: GrowthStage.Overgrown, facts: 10, connections: 3 },
@@ -346,12 +373,21 @@ export class KnowledgeStore {
   public getStage(): GrowthStage {
     const factCount = this.facts.size;
     const connectionCount = this.connections.size;
+    let byFacts = GrowthStage.Sprout;
     for (const threshold of STAGE_THRESHOLDS) {
       if (factCount >= threshold.facts && connectionCount >= threshold.connections) {
-        return threshold.stage;
+        byFacts = threshold.stage;
+        break;
       }
     }
-    return GrowthStage.Sprout;
+
+    // The completion floor: see SOLVED_FLOOR. jobs counts solves, and a re-solve after a
+    // loss still counts once per resolution, which is the honest reading of "finished".
+    let solved = 0;
+    for (const standing of this.standings.values()) solved += standing.jobs;
+    const bysolves = SOLVED_FLOOR[Math.min(solved, SOLVED_FLOOR.length - 1)];
+
+    return Math.max(byFacts, bysolves) as GrowthStage;
   }
 
   /**

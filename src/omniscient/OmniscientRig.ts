@@ -46,7 +46,7 @@ import { applyShadowPolicy } from './art/shadows.js';
 import { SystemPanel } from './menu/SystemPanel.js';
 import { createSeaLife } from './geometry/seaLife.js';
 import { WINDOW_VIEW } from './geometry/room.js';
-import { createSignals, M4SS_SIGNAL, MIRELA_SIGNAL, REVEALED_AFTER_FIRST } from './content/signals.js';
+import { ANOMALY_SIGNAL, createSignals, M4SS_SIGNAL, MIRELA_SIGNAL } from './content/signals.js';
 import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
 import { TunePanel } from './dev/TunePanel.js';
@@ -326,6 +326,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private endingPanel: EndingPanel | null = null;
   private endingDelay = -1;
   private endingShown = false;
+  /** The contact most recently opened. Saved so CONTINUE can return to the scene. */
+  private lastPlayedContactId: string | null = null;
+  /** Seconds until the anomaly arrives on the globe. -1 disarmed. See the ending panel. */
+  private anomalyDelay = -1;
 
   /**
    * Every diorama, built once at construction and kept hidden until its request opens.
@@ -1692,11 +1696,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * is not fresh is the save system at its most confusing. The specimen resets too:
      * OMNISCIENT_ and M4SS are one fiction, and a new operator gets a new containment file.
      */
+    let resume: string | null = null;
     if (action === 'new-game') {
       clearSave();
       clearM4ssStage();
     } else {
-      this.restoreSave();
+      resume = this.restoreSave();
     }
 
     /**
@@ -1711,6 +1716,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.menu?.setEnabled(false);
     this.showGlobe();
+
+    /*
+     * CONTINUE, continued: if the tape knows which request the player was inside when
+     * they left, take them back to it - the contact's view, the room, the objective, the
+     * conversation reopened from the top (with the lost-attempt line if there was one).
+     * The globe stays underneath, exactly as if they had clicked the signal themselves,
+     * which is also what makes this safe: it IS that click, replayed.
+     */
+    if (resume && this.openable.has(resume)) {
+      this.openSignal(resume);
+    }
   }
 
   /**
@@ -1719,19 +1735,32 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * saved (see persistence.ts): a refresh mid-request costs the attempt, never the game.
    */
   private persist(): void {
+    /*
+     * "Last played" only counts while it is unfinished. A resolved request writes null -
+     * a finished story has no "where was I", and CONTINUE should land on the globe.
+     */
+    const last =
+      this.lastPlayedContactId &&
+      this.signals.find((s) => s.id === this.lastPlayedContactId)?.state !== SignalState.Resolved
+        ? this.lastPlayedContactId
+        : null;
     saveGame({
       ...this.knowledge.serialize(),
       signals: this.signals.map((s) => ({ id: s.id, state: s.state, hidden: s.hidden ?? false })),
       offered: this.offered,
       openable: [...this.openable],
       m4ssStage: loadM4ssStage(),
+      lastPlayedContactId: last,
     });
   }
 
-  /** Rebuild the world from the tape. Runs before showGlobe, on the CONTINUE action. */
-  private restoreSave(): void {
+  /**
+   * Rebuild the world from the tape. Runs before showGlobe, on the CONTINUE action.
+   * Returns the contact to reopen, if the save was taken mid-story.
+   */
+  private restoreSave(): string | null {
     const save = loadGame();
-    if (!save) return;
+    if (!save) return null;
 
     this.knowledge.restore(save);
 
@@ -1755,11 +1784,27 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.offered = save.offered;
     this.openable = new Set(save.openable);
+    /*
+     * Every coercion to Waiting must also restore answerability. Answerable is two
+     * conditions - state AND membership in `openable` - and the save was written at a
+     * moment when Active and Cooldown signals were legitimately NOT openable. Coerce the
+     * state without the set and the restored globe shows a green point that cannot be
+     * clicked, which is this codebase's oldest documented bug wearing a new entrance.
+     */
+    for (const signal of this.signals) {
+      const saved = save.signals.find((rec) => rec.id === signal.id);
+      if (!saved) continue;
+      const coerced = saved.state === SignalState.Cooldown || saved.state === SignalState.Active;
+      if (coerced && signal.state === SignalState.Waiting) this.openable.add(signal.id);
+    }
 
     // The menu screen is the tree, and it is already on. Redraw it as the restored
     // knowledge, the same derive-from-state path a fresh boot takes.
     this.tree?.setState(this.knowledge.toTreeState());
     this.tree?.draw(1, this.pulse);
+
+    this.lastPlayedContactId = save.lastPlayedContactId ?? null;
+    return this.lastPlayedContactId;
   }
 
   /**
@@ -1954,6 +1999,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.setSignalState(signalId, SignalState.Active);
     this.openable.delete(signalId);
     this.activeIndex = index;
+    /*
+     * Remember where the player is, on disk, from the moment they walk in. Written now
+     * rather than at resolve/loss so a tab closed mid-first-attempt still knows where the
+     * player was - the attempt is gone (mid-mission state is never saved), but the PLACE
+     * is not, and CONTINUE reopens this contact fresh.
+     */
+    this.lastPlayedContactId = signalId;
+    this.persist();
 
     this.setPhase(Phase.Contact);
     // Every room opens on its own establishing shot, whatever the last one was left on.
@@ -2027,7 +2080,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * place - Keller's conversation - with the desktop file flipped to CONTAINED behind
      * it, because the flag was written before the handback.
      */
-    rig.onContained = () => this.exitM4SS();
+    rig.onContained = () => {
+      this.exitM4SS();
+      /*
+       * Containing the specimen IS the answer to Keller's request. The mission advances
+       * to its `contained` beat through the same machinery a typed intent uses, so her
+       * reaction, the outcome and the resolve chain all land exactly as if the player had
+       * said something - because they did something better.
+       */
+      this.session?.event('contained');
+    };
     this.m4ss = rig;
 
     /*
@@ -2327,14 +2389,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (resolvedId) this.setSignalState(resolvedId, SignalState.Resolved);
     this.activeIndex = null;
 
-    // The world opens up after the first request, not before it. §52 still gets its
-    // tease; the player just gets to learn what the globe is for on an empty one first.
-    if (this.offered === 1) {
-      for (const signal of this.signals) {
-        if (REVEALED_AFTER_FIRST.includes(signal.id)) signal.hidden = false;
-      }
-    }
-
     this.topUpGlobe();
     this.persist();
 
@@ -2349,6 +2403,24 @@ export class OmniscientRig extends ENGINE.SceneNode {
         SignalState.Resolved
     );
     if (allResolved && !this.endingShown) this.endingDelay = 7.0;
+  }
+
+  /**
+   * The anomaly arrives: unhidden, hurried, ringed, and on the record.
+   *
+   * The squelch plays - the sound every CALL opens with, which is the point: after the
+   * machine said somebody will call, the sound of somebody calling. The pace makes the
+   * Unknown flash arrive three times as often as its easy-to-miss resting rate, and the
+   * persist means a player who closes the tab here still owns the reveal.
+   */
+  private revealAnomaly(): void {
+    const anomaly = this.signals.find((s) => s.id === ANOMALY_SIGNAL);
+    if (!anomaly || !anomaly.hidden) return;
+    anomaly.hidden = false;
+    anomaly.pace = 3;
+    audio.play('connect');
+    this.globeScreen?.flareSignal(ANOMALY_SIGNAL);
+    this.persist();
   }
 
   /**
@@ -2382,8 +2454,24 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.endingPanel = new EndingPanel(container, () => {
       this.endingPanel = null;
-      // The player leaves the machine the way they found it: on, at the desk.
-      this.moveTo(HOME_SHOT, HOME_SHOT.duration ?? 2.0);
+      /*
+       * "SOMEBODY WILL CALL" is the transmission's last line, and this is that somebody.
+       *
+       * The panel closes, the camera pushes back into the CRT on its own, and once the
+       * globe has the screen the one signal the player has never seen arrives - red,
+       * off-world, origin unresolved. The reveal is gated on the WHOLE game being
+       * finished rather than on the first request (where it used to sit as a quiet
+       * tease), because as the final image it recontextualises: eight people were
+       * answered, and something that is not a person was listening the entire time.
+       */
+      const anomaly = this.signals.find((s) => s.id === ANOMALY_SIGNAL);
+      if (anomaly?.hidden) {
+        this.showGlobe();
+        this.anomalyDelay = 3.0;
+      } else {
+        // The player leaves the machine the way they found it: on, at the desk.
+        this.moveTo(HOME_SHOT, HOME_SHOT.duration ?? 2.0);
+      }
     });
     this.endingPanel.open(this.knowledge, resolved, this.queue.length);
   }
@@ -2821,6 +2909,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
       if (this.endingDelay <= 0) this.openEnding();
     }
     this.endingPanel?.update(deltaTime);
+
+    // The last arrival. Timed so the camera's push into the CRT has landed first.
+    if (this.anomalyDelay > 0) {
+      this.anomalyDelay -= deltaTime;
+      if (this.anomalyDelay <= 0) this.revealAnomaly();
+    }
 
     /*
      * Driving, before anything that reads the camera.

@@ -265,6 +265,30 @@ export const MISSION_09: MissionDefinition = {
       },
     },
 
+    /*
+     * Reached by no intent. The rig fires this through session.event() when the player
+     * contains the specimen in M4SS itself - the only beat in the game whose trigger is
+     * an act performed in another game. Keller's reaction is the payoff of her whole
+     * request: eleven days of watching it hedge, and for the player it commits.
+     */
+    {
+      id: 'contained',
+      tempo: Tempo.Respond,
+      framing: 'camera.pan:default',
+      say:
+        'It went into the second chamber and took all of itself with it. Eleven days I '
+        + 'have watched that thing leave pieces of itself behind like insurance, and for '
+        + 'you it collected itself and walked in. The tank is holding. I am going to sit '
+        + 'down for a minute, and then I am going to rewrite an intake form from November.',
+      learn: [FACT_SPECIMEN_MASS],
+      on: {},
+      outcome: {
+        kind: OutcomeKind.Solved,
+        say: 'Specimen contained. Station 9 stands down.',
+        trust: 2,
+      },
+    },
+
     {
       id: 'verdict',
       tempo: Tempo.Respond,

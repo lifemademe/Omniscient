@@ -221,7 +221,24 @@ export class GlobeView {
    * whole guarantee - every signal on the globe comes round to the front, on its own, in
    * under half a minute, without the player having to do anything.
    */
+  /**
+   * Arrival rings, alive on the view for a moment.
+   *
+   * One per reveal: two expanding pixel circles around the signal, gone inside two
+   * seconds. This is the whole cinematic vocabulary the globe gets - it is a 192x144
+   * phosphor surface, and on a screen that small an effect either reads in eight pixels
+   * or it is noise.
+   */
+  private readonly flares: Array<{ id: string; t: number }> = [];
+
+  public flare(id: string): void {
+    this.flares.push({ id, t: 0 });
+  }
+
   public advance(deltaTime: number, speed = 0.16): void {
+    for (const f of this.flares) f.t += deltaTime;
+    while (this.flares.length && this.flares[0].t > 1.8) this.flares.shift();
+
     const attend = this.rotationForWaiting();
 
     if (attend === null) {
@@ -405,8 +422,33 @@ export class GlobeView {
         : this.project(signal.latitude, signal.longitude);
       if (!point.visible) continue;
 
-      const color = this.colorFor(signal, pulse);
+      const flare = this.flares.find((f) => f.id === signal.id);
+      // A flaring signal is SOLID for the duration - the reveal must not strobe.
+      const color = flare ? PALETTE.unknown : this.colorFor(signal, pulse);
       if (!color) continue;
+
+      if (flare) {
+        /*
+         * Two rings, the outer one born half a beat earlier, both fading as they grow.
+         * Drawn as sixteen points per ring rather than a rastered circle: on phosphor at
+         * this resolution a dotted ring reads as radar, and radar is exactly the register
+         * an unresolvable origin should arrive in.
+         */
+        for (const born of [0, 0.35]) {
+          const age = flare.t - born;
+          if (age < 0 || age > 1.2) continue;
+          const radius = 3 + age * 16;
+          for (let i = 0; i < 16; i++) {
+            const a = (i / 16) * Math.PI * 2;
+            this.surface.pixel(
+              Math.round(point.x + Math.cos(a) * radius),
+              Math.round(point.y + Math.sin(a) * radius * 0.82),
+              age < 0.8 ? PALETTE.unknown : PALETTE.terminator
+            );
+          }
+        }
+      }
+
 
       // Solid 2x2 core with arms. The grid is one pixel wide, so a signal has to be
       // heavier than a grid line or it disappears into the wireframe.
@@ -464,9 +506,13 @@ export class GlobeView {
       case SignalState.Cooldown:
         // Red, and blinking harder than a waiting signal - something went wrong here.
         return pulse < 0.5 ? PALETTE.cooldown : PALETTE.terminator;
-      case SignalState.Unknown:
-        // Far slower and fainter - easy to miss, which is the point (§169).
-        return pulse < 0.12 ? PALETTE.unknown : null;
+      case SignalState.Unknown: {
+        // Far slower and fainter - easy to miss, which is the point (§169) while the
+        // game is running. After the reveal the rig sets a pace, and the same flash
+        // arrives that many times as often: still a flash, no longer missable.
+        const phase = (pulse * (signal.pace ?? 1)) % 1;
+        return phase < 0.12 ? PALETTE.unknown : null;
+      }
       default:
         return null;
     }

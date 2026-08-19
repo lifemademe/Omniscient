@@ -64,7 +64,9 @@ console.log('\n=== THE ENDING ===\n');
   check('answered reads n of m', byLabel.get('REQUESTS ANSWERED') === '8 OF 8');
   check('facts are counted', byLabel.get('FACTS RECORDED') === '3');
   check('connections are counted', byLabel.get('CONNECTIONS MADE') === '1');
-  check('the growth stage is named', byLabel.get('GROWTH STAGE') === 'BRANCHING');
+  // INTERWOVEN, not BRANCHING: this store carries three SOLVES, and completion floors
+  // the stage now - the tree's promise is that finishing requests grows it.
+  check('the growth stage is named', byLabel.get('GROWTH STAGE') === 'INTERWOVEN');
   check('losses are on the record - the history is part of the report', byLabel.get('REQUESTS LOST ON THE WAY') === '1');
   check(
     'the most trusting caller is the one most worked with',
@@ -87,6 +89,41 @@ console.log('\n=== THE ENDING ===\n');
   check(
     'a run where nobody was worked with names no favourite',
     !rows.some((row) => row.label === 'MOST TRUSTING CALLER')
+  );
+}
+
+// ---------------------------------------------------------------- the tree keeps its promise
+{
+  /*
+   * The CRT's promise: the tree grows when you finish someone's problem, and it is FULLY
+   * grown when you have finished them all - whatever route the player took. Facts used to
+   * be the only driver, and whether the finale's tree was full depended on which optional
+   * beats a player happened to walk. Completion floors the stage now, so this walks eight
+   * solves with NO facts learned at all - the worst-case route - and requires monotone
+   * growth ending at Transcendent.
+   */
+  const store = new KnowledgeStore(11);
+  const contacts = ['mirela', 'tomas', 'adaeze', 'ileana', 'vasile', 'dorin', 'lucian', 'keller'];
+  let last = store.getStage();
+  let monotone = true;
+  for (const id of contacts) {
+    store.recordOutcome(id, true, 2);
+    const stage = store.getStage();
+    if (stage < last) monotone = false;
+    last = stage;
+  }
+  check('the tree never shrinks as requests resolve', monotone);
+  check(
+    'eight solves grow it to Transcendent even on a fact-poor route',
+    store.getStage() === 6,
+    `ended at stage ${store.getStage()}`
+  );
+  const seven = new KnowledgeStore(12);
+  for (const id of contacts.slice(0, 7)) seven.recordOutcome(id, true, 2);
+  check(
+    'seven solves do NOT reach full - the last request still buys something',
+    seven.getStage() < store.getStage(),
+    `seven solves sit at stage ${seven.getStage()}`
   );
 }
 

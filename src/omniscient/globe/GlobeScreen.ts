@@ -626,6 +626,11 @@ export class GlobeScreen {
   }
 
   /** Advance rotation, cooldowns and the drawing. */
+  /** Fire the arrival rings on one signal. See GlobeView.flare. */
+  public flareSignal(id: string): void {
+    this.globe.flare(id);
+  }
+
   public update(deltaTime: number): void {
     if (!this.root || this.root.style.display === 'none') return;
 

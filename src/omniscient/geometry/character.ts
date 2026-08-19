@@ -77,7 +77,7 @@ export interface CharacterParams {
    * Pin any of the generated colours. Omitted channels stay seeded, so this is a nudge
    * for named characters rather than a second way to author a whole person.
    */
-  colors?: Partial<{ skin: string; garment: string; underlayer: string; hair: string }>;
+  colors?: Partial<{ skin: string; garment: string; underlayer: string; hair: string; hardware: string }>;
 }
 
 /** Which of the five surfaces a piece of a body belongs to. */
@@ -129,6 +129,7 @@ export interface CharacterParts {
     garment: string;
     underlayer: string;
     hair: string;
+    hardware: string;
   };
 }
 
@@ -543,6 +544,14 @@ export function createCharacter(params: CharacterParams): CharacterParts {
     garment: params.colors?.garment ?? pick(rng, PERSON.garment),
     underlayer: params.colors?.underlayer ?? pick(rng, PERSON.underlayer),
     hair: params.colors?.hair ?? pick(rng, PERSON.hair),
+    /*
+     * Overridable per figure because brightness is contextual: the default warm grey is a
+     * quiet accent in a daylit workshop and a GLINT in a dark cellar. Vasile's buckle and
+     * buttons under the school were sampled at #e6e1d2 on screen - the brightest thing on
+     * a man wearing near-black - after two shader passes went hunting a specular that was
+     * never there. Accents are albedo; fix the albedo.
+     */
+    hardware: params.colors?.hardware ?? PERSON.hardware,
   };
 
   /*

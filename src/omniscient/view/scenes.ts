@@ -6221,7 +6221,17 @@ function buildFloodedCellar(scene: ContactScene): void {
       pouch: true,
     temperament: 'working',
     garment: 'overalls',
-    colors: { garment: '#3d4a53', underlayer: '#b9ad92' },
+    /*
+     * The underlayer came down from '#b9ad92'. That pale khaki against near-black
+     * overalls was a 2.5:1 luma jump, and under the cellar lamp every sliver of it -
+     * the collar strip, the cuffs, the shirt front - read as a white GLINT. He looked
+     * varnished. Two shader passes went hunting a specular that was never there before
+     * anyone sampled the pixels: #cabfa8, which is this exact colour, lit. The fix is
+     * what it always was - a working man's undershirt is not cream after thirty years
+     * under a school.
+     */
+    // Hardware down with it: oiled steel, not chrome. See the note in character.ts.
+    colors: { garment: '#3d4a53', underlayer: '#6e685a', hardware: '#565149' },
     /**
      * Back against the wall by the run, not in the middle of the floor.
      *

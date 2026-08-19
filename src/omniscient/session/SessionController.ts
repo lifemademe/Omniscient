@@ -190,6 +190,16 @@ export class SessionController {
     this.present();
   }
 
+  /**
+   * An out-of-band event moved the mission. Same delivery as a typed response - the line,
+   * the outcome, the hooks - minus the player's own message, because the player did not
+   * say anything: they DID something, somewhere else, and the contact is reacting to it.
+   */
+  public event(beatId: string): void {
+    if (!this.runtime || !this.contact || this.runtime.isFinished) return;
+    this.apply(this.runtime.event(beatId));
+  }
+
   /** Feed a player response through the runtime. */
   public submit(text: string): void {
     if (!this.runtime || !this.contact || this.runtime.isFinished) return;

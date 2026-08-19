@@ -480,6 +480,20 @@ ${graded.note}`
     };
   }
 
+  /**
+   * Advance to a named beat because something OUTSIDE the conversation happened.
+   *
+   * Exists for exactly one caller so far: containing the specimen. Mission 09 hands the
+   * screen to M4SS, and finishing M4SS is an act performed in another game entirely -
+   * there is no text the player could type here that means "I did it", and asking them to
+   * come back and SAY they did it would make the doing decorative. The event walks the
+   * same transition machinery as typed intents - same knowledge recording, same outcome
+   * handling - so an external fact arrives exactly like a spoken one.
+   */
+  public event(beatId: string): MissionStep {
+    return this.applyTransition({ to: beatId });
+  }
+
   private applyTransition(transition: BeatTransition): MissionStep {
     // Knowledge from the action taken...
     const learned = this.recordKnowledge(transition.learn ?? []);

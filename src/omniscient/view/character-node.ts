@@ -243,7 +243,7 @@ function breathe(
 
 function surfaceFor(
   material: BodyMaterial,
-  colors: { skin: string; garment: string; underlayer: string; hair: string }
+  colors: { skin: string; garment: string; underlayer: string; hair: string; hardware: string }
 ): THREE.MeshStandardMaterial {
   const [color, roughness] = {
     skin: [colors.skin, 0.82],
@@ -266,7 +266,7 @@ function surfaceFor(
     // element meant to be a small hard accent became the brightest thing in the frame and
     // out-shouted the radio the whole request is about. An accent that wins is not an
     // accent. Rough enough to catch a highlight, not enough to become one.
-    metal: [PERSON.hardware, 0.72],
+    metal: [colors.hardware, 0.72],
   }[material] as [string, number];
 
   // Banded like the family. The characters are chamfered slabs, and the bevel facets
@@ -345,7 +345,7 @@ const NO_INK: ReadonlySet<BodyMaterial> = new Set<BodyMaterial>(['eyes', 'metal'
 function addPieces(
   into: ENGINE.SceneNode,
   pieces: CharacterPiece[],
-  colors: { skin: string; garment: string; underlayer: string; hair: string }
+  colors: { skin: string; garment: string; underlayer: string; hair: string; hardware: string }
 ): void {
   for (const piece of pieces) {
     // Capitalised for the outliner, which is the only place these names are read.

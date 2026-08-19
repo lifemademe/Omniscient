@@ -11,20 +11,19 @@ import { SignalState } from '../crt/GlobeView.js';
 import type { Signal } from '../crt/GlobeView.js';
 
 /**
- * Signals revealed once the player has finished their first request.
+ * The one signal that is not a person, and when it is allowed to exist.
  *
- * The opening globe holds exactly one point, so there is no question about where to go.
- * Everything §52 wants arrives the moment the player has done a thing once and knows what
- * the globe is for.
+ * It used to be revealed after the first request, as a quiet §52 tease sitting on the
+ * globe for the whole game. It is the FINALE now: hidden until every request is resolved,
+ * and revealed by the rig in the beat after the machine's final transmission - the ending
+ * says "somebody will call", and this is the something that does. As a tease it was
+ * furniture; as the last image of the game it recontextualises, which is what an ending
+ * image is for.
  *
- * There used to be a tease here as well - a failed request in Toronto, seeded already on
- * cooldown, which existed to make the world look bigger than four contacts and to show
- * §31 on the globe. Five real requests do the first job better than a fake one did, and
- * §96 caps the nameable signals at five, so the fake was the one to go. §31 is left to the
- * real mechanism: losing Mirela puts her on a countdown, which preview-stuck walks end to
- * end.
+ * (An earlier tease - a fake failed request in Toronto - died for §96's five-signal cap.
+ * The anomaly earns its slot by being the only point that is not answerable.)
  */
-export const REVEALED_AFTER_FIRST = ['anomaly'];
+export const ANOMALY_SIGNAL = 'anomaly';
 
 /** Signal ids that map to authored missions, in queue order. */
 export const MIRELA_SIGNAL = 'mirela';
