@@ -1699,9 +1699,28 @@ export class BoardPanel {
     const view = this.view;
     if (!view || view.kind !== 'trail' || !this.trailParts) return;
 
+    /**
+     * The headline carries the RULE, not just the heading.
+     *
+     * It used to read "LAST SEEN heading south - 2 of 9 claimed as him", which is a status
+     * and not an instruction: the heading is the one fact on this board the player cannot
+     * act on, because every row is already described relative to it. So the most prominent
+     * line on the panel was spending itself on the only number that does no work.
+     *
+     * What a player actually needs is the arithmetic, and it is two short facts. Distances
+     * are along the streets, so "6 blocks ahead, 1 block to the west" is seven blocks of
+     * driving and not the diagonal - and the car does about a block a second, so seven
+     * blocks needs about seven seconds. Every decoy in the shipped pool fails that badly
+     * enough to see: 22 blocks in 4s, 15 blocks in 5s. Every real one clears it with room -
+     * the four jumps are 7 in 8s, 5 in 10s, 7 in 9s, 8 in 11s.
+     *
+     * Said once, at the top, in the sentence the player reads first.
+     */
     this.trailParts.headline.textContent =
-      `LAST SEEN heading ${view.trail.heading} - ${this.claimed.size} of `
-      + `${view.trail.fragments.length} claimed as him`;
+      `LAST SEEN heading ${view.trail.heading}, doing about a block a second. He drives the `
+      + `streets, so add the two distances - if that is more blocks than there are seconds `
+      + `between two pings, he cannot be both. ${this.claimed.size} of `
+      + `${view.trail.fragments.length} claimed as him.`;
 
     const ordered = [...view.trail.fragments].sort((a, b) => a.at - b.at);
 
