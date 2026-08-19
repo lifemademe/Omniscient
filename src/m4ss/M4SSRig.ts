@@ -42,6 +42,7 @@ import {
   pipeStackTexture,
   markerTexture,
   occluderTexture,
+  oozeFallTexture,
   gateTexture,
   glowTexture,
   interiorFadeTexture,
@@ -59,6 +60,7 @@ import {
   portalTexture,
   signTexture,
   stoneTexture,
+  vesselTexture,
   vineTexture,
 } from './stageArt.js';
 import {
@@ -266,6 +268,8 @@ export class M4SSRig extends ENGINE.SceneNode {
   /** The stage's art identity - palette, light direction, midground kind. Set at the top
    * of buildLevel() so every generator call below it draws the right world. */
   private theme = THEME_GALLERY;
+  /** The ooze-fall's material, shimmered gently in updateGrowths' art tick. */
+  private oozeFallMat: THREE.MeshBasicMaterial | null = null;
   private vignette: ENGINE.MeshNode | null = null;
   /** Smoothed camera height, in level coordinates. See viewCentre. */
   private cameraY = 0;
@@ -738,6 +742,41 @@ export class M4SSRig extends ENGINE.SceneNode {
           );
           pond.position.set(px, t.y + 9, 5);
           this.stage?.add(pond);
+
+          /*
+           * The fall that feeds it. One per stage, Gallery only, over the first pool of
+           * the first wide platform: a broken feed pipe up at midground height pouring
+           * culture medium into the water - the reference's brightest moment, and the
+           * story of why these pools glow at all. Behind the play plane (z -14) so the
+           * slime always crosses IN FRONT of the liquid: decor, never obstacle.
+           */
+          if (this.theme.name === 'gallery' && !this.oozeFallMat && pools === 2 && i === 0) {
+            const drop = 190;
+            const mat = this.artMaterial({
+              map: oozeFallTexture(`fall-${t.x}`, 16, 256),
+              transparent: true,
+              opacity: 0.9,
+              depthWrite: false,
+            });
+            const fall = decorMesh('OozeFall', new THREE.PlaneGeometry(20, drop), mat);
+            fall.position.set(px, t.y - drop / 2 + 6, -14);
+            this.stage?.add(fall);
+            this.oozeFallMat = mat;
+            // The landing glow: water lit by what lands in it.
+            const splash = decorMesh(
+              'FallGlow',
+              new THREE.PlaneGeometry(120, 120),
+              this.artMaterial({
+                map: glowTexture('fall-glow', '#b9d94a'),
+                transparent: true,
+                opacity: 0.3,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+              })
+            );
+            splash.position.set(px, t.y + 4, 6);
+            this.stage?.add(splash);
+          }
         }
       }
 
@@ -938,6 +977,27 @@ export class M4SSRig extends ENGINE.SceneNode {
         const count = Math.floor(tile.w / 140);
         for (let i = 0; i < count && planted < 22; i++) {
           const px = tile.x + 40 + ((i + 0.3 + rng() * 0.5) / count) * (tile.w - 80);
+          /*
+           * Every seventh plant in the Gallery is a BELL JAR instead: the lab's own
+           * furniture among the flora that outlived it, capped at two so the prop stays
+           * an event rather than a set dressing pattern. Behind the plants (z 10) and a
+           * touch taller than them - glass over stone, unmistakably built.
+           */
+          if (this.theme.name === 'gallery' && planted % 7 === 3 && planted < 18) {
+            const jar = decorMesh(
+              'BellJar',
+              new THREE.PlaneGeometry(52, 71),
+              this.artMaterial({
+                map: vesselTexture(`vessel-${planted}`),
+                transparent: true,
+                depthWrite: false,
+              })
+            );
+            jar.position.set(px, tile.y - 32, 10);
+            this.stage?.add(jar);
+            planted += 1;
+            continue;
+          }
           const kind = rng() > 0.45 ? 'fern' : 'shroom';
           // 62px, up from 44: at 44 the playtest could not find them at all. Decoration
           // that needs pointing out is not decorating anything.
@@ -1930,6 +1990,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.hoverHalo = null;
     this.canopy = null;
     this.vignette = null;
+    this.oozeFallMat = null;
 
     this.state = makeState(STAGES[this.stageIndex](), 40);
     this.cleared = false;
@@ -2513,6 +2574,10 @@ export class M4SSRig extends ENGINE.SceneNode {
         (presence.material as THREE.MeshBasicMaterial).opacity = dead
           ? 0
           : 0.18 + Math.sin(this.artClock * 2.2 + anchor.x) * 0.05;
+      }
+      // The ooze-fall runs: a slow opacity breath is the cheapest honest liquid motion.
+      if (this.oozeFallMat) {
+        this.oozeFallMat.opacity = 0.82 + Math.sin(this.artClock * 3.1) * 0.1;
       }
       const art = this.growthArt.get(anchor);
       const wanted = art ? (dead ? art.dead : art.live) : null;

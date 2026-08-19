@@ -2076,6 +2076,119 @@ export function propTexture(seed: string, kind: 'fern' | 'shroom', size = 48): T
 }
 
 /**
+ * The ooze-fall: culture medium pouring from a broken feed pipe. The 08_49_58 reference
+ * builds its brightest moment out of exactly this - green liquid falls off an edge, glows,
+ * and pools - and the bible calls the pools "fed" a requirement: our water glowed but
+ * nothing filled it. The texture carries its own source (a dark pipe mouth at the top) so
+ * the liquid is never a light beam: it comes OUT of something and lands IN something.
+ *
+ * Drawn as broken vertical dashes around a solid core - liquid, not laser - with beads
+ * that read as droplets. The rig pulses its opacity gently; the shimmer is the cheapest
+ * honest motion in the game.
+ */
+export function oozeFallTexture(seed: string, w = 16, h = 256): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+  const cx = Math.floor(w / 2);
+
+  // The mouth: a broken pipe stub, dark metal, two rivets, a cracked lip.
+  const metal = mixHex(PAL.stoneDark, PAL.rustDark, 0.35);
+  g.fillStyle = mixHex(metal, '#000000', 0.35);
+  g.fillRect(0, 0, w, 10);
+  g.fillStyle = metal;
+  g.fillRect(1, 1, w - 2, 8);
+  g.fillStyle = mixHex(metal, PAL.stoneLit, 0.4);
+  g.fillRect(1, 1, w - 2, 1);
+  g.fillStyle = PAL.rustMid;
+  g.fillRect(2, 6, 2, 3);
+  g.fillRect(w - 4, 5, 2, 4);
+
+  // The liquid: a solid core with ragged bright edges, thinning as it falls.
+  for (let y = 10; y < h; y++) {
+    const t = (y - 10) / (h - 10);
+    const core = Math.max(2, Math.round(5 * (1 - t * 0.4)));
+    g.fillStyle = PAL.mossLit;
+    g.fillRect(cx - Math.floor(core / 2) - 1, y, core + 2, 1);
+    g.fillStyle = PAL.slime;
+    g.fillRect(cx - Math.floor(core / 2), y, core, 1);
+    // The bright thread down the middle, broken so it reads as running.
+    if (y % 5 !== 4) {
+      g.fillStyle = PAL.slimeGlow;
+      g.fillRect(cx, y, 1, 1);
+    }
+  }
+  // Beads: droplets thrown clear of the column.
+  for (let i = 0; i < 9; i++) {
+    const by = Math.round(range(rng, 20, h - 8));
+    const bx = cx + Math.round(range(rng, 3, 6)) * (rng() > 0.5 ? 1 : -1);
+    g.fillStyle = rng() > 0.5 ? PAL.slime : PAL.mossLit;
+    g.fillRect(bx, by, 2, 2);
+  }
+
+  return pixelTexture(c);
+}
+
+/**
+ * A bell jar: the lab's purpose, sitting on its floor. Glass dome on a stone plinth with
+ * a culture sample still glowing inside - the one prop that says "someone was studying
+ * something here" without a word of text. Drawn per the 08_50_08 reference's vessels:
+ * rim-lit glass (two vertical highlight slivers, a lit crown), the culture as a soft blob
+ * of the slime's own family, two bubbles rising.
+ */
+export function vesselTexture(seed: string, w = 44, h = 60): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+  const cx = w / 2;
+
+  // The plinth: three stone rows, lit top.
+  const plinthH = 10;
+  g.fillStyle = PAL.stoneMid;
+  g.fillRect(2, h - plinthH, w - 4, plinthH);
+  g.fillStyle = PAL.stoneLit;
+  g.fillRect(2, h - plinthH, w - 4, 2);
+  g.fillStyle = PAL.stoneDark;
+  g.fillRect(2, h - 2, w - 4, 2);
+
+  // The glass: a dome outline one pixel thick, interior barely darker than the air.
+  const glassTop = 6;
+  const glassBottom = h - plinthH;
+  const rimLit = mixHex(PAL.hazeNear, PAL.bioCore, 0.35);
+  const rimDim = mixHex(PAL.hazeNear, PAL.hazeFar, 0.5);
+  for (let y = glassTop; y < glassBottom; y++) {
+    const t = (y - glassTop) / (glassBottom - glassTop);
+    const half = t < 0.25 ? Math.round((w / 2 - 3) * Math.sqrt(t / 0.25)) : w / 2 - 3;
+    // Interior: a whisper darker, so the glass contains air rather than paint.
+    g.fillStyle = mixHex(PAL.voidMid, PAL.hazeFar, 0.3);
+    g.fillRect(Math.round(cx - half), y, half * 2, 1);
+    // The rim.
+    g.fillStyle = y < glassTop + 8 ? rimLit : rimDim;
+    g.fillRect(Math.round(cx - half), y, 1, 1);
+    g.fillRect(Math.round(cx + half) - 1, y, 1, 1);
+  }
+  // Crown highlight and two rim slivers - the glass catching the growth light.
+  g.fillStyle = rimLit;
+  g.fillRect(Math.round(cx) - 3, glassTop, 6, 1);
+  g.fillRect(Math.round(cx - w * 0.28), Math.round(h * 0.3), 1, Math.round(h * 0.3));
+  g.fillStyle = mixHex(rimLit, rimDim, 0.5);
+  g.fillRect(Math.round(cx + w * 0.3), Math.round(h * 0.36), 1, Math.round(h * 0.22));
+
+  // The culture: a pooled blob, brightest at its heart, two bubbles above it.
+  const by = glassBottom - 4;
+  for (let row = 0; row < 9; row++) {
+    const half = Math.round((w * 0.26) * Math.sqrt(Math.max(0, 1 - (row / 9) ** 2)));
+    g.fillStyle = row < 3 ? PAL.mossLit : PAL.mossMid;
+    g.fillRect(Math.round(cx - half), by - row, half * 2, 1);
+  }
+  g.fillStyle = PAL.slimeGlow;
+  g.fillRect(Math.round(cx) - 2, by - 3, 4, 3);
+  g.fillStyle = PAL.slime;
+  g.fillRect(Math.round(cx + range(rng, -6, 6)), by - Math.round(range(rng, 12, 20)), 2, 2);
+  g.fillRect(Math.round(cx + range(rng, -6, 6)), by - Math.round(range(rng, 22, 30)), 2, 2);
+
+  return pixelTexture(c);
+}
+
+/**
  * A foreground occluder sheet: the layer the parallax spec puts at 120%, and the one the
  * stage never had. Near-black shapes IN FRONT of the play plane - the camera moves and
  * they slide across the world faster than anything behind them, which is the strongest
@@ -2318,8 +2431,14 @@ export function domeTexture(seed: string, w = 1280, h = 520): THREE.CanvasTextur
       const half = Math.round(radius * Math.sqrt(Math.max(0, 1 - (1 - t) ** 2)));
       const y2 = baseY - rows + dy;
       if (y2 < 0 || y2 >= h) continue;
-      g.fillStyle = paneRamp[Math.min(paneRamp.length - 1, Math.floor(t * paneRamp.length))];
-      g.fillRect(cx - half, y2, half * 2, 1);
+      const band = paneRamp[Math.min(paneRamp.length - 1, Math.floor(t * paneRamp.length))];
+      // The glass has a CENTRE: flanks fall a step toward the haze, so the pane grid
+      // stops reading as one uniform wall of tiles across the whole frame.
+      g.fillStyle = band;
+      g.fillRect(cx - Math.round(half * 0.7), y2, Math.round(half * 1.4), 1);
+      g.fillStyle = mixHex(band, PAL.hazeFar, 0.45);
+      g.fillRect(cx - half, y2, Math.round(half * 0.32), 1);
+      g.fillRect(cx + half - Math.round(half * 0.32), y2, Math.round(half * 0.32), 1);
     }
     // Vertical ribs: meridians converging on the crown.
     const meridians = Math.max(5, Math.round(radius / 34));
@@ -2433,6 +2552,13 @@ export function domeTexture(seed: string, w = 1280, h = 520): THREE.CanvasTextur
         g.fillRect(Math.round(sx), sy + d, 2, 1);
       }
     }
+    // The glass's bottom rows get their own nibble of growth, so the pane grid never
+    // ends on a straight line even where the drum hides behind a trunk.
+    for (let k = 0; k < Math.max(5, Math.round(drumHalf / 34)); k++) {
+      const ex = cx + Math.round(range(rng, -radius * 0.9, radius * 0.9));
+      blob(g, rng, ex, baseY - Math.round(range(rng, 0, rows * 0.08)), range(rng, 5, 12), eat, 1.5);
+    }
+
     // The foot dissolves: stepped dark rows swallowing the drum's last quarter.
     const sink = mixHex(PAL.voidDeep, '#000000', 0.2);
     for (let d = 0; d < Math.round(drumH * 0.45); d++) {
