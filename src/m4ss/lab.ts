@@ -264,10 +264,16 @@ export const THE_LAB: World = {
    * player is standing when they first want their mass back. Stage two authors none,
    * because by then the verbs are the player's.
    */
+  /*
+   * No letter M anywhere in these, and that is a rule, not a coincidence: a 3-pixel-wide
+   * M is an N with ambitions, and the first live capture read HOLD LMB as HOLD LNB.
+   * "CLICK" also teaches better than "LMB" - the stencil is for whoever is standing in
+   * front of it, not for people who already know mouse-button jargon.
+   */
   signs: [
-    { x: 96, y: 566, lines: ['A D', 'MOVE'] },
-    { x: 320, y: 380, lines: ['HOLD LMB', 'ON GROWTH'] },
-    { x: 700, y: 520, lines: ['HOLD SPACE', 'SHED MASS'] },
+    { x: 96, y: 566, lines: ['A D', 'WALK'] },
+    { x: 320, y: 380, lines: ['HOLD CLICK', 'ON GROWTH'] },
+    { x: 700, y: 520, lines: ['HOLD SPACE', 'TO SPLIT'] },
     { x: 952, y: 520, lines: ['Q', 'RECALL'] },
   ],
 

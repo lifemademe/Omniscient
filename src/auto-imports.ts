@@ -112,6 +112,7 @@ import './omniscient/view/character-node.js';
 import './omniscient/view/ContactScene.js';
 import './omniscient/view/gestures.js';
 import './omniscient/view/mowing.js';
+import './omniscient/view/pixelFont.js';
 import './omniscient/view/riggedContact.js';
 import './omniscient/view/scene-ids.js';
 import './omniscient/view/scenes.js';
