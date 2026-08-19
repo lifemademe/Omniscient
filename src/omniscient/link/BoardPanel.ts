@@ -1687,19 +1687,30 @@ export class BoardPanel {
       const what = document.createElement('span');
       what.className = 'omni-trace__detail';
       /**
-       * WHERE, not only what.
+       * ONE distance, not two.
        *
-       * The rule the player is applying is whether a car could have got from one of these
-       * to the next in the time between them - and the first version of this panel printed
-       * the time and the source and nothing else, which makes that question unanswerable.
-       * A list of nine things with no positions is not a deduction, it is nine coin flips
-       * with atmosphere.
+       * ## Why this board drops the sideways component
        *
-       * Described relative to where the cameras lost him, in the same words the chase uses,
-       * because it is the same reasoning continued past the edge of the network.
+       * The chase describes a camera as "4 blocks ahead, 3 blocks to the south" because that
+       * board genuinely needs both: being off his street is one of its three tests, and the
+       * sideways number is the one that fails it. This board has no such test. Coherence here
+       * is a single question - could a car cover that ground in that time - and it takes one
+       * number.
+       *
+       * Carrying the chase's two-part wording across anyway cost three separate misreadings
+       * in a row: that "17 blocks ahead" meant 17 blocks of driving, that a row's distance
+       * was measured from the previous ping, and that "21 ahead, 1 west" should somehow equal
+       * an 18-block jump. Every one of those was a player doing correct arithmetic on numbers
+       * the board had framed wrongly, and the framing was inherited rather than chosen.
+       *
+       * So: total distance from where the cameras lost him, added up along the streets,
+       * because that is the only figure the rule on this board consumes.
        */
+      const away =
+        Math.abs(view.trail.from.x - fragment.cell.x) +
+        Math.abs(view.trail.from.y - fragment.cell.y);
       what.textContent =
-        `${describe(view.trail.from, view.trail.heading, fragment.cell)}  -  ${fragment.detail}`;
+        `${away} blocks from where he was last seen  -  ${fragment.detail}`;
 
       /**
        * The jump from the previous claimed ping, filled in by refreshTrail.
@@ -1761,10 +1772,18 @@ export class BoardPanel {
      *
      * Said once, at the top, in the sentence the player reads first.
      */
+    /**
+     * The whole rule, in one sentence, with no geometry left in it.
+     *
+     * He does about a block a second. Claim two pings and the board says how far apart they
+     * are and how long he had. If the distance is bigger than the seconds, no car did both -
+     * and that is the entire test. Nothing here asks the player to hold a direction, add two
+     * numbers, or work out which row a figure was measured against.
+     */
     this.trailParts.headline.textContent =
-      `LAST SEEN heading ${view.trail.heading}, doing about a block a second. Every position `
-      + `below is measured from where the cameras lost him - claim one and it will work out `
-      + `the drive from the ping before it. More blocks than seconds and he cannot be both. `
+      `LAST SEEN heading ${view.trail.heading}, doing about a block a second. Claim the pings `
+      + `you think are him - the board works out how far he had to drive between each one. `
+      + `If that is further than he could get in the time, it was not the same car. `
       + `${this.claimed.size} of ${view.trail.fragments.length} claimed as him.`;
 
     const ordered = [...view.trail.fragments].sort((a, b) => a.at - b.at);
@@ -1850,10 +1869,10 @@ export class BoardPanel {
     this.status.textContent =
       view.note ??
       (this.claimed.size === 0
-        ? 'ignore what recorded them - only when and where. claim every ping one car could have driven between'
+        ? 'ignore what recorded them - only how far and how long. start with one and add to it'
         : firstBroken
-          ? `+${firstBroken.at}s is too far from the one before it - he cannot be in both`
-          : `${this.claimed.size} claimed and all of them reachable - now find the ones you have left out`);
+          ? `he could not have driven that far in that time - +${firstBroken.at}s is not the same car`
+          : `${this.claimed.size} claimed and he could have driven all of it - now find the ones you have left out`);
   }
 
   private buildBeam(): void {
