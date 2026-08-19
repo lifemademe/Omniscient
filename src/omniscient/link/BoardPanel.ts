@@ -24,6 +24,7 @@
 
 import { initialBeam, stepBeam } from '../mission/beam.js';
 import { describe } from '../mission/pursuit.js';
+import { couldReach } from '../mission/breadcrumbs.js';
 import { reached } from '../mission/pipes.js';
 import { narrow } from '../mission/traces.js';
 import { audio } from '../audio/ConsoleAudio.js';
@@ -364,6 +365,26 @@ const BOARD_CSS = `
 
    One character, invisible in review, and it only breaks the one rule that
    happens to follow it. See scripts/css-balanced.ts. */
+/* A claimed fragment the car could not have reached in time from the one before it.
+
+   ## Why the board shows this
+
+   Asked, of this panel: "what are inductive loop counts, what is a changed cell, what am I
+   looking for?" - and the honest answer to the first two is THEY DO NOT MATTER. The source
+   of a ping is texture; the puzzle is entirely when and where. Nine rows of unfamiliar
+   sensor names read as nine things to understand, so the writing that was meant to give the
+   phase its texture was being mistaken for the mechanic.
+
+   The fix is not to explain inductive loops. It is to make the actual rule visible: claim
+   the pings one car could have driven between, and the moment two of them cannot both be
+   him, say which two. Same medicine as the wet pipes - show the consequence of the player's
+   own choices instead of grading them at the end. */
+.omni-trace__row--broken {
+  border-color: rgba(168, 64, 47, 0.75);
+  background: rgba(30, 12, 10, 0.75);
+}
+.omni-trace__row--broken .omni-trace__plate { color: #d1614a; }
+
 /* -- The chase's trail ------------------------------------------------------------------
    Every camera the player has already committed to, kept on screen.
 
@@ -1683,16 +1704,56 @@ export class BoardPanel {
       + `${view.trail.fragments.length} claimed as him`;
 
     const ordered = [...view.trail.fragments].sort((a, b) => a.at - b.at);
+
+    /**
+     * Walk the claim in time order and find the first jump no car could make.
+     *
+     * The same test the grader uses, on the same data, run on every click instead of once
+     * at the end. It gives away nothing: `couldReach` is arithmetic over two positions and
+     * a duration, all three of which are printed on the rows the player is looking at. What
+     * it removes is the part where you assemble a set, send it, and are told only that
+     * "somewhere in there it would have had to be in two places".
+     */
+    const picked = ordered.filter((fragment) => this.claimed.has(fragment.id));
+    const broken = new Set<string>();
+    let at = view.trail.from;
+    let since = 0;
+    for (const fragment of picked) {
+      if (!couldReach(at, fragment.cell, fragment.at - since)) broken.add(fragment.id);
+      at = fragment.cell;
+      since = fragment.at;
+    }
+
     Array.from(this.trailParts.list.children).forEach((row, i) => {
-      row.classList.toggle('omni-trace__row--picked', this.claimed.has(ordered[i].id));
+      const id = ordered[i].id;
+      row.classList.toggle('omni-trace__row--picked', this.claimed.has(id));
+      row.classList.toggle('omni-trace__row--broken', broken.has(id));
     });
 
     // Two is the fewest that can describe a journey, so anything less is not a claim yet.
-    this.send.disabled = this.claimed.size < 2;
-    if (view.note) {
-      this.status.className = 'omni-board__status omni-board__status--score';
-      this.status.textContent = view.note;
-    }
+    this.send.disabled = this.claimed.size < 2 || broken.size > 0;
+
+    /**
+     * Say what to do, then say how it is going.
+     *
+     * This wrote the status only when there was a note, so a fresh board carried whatever
+     * the last device left there and a player who had not read the prompt had nothing at
+     * all. The prompt does state the rule - one car, in time order, about a block a second -
+     * but it leaves out the thing that decides the answer: the grader takes the LARGEST
+     * coherent set, so a chain that is merely consistent is not enough. That belongs on the
+     * line the player is watching.
+     */
+    this.status.className = view.note
+      ? 'omni-board__status omni-board__status--score'
+      : 'omni-board__status';
+    const firstBroken = picked.find((fragment) => broken.has(fragment.id));
+    this.status.textContent =
+      view.note ??
+      (this.claimed.size === 0
+        ? 'ignore what recorded them - only when and where. claim every ping one car could have driven between'
+        : firstBroken
+          ? `+${firstBroken.at}s is too far from the one before it - he cannot be in both`
+          : `${this.claimed.size} claimed and all of them reachable - now find the ones you have left out`);
   }
 
   private buildBeam(): void {
