@@ -127,6 +127,8 @@ export class M4SSRig extends ENGINE.SceneNode {
 
   private body: ENGINE.MeshNode | null = null;
   private shine: ENGINE.MeshNode | null = null;
+  /** Where the highlight has leaned to, smoothed. See paintSlime. */
+  private shineLean = 0;
   private belly: ENGINE.MeshNode | null = null;
   private rim: ENGINE.MeshNode | null = null;
   private strays: ENGINE.MeshNode | null = null;
@@ -1158,9 +1160,26 @@ export class M4SSRig extends ENGINE.SceneNode {
      * off the silhouette on a fast-moving blob, whereas shifting the field keeps it inside.
      *
      * y is negative-up in level space, so -7 lifts the shine and +6 drops the belly.
+     *
+     * ## The shine leans into the direction of travel
+     *
+     * A highlight pinned to the top of the body is a highlight painted ON the slime; a real
+     * one sits where the surface faces the light, and on something this soft the surface
+     * facing up-and-forward is whichever way the mass is piling as it moves. So the shine's
+     * offset carries a horizontal component taken from the body's own velocity, smoothed hard
+     * - the raw value is jittery enough to make the highlight buzz, and a highlight that
+     * buzzes is worse than one that never moves.
+     *
+     * Clamped, because a fast swing would otherwise throw the shine clean off the silhouette
+     * and leave a bright crescent floating beside the creature.
      */
-    const lifted = mine.map((q) => ({ x: q.x, y: q.y - 7 }));
-    const dropped = mine.map((q) => ({ x: q.x, y: q.y + 6 }));
+    let vx = 0;
+    for (const q of owned(state)) vx += q.x - q.px;
+    const drift = mine.length > 0 ? vx / mine.length / TUNING.dt : 0;
+    this.shineLean += (Math.max(-9, Math.min(9, drift * 0.02)) - this.shineLean) * 0.06;
+
+    const lifted = mine.map((q) => ({ x: q.x + this.shineLean, y: q.y - 7 }));
+    const dropped = mine.map((q) => ({ x: q.x - this.shineLean * 0.4, y: q.y + 6 }));
     this.replace(this.belly, buildSurface(dropped, { cell: 5, threshold: 1.45 }));
     this.replace(this.shine, buildSurface(lifted, { cell: 5, threshold: 2.1 }));
     const strandedPoints = loose(state).map((p) => ({ x: p.x, y: p.y }));

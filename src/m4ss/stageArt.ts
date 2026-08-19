@@ -470,34 +470,123 @@ export function backdropTexture(
    * it. Without it the backdrop is an even wash and the silhouettes have nothing to be
    * silhouettes against.
    */
-  for (let r = 130; r > 0; r -= 8) {
-    g.fillStyle = mixHex(PAL.hazeNear, '#3f7d6c', 1 - r / 130);
-    const cx = Math.round(w * 0.52);
-    const cy = Math.round(h * 0.52);
-    g.fillRect(cx - r, cy - Math.round(r * 0.6), r * 2, Math.round(r * 1.2));
+  const glowR = 190;
+  const gx = Math.round(w * 0.52);
+  const gy = Math.round(h * 0.52);
+  g.globalCompositeOperation = 'lighter';
+  for (let r = glowR; r > 0; r -= 8) {
+    /*
+     * Banded ELLIPSES, not nested rectangles.
+     *
+     * This was `fillRect(cx - r, cy - r * 0.6, r * 2, r * 1.2)` for eighteen passes, which
+     * makes a stack of boxes: the outermost band is a hard rectangle against the haze, and
+     * the thing reads as a flat teal panel bolted to the sky rather than as light. Nothing
+     * caught it, because in a game capture it sits behind the platforms at a size where a
+     * corner is a few pixels, and the audit measures distributions - a rectangle and an
+     * ellipse of the same area and colour score identically on all eight axes.
+     *
+     * Banded is still right. A smooth radial gradient would be the only true gradient in the
+     * whole stage and would cost palette; the reference lights its distances in steps.
+     *
+     * The bands ADD light rather than mixing toward a colour, which is the second half of the
+     * same bug and survived the first fix. Mixing each ring toward `hazeNear` means the
+     * outermost ring is painted hazeNear exactly - but the haze behind it is a sixteen-step
+     * vertical ramp, so hazeNear only matches the background at one height and is brighter
+     * than it everywhere else. The result was a pale ellipse with a crisp rim: rounder than
+     * the rectangle, and just as obviously an object rather than light.
+     *
+     * Under `lighter` each band adds a fixed sliver to WHATEVER is beneath it. The outermost
+     * adds one twenty-fourth of the total and is invisible against any background, so the
+     * glow has no edge at all, while the overlaps accumulate toward the centre and give the
+     * banding for free.
+     */
+    g.fillStyle = 'rgba(63, 125, 108, 0.022)';
+    const ry = r * 0.6;
+    for (let dy = -Math.ceil(ry); dy <= Math.ceil(ry); dy++) {
+      const half = Math.round(r * Math.sqrt(Math.max(0, 1 - (dy / ry) ** 2)));
+      if (half > 0) g.fillRect(gx - half, gy + dy, half * 2, 1);
+    }
   }
+  g.globalCompositeOperation = 'source-over';
 
-  // Far structures: domes and towers, as flat silhouettes.
+  /*
+   * Far structures: domes and towers, as flat silhouettes.
+   *
+   * Flat is right - they are far away, and giving them interior value would pull them onto the
+   * gameplay plane. But a silhouette is ONLY its edge, and these were seven `fillRect`s, which
+   * is to say seven straight horizontal lines at seven heights. The reference has nothing
+   * straight in its distance: every far shape is bitten into, leaning, or crowned with
+   * something growing on it, and that ragged edge is most of what makes it read as a ruin
+   * rather than as a chart.
+   *
+   * So each structure is drawn COLUMN BY COLUMN off a height profile instead of as a
+   * rectangle. Same colour, same area, same value - the change is entirely in the edge.
+   *
+   * Three things shape the profile, in this order:
+   *   1. a lean, so the tower is not axis-aligned;
+   *   2. bites, so the top has collapsed somewhere;
+   *   3. a fringe, so something is growing out of the top.
+   *
+   * The dome is kept for the ones that have it - this is a greenhouse laboratory - but it now
+   * shares the profile, so a bite can take a piece out of the dome too.
+   */
   g.fillStyle = PAL.voidMid;
   for (let i = 0; i < 7; i++) {
     const bx = Math.round(range(rng, 0, w));
     const bw = Math.round(range(rng, 30, 80));
     const bh = Math.round(range(rng, 40, 110));
-    const by = Math.round(h * 0.62) - bh;
-    g.fillRect(bx, by, bw, bh + 40);
-    // A dome on some of them - this is a greenhouse laboratory.
-    if (rng() > 0.45) {
-      const cx = bx + bw / 2;
-      for (let dy = 0; dy < bw * 0.4; dy++) {
-        const half = Math.sqrt(Math.max(0, (bw * 0.4) ** 2 - dy * dy)) * 1.1;
-        g.fillRect(Math.round(cx - half), by - dy, Math.round(half * 2), 1);
+    const baseY = Math.round(h * 0.62);
+    const domed = rng() > 0.45;
+    const domeR = bw * 0.4;
+
+    // 1. Lean: a per-column tilt, at most a few pixels across the whole width. More than that
+    //    and a "tower" reads as a wedge.
+    const lean = range(rng, -0.14, 0.14);
+
+    // 2. Bites: collapsed sections of the top edge, each a soft cosine notch so the ruin has
+    //    crumbled rather than been cut.
+    const bites: Array<{ at: number; half: number; deep: number }> = [];
+    for (let b = 0, n = 1 + Math.floor(rng() * 3); b < n; b++) {
+      bites.push({
+        at: range(rng, 0, bw),
+        half: range(rng, 3, bw * 0.3),
+        deep: range(rng, 3, bh * 0.35),
+      });
+    }
+
+    for (let x = 0; x < bw; x++) {
+      let top = bh + x * lean;
+      for (const bite of bites) {
+        const d = Math.abs(x - bite.at);
+        if (d < bite.half) top -= bite.deep * 0.5 * (1 + Math.cos((d / bite.half) * Math.PI));
+      }
+      /*
+       * The dome goes on AFTER the bites, so it survives them.
+       *
+       * Applied before, it was simply eaten: a bite reaches 35% of tower height and a dome is
+       * 40% of tower WIDTH, so on anything tall the notch swallowed the arc whole and seven
+       * greenhouses came out as seven rock spires. The bites are meant to say the tower has
+       * collapsed; the dome is the only thing in the distance that says laboratory at all.
+       */
+      if (domed) {
+        const dx = x - bw / 2;
+        top += Math.sqrt(Math.max(0, domeR * domeR - dx * dx)) * 1.1;
+      }
+      // Quantised to 2px so the edge stays pixel art rather than an antialiased curve.
+      top = Math.max(4, Math.round(top / 2) * 2);
+      g.fillRect(bx + x, baseY - top, 1, top + 40);
+
+      // 3. Fringe: growth on the roofline, one or two pixels of it, on some columns only.
+      if (rng() > 0.72) {
+        g.fillRect(bx + x, baseY - top - (rng() > 0.6 ? 2 : 1), 1, 2);
       }
     }
+
     // Lit panes, the only warm thing in the distance.
     if (rng() > 0.5) {
       g.fillStyle = '#4a7f5f';
       for (let k = 0; k < 5; k++) {
-        g.fillRect(bx + Math.round(range(rng, 3, bw - 6)), by + Math.round(range(rng, 6, bh - 6)), 3, 4);
+        g.fillRect(bx + Math.round(range(rng, 3, bw - 6)), baseY - Math.round(range(rng, 6, bh - 6)), 3, 4);
       }
       g.fillStyle = PAL.voidMid;
     }
