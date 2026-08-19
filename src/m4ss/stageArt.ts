@@ -1478,12 +1478,18 @@ export function sporeTexture(seed: string, size = 256, count = 90): THREE.Canvas
     const x = Math.round(range(rng, 4, size - 8));
     const y = Math.round(range(rng, 4, size - 8));
     const roll = rng();
-    if (roll > 0.93) {
-      // The big ones carry a halo, so a few motes read as genuinely close to the camera.
-      g.fillStyle = mixHex(PAL.voidDeep, PAL.bioCyan, 0.45);
-      g.fillRect(x - 1, y - 1, 5, 5);
+    if (roll > 0.94) {
+      /*
+       * The big ones are CROSSES, not boxed squares. The old 5px halo square around a 3px
+       * core, doubled by the near layer's scale, floated through the live Stack capture
+       * as white chips in teal frames - dead pixels, not spores. A plus-shape has no
+       * corners to read as a frame and still carries the size.
+       */
+      g.fillStyle = mixHex(PAL.bioCyan, PAL.bioCore, 0.4);
+      g.fillRect(x - 1, y, 4, 2);
+      g.fillRect(x, y - 1, 2, 4);
       g.fillStyle = PAL.bioCore;
-      g.fillRect(x, y, 3, 3);
+      g.fillRect(x, y, 2, 2);
     } else if (roll > 0.66) {
       g.fillStyle = mixHex(PAL.bioCyan, PAL.bioCore, 0.5);
       g.fillRect(x, y, 2, 2);
@@ -2176,6 +2182,14 @@ export function godRayTexture(
   w = 1024,
   h = 576
 ): THREE.CanvasTexture {
+  /*
+   * Round 2: the fade is nested SOLID bands, not row dithering. The first draft faded
+   * each shaft by skipping every second then third row, and the live Stack capture read
+   * the columns as digital rain - stacked dashes, a glitch effect, not light. Light does
+   * not perforate: a shaft is now three nested solid strips (wide dim, mid, narrow core)
+   * and the lengthwise fade is three segments of falling alpha with soft-stepped ends,
+   * which keeps the banded language without turning the air into a screen effect.
+   */
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(w, h);
 
@@ -2187,21 +2201,33 @@ export function godRayTexture(
   const shafts = angle === 'diagonal' ? 4 : 5;
   const slope = angle === 'diagonal' ? 0.42 : 0;
   for (let i = 0; i < shafts; i++) {
-    const x0 = ((i + range(rng, 0.1, 0.6)) / shafts) * w - (angle === 'diagonal' ? h * slope * 0.5 : 0);
+    const x0 =
+      ((i + range(rng, 0.1, 0.6)) / shafts) * w - (angle === 'diagonal' ? h * slope * 0.5 : 0);
     const w0 = range(rng, 40, 90) * (angle === 'diagonal' ? 1.4 : 1);
-    // Two nested bands: a wide dim wash, then a narrower core, both fading DOWN in steps.
-    for (let band = 0; band < 2; band++) {
-      const bw = band === 0 ? w0 : w0 * 0.45;
-      g.fillStyle = tint[band];
-      for (let y = 0; y < h; y++) {
-        const fade = 1 - y / h;
-        // Stepped alpha via dithered row skipping: full rows near the top, then every
-        // second, then every third - banding in the drawing, not in an alpha channel.
-        const step = fade > 0.65 ? 1 : fade > 0.35 ? 2 : 3;
-        if (y % step !== 0) continue;
-        const x2 = x0 + y * slope + (band === 1 ? (w0 - bw) / 2 : 0);
-        g.globalAlpha = band === 0 ? 0.16 : 0.22;
-        g.fillRect(Math.round(x2), y, Math.round(bw), 1);
+    const reach = h * range(rng, 0.75, 1);
+    // Three nested strips; each fades over its own length in three alpha segments.
+    const strips = [
+      { bw: w0, a: 0.1, colour: tint[0] },
+      { bw: w0 * 0.62, a: 0.12, colour: tint[0] },
+      { bw: w0 * 0.3, a: 0.16, colour: tint[1] },
+    ];
+    for (const strip of strips) {
+      g.fillStyle = strip.colour;
+      const segs = 3;
+      for (let sgi = 0; sgi < segs; sgi++) {
+        const y0 = Math.round((sgi / segs) * reach);
+        const y1 = Math.round(((sgi + 1) / segs) * reach);
+        g.globalAlpha = strip.a * (1 - sgi * 0.32);
+        if (angle === 'diagonal') {
+          // Diagonals march down in short solid slabs so the slope stays pixelated.
+          for (let y = y0; y < y1; y += 4) {
+            const x2 = x0 + y * slope + (w0 - strip.bw) / 2;
+            g.fillRect(Math.round(x2), y, Math.round(strip.bw), 4);
+          }
+        } else {
+          const x2 = x0 + (w0 - strip.bw) / 2;
+          g.fillRect(Math.round(x2), y0, Math.round(strip.bw), y1 - y0);
+        }
       }
     }
     g.globalAlpha = 1;

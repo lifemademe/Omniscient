@@ -232,7 +232,11 @@ blue-green) so the two stages cannot be mistaken for each other even in thumbnai
   occluder layer in front of play plane (z > 45, moves faster than camera).
 - Slime gets **eyes** (two dark dots + catch-light on the largest body, following
   velocity; hidden during 360-spin blur).
-- Crusher/gate/button dressed as lab equipment; HUD panels get vine-metal frames.
+- Crusher/gate/button dressed as lab equipment. HUD stays a **Pelagic OS window**, NOT
+  vine-metal: in this game's fiction M4SS is a containment feed running on Dana Keller's
+  desktop, and her OS chrome IS the diegetic frame. The reference's mossy UI assumes M4SS
+  is its own boxed game; ours is a window on someone's machine, and the window saying so
+  is worth more than moss. The specimen's face appears in the gauge glyph instead.
 - Everything drips: drip particle emitters on tile undersides and canopy.
 
 Feature freeze is Sept 2. The gauntlet runs foundation-first (theme plumbing, stone, lab

@@ -1528,8 +1528,13 @@ export class M4SSRig extends ENGINE.SceneNode {
       '<div style="display:flex;align-items:center;gap:7px">',
       // The specimen glyph: a green blob with its own glow, the HUD's one piece of the
       // creature. A gauge with a face on it reads as a creature meter, not a fuel bar.
+      // The same face the creature wears in the feed: two pupils, nothing more. A gauge
+      // with the specimen's own face reads as a live reading OF it.
       '<div style="width:13px;height:11px;border-radius:52% 48% 55% 45%;background:#8fe8a8;',
-      'box-shadow:0 0 7px #4fae6e"></div>',
+      'box-shadow:0 0 7px #4fae6e;position:relative">',
+      '<i style="position:absolute;left:3px;top:4px;width:2px;height:3px;background:#0d1a14"></i>',
+      '<i style="position:absolute;right:3px;top:4px;width:2px;height:3px;background:#0d1a14"></i>',
+      '</div>',
       '<div data-role="label" style="letter-spacing:2px;opacity:0.85;font-size:10px">MASS</div>',
       '</div>',
       '<div style="position:relative;height:13px;margin-top:5px;background:#0b0e12;',
