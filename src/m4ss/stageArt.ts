@@ -1221,6 +1221,21 @@ export function poolTexture(seed: string, w = 128, h = 32): THREE.CanvasTexture 
     g.fillRect(sx, Math.round(cy - 2), 2, 2);
   }
 
+  /*
+   * Reflections: water doubles every light (the 08_50_08 reference reflects each glow as
+   * a vertical smear). Two broken columns falling from the surface line, brightest at the
+   * top, drawn as dashes so the water keeps moving.
+   */
+  for (let i2 = 0; i2 < 2; i2++) {
+    const rx = Math.round(cx + range(rng, -w * 0.28, w * 0.28));
+    const depth = Math.round(range(rng, h * 0.2, h * 0.4));
+    for (let d = 0; d < depth; d++) {
+      if (d % 3 === 2) continue;
+      g.fillStyle = d < depth * 0.4 ? mixHex(PAL.bioCore, PAL.bioCyan, 0.4) : PAL.bioCyan;
+      g.fillRect(rx, Math.round(cy + 1 + d), 2, 1);
+    }
+  }
+
   return pixelTexture(c);
 }
 
@@ -2003,6 +2018,97 @@ export function propTexture(seed: string, kind: 'fern' | 'shroom', size = 48): T
       g.fillRect(Math.round(mx - 1), Math.round(base - tall + 2), 2, 1);
     }
   }
+  return pixelTexture(c);
+}
+
+/**
+ * God rays: broad shafts of light with a DIRECTION, which is the one thing the old
+ * uniform haze never had. Background1 in the reference set builds its whole value
+ * structure out of them - the light says where the surface is, and everything is judged
+ * against it.
+ *
+ * Meant for one additive plane: diagonal shafts falling from the upper-left for the
+ * Gallery (morning through the broken dome), vertical columns for the Stack (grate light
+ * from the world above). Drawn as stepped bands, never gradients - three nested
+ * intensities per shaft, brightest core last.
+ */
+export function godRayTexture(
+  seed: string,
+  angle: 'diagonal' | 'vertical',
+  w = 1024,
+  h = 576
+): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+
+  const tint =
+    angle === 'diagonal'
+      ? [mixHex(PAL.hazeNear, PAL.mossMid, 0.25), mixHex(PAL.hazeNear, PAL.mossMid, 0.45)]
+      : [mixHex(PAL.hazeNear, PAL.bioCyan, 0.3), mixHex(PAL.hazeNear, PAL.bioCyan, 0.55)];
+
+  const shafts = angle === 'diagonal' ? 4 : 5;
+  const slope = angle === 'diagonal' ? 0.42 : 0;
+  for (let i = 0; i < shafts; i++) {
+    const x0 = ((i + range(rng, 0.1, 0.6)) / shafts) * w - (angle === 'diagonal' ? h * slope * 0.5 : 0);
+    const w0 = range(rng, 40, 90) * (angle === 'diagonal' ? 1.4 : 1);
+    // Two nested bands: a wide dim wash, then a narrower core, both fading DOWN in steps.
+    for (let band = 0; band < 2; band++) {
+      const bw = band === 0 ? w0 : w0 * 0.45;
+      g.fillStyle = tint[band];
+      for (let y = 0; y < h; y++) {
+        const fade = 1 - y / h;
+        // Stepped alpha via dithered row skipping: full rows near the top, then every
+        // second, then every third - banding in the drawing, not in an alpha channel.
+        const step = fade > 0.65 ? 1 : fade > 0.35 ? 2 : 3;
+        if (y % step !== 0) continue;
+        const x2 = x0 + y * slope + (band === 1 ? (w0 - bw) / 2 : 0);
+        g.globalAlpha = band === 0 ? 0.16 : 0.22;
+        g.fillRect(Math.round(x2), y, Math.round(bw), 1);
+      }
+    }
+    g.globalAlpha = 1;
+  }
+
+  return pixelTexture(c);
+}
+
+/**
+ * The floor mist: the reference loses its ground line in dark vapour, and this is that -
+ * transparent at the top, near-black at the foot, with wisps breaking the boundary so it
+ * reads as vapour rather than as a gradient bar. One plane hugging the bottom of the
+ * world, IN FRONT of the play plane: the deep tile bodies sink into it, pits fall into
+ * mystery, and the walk line stays clear above it.
+ */
+export function floorMistTexture(seed: string, w = 512, h = 128): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+  const ink = mixHex(PAL.voidDeep, '#000000', 0.45);
+
+  // The body: stepped rows, alpha rising toward the foot.
+  for (let y = 0; y < h; y++) {
+    const t = y / h;
+    const a = Math.min(0.62, Math.floor(t * 9) / 9) * 0.72;
+    if (a <= 0) continue;
+    g.globalAlpha = a;
+    g.fillStyle = ink;
+    g.fillRect(0, y, w, 1);
+  }
+  g.globalAlpha = 1;
+
+  // Wisps riding the boundary: soft humps of the same ink at the mist's own top alpha.
+  for (let i = 0; i < 14; i++) {
+    const wx = Math.round(range(rng, 0, w));
+    const wy = Math.round(range(rng, h * 0.12, h * 0.4));
+    const ww = Math.round(range(rng, 20, 60));
+    g.globalAlpha = 0.14;
+    g.fillStyle = ink;
+    for (let dy = 0; dy < 8; dy++) {
+      const half = Math.round((ww / 2) * Math.sqrt(Math.max(0, 1 - (dy / 8) ** 2)));
+      g.fillRect(wx - half, wy - dy, half * 2, 1);
+    }
+  }
+  g.globalAlpha = 1;
+
   return pixelTexture(c);
 }
 

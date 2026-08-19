@@ -35,7 +35,9 @@ import {
   endCapTexture,
   canopyTexture,
   domeTexture,
+  floorMistTexture,
   forestLayer,
+  godRayTexture,
   pipeStackTexture,
   markerTexture,
   gateTexture,
@@ -1069,6 +1071,45 @@ export class M4SSRig extends ENGINE.SceneNode {
       sheet.position.set(world.width / 2, world.height / 2, layer.z);
       this.stage?.add(sheet);
     }
+
+    /*
+     * The light, given a direction. Diagonal shafts through the Gallery's broken dome,
+     * vertical grate-light columns in the Stack - additive, at -60 so they wash over the
+     * whole backdrop stack and stop at the play plane. Uniform haze says "atmosphere";
+     * shafts say WHERE THE LIGHT COMES FROM, which is most of what makes the reference
+     * frames read as places with an outside.
+     */
+    const rays = decorMesh(
+      'GodRays',
+      new THREE.PlaneGeometry(world.width * 1.25, world.height * 1.1),
+      this.artMaterial({
+        map: godRayTexture(`rays-${this.theme.name}`, this.theme.light),
+        transparent: true,
+        opacity: 0.6,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    rays.position.set(world.width / 2, world.height / 2 - world.height * 0.05, -60);
+    this.stage?.add(rays);
+
+    /*
+     * The lost bottom edge: dark vapour swallowing the ground line, in front of the play
+     * plane (z 40) but anchored to the world's FOOT - the deep tile bodies and the pits
+     * sink into it while the walk line stays clear above. The reference never shows a
+     * hard floor line and now neither do we.
+     */
+    const mist = decorMesh(
+      'FloorMist',
+      new THREE.PlaneGeometry(world.width * 1.6, 230),
+      this.artMaterial({
+        map: floorMistTexture(`mist-${this.theme.name}`),
+        transparent: true,
+        depthWrite: false,
+      })
+    );
+    mist.position.set(world.width / 2, world.height - 100, 40);
+    this.stage?.add(mist);
 
     /*
      * The architecture: what makes the midground a LAB rather than more forest.
