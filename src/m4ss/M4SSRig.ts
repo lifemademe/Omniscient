@@ -1907,7 +1907,24 @@ export class M4SSRig extends ENGINE.SceneNode {
      * The points shrink toward the growth (via `r`, the per-point field radius) so the arm
      * tapers instead of being a sausage of body-width all the way up.
      */
-    const drawn: Array<{ x: number; y: number; r?: number }> = [...mine];
+    /*
+     * Lone particles are CULLED from the draw, not from the sim. A particle knocked a
+     * body-width clear of everyone else renders as a single 4px island popping around the
+     * creature - the playtest's "static pixels that follow it". The physics still owns
+     * the particle and cohesion pulls it home within a few frames; the render just
+     * declines to advertise the excursion. Pairs and better still draw, because a real
+     * shed lump must never be invisible.
+     */
+    const isLone = (q: { x: number; y: number }, group: Array<{ x: number; y: number }>): boolean => {
+      for (const o of group) {
+        if (o === q) continue;
+        if (Math.hypot(o.x - q.x, o.y - q.y) < 24) return false;
+      }
+      return true;
+    };
+    const drawn: Array<{ x: number; y: number; r?: number }> = mine.filter(
+      (q) => mine.length <= 3 || !isLone(q, mine)
+    );
     if (state.attached && this.latched && mine.length > 0) {
       const grip = this.latched;
       let near = mine[0];
@@ -1965,7 +1982,12 @@ export class M4SSRig extends ENGINE.SceneNode {
     const dropped = mine.map((q) => ({ x: q.x - this.shineLean * 0.4, y: q.y + 6 }));
     this.replace(this.belly, buildSurface(dropped, { cell: 5, threshold: 1.45 }));
     this.replace(this.shine, buildSurface(lifted, { cell: 5, threshold: 2.1 }));
-    const strandedPoints = loose(state).map((p) => ({ x: p.x, y: p.y }));
+    // Same lone-pixel rule as the body: a shed LUMP draws, a shed CRUMB of one particle
+    // mid-flight does not - it reads as a stray pixel, and it lands and clusters soon.
+    const strandedAll = loose(state).map((p) => ({ x: p.x, y: p.y }));
+    const strandedPoints = strandedAll.filter(
+      (q) => strandedAll.length <= 2 || !isLone(q, strandedAll)
+    );
     this.replace(this.strays, buildSurface(strandedPoints, { cell: 5 }));
 
     if (state.tip && !state.attached && mine.length > 0) {
