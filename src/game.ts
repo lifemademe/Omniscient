@@ -8,11 +8,28 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
 import { isPhoneRequested, PhoneClient } from './omniscient/link/PhoneClient.js';
+import { M4SSRig } from './m4ss/M4SSRig.js';
 import { OmniscientRig } from './omniscient/OmniscientRig.js';
+
+/**
+ * Which game this build starts.
+ *
+ * Two games share one Studio project while it is still an open question which of them goes
+ * to the jam. `?game=m4ss` starts the slime; anything else starts OMNISCIENT_, so nothing
+ * about the existing game changes by adding the other one.
+ *
+ * The same shape as the phone surface below - one bundle, one deploy, a query string
+ * choosing what it becomes - because that pattern is already load-bearing here and a second
+ * mechanism for the same job is a second thing to keep working.
+ */
+function wantsM4SS(): boolean {
+  if (typeof location === 'undefined') return false;
+  return new URLSearchParams(location.search).get('game') === 'm4ss';
+}
 
 @ENGINE.GameClass()
 class MyGameMode extends ENGINE.GameMode {
-  private rig: OmniscientRig | null = null;
+  private rig: OmniscientRig | M4SSRig | null = null;
 
   constructor() {
     super();
@@ -31,10 +48,9 @@ class MyGameMode extends ENGINE.GameMode {
 
     const world = this.getWorld();
     if (world) {
-      this.rig = OmniscientRig.create({
-        name: 'OmniscientRig',
-        position: new THREE.Vector3(0, 0, 0),
-      });
+      this.rig = wantsM4SS()
+        ? M4SSRig.create({ name: 'M4SSRig', position: new THREE.Vector3(0, 0, 0) })
+        : OmniscientRig.create({ name: 'OmniscientRig', position: new THREE.Vector3(0, 0, 0) });
       world.add(this.rig);
     }
 

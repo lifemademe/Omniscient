@@ -1,4 +1,8 @@
 import './game-data.js';
+import './m4ss/lab.js';
+import './m4ss/M4SSRig.js';
+import './m4ss/mass.js';
+import './m4ss/surface.js';
 import './omniscient/art/brickwork.js';
 import './omniscient/art/certainty.js';
 import './omniscient/art/cursor.js';
