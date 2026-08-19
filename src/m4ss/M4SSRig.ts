@@ -41,6 +41,9 @@ import {
   interiorFadeTexture,
   plateTexture,
   propTexture,
+  setStageTheme,
+  THEME_GALLERY,
+  THEME_STACK,
   vignetteTexture,
   lipTexture,
   poolTexture,
@@ -249,6 +252,9 @@ export class M4SSRig extends ENGINE.SceneNode {
   /** The frame-closers: canopy across the view top, vignette over the whole view. They
    * follow the camera in follow(), so a scrolling stage stays closed at every height. */
   private canopy: ENGINE.MeshNode | null = null;
+  /** The stage's art identity - palette, light direction, midground kind. Set at the top
+   * of buildLevel() so every generator call below it draws the right world. */
+  private theme = THEME_GALLERY;
   private vignette: ENGINE.MeshNode | null = null;
   /** Smoothed camera height, in level coordinates. See viewCentre. */
   private cameraY = 0;
@@ -585,6 +591,14 @@ export class M4SSRig extends ENGINE.SceneNode {
     const world = this.state?.world;
     if (!world) return;
 
+    /*
+     * The theme comes FIRST. Every texture below is drawn against the module palette, and
+     * setStageTheme swaps that palette wholesale - so the one rule that keeps the two
+     * stages from bleeding into each other is that nothing draws before this line.
+     */
+    this.theme = this.stageIndex === 0 ? THEME_GALLERY : THEME_STACK;
+    setStageTheme(this.theme);
+
     this.buildBackdrop(world);
 
     /*
@@ -595,8 +609,8 @@ export class M4SSRig extends ENGINE.SceneNode {
      * tile's own dimensions keeps the block size constant across the whole stage, so it all
      * reads as one quarry.
      */
-    const stoneMap = stoneTexture('m4ss-stone');
-    const wallMap = stoneTexture('m4ss-stone', 128, 96, 'wall');
+    const stoneMap = stoneTexture(`m4ss-stone-${this.theme.name}`);
+    const wallMap = stoneTexture(`m4ss-stone-${this.theme.name}`, 128, 96, 'wall');
 
     for (const t of world.tiles) {
       /*
@@ -1007,7 +1021,7 @@ export class M4SSRig extends ENGINE.SceneNode {
    * moves the view.
    */
   private buildBackdrop(world: { width: number; height: number }): void {
-    const far = backdropTexture('m4ss-backdrop');
+    const far = backdropTexture(`m4ss-backdrop-${this.theme.name}`);
     const backdrop = decorMesh(
       'Backdrop',
       new THREE.PlaneGeometry(world.width * 1.6, world.height * 1.6),
@@ -1028,9 +1042,9 @@ export class M4SSRig extends ENGINE.SceneNode {
      * what makes them read as IN the forest rather than stickers on it.
      */
     const layers: Array<{ depth: 0 | 1 | 2; z: number; colour: string; drift: number }> = [
-      { depth: 0, z: -280, colour: '#22332e', drift: 1.0 },
-      { depth: 1, z: -210, colour: '#18271f', drift: 1.0 },
-      { depth: 2, z: -120, colour: '#0e1a13', drift: 1.0 },
+      { depth: 0, z: -280, colour: this.theme.forest[0], drift: 1.0 },
+      { depth: 1, z: -210, colour: this.theme.forest[1], drift: 1.0 },
+      { depth: 2, z: -120, colour: this.theme.forest[2], drift: 1.0 },
     ];
     for (const layer of layers) {
       const texH = Math.min(900, Math.round(world.height * 0.62));
@@ -1038,7 +1052,14 @@ export class M4SSRig extends ENGINE.SceneNode {
         'Forest',
         new THREE.PlaneGeometry(world.width * 1.5, world.height * 1.18),
         this.artMaterial({
-          map: forestLayer(`forest-${layer.depth}`, layer.depth, layer.colour, 1280, texH),
+          map: forestLayer(
+            `forest-${this.theme.name}-${layer.depth}`,
+            layer.depth,
+            layer.colour,
+            1280,
+            texH,
+            this.theme.flora
+          ),
           transparent: true,
           depthWrite: false,
         })
@@ -1059,7 +1080,7 @@ export class M4SSRig extends ENGINE.SceneNode {
      * texture's bottom edge bled the SOLID TOP ROW around from the other side. Two rounds
      * of clamping the drawn strands could not fix what was never a drawing problem.
      */
-    const canopyMap = canopyTexture(`canopy-${world.width}`, 1280, 180);
+    const canopyMap = canopyTexture(`canopy-${this.theme.name}-${world.width}`, 1280, 180);
     canopyMap.wrapS = THREE.ClampToEdgeWrapping;
     canopyMap.wrapT = THREE.ClampToEdgeWrapping;
     this.canopy = decorMesh(
@@ -1156,7 +1177,7 @@ export class M4SSRig extends ENGINE.SceneNode {
       'Atmosphere',
       new THREE.PlaneGeometry(world.width * 1.1, world.height * 1.1),
       this.artMaterial({
-        map: atmosphereTexture('m4ss-air'),
+        map: atmosphereTexture(`m4ss-air-${this.theme.name}`),
         transparent: true,
         opacity: 0.5,
         blending: THREE.AdditiveBlending,

@@ -227,12 +227,113 @@ function lift(hex: string, keep: number): string {
  * surface in the stage is built from this list, so a platform, a vine and the far background
  * are automatically in the same world even though nothing coordinates them.
  */
-export const PAL = Object.fromEntries(
-  Object.entries(PAL_RAW).map(([k, v]) => [
-    k,
-    lift(v, MUTE[k as keyof typeof PAL_RAW] ?? MUTE_DEFAULT),
-  ])
-) as Record<keyof typeof PAL_RAW, string>;
+function buildPal(overrides: Partial<Record<keyof typeof PAL_RAW, string>>): Record<keyof typeof PAL_RAW, string> {
+  return Object.fromEntries(
+    Object.entries({ ...PAL_RAW, ...overrides }).map(([k, v]) => [
+      k,
+      lift(v, MUTE[k as keyof typeof PAL_RAW] ?? MUTE_DEFAULT),
+    ])
+  ) as Record<keyof typeof PAL_RAW, string>;
+}
+
+export const PAL = buildPal({});
+
+/*
+ * The Stack's palette: the same world, with the warmth removed.
+ *
+ * Stage two is the service shaft under the lab, and the art bible's temperature rule is
+ * that the two stages must not be mistakable for each other even in thumbnails. So the
+ * whole structural family walks BLUE - stone, haze, void, moss, leaves - the amber service
+ * lights become pale cyan (the lab's emergency circuit, not its lamps), and the rust gets
+ * heavier because everything down here is wetter. The reserved accents - slime, portal,
+ * bio, caps - are untouched: the player and the things the player uses look the same in
+ * both worlds, which is exactly what "reserved" means.
+ *
+ * Only overrides live here; everything absent inherits the Gallery's value.
+ */
+const STACK_RAW: Partial<Record<keyof typeof PAL_RAW, string>> = {
+  voidDeep: '#081012',
+  voidMid: '#0e1a20',
+  hazeFar: '#142c34',
+  hazeNear: '#1a3a44',
+  stoneDark: '#161e22',
+  stoneMid: '#242e34',
+  stoneLit: '#32424a',
+  stoneEdge: '#44525c',
+  mossDark: '#2b4426',
+  mossMid: '#3f6630',
+  mossLit: '#5e8a54',
+  leafDark: '#26402e',
+  leafMid: '#356044',
+  leafLit: '#4f8a68',
+  vineDark: '#242018',
+  vineMid: '#3c3620',
+  rustDark: '#3a2014',
+  rustMid: '#6e3c1c',
+  rustLit: '#a05a28',
+  lampWarm: '#7fc8d8',
+  lampCore: '#b8ecf8',
+};
+
+/**
+ * Everything that makes one stage look like ITSELF, in one object.
+ *
+ * The bible (M4SS-ART-BIBLE.md section 5) specifies the two stages as different places:
+ * the Gallery horizontal, warm and overgrown; the Stack vertical, cold and industrial.
+ * Before this existed every generator read one module palette and both stages were the
+ * same room twice. The rig calls setStageTheme() before building a stage; generators keep
+ * reading PAL and get the right world without knowing themes exist.
+ */
+export interface StageTheme {
+  name: 'gallery' | 'stack';
+  pal: Record<keyof typeof PAL_RAW, string>;
+  /** Where the light falls from: god rays on a diagonal, or shaft light straight down. */
+  light: 'diagonal' | 'vertical';
+  /** What the midground architecture is: the greenhouse dome, or the pipe stacks. */
+  midground: 'dome' | 'pipes';
+  /** What hangs into the frame in front of the play plane. */
+  occluders: 'leaves' | 'pipes';
+  /** Flora density multiplier - the Stack is where the forest thins out. */
+  flora: number;
+  /** Final (post-grade) colours for the three parallax forest layers, far to near. */
+  forest: [string, string, string];
+}
+
+export const THEME_GALLERY: StageTheme = {
+  name: 'gallery',
+  pal: PAL,
+  light: 'diagonal',
+  midground: 'dome',
+  occluders: 'leaves',
+  flora: 1,
+  forest: ['#22332e', '#18271f', '#0e1a13'],
+};
+
+export const THEME_STACK: StageTheme = {
+  name: 'stack',
+  pal: buildPal(STACK_RAW),
+  light: 'vertical',
+  midground: 'pipes',
+  occluders: 'pipes',
+  flora: 0.4,
+  forest: ['#20303a', '#141f29', '#0a121a'],
+};
+
+let activeTheme: StageTheme = THEME_GALLERY;
+
+/**
+ * Point every generator at one stage's world. PAL is mutated in place because every
+ * drawing function on this page reads PAL.x at draw time - swapping the values under them
+ * re-themes all twenty-plus generators without a single signature changing.
+ */
+export function setStageTheme(theme: StageTheme): void {
+  activeTheme = theme;
+  Object.assign(PAL, theme.pal);
+}
+
+export function stageTheme(): StageTheme {
+  return activeTheme;
+}
 
 /** A canvas at exact pixel size, with smoothing off and nothing drawn yet. */
 function surface(w: number, h: number): { c: HTMLCanvasElement; g: CanvasRenderingContext2D } {
@@ -1781,13 +1882,15 @@ export function forestLayer(
   depth: 0 | 1 | 2,
   colour: string,
   w = 1280,
-  h = 760
+  h = 760,
+  density = 1
 ): THREE.CanvasTexture {
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(w, h);
   g.fillStyle = colour;
 
-  const trunks = [4, 5, 6][depth];
+  // Density scales the trunk count: the Stack keeps a thinner forest than the Gallery.
+  const trunks = Math.max(2, Math.round([4, 5, 6][depth] * density));
   const baseY = h;
 
   for (let i = 0; i < trunks; i++) {
