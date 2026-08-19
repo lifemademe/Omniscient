@@ -1792,17 +1792,29 @@ export class BoardPanel {
      * The same walk again, keeping the numbers this time so each claimed row can show what
      * it actually asks of the car.
      */
-    const jumps = new Map<string, { blocks: number; seconds: number }>();
+    const jumps = new Map<string, { blocks: number; seconds: number; from: string }>();
     at = view.trail.from;
     since = 0;
+    /*
+     * `from` names the ping this was measured against, and it has to be named.
+     *
+     * "From the one before it" is unambiguous in the code and useless on screen: the
+     * previous CLAIMED ping can be several rows up, with unclaimed rows in between, so a
+     * player reading "18 blocks" against a row that says "21 blocks ahead" has no way to
+     * see what the 18 refers to. Reported as exactly that - how is 21 ahead and 1 west the
+     * same as 18 blocks? It is not; the 18 was from the +33s ping, four rows above.
+     */
+    let previous = 'where the cameras lost him';
     for (const fragment of picked) {
       jumps.set(fragment.id, {
         blocks:
           Math.abs(at.x - fragment.cell.x) + Math.abs(at.y - fragment.cell.y),
         seconds: fragment.at - since,
+        from: previous,
       });
       at = fragment.cell;
       since = fragment.at;
+      previous = `the +${fragment.at}s ping`;
     }
 
     Array.from(this.trailParts.list.children).forEach((row, i) => {
@@ -1813,7 +1825,7 @@ export class BoardPanel {
       if (!jump) return;
       const step = jumps.get(id);
       jump.textContent = step
-        ? `${step.blocks} blocks of driving in ${step.seconds}s, from the one before it`
+        ? `${step.blocks} blocks of driving in ${step.seconds}s, from ${step.from}`
         : '';
       jump.classList.toggle('omni-trace__jump--broken', broken.has(id));
     });
