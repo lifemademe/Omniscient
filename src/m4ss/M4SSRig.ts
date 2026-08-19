@@ -34,7 +34,9 @@ import {
   backdropTexture,
   endCapTexture,
   canopyTexture,
+  domeTexture,
   forestLayer,
+  pipeStackTexture,
   markerTexture,
   gateTexture,
   glowTexture,
@@ -1067,6 +1069,34 @@ export class M4SSRig extends ENGINE.SceneNode {
       sheet.position.set(world.width / 2, world.height / 2, layer.z);
       this.stage?.add(sheet);
     }
+
+    /*
+     * The architecture: what makes the midground a LAB rather than more forest.
+     *
+     * The bible's P3 says depth reads because the layers are different KINDS of thing,
+     * and the reference's midground is structures - the greenhouse dome in the Gallery,
+     * the pipe stacks and tanks in the Stack. Placed at -240, between the far forest
+     * (-280) and the middle forest (-210), so the trees both frame it and grow through
+     * it: the forest is eating the lab, not standing beside it.
+     */
+    const archMap =
+      this.theme.midground === 'dome'
+        ? domeTexture(`dome-${this.theme.name}`, 1280, 520)
+        : pipeStackTexture(`pipes-${this.theme.name}`, 1280, Math.min(900, Math.round(world.height * 0.6)));
+    const archH =
+      this.theme.midground === 'dome' ? world.height * 0.52 : world.height * 0.78;
+    const arch = decorMesh(
+      'Architecture',
+      new THREE.PlaneGeometry(world.width * 1.3, archH),
+      this.artMaterial({ map: archMap, transparent: true, depthWrite: false })
+    );
+    /*
+     * Anchored to the BOTTOM of the backdrop rather than centred: domes rise from the
+     * ground line and pipe stacks stand on it, and centring either leaves it floating in
+     * the middle of the sky.
+     */
+    arch.position.set(world.width / 2, world.height - archH / 2 - world.height * 0.04, -240);
+    this.stage?.add(arch);
 
     /*
      * The frame-closers. Every reference is CLOSED at the top and dark in the corners -

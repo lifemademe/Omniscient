@@ -2007,6 +2007,242 @@ export function propTexture(seed: string, kind: 'fern' | 'shroom', size = 48): T
 }
 
 /**
+ * The greenhouse dome: the Gallery's midground, and the single image that says "lab".
+ *
+ * Every reference that reads as a laboratory earns it here - a glass lattice dome, backlit
+ * by the haze, filling the upper background. Ribs are drawn dark against panes one step
+ * brighter than the haze; a few panes are BROKEN (the lattice shows the sky through a
+ * darker gap, with a hanging shard); moss rides the horizontal ribs; and a handful of
+ * panes glow warm from inside - the lab's lights, still on, with nobody left to need them.
+ *
+ * A silhouette sheet, transparent everywhere the dome is not, meant for a plane between
+ * the far forest and the middle forest layer.
+ */
+export function domeTexture(seed: string, w = 1280, h = 520): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+
+  /*
+   * Round 2 values. The first draft graded the panes in two flat bands - a bright ring at
+   * the crown over a near-void body - and the dome read as a flying saucer. Everything
+   * here now lives inside the haze family on a SMOOTH four-step ramp (glass in front of
+   * hazy light is just haze, slightly organised), and the ribs sit one step darker than
+   * whatever pane they cross, never black.
+   */
+  const paneRamp = [
+    mixHex(PAL.hazeNear, PAL.bioCyan, 0.22),
+    mixHex(PAL.hazeNear, PAL.bioCyan, 0.08),
+    mixHex(PAL.hazeFar, PAL.hazeNear, 0.65),
+    mixHex(PAL.hazeFar, PAL.hazeNear, 0.35),
+  ];
+  const rib = mixHex(PAL.hazeFar, PAL.voidMid, 0.55);
+  const ribLit = mixHex(rib, PAL.hazeNear, 0.5);
+
+  /** One dome: a stepped pixel arc of panes inside a ribbed lattice. */
+  const dome = (cx: number, baseY: number, radius: number, squash: number): void => {
+    const rows = Math.round(radius * squash);
+    // Panes first: horizontal bands of glass, brighter toward the crown where the
+    // backlight is strongest.
+    for (let dy = 0; dy < rows; dy++) {
+      const t = dy / rows;
+      const half = Math.round(radius * Math.sqrt(Math.max(0, 1 - (1 - t) ** 2)));
+      const y2 = baseY - rows + dy;
+      if (y2 < 0 || y2 >= h) continue;
+      g.fillStyle = paneRamp[Math.min(paneRamp.length - 1, Math.floor(t * paneRamp.length))];
+      g.fillRect(cx - half, y2, half * 2, 1);
+    }
+    // Vertical ribs: meridians converging on the crown.
+    const meridians = Math.max(5, Math.round(radius / 34));
+    for (let m = 0; m <= meridians; m++) {
+      const k = m / meridians;
+      const topX = cx + Math.round((k - 0.5) * radius * 0.5);
+      const botX = cx + Math.round((k - 0.5) * 2 * radius);
+      for (let dy = 0; dy < rows; dy++) {
+        const t = dy / rows;
+        const x2 = Math.round(topX + (botX - topX) * t);
+        const y2 = baseY - rows + dy;
+        if (y2 < 0 || y2 >= h) continue;
+        g.fillStyle = rib;
+        g.fillRect(x2, y2, 2, 1);
+      }
+    }
+    // Horizontal rib rings, with moss riding the lower ones.
+    for (let ring = 1; ring <= 4; ring++) {
+      const t = ring / 4.6;
+      const y2 = baseY - rows + Math.round(rows * t);
+      const half = Math.round(radius * Math.sqrt(Math.max(0, 1 - (1 - t) ** 2)));
+      g.fillStyle = ring < 3 ? rib : ribLit;
+      g.fillRect(cx - half, y2, half * 2, 2);
+      if (ring >= 3) {
+        for (let x2 = cx - half; x2 < cx + half; x2 += Math.round(range(rng, 6, 16))) {
+          g.fillStyle = PAL.mossDark;
+          g.fillRect(x2, y2 + 2, Math.round(range(rng, 2, 5)), Math.round(range(rng, 1, 3)));
+        }
+      }
+    }
+    // Broken panes: gaps torn in the glass, one shard hanging.
+    for (let b = 0; b < 3; b++) {
+      const t = range(rng, 0.15, 0.75);
+      const half = Math.round(radius * Math.sqrt(Math.max(0, 1 - (1 - t) ** 2)));
+      const bx = cx + Math.round(range(rng, -half * 0.8, half * 0.8));
+      const by = baseY - rows + Math.round(rows * t);
+      const bw = Math.round(range(rng, 8, 20));
+      const bh = Math.round(range(rng, 5, 12));
+      g.clearRect(bx, by, bw, bh);
+      g.fillStyle = rib;
+      g.fillRect(bx, by, 1, Math.round(bh * 0.6));
+      g.fillRect(bx + bw - 1, by, 1, Math.round(bh * 0.4));
+    }
+    // The lights left on: whole PANES glowing warm, low in the dome, bounded by their
+    // own ribs - a lit window, not a pixel. Sized off the radius so every dome carries
+    // lights that survive the display scale.
+    for (let l = 0; l < 3; l++) {
+      const t = range(rng, 0.5, 0.8);
+      const half = Math.round(radius * Math.sqrt(Math.max(0, 1 - (1 - t) ** 2)));
+      const lw = Math.max(8, Math.round(radius * 0.09));
+      const lh = Math.max(6, Math.round(radius * 0.055));
+      const lx = cx + Math.round(range(rng, -half * 0.7, half * 0.7 - lw));
+      const ly = baseY - rows + Math.round(rows * t);
+      g.fillStyle = mixHex(PAL.lampWarm, paneRamp[2], 0.4);
+      g.fillRect(lx - 1, ly - 1, lw + 2, lh + 2);
+      g.fillStyle = PAL.lampWarm;
+      g.fillRect(lx, ly, lw, lh);
+      g.fillStyle = PAL.lampCore;
+      g.fillRect(lx + 2, ly + 1, Math.round(lw * 0.4), Math.max(2, Math.round(lh * 0.4)));
+    }
+
+    /*
+     * The drum: a walled base under the glass, so the dome is a BUILDING standing on the
+     * ground rather than a hemisphere floating over it. Vertical panelling one step
+     * darker than the glass, a lit cornice where drum meets dome, and a tall doorway.
+     */
+    const drumH = Math.round(radius * 0.28);
+    const drumHalf = Math.round(radius * 0.94);
+    g.fillStyle = paneRamp[3];
+    g.fillRect(cx - drumHalf, baseY, drumHalf * 2, drumH);
+    g.fillStyle = ribLit;
+    g.fillRect(cx - drumHalf, baseY, drumHalf * 2, 2);
+    g.fillStyle = rib;
+    for (let px2 = cx - drumHalf; px2 <= cx + drumHalf; px2 += 14) {
+      g.fillRect(px2, baseY, 2, drumH);
+    }
+    // The doorway, dark, with a warm interior sliver on one side.
+    const doorW = Math.max(8, Math.round(radius * 0.08));
+    const doorX = cx + Math.round(range(rng, -drumHalf * 0.5, drumHalf * 0.5));
+    g.fillStyle = mixHex(PAL.voidDeep, '#000000', 0.3);
+    g.fillRect(doorX, baseY + Math.round(drumH * 0.25), doorW, Math.round(drumH * 0.75));
+    g.fillStyle = mixHex(PAL.lampWarm, PAL.voidDeep, 0.5);
+    g.fillRect(doorX + doorW - 2, baseY + Math.round(drumH * 0.35), 2, Math.round(drumH * 0.6));
+  };
+
+  // One grand dome off-centre and two smaller flanks - a facility, not a monument. Base
+  // lines sit high enough that each drum still fits inside the canvas.
+  dome(Math.round(w * range(rng, 0.42, 0.58)), h - 90, Math.round(range(rng, 240, 300)), 0.72);
+  dome(Math.round(w * range(rng, 0.12, 0.2)), h - 50, Math.round(range(rng, 120, 160)), 0.66);
+  dome(Math.round(w * range(rng, 0.78, 0.88)), h - 55, Math.round(range(rng, 100, 150)), 0.7);
+
+  return pixelTexture(c);
+}
+
+/**
+ * The pipe stacks: the Stack's midground. Vertical runs, tanks and valve hardware in
+ * silhouette, with the lab's emergency circuit - pale cyan pilot lights - instead of the
+ * Gallery's warm panes. Same job as domeTexture: say what this place IS from the back of
+ * the frame.
+ */
+export function pipeStackTexture(seed: string, w = 1280, h = 760): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+
+  /*
+   * Round 2 values: the first draft mixed the bodies off voidMid and the whole sheet was
+   * black-on-black. Midground silhouettes read against the haze BEHIND them, so their
+   * values come from the haze family - dark enough to silhouette, never darker than the
+   * frame's own corners.
+   */
+  const body = mixHex(PAL.hazeFar, PAL.hazeNear, 0.3);
+  const lit = mixHex(PAL.hazeNear, PAL.bioCyan, 0.12);
+  const shade = mixHex(PAL.hazeFar, PAL.voidMid, 0.45);
+
+  // Vertical pipe runs from floor to out-of-frame, in loose groups.
+  const groups = 4;
+  for (let gi = 0; gi < groups; gi++) {
+    const gx = ((gi + 0.25 + rng() * 0.5) / groups) * w;
+    const count = Math.round(range(rng, 2, 4));
+    for (let pi = 0; pi < count; pi++) {
+      const px = Math.round(gx + pi * range(rng, 14, 26));
+      const pw = Math.round(range(rng, 10, 20));
+      const top = Math.round(range(rng, 0, h * 0.3));
+      g.fillStyle = body;
+      g.fillRect(px, top, pw, h - top);
+      g.fillStyle = lit;
+      g.fillRect(px, top, 2, h - top);
+      g.fillStyle = shade;
+      g.fillRect(px + pw - 3, top, 3, h - top);
+      // Flanges.
+      for (let fy = top + 20; fy < h; fy += Math.round(range(rng, 60, 120))) {
+        g.fillStyle = body;
+        g.fillRect(px - 3, fy, pw + 6, 6);
+        g.fillStyle = lit;
+        g.fillRect(px - 3, fy, pw + 6, 1);
+      }
+      // An elbow near the top of the shorter runs.
+      if (top > 40 && rng() > 0.5) {
+        const reach = Math.round(range(rng, 30, 80));
+        const dir = rng() > 0.5 ? 1 : -1;
+        g.fillStyle = body;
+        g.fillRect(dir > 0 ? px : px - reach, top, reach + pw, pw);
+        g.fillStyle = lit;
+        g.fillRect(dir > 0 ? px : px - reach, top, reach + pw, 1);
+      }
+    }
+    // A tank at some groups' feet: a fat rounded vessel with a pilot light.
+    if (rng() > 0.4) {
+      const tw = Math.round(range(rng, 60, 110));
+      const th = Math.round(range(rng, 70, 120));
+      const tx = Math.round(gx - tw / 2 + range(rng, -20, 20));
+      const ty = h - th;
+      g.fillStyle = body;
+      g.fillRect(tx + 3, ty, tw - 6, th);
+      g.fillRect(tx, ty + 4, tw, th - 4);
+      g.fillStyle = lit;
+      g.fillRect(tx + 3, ty, tw - 6, 2);
+      // Weld seams.
+      g.fillStyle = mixHex(body, '#000000', 0.3);
+      g.fillRect(tx, ty + Math.round(th * 0.4), tw, 2);
+      // The pilot light: a lit gauge PANEL, not a pixel - the cold circuit still alive.
+      const gw = Math.max(8, Math.round(tw * 0.16));
+      const gh = Math.max(6, Math.round(th * 0.12));
+      const gx2 = tx + Math.round(tw * 0.62);
+      const gy2 = ty + Math.round(th * 0.28);
+      g.fillStyle = mixHex(PAL.lampWarm, body, 0.45);
+      g.fillRect(gx2 - 1, gy2 - 1, gw + 2, gh + 2);
+      g.fillStyle = PAL.lampWarm;
+      g.fillRect(gx2, gy2, gw, gh);
+      g.fillStyle = PAL.lampCore;
+      g.fillRect(gx2 + 2, gy2 + 1, Math.round(gw * 0.4), Math.max(2, Math.round(gh * 0.4)));
+    }
+  }
+
+  // Grated catwalk lines crossing between groups, sparse.
+  for (let i = 0; i < 3; i++) {
+    const cy = Math.round(range(rng, h * 0.25, h * 0.8));
+    const x0 = Math.round(range(rng, 0, w * 0.5));
+    const len = Math.round(range(rng, w * 0.2, w * 0.45));
+    g.fillStyle = body;
+    g.fillRect(x0, cy, len, 4);
+    g.fillStyle = lit;
+    g.fillRect(x0, cy, len, 1);
+    for (let x2 = x0; x2 < x0 + len; x2 += 9) {
+      g.fillStyle = body;
+      g.fillRect(x2, cy + 4, 2, 8);
+    }
+  }
+
+  return pixelTexture(c);
+}
+
+/**
  * One parallax layer of overgrowth, as pure silhouette.
  *
  * The reference frames get their depth from four or five planes of organic shapes fading
