@@ -249,35 +249,35 @@ lives in, log a line. Harness rule stands: `m4ss-stage.ts` (28) and `m4ss-shaft.
 stay green on every pass; `preview-stuck.ts` guards the console.
 
 ### Phase 0 — structural, before anything else (target: this week)
+> Status 2026-08-19: items 1-6 done. Item 7 is the only thing left before Phase 2.
 
-1. **[Code] Save/continue.** New `src/omniscient/session/persistence.ts`: serialise
+1. **[DONE `d15a37f`] Save/continue.** New `src/omniscient/session/persistence.ts`: serialise
    {version, resolved mission ids, knowledge facts, queue offset, m4ssStage} on every
    resolve and stage clear; restore in rig boot; menu shows CONTINUE when a save exists.
    `[Verify]` headless: resolve mission 1 → serialise → fresh rig → restore → mission 2 is
    offered. Add to preview-stuck.
-2. **[Code] Restore `COOLDOWN_OVERRIDE` to `null`.** One line. `[Verify]` grep + preview-stuck.
-3. **[Code] The ending.** After last queue resolution: final transmission beat (authored,
+2. **[DONE `d15a37f`] Restore `COOLDOWN_OVERRIDE` to `null`.** One line. `[Verify]` grep + preview-stuck.
+3. **[DONE `7b46ad6`] The ending.** After last queue resolution: final transmission beat (authored,
    ~20 lines), tree fully lit, pull-back shot, containment-report summary card (missions,
    facts learned, what was never asked), credits line. `[Verify]` preview script walks all
    missions to completion and asserts the ending fires.
-4. **[Code] M4SS ending hook.** Stage-2 portal → "SPECIMEN CONTAINED" state on Keller
+4. **[DONE `7b46ad6`] M4SS ending hook.** Stage-2 portal → "SPECIMEN CONTAINED" state on Keller
    desktop file → return to console. `[Verify]` live capture.
-5. **[Code] M4SS audio.** `src/m4ss/SlimeAudio.ts` per F3, wired to: latch, release,
+5. **[DONE `29e6599`] M4SS audio.** `src/m4ss/SlimeAudio.ts` per F3, wired to: latch, release,
    snap, split, recall, button, heavy-button, gate, bridge fall, crush, portal, landing.
    Slow-mo lowpass sweep. `[Verify]` live; keep master under ConsoleAudio's ceiling.
-6. **[Code] Split bypass decision** (F7, recommend mass-gate). `[Verify]` new harness check:
+6. **[DONE `adfc842` - mass sieve at 24 grams]** Split bypass decision (F7, recommend mass-gate). `[Verify]` new harness check:
    full body driven at the gap for 30s does NOT pass; legal split does.
-7. **[Verify] Burn down F13 live-verification list** with record.py; fix what falls out.
+7. **[OUTSTANDING - needs the editor loaded and the machine]** Burn down F13 live-verification list with record.py; fix what falls out.
 
 ### Phase 1 — feel, before freeze (target: Aug 25–Sept 2)
 
-8. **[Code] Juice pass per F5**, items 1→5 in order, one per pass, harnesses green.
-9. **[Asset] Dead-growth silhouette** per F4; greyscale check on the sheet.
-10. **[Asset] Diegetic control glyphs** in stage 1 art per F6. `[Verify]` sheet + capture.
-11. **[Code] HUD restyle** per F9.
-12. **[Code] Failure re-contact lines** per F8 — one line per mission, authored in each
-    mission file's re-open beat.
-13. **[Code] Wire `urgency`** to globe blink rate, or delete it (F12).
+8. **[DONE `813dc8c` - items 1-4; item 5 (tree pulse loudness) folded into the live burn-down]** Juice pass per F5, items 1→5 in order, one per pass, harnesses green.
+9. **[DONE `a13b0ee` - measured 74% vs 39% above the core line in greyscale]** Dead-growth silhouette per F4.
+10. **[DONE `a13b0ee` - four stencils in Pelagic OS's own face; weathering by fade, never dropout]** Diegetic control glyphs per F6.
+11. **[DONE `3d4916c`]** HUD restyle per F9.
+12. **[DONE `3d4916c` - `reopeningSay`, once per relationship, on the first re-contact after a loss]** Failure re-contact lines per F8.
+13. **[DONE `3d4916c` - blink pace 1x/2x/3x by authored urgency]** Wire `urgency` (F12).
 
 ### Phase 2 — if time remains / post-jam
 
