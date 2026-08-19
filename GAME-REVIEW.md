@@ -268,7 +268,10 @@ stay green on every pass; `preview-stuck.ts` guards the console.
    Slow-mo lowpass sweep. `[Verify]` live; keep master under ConsoleAudio's ceiling.
 6. **[DONE `adfc842` - mass sieve at 24 grams]** Split bypass decision (F7, recommend mass-gate). `[Verify]` new harness check:
    full body driven at the gap for 30s does NOT pass; legal split does.
-7. **[OUTSTANDING - needs the editor loaded and the machine]** Burn down F13 live-verification list with record.py; fix what falls out.
+7. **[MACHINE HALF DONE `d1d99f2` - boot, framing, HUD, stencils, movement, pit-return,
+   split bar, recall all verified in play mode. HUMAN HALF REMAINS: latch/swing feel, warp
+   to stage 2, crushers/red growth live, the slime's voice, ending pacing, CONTINUE across
+   a restart - one play session, needs ears]** Burn down F13 live-verification list with record.py; fix what falls out.
 
 ### Phase 1 — feel, before freeze (target: Aug 25–Sept 2)
 
