@@ -27,6 +27,14 @@ import { PAINT_UNIFORMS } from './art/painterly.js';
 import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { audio } from './audio/ConsoleAudio.js';
+import {
+  clearM4ssStage,
+  clearSave,
+  hasSave,
+  loadGame,
+  loadM4ssStage,
+  saveGame,
+} from './session/persistence.js';
 import { installCursor } from './art/cursor.js';
 import { installRetro, setRetroLook } from './art/retro.js';
 import { ScanTargets } from './link/ScanTargets.js';
@@ -431,6 +439,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.menu = new MainMenu(WORKSTATION_ORIGIN);
     this.add(this.menu.root);
+    // The tape deck is authored cold. If there is something on the tape, warm it.
+    if (hasSave()) this.menu.setModuleEnabled('continue', true);
   }
 
   /** Created before beginPlay so it is part of the tree the engine initialises normally. */
@@ -1648,7 +1658,20 @@ export class OmniscientRig extends ENGINE.SceneNode {
       return;
     }
 
-    if (action !== 'new-game') return;
+    if (action !== 'new-game' && action !== 'continue') return;
+
+    /*
+     * The cartridge wipes the tape. Choosing NEW GAME with a save present is a decision,
+     * and the machine should honour it rather than quietly resuming - a fresh start that
+     * is not fresh is the save system at its most confusing. The specimen resets too:
+     * OMNISCIENT_ and M4SS are one fiction, and a new operator gets a new containment file.
+     */
+    if (action === 'new-game') {
+      clearSave();
+      clearM4ssStage();
+    } else {
+      this.restoreSave();
+    }
 
     /**
      * The first gesture the game gets, and therefore the only place audio can start.
@@ -1656,12 +1679,61 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * Browsers refuse to start an AudioContext outside a user gesture, and one created at
      * load sits `suspended` forever while every cue silently does nothing - a failure mode
      * with no symptom except silence, which is indistinguishable from having no audio at
-     * all. Hanging it off NEW GAME means it cannot be missed.
+     * all. Hanging it off the front-door actions means it cannot be missed.
      */
     audio.unlock();
 
     this.menu?.setEnabled(false);
     this.showGlobe();
+  }
+
+  /**
+   * Write the whole game state that matters. Called when a request resolves or is lost -
+   * the two moments the world durably changes. Mid-mission progress is deliberately not
+   * saved (see persistence.ts): a refresh mid-request costs the attempt, never the game.
+   */
+  private persist(): void {
+    saveGame({
+      ...this.knowledge.serialize(),
+      signals: this.signals.map((s) => ({ id: s.id, state: s.state, hidden: s.hidden ?? false })),
+      offered: this.offered,
+      openable: [...this.openable],
+      m4ssStage: loadM4ssStage(),
+    });
+  }
+
+  /** Rebuild the world from the tape. Runs before showGlobe, on the CONTINUE action. */
+  private restoreSave(): void {
+    const save = loadGame();
+    if (!save) return;
+
+    this.knowledge.restore(save);
+
+    for (const signal of this.signals) {
+      const saved = save.signals.find((r) => r.id === signal.id);
+      if (!saved) continue;
+      /*
+       * Cooldown and Active both coerce to Waiting. Cooldown because deadlines are not
+       * serialised (persistence.ts says why); Active because persist() only ever runs
+       * with no request open, so an Active state in a save file is corruption, and the
+       * generous reading of a corrupt state is "still waiting to be answered".
+       */
+      const state =
+        saved.state === SignalState.Cooldown || saved.state === SignalState.Active
+          ? SignalState.Waiting
+          : saved.state;
+      signal.state = state;
+      signal.hidden = saved.hidden;
+      signal.cooldown = undefined;
+    }
+
+    this.offered = save.offered;
+    this.openable = new Set(save.openable);
+
+    // The menu screen is the tree, and it is already on. Redraw it as the restored
+    // knowledge, the same derive-from-state path a fresh boot takes.
+    this.tree?.setState(this.knowledge.toTreeState());
+    this.tree?.draw(1, this.pulse);
   }
 
   /**
@@ -2031,7 +2103,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * One number in one place so it is one line to take out. Set it to null to give every
    * mission its own cooldown back.
    */
-  private static readonly COOLDOWN_OVERRIDE: number | null = 10;
+  private static readonly COOLDOWN_OVERRIDE: number | null = null;
 
   private onRequestLost(failure: MissionFailure): void {
     const contactId = this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
@@ -2081,6 +2153,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // behind us, but the player is still looking at what went wrong and is being asked to
     // write themselves a note about it - starting the return now took the Contact View
     // away mid-sentence and made §170's note unreachable. The exit is onNoteRecorded.
+
+    // A loss changes the world - trust, the countdown, the openable set - so it is one of
+    // the two moments worth writing to the tape.
+    this.persist();
   }
 
   /**
@@ -2227,6 +2303,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
 
     this.topUpGlobe();
+    this.persist();
   }
 
   /** The shared atmosphere, retuned per diorama - see mountScene. */

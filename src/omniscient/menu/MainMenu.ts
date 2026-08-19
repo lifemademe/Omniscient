@@ -58,7 +58,11 @@ const MODULES: ModuleSpec[] = [
     title: 'Continue',
     subtitle: 'Restore from memory.',
     accent: ACCENT.amber,
-    // No save system in the Jam build (§215), so this reads as present but cold.
+    /*
+     * Cold until the rig warms it. There is a save system now; what stays true is that a
+     * machine with nothing on the tape should not offer to play the tape - the rig calls
+     * setModuleEnabled('continue', true) at boot if persistence has something to restore.
+     */
     disabled: true,
   },
   {
@@ -225,6 +229,19 @@ export class MainMenu {
       picker.onHover((id) => this.setHovered(id as MenuAction | null)),
       picker.onClick((id) => this.onClick(id as MenuAction | null))
     );
+  }
+
+  /**
+   * Wake or cool one module at runtime.
+   *
+   * Exists for exactly one caller: the tape deck. CONTINUE ships authored as disabled -
+   * "present but cold" - and the rig warms it at boot when a save exists. Flipping the
+   * spec is enough; hover and click both read `spec.disabled` live, so there is no lit
+   * state to rebuild.
+   */
+  public setModuleEnabled(id: MenuAction, enabled: boolean): void {
+    const module = this.modules.get(id);
+    if (module) module.spec.disabled = !enabled;
   }
 
   public onAction(handler: (action: MenuAction) => void): () => void {

@@ -26,6 +26,7 @@ import { decorMesh } from '../omniscient/art/mesh.js';
 import { buildSurface } from './surface.js';
 import { freshLab } from './lab.js';
 import { freshShaft } from './shaft.js';
+import { loadM4ssStage, saveM4ssStage } from '../omniscient/session/persistence.js';
 import {
   atmosphereTexture,
   backdropTexture,
@@ -295,8 +296,18 @@ export class M4SSRig extends ENGINE.SceneNode {
      * lighter. 40 reads as a thing you could pick up rather than a puddle, and the reach
      * economy was retuned around it rather than the other way round.
      */
+    /*
+     * Resume at the saved stage. Clamped rather than trusted - a save written by a build
+     * with three stages read by a build with two should land on the last real stage, not
+     * on undefined. Progress WITHIN a stage is never saved, matching the console's rule:
+     * a refresh costs the attempt, never the game.
+     */
+    this.stageIndex = Math.min(loadM4ssStage(), STAGES.length - 1);
     this.state = makeState(STAGES[this.stageIndex](), 40);
-    this.cameraY = this.state.world.height / 2;
+    this.cameraY =
+      this.state.world.height <= VIEW_WIDTH / CAMERA_ASPECT
+        ? this.state.world.height / 2
+        : this.state.world.height - VIEW_WIDTH / CAMERA_ASPECT / 2;
     const stage = ENGINE.SceneNode.create({ name: 'M4SSStage' });
     stage.scale.set(SCALE, -SCALE, SCALE);
     this.add(stage);
@@ -1214,6 +1225,7 @@ export class M4SSRig extends ENGINE.SceneNode {
   private advance(): void {
     if (this.stageIndex + 1 >= STAGES.length) return;
     this.stageIndex += 1;
+    saveM4ssStage(this.stageIndex);
 
     /*
      * The whole stage node goes, and everything in it is built again.

@@ -247,6 +247,48 @@ export class KnowledgeStore {
     return this.facts.get(id) ?? null;
   }
 
+  /** Everything the save file needs to rebuild this store. Copies, not references. */
+  public serialize(): {
+    facts: Fact[];
+    connections: Connection[];
+    standings: Array<{ contactId: string; standing: ContactStanding }>;
+    sequence: number;
+  } {
+    return {
+      facts: [...this.facts.values()].map((f) => ({ ...f })),
+      connections: [...this.connections.values()].map((c) => ({ ...c })),
+      standings: [...this.standings.entries()].map(([contactId, standing]) => ({
+        contactId,
+        standing: { ...standing },
+      })),
+      sequence: this.sequence,
+    };
+  }
+
+  /**
+   * Rebuild the store from a save. Replaces everything; emits nothing.
+   *
+   * Silent on purpose: restore runs at boot, before the tree or any listener exists, and
+   * a listener that DID exist would see fourteen fact-learned events fire in one frame -
+   * the growth reveal animating a whole playthrough of learning as if it happened now.
+   * The tree is rebuilt from toTreeState() after this returns, which is the same path a
+   * fresh boot takes.
+   */
+  public restore(data: {
+    facts: Fact[];
+    connections: Connection[];
+    standings: Array<{ contactId: string; standing: ContactStanding }>;
+    sequence: number;
+  }): void {
+    this.facts.clear();
+    this.connections.clear();
+    this.standings.clear();
+    for (const fact of data.facts) this.facts.set(fact.id, { ...fact });
+    for (const connection of data.connections) this.connections.set(connection.id, { ...connection });
+    for (const { contactId, standing } of data.standings) this.standings.set(contactId, { ...standing });
+    this.sequence = data.sequence;
+  }
+
   /** Facts in learn order - the order the tree draws them. */
   public getFacts(): Fact[] {
     return [...this.facts.values()].sort((a, b) => a.sequence - b.sequence);
