@@ -9,7 +9,7 @@
  * should not also need to know how water finds a drain.
  */
 
-import { bestSets, isCoherent } from './breadcrumbs.js';
+import { arrives, bestSets, drivable, isCoherent } from './breadcrumbs.js';
 import { CLUES, matches, satisfies } from './traces.js';
 import { replayBeam } from './beam.js';
 import { workLock } from './lock.js';
@@ -197,10 +197,28 @@ export function gradeDevice(device: Device, submission: DeviceSubmission): Devic
        * route is itself coherent. Without maximality a player could submit two pings and
        * be right, which is how the first version of this device had fifteen answers.
        */
-      if (!isCoherent(device.trail, chosen)) {
+      /*
+       * Two failures, two sentences, because they send the player in opposite directions.
+       *
+       * A set with an impossible jump in it has one too many; a set that stops short has
+       * too few. Returning "it would have had to be in two places" for both - which is what
+       * this did - tells the second player to go hunting for a contradiction that is not
+       * there. {+8, +18, +33} is three jumps anybody could drive, and it was being called
+       * physically impossible.
+       */
+      if (!drivable(device.trail, chosen)) {
         return {
           solved: false,
           note: 'those are not one car - somewhere in there it would have had to be in two places',
+        };
+      }
+
+      if (!arrives(device.trail, chosen)) {
+        // Says the trail stops too soon, never where it should have got to - naming that is
+        // naming the answer, and working out where he comes out IS the request.
+        return {
+          solved: false,
+          note: 'he could have driven all of that, but it stops in the middle of the district - he did not stop there',
         };
       }
 

@@ -32,6 +32,8 @@ import { GlobeView, SignalState } from '../src/omniscient/crt/GlobeView.js';
 import { createSignals } from '../src/omniscient/content/signals.js';
 import { DISTRICT_PURSUIT } from '../src/omniscient/content/district-07.js';
 import { auditPursuit } from '../src/omniscient/mission/pursuit.js';
+import { DISTRICT_TRAIL } from '../src/omniscient/content/district-07.js';
+import { gradeDevice } from '../src/omniscient/mission/device.js';
 import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
 
 const SEED = 0x0c151e;
@@ -367,6 +369,54 @@ function checkShippedChase(): void {
     `${audit.honestDecoys} of ${audit.hops}`
   );
   check('no hop is a single option', audit.thin === 0, `${audit.thin} thin`);
+}
+
+/**
+ * The cold trail fails in three different ways, and must say which.
+ *
+ * A set can be wrong by containing a jump no car could make, by stopping short of anywhere
+ * he could be going, or by being a real route with pieces of him left behind. Those send the
+ * player in three different directions, and one of them used to answer for all three: a
+ * perfectly drivable {+8, +18, +33} was told "somewhere in there it would have had to be in
+ * two places", which sent them hunting for a contradiction that did not exist.
+ *
+ * Checked by submitting one of each and requiring three distinct notes.
+ */
+function checkTrailSaysWhy(): void {
+  const trail = DISTRICT_TRAIL;
+  const ordered = [...trail.fragments].sort((a, b) => a.at - b.at);
+  const ids = (secs: number[]): string[] =>
+    ordered.filter((f) => secs.includes(f.at)).map((f) => f.id);
+  const device = {
+    kind: 'trail' as const,
+    prompt: '',
+    trail,
+    onSolved: { to: 'x' },
+    onWrong: { to: 'y' },
+    wrongSay: '',
+  };
+
+  const impossible = gradeDevice(device, { kind: 'trail', picks: ids([8, 22, 27]) });
+  const short = gradeDevice(device, { kind: 'trail', picks: ids([8, 18, 33]) });
+  const partial = gradeDevice(device, { kind: 'trail', picks: ids([8, 18, 38]) });
+  const right = gradeDevice(device, { kind: 'trail', picks: ids([8, 18, 27, 38]) });
+
+  check('the answer is accepted', right.solved);
+  check('an impossible jump is rejected', !impossible.solved);
+  check('a trail that stops short is rejected', !short.solved);
+  check('a real route with pieces missing is rejected', !partial.solved);
+
+  const notes = [impossible.note, short.note, partial.note];
+  check(
+    'each failure says something different',
+    new Set(notes).size === 3 && notes.every(Boolean),
+    notes.map((n) => `"${(n ?? '').slice(0, 28)}..."`).join(' / ')
+  );
+  check(
+    'and the one that stops short does not claim two places',
+    !(short.note ?? '').includes('two places'),
+    short.note
+  );
 }
 
 let failures = 0;
@@ -867,6 +917,9 @@ console.log('');
 console.log('=== THE GLOBE ===');
 checkEveryMissionHasASignal();
 checkGlobeTurns();
+console.log('');
+console.log('=== THE COLD TRAIL ===');
+checkTrailSaysWhy();
 console.log('');
 console.log('=== THE CHASE THAT SHIPS ===');
 checkShippedChase();

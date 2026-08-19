@@ -1872,7 +1872,7 @@ export class BoardPanel {
         ? 'ignore what recorded them - only how far and how long. start with one and add to it'
         : firstBroken
           ? `he could not have driven that far in that time - +${firstBroken.at}s is not the same car`
-          : `${this.claimed.size} claimed and he could have driven all of it - now find the ones you have left out`);
+          : `${this.claimed.size} claimed and he could have driven all of it - keep going until the trail leaves the district`);
   }
 
   private buildBeam(): void {

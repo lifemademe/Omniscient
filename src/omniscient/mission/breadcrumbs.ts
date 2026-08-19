@@ -99,6 +99,43 @@ export function couldReach(from: Cell, to: Cell, seconds: number): boolean {
  * car cannot be at 21:58 before it was at 21:54. Sorting here rather than asking them to
  * sequence it keeps the question about plausibility instead of about clerical work.
  */
+/**
+ * Could one car have driven this, ignoring where it ends up?
+ *
+ * Split out of `isCoherent` because the two halves fail for completely different reasons
+ * and the player has to be told which. A set can be perfectly drivable and still wrong by
+ * stopping in the middle of the district - {+8, +18, +33} is exactly that, three jumps
+ * anybody could make, finishing twenty-three blocks short of anywhere.
+ *
+ * Told as "it would have had to be in two places", which is what happened, that player goes
+ * looking for an impossible jump that does not exist.
+ */
+export function drivable(trail: Trail, chosen: string[]): boolean {
+  const picked = trail.fragments
+    .filter((fragment) => chosen.includes(fragment.id))
+    .sort((a, b) => a.at - b.at);
+  if (picked.length !== chosen.length) return false;
+
+  let at = trail.from;
+  let since = 0;
+  for (const fragment of picked) {
+    if (!couldReach(at, fragment.cell, fragment.at - since)) return false;
+    at = fragment.cell;
+    since = fragment.at;
+  }
+  return true;
+}
+
+/** Does the chain finish somewhere he could be going? */
+export function arrives(trail: Trail, chosen: string[]): boolean {
+  const picked = trail.fragments
+    .filter((fragment) => chosen.includes(fragment.id))
+    .sort((a, b) => a.at - b.at);
+  const last = picked[picked.length - 1];
+  if (!last) return false;
+  return gap(last.cell, trail.destination) <= 2;
+}
+
 export function isCoherent(trail: Trail, chosen: string[]): boolean {
   if (chosen.length === 0) return false;
 
