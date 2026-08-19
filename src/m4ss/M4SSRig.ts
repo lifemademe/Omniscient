@@ -27,6 +27,8 @@ import { buildSurface } from './surface.js';
 import { freshLab } from './lab.js';
 import { freshShaft } from './shaft.js';
 import { loadM4ssStage, saveM4ssContained, saveM4ssStage } from '../omniscient/session/persistence.js';
+import { audio } from '../omniscient/audio/ConsoleAudio.js';
+import { SlimeAudio } from './SlimeAudio.js';
 import {
   atmosphereTexture,
   backdropTexture,
@@ -170,6 +172,22 @@ export class M4SSRig extends ENGINE.SceneNode {
   public onContained: (() => void) | null = null;
   /** Seconds until onContained fires. -1 is disarmed. See contain(). */
   private containedDelay = -1;
+
+  // -- the voice, and the state edges that trigger it -------------------------------------
+  private readonly voice = new SlimeAudio();
+  /** Last frame's values, so a cue fires on the TRANSITION and never on the state. */
+  private wasAttached = false;
+  private wasSnapped = 0;
+  private wasOwned = 0;
+  private wasAirborne = false;
+  private fallSpeed = 0;
+  /** Set by the split handler for one tick, so a split's mass drop is not read as a crush. */
+  private justSplit = false;
+  /** Absorb ticks are throttled - lumps come home a few grams a frame for seconds. */
+  private absorbCooldown = 0;
+  /** Buttons and gates already announced, so a pressed state does not re-fire per frame. */
+  private readonly heardButtons = new Set<object>();
+  private readonly heardGates = new Set<object>();
   /**
    * Which stage is loaded. The portal advances it.
    *
@@ -356,6 +374,9 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.camera?.setActive(false);
     for (const off of this.detach) off();
     this.detach.length = 0;
+    // Disconnect the instrument from the shared bus. The bus itself belongs to the
+    // console and stays up - only the slime's routes through it are ours to tear down.
+    this.voice.dispose();
   }
 
   // -- setup ------------------------------------------------------------------------------
@@ -1085,7 +1106,14 @@ export class M4SSRig extends ENGINE.SceneNode {
 
   private listen(): void {
     const down = (e: KeyboardEvent): void => {
+      /*
+       * The standalone boot has no menu, so the first keystroke is the first gesture the
+       * browser will accept an AudioContext from. Inside the console this is a no-op
+       * resume - unlock() is idempotent - so the two boots share one line.
+       */
+      audio.unlock();
       this.held.add(e.code);
+      if (e.code === 'KeyQ' && !e.repeat) this.voice.play('recall');
       if (e.code === 'KeyQ') this.recalling = true;
       if (e.code === 'Space') e.preventDefault();
     };
@@ -1093,11 +1121,18 @@ export class M4SSRig extends ENGINE.SceneNode {
       this.held.delete(e.code);
       if (e.code === 'KeyQ') this.recalling = false;
       if (e.code === 'Space' && this.state) {
-        split(this.state, this.splitFraction());
+        const shed = split(this.state, this.splitFraction());
+        if (shed > 0) {
+          this.voice.play('split');
+          this.justSplit = true;
+        }
         this.splitHold = 0;
       }
     };
-    const press = (e: MouseEvent): void => this.grab(e);
+    const press = (e: MouseEvent): void => {
+      audio.unlock();
+      this.grab(e);
+    };
     const hover = (e: MouseEvent): void => {
       this.pointer = this.toLevel(e);
     };
@@ -1217,8 +1252,16 @@ export class M4SSRig extends ENGINE.SceneNode {
       step(state, { move, anchor: this.latched, recall: this.recalling });
       this.carry -= TUNING.dt;
     }
-    if (this.recalling) absorbTouching(state);
+    if (this.recalling) {
+      const came = absorbTouching(state);
+      if (came > 0 && this.absorbCooldown <= 0) {
+        this.voice.play('absorb');
+        this.absorbCooldown = 0.09;
+      }
+    }
+    this.absorbCooldown -= deltaTime;
 
+    this.hearWorld();
     this.paintSlime();
     this.paintWorld(deltaTime);
     this.follow();
@@ -1293,6 +1336,9 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.hovered = null;
     this.splitHold = 0;
     this.carry = 0;
+    this.heardButtons.clear();
+    this.heardGates.clear();
+    this.wasOwned = 0;
     // Start looking at the bottom of the room, which is where the player is standing.
     this.cameraY = this.state.world.height - VIEW_WIDTH / CAMERA_ASPECT / 2;
 
@@ -1305,6 +1351,73 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.buildPortal(this.state.world);
     this.buildSlimeGlow();
     this.buildSlime();
+  }
+
+  /**
+   * Turn state TRANSITIONS into cues, once per frame, after the sim has stepped.
+   *
+   * Everything here is an edge detector, and that is the whole design: the sim owns what
+   * happened, the rig only notices that it changed. No cue fires from a state being true -
+   * a body that stays attached is holding on, not latching sixty times a second.
+   */
+  private hearWorld(): void {
+    const state = this.state;
+    if (!state) return;
+    const world = state.world;
+    const mine = owned(state);
+
+    // The creature's filter follows the fling's slow motion. Heard, not just seen.
+    this.voice.setSlowmo(state.slowmo);
+
+    // Latch, snap, release. Snap wins over release: both drop `attached` in one frame,
+    // and the tear is the one the player needs to hear.
+    if (state.attached && !this.wasAttached) this.voice.play('latch');
+    if (state.snapped > this.wasSnapped) {
+      this.voice.play('snap');
+    } else if (!state.attached && this.wasAttached && this.latched === null) {
+      this.voice.play('release');
+    }
+
+    /*
+     * A crush is a mass drop the player did not ask for. The split handler flags its own
+     * drops and the snap already sounded above, so whatever ownership loss remains this
+     * frame was a press closing on the body.
+     */
+    if (!this.justSplit && state.snapped === this.wasSnapped && mine.length < this.wasOwned) {
+      this.voice.play('crush');
+    }
+    this.justSplit = false;
+
+    // Landing: airborne last frame, grounded now, and the fall was a real one. The
+    // threshold keeps the crawl's constant micro-hops silent.
+    let grounded = 0;
+    let vy = 0;
+    for (const q of mine) {
+      if (q.grounded) grounded += 1;
+      vy += (q.y - q.py) / TUNING.dt;
+    }
+    const airborne = mine.length > 0 && grounded / mine.length < 0.2;
+    if (airborne) this.fallSpeed = vy / Math.max(1, mine.length);
+    if (this.wasAirborne && !airborne && this.fallSpeed > 260) this.voice.play('land');
+
+    // The level's own machinery announces its transitions.
+    for (const button of world.buttons) {
+      if (button.pressed && !this.heardButtons.has(button)) {
+        this.heardButtons.add(button);
+        this.voice.play(button.force !== undefined ? 'heavy' : 'button');
+      }
+    }
+    for (const gate of world.gates) {
+      if (gate.open && !this.heardGates.has(gate)) {
+        this.heardGates.add(gate);
+        this.voice.play(gate.mode === 'bridge' ? 'bridge' : 'gate');
+      }
+    }
+
+    this.wasAttached = state.attached;
+    this.wasSnapped = state.snapped;
+    this.wasOwned = mine.length;
+    this.wasAirborne = airborne;
   }
 
   private replace(node: ENGINE.MeshNode | null, geometry: THREE.BufferGeometry): void {
@@ -1515,6 +1628,7 @@ export class M4SSRig extends ENGINE.SceneNode {
         if (d < 70) {
           this.cleared = true;
           this.portal.scale.set(1.25, 1.25, 1.25);
+          this.voice.play('portal');
           if (this.stageIndex + 1 < STAGES.length) this.advance();
           else this.contain();
         }

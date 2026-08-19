@@ -269,6 +269,22 @@ export class ConsoleAudio {
     this.carrier.gain.setTargetAtTime(live ? 0.16 : 0, this.ctx.currentTime, live ? 0.4 : 0.7);
   }
 
+  /**
+   * The shared context, noise bed and master ceiling, for sibling instruments.
+   *
+   * Exists for exactly one caller: the slime. M4SS needs a voice of its own - wet,
+   * pitch-bent, nothing like the valve set - but "its own" must not mean its own
+   * AudioContext, because two contexts is two carriers, and two carriers beating against
+   * each other is the most audible bug this system can have (see the class comment).
+   * A sibling gets the plumbing and brings its own cue table; the master gain stays the
+   * one ceiling nothing may bypass.
+   */
+  public bus(): { ctx: AudioContext; master: GainNode; noise: AudioBuffer } | null {
+    return this.ctx && this.master && this.noise
+      ? { ctx: this.ctx, master: this.master, noise: this.noise }
+      : null;
+  }
+
   public play(cue: Cue): void {
     const ctx = this.ctx;
     const master = this.master;
