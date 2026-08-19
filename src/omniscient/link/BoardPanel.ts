@@ -24,7 +24,6 @@
 
 import { initialBeam, stepBeam } from '../mission/beam.js';
 import { describe } from '../mission/pursuit.js';
-import { couldReach } from '../mission/breadcrumbs.js';
 import { reached } from '../mission/pipes.js';
 import { narrow } from '../mission/traces.js';
 import { audio } from '../audio/ConsoleAudio.js';
@@ -376,26 +375,6 @@ const BOARD_CSS = `
 
    One character, invisible in review, and it only breaks the one rule that
    happens to follow it. See scripts/css-balanced.ts. */
-/* A claimed fragment the car could not have reached in time from the one before it.
-
-   ## Why the board shows this
-
-   Asked, of this panel: "what are inductive loop counts, what is a changed cell, what am I
-   looking for?" - and the honest answer to the first two is THEY DO NOT MATTER. The source
-   of a ping is texture; the puzzle is entirely when and where. Nine rows of unfamiliar
-   sensor names read as nine things to understand, so the writing that was meant to give the
-   phase its texture was being mistaken for the mechanic.
-
-   The fix is not to explain inductive loops. It is to make the actual rule visible: claim
-   the pings one car could have driven between, and the moment two of them cannot both be
-   him, say which two. Same medicine as the wet pipes - show the consequence of the player's
-   own choices instead of grading them at the end. */
-
-.omni-trace__row--broken {
-  border-color: rgba(168, 64, 47, 0.75);
-  background: rgba(30, 12, 10, 0.75);
-}
-.omni-trace__row--broken .omni-trace__plate { color: #d1614a; }
 
 /* -- The chase's trail ------------------------------------------------------------------
    Every camera the player has already committed to, kept on screen.
@@ -1732,37 +1711,24 @@ export class BoardPanel {
      * and that is the entire test. Nothing here asks the player to hold a direction, add two
      * numbers, or work out which row a figure was measured against.
      */
+    /**
+     * The rule, and where the numbers come from. Not which rows pass it.
+     *
+     * "After 7 blocks" is measured from the last ping claimed, and the time is the gap
+     * between the two timestamps - which the player reads off the list themselves. Both
+     * halves have to be said, because a distance with no stated origin is the thing that
+     * caused every misreading in this panel's history.
+     */
     this.trailParts.headline.textContent =
-      `LAST SEEN heading ${view.trail.heading}, doing about a block a second. Each line says `
-      + `how far he would have had to drive to be there, and how long he had. Claim the ones `
-      + `he could have made - the red ones he could not. `
+      `LAST SEEN heading ${view.trail.heading}, doing about a block a second. Each line is `
+      + `the drive from the last ping you claimed - and the clock is on the left. Could he `
+      + `have covered that ground in that long? `
       + `${this.claimed.size} of ${view.trail.fragments.length} claimed as him.`;
 
     const ordered = [...view.trail.fragments].sort((a, b) => a.at - b.at);
 
-    /**
-     * Walk the claim in time order and find the first jump no car could make.
-     *
-     * The same test the grader uses, on the same data, run on every click instead of once
-     * at the end. It gives away nothing: `couldReach` is arithmetic over two positions and
-     * a duration, all three of which are printed on the rows the player is looking at. What
-     * it removes is the part where you assemble a set, send it, and are told only that
-     * "somewhere in there it would have had to be in two places".
-     */
     const picked = ordered.filter((fragment) => this.claimed.has(fragment.id));
-    const broken = new Set<string>();
-    let at = view.trail.from;
-    let since = 0;
-    for (const fragment of picked) {
-      if (!couldReach(at, fragment.cell, fragment.at - since)) broken.add(fragment.id);
-      at = fragment.cell;
-      since = fragment.at;
-    }
 
-    /*
-     * The same walk again, keeping the numbers this time so each claimed row can show what
-     * it actually asks of the car.
-     */
     /**
      * What every ping would ask of the car, from wherever the chain has got to.
      *
@@ -1794,23 +1760,38 @@ export class BoardPanel {
       const detail = row.querySelector('.omni-trace__detail');
       const step = jumps.get(id);
       if (!detail || !step) return;
-      /*
-       * "after 7 blocks and 8s, the barrier logged a vehicle" - the drive first, because it
-       * is the only part that decides anything, and the source after it, because it is the
-       * only part that gives the night any texture.
+      /**
+       * The distance, and nothing else.
+       *
+       * ## What the board does, and what it leaves alone
+       *
+       * The split is between arithmetic a person cannot do from what is on screen and
+       * arithmetic they can. Working out how far apart two pings are needs their positions
+       * on a grid, and printing those brought four rounds of misreading - it is the board's
+       * job. Working out that +27s is nine seconds after +18s is subtracting two numbers
+       * that are both right there in front of them, and comparing that to the distance is
+       * the puzzle itself.
+       *
+       * So the seconds came back off. The row said "after 7 blocks and 9s" and that is the
+       * whole question answered on the player's behalf; there was nothing left to decide
+       * except to read the colour.
+       *
+       * The colour is gone with it. A row drawn red is the board saying "not this one",
+       * which is the answer, not a tool for finding it - and a board that flags every wrong
+       * option is a board being clicked rather than read.
        */
-      detail.textContent =
-        `after ${step.blocks} blocks and ${step.seconds}s, ${ordered[i].detail}`;
-      /*
-       * Red on any row he could not have reached, claimed or not, so an impossible ping can
-       * be seen and skipped rather than clicked and undone.
-       */
-      const reachable = couldReach({ x: 0, y: 0 }, { x: step.blocks, y: 0 }, step.seconds);
-      row.classList.toggle('omni-trace__row--broken', !reachable);
+      detail.textContent = `after ${step.blocks} blocks, ${ordered[i].detail}`;
     });
 
-    // Two is the fewest that can describe a journey, so anything less is not a claim yet.
-    this.send.disabled = this.claimed.size < 2 || broken.size > 0;
+    /*
+     * Two is the fewest that can describe a journey, so anything less is not a claim yet.
+     *
+     * It used to also refuse a claim with an impossible jump in it, which was the red
+     * highlight wearing a different hat: a send button that will not press is the board
+     * telling the player they are wrong before they have committed to anything. They are
+     * allowed to be wrong now. Lucian says so afterwards.
+     */
+    this.send.disabled = this.claimed.size < 2;
 
     /**
      * Say what to do, then say how it is going.
@@ -1825,14 +1806,17 @@ export class BoardPanel {
     this.status.className = view.note
       ? 'omni-board__status omni-board__status--score'
       : 'omni-board__status';
-    const firstBroken = picked.find((fragment) => broken.has(fragment.id));
+    /*
+     * It named the first impossible ping. That is the same hint as the red row, in a
+     * sentence - it hands over the finding, which is the part the player came for. What is
+     * left is the rule and the count, which are both things they would have to be told
+     * regardless.
+     */
     this.status.textContent =
       view.note ??
       (this.claimed.size === 0
         ? 'ignore what recorded them - only how far and how long. start with one and add to it'
-        : firstBroken
-          ? `he could not have driven that far in that time - +${firstBroken.at}s is not the same car`
-          : `${this.claimed.size} claimed, and one car could have driven all of it - send it`);
+        : `${this.claimed.size} claimed - could one car really have driven all of that?`);
   }
 
   private buildBeam(): void {
