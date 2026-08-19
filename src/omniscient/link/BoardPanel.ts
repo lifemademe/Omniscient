@@ -303,8 +303,19 @@ const BOARD_CSS = `
   background: rgba(127, 224, 138, 0.16);
 }
 .omni-trace__plate { letter-spacing: 0.16em; color: #e0a24c; }
-.omni-trace__row--wrap { align-items: flex-start; }
-.omni-trace__row--wrap .omni-trace__detail { white-space: normal; overflow: visible; }
+/* flex-wrap, so the jump line gets a line. The row is a flex container and the jump span
+   asks for flex-basis:100%, which without wrapping just squeezes it onto the same row and
+   off the edge of the panel - which is where it was, invisible, on the first attempt. */
+.omni-trace__row--wrap { align-items: flex-start; flex-wrap: wrap; }
+/* flex:1 keeps the detail beside the plate. Without it, wrapping is triggered by the
+   detail's own max-content width and it drops to a line of its own, which costs a row of
+   vertical space nine times over for no gain - only the jump line is meant to wrap. */
+.omni-trace__row--wrap .omni-trace__detail {
+  white-space: normal;
+  overflow: visible;
+  flex: 1 1 0;
+  min-width: 0;
+}
 .omni-trace__row--wrap .omni-trace__plate { flex: 0 0 auto; }
 .omni-trace__detail {
   color: rgba(159, 216, 168, 0.78);
@@ -379,6 +390,18 @@ const BOARD_CSS = `
    the pings one car could have driven between, and the moment two of them cannot both be
    him, say which two. Same medicine as the wet pipes - show the consequence of the player's
    own choices instead of grading them at the end. */
+/* The drive this row asks of the car, once claimed. Its own line under the detail, because
+   it is the number the decision is made on and it must not be at the end of a sentence. */
+.omni-trace__jump {
+  flex-basis: 100%;
+  padding-top: 2px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: rgba(143, 214, 232, 0.8);
+}
+.omni-trace__jump:empty { display: none; }
+.omni-trace__jump--broken { color: #d1614a; }
+
 .omni-trace__row--broken {
   border-color: rgba(168, 64, 47, 0.75);
   background: rgba(30, 12, 10, 0.75);
@@ -1678,7 +1701,29 @@ export class BoardPanel {
       what.textContent =
         `${describe(view.trail.from, view.trail.heading, fragment.cell)}  -  ${fragment.detail}`;
 
-      row.append(when, what);
+      /**
+       * The jump from the previous claimed ping, filled in by refreshTrail.
+       *
+       * ## The board was asking for a subtraction it never showed
+       *
+       * Every row is described relative to WHERE THE CAMERAS LOST HIM - "17 blocks ahead, 2
+       * blocks to the west" is nineteen blocks from the start. The rule is about consecutive
+       * pings, so the number that decides anything is the difference between one row and the
+       * next: from the ping at +18s, that same +27s row is seven blocks, not nineteen.
+       *
+       * Reported as exactly that misreading - "so after 9 seconds he can drive 17 blocks?" -
+       * and it was the board's fault, not the player's. It printed absolute distances, stated
+       * a rule about relative ones, and left a two-axis subtraction with signs in it to be
+       * done in the head for every pair of nine rows.
+       *
+       * So the board does the subtraction and shows its result on the rows that have been
+       * claimed. It removes arithmetic, not deduction: which SET is one car, and which is the
+       * largest, is untouched.
+       */
+      const jump = document.createElement('span');
+      jump.className = 'omni-trace__jump';
+
+      row.append(when, what, jump);
       row.addEventListener('mousedown', (event) => {
         event.preventDefault();
         audio.play('tap');
@@ -1717,10 +1762,10 @@ export class BoardPanel {
      * Said once, at the top, in the sentence the player reads first.
      */
     this.trailParts.headline.textContent =
-      `LAST SEEN heading ${view.trail.heading}, doing about a block a second. He drives the `
-      + `streets, so add the two distances - if that is more blocks than there are seconds `
-      + `between two pings, he cannot be both. ${this.claimed.size} of `
-      + `${view.trail.fragments.length} claimed as him.`;
+      `LAST SEEN heading ${view.trail.heading}, doing about a block a second. Every position `
+      + `below is measured from where the cameras lost him - claim one and it will work out `
+      + `the drive from the ping before it. More blocks than seconds and he cannot be both. `
+      + `${this.claimed.size} of ${view.trail.fragments.length} claimed as him.`;
 
     const ordered = [...view.trail.fragments].sort((a, b) => a.at - b.at);
 
@@ -1743,10 +1788,34 @@ export class BoardPanel {
       since = fragment.at;
     }
 
+    /*
+     * The same walk again, keeping the numbers this time so each claimed row can show what
+     * it actually asks of the car.
+     */
+    const jumps = new Map<string, { blocks: number; seconds: number }>();
+    at = view.trail.from;
+    since = 0;
+    for (const fragment of picked) {
+      jumps.set(fragment.id, {
+        blocks:
+          Math.abs(at.x - fragment.cell.x) + Math.abs(at.y - fragment.cell.y),
+        seconds: fragment.at - since,
+      });
+      at = fragment.cell;
+      since = fragment.at;
+    }
+
     Array.from(this.trailParts.list.children).forEach((row, i) => {
       const id = ordered[i].id;
       row.classList.toggle('omni-trace__row--picked', this.claimed.has(id));
       row.classList.toggle('omni-trace__row--broken', broken.has(id));
+      const jump = row.querySelector('.omni-trace__jump');
+      if (!jump) return;
+      const step = jumps.get(id);
+      jump.textContent = step
+        ? `${step.blocks} blocks of driving in ${step.seconds}s, from the one before it`
+        : '';
+      jump.classList.toggle('omni-trace__jump--broken', broken.has(id));
     });
 
     // Two is the fewest that can describe a journey, so anything less is not a claim yet.
