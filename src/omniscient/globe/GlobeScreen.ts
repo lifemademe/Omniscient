@@ -903,6 +903,15 @@ export class GlobeScreen {
     // answered. Red against seven greens is the whole statement.
     if (signal.state === SignalState.Unknown) return 'unknown';
     if (signal.state === SignalState.Cooldown) return 'cooldown';
+    /*
+     * ACTIVE is the request the player is inside RIGHT NOW, and it fell through to the
+     * openable test below - which strips an active contact of answerability by design -
+     * so the one person the player is currently talking to rendered in the dim resolved
+     * green. Dana Keller vanished from the globe the moment her file launched M4SS,
+     * because entering the game marked her Active and nothing ever told this method that
+     * active means PRESENT. Bright, always: you cannot lose the person you are with.
+     */
+    if (signal.state === SignalState.Active) return 'waiting';
     if (signal.state === SignalState.Resolved || signal.state === SignalState.Dormant) {
       return 'resolved';
     }

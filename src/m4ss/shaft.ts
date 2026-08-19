@@ -41,6 +41,9 @@ export const THE_SHAFT: World = {
   width: 1280,
   height: 1440,
   start: { x: 140, y: 1280 },
+  // In the alcove past the heavy gate: the stage's last clause is force, and the portal
+  // stands behind the door only force opens.
+  exit: { x: 150, y: 598 },
   tiles: [
     // -- 1. the ledge, the pit, the far side ---------------------------------------------
     { x: 0, y: FLOOR, w: 300, h: DEEP },
@@ -190,6 +193,7 @@ export const THE_SHAFT: World = {
 export function freshShaft(): World {
   return {
     ...THE_SHAFT,
+    exit: { ...THE_SHAFT.exit },
     tiles: THE_SHAFT.tiles.map((t) => ({ ...t })),
     anchors: THE_SHAFT.anchors.map((a) => ({ ...a })),
     gates: THE_SHAFT.gates.map((g) => ({ ...g, span: g.span ? { ...g.span } : undefined })),

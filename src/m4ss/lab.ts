@@ -45,6 +45,8 @@ export const THE_LAB: World = {
   width: 1280,
   height: 720,
   start: { x: 140, y: 560 },
+  // On the exit shelf, above its centre. The final fling lands beside it.
+  exit: { x: 1222, y: 558 },
   tiles: [
     // -- 1. the ledge you start on, and the pit ------------------------------------------
     { x: 0, y: FLOOR, w: 300, h: DEEP },
@@ -224,6 +226,7 @@ export const THE_LAB: World = {
 export function freshLab(): World {
   return {
     ...THE_LAB,
+    exit: { ...THE_LAB.exit },
     tiles: THE_LAB.tiles.map((t) => ({ ...t })),
     anchors: THE_LAB.anchors.map((a) => ({ ...a })),
     gates: THE_LAB.gates.map((g) => ({ ...g })),

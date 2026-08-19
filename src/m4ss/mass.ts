@@ -215,6 +215,16 @@ export interface World {
   width: number;
   height: number;
   start: { x: number; y: number };
+  /**
+   * Where the portal stands. DECLARED, after inference broke twice: the renderer used to
+   * pick "the right-most tile that is floor-shaped", which chose the boundary wall until a
+   * height filter was added, and then chose nothing at all when the floors were deepened
+   * to close the under-level corridor - buildPortal crashed on undefined, and because the
+   * slime is built after the portal, the crash presented as "stage two has no player".
+   * A level knows where its own exit is; guessing from geometry was never information,
+   * it was luck.
+   */
+  exit: { x: number; y: number };
   tiles: Tile[];
   anchors: Anchor[];
   gates: Gate[];

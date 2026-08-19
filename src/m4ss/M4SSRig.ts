@@ -33,7 +33,10 @@ import {
   atmosphereTexture,
   backdropTexture,
   endCapTexture,
+  gateTexture,
   glowTexture,
+  plateTexture,
+  propTexture,
   lipTexture,
   poolTexture,
   sporeTexture,
@@ -227,6 +230,8 @@ export class M4SSRig extends ENGINE.SceneNode {
   private crusherNodes: Array<{ node: ENGINE.MeshNode; crusher: Crusher }> = [];
   /** Both sprites for every growth, so waking one is a texture swap. */
   private readonly growthArt = new Map<Anchor, { live: THREE.Texture; dead: THREE.Texture }>();
+  /** The halo that sits behind whichever reachable growth the pointer is over. */
+  private hoverHalo: ENGINE.MeshNode | null = null;
   /** Smoothed camera height, in level coordinates. See viewCentre. */
   private cameraY = 0;
 
@@ -727,17 +732,36 @@ export class M4SSRig extends ENGINE.SceneNode {
      * whatever the pit tore off, which is what makes leaving some of it behind a decision
      * rather than an errand.
      */
-    const gateMaterial = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#8c5a4a'),
-      roughness: 0.8,
-      emissive: new THREE.Color('#241010'),
-    });
-    for (const gate of world.gates) {
-      const node = decorMesh('Gate', new THREE.BoxGeometry(gate.w, gate.h, 54), gateMaterial);
+    /*
+     * Gates were the last flat-tinted primitives in the stage - a #8c5a4a box that
+     * outlived the greybox it came from. Each keeps a dark depth box (the door has
+     * thickness, and the sides read while it slides) and wears a DRAWN face: rusted
+     * plates on the stage's rust ramp, rivets, a hazard band low down, moss claiming the
+     * foot - every man-made thing here is losing to the growth, and a clean door would
+     * read newer than the room it locks. The face is a child of the slab, so lift and
+     * fall carry the art with them.
+     */
+    world.gates.forEach((gate, i) => {
+      const node = decorMesh(
+        'Gate',
+        new THREE.BoxGeometry(gate.w, gate.h, 54),
+        new THREE.MeshStandardMaterial({
+          color: new THREE.Color('#4a3128'),
+          roughness: 0.85,
+          emissive: new THREE.Color('#140b08'),
+        })
+      );
       node.position.set(gate.x + gate.w / 2, gate.y + gate.h / 2, -28);
+      const face = decorMesh(
+        'GateFace',
+        new THREE.PlaneGeometry(gate.w, gate.h),
+        this.artMaterial({ map: gateTexture(`gate-${i}`, gate.w, gate.h), transparent: true })
+      );
+      face.position.set(0, 0, 29);
+      node.add(face);
       this.stage?.add(node);
       this.gateNodes.push({ node, gate, restY: gate.y + gate.h / 2 });
-    }
+    });
 
     /*
      * The presses.
@@ -764,6 +788,63 @@ export class M4SSRig extends ENGINE.SceneNode {
     }
 
     /*
+     * Floor props: ferns and mushroom clusters scattered on the walkable tops, seeded per
+     * stage. The platforms were corridors between the things that matter; the reference
+     * fills its walking surfaces with small life that asks for nothing. Placement is
+     * derived, not authored: every wide floor top gets a few, spaced by seed, skipping the
+     * first metre of each tile so they never crowd a button or a landing lip.
+     */
+    {
+      const rng = ((seed: number) => () => {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        return seed / 0x7fffffff;
+      })(world.width + world.height * 7);
+      let planted = 0;
+      for (const tile of world.tiles) {
+        if (tile.w < 160 || tile.y < 100) continue;
+        const count = Math.floor(tile.w / 170);
+        for (let i = 0; i < count && planted < 14; i++) {
+          const px = tile.x + 40 + ((i + 0.3 + rng() * 0.5) / count) * (tile.w - 80);
+          const kind = rng() > 0.45 ? 'fern' : 'shroom';
+          const node = decorMesh(
+            'FloorProp',
+            new THREE.PlaneGeometry(44, 44),
+            this.artMaterial({
+              map: propTexture(`prop-${planted}`, kind as 'fern' | 'shroom'),
+              transparent: true,
+              depthWrite: false,
+            })
+          );
+          node.position.set(px, tile.y - 20, 12);
+          this.stage?.add(node);
+          planted += 1;
+        }
+      }
+    }
+
+    /*
+     * The hover halo: one additive glow sprite, parked invisible, moved behind whichever
+     * reachable growth the pointer is over. The old hover feedback was a tint two steps
+     * paler than the in-reach tint and a scale of 1.08 - measurably present, visibly
+     * nothing, and reported as "hovering does not glow". A glow is a THING BEHIND the
+     * plant, not a property of its pixels: same additive sprite family as the lanterns
+     * and the portal bleed, in the slime's own green, so what it says is "yours".
+     */
+    this.hoverHalo = decorMesh(
+      'HoverHalo',
+      new THREE.PlaneGeometry(210, 210),
+      this.artMaterial({
+        map: glowTexture('hover-glow', '#9ff0b0'),
+        transparent: true,
+        opacity: 0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      })
+    );
+    this.hoverHalo.position.set(-500, -500, 18);
+    this.stage?.add(this.hoverHalo);
+
+    /*
      * The wall stencils. Sized from the texture's own aspect so the pixels stay square -
      * a stretched stencil reads as a decal, a square-pixel one reads as paint.
      */
@@ -780,17 +861,27 @@ export class M4SSRig extends ENGINE.SceneNode {
       this.stage?.add(node);
     });
 
-    const buttonMaterial = this.artMaterial({ color: new THREE.Color('#d8703c') });
-    for (const button of world.buttons) {
+    /*
+     * The button was the other survivor: an orange cylinder. It is a pressure plate now -
+     * a stone anvil the floor owns, capped with a dome of the stage's lamp colour, the one
+     * hue reserved for man-made light. The read at distance is "warm, wants weight". The
+     * press animation sinks the whole sprite into its socket, so the art needs no second
+     * state.
+     */
+    world.buttons.forEach((button, i) => {
       const node = decorMesh(
         'Button',
-        new THREE.CylinderGeometry(button.radius, button.radius * 1.15, 10, 14),
-        buttonMaterial
+        new THREE.PlaneGeometry(button.radius * 2.6, button.radius),
+        this.artMaterial({
+          map: plateTexture(`plate-${i}`, 72, 26),
+          transparent: true,
+          depthWrite: false,
+        })
       );
-      node.position.set(button.x, button.y + 6, 0);
+      node.position.set(button.x, button.y + 6, 2);
       this.stage?.add(node);
       this.buttonNodes.push({ node, button });
-    }
+    });
   }
 
   /**
@@ -953,19 +1044,16 @@ export class M4SSRig extends ENGINE.SceneNode {
    * The membrane is re-drawn a few times a second from a phase value - see paintWorld -
    * which is the cheapest animation in the stage and the only moving art in it.
    */
-  private buildPortal(world: { tiles: Array<{ x: number; y: number; w: number; h: number }> }): void {
+  private buildPortal(world: { exit: { x: number; y: number } }): void {
     /*
-     * The exit shelf: the right-most tile that is FLOOR, not scenery.
-     *
-     * "Right-most tile" alone picks the right-hand boundary wall, which spans the full height
-     * of the level at x 1260 - so the portal went to x 1290, y -64, off the top corner of the
-     * world where nothing could ever reach it and nothing was visible. Walls are tall and
-     * start at y 0; a standable surface is short and sits at floor height, so the filter is
-     * on the tile's own shape rather than on its index in the list.
+     * Where the level says, no cleverness. This method used to INFER the exit shelf from
+     * tile shape and the inference broke twice: "right-most tile" picked the boundary wall,
+     * the height-filtered version picked nothing at all once the floors were deepened past
+     * its threshold - and it crashed on the very first frame of stage two, which, because
+     * the slime builds after the portal, presented as "stage two has no player". The World
+     * declares `exit` now. A level knows where its own door is.
      */
-    const floors = world.tiles.filter((t) => t.h < 200 && t.y > 200);
-    const shelf = floors.reduce((best, t) => (t.x > best.x ? t : best), floors[0]);
-    this.portalAt = { x: shelf.x + shelf.w / 2, y: shelf.y - 62 };
+    this.portalAt = { x: world.exit.x, y: world.exit.y };
 
     const node = decorMesh(
       'Portal',
@@ -1453,6 +1541,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.portal = null;
     this.slimeGlow = null;
     this.portalAt = null;
+    this.hoverHalo = null;
 
     this.state = makeState(STAGES[this.stageIndex](), 40);
     this.cleared = false;
@@ -1888,6 +1977,20 @@ export class M4SSRig extends ENGINE.SceneNode {
       }
       this.hovered = best;
     }
+
+    // The halo follows the hover, breathing slightly so it reads as live, not painted.
+    if (this.hoverHalo) {
+      const material = this.hoverHalo.material as THREE.MeshBasicMaterial;
+      if (this.hovered) {
+        this.hoverHalo.position.x = this.hovered.x;
+        this.hoverHalo.position.y = this.hovered.y;
+        const breathe = 1 + Math.sin(this.artClock * 5) * 0.06;
+        this.hoverHalo.scale.set(breathe, breathe, 1);
+        material.opacity = Math.min(0.55, material.opacity + 0.08);
+      } else {
+        material.opacity = Math.max(0, material.opacity - 0.12);
+      }
+    }
     for (const [anchor, node] of this.anchorNodes) {
       const within = Math.hypot(anchor.x - home.x, anchor.y - home.y) <= limit;
       /*
@@ -1928,14 +2031,14 @@ export class M4SSRig extends ENGINE.SceneNode {
           : anchor === this.latched
             ? '#ffffff'
             : hovered
-              ? '#f2ffd8'
+              ? '#ffffff'
               : within
                 ? '#cfe8b4'
                 : '#5a6f78'
       );
       // A growth you are hanging from is doing something, so it reads as bigger. A hovered
       // one leans toward that without arriving, so the two never look the same.
-      const scale = anchor === this.latched ? 1.16 : hovered ? 1.08 : 1;
+      const scale = anchor === this.latched ? 1.16 : hovered ? 1.1 : 1;
       node.scale.set(scale, scale, scale);
     }
   }

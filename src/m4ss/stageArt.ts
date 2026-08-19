@@ -1530,6 +1530,163 @@ export function signTexture(seed: string, lines: string[], scale = 4): THREE.Can
   return pixelTexture(c);
 }
 
+/**
+ * A gate: the sliding containment door, drawn instead of tinted.
+ *
+ * These were flat #8c5a4a boxes - the last two solid-colour primitives in a stage where
+ * everything else earned a texture, and they read as greybox left in by mistake, which is
+ * exactly what they were. The design language is the facility's: rusted iron plates on the
+ * stage's own rust ramp, cross-braces with rivets, a hazard chevron band low down where a
+ * door that meets a floor announces itself, and moss claiming the bottom edge - because
+ * every man-made thing in this place is losing to the growth, and a door that stayed clean
+ * would read as newer than the room it locks.
+ */
+export function gateTexture(seed: string, w = 40, h = 590): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+
+  // Plates: horizontal bands of rust, each its own shade off the ramp.
+  const plateH = 46;
+  for (let y = 0; y < h; y += plateH) {
+    g.fillStyle = mixHex(PAL.rustDark, PAL.rustMid, range(rng, 0.15, 0.6));
+    g.fillRect(0, y, w, plateH);
+    // The seam between plates, dark, with a lit edge below it - light falls from above.
+    g.fillStyle = mixHex(PAL.rustDark, '#000000', 0.4);
+    g.fillRect(0, y, w, 2);
+    g.fillStyle = mixHex(PAL.rustMid, PAL.lampWarm, 0.12);
+    g.fillRect(0, y + 2, w, 1);
+  }
+
+  // Two vertical rails with rivets, holding the plates together.
+  for (const rx of [5, w - 8]) {
+    g.fillStyle = mixHex(PAL.rustDark, '#000000', 0.25);
+    g.fillRect(rx, 0, 3, h);
+    g.fillStyle = mixHex(PAL.rustMid, PAL.lampWarm, 0.2);
+    for (let y = plateH / 2; y < h; y += plateH) {
+      g.fillRect(rx, Math.round(y), 2, 2);
+    }
+  }
+
+  // The hazard band: worn chevrons, low, where the door meets whatever it crushes.
+  const bandY = h - 84;
+  g.fillStyle = mixHex(PAL.lampWarm, PAL.rustDark, 0.35);
+  g.fillRect(0, bandY, w, 18);
+  g.fillStyle = mixHex(PAL.rustDark, '#000000', 0.35);
+  for (let x = -18; x < w; x += 12) {
+    for (let i = 0; i < 6; i++) {
+      g.fillRect(x + i, bandY + i * 3, 6, 3);
+    }
+  }
+
+  // Weathering: flecks of darker rust, seeded, sparse.
+  for (let i = 0; i < (w * h) / 260; i++) {
+    g.fillStyle = mixHex(PAL.rustDark, '#000000', range(rng, 0.2, 0.55));
+    g.fillRect(Math.round(range(rng, 0, w)), Math.round(range(rng, 0, h)), 2, 1);
+  }
+
+  // Moss takes the bottom, same run the platforms wear.
+  mossRun(g, rng, 0, w, h - 12, 12);
+
+  return pixelTexture(c);
+}
+
+/**
+ * A button: a pressure plate with a lit core, replacing the flat orange cylinder.
+ *
+ * The read it has to give at distance is "this is warm and it wants weight", so the cap
+ * carries the stage's lamp colour - the one hue reserved for man-made light - over a
+ * stone anvil that visibly belongs to the floor. Drawn wider than tall; the rig sinks the
+ * whole sprite into its socket when pressed, so the art needs no pressed state.
+ */
+export function plateTexture(seed: string, w = 72, h = 26): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+  const cx = w / 2;
+
+  // The stone anvil: a trapezoid base, lit on top like every ledge in the stage.
+  g.fillStyle = PAL.stoneDark;
+  g.fillRect(4, h - 8, w - 8, 8);
+  g.fillStyle = PAL.stoneMid;
+  g.fillRect(7, h - 10, w - 14, 4);
+
+  // The cap: a shallow dome of warm light, brightest at the centre.
+  const capW = w - 26;
+  for (let i = 0; i < 4; i++) {
+    const inset = i * 3;
+    g.fillStyle = [
+      mixHex(PAL.lampWarm, PAL.rustDark, 0.45),
+      mixHex(PAL.lampWarm, PAL.rustDark, 0.2),
+      PAL.lampWarm,
+      mixHex(PAL.lampWarm, '#ffffff', 0.35),
+    ][i];
+    const y = h - 10 - 4 - i * 2;
+    g.fillRect(Math.round(cx - capW / 2 + inset), y, Math.round(capW - inset * 2), h - 10 - y);
+  }
+
+  // Two anchor bolts, dark, so the plate reads as fixed to the floor rather than resting.
+  g.fillStyle = mixHex(PAL.stoneDark, '#000000', 0.4);
+  g.fillRect(6, h - 6, 3, 3);
+  g.fillRect(w - 9, h - 6, 3, 3);
+  void rng;
+
+  return pixelTexture(c);
+}
+
+/**
+ * A floor prop: a fern or a mushroom cluster, for the empty metres between features.
+ *
+ * The invention list has carried "scattered decoration between the growths" since pass 17.
+ * The platforms read as corridors between the things that matter; the reference fills its
+ * walking surfaces with small life that asks for nothing. Two kinds only - a fern (cool,
+ * leaf ramp) and a mushroom cluster (the cap accent colours) - because the stage already
+ * speaks in those two families and a third would be a new word used once.
+ */
+export function propTexture(seed: string, kind: 'fern' | 'shroom', size = 48): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(size, size);
+  const cx = size / 2;
+  const base = size - 4;
+
+  if (kind === 'fern') {
+    // Five to seven fronds, arcs of stacked pixels thinning toward the tip.
+    const fronds = 5 + Math.floor(rng() * 3);
+    for (let i = 0; i < fronds; i++) {
+      const lean = range(rng, -1.2, 1.2);
+      const tall = range(rng, size * 0.4, size * 0.75);
+      const shade = ramp(PAL.leafDark, PAL.leafMid, 4, Math.floor(rng() * 4));
+      g.fillStyle = shade;
+      for (let t = 0; t < tall; t++) {
+        const k = t / tall;
+        const x = cx + lean * t * 0.45 + Math.sin(k * 3.1) * 2;
+        const wide = Math.max(1, Math.round(3 * (1 - k)));
+        g.fillRect(Math.round(x - wide / 2), base - t, wide, 1);
+      }
+    }
+    return pixelTexture(c);
+  }
+
+  // Mushrooms: two or three, stems then caps, the tallest lit.
+  const count = 2 + Math.floor(rng() * 2);
+  for (let i = 0; i < count; i++) {
+    const mx = cx + range(rng, -size * 0.28, size * 0.28);
+    const tall = range(rng, size * 0.18, size * 0.42);
+    const capW = range(rng, 8, 14);
+    g.fillStyle = mixHex(PAL.stoneLit, PAL.capDark, 0.3);
+    g.fillRect(Math.round(mx - 1), Math.round(base - tall), 3, Math.round(tall));
+    g.fillStyle = i === count - 1 ? PAL.capLit : PAL.capDark;
+    for (let dy = 0; dy < capW * 0.45; dy++) {
+      const half = Math.round((capW / 2) * Math.sqrt(Math.max(0, 1 - (dy / (capW * 0.45)) ** 2)));
+      g.fillRect(Math.round(mx - half), Math.round(base - tall - dy), half * 2, 1);
+    }
+    // One glint of spore-light under the lit cap, cold against the warm cap.
+    if (i === count - 1) {
+      g.fillStyle = PAL.bioCyan;
+      g.fillRect(Math.round(mx - 1), Math.round(base - tall + 2), 2, 1);
+    }
+  }
+  return pixelTexture(c);
+}
+
 /** Blend two hex colours. Banding and shading only - never for smoothing an edge. */
 function mixHex(a: string, b: string, t: number): string {
   const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
