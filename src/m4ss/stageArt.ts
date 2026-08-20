@@ -1548,20 +1548,20 @@ export function portalTexture(seed: string, phase: number, size = 128): THREE.Ca
   }
 
   /*
-   * Two jambs, and nothing over them.
+   * The membrane, and nothing else.
    *
-   * The arch used to carry a stone head with a moss run and hanging vines along it, and
-   * the playtest asked for exactly that to go: "remove the top grass/stone part of the
-   * portal". It was the busiest thing in the frame at the one moment the player is
-   * supposed to be reading a doorway. What remains is the pair of uprights - enough to say
-   * the way through is BUILT, with the membrane itself uninterrupted above.
+   * This arch has been taken apart in two passes and the second one finishes the job. It
+   * carried a stone head with moss and hanging vines (removed: the busiest thing in frame
+   * at the one moment the player is meant to be reading a doorway), and then a pair of
+   * stone jambs, which are now gone too.
+   *
+   * The jambs were kept to say the way through was BUILT, and they were not earning it.
+   * At this size they read as two grey panels flanking the iris rather than as masonry -
+   * and the transit tube does not need masonry to be legible. The whole object is now the
+   * one thing that matters: a hole with light in it, on a stone shelf that already looks
+   * built. Silhouette-first (P1) - the fewer shapes the eye has to resolve, the faster it
+   * finds the way out.
    */
-  g.fillStyle = PAL.stoneMid;
-  g.fillRect(cx - 44, 30, 12, size - 30);
-  g.fillRect(cx + 32, 30, 12, size - 30);
-  g.fillStyle = PAL.stoneEdge;
-  g.fillRect(cx - 44, 30, 12, 2);
-  g.fillRect(cx + 32, 30, 12, 2);
   void rng;
 
   return pixelTexture(c);
