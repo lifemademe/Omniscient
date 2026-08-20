@@ -1145,7 +1145,9 @@ export class M4SSRig extends ENGINE.SceneNode {
      */
     this.latchRing = decorMesh(
       'LatchRing',
-      new THREE.PlaneGeometry(150, 150),
+      // 112 across, down from 150: the ring should sit just outside the lantern rather
+      // than enclose a region of the room around it.
+      new THREE.PlaneGeometry(112, 112),
       this.artMaterial({
         map: ringTexture(128),
         transparent: true,
@@ -1173,7 +1175,10 @@ export class M4SSRig extends ENGINE.SceneNode {
           'GrowthFly',
           new THREE.PlaneGeometry(5, 5),
           this.artMaterial({
-            map: moteTexture('#c8f076'),
+            // Yellow, not yellow-green: these are the flies around a lit lantern, and a
+            // warm mote against the lamp's lemon pane reads as an insect catching the
+            // light rather than as another piece of the plant.
+            map: moteTexture('#f2d75c'),
             transparent: true,
             opacity: 0.85,
             blending: THREE.AdditiveBlending,
@@ -2131,7 +2136,7 @@ export class M4SSRig extends ENGINE.SceneNode {
       return;
     }
     const pulse = (Math.sin(this.artClock * 4.2) + 1) / 2;
-    const scale = 1.22 - pulse * 0.22;
+    const scale = 1.14 - pulse * 0.14;
     ring.visible = true;
     ring.position.set(this.target.x, this.target.y, 22);
     ring.scale.set(scale, scale, 1);

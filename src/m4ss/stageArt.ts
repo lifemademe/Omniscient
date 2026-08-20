@@ -2107,7 +2107,10 @@ export function ringTexture(size = 128): THREE.CanvasTexture {
   const { c, g } = surface(size, size);
   const cx = size / 2;
   const outer = size / 2 - 2;
-  const inner = outer - Math.max(3, Math.round(size * 0.055));
+  // A THIN band: 0.028 of the sprite rather than 0.055. A ring is a pointer, and a fat
+  // one competes with the thing it is pointing at - which on this stage is the one object
+  // that must never share attention.
+  const inner = outer - Math.max(2, Math.round(size * 0.028));
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const d = Math.hypot(x - cx + 0.5, y - cx + 0.5);
