@@ -58,6 +58,9 @@ import {
   ringTexture,
   strikerTexture,
   setStageTheme,
+  sporelingSprite,
+  SPORELING_H,
+  SPORELING_W,
   THEME_GALLERY,
   THEME_STACK,
   vignetteTexture,
@@ -84,7 +87,7 @@ import {
   step,
 } from './mass.js';
 
-import type { Anchor, Button, Crusher, Gate, MassState } from './mass.js';
+import type { Anchor, Button, Critter, Crusher, Gate, MassState } from './mass.js';
 
 /**
  * The stages, in order. The portal at the end of one loads the next.
@@ -253,6 +256,12 @@ export class M4SSRig extends ENGINE.SceneNode {
   /** The growth the pointer is over and the body could actually reach, if any. */
   private hovered: Anchor | null = null;
   private crusherNodes: Array<{ node: ENGINE.MeshNode; crusher: Crusher }> = [];
+  /** One sprite per critter, each owning the canvas it repaints. See sporelingSprite. */
+  private critterNodes: Array<{
+    node: ENGINE.MeshNode;
+    critter: Critter;
+    sprite: ReturnType<typeof sporelingSprite>;
+  }> = [];
   /** Both sprites for every growth, so waking one is a texture swap. */
   private readonly growthArt = new Map<Anchor, { live: THREE.Texture; dead: THREE.Texture }>();
   /** The ember halo behind each dead growth; hidden the frame its growth wakes. */
@@ -971,6 +980,30 @@ export class M4SSRig extends ENGINE.SceneNode {
     }
 
     /*
+     * The critters.
+     *
+     * z -6 puts the creature BEHIND the player and in front of the scenery. It is the one
+     * placement that cannot go wrong in the moment that matters: at the instant of contact
+     * the two are overlapping, and a hazard drawn over the top of the player hides the exact
+     * thing the player is trying to read.
+     *
+     * The plane is the sprite's own size, one texel per world pixel, so the creature is
+     * drawn at the resolution it was baked at rather than scaled to a guess.
+     */
+    for (const critter of world.critters ?? []) {
+      const sprite = sporelingSprite();
+      sprite.draw(0);
+      const node = decorMesh(
+        'Sporeling',
+        new THREE.PlaneGeometry(SPORELING_W, SPORELING_H),
+        this.artMaterial({ map: sprite.texture, transparent: true, depthWrite: false })
+      );
+      node.position.set(critter.x, critter.y - SPORELING_H / 2, -6);
+      this.stage?.add(node);
+      this.critterNodes.push({ node, critter, sprite });
+    }
+
+    /*
      * Floor props: ferns and mushroom clusters scattered on the walkable tops, seeded per
      * stage. The platforms were corridors between the things that matter; the reference
      * fills its walking surfaces with small life that asks for nothing. Placement is
@@ -985,6 +1018,16 @@ export class M4SSRig extends ENGINE.SceneNode {
       let planted = 0;
       for (const tile of world.tiles) {
         if (tile.w < 160 || tile.y < 100) continue;
+        /*
+         * A platform with something living on it gets no scatter.
+         *
+         * The first capture of the sporeling's ledge had one of these clusters standing a
+         * body-width from the creature, in the same accent purple, and at playing size the
+         * two were indistinguishable - the decoration read as a second sporeling that never
+         * moved. Anywhere the player has to watch a shape to survive, no other shape of that
+         * shape's colour may stand.
+         */
+        if ((world.critters ?? []).some((c) => c.y === tile.y)) continue;
         const count = Math.floor(tile.w / 140);
         for (let i = 0; i < count && planted < 22; i++) {
           const px = tile.x + 40 + ((i + 0.3 + rng() * 0.5) / count) * (tile.w - 80);
@@ -1297,14 +1340,31 @@ export class M4SSRig extends ENGINE.SceneNode {
        * Placed a third and two thirds along a floor so they never sit under a growth or
        * on top of the spot a swing lands.
        */
-      floors.slice(0, 2).forEach((tile, i) => {
-        const size = 150 + Math.round(rng() * 40);
-        const at = tile.x + tile.w * (i === 0 ? 0.34 : 0.68);
+      /*
+       * A level that has been laid out AROUND a mushroom gets to say where it stands.
+       *
+       * The derived placement below is right for scenery and wrong the moment a platform is
+       * described in relation to one - stage two's ledge is "above and left of the first
+       * mushroom", and if that mushroom is chosen by sorting floors on width then the
+       * composition depends on a tile-width tie-break. Where landmarks are declared they
+       * replace the scatter entirely rather than adding to it.
+       */
+      const spots = world.landmarks
+        ? world.landmarks.map((l) => ({ x: l.x, y: l.y, size: l.size ?? 150 }))
+        : floors.slice(0, 2).map((tile, i) => ({
+            x: tile.x + tile.w * (i === 0 ? 0.34 : 0.68),
+            y: tile.y,
+            size: 150 + Math.round(rng() * 40),
+          }));
+      spots.forEach((spot, i) => {
+        const size = spot.size;
+        const tile = { x: spot.x, y: spot.y };
+        const at = spot.x;
         const shroom = decorMesh(
           'GiantShroom',
           new THREE.PlaneGeometry(size, size * 1.13),
           this.artMaterial({
-            map: bigShroomTexture(`shroom-${tile.x}-${i}`),
+            map: bigShroomTexture(`shroom-${Math.round(tile.x)}-${i}`),
             transparent: true,
             depthWrite: false,
           })
@@ -2544,6 +2604,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.buttonNodes.length = 0;
     this.buttonFlags.length = 0;
     this.crusherNodes = [];
+    this.critterNodes = [];
     this.growthArt.clear();
     this.emberNodes.clear();
     this.presenceNodes.clear();
@@ -3025,6 +3086,23 @@ export class M4SSRig extends ENGINE.SceneNode {
     for (const { node, crusher } of this.crusherNodes) {
       const at = crusherRect(crusher);
       node.position.set(at.x + at.w / 2, at.y + at.h / 2, -20);
+    }
+
+    /*
+     * The critters walk, and stand still when they are not walking.
+     *
+     * `phase` only advances in the sim while the creature is actually moving, so the pause at
+     * each end of the beat is a real pause rather than a walk cycle playing on the spot -
+     * which is the tell that separates a creature from a texture on rails. 10fps is the rate
+     * the frames were generated for; anything faster turns a waddle into a scurry.
+     *
+     * The sprite is drawn facing west, so a negative x scale is what "walking east" means.
+     */
+    for (const { node, critter, sprite } of this.critterNodes) {
+      node.position.x = critter.x;
+      node.position.y = critter.y - SPORELING_H / 2;
+      node.scale.x = critter.facing === 1 ? -1 : 1;
+      sprite.draw(Math.floor(critter.phase * 10));
     }
 
     // Pressed buttons sit down into their sockets. Eased, so the press reads as travel

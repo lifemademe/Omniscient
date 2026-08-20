@@ -228,6 +228,40 @@ export interface Crusher {
   at: number;
 }
 
+/**
+ * A creature that walks a platform, and the first thing in M4SS that is alive besides you.
+ *
+ * The stage's hazards up to now are all machines on timers - a press keeps its rhythm
+ * whatever you do, so learning one is learning a clock. A patroller is the same puzzle with
+ * the clock taken out: it is somewhere specific, it is going somewhere specific, and the
+ * question is where it will be when you commit rather than when the next beat lands.
+ *
+ * Touching one costs what a pit costs - the attempt, never the creature. That is not
+ * leniency, it is the rule the whole game is built on: mass is the economy, nothing in a
+ * stage replaces what you lose, and an enemy that ate a quarter of you would be the one
+ * object in M4SS that can make a level unwinnable without killing you.
+ */
+export interface Critter {
+  /** The two ends of its beat, in world x. It walks between them for ever. */
+  from: number;
+  to: number;
+  /** The y of the surface it walks on - it stands ON this, the same as the player. */
+  y: number;
+  /** px/s along its beat. */
+  speed: number;
+  /** Half-width and height of the body that can touch you. */
+  w: number;
+  h: number;
+  /** Live state, written by step and read by the renderer. */
+  x: number;
+  /** -1 walking west, 1 walking east. The sprite is drawn facing west. */
+  facing: 1 | -1;
+  /** Seconds left of the pause at the end of a leg, or of a recoil after a hit. */
+  wait: number;
+  /** Seconds of walk animation accumulated. Only advances while it is moving. */
+  phase: number;
+}
+
 export interface World {
   width: number;
   height: number;
@@ -247,6 +281,17 @@ export interface World {
   gates: Gate[];
   buttons: Button[];
   crushers?: Crusher[];
+  critters?: Critter[];
+  /**
+   * Set-dressing the LEVEL wants placed, rather than the renderer's derived scatter.
+   *
+   * The giant mushrooms are normally positioned by picking the widest floors, which is fine
+   * for scenery and wrong the moment a platform is laid out in relation to one: the ledge
+   * would be anchored to a decoration that is anchored to a tile-width sort, and the first
+   * time either changed the composition would quietly come apart. A landmark is a mushroom
+   * the level is willing to be measured against.
+   */
+  landmarks?: Array<{ x: number; y: number; size?: number }>;
   /**
    * Wall stencils. Pure decor - the sim never reads them - but they are LEVEL data
    * because where a control is taught is a level-design decision: the marking sits at the
@@ -302,6 +347,8 @@ export interface MassState {
    * during flight and touchdown keeps the body one thing without making it stiffer to play.
    */
   regroup: number;
+  /** Seconds of immunity left after a critter hit. See TUNING.critterStun. */
+  stunned: number;
   /**
    * The body's shape at the moment it grabbed on, in the rope's own frame.
    *
@@ -447,6 +494,17 @@ export const TUNING = {
    * player, it must not leave them unable to play the level.
    */
   crushFloor: 20,
+  /** How long a critter dwells at each end of its beat, in seconds. */
+  critterPause: 0.6,
+  /**
+   * Grace after a critter hits you, in seconds.
+   *
+   * Without it the stage can lock: the body is handed back to its last safe footing, and if
+   * that footing is the very ledge the creature patrols, the next frame is another hit and
+   * the player never gets a turn. Both sides stand still for this long - the creature
+   * recoils, the body cannot be touched - which is long enough to walk clear.
+   */
+  critterStun: 1.2,
   reachPerMass: 5.3,
 
   /**
@@ -887,6 +945,7 @@ export function makeState(world: World, startMass: number): MassState {
     lastSafe: { x: world.start.x, y: world.start.y },
     slowmo: 0,
     regroup: 0,
+    stunned: 0,
     snapped: 0,
     time: 0,
   };
@@ -908,6 +967,30 @@ export function owned(state: MassState): Particle[] {
 
 export function loose(state: MassState): Particle[] {
   return state.particles.filter((p) => !state.owned.has(p.id));
+}
+
+/**
+ * Put a body back on its feet at the last safe footing, in its birth arrangement.
+ *
+ * Shared by the two things that end an attempt: falling out of the world, and touching
+ * something alive. They are deliberately the SAME code rather than the same idea - the
+ * pit's handback was tuned over several playtests (golden-angle spacing so the mound does
+ * not burst, velocities cleared so it does not inherit the fall, regroup cleared so the
+ * landing glue does not fire on a body that never flew) and a second copy of it would have
+ * drifted away from all of that within a week.
+ */
+function standUp(state: MassState, group: Particle[]): void {
+  const golden = Math.PI * (3 - Math.sqrt(5));
+  group.forEach((p, i) => {
+    const r = TUNING.rest * 0.62 * Math.sqrt(i);
+    const a = i * golden;
+    p.x = state.lastSafe.x + Math.cos(a) * r;
+    p.y = state.lastSafe.y + Math.sin(a) * r;
+    p.px = p.x;
+    p.py = p.y;
+    state.owned.add(p.id);
+  });
+  state.regroup = 0;
 }
 
 export function step(state: MassState, input: Input): MassState {
@@ -1780,18 +1863,71 @@ export function step(state: MassState, input: Input): MassState {
     } else {
       // The whole body fell. Stand it back up at the LAST SAFE FOOTING, in its birth
       // arrangement - see MassState.lastSafe for why this is not the start of the room.
-      const golden = Math.PI * (3 - Math.sqrt(5));
-      fallen.forEach((p, i) => {
-        const r = T.rest * 0.62 * Math.sqrt(i);
-        const a = i * golden;
-        p.x = state.lastSafe.x + Math.cos(a) * r;
-        p.y = state.lastSafe.y + Math.sin(a) * r;
-        p.px = p.x;
-        p.py = p.y;
-        state.owned.add(p.id);
-      });
-      state.regroup = 0;
+      standUp(state, fallen);
     }
+  }
+
+  /*
+   * The critters: walk the beat, then check what is standing in it.
+   *
+   * Placed after collision and after the presses for the same reason they are: a body that
+   * has already been resolved against the room this frame is the body the player can
+   * actually see, and a hazard that tests an unresolved position reports contacts that
+   * never appeared on screen.
+   */
+  if (state.stunned > 0) state.stunned = Math.max(0, state.stunned - dt);
+  for (const critter of world.critters ?? []) {
+    if (critter.wait > 0) {
+      critter.wait = Math.max(0, critter.wait - dt);
+    } else {
+      critter.x += critter.speed * critter.facing * dt;
+      critter.phase += dt;
+      // Turning at the ends with a beat of stillness. A patroller that pivots instantly
+      // reads as a machine, which is the one thing this creature is here not to be.
+      if (critter.x <= critter.from) {
+        critter.x = critter.from;
+        critter.facing = 1;
+        critter.wait = T.critterPause;
+      } else if (critter.x >= critter.to) {
+        critter.x = critter.to;
+        critter.facing = -1;
+        critter.wait = T.critterPause;
+      }
+    }
+
+    if (state.stunned > 0) continue;
+    /*
+     * Contact is tested against the OWNED body only.
+     *
+     * Shed mass is scenery as far as a creature is concerned: a lump the player deliberately
+     * left behind, sitting on a ledge they are trying to cross, would otherwise end the
+     * attempt from across the room for something they cannot even see happening.
+     */
+    const left = critter.x - critter.w / 2;
+    const right = critter.x + critter.w / 2;
+    const top = critter.y - critter.h;
+    let touched = false;
+    for (const p of owned(state)) {
+      if (p.x < left || p.x > right || p.y < top || p.y > critter.y) continue;
+      touched = true;
+      break;
+    }
+    if (!touched) continue;
+
+    /*
+     * Hit. Both sides stop: the body goes back to its footing, and the creature recoils for
+     * as long as the player is untouchable - see TUNING.critterStun for why standing still
+     * matters as much as the immunity does.
+     */
+    state.attached = false;
+    state.swingRadius = 0;
+    state.spin = 0;
+    state.tip = null;
+    state.slowmo = 0;
+    state.stunned = T.critterStun;
+    critter.wait = T.critterStun;
+    critter.facing = critter.facing === 1 ? -1 : 1;
+    standUp(state, owned(state));
   }
 
   /*

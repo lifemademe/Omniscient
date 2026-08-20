@@ -557,3 +557,32 @@ direction from a dead hang must never circle.
 | 69d | crushing has a floor | A press will not take you below `crushFloor` (20), which is `reachPerMass` times 20 = 106px of reach | Chosen from what the player needs, not from what looks fair: whatever else a press does, it must never leave a creature unable to cross to a growth. Under the line the press carries the body instead of biting it, which also removes the worst thing this stage could produce - a slime pinned under a rhythm it no longer has the mass to escape. |
 | 69e | the stage two finale | The press nearest the heavy button is gone; the button is upright, bolted to the door it opens, on the face the player swings from - and it RIDES the door up | A hazard sitting in the flight path of a shot the player aimed turns their aim into the timer's business. And the button lay flat like a floor plate, which says STAND ON ME about the one control you are meant to HIT with a flung body; `strikerTexture` gives it a bracket, a struck face and one amber eye to aim at. |
 | 69f | furniture with scale | Giant mushrooms, a half-buried ribcage, leafy hanging vines, and near-black dead trees in the FOREGROUND at z 72 | The room had small mushrooms and ferns and the eye walked past them - they are texture, not objects. Size is the only way a frame tells you how big the creature is. Placed from level geometry rather than authored per stage, and kept sparse: a room with an object in it reads as a place, a room with twenty reads as a shop. The caps are mixed most of the way to the void - drawn in the raw accent purple this thing was louder than the player, and the accent family is reserved for small things. |
+
+## Pass 70 - the first living thing
+
+**Stage two gets a creature, and its switch.** A ledge is hung over the middle floor, a
+sporeling patrols it, and the plate that wakes the shaft's red growth sits at the far end
+of its beat. The waking button behind the splitting wall keeps only its second job -
+opening the wall so the mass left behind can be fetched - so the stage's most important
+switch is no longer the one thing in the room that nothing guards.
+
+**The sprite came from outside and was repainted to fit.** Spriterrific generated an
+eight-frame walk in its lobit mode (a real pixel grid rather than mixels), and the frames
+are baked into source rather than loaded as a PNG. Two reasons, and the first one is a
+measurement: lift() pre-compensates for ACES at exposure 0.5 and therefore expects colours
+authored DARK, so lifting the generator's near-white cream clipped four of twelve entries
+to pure white - the trap PAL.lampCore already carries a warning for. The clusters are
+re-pointed onto PAL instead: the cap takes capDark/capLit, the body takes the same bone
+ramp bonesTexture mixes for the ribcage. Nothing new entered the palette.
+
+The second reason is the pipeline. A baked sprite re-themes with setStageTheme, needs no
+resource manager, and puts no async material swap into a rig that has none.
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 70a | the sporeling | `Critter` in the sim: a beat, a speed, a contact box. Touching one calls the SAME `standUp` the pit calls | The stage's hazards were all machines on timers, and learning a timer is learning a clock. A patroller is that puzzle with the clock removed. Contact costs the attempt and no mass at all - an enemy that ate a quarter of you would be the one object in M4SS that can make a level unwinnable without killing you. |
+| 70b | the grace period | `critterStun` 1.2s, and the creature recoils for exactly as long | Without it the stage can soft-lock: the body is handed back to its last safe footing, and if that footing is the ledge the creature patrols, the next frame is another hit for ever. |
+| 70c | the ledge, sized by measurement | 570..860, 140 thick | A settled 40-mass body is 69px wide - measured, not guessed - so a ledge holding a creature at each end plus a patrol between them cannot be shorter than about 280 however tidy 220 looked. At 220 the plate counted as a contact and a body dropped on either end slid off. Nine pixels of slack at each end is also load-bearing: a body flush against an edge has its outermost particles resolved OUT of the platform and walks itself off. |
+| 70d | 140 thick, not 40 | | The third time this project has met it: a platform thinner than a piled body sinks posts the walker out of its own underside. |
+| 70e | landmarks | `World.landmarks` places the giant mushrooms where a level asks for them | The ledge is described in relation to the first mushroom, and that mushroom was being chosen by sorting floors on width. A level that has been laid out around a decoration has to be allowed to place it. |
+| 70f | no scatter where something lives | Floor props skip any tile a critter walks on | The first capture had a decorative cluster a body-width from the creature in the same accent purple, and at playing size it read as a second sporeling that never moved. Where the player has to watch a shape to survive, nothing else of that colour may stand. |

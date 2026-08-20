@@ -1,0 +1,109 @@
+{
+  "actions": [
+    "walk"
+  ],
+  "archivedAt": null,
+  "artifacts": [
+    {
+      "contentType": "image/png",
+      "key": "jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/anchors/anchor-w.png",
+      "name": "anchors/anchor-w",
+      "size": 11826,
+      "url": "https://pub-656cad5276814bbab250de9f6f3ed93d.r2.dev/jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/anchors/anchor-w.png"
+    },
+    {
+      "contentType": "image/png",
+      "key": "jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/anchors/candidate.png",
+      "name": "anchors/candidate",
+      "size": 10382,
+      "url": "https://pub-656cad5276814bbab250de9f6f3ed93d.r2.dev/jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/anchors/candidate.png"
+    },
+    {
+      "contentType": "image/png",
+      "key": "jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/walk/spritesheet.png",
+      "name": "walk/spritesheet",
+      "size": 168280,
+      "url": "https://pub-656cad5276814bbab250de9f6f3ed93d.r2.dev/jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/walk/spritesheet.png"
+    },
+    {
+      "contentType": "image/gif",
+      "key": "jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/walk/preview.gif",
+      "name": "walk/preview",
+      "size": 84222,
+      "url": "https://pub-656cad5276814bbab250de9f6f3ed93d.r2.dev/jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/walk/preview.gif"
+    },
+    {
+      "contentType": "application/json",
+      "key": "jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/walk/manifest.json",
+      "name": "walk/manifest",
+      "size": 345,
+      "url": "https://pub-656cad5276814bbab250de9f6f3ed93d.r2.dev/jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/walk/manifest.json"
+    },
+    {
+      "contentType": "application/json",
+      "key": "jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/character-plan.json",
+      "name": "plan",
+      "size": 1559,
+      "url": "https://pub-656cad5276814bbab250de9f6f3ed93d.r2.dev/jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/character-plan.json"
+    },
+    {
+      "contentType": "application/json",
+      "key": "jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/costs.json",
+      "name": "costs",
+      "size": 1624,
+      "url": "https://pub-656cad5276814bbab250de9f6f3ed93d.r2.dev/jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/costs.json"
+    },
+    {
+      "contentType": "application/json",
+      "key": "jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/walk/frames-index.json",
+      "name": "walk/frames-index",
+      "size": 1280,
+      "url": "https://pub-656cad5276814bbab250de9f6f3ed93d.r2.dev/jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/walk/frames-index.json"
+    },
+    {
+      "contentType": "application/json",
+      "key": "jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/run-index.json",
+      "name": "run-index",
+      "size": 28927,
+      "url": "https://pub-656cad5276814bbab250de9f6f3ed93d.r2.dev/jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/run-index.json"
+    },
+    {
+      "key": "jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/run/walk-w/review/selected-contact.png",
+      "name": "walk/contact",
+      "url": "https://pub-656cad5276814bbab250de9f6f3ed93d.r2.dev/jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/run/walk-w/review/selected-contact.png"
+    },
+    {
+      "key": "jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/run/walk-w/fal/raw-video.mp4",
+      "name": "walk/raw-video",
+      "url": "https://pub-656cad5276814bbab250de9f6f3ed93d.r2.dev/jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf/run/walk-w/fal/raw-video.mp4"
+    }
+  ],
+  "characterName": "m4ss-sporeling",
+  "createdAt": 1787228642586.9355,
+  "creditsDebited": 190,
+  "creditsRefunded": 0,
+  "direction": "w",
+  "engineVersion": "0.20.4",
+  "error": null,
+  "finishedAt": 1787229085677,
+  "id": "kh70h8wetk6b0hk6przhsy67g18cv30z",
+  "progress": null,
+  "status": "completed",
+  "steps": [
+    {
+      "estimatedCostUsd": 3.000067,
+      "kind": "anchors",
+      "status": "completed",
+      "stepId": "anchors"
+    },
+    {
+      "estimatedCostUsd": 0.01,
+      "kind": "action",
+      "status": "completed",
+      "stepId": "action:walk"
+    }
+  ],
+  "storagePrefix": "jobs/kh70h8wetk6b0hk6przhsy67g18cv30z-87067e3935e998cf",
+  "type": "character",
+  "workerVersion": "0.3.20"
+}

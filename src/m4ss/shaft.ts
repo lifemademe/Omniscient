@@ -59,6 +59,35 @@ export const THE_SHAFT: World = {
     // Past the wall, where the waking button is.
     { x: 900, y: FLOOR, w: 360, h: DEEP },
 
+    /*
+     * -- 1b. the sporeling's ledge --------------------------------------------------------
+     *
+     * Hung over the middle floor, up and to the left of the first giant mushroom, and it is
+     * where the whole stage now turns: the switch that wakes the red growth is on it, and
+     * something lives on it.
+     *
+     * Reachable, and not by accident. A release off g1 anywhere near the middle of the rise
+     * - roughly forty-five degrees, which is where a first swing naturally lets go - arcs
+     * onto it; a weak swing lands short on the floor and a hard one clears to the east end.
+     * So the ledge is not a skill gate, it is simply the place the opening swing goes, which
+     * is the correct amount of ceremony for the first thing in the room that can hurt you.
+     *
+     * 570 rather than 540: g1's sweep reaches x 520 and a body on it is twenty pixels wide,
+     * so a ledge at 540 is a corner for the swing to clip and shed mass on every revolution.
+     * 290 long rather than 220, and the length was arrived at by measurement rather than by
+     * eye: a settled body is 69px wide, so a ledge that holds a creature at each end AND a
+     * patrol between them cannot be shorter than about 280 however tidy 220 looked. At 220
+     * both ends were flush, standing on the plate counted as a contact, and a body dropped on
+     * the east end slid off it. It runs east to meet the wall, which is the only edge of this
+     * floor that was not already spoken for.
+     *
+     * 140 thick, not 40. A 40px platform is thinner than a piled body sinks, so collision
+     * finds its underside nearer than its top and posts the walker downward - the bug the
+     * corridor and the drawbridge deck both had. Its underside still leaves 80px of headroom
+     * over the floor, which a crawling body passes without noticing.
+     */
+    { x: 570, y: 1120, w: 290, h: 140 },
+
     // -- the shell -----------------------------------------------------------------------
     { x: -40, y: 0, w: 60, h: 1440 },
     { x: 1260, y: 0, w: 60, h: 1440 },
@@ -153,6 +182,15 @@ export const THE_SHAFT: World = {
      * bargain stage one's button makes, restated so the thing being unlocked is a plant
      * rather than a doorway.
      */
+    /*
+     * The waking button now only opens the wall.
+     *
+     * It used to do both jobs - open w1 and wake g2 - and both were on the far side of a
+     * gap the player crawls through, which put the stage's most important switch in the one
+     * place nothing guards. Waking the shaft has moved to the sporeling's ledge, and what is
+     * left here is the bargain stage one makes: the door you crawled under opens so you can
+     * go back for the mass you left behind.
+     */
     {
       id: 'wake',
       x: 1050,
@@ -160,6 +198,30 @@ export const THE_SHAFT: World = {
       radius: 26,
       pressed: false,
       opens: ['w1'],
+    },
+    /*
+     * The switch that wakes the shaft, at the far end of a ledge with something on it.
+     *
+     * Every number here is a measured body rather than a guess. A settled 40-mass creature is
+     * 69px wide, so a plate at 812 puts the body between 777 and 847 - clear of the east end
+     * of the beat (760, plus half a sporeling, is 773) and 13px inside the east edge of the
+     * ledge. Standing on the plate is therefore never dangerous; getting there is the puzzle.
+     *
+     * And the intended route to it is not a walk. The ledge is where a release off g1 lands,
+     * and WHERE it lands depends on when the player lets go - so the honest solution is to
+     * come down east of the creature, using the one verb this stage has already taught, and
+     * walking past is the fallback for a release that fell short.
+     */
+    {
+      id: 'spore',
+      x: 812,
+      y: 1104,
+      radius: 24,
+      pressed: false,
+      // Explicitly nothing. An undefined `opens` means EVERY gate in the level - stage one's
+      // wiring from when there was one button and one door - so leaving it off here quietly
+      // opened the splitting wall and handed the player the far chamber for free.
+      opens: [],
       activates: ['g2'],
     },
     /*
@@ -224,6 +286,48 @@ export const THE_SHAFT: World = {
   crushers: [
     { x: 560, y: 340, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0, at: 0 },
   ],
+
+  /**
+   * The sporeling.
+   *
+   * Slow on purpose - 55px/s against a crawl of fifteen hundred - because the creature is
+   * not a chase, it is a moving piece of the room. Everything difficult about it is where it
+   * is standing, and a player who cannot outrun it has no puzzle to solve, only a race.
+   *
+   * Its beat runs 670 to 760 - the middle third of the ledge - which leaves a body-width of
+   * safe ground at each end plus about nine pixels of slack: the west end is where a short
+   * release lands, the east end is the plate. The slack is not tidiness. A body parked flush
+   * against an edge has its outermost particles resolved OUT of the platform, and it walks
+   * itself off - the west end held nothing at all until the beat moved ten pixels east. 46px/s against a crawl of 92 means a player who is already past it can always
+   * outrun it, and a player who is not can never quite walk through it.
+   *
+   * It starts at the west end walking east, so the first thing the player sees on landing
+   * is a small creature coming towards them.
+   *
+   * The contact box is 26x42 against a 32x46 sprite: a graze along the silhouette should not
+   * end the attempt, because at this size the difference between touching and nearly
+   * touching is three pixels the player cannot possibly judge.
+   */
+  critters: [
+    { from: 670, to: 760, y: 1120, speed: 46, w: 26, h: 42, x: 670, facing: 1, wait: 0, phase: 0 },
+  ],
+
+  /*
+   * The two giant mushrooms, placed rather than derived.
+   *
+   * The first one is the landmark the ledge is described against, so it cannot be left to
+   * the renderer's "two widest floors" scatter.
+   *
+   * It stands past the wall rather than under the ledge, and that is a concession the floor
+   * plan forced: the ledge needs 290 of the middle floor's 380 to be playable, and what is
+   * left under it is 80px of headroom - a third of a giant mushroom. So the pair of them
+   * cluster in the far chamber instead, where the ledge looks down and to the right onto
+   * them, and the shaft climbs out of the room they are growing in.
+   */
+  landmarks: [
+    { x: 960, y: FLOOR, size: 150 },
+    { x: 1180, y: FLOOR, size: 172 },
+  ],
 };
 
 /** A fresh copy - gates, buttons, growths and presses are all mutated by play. */
@@ -236,5 +340,6 @@ export function freshShaft(): World {
     gates: THE_SHAFT.gates.map((g) => ({ ...g, span: g.span ? { ...g.span } : undefined })),
     buttons: THE_SHAFT.buttons.map((b) => ({ ...b })),
     crushers: (THE_SHAFT.crushers ?? []).map((c) => ({ ...c })),
+    critters: (THE_SHAFT.critters ?? []).map((c) => ({ ...c })),
   };
 }

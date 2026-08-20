@@ -25,6 +25,12 @@
  */
 
 import * as THREE from 'three';
+import {
+  SPORELING_FRAMES,
+  SPORELING_H,
+  SPORELING_W,
+  sporelingFrame,
+} from './sporelingArt.js';
 
 import { createRng, range, seedFrom } from '../omniscient/core/rng.js';
 
@@ -2448,6 +2454,44 @@ export function strikerTexture(seed: string, w = 40, h = 96): THREE.CanvasTextur
   }
 
   return pixelTexture(c);
+}
+
+/**
+ * The sporeling, as one texture that repaints itself.
+ *
+ * A sprite that animates by swapping `material.map` per frame is the obvious build and it is
+ * the one this project has already been bitten by: material properties written from the
+ * frame loop do not reliably survive a MeshNode, and a swap that silently does not take
+ * presents as a creature frozen mid-step. Repainting a single canvas and flagging the
+ * TEXTURE instead never touches the material at all, and at 32x46 the repaint is free.
+ *
+ * The frames themselves are baked - see sporelingArt.ts for why they are source rather than
+ * a PNG in /assets.
+ */
+export { SPORELING_W, SPORELING_H } from './sporelingArt.js';
+
+export function sporelingSprite(): {
+  texture: THREE.CanvasTexture;
+  draw(frame: number): void;
+} {
+  const cells = Array.from({ length: SPORELING_FRAMES }, (_, i) => sporelingFrame(i));
+  const c = document.createElement('canvas');
+  c.width = SPORELING_W;
+  c.height = SPORELING_H;
+  const g = c.getContext('2d');
+  const texture = pixelTexture(c);
+  let shown = -1;
+  return {
+    texture,
+    draw(frame: number) {
+      const at = ((frame % cells.length) + cells.length) % cells.length;
+      if (at === shown || !g) return;
+      shown = at;
+      g.clearRect(0, 0, SPORELING_W, SPORELING_H);
+      g.drawImage(cells[at], 0, 0);
+      texture.needsUpdate = true;
+    },
+  };
 }
 
 /**

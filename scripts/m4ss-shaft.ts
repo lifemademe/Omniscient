@@ -16,6 +16,7 @@
 import { freshShaft } from '../src/m4ss/shaft.js';
 import {
   centroid,
+  components,
   crusherRect,
   makeState,
   mass,
@@ -135,7 +136,10 @@ console.log('\n=== M4SS STAGE TWO ===\n');
     button.pressed,
     button.pressed ? `body at ${home(state).x.toFixed(0)}` : `stuck at ${home(state).x.toFixed(0)}`
   );
-  check('the waking button turns the red growth green', g2.live === true);
+  check(
+    'the waking button no longer wakes the growth - that job moved to the ledge',
+    g2.live === false
+  );
   check('and opens the wall, so the mass left behind can be fetched', wall.open);
 }
 
@@ -378,6 +382,167 @@ console.log('\n=== M4SS STAGE TWO ===\n');
   const hit = fast.world.buttons.find((b) => b.id === 'heavy')!;
   check('a body arriving at speed presses it', hit.pressed);
   check('and that opens the heavy gate', fast.world.gates.find((g) => g.id === 'w2')!.open);
+}
+
+// ---------------------------------------------------------------- the sporeling's ledge
+{
+  const world = freshShaft();
+  const ledge = world.tiles.find((t) => t.y === 1120)!;
+  const critter = world.critters![0];
+  const plate = world.buttons.find((b) => b.id === 'spore')!;
+
+  /*
+   * The three things about this platform that cannot be judged by looking at it.
+   *
+   * A body has to be able to stand ON it - the corridor and the drawbridge deck both taught
+   * that a platform thinner than a piled body sinks posts the walker out of its underside -
+   * and a body has to be able to walk UNDER it, because the route to the splitting wall runs
+   * along the floor it is hung over. Those two pull in opposite directions, which is exactly
+   * why they are measured rather than eyeballed.
+   */
+  check(
+    'the ledge is thicker than a body sinks',
+    ledge.h >= 120,
+    `${ledge.h}px deep`
+  );
+
+  /*
+   * Both ends of the ledge have to hold a whole creature.
+   *
+   * A settled body is 69px wide and the ledge is 220, so this is not obviously true and the
+   * first layout got it wrong twice - once with the body dropped onto the sporeling's head,
+   * which measured the respawn rather than the platform, and once with a plate close enough
+   * to the beat that standing on it was a contact. The east end is where the plate is; the
+   * west end is where a short release lands.
+   */
+  for (const [where, x] of [
+    ['the east end, where the plate is', 812],
+    ['the west end, where a short release lands', 613],
+  ] as Array<[string, number]>) {
+    const stand = makeState(freshShaft(), START_MASS);
+    place(stand, x, 1060);
+    run(stand, 4.0, () => IDLE);
+    check(
+      `a full body stays on ${where}`,
+      home(stand).y < 1130 && home(stand).x > 570 && home(stand).x < 860,
+      `settled at ${home(stand).x.toFixed(0)},${home(stand).y.toFixed(0)}, ledge is 570..860 topped at 1120`
+    );
+  }
+
+  const under = makeState(freshShaft(), START_MASS);
+  place(under, 560, 1310);
+  run(under, 12.0, () => ({ move: 1, anchor: null, recall: false }));
+  check(
+    'and the floor under it is still walkable',
+    home(under).x > 800,
+    `walked to ${home(under).x.toFixed(0)}, the ledge spans 570..860`
+  );
+
+  /*
+   * The beat. It has to stay on its own platform for ever - a patroller that walks off the
+   * end is a patroller in the pit - and it has to leave the plate itself alone, or the puzzle
+   * is not "cross while it is away", it is "stand on a button being stood on".
+   */
+  const walk = makeState(freshShaft(), START_MASS);
+  place(walk, 200, 1310);
+  const seen = { min: Infinity, max: -Infinity };
+  for (let i = 0; i < 60 / TUNING.dt; i++) {
+    step(walk, IDLE);
+    const c = walk.world.critters![0];
+    seen.min = Math.min(seen.min, c.x);
+    seen.max = Math.max(seen.max, c.x);
+  }
+  check(
+    'the sporeling never leaves its ledge',
+    seen.min >= ledge.x && seen.max <= ledge.x + ledge.w,
+    `patrolled ${seen.min.toFixed(0)}..${seen.max.toFixed(0)} on a ledge spanning ${ledge.x}..${ledge.x + ledge.w}`
+  );
+  check(
+    'it walks the whole beat it was given',
+    seen.min <= critter.from + 2 && seen.max >= critter.to - 2,
+    `reached ${seen.min.toFixed(0)} and ${seen.max.toFixed(0)}, beat is ${critter.from}..${critter.to}`
+  );
+  check(
+    'and it never reaches the plate it guards',
+    seen.max + critter.w / 2 < plate.x - plate.radius,
+    `nearest approach ${(seen.max + critter.w / 2).toFixed(0)}, plate starts at ${plate.x - plate.radius}`
+  );
+
+  /*
+   * Contact costs the attempt and nothing else.
+   *
+   * The body is put in the creature's way with a safe footing recorded well to the west, and
+   * three things are asserted about what comes back: it is somewhere else, it is all still
+   * there, and it is in one piece. The last one is the interesting assertion - the pit's
+   * handback had to be rewritten once because respawning a body onto a single host particle
+   * produced the vertical column the playtest photographed, and this path now shares that
+   * code precisely so it cannot regress separately.
+   */
+  const hit = makeState(freshShaft(), START_MASS);
+  place(hit, 200, 1310);
+  run(hit, 1.5, () => IDLE);
+  const safe = { ...hit.lastSafe };
+  const before = mass(hit);
+  for (const p of owned(hit)) {
+    p.x = hit.world.critters![0].x;
+    p.y = 1100;
+    p.px = p.x;
+    p.py = p.y;
+  }
+  run(hit, 0.2, () => IDLE);
+  check(
+    'touching the sporeling hands the body back to its last safe footing',
+    Math.hypot(home(hit).x - safe.x, home(hit).y - safe.y) < 60,
+    `landed ${Math.hypot(home(hit).x - safe.x, home(hit).y - safe.y).toFixed(0)}px from ${safe.x.toFixed(0)},${safe.y.toFixed(0)}`
+  );
+  check(
+    'and costs no mass at all - the attempt, never the creature',
+    mass(hit) === before,
+    `${mass(hit)} of ${before}`
+  );
+  run(hit, 2.0, () => IDLE);
+  check(
+    'the body it hands back is one piece, not a column',
+    components(owned(hit)).length === 1,
+    `${components(owned(hit)).length} pieces`
+  );
+
+  /*
+   * The grace period, which is the difference between a hazard and a soft lock: the footing
+   * the body is handed back to can BE this ledge, and without a beat where neither side can
+   * act the next frame is another hit, for ever.
+   */
+  const trapped = makeState(freshShaft(), START_MASS);
+  place(trapped, 640, 1080);
+  run(trapped, 2.0, () => IDLE);
+  const hits = { count: 0 };
+  let wasStunned = false;
+  for (let i = 0; i < 6 / TUNING.dt; i++) {
+    step(trapped, IDLE);
+    if (trapped.stunned > 0 && !wasStunned) hits.count += 1;
+    wasStunned = trapped.stunned > 0;
+  }
+  check(
+    'a body standing on the ledge is not hit every frame',
+    hits.count <= 6,
+    `${hits.count} hits in six seconds`
+  );
+
+  /*
+   * And the wiring: this plate, not the one behind the wall, is what opens the shaft.
+   */
+  const wake = makeState(freshShaft(), START_MASS);
+  place(wake, plate.x, 1060);
+  run(wake, 4.0, () => IDLE);
+  check(
+    'standing on the ledge plate wakes the red growth',
+    wake.world.anchors.find((a) => a.id === 'g2')!.live === true,
+    wake.world.buttons.find((b) => b.id === 'spore')!.pressed ? 'plate pressed' : 'plate NOT pressed'
+  );
+  check(
+    'and it does not open the splitting wall - that stays its own puzzle',
+    !wake.world.gates.find((g) => g.id === 'w1')!.open
+  );
 }
 
 // ---------------------------------------------------------------- the exit
