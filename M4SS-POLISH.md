@@ -606,3 +606,39 @@ player in it.
 | 71c | the sporeling's platform | 140 thick to 70 | Half the depth of the slabs around it, which is what stops a ledge hung in mid-air from reading as a chunk of floor that came loose. |
 | 71d | the grey lines | end caps skipped on slabs shorter than the cap art (92px) | The cap is 92 tall, so on a thin ledge it hung most of its length below the slab it was capping and read as a grey striped column stuck to each end. A cap taller than the thing it caps is not a cap. |
 | 71e | the plate moves to the middle, the beat becomes the whole ledge | plate at 715 (dead centre), beat 583..847 | The opposite puzzle shape: there is now no safe ground on this platform at all, and the switch has to be taken on a timer rather than reached and held. Cheaper failure, harder ask - the plate latches on contact and the growth stays awake, so being caught a second later costs only the walk back. |
+
+## Pass 72 - the trail, the wall, and the threshold
+
+**The wall was wallpaper, and the texture sheet could not say so until it was asked to.**
+The sheet drew every generator once, which answers "is this any good" and cannot answer
+"does it repeat" - so it grew a 3x3 view, and the old wall failed in it twice over. It was
+not seamless (courses were laid from a negative start and clipped at the right edge, so
+every repeat cut a stone in half) and it carried a full-height rusted pipe with riveted
+collars and a chartreuse ooze drip. Both of those are objects the eye can NAME. Repeat a
+nameable object fifteen times up a shaft and the wall becomes a lattice with a pipe at
+every node.
+
+The rewrite follows three rules: nothing individually identifiable, exact partition rather
+than clipping, and low contrast. Courses are cut into stones whose widths sum to exactly
+the texture width and whose heights sum to exactly its height, each course rotated by its
+own phase so the wrap point is a different grout line in every row. The pipes and the
+bright drips are gone; damp is told in value instead of colour. 256x192, so the same wall
+shows a quarter as many repeats.
+
+**The trail cost four editor cycles and three of them were my own fault.** The first blank
+screen was a stale bundle - I entered play mode while a build was still writing game.js -
+and I spent two cycles bisecting my own code for a fault that was not in it. The real bug
+was silent: the stage node is scaled (SCALE, -SCALE, SCALE) to turn y-down level space into
+y-up world space, and a negative scale REVERSES triangle winding, so every quad built by
+hand in the rig faces away from the camera and is culled with no error and nothing on
+screen. The generated meshes get away with it because their builder happens to wind the
+other way.
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 72a | does it tile? | `showTiled` on the texture sheet, 3x3 at 1:1 | The question the sheet could not answer, about the property that matters most for every surface in the game. |
+| 72b | the wall | `wallTexture`, replacing `stoneTexture` | See above. The floor variant went with it - the rig has drawn floors with `dirtTexture` for several passes and nothing used it. |
+| 72c | repeats read off the texture | the rig divides by the map's own width, not by 128 | The wall and the dirt are different sizes now, and a hardcoded divisor is a silent scale error that stretches the pattern instead of tiling it. |
+| 72d | the trail | `trailTexture` + one rebuilt geometry per frame, fade carried in vertex alpha | One draw call however long the trail gets, and alpha in the colour attribute goes through the same path as the vertices - it cannot fail to apply the way a frame-written `material.opacity` can. |
+| 72e | the trail is DARK | mixed 74% to the void, not 46% | Its first colour was the player's green pulled slightly down, and in the editor it was invisible: the walked surface of both stages is bright grass, and a dull green over a bright green of similar value has nothing to read against. Wet ground is dark ground. |
+| 72f | the threshold | `sillTexture` under the portal in both stages | Stage one's exit is a 75px shelf that was wearing the same loose earth as everything else - odd ground for a working doorway, and the one place the floor texture showed as an arbitrary crop rather than as a pattern. |

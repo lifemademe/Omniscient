@@ -479,245 +479,435 @@ function mossRun(
  * gravity in its art. Walls read as STACKED (big blocks, dark seams, streaks running
  * down); floors read as WALKED (smaller blocks, lit tops).
  */
-export function stoneTexture(
-  seed: string,
-  w = 128,
-  h = 96,
-  variant: 'floor' | 'wall' = 'floor'
-): THREE.CanvasTexture {
+/**
+ * One blot of the slime's trail.
+ *
+ * The creature is wet and it is the only wet thing in the room, so it should leave the room
+ * changed behind it - that is the entire argument for a trail, and it buys three things at
+ * once. It says where you have BEEN, which on a stage built around swinging back and forth
+ * over the same pit is real information. It says what you ARE, without a line of dialogue.
+ * And it makes the floor look walked on rather than authored, which nine passes of texture
+ * work could not do on their own because a floor with nothing on it has never been touched.
+ *
+ * Drawn dull, and that is the whole discipline of it: this is residue, not slime. The blot
+ * is the player's own green pulled most of the way to the ground it is lying on, so a floor
+ * covered in trail never competes with the creature that made it - the brightest green in
+ * the frame has to stay the one that is alive.
+ *
+ * Irregular rather than round, with a dithered fringe, because a circle repeated ninety
+ * times down a corridor reads as a string of beads.
+ */
+export function trailTexture(seed: string, size = 32): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(size, size);
+
   /*
-   * Rewritten to the tile reference (exec-*.png in the reference set), which does three
-   * things the old block grid never did:
+   * DARKER than the ground, not greener.
    *
-   *  - The stones are ROUNDED, individually shaded pebbles in courses of mixed sizes, not
-   *    square blocks. Rounding is corner cuts on integer pixels - never a curve.
-   *  - The ooze lives in the SEAMS. The lab pumped culture medium through this masonry,
-   *    and it still seeps: chartreuse pockets at grout junctions, drips running down the
-   *    faces below them. Seam colour = player colour, which is the story doing the work.
-   *  - The lab is IN the stone: rusted pipe runs with riveted plates weave through the
-   *    tilework. Horizontal runs on the floor variant, vertical on the wall variant, both
-   *    full-span so the pattern tiles without a visible joint.
-   *
-   * Both variants share one stone vocabulary at two scales, so walls read as STACKED
-   * (bigger stones, wider grout, longer drip stains) and floors read as WALKED (smaller
-   * stones, moss crown), while still being one quarry.
+   * The first version was the player's green pulled a little toward the void, and in the
+   * editor it was invisible: the walked surface of both stages is bright grass, and a dull
+   * green laid over a bright green of similar value has nothing to read against. Wet ground
+   * is DARK ground - water sinks into a surface and drops its value - so the blot is mostly
+   * void with the slime's hue still in it, and the only bright thing on it is the specular.
+   * That reads on the grass the player walks on and on the dirt below it, which a single
+   * green never could.
    */
-  const isWall = variant === 'wall';
-  const rng = createRng(seedFrom(seed + (isWall ? '-wall' : '')));
+  const wet = mixHex(PAL.slime, PAL.voidDeep, 0.74);
+  const core = mixHex(PAL.slime, PAL.voidDeep, 0.62);
+  const sheen = mixHex(PAL.slimeGlow, PAL.voidMid, 0.25);
+
+  const mid = size / 2;
+  const rx = size * 0.46;
+  const ry = size * 0.36;
+
+  // The body of the blot: an ellipse walked row by row with a wandering half-width, so no
+  // two blots have the same outline and none of them is a circle.
+  const edge: number[] = [];
+  let drift = 0;
+  for (let y = 0; y < size; y++) {
+    const t = (y - mid) / ry;
+    if (Math.abs(t) > 1) {
+      edge.push(0);
+      continue;
+    }
+    drift += range(rng, -0.9, 0.9);
+    drift = Math.max(-2.5, Math.min(2.5, drift));
+    const half = Math.max(0, Math.round(rx * Math.sqrt(1 - t * t) + drift));
+    edge.push(half);
+    g.fillStyle = wet;
+    g.fillRect(Math.round(mid - half), y, half * 2, 1);
+  }
+
+  // A denser middle, so the blot has a value inside it rather than being a flat stamp.
+  for (let y = 0; y < size; y++) {
+    const half = edge[y];
+    if (half < 3) continue;
+    const inner = Math.round(half * range(rng, 0.4, 0.62));
+    g.fillStyle = core;
+    g.fillRect(Math.round(mid - inner), y, inner * 2, 1);
+  }
+
+  // One highlight, off-centre. Wet things have a specular; without it this is a stain.
+  const hx = Math.round(mid + range(rng, -3, 3));
+  const hy = Math.round(mid + range(rng, -4, 2));
+  g.fillStyle = sheen;
+  g.fillRect(hx - 2, hy, 4, 1);
+  g.fillRect(hx - 1, hy - 1, 2, 1);
+
+  /*
+   * The falloff, applied to ALPHA rather than drawn in colour - and this is the whole
+   * difference between a smear and a lump.
+   *
+   * The first version was a hard-edged silhouette at a flat opacity, and ninety of them down
+   * a corridor read as a line of olive pebbles: a shape has an outline, and an outline is the
+   * one thing a wet patch does not have. Multiplying alpha by a squared radial falloff, with
+   * a per-pixel dither in the outer half, gives an edge that dissolves instead of stopping.
+   * The dither matters as much as the falloff: a smooth alpha ramp on a nearest-neighbour
+   * texture bands visibly, and dithering it is how every other soft edge in this stage is
+   * made.
+   */
+  const px = g.getImageData(0, 0, size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4 + 3;
+      if (px.data[i] === 0) continue;
+      const dx = (x - mid) / rx;
+      const dy = (y - mid) / ry;
+      const d = Math.min(1, Math.sqrt(dx * dx + dy * dy));
+      const fall = (1 - d) * (1 - d);
+      const dithered = d > 0.5 && rng() > fall * 2.4 ? 0 : fall;
+      px.data[i] = Math.round(255 * Math.min(1, dithered * 1.35));
+    }
+  }
+  g.putImageData(px, 0, 0);
+
+  return pixelTexture(c);
+}
+
+/**
+ * The threshold under a portal: the one piece of ARCHITECTURE on the ground in either stage.
+ *
+ * Stage one's exit is a 75px shelf across a pit, and it was wearing the same loose dirt as
+ * every other surface - which is a strange thing for the ground under a working door to be.
+ * It also showed an arbitrary 75px crop of a 128px texture, so the finale platform was the
+ * one place in the room where the tiling was visible as a crop rather than as a pattern.
+ *
+ * A sill answers both. It is cut stone with a metal saddle plate across it, worn bright
+ * along the middle where everything that ever left this room stepped, and it reads as
+ * BUILT - which is exactly the right note under the only object in the stage that was
+ * manufactured rather than grown. The portal's own colour bleeds onto the plate from above,
+ * so the door is lighting the floor it stands on instead of hovering over it.
+ */
+export function sillTexture(seed: string, w = 96, h = 30): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed + '-sill'));
   const { c, g } = surface(w, h);
 
-  // Grout first: the darkest thing in the texture, so every gap reads as depth.
-  const grout = mixHex(PAL.voidDeep, '#000000', 0.35);
+  const kerb = mixHex(PAL.stoneMid, PAL.stoneDark, 0.35);
+  const kerbLit = mixHex(PAL.stoneLit, PAL.stoneEdge, 0.4);
+  const plate = mixHex(PAL.stoneLit, PAL.rustDark, 0.42);
+  const plateLit = mixHex(PAL.stoneEdge, PAL.rustMid, 0.3);
+  const plateDark = mixHex(PAL.stoneDark, PAL.rustDark, 0.45);
+
+  // The stone kerb, filling the whole sill, with a lit top edge and a dark foot.
+  g.fillStyle = kerb;
+  g.fillRect(0, 0, w, h);
+  g.fillStyle = kerbLit;
+  g.fillRect(0, 0, w, 2);
+  g.fillStyle = mixHex(PAL.stoneDark, PAL.voidDeep, 0.4);
+  g.fillRect(0, h - 4, w, 4);
+
+  // Cut into blocks. Two or three across the sill, so it reads as masonry rather than as a
+  // slab, with the joints running the full depth.
+  const joints = Math.max(1, Math.round(w / 34));
+  for (let i = 1; i < joints; i++) {
+    const jx = Math.round((i / joints) * w + range(rng, -3, 3));
+    g.fillStyle = mixHex(PAL.voidDeep, '#000000', 0.3);
+    g.fillRect(jx, 0, 2, h);
+    g.fillStyle = kerbLit;
+    g.fillRect(jx + 2, 0, 1, 2);
+  }
+
+  /*
+   * The saddle plate: a metal band across the middle of the sill, sunk into the stone.
+   *
+   * Placed at a third of the depth rather than centred, because it is being seen from
+   * slightly above and the stone in front of it is what sells the step.
+   */
+  const py = Math.round(h * 0.3);
+  const ph = Math.max(6, Math.round(h * 0.42));
+  g.fillStyle = plateDark;
+  g.fillRect(2, py - 1, w - 4, ph + 2);
+  g.fillStyle = plate;
+  g.fillRect(3, py, w - 6, ph);
+  g.fillStyle = plateLit;
+  g.fillRect(3, py, w - 6, 1);
+
+  // Worn bright through the middle - the path everything took.
+  const wornX = Math.round(w * 0.3);
+  const wornW = Math.round(w * 0.4);
+  g.fillStyle = mixHex(plateLit, PAL.spec, 0.12);
+  g.fillRect(wornX, py + 1, wornW, Math.max(1, Math.round(ph * 0.4)));
+  for (let i = 0; i < 14; i++) {
+    g.fillStyle = plateDark;
+    g.fillRect(
+      Math.round(range(rng, 4, w - 6)),
+      py + Math.round(range(rng, 1, ph - 2)),
+      Math.round(range(rng, 1, 4)),
+      1
+    );
+  }
+
+  // Countersunk bolts at both ends of the plate.
+  for (const bx of [6, w - 10]) {
+    g.fillStyle = plateDark;
+    g.fillRect(bx, py + Math.round(ph / 2) - 2, 4, 4);
+    g.fillStyle = mixHex(plate, PAL.spec, 0.2);
+    g.fillRect(bx, py + Math.round(ph / 2) - 2, 4, 1);
+  }
+
+  /*
+   * Moss at both ends and nowhere in the middle. The forest is taking this room back
+   * everywhere the traffic stopped, and stating that as a gradient across one small object
+   * says more about the place than any amount of moss spread evenly over it.
+   */
+  for (let i = 0; i < 34; i++) {
+    const t = rng();
+    const mx = Math.round(t < 0.5 ? range(rng, 0, w * 0.22) : range(rng, w * 0.78, w));
+    const my = Math.round(range(rng, 0, h));
+    g.fillStyle = rng() > 0.55 ? mixHex(PAL.mossDark, kerb, 0.3) : PAL.mossDark;
+    g.fillRect(mx, my, Math.round(range(rng, 1, 3)), 1);
+  }
+
+  /*
+   * The portal's light, landing on the stone. Strongest at the top, gone by the foot - the
+   * door is above this, so its bleed falls forward onto the sill rather than filling it.
+   *
+   * Sparse, and it took a look at the texture sheet to see how sparse it needs to be. At a
+   * peak density of 0.55 this was a blizzard of cyan speckle across the whole slab - it read
+   * as noise damage rather than as light, and it buried the stonework the sill exists to
+   * show. Cubed falloff and a peak of 0.14 leaves a faint wash under the doorway and clean
+   * stone everywhere else, which is what a light source above a step actually does.
+   */
+  const bleed = mixHex(PAL.portalRim, PAL.stoneLit, 0.55);
+  for (let y = 0; y < Math.round(h * 0.6); y++) {
+    const fall = 1 - y / (h * 0.6);
+    for (let x = 0; x < w; x++) {
+      const across = 1 - Math.abs(x - w / 2) / (w / 2);
+      if (rng() > fall * fall * fall * across * across * 0.08) continue;
+      g.fillStyle = bleed;
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+
+  return pixelTexture(c);
+}
+
+export function wallTexture(seed: string, w = 256, h = 192): THREE.CanvasTexture {
+  /*
+   * The shell of the room, and the hardest texture in the game to get right - not because a
+   * wall is hard to draw, but because this one is drawn once and shown fifteen times.
+   *
+   * ## What was wrong with the old one, measured
+   *
+   * Laid out three by three on the texture sheet, the previous wall failed in two ways at
+   * once. It was not seamless: courses were laid from a negative start and clipped at the
+   * right edge, so every repeat put a hard vertical cut through a stone. And it carried a
+   * full-height rusted PIPE with riveted collars and a bright chartreuse ooze drip - both of
+   * which are objects the eye can name. Repeat a nameable object fifteen times up a shaft and
+   * the wall stops being a wall and becomes a lattice with a pipe at every node.
+   *
+   * ## The three rules this one follows
+   *
+   * 1. NOTHING INDIVIDUALLY IDENTIFIABLE. A repeating texture may carry material - grain,
+   *    grout, damp - and must not carry objects. Anything the player could point at belongs
+   *    in the world as a placed decal, once, where it means something.
+   * 2. EXACT PARTITION, not clipping. Each course is cut into stones whose widths sum to
+   *    exactly the texture width, and the courses' heights sum to exactly its height. Every
+   *    course is then rotated by its own phase, so the wrap point is a different grout line
+   *    in every row rather than a column of them. Nothing is ever cut by the edge, because
+   *    nothing ever reaches the edge except a joint that was going to be there anyway.
+   * 3. LOW CONTRAST. The stones sit in the middle of the value ramp with a narrow spread. A
+   *    pattern the eye can barely resolve is a pattern the eye cannot lock onto, and the
+   *    large-scale shaping this wall used to attempt in its own pixels is done properly by
+   *    the interior fade, the floor mist and the god rays, none of which repeat.
+   *
+   * 256x192 rather than 128x96 for the same reason: four times the area is a quarter as many
+   * repeats across the same wall.
+   */
+  const rng = createRng(seedFrom(seed + '-wall'));
+  const { c, g } = surface(w, h);
+
+  const grout = mixHex(PAL.voidDeep, '#000000', 0.3);
   g.fillStyle = grout;
   g.fillRect(0, 0, w, h);
 
-  const STEPS = 7;
+  /**
+   * Draw a rect and every wrapped copy of it.
+   *
+   * The whole seamlessness argument rests on this: a stone that runs off the right edge is
+   * also drawn coming in at the left, so the two halves are the same stone and meet exactly.
+   */
+  const put = (x: number, y: number, rw: number, rh: number, style: string): void => {
+    g.fillStyle = style;
+    for (const ox of [0, -w, w]) {
+      if (x + ox >= w || x + ox + rw <= 0) continue;
+      for (const oy of [0, -h, h]) {
+        if (y + oy >= h || y + oy + rh <= 0) continue;
+        g.fillRect(x + ox, y + oy, rw, rh);
+      }
+    }
+  };
 
   /**
-   * One PILLOWED stone. The first draft drew flat plates with a one-pixel lip and they
-   * read as UI buttons on a black board. The reference's stones are volumes: a lit
-   * crown fading through the body to a shadowed foot, rough speckle in the interior,
-   * and an inner shadow hugging the bottom-right - all of which happens INSIDE the
-   * silhouette, which is what makes a rock a rock and not a rectangle.
+   * Cut a length into `n` pieces of varied size that sum to it EXACTLY.
+   *
+   * The exactness is the point. Laying stones until you run off the end and clipping the last
+   * one is what put a cut stone at every tile boundary in the old texture; handing out the
+   * remainder instead means the last stone in a course meets the first one, because they are
+   * the same joint seen from both sides.
+   */
+  const cut = (total: number, n: number, jitter: number): number[] => {
+    const base = total / n;
+    const parts: number[] = [];
+    let used = 0;
+    for (let i = 0; i < n - 1; i++) {
+      const size = Math.max(10, Math.round(base * (1 + range(rng, -jitter, jitter))));
+      parts.push(size);
+      used += size;
+    }
+    parts.push(Math.max(10, total - used));
+    return parts;
+  };
+
+  const STEPS = 7;
+  const value = (k: number): string =>
+    ramp(PAL.stoneDark, PAL.stoneEdge, STEPS, Math.max(0, Math.min(STEPS - 1, k)));
+
+  /**
+   * One pillowed stone: a lit crown fading through the body to a shadowed foot, with all the
+   * shading happening INSIDE the silhouette. That is what makes a rock a rock rather than a
+   * rectangle, and it is the one thing worth keeping from the old generator.
    */
   const stone = (x: number, y: number, sw: number, sh: number, pick: number): void => {
-    const cut = sh > 14 ? 2 : 1;
-    // The body, shaded in thirds: crown value, mid value, foot value.
-    const crown = ramp(PAL.stoneDark, PAL.stoneEdge, STEPS, Math.min(STEPS - 1, pick + 2));
-    const mid = ramp(PAL.stoneDark, PAL.stoneEdge, STEPS, pick);
-    const foot = ramp(PAL.stoneDark, PAL.stoneEdge, STEPS, Math.max(0, pick - 2));
-    const topH = Math.max(2, Math.round(sh * 0.3));
-    const midH = Math.max(2, Math.round(sh * 0.45));
-    g.fillStyle = crown;
-    g.fillRect(x + cut, y, sw - cut * 2, sh);
-    g.fillRect(x, y + cut, sw, sh - cut * 2);
-    g.fillStyle = mid;
-    g.fillRect(x, y + topH, sw, sh - topH - cut);
-    g.fillRect(x + cut, y + topH, sw - cut * 2, sh - topH);
-    g.fillStyle = foot;
-    g.fillRect(x, y + topH + midH, sw, Math.max(0, sh - topH - midH - cut));
-    g.fillRect(x + cut, y + topH + midH, sw - cut * 2, Math.max(0, sh - topH - midH));
-    // The inner shadow, hugging the right edge - the side away from the key light.
-    g.fillStyle = foot;
-    g.fillRect(x + sw - cut - 2, y + topH, 2, sh - topH - cut);
-    // Speckle: a few rough flecks per stone, one step off their band's value.
-    const flecks = Math.round((sw * sh) / 160);
+    if (sw < 6 || sh < 6) return;
+    const nick = sh > 16 ? 2 : 1;
+    const topH = Math.max(2, Math.round(sh * 0.34));
+    const footH = Math.max(2, Math.round(sh * 0.24));
+    put(x + nick, y, sw - nick * 2, sh, value(pick + 1));
+    put(x, y + nick, sw, sh - nick * 2, value(pick + 1));
+    put(x, y + topH, sw, sh - topH - nick, value(pick));
+    put(x + nick, y + topH, sw - nick * 2, sh - topH, value(pick));
+    put(x, y + sh - footH, sw, footH - nick, value(pick - 1));
+    // The side away from the key light.
+    put(x + sw - nick - 2, y + topH, 2, sh - topH - nick, value(pick - 1));
+
+    // Grain: flecks one step off the band they sit in, at a density set by area so a big
+    // stone is not smoother than a small one.
+    const flecks = Math.round((sw * sh) / 130);
     for (let f = 0; f < flecks; f++) {
-      const fx = x + Math.round(range(rng, 2, sw - 4));
-      const fy = y + Math.round(range(rng, 2, sh - 3));
-      const band = fy < y + topH ? pick + 2 : fy < y + topH + midH ? pick : pick - 2;
-      g.fillStyle = ramp(
-        PAL.stoneDark,
-        PAL.stoneEdge,
-        STEPS,
-        Math.max(0, Math.min(STEPS - 1, band + (rng() > 0.5 ? 1 : -1)))
-      );
-      g.fillRect(fx, fy, 2, 1);
+      const fx = x + Math.round(range(rng, 1, Math.max(2, sw - 3)));
+      const fy = y + Math.round(range(rng, 1, Math.max(2, sh - 2)));
+      put(fx, fy, 2, 1, value(pick + (rng() > 0.5 ? 1 : -1)));
     }
-    // A crack, sparingly.
-    if (rng() > 0.8 && sh > 12) {
-      g.fillStyle = grout;
-      let cx2 = x + Math.round(range(rng, 4, sw - 5));
-      for (let cy = y + 2; cy < y + sh - 2; cy++) {
-        g.fillRect(cx2, cy, 1, 1);
-        cx2 += Math.round(range(rng, -1, 1));
+
+    /*
+     * Damp, which is this room's whole story, told in VALUE rather than in colour.
+     *
+     * The old wall said "wet lab" with bright chartreuse medium bleeding out of the seams,
+     * which is a better sentence and a much worse texture - it was the single most repetitive
+     * thing on the surface. Here a stone is simply darker and slightly greener where water
+     * has been sitting on it, at a contrast the eye reads as a stain rather than as a mark.
+     */
+    if (rng() > 0.55) {
+      /*
+       * Drawn as a stack of rows of drifting width rather than as one rect. A rectangular
+       * stain is a rectangle first and a stain second, and once the eye has seen one
+       * rectangle it finds all of them - which on a repeating texture is the whole failure
+       * mode this rewrite exists to avoid.
+       */
+      const dh = Math.round(range(rng, sh * 0.35, sh * 0.9));
+      let dw = Math.round(range(rng, 3, Math.max(5, sw * 0.4)));
+      let dx = x + Math.round(range(rng, 1, Math.max(2, sw - dw - 1)));
+      const wet = mixHex(value(pick), PAL.mossDark, 0.3);
+      const wetter = mixHex(value(pick - 1), PAL.mossDark, 0.38);
+      for (let d = 0; d < dh; d++) {
+        const row = y + sh - 1 - d;
+        put(dx, row, dw, 1, d < dh * 0.45 ? wetter : wet);
+        dx += Math.round(range(rng, -1, 1));
+        dw = Math.max(2, dw + Math.round(range(rng, -1, 1)));
+        dx = Math.max(x, Math.min(x + sw - dw, dx));
       }
     }
   };
 
   /*
-   * Courses of pebbles, mixed sizes. Junction points (where grout lines meet) are
-   * collected as the candidate homes for ooze pockets.
+   * Courses, cut to fit exactly, each rotated by its own phase.
+   *
+   * The phase is what stops the wrap from being a column: without it every course would break
+   * at x = 0 and the texture would grow the one vertical line it was rewritten to avoid.
+   *
+   * The first version of this cut five even courses of even stones and came back a BRICK
+   * WALL - seamless, and so regular that the grid was the only thing you could see. Masonry
+   * this old is not laid to a course: heights vary by nearly half, widths by more, and every
+   * few stones one is split into two stacked halves or knocked into rubble. Those two breaks
+   * are doing most of the work here; without them no amount of value variation stops the eye
+   * finding the rows.
    */
-  const junctions: Array<{ x: number; y: number }> = [];
-  const rowBase = isWall ? 30 : 20;
-  const rowVar = isWall ? 10 : 8;
-  const gap = isWall ? 3 : 2;
-  let y = -Math.round(range(rng, 0, rowBase / 2));
-  while (y < h) {
-    const rowH = Math.round(range(rng, rowBase, rowBase + rowVar));
-    let x = -Math.round(range(rng, 0, 26));
-    while (x < w) {
-      const sw = Math.round(range(rng, isWall ? 34 : 24, isWall ? 60 : 46));
-      const pick = Math.floor((rng() * 0.6 + rng() * 0.6) * STEPS * (isWall ? 0.7 : 0.83));
-      stone(x, y, sw, rowH - gap, pick);
-      // The occasional small stone pair instead of one wide one.
-      if (rng() > 0.75 && sw > 34) {
-        g.fillStyle = grout;
-        g.fillRect(x + Math.round(sw / 2) - 1, y, 3, rowH - gap);
-        stone(x + Math.round(sw / 2) + 2, y + 2, Math.round(sw / 2) - 2, rowH - gap - 4,
-          Math.max(0, pick - 1));
+  const rows = cut(h, 5, 0.42);
+  let y = 0;
+  for (const rowH of rows) {
+    // Joint width varies by course. One constant grout weight draws one constant set of
+    // lines, and lines are what the eye counts.
+    const joint = rng() > 0.5 ? 2 : 3;
+    const cols = cut(w, Math.round(range(rng, 3, 6)), 0.44);
+    let x = Math.round(range(rng, 0, w));
+    for (const sw of cols) {
+      /*
+       * Biased DARK: two dice on 1..3 of a seven-step ramp. This wall is the back of the
+       * frame and everything the player cares about is in front of it, so its job is to have
+       * texture without having presence - the reference paints its stone nearly black and
+       * lets the moss and the lamps carry all of the light.
+       *
+       * The range is one step wide on purpose. Two steps put the occasional stone three
+       * values above its neighbours, and a stone that much paler than the wall around it is
+       * a landmark - the pale ones were visibly the SAME pale ones in every repeat, which is
+       * the nameable-object failure coming back quietly instead of loudly.
+       */
+      const pick = 1 + Math.round(rng());
+      const roll = rng();
+      if (roll > 0.82 && rowH > 26) {
+        // Split: two stacked half-stones, which puts a horizontal joint mid-course.
+        const top = Math.round(rowH * range(rng, 0.4, 0.6));
+        stone(x, y, sw - joint, top - joint, pick);
+        stone(x, y + top, sw - joint, rowH - top - joint, Math.max(0, pick - 1));
+      } else if (roll > 0.74 && sw > 44) {
+        // Rubble: a short course of small stones filling one stone's footprint.
+        const bits = cut(sw, 3, 0.35);
+        let bx = x;
+        for (const bw of bits) {
+          stone(bx, y + 1, bw - joint, rowH - joint - 2, 1 + Math.round(rng()));
+          bx += bw;
+        }
+      } else {
+        stone(x, y, sw - joint, rowH - joint, pick);
       }
-      x += sw + gap;
-      if (x > 0 && x < w) junctions.push({ x, y: y + rowH - gap });
+      x += sw;
     }
     y += rowH;
   }
 
   /*
-   * The pipes, woven through the masonry. Full-span so the texture tiles: a horizontal
-   * run wraps in x by construction, a vertical run wraps in y. Rust body, lit top edge,
-   * riveted joint plates, and a stain bleeding off the underside.
+   * Moss in the grout, and only in the grout.
+   *
+   * Two steps off the stone rather than the full slime green: this is the one place a hint of
+   * the palette's living colour belongs on a surface nothing lives on, and at this contrast it
+   * survives repetition because there is nothing to recognise - just a seam that is greener
+   * here than it is there.
    */
-  /*
-   * A pipe is corroded MB-dark metal, not timber: the first draft used the rust ramp as
-   * the body colour and the pipe read as a wooden beam. The body is a cold metal mix one
-   * step off the stone (so it belongs to the same wet room), rust appears only as PATINA
-   * blotches creeping from the joints, and the lit edge is thin and cool.
-   */
-  const metalDark = mixHex(PAL.stoneDark, PAL.rustDark, 0.35);
-  const metalMid = mixHex(PAL.stoneMid, PAL.rustDark, 0.3);
-  const metalLit = mixHex(PAL.stoneLit, PAL.rustMid, 0.25);
-  const pipe = (at: number): void => {
-    const thick = Math.round(range(rng, 5, 7));
-    const along = (isWall ? h : w) as number;
-    const px = at;
-    // Body with a thin lit edge on the light side.
-    if (isWall) {
-      g.fillStyle = mixHex(metalDark, '#000000', 0.4);
-      g.fillRect(px - 1, 0, thick + 2, h);
-      g.fillStyle = metalMid;
-      g.fillRect(px, 0, thick, h);
-      g.fillStyle = metalLit;
-      g.fillRect(px, 0, 1, h);
-      g.fillStyle = metalDark;
-      g.fillRect(px + thick - 2, 0, 2, h);
-    } else {
-      g.fillStyle = mixHex(metalDark, '#000000', 0.4);
-      g.fillRect(0, px - 1, w, thick + 2);
-      g.fillStyle = metalMid;
-      g.fillRect(0, px, w, thick);
-      g.fillStyle = metalLit;
-      g.fillRect(0, px, w, 1);
-      g.fillStyle = metalDark;
-      g.fillRect(0, px + thick - 2, w, 2);
-    }
-    // Joints: clamp collars every few stones, with rust bleeding away from each.
-    for (let j = Math.round(range(rng, 6, 24)); j < along; j += Math.round(range(rng, 30, 48))) {
-      if (isWall) {
-        g.fillStyle = metalDark;
-        g.fillRect(px - 2, j, thick + 4, 5);
-        g.fillStyle = metalLit;
-        g.fillRect(px - 2, j, thick + 4, 1);
-      } else {
-        g.fillStyle = metalDark;
-        g.fillRect(j, px - 2, 5, thick + 4);
-        g.fillStyle = metalLit;
-        g.fillRect(j, px - 2, 5, 1);
-      }
-      // Rust patina creeping from the joint, in blotches that thin with distance.
-      for (let b = 0; b < 7; b++) {
-        const d = Math.round(range(rng, 1, 14));
-        const off = Math.round(range(rng, 0, thick - 1));
-        g.fillStyle = b < 3 ? PAL.rustMid : PAL.rustDark;
-        if (isWall) g.fillRect(px + off, j + (rng() > 0.5 ? d : -d), 2, 2);
-        else g.fillRect(j + (rng() > 0.5 ? d : -d), px + off, 2, 2);
-      }
-    }
-    // The leak stain under a horizontal run.
-    if (!isWall) {
-      const lx = Math.round(range(rng, 8, w - 10));
-      g.fillStyle = mixHex(PAL.stoneDark, '#000000', 0.4);
-      const stainLen = Math.round(range(rng, 10, 26));
-      for (let d = 0; d < stainLen; d++) {
-        if (px + thick + d < h) g.fillRect(lx, px + thick + d, 2, 1);
-      }
-    }
-  };
-  // One run per tile; the wall gets a second thin one some of the time.
-  pipe(isWall ? Math.round(range(rng, 14, w - 24)) : Math.round(range(rng, h * 0.3, h * 0.75)));
-  if (isWall && rng() > 0.55) pipe(Math.round(range(rng, 14, w - 24)));
-
-  /*
-   * The ooze: culture medium seeping at grout junctions. Pockets sit IN the seam; drips
-   * run DOWN the stone faces below the pocket, shaded along their length; the brightest
-   * pips are 2x2 so they survive downsampling (the pass-11 lesson).
-   */
-  const pockets = isWall ? 4 : 6;
-  for (let i2 = 0; i2 < pockets && junctions.length > 0; i2++) {
-    const j = junctions[Math.floor(rng() * junctions.length)];
-    const px = Math.max(4, Math.min(w - 8, j.x - 1));
-    const py = Math.max(2, Math.min(h - 4, j.y));
-    /*
-     * The channel: the medium FLOODS a run of the horizontal seam, brightest at the
-     * junction and darkening toward both ends, so the seam reads as full rather than
-     * dotted. The first draft placed six-pixel pips and they vanished at game scale.
-     */
-    const run = Math.round(range(rng, 10, 26));
-    for (let d = -run; d <= run; d++) {
-      const t = Math.abs(d) / run;
-      const cx3 = px + d;
-      if (cx3 < 0 || cx3 >= w) continue;
-      g.fillStyle = t < 0.25 ? PAL.mossLit : t < 0.6 ? PAL.mossMid : PAL.mossDark;
-      g.fillRect(cx3, py, 1, 2);
-    }
-    // The bulb at the junction and its drip: a fat head tapering to a thread.
-    g.fillStyle = PAL.slime;
-    g.fillRect(px - 1, py - 1, 4, 3);
-    g.fillStyle = PAL.slimeGlow;
-    g.fillRect(px, py, 2, 2);
-    const drop = Math.round(range(rng, 8, isWall ? 34 : 18));
-    for (let d = 0; d < drop; d++) {
-      const t = d / drop;
-      g.fillStyle = t < 0.3 ? PAL.slime : t < 0.7 ? PAL.mossLit : PAL.mossMid;
-      const dw = t < 0.35 ? 3 : t < 0.75 ? 2 : 1;
-      if (py + 2 + d < h) g.fillRect(px + Math.floor((3 - dw) / 2), py + 2 + d, dw, 1);
-    }
-    // The hanging bead at the tip of a long drip.
-    if (drop > 14 && py + 3 + drop < h) {
-      g.fillStyle = PAL.slime;
-      g.fillRect(px, py + 2 + drop, 2, 2);
-    }
-  }
-
-  // Moss: the floor wears a crown along its walked edge; the wall only flecks.
-  if (isWall) {
-    for (let i2 = 0; i2 < 20; i2++) {
-      g.fillStyle = rng() > 0.5 ? PAL.mossDark : mixHex(PAL.mossDark, PAL.mossMid, 0.5);
-      g.fillRect(Math.round(range(rng, 0, w)), Math.round(range(rng, 0, h)), 2, 1);
-    }
-  } else {
-    mossRun(g, rng, 0, w, 0, 14);
+  for (let i = 0; i < 110; i++) {
+    const gx = Math.round(range(rng, 0, w));
+    const gy = Math.round(range(rng, 0, h));
+    put(gx, gy, Math.round(range(rng, 1, 3)), 1, mixHex(grout, PAL.mossDark, range(rng, 0.2, 0.6)));
   }
 
   return pixelTexture(c);

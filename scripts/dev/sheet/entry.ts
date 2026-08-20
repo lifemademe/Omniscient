@@ -65,6 +65,38 @@ function toneMap(px: Uint8ClampedArray): void {
   }
 }
 
+/**
+ * The same texture, laid three by three - the only way to see whether it TILES.
+ *
+ * The sheet answered "is this texture any good" and could not answer "does it repeat", which
+ * is the question that matters for every surface in the game: a wall is a 128x96 texture
+ * repeated fifteen times up a shaft, so a mismatch of one pixel between its top and bottom
+ * edges becomes fifteen horizontal lines across the room. Shown at 1:1 because a seam is a
+ * discontinuity, and a discontinuity is easiest to see when nothing is interpolated.
+ */
+function showTiled(label: string, tex: { image: CanvasImageSource & { width: number; height: number } }) {
+  const cell = document.createElement('figure');
+  const src = tex.image;
+  const view = document.createElement('canvas');
+  view.width = src.width * 3;
+  view.height = src.height * 3;
+  const g = view.getContext('2d')!;
+  g.imageSmoothingEnabled = false;
+  for (let j = 0; j < 3; j++) {
+    for (let i = 0; i < 3; i++) g.drawImage(src, i * src.width, j * src.height);
+  }
+  if (!RAW) {
+    const px = g.getImageData(0, 0, view.width, view.height);
+    toneMap(px.data);
+    g.putImageData(px, 0, 0);
+  }
+  cell.appendChild(view);
+  const caption = document.createElement('figcaption');
+  caption.textContent = `${label} 3x3`;
+  cell.appendChild(caption);
+  wrap.appendChild(cell);
+}
+
 function show(label: string, tex: { image: CanvasImageSource & { width: number; height: number } }, zoom = 1) {
   const cell = document.createElement('figure');
   const src = tex.image;
@@ -99,6 +131,17 @@ function show(label: string, tex: { image: CanvasImageSource & { width: number; 
 }
 
 const S = 'm4ss';
+
+/*
+ * The tiling checks, first on the page because they are the ones that were missing.
+ */
+showTiled('tile-wall-gallery', art.wallTexture(S));
+
+showTiled('tile-dirt-plain', art.dirtTexture(S, 128, 96, 'plain'));
+art.setStageTheme(art.THEME_STACK);
+showTiled('tile-wall-stack', art.wallTexture(S));
+art.setStageTheme(art.THEME_GALLERY);
+
 // Both stage identities, side by side - the thumbnail test happens here first.
 art.setStageTheme(art.THEME_GALLERY);
 show('press', art.pressTexture(S, 60, 260), 1);
@@ -114,11 +157,9 @@ show('dirt-grass', art.dirtTexture(S, 128, 96, 'grass'), 3);
 show('dirt-plain', art.dirtTexture(S, 128, 96, 'plain'), 3);
 show('acid', art.acidTexture(S, 256, 128), 2);
 show('portal-new', art.portalTexture(S, 0), 3);
-show('stone-gallery', art.stoneTexture(S), 3);
-show('wall-gallery', art.stoneTexture(S, 128, 96, 'wall'), 3);
+show('wall-gallery', art.wallTexture(S), 2);
 art.setStageTheme(art.THEME_STACK);
-show('stone-stack', art.stoneTexture(S), 3);
-show('wall-stack', art.stoneTexture(S, 128, 96, 'wall'), 3);
+show('wall-stack', art.wallTexture(S), 2);
 art.setStageTheme(art.THEME_GALLERY);
 show('dome', art.domeTexture('dome-gallery'), 1);
 art.setStageTheme(art.THEME_STACK);
@@ -126,7 +167,6 @@ show('pipestack', art.pipeStackTexture('pipes-stack', 1280, 760), 1);
 art.setStageTheme(art.THEME_GALLERY);
 show('backdrop', art.backdropTexture(S).texture);
 show('atmosphere', art.atmosphereTexture(S));
-show('stone', art.stoneTexture(S), 3);
 show('endCap', art.endCapTexture(S), 2);
 show('bush', art.bushTexture(S), 2);
 show('bushDead', art.bushTexture(S, 160, true), 2);
@@ -135,6 +175,8 @@ show('plate', art.plateTexture(S), 3);
 show('vine', art.vineTexture(S), 3);
 show('portal', art.portalTexture(S, 0), 3);
 show('glow', art.glowTexture(S, '#7fe0a0'), 2);
+show('trail', art.trailTexture(S), 6);
+show('sill', art.sillTexture(S, 96, 30), 4);
 
 /*
  * Post every cell back to catch.py so the textures can be looked at as files.

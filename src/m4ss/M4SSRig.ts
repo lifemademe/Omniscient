@@ -67,7 +67,9 @@ import {
   bushTexture,
   PAL,
   portalTexture,
-  stoneTexture,
+  wallTexture,
+  sillTexture,
+  trailTexture,
   vineTexture,
 } from './stageArt.js';
 import {
@@ -108,6 +110,21 @@ import type { Anchor, Button, Critter, Crusher, Gate, MassState } from './mass.j
  * the underside of a gate for the two seconds it takes to crawl through one.
  */
 const BLOB_LIFT = 10;
+
+/** How far the body has to travel along the ground before it leaves another mark, in px. */
+const TRAIL_STEP = 13;
+/** Seconds a blot lasts. Long enough to see a route, short enough that a room does not fill. */
+const TRAIL_LIFE = 7;
+/** The most blots kept at once - about two full crossings of a stage. */
+const TRAIL_MAX = 130;
+/**
+ * How opaque a fresh blot is.
+ *
+ * Low on purpose. The trail is residue and the creature is alive, and the brightest green in
+ * the frame has to stay the one that can move; a trail that reads as strongly as the player
+ * turns every room into a diagram of where the player has been.
+ */
+const TRAIL_PEAK = 0.62;
 
 /**
  * The stages, in order. The portal at the end of one loads the next.
@@ -276,6 +293,16 @@ export class M4SSRig extends ENGINE.SceneNode {
   /** The growth the pointer is over and the body could actually reach, if any. */
   private hovered: Anchor | null = null;
   private crusherNodes: Array<{ node: ENGINE.MeshNode; crusher: Crusher }> = [];
+  /**
+   * The trail: where the creature has been, oldest first.
+   *
+   * Kept by the RIG rather than by the sim, because nothing about it is simulated - no rule
+   * reads it, no collision touches it, and a body that has left a trail behaves exactly like
+   * one that has not. State that only the renderer consumes belongs to the renderer.
+   */
+  private trail: Array<{ x: number; y: number; r: number; born: number }> = [];
+  private trailNode: ENGINE.MeshNode | null = null;
+  private lastStamp: { x: number; y: number } | null = null;
   /** One sprite per critter, each owning the canvas it repaints. See sporelingSprite. */
   private critterNodes: Array<{
     node: ENGINE.MeshNode;
@@ -705,7 +732,7 @@ export class M4SSRig extends ENGINE.SceneNode {
      */
     const dirtMap = dirtTexture(`m4ss-dirt-${this.theme.name}`, 128, 96, 'plain');
     const grassMap = dirtTexture(`m4ss-dirt-${this.theme.name}`, 128, 96, 'grass');
-    const wallMap = stoneTexture(`m4ss-stone-${this.theme.name}`, 128, 96, 'wall');
+    const wallMap = wallTexture(`m4ss-stone-${this.theme.name}`);
 
     for (const t of world.tiles) {
       /*
@@ -717,14 +744,22 @@ export class M4SSRig extends ENGINE.SceneNode {
       const isWall = t.h > t.w * 1.6;
       const face = (isWall ? wallMap : dirtMap).clone();
       face.needsUpdate = true;
-      face.repeat.set(t.w / 128, t.h / 96);
+      /*
+       * Repeats read off the TEXTURE rather than written as constants. The wall and the dirt
+       * are different sizes now (256x192 against 128x96) and a hardcoded divisor is a silent
+       * scale error the moment either changes - it stretches the pattern instead of tiling
+       * it, which looks like a texture that is simply worse rather than one being misused.
+       */
+      const tileW = (face.image as HTMLCanvasElement).width;
+      const tileH = (face.image as HTMLCanvasElement).height;
+      face.repeat.set(t.w / tileW, t.h / tileH);
       /*
        * WORLD-ALIGNED offsets: the pattern's origin is the world's, not the tile's, so
        * two tiles that touch continue each other's blocks instead of restarting the
        * pattern at their own corner - which was the visible seam the playtest called
        * "not seamless". One texture, offset per tile, globally continuous.
        */
-      face.offset.set((t.x % 128) / 128, 1 - ((t.y + t.h) % 96) / 96);
+      face.offset.set((t.x % tileW) / tileW, 1 - ((t.y + t.h) % tileH) / tileH);
       /*
        * The slab behind the art is near-black SHADOW, not lit stone: the box's 3D side
        * faces were catching the camera's perspective and reading as "a flat 2D game with
@@ -781,7 +816,13 @@ export class M4SSRig extends ENGINE.SceneNode {
          * sunk into the turf. Three still gives the silhouette somewhere to wander without
          * moving the ground line the player reads.
          */
-        turf.position.set(0, -t.h / 2 + crownH / 2 - 3, 24);
+        /*
+         * z 23.5 local, which is -0.5 in the world: in front of the tile face and BEHIND the
+         * two things that now lie on the ground - the sill under a portal, and the creature's
+         * trail. The grass used to sit at exactly 0, sharing a plane with the slime, and two
+         * transparent surfaces at the same depth are drawn in whatever order they were built.
+         */
+        turf.position.set(0, -t.h / 2 + crownH / 2 - 3, 23.5);
         node.add(turf);
       }
 
@@ -2029,6 +2070,43 @@ export class M4SSRig extends ENGINE.SceneNode {
     node.position.set(this.portalAt.x, this.portalAt.y, 8);
     this.stage?.add(node);
     this.portal = node;
+
+    /*
+     * The threshold the door stands on.
+     *
+     * Stage one's exit is a 75px shelf, and it was wearing the same loose earth as every
+     * other surface in the room - odd ground for a working doorway, and the one place where
+     * the floor texture showed as an arbitrary crop rather than as a pattern, because 75 is
+     * not a multiple of anything. A sill states that this corner was BUILT, which is the
+     * right note under the only object in the stage that was manufactured rather than grown.
+     *
+     * The tile is found rather than authored: the nearest surface below the declared exit
+     * that spans it. Both stages get one, and stage two's is inset in a wide shelf while
+     * stage one's covers its narrow one, which is the correct difference between a threshold
+     * in a doorway and a threshold that IS the ledge.
+     */
+    const doorway = this.portalAt;
+    const under = (this.state?.world.tiles ?? [])
+      .filter((t) => t.x <= doorway.x && t.x + t.w >= doorway.x && t.y >= doorway.y)
+      .sort((a, b) => a.y - b.y)[0];
+    if (under) {
+      const sw = Math.min(150, under.w);
+      const sh = 30;
+      const sx = Math.max(under.x + sw / 2, Math.min(under.x + under.w - sw / 2, doorway.x));
+      const sill = decorMesh(
+        'PortalSill',
+        new THREE.PlaneGeometry(sw, sh),
+        this.artMaterial({
+          map: sillTexture(`sill-${Math.round(under.x)}`, Math.round(sw), sh),
+          transparent: true,
+          depthWrite: false,
+        })
+      );
+      // Its top edge on the walked surface, and in front of the turf so the threshold is
+      // stone rather than stone with grass growing over it.
+      sill.position.set(sx, under.y + sh / 2, -0.2);
+      this.stage?.add(sill);
+    }
   }
 
   /**
@@ -2060,8 +2138,112 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.slimeGlow = halo;
   }
 
+  /**
+   * The trail mesh: one geometry, rebuilt every frame, with the fade carried in VERTEX ALPHA.
+   *
+   * The obvious build is one node per blot with its opacity animated down, and it is the one
+   * this project has been bitten by twice: material properties written from the frame loop do
+   * not reliably survive a MeshNode, and a hundred nodes appearing and disappearing per
+   * corridor is a lot of scene graph for some wet patches. Alpha in the colour attribute goes
+   * through the same path as the vertices themselves, so it cannot fail to apply, and the
+   * whole trail costs one draw call however long it gets.
+   */
+  private buildTrail(): void {
+    this.trailNode = decorMesh(
+      'SlimeTrail',
+      new THREE.BufferGeometry(),
+      this.artMaterial({
+        map: trailTexture('m4ss-trail'),
+        transparent: true,
+        depthWrite: false,
+        vertexColors: true,
+        /*
+         * DOUBLE-SIDED, and this is not belt and braces - it is the whole reason the trail
+         * was invisible on its first run in the editor.
+         *
+         * The stage node is scaled (SCALE, -SCALE, SCALE) to turn level space, which is
+         * y-down, into world space, which is y-up. A negative scale on one axis REVERSES
+         * triangle winding, so every quad built by hand in this file faces away from the
+         * camera and is culled - silently, with no error and nothing on screen, which is the
+         * most expensive kind of wrong. The generated meshes get away with it because their
+         * builder happens to wind the other way.
+         */
+        side: THREE.DoubleSide,
+      })
+    );
+    // In front of the ground and its turf, behind the creature. A trail drawn over the body
+    // would put a smear on the animal that made it.
+    this.trailNode.position.z = -0.1;
+    this.stage?.add(this.trailNode);
+  }
+
+  /**
+   * Lay a blot if the body has moved far enough along the ground, and rebuild the strip.
+   *
+   * Stamped by DISTANCE rather than by time, which is the difference between a trail and a
+   * puddle: a creature standing still has already marked where it is standing, and adding to
+   * that mark every frame just makes one bright spot that says nothing. Only grounded
+   * particles count, so a swing leaves no trail in mid-air - the mark is contact.
+   */
+  private paintTrail(state: MassState): void {
+    if (!this.trailNode) return;
+
+    const mine = owned(state);
+    let sumX = 0;
+    let low = -Infinity;
+    let touching = 0;
+    for (const p of mine) {
+      if (!p.grounded) continue;
+      touching += 1;
+      sumX += p.x;
+      if (p.y > low) low = p.y;
+    }
+    if (touching >= 2) {
+      const at = { x: sumX / touching, y: low };
+      const moved =
+        this.lastStamp === null ||
+        Math.hypot(at.x - this.lastStamp.x, at.y - this.lastStamp.y) > TRAIL_STEP;
+      if (moved) {
+        this.lastStamp = at;
+        // Sized from the body, so a split creature leaves a thinner mark than a whole one -
+        // the same feedback the glow gives, written on the floor.
+        const r = 11 + Math.min(13, mine.length * 0.32);
+        this.trail.push({ x: at.x, y: at.y - r * 0.35, r, born: state.time });
+        if (this.trail.length > TRAIL_MAX) this.trail.splice(0, this.trail.length - TRAIL_MAX);
+      }
+    }
+
+    const verts: number[] = [];
+    const uvs: number[] = [];
+    const colours: number[] = [];
+    for (const blot of this.trail) {
+      const age = state.time - blot.born;
+      if (age > TRAIL_LIFE) continue;
+      /*
+       * Full for the first stretch, then away. A mark that starts fading the instant it is
+       * made never reads as a mark at all - it reads as a flicker under the creature.
+       */
+      const left = 1 - age / TRAIL_LIFE;
+      const a = Math.min(1, left * 2.2) * TRAIL_PEAK;
+      const r = blot.r;
+      const x0 = blot.x - r;
+      const x1 = blot.x + r;
+      const y0 = blot.y - r * 0.7;
+      const y1 = blot.y + r * 0.7;
+      verts.push(x0, y0, 0, x1, y0, 0, x1, y1, 0, x0, y0, 0, x1, y1, 0, x0, y1, 0);
+      uvs.push(0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0);
+      for (let i = 0; i < 6; i++) colours.push(1, 1, 1, a);
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 4));
+    this.replace(this.trailNode, geometry);
+  }
+
   private buildSlime(): void {
     const empty = new THREE.BufferGeometry();
+    this.buildTrail();
     this.rim = decorMesh('SlimeRim', empty.clone(), this.rimMaterial);
     this.rim.position.z = -2;
     this.stage?.add(this.rim);
@@ -2638,6 +2820,9 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.buttonFlags.length = 0;
     this.crusherNodes = [];
     this.critterNodes = [];
+    this.trail.length = 0;
+    this.trailNode = null;
+    this.lastStamp = null;
     this.growthArt.clear();
     this.emberNodes.clear();
     this.presenceNodes.clear();
@@ -2788,6 +2973,7 @@ export class M4SSRig extends ENGINE.SceneNode {
 
     // The level is y-down and the world is y-up, so the contour is built flipped.
     // Level coordinates: the stage flips and scales them.
+    this.paintTrail(state);
     const mine = owned(state).map((p) => ({ x: p.x, y: p.y - BLOB_LIFT }));
 
     /*
