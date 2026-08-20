@@ -124,7 +124,6 @@ show('stone', art.stoneTexture(S), 3);
 show('endCap', art.endCapTexture(S), 2);
 show('bush', art.bushTexture(S), 2);
 show('bushDead', art.bushTexture(S, 160, true), 2);
-show('sign', art.signTexture(S, ['HOLD SPACE', 'TO SPLIT']), 2);
 show('gate', art.gateTexture(S, 40, 590), 1);
 show('plate', art.plateTexture(S), 3);
 show('vine', art.vineTexture(S), 3);

@@ -26,8 +26,6 @@
 
 import * as THREE from 'three';
 
-import { PIXEL_FONT } from '../omniscient/view/pixelFont.js';
-
 import { createRng, range, seedFrom } from '../omniscient/core/rng.js';
 
 import type { Rng } from '../omniscient/core/rng.js';
@@ -1566,95 +1564,6 @@ export function portalTexture(seed: string, phase: number, size = 128): THREE.Ca
   g.fillRect(cx + 32, 30, 12, 2);
   void rng;
 
-  return pixelTexture(c);
-}
-
-/**
- * A stencilled wall marking, for teaching controls without a tutorial.
- *
- * The judge's first forty seconds with M4SS were going to be spent clicking and finding
- * nothing, because the controls - A/D, hold LMB, hold Space, Q - were stated nowhere in
- * the game. The obvious fix is a HUD overlay, and it is wrong here: this stage has spent
- * twenty-three polish passes becoming a place, and a floating "PRESS SPACE" would cost
- * more atmosphere than it teaches.
- *
- * So the controls are painted ON THE FACILITY, at the point of need, in Pelagic OS's own
- * 3x5 face - the same letterforms as Keller's desktop, because the sim and the desktop
- * are the same operating system. Faded and weathered: a seeded fraction of pixels are
- * dropped and the rest sit at stencil-paint opacity, so they read as markings a
- * technician left years ago, not as UI. The fiction even supports the content - somebody
- * had to run this containment rig before you.
- */
-export function signTexture(seed: string, lines: string[], scale = 4): THREE.CanvasTexture {
-  const rng = createRng(seedFrom(seed));
-  const glyphW = 4 * scale; // 3px face + 1px gap
-  const glyphH = 6 * scale;
-  const widest = Math.max(...lines.map((line) => line.length));
-  const { c, g } = surface(widest * glyphW + scale * 2, lines.length * glyphH + scale * 2);
-
-  /*
-   * Stencil paint: a pale moss-grey, brighter than the stone it sits on and dimmer than
-   * anything alive. Authored bright like the rest of the palette - the ACES pass at
-   * exposure 0.5 takes it back down to "old paint" on screen.
-   */
-  const INK = '#b8ceb4';
-
-  /*
-   * A dark rounded panel under the text, asked for and overdue.
-   *
-   * These stencils are the only writing in the stage and they were painted straight onto
-   * whatever happened to be behind them - a tree, the haze, a platform edge - so their
-   * legibility changed with the camera and with every art pass that altered the backdrop.
-   * A panel makes that a non-question: the text now carries its own contrast with it.
-   *
-   * Rounded by corner cuts on integer pixels, never by an arc - one anti-aliased curve and
-   * the whole stage stops being pixel art. Drawn at 78% so it darkens what is behind it
-   * without becoming a solid black slab hanging in the room.
-   */
-  const pad = scale * 2;
-  const panelW = c.width;
-  const panelH = c.height;
-  const cut = Math.max(2, scale);
-  g.globalAlpha = 0.78;
-  g.fillStyle = mixHex(PAL.voidDeep, '#000000', 0.35);
-  g.fillRect(cut, 0, panelW - cut * 2, panelH);
-  g.fillRect(0, cut, panelW, panelH - cut * 2);
-  g.fillRect(Math.round(cut / 2), Math.round(cut / 2), panelW - cut, panelH - cut);
-  // A one-pixel lit top edge, the same trick every ledge in the stage uses, so the panel
-  // reads as a plate fixed to something rather than as a hole cut in the picture.
-  g.globalAlpha = 0.5;
-  g.fillStyle = mixHex(PAL.stoneMid, PAL.mossDark, 0.4);
-  g.fillRect(cut, 0, panelW - cut * 2, 1);
-  g.globalAlpha = 1;
-  void pad;
-
-  lines.forEach((line, row) => {
-    let x = scale;
-    const top = scale + row * glyphH;
-    for (const ch of line) {
-      const rows = PIXEL_FONT[ch] ?? PIXEL_FONT[ch.toUpperCase()];
-      if (rows) {
-        rows.forEach((bits, ry) => {
-          for (let bx = 0; bx < bits.length; bx++) {
-            if (bits[bx] !== '1') continue;
-            /*
-             * Weathering by FADE, never by dropout. Dropping pixels was tried at two
-             * rates and both broke letterforms - on a 3x5 face one pixel is a fifteenth
-             * of the glyph, and HOLD read as KOLD at either setting, because the seed is
-             * fixed and the same load-bearing pixel flaked every time. Uneven opacity
-             * gives the same "old paint" read and cannot change what a letter IS.
-             */
-            g.globalAlpha = 0.55 + rng() * 0.45;
-            g.fillStyle = INK;
-            g.fillRect(x + bx * scale, top + ry * scale, scale, scale);
-          }
-        });
-      }
-      x += glyphW;
-    }
-  });
-
-  g.globalAlpha = 1;
   return pixelTexture(c);
 }
 

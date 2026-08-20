@@ -58,7 +58,6 @@ import {
   bushTexture,
   PAL,
   portalTexture,
-  signTexture,
   stoneTexture,
   vineTexture,
 } from './stageArt.js';
@@ -269,6 +268,8 @@ export class M4SSRig extends ENGINE.SceneNode {
   /** Where the backdrop hung its lanterns, in level x. Filled by buildBackdrop, spent by
    * buildLevel's floor pools - light that lands has to know where it came from. */
   private lanternXs: number[] = [];
+  /** The tutorial plates, and the world points they are pinned to. See placeSigns. */
+  private readonly signLabels: Array<{ el: HTMLElement; x: number; y: number }> = [];
   /** The pulsing ring over the growth a click would catch. See chooseTarget. */
   private latchRing: ENGINE.MeshNode | null = null;
   /** The growth a click would catch right now - nearest live growth within reach. */
@@ -472,6 +473,8 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.mounted = false;
     this.setTickEnabled(false);
     this.camera?.setActive(false);
+    for (const sign of this.signLabels) sign.el.remove();
+    this.signLabels.length = 0;
     for (const off of this.detach) off();
     this.detach.length = 0;
     // Disconnect the instrument from the shared bus. The bus itself belongs to the
@@ -1318,18 +1321,51 @@ export class M4SSRig extends ENGINE.SceneNode {
      * The wall stencils. Sized from the texture's own aspect so the pixels stay square -
      * a stretched stencil reads as a decal, a square-pixel one reads as paint.
      */
-    (world.signs ?? []).forEach((sign, i) => {
-      const map = signTexture(`sign-${i}`, sign.lines, sign.scale ?? 4);
-      const image = map.image as { width: number; height: number };
-      const wide = image.width * 0.55;
-      const node = decorMesh(
-        'Stencil',
-        new THREE.PlaneGeometry(wide, wide * (image.height / image.width)),
-        this.artMaterial({ map, transparent: true, opacity: 0.8, depthWrite: false })
-      );
-      node.position.set(sign.x, sign.y, 3);
-      this.stage?.add(node);
-    });
+    /*
+     * The tutorial text is DOM now, in the game's own font, on a translucent plate.
+     *
+     * It used to be a canvas sprite drawn from the console's 3x5 pixel font and mapped
+     * onto a plane in the scene. That bought a real thing - the text lived IN the room
+     * rather than on Keller's software - and it cost more than it bought: at three pixels
+     * wide `M`, `N` and `W` are within one row of each other (W is 101/101/111/111/101 and
+     * M is 101/111/111/101/101), so WHEN rendered as something closer to NHEN, and an
+     * earlier pass had already reworded signs to dodge the letter M rather than admit the
+     * font could not carry them. Instructions are the one thing in a game that must be
+     * unambiguous.
+     *
+     * So the letterforms come from the font the rest of the game is written in, and the
+     * plate is a real translucent panel with real rounded corners rather than corner-cut
+     * rectangles faked on a canvas. Positioned by projecting the sign's WORLD point into
+     * the container every frame (see placeSigns), so it still belongs to the place it is
+     * describing and would follow a scrolling camera if stage two ever gets signs.
+     */
+    const container = this.getWorld()?.gameContainer;
+    if (container) {
+      (world.signs ?? []).forEach((sign) => {
+        const label = document.createElement('div');
+        label.style.cssText = [
+          'position:absolute',
+          'transform:translate(-50%,-50%)',
+          'padding:7px 11px',
+          'border-radius:9px',
+          'background:rgba(7,14,11,0.72)',
+          'border:1px solid rgba(150,190,160,0.16)',
+          'color:#cbe3c4',
+          'font:13px/1.45 "Courier New",monospace',
+          'letter-spacing:2px',
+          'text-align:center',
+          'white-space:pre',
+          'pointer-events:none',
+          'text-shadow:0 1px 2px rgba(0,0,0,0.75)',
+          'z-index:12',
+        ].join(';');
+        // textContent, never innerHTML: these strings are authored here today, and the
+        // habit is what keeps a player-supplied one from ever becoming markup.
+        label.textContent = sign.lines.join('\n');
+        container.appendChild(label);
+        this.signLabels.push({ el: label, x: sign.x, y: sign.y });
+      });
+    }
 
     /*
      * The button was the other survivor: an orange cylinder. It is a pressure plate now -
@@ -2378,6 +2414,9 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.slimeGlow = null;
     this.portalAt = null;
     this.hoverHalo = null;
+    // The plates are DOM, so destroying the stage node does not take them with it.
+    for (const sign of this.signLabels) sign.el.remove();
+    this.signLabels.length = 0;
     this.latchRing = null;
     this.target = null;
     this.flies.length = 0;
@@ -3105,10 +3144,30 @@ export class M4SSRig extends ENGINE.SceneNode {
     return { x: world.width / 2, y: this.cameraY };
   }
 
+  /**
+   * Put each tutorial plate where its world point is on screen.
+   *
+   * Percentages rather than pixels, so the labels survive the container being any size -
+   * the projection is (world - viewLeft) / viewWidth, which is exactly what the camera
+   * does, expressed as a fraction. Called from follow(), which already has the view
+   * centre and already runs every frame.
+   */
+  private placeSigns(at: { x: number; y: number }): void {
+    if (this.signLabels.length === 0) return;
+    const viewHeight = VIEW_WIDTH / CAMERA_ASPECT;
+    for (const sign of this.signLabels) {
+      const u = (sign.x - (at.x - VIEW_WIDTH / 2)) / VIEW_WIDTH;
+      const v = (sign.y - (at.y - viewHeight / 2)) / viewHeight;
+      sign.el.style.left = `${(u * 100).toFixed(3)}%`;
+      sign.el.style.top = `${(v * 100).toFixed(3)}%`;
+    }
+  }
+
   private follow(): void {
     if (!this.camera || !this.state) return;
     this.keepActive();
     const at = this.viewCentre();
+    this.placeSigns(at);
     // Keep the frame closed wherever the camera is: canopy pinned to the view top,
     // vignette centred on the view. Both live in level space, so this is a reposition,
     // not a reparent.
