@@ -586,3 +586,23 @@ resource manager, and puts no async material swap into a rig that has none.
 | 70d | 140 thick, not 40 | | The third time this project has met it: a platform thinner than a piled body sinks posts the walker out of its own underside. |
 | 70e | landmarks | `World.landmarks` places the giant mushrooms where a level asks for them | The ledge is described in relation to the first mushroom, and that mushroom was being chosen by sorting floors on width. A level that has been laid out around a decoration has to be allowed to place it. |
 | 70f | no scatter where something lives | Floor props skip any tile a critter walks on | The first capture had a decorative cluster a body-width from the creature in the same accent purple, and at playing size it read as a second sporeling that never moved. Where the player has to watch a shape to survive, nothing else of that colour may stand. |
+
+## Pass 71 - the ground line
+
+**The creature was drawn nineteen pixels below the floor it was standing on, and the two
+halves of that had nothing to do with each other.** Measured rather than guessed: a
+metaball surface extends past the particles that generate it in every direction, and with
+this rig's field (radius 21, threshold 1.55) a settled body's mesh reaches 9.9px below its
+lowest particle - which itself rests exactly on the tile. The other ten came from the grass
+crown, which was deliberately lifted 9px so its wandering silhouette would not be cut off
+by the straight earth line. Neither was wrong on its own; together they put the visible top
+of the world ten pixels above the surface anything stands on, and buried a third of the
+player in it.
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 71a | the body stands on the ground | `BLOB_LIFT` 10, applied to the POINTS the surface is built from | Applied to the points rather than the finished meshes so the body, rim, belly, shine, eyes and tendril all move together - a mesh offset would have slid the face off the silhouette. The cost is at ceilings, where the creature now draws ten pixels into whatever it is crawling under; the player looks at the ground constantly and at the underside of a gate for two seconds. |
+| 71b | the grass line is the ground line | crown lift 9 to 3 | Three still gives the moss silhouette somewhere to wander without moving the line the player reads. |
+| 71c | the sporeling's platform | 140 thick to 70 | Half the depth of the slabs around it, which is what stops a ledge hung in mid-air from reading as a chunk of floor that came loose. |
+| 71d | the grey lines | end caps skipped on slabs shorter than the cap art (92px) | The cap is 92 tall, so on a thin ledge it hung most of its length below the slab it was capping and read as a grey striped column stuck to each end. A cap taller than the thing it caps is not a cap. |
+| 71e | the plate moves to the middle, the beat becomes the whole ledge | plate at 715 (dead centre), beat 583..847 | The opposite puzzle shape: there is now no safe ground on this platform at all, and the switch has to be taken on a timer rather than reached and held. Cheaper failure, harder ask - the plate latches on contact and the growth stays awake, so being caught a second later costs only the walk back. |

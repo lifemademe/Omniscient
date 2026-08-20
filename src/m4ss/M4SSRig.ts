@@ -90,6 +90,26 @@ import {
 import type { Anchor, Button, Critter, Crusher, Gate, MassState } from './mass.js';
 
 /**
+ * How far the drawn body has to be lifted to stand ON the ground rather than in it.
+ *
+ * A metaball surface extends past the particles that generate it in every direction - that is
+ * what gives the creature its soft outline - and the overshoot is the same at the bottom as
+ * at the top. Measured: with the field this rig uses (radius 21, threshold 1.55) a settled
+ * body's mesh reaches 9.9px below its lowest particle, and its lowest particle rests exactly
+ * on the tile. So a third of the creature was drawn underground, on every surface in both
+ * stages, which the playtest read as the mass sitting "a little bit below the ground tile".
+ *
+ * The lift is applied to the POINTS the surface is built from rather than to the finished
+ * meshes, so the body, its rim, its belly, its shine, its eyes and the tendril all move
+ * together - a mesh-level offset would have slid the face off the silhouette.
+ *
+ * The cost is at ceilings, where the creature now draws about ten pixels into whatever it is
+ * squeezing under. That is the right trade: the player looks at the ground constantly and at
+ * the underside of a gate for the two seconds it takes to crawl through one.
+ */
+const BLOB_LIFT = 10;
+
+/**
  * The stages, in order. The portal at the end of one loads the next.
  *
  * Each entry is a factory rather than a World, because a World is mutated by play - gates
@@ -752,9 +772,16 @@ export class M4SSRig extends ENGINE.SceneNode {
           new THREE.PlaneGeometry(t.w, crownH),
           this.artMaterial({ map: crown, transparent: true, depthWrite: false })
         );
-        // Lifted by the crest height, so the wandering moss silhouette sits ABOVE the
-        // straight earth line rather than being cut off by it.
-        turf.position.set(0, -t.h / 2 + crownH / 2 - 9, 24);
+        /*
+         * Lifted, so the wandering moss silhouette sits above the straight earth line rather
+         * than being cut off by it - but by three pixels rather than nine.
+         *
+         * At nine the visible top of the world was nine pixels higher than the surface
+         * anything actually stands on, and every creature in the game looked like it had
+         * sunk into the turf. Three still gives the silhouette somewhere to wander without
+         * moving the ground line the player reads.
+         */
+        turf.position.set(0, -t.h / 2 + crownH / 2 - 3, 24);
         node.add(turf);
       }
 
@@ -776,7 +803,13 @@ export class M4SSRig extends ENGINE.SceneNode {
        * nobody will ever look at. Mirrored on the left by negating the scale, so one
        * generator serves both sides. See endCapTexture.
        */
-      if (t.w >= 120 && t.h < 200) {
+      /*
+       * ...and only on slabs deep enough to HAVE a corner. The cap art is 92px tall, so on a
+       * thin ledge it hangs most of its length below the slab it is capping and reads as a
+       * grey striped column stuck to each end - which is exactly what the playtest called
+       * "those grey horizontal lines on the side of the platform".
+       */
+      if (t.w >= 120 && t.h < 200 && t.h >= 92) {
         for (const side of [-1, 1] as const) {
           const cap = decorMesh(
             'EndCap',
@@ -2755,7 +2788,7 @@ export class M4SSRig extends ENGINE.SceneNode {
 
     // The level is y-down and the world is y-up, so the contour is built flipped.
     // Level coordinates: the stage flips and scales them.
-    const mine = owned(state).map((p) => ({ x: p.x, y: p.y }));
+    const mine = owned(state).map((p) => ({ x: p.x, y: p.y - BLOB_LIFT }));
 
     /*
      * While hanging, the body and the growth are one shape.
@@ -2863,7 +2896,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.replace(this.shine, buildSurface(lifted, { cell: 4, radius: 21, threshold: 3.1 }));
     // Same lone-pixel rule as the body: a shed LUMP draws, a shed CRUMB of one particle
     // mid-flight does not - it reads as a stray pixel, and it lands and clusters soon.
-    const strandedAll = loose(state).map((p) => ({ x: p.x, y: p.y }));
+    const strandedAll = loose(state).map((p) => ({ x: p.x, y: p.y - BLOB_LIFT }));
     const strandedPoints = strandedAll.filter(
       (q) => strandedAll.length <= 2 || !isLone(q, strandedAll)
     );
@@ -2871,6 +2904,7 @@ export class M4SSRig extends ENGINE.SceneNode {
 
     if (state.tip && !state.attached && mine.length > 0) {
       const home = centroid(owned(state));
+      home.y -= BLOB_LIFT;
       this.replace(this.cord, this.cordGeometry(home, state.tip, state.strain > 0));
     } else {
       this.replace(this.cord, new THREE.BufferGeometry());

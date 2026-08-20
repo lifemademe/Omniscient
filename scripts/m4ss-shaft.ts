@@ -402,7 +402,7 @@ console.log('\n=== M4SS STAGE TWO ===\n');
    */
   check(
     'the ledge is thicker than a body sinks',
-    ledge.h >= 120,
+    ledge.h >= 60,
     `${ledge.h}px deep`
   );
 
@@ -416,10 +416,19 @@ console.log('\n=== M4SS STAGE TWO ===\n');
    * west end is where a short release lands.
    */
   for (const [where, x] of [
-    ['the east end, where the plate is', 812],
-    ['the west end, where a short release lands', 613],
+    ['the east end', 820],
+    ['the middle, where the plate is', 715],
+    ['the west end', 610],
   ] as Array<[string, number]>) {
-    const stand = makeState(freshShaft(), START_MASS);
+    /*
+     * With the creature walking the whole ledge there is no spot on it that is safe for
+     * four seconds, so these tests take the sporeling OUT: what is being measured is
+     * whether the PLATFORM holds a body, and leaving the hazard in would measure the
+     * respawn instead. That mistake has already been made once here.
+     */
+    const empty = freshShaft();
+    empty.critters = [];
+    const stand = makeState(empty, START_MASS);
     place(stand, x, 1060);
     run(stand, 4.0, () => IDLE);
     check(
@@ -462,10 +471,26 @@ console.log('\n=== M4SS STAGE TWO ===\n');
     seen.min <= critter.from + 2 && seen.max >= critter.to - 2,
     `reached ${seen.min.toFixed(0)} and ${seen.max.toFixed(0)}, beat is ${critter.from}..${critter.to}`
   );
+  /*
+   * The plate is ON the beat, deliberately: there is no safe ground on this platform, and
+   * the switch has to be taken on a timer rather than reached and held. Asserted rather
+   * than left implicit, because "the creature walks over the button" is the kind of thing
+   * that looks like a layout mistake to whoever reads this next.
+   */
   check(
-    'and it never reaches the plate it guards',
-    seen.max + critter.w / 2 < plate.x - plate.radius,
-    `nearest approach ${(seen.max + critter.w / 2).toFixed(0)}, plate starts at ${plate.x - plate.radius}`
+    'the plate sits inside the beat - this platform has no safe ground',
+    plate.x > critter.from && plate.x < critter.to,
+    `plate at ${plate.x}, beat is ${critter.from}..${critter.to}`
+  );
+  check(
+    'and the plate is centred on the ledge',
+    Math.abs(plate.x - (ledge.x + ledge.w / 2)) <= 2,
+    `plate at ${plate.x}, ledge centre is ${ledge.x + ledge.w / 2}`
+  );
+  check(
+    'the beat reaches both lips without hanging over either',
+    critter.from - critter.w / 2 >= ledge.x && critter.to + critter.w / 2 <= ledge.x + ledge.w,
+    `body spans ${critter.from - critter.w / 2}..${critter.to + critter.w / 2} on ${ledge.x}..${ledge.x + ledge.w}`
   );
 
   /*
@@ -513,7 +538,7 @@ console.log('\n=== M4SS STAGE TWO ===\n');
    * act the next frame is another hit, for ever.
    */
   const trapped = makeState(freshShaft(), START_MASS);
-  place(trapped, 640, 1080);
+  place(trapped, 715, 1080);
   run(trapped, 2.0, () => IDLE);
   const hits = { count: 0 };
   let wasStunned = false;
@@ -533,7 +558,7 @@ console.log('\n=== M4SS STAGE TWO ===\n');
    */
   const wake = makeState(freshShaft(), START_MASS);
   place(wake, plate.x, 1060);
-  run(wake, 4.0, () => IDLE);
+  run(wake, 1.5, () => IDLE);
   check(
     'standing on the ledge plate wakes the red growth',
     wake.world.anchors.find((a) => a.id === 'g2')!.live === true,

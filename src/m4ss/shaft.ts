@@ -81,12 +81,13 @@ export const THE_SHAFT: World = {
      * the east end slid off it. It runs east to meet the wall, which is the only edge of this
      * floor that was not already spoken for.
      *
-     * 140 thick, not 40. A 40px platform is thinner than a piled body sinks, so collision
-     * finds its underside nearer than its top and posts the walker downward - the bug the
-     * corridor and the drawbridge deck both had. Its underside still leaves 80px of headroom
-     * over the floor, which a crawling body passes without noticing.
+     * 70 thick: half the depth of the slabs around it, which is what the reference sheet's
+     * platforms look like and what stops a ledge hung in mid-air from reading as a chunk of
+     * the floor that came loose. Still comfortably deeper than the 40 that broke the corridor
+     * and the drawbridge deck - a platform thinner than a piled body sinks posts the walker
+     * out of its own underside - and it leaves 150px of headroom over the floor beneath.
      */
-    { x: 570, y: 1120, w: 290, h: 140 },
+    { x: 570, y: 1120, w: 290, h: 70 },
 
     // -- the shell -----------------------------------------------------------------------
     { x: -40, y: 0, w: 60, h: 1440 },
@@ -202,19 +203,21 @@ export const THE_SHAFT: World = {
     /*
      * The switch that wakes the shaft, at the far end of a ledge with something on it.
      *
-     * Every number here is a measured body rather than a guess. A settled 40-mass creature is
-     * 69px wide, so a plate at 812 puts the body between 777 and 847 - clear of the east end
-     * of the beat (760, plus half a sporeling, is 773) and 13px inside the east edge of the
-     * ledge. Standing on the plate is therefore never dangerous; getting there is the puzzle.
+     * Dead centre of the ledge, and the sporeling walks over it.
      *
-     * And the intended route to it is not a walk. The ledge is where a release off g1 lands,
-     * and WHERE it lands depends on when the player lets go - so the honest solution is to
-     * come down east of the creature, using the one verb this stage has already taught, and
-     * walking past is the fallback for a release that fell short.
+     * The first version put the plate past the end of the creature's beat, so standing on it
+     * was permanently safe and the puzzle was a single crossing. Centred, it is the opposite
+     * shape: there is no safe ground on this platform at all, and the plate has to be taken
+     * on a timer rather than reached and held.
+     *
+     * That is a harder ask and a cheaper failure, which is the right way round. The plate
+     * latches the moment it is touched and the growth stays awake, so being caught a second
+     * later costs only the walk back - and being caught BEFORE reaching it costs the attempt,
+     * which is what the pit costs and what everything in this game costs.
      */
     {
       id: 'spore',
-      x: 812,
+      x: 715,
       y: 1104,
       radius: 24,
       pressed: false,
@@ -294,11 +297,10 @@ export const THE_SHAFT: World = {
    * not a chase, it is a moving piece of the room. Everything difficult about it is where it
    * is standing, and a player who cannot outrun it has no puzzle to solve, only a race.
    *
-   * Its beat runs 670 to 760 - the middle third of the ledge - which leaves a body-width of
-   * safe ground at each end plus about nine pixels of slack: the west end is where a short
-   * release lands, the east end is the plate. The slack is not tidiness. A body parked flush
-   * against an edge has its outermost particles resolved OUT of the platform, and it walks
-   * itself off - the west end held nothing at all until the beat moved ten pixels east. 46px/s against a crawl of 92 means a player who is already past it can always
+   * Its beat is the WHOLE ledge, end to end: 583 to 847 is 570 and 860 pulled in by half a
+   * sporeling, so the creature walks to each lip and turns without any part of it hanging
+   * over the edge. 264px at 46px/s is about six seconds each way, which is slow enough that
+   * any particular spot on the platform is clear most of the time and never clear for long. 46px/s against a crawl of 92 means a player who is already past it can always
    * outrun it, and a player who is not can never quite walk through it.
    *
    * It starts at the west end walking east, so the first thing the player sees on landing
@@ -309,7 +311,7 @@ export const THE_SHAFT: World = {
    * touching is three pixels the player cannot possibly judge.
    */
   critters: [
-    { from: 670, to: 760, y: 1120, speed: 46, w: 26, h: 42, x: 670, facing: 1, wait: 0, phase: 0 },
+    { from: 583, to: 847, y: 1120, speed: 46, w: 26, h: 42, x: 583, facing: 1, wait: 0, phase: 0 },
   ],
 
   /*
