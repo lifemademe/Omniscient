@@ -49,8 +49,14 @@ import {
   glowTexture,
   interiorFadeTexture,
   plateTexture,
+  bigShroomTexture,
+  bonesTexture,
+  deadTreeTexture,
+  leafVineTexture,
+  pressTexture,
   propTexture,
   ringTexture,
+  strikerTexture,
   setStageTheme,
   THEME_GALLERY,
   THEME_STACK,
@@ -935,18 +941,30 @@ export class M4SSRig extends ENGINE.SceneNode {
      * else in the room uses. Everything here that can be interacted with is a plant or is
      * warm; the one thing that can take mass off you should not look like it grew.
      */
-    const crusherMaterial = new THREE.MeshStandardMaterial({
-      color: new THREE.Color('#5c6672'),
-      roughness: 0.55,
-      metalness: 0.35,
-      emissive: new THREE.Color('#0e1418'),
-    });
     for (const crusher of world.crushers ?? []) {
+      /*
+       * The press is DRAWN now, not tinted. It was a flat grey box from the greybox
+       * onward - the one object in the room that can take something off the player, and
+       * the only one that still looked unfinished. See pressTexture.
+       *
+       * The body behind the art stays near-black like every other solid here, so its 3D
+       * sides never catch the camera; the machine lives on the front plane.
+       */
       const node = decorMesh(
         'Crusher',
         new THREE.BoxGeometry(crusher.w, crusher.h, 60),
-        crusherMaterial
+        new THREE.MeshStandardMaterial({ color: new THREE.Color('#0a0f12'), roughness: 1 })
       );
+      const face = decorMesh(
+        'CrusherFace',
+        new THREE.PlaneGeometry(crusher.w, crusher.h),
+        this.artMaterial({
+          map: pressTexture(`press-${crusher.x}`, crusher.w, crusher.h),
+          transparent: true,
+        })
+      );
+      face.position.set(0, 0, 31);
+      node.add(face);
       node.position.set(crusher.x + crusher.w / 2, crusher.y + crusher.h / 2, -20);
       this.stage?.add(node);
       this.crusherNodes.push({ node, crusher });
@@ -1251,6 +1269,119 @@ export class M4SSRig extends ENGINE.SceneNode {
     }
 
     /*
+     * SET DRESSING WITH SCALE, and why these four and not more of the small stuff.
+     *
+     * The stage already had small mushrooms and ferns on its ledges, and the eye walks
+     * straight past them - they are texture, not objects. What a room this size was
+     * missing is things with SIZE in them, because size is the only way a frame tells you
+     * how big the creature is. Everything below is placed from the level's own geometry
+     * rather than authored per stage, so it lands correctly in both.
+     *
+     * Deliberately sparse. Two giant mushrooms, one ribcage, a few vines, three
+     * foreground trees: a room with an object in it reads as a place, and a room with
+     * twenty reads as a shop.
+     */
+    {
+      const rng = ((seed: number) => () => {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        return seed / 0x7fffffff;
+      })(Math.round(world.width * 13 + world.height * 7));
+
+      // The widest walked surfaces, which is where furniture belongs.
+      const floors = world.tiles
+        .filter((t) => t.w >= 260 && t.y > 120 && t.h < 400)
+        .sort((a, b) => b.w - a.w);
+
+      /*
+       * Giant mushrooms, standing on the ground with their caps up in the play space.
+       * Placed a third and two thirds along a floor so they never sit under a growth or
+       * on top of the spot a swing lands.
+       */
+      floors.slice(0, 2).forEach((tile, i) => {
+        const size = 150 + Math.round(rng() * 40);
+        const at = tile.x + tile.w * (i === 0 ? 0.34 : 0.68);
+        const shroom = decorMesh(
+          'GiantShroom',
+          new THREE.PlaneGeometry(size, size * 1.13),
+          this.artMaterial({
+            map: bigShroomTexture(`shroom-${tile.x}-${i}`),
+            transparent: true,
+            depthWrite: false,
+          })
+        );
+        // z -16: behind the play plane, in front of the fog, so it is scenery the player
+        // walks past rather than scenery the player walks into.
+        shroom.position.set(at, tile.y - (size * 1.13) / 2 + 6, -16);
+        this.stage?.add(shroom);
+      });
+
+      /*
+       * The ribcage, half-buried in the widest floor. Bone is nearly the palest thing in
+       * the level, so it goes low and behind, where it reads as something the ground has
+       * been keeping rather than as a prop set on top of it.
+       */
+      if (floors.length > 0) {
+        const tile = floors[0];
+        const bones = decorMesh(
+          'Bones',
+          new THREE.PlaneGeometry(210, 90),
+          this.artMaterial({
+            map: bonesTexture(`bones-${tile.x}`),
+            transparent: true,
+            depthWrite: false,
+          })
+        );
+        bones.position.set(tile.x + tile.w * 0.52, tile.y - 30, -14);
+        this.stage?.add(bones);
+      }
+
+      /*
+       * Leafy vines hanging from the undersides of high ledges - the thing the old vine
+       * curtain was reaching for before it was cut for being a beard along every edge.
+       * Three of them, on the highest surfaces, where they hang into open air.
+       */
+      const high = world.tiles
+        .filter((t) => t.w >= 150 && t.y > 60 && t.y < world.height * 0.75 && t.h < 400)
+        .slice(0, 3);
+      high.forEach((tile, i) => {
+        const vine = decorMesh(
+          'LeafVine',
+          new THREE.PlaneGeometry(46, 200),
+          this.artMaterial({
+            map: leafVineTexture(`leafvine-${tile.x}-${i}`),
+            transparent: true,
+            depthWrite: false,
+          })
+        );
+        vine.position.set(tile.x + tile.w * (0.2 + i * 0.3), tile.y + 100, -10);
+        this.stage?.add(vine);
+      });
+
+      /*
+       * Dead trees in the FOREGROUND, at z 72 - in front of everything, including the
+       * player. Near-black silhouettes whose whole job is to frame the shot and to slide
+       * across it as the camera moves; bare branches make a broken, legible edge where a
+       * leafy crown would make a blob. Kept to the sides so nothing ever stands between
+       * the camera and the creature for long.
+       */
+      const treeAt = [world.width * 0.06, world.width * 0.63, world.width * 0.97];
+      treeAt.forEach((x, i) => {
+        const tall = 380 + Math.round(rng() * 120);
+        const tree = decorMesh(
+          'DeadTree',
+          new THREE.PlaneGeometry(tall * 0.52, tall),
+          this.artMaterial({
+            map: deadTreeTexture(`deadtree-${i}`),
+            transparent: true,
+            depthWrite: false,
+          })
+        );
+        tree.position.set(x, world.height - tall / 2 + 40, 72);
+        this.stage?.add(tree);
+      });
+    }
+
+    /*
      * The acid at the bottom of every pit.
      *
      * One bath spanning the world, sitting BEHIND the floor masses (z -6, against tile art
@@ -1377,16 +1508,31 @@ export class M4SSRig extends ENGINE.SceneNode {
     world.buttons.forEach((button, i) => {
       // The decor plane grew with the redraw - the LOGIC radius is untouched, this is
       // the picture of the plate, not its pressure zone.
-      const node = decorMesh(
-        'Button',
-        new THREE.PlaneGeometry(button.radius * 3.2, button.radius * 1.4),
-        this.artMaterial({
-          map: plateTexture(`plate-${i}`, 96, 40),
-          transparent: true,
-          depthWrite: false,
-        })
-      );
-      node.position.set(button.x, button.y + 4, 2);
+      /*
+       * A wall button is a different object from a floor plate, and drawn as one: a floor
+       * plate says STAND ON ME, a striker on a bulkhead says HIT ME, and stage two's last
+       * clause is a thing you hit with a flung body.
+       */
+      const node = button.vertical
+        ? decorMesh(
+            'Button',
+            new THREE.PlaneGeometry(button.radius * 1.5, button.radius * 3.2),
+            this.artMaterial({
+              map: strikerTexture(`striker-${i}`, 40, 96),
+              transparent: true,
+              depthWrite: false,
+            })
+          )
+        : decorMesh(
+            'Button',
+            new THREE.PlaneGeometry(button.radius * 3.2, button.radius * 1.4),
+            this.artMaterial({
+              map: plateTexture(`plate-${i}`, 96, 40),
+              transparent: true,
+              depthWrite: false,
+            })
+          );
+      node.position.set(button.x, button.y + (button.vertical ? 0 : 4), 2);
       this.stage?.add(node);
       /*
        * The find-me glow. The squint test measured the Stack's wake plate BELOW the
@@ -2884,6 +3030,16 @@ export class M4SSRig extends ENGINE.SceneNode {
     // Pressed buttons sit down into their sockets. Eased, so the press reads as travel
     // rather than as a swap; level space is y-down, so +y is into the floor.
     for (const { node, button } of this.buttonNodes) {
+      /*
+       * A floor plate sinks into its socket when pressed. A wall striker does not sink
+       * DOWN - it is hit sideways, and it rides its gate upward the moment it fires, so
+       * its y belongs to the sim and the rig must not fight it for it.
+       */
+      if (button.vertical) {
+        node.position.y = button.y;
+        node.position.x = button.x + (button.pressed ? 5 : 0);
+        continue;
+      }
       const target = button.y + 6 + (button.pressed ? 7 : 0);
       node.position.y += (target - node.position.y) * 0.25;
     }
@@ -2891,6 +3047,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     for (const { node, button } of this.buttonFlags) {
       node.visible = !button.pressed;
       if (!button.pressed) {
+        node.position.x = button.x;
         node.position.y = button.y - 54 + Math.sin(this.artClock * 3.4 + button.x) * 5;
       }
     }

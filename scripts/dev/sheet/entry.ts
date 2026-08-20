@@ -101,6 +101,12 @@ function show(label: string, tex: { image: CanvasImageSource & { width: number; 
 const S = 'm4ss';
 // Both stage identities, side by side - the thumbnail test happens here first.
 art.setStageTheme(art.THEME_GALLERY);
+show('press', art.pressTexture(S, 60, 260), 1);
+show('striker', art.strikerTexture(S, 40, 96), 2);
+show('bigshroom', art.bigShroomTexture(S), 1);
+show('leafvine', art.leafVineTexture(S), 1);
+show('bones', art.bonesTexture(S), 1);
+show('deadtree', art.deadTreeTexture(S), 1);
 show('growth-live', art.bushTexture(S, 160, false), 2);
 show('growth-dead', art.bushTexture(S, 160, true), 2);
 show('ring', art.ringTexture(128), 2);

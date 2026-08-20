@@ -170,7 +170,30 @@ export const THE_SHAFT: World = {
      * out comfortably above 420, so what it asks for is a committed revolution rather than a
      * lucky nudge, and there is no way to build one of those by accident.
      */
-    { id: 'heavy', x: 310, y: 520, radius: 30, pressed: false, force: 420, opens: ['w2'] },
+    /*
+     * Bolted to the door it opens, standing upright, on the face the player arrives at.
+     *
+     * It used to hang in mid-air thirty pixels east of the gate, lying flat like the floor
+     * plates - which said STAND ON ME about the one control in the game you are meant to
+     * HIT. Mounted on the door and turned upright it states its own rule: a switch on the
+     * face of a bulkhead, at swing height, with nothing under it to stand on.
+     *
+     * x 286 puts it against the gate's east face (the slab spans 240 to 280), the side the
+     * player swings from - g6 hangs at 400 and the alcove is behind the door. And because
+     * it rides the gate now (see Button.onGate), the moment it is struck it goes up with
+     * the door instead of being left behind in the air.
+     */
+    {
+      id: 'heavy',
+      x: 286,
+      y: 500,
+      radius: 30,
+      pressed: false,
+      force: 420,
+      opens: ['w2'],
+      onGate: 'w2',
+      vertical: true,
+    },
   ],
 
   /**
@@ -183,9 +206,23 @@ export const THE_SHAFT: World = {
    * Each closes onto the corridor floor exactly, and leaves a 60px gap at the top of its
    * travel - wider than the body stands, so the way through is real rather than frame-perfect.
    */
+  /*
+   * ONE press, not two, and it lifts far enough to be read.
+   *
+   * The second press stood at 420 - directly on the approach to the heavy button - and it
+   * had to go: that button is now the target of a fling off a 360, and a press sitting in
+   * the flight path turns a shot the player aimed into a shot the timer took. A hazard
+   * that punishes good aim for reasons outside the player's control is not difficulty.
+   *
+   * Travel goes 60 to 190 for the survivor. At 60 the head barely cleared its own housing,
+   * so the "gap" the player was supposed to time was a couple of body-widths appearing and
+   * vanishing with no visible wind-up - the playtest said it never rose high enough to
+   * time a run past it, and it was right. At 190 the head lifts most of a body-height
+   * clear, the rhythm is legible from across the room, and the period is long enough to
+   * walk it rather than sprint it.
+   */
   crushers: [
-    { x: 560, y: 340, w: 60, h: 260, travel: 60, axis: 'y', period: 3.0, phase: 0, at: 0 },
-    { x: 420, y: 340, w: 60, h: 260, travel: 60, axis: 'y', period: 3.0, phase: 0.5, at: 0 },
+    { x: 560, y: 340, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0, at: 0 },
   ],
 };
 

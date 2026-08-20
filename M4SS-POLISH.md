@@ -534,3 +534,26 @@ asymmetry that started all of this in pass 67.
 **When a measurement keeps changing its answer as the probe changes, the probe is the
 subject.** The one number that stayed put under every rewrite - both directions sustaining
 equally once the body is circling - is the only one that was ever load-bearing.
+
+## Pass 69: the 360 becomes repeatable, and the room gets furniture
+
+**The 360's speed was a coin toss, and this is the measurement that found it.** With a
+probe that pumps the way a player does - push WITH the motion, hold through the turnaround
+rather than reverting to a fixed key - peak spin was already steady across eight latches at
+6.4-7.8 rad/s. What was not steady was the spin still turning six seconds later: 0.5, 0.8,
+1.5, 1.5, 4.1, 4.8, 5.3, 6.4. The swing built every time and then fell out of its circle
+about half the time, because it was equilibrating at almost exactly the energy needed to
+carry over the top. What the player had at the moment they released was luck.
+
+The pump now has three regimes rather than two. Below 60px/s along the arc it is a quarter
+strength (a hang cannot be walked round, so the 360 stays earned); to 300 it is full; past
+300 it is 1.8x. That last band is the fix: a committed swing ends up clear of the top
+instead of level with it. Same eight latches, all eight still turning above 6.4 rad/s at
+six seconds - and every harness check still passes, including the one that says holding one
+direction from a dead hang must never circle.
+
+| 69b | the crawl, and the filter that had to be fixed first | move 4300 to 6400; the sieve becomes a hard clamp instead of a collision | Asked for twice. The first attempt failed immediately: at 4800 a FULL body oozed under the shut wall, because the filter resolved through the normal collision path and a particle crossing the whole gap inside one step never meets the face meant to stop it. A filter the player can defeat by holding a direction harder is not a filter, and it is the rule two stages are built on. An over-mass particle found in the gap is now put back on the side its previous position was on, velocity dropped - there is no speed that outruns it. |
+| 69c | the press | travel 60 to 190, period 3.4, and `pressTexture` - housing, guide rails, a shouldered head with hazard banding, a polished striking face | At 60 the head barely cleared its own housing, so the gap the player was meant to time appeared and vanished with no wind-up. And it had been a flat grey box since the greybox: the one object that can take something from the player was the only thing that still looked unfinished. |
+| 69d | crushing has a floor | A press will not take you below `crushFloor` (20), which is `reachPerMass` times 20 = 106px of reach | Chosen from what the player needs, not from what looks fair: whatever else a press does, it must never leave a creature unable to cross to a growth. Under the line the press carries the body instead of biting it, which also removes the worst thing this stage could produce - a slime pinned under a rhythm it no longer has the mass to escape. |
+| 69e | the stage two finale | The press nearest the heavy button is gone; the button is upright, bolted to the door it opens, on the face the player swings from - and it RIDES the door up | A hazard sitting in the flight path of a shot the player aimed turns their aim into the timer's business. And the button lay flat like a floor plate, which says STAND ON ME about the one control you are meant to HIT with a flung body; `strikerTexture` gives it a bracket, a struck face and one amber eye to aim at. |
+| 69f | furniture with scale | Giant mushrooms, a half-buried ribcage, leafy hanging vines, and near-black dead trees in the FOREGROUND at z 72 | The room had small mushrooms and ferns and the eye walked past them - they are texture, not objects. Size is the only way a frame tells you how big the creature is. Placed from level geometry rather than authored per stage, and kept sparse: a room with an object in it reads as a place, a room with twenty reads as a shop. The caps are mixed most of the way to the void - drawn in the raw accent purple this thing was louder than the player, and the accent family is reserved for small things. |

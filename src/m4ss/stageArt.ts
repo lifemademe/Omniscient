@@ -2004,6 +2004,453 @@ export function dirtTexture(
 }
 
 /**
+ * A GIANT mushroom - furniture, not a floor prop.
+ *
+ * The stage has small mushrooms scattered on its ledges already, and they are decoration:
+ * you look past them. What a room this size needs is one or two objects with real SCALE in
+ * them, because scale is what tells the eye how big the creature is. A cap two body-widths
+ * across, with a stalk thick enough to have its own shading and gills you can count, does
+ * that work in one silhouette.
+ *
+ * Built to be lit from the upper left like everything else: the cap's left shoulder takes
+ * the light, the underside is in its own shadow, and the gills are the darkest thing in
+ * the sprite so the cap reads as a solid overhang rather than a painted dome.
+ */
+export function bigShroomTexture(seed: string, w = 150, h = 170): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+  const cx = Math.round(w / 2);
+
+  /*
+   * The cap is DUSKY, not neon, and that is a hierarchy decision rather than a taste one.
+   *
+   * Drawn in the raw accent purples this thing was the loudest object on screen - louder
+   * than the creature, which the whole palette exists to keep at the top of the range.
+   * The accent family is reserved for SMALL things (a mushroom cap the size of a fist),
+   * and an object this big borrowing it out-shouts everything. Mixed most of the way to
+   * the void it keeps the hue - it still reads as a purple mushroom, still the only
+   * non-green in the room - and hands the brightness back to the player.
+   */
+  const capDark = mixHex(PAL.capDark, PAL.voidDeep, 0.55);
+  const capMid = mixHex(mixHex(PAL.capDark, PAL.capLit, 0.5), PAL.voidMid, 0.5);
+  const capLit = mixHex(PAL.capLit, PAL.voidMid, 0.42);
+  const stalkDark = mixHex(PAL.vineMid, PAL.voidDeep, 0.45);
+  const stalkMid = mixHex(PAL.vineMid, PAL.stoneLit, 0.3);
+  const stalkLit = mixHex(stalkMid, PAL.lampWarm, 0.16);
+
+  // The stalk: a slightly bowed column, fattest at the foot.
+  const footY = h - 4;
+  const capY = Math.round(h * 0.42);
+  for (let y = capY; y < footY; y++) {
+    const t = (y - capY) / (footY - capY);
+    const half = Math.round(w * (0.07 + t * 0.05));
+    const bow = Math.round(Math.sin(t * Math.PI) * 4);
+    g.fillStyle = stalkDark;
+    g.fillRect(cx - half + bow, y, half * 2, 1);
+    g.fillStyle = stalkMid;
+    g.fillRect(cx - half + bow + 2, y, Math.max(1, half), 1);
+    g.fillStyle = stalkLit;
+    g.fillRect(cx - half + bow + 2, y, 2, 1);
+  }
+  // A skirt where the stalk meets the ground.
+  g.fillStyle = stalkDark;
+  g.fillRect(cx - Math.round(w * 0.16), footY - 3, Math.round(w * 0.32), 4);
+
+  // The gills, under the cap - drawn before it so the cap's rim covers their tops.
+  const gillY = capY;
+  for (let i = -8; i <= 8; i++) {
+    const gx = cx + Math.round(i * (w * 0.055));
+    const drop = Math.round(10 - Math.abs(i) * 0.7);
+    g.fillStyle = mixHex(capDark, PAL.voidDeep, 0.55);
+    g.fillRect(gx, gillY - 2, 2, drop);
+  }
+
+  /*
+   * The cap: a wide dome in three bands, lit on its left shoulder. Rows are drawn from a
+   * squashed circle so the profile is a real overhang rather than a semicircle.
+   */
+  const capR = Math.round(w * 0.46);
+  const capH = Math.round(h * 0.34);
+  for (let dy = 0; dy < capH; dy++) {
+    const t = dy / capH;
+    const half = Math.round(capR * Math.sqrt(Math.max(0, 1 - (1 - t) ** 2)));
+    const y = capY - capH + dy;
+    if (half <= 0 || y < 0) continue;
+    g.fillStyle = t < 0.34 ? capLit : t < 0.72 ? capMid : capDark;
+    g.fillRect(cx - half, y, half * 2, 1);
+    // The lit shoulder, up on the left where the key light is.
+    if (t > 0.1 && t < 0.6) {
+      g.fillStyle = mixHex(capLit, '#ffffff', 0.14);
+      g.fillRect(cx - half + Math.round(half * 0.12), y, Math.max(2, Math.round(half * 0.22)), 1);
+    }
+  }
+  // The rim, one step darker, so the cap has an edge.
+  g.fillStyle = capDark;
+  g.fillRect(cx - capR, capY - 2, capR * 2, 2);
+
+  // Pale flecks on the cap, the way a real one sheds its veil.
+  for (let i = 0; i < 9; i++) {
+    const fx = cx + Math.round(range(rng, -capR * 0.8, capR * 0.8));
+    const fy = capY - capH + Math.round(range(rng, capH * 0.15, capH * 0.8));
+    g.fillStyle = mixHex(capLit, '#ffffff', 0.3);
+    g.fillRect(fx, fy, 3, 2);
+  }
+
+  return pixelTexture(c);
+}
+
+/**
+ * A hanging vine WITH LEAVES - the thing the old vine curtain was missing.
+ *
+ * The curtain that used to hang off every ledge was strands and nothing else, which is why
+ * it read as a beard and got cut. A vine with leaves on it is a different object: the eye
+ * follows the stem, the leaves give it a direction, and two or three of them hanging in a
+ * room are worth more than a fringe along every edge.
+ */
+export function leafVineTexture(seed: string, w = 46, h = 200): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+
+  const stemDark = mixHex(PAL.vineDark, PAL.voidDeep, 0.35);
+  const stemMid = PAL.vineMid;
+  const leaf = [PAL.leafDark, PAL.leafMid, PAL.leafLit];
+
+  let x = w / 2;
+  let drift = 0;
+  for (let y = 0; y < h; y++) {
+    if (y % 11 === 0) drift = range(rng, -0.9, 0.9);
+    x += drift * 0.35;
+    x = Math.max(6, Math.min(w - 6, x));
+    g.fillStyle = stemDark;
+    g.fillRect(Math.round(x) - 1, y, 4, 1);
+    g.fillStyle = stemMid;
+    g.fillRect(Math.round(x), y, 2, 1);
+
+    // A leaf every so often, alternating sides, smaller toward the tip.
+    if (y > 14 && y % 26 === 0) {
+      const side = (y / 26) % 2 === 0 ? 1 : -1;
+      const size = Math.round(range(rng, 7, 13) * (1 - (y / h) * 0.45));
+      for (let i = 0; i < size; i++) {
+        const t = i / size;
+        const halfLeaf = Math.round(Math.sin(t * Math.PI) * size * 0.42);
+        if (halfLeaf <= 0) continue;
+        const lx = Math.round(x + side * (2 + i));
+        const ly = Math.round(y + i * 0.55);
+        g.fillStyle = leaf[t < 0.3 ? 2 : t < 0.7 ? 1 : 0];
+        g.fillRect(lx, ly - halfLeaf, 1, halfLeaf * 2);
+      }
+      // The leaf's own midrib.
+      g.fillStyle = stemMid;
+      g.fillRect(Math.round(x + (side > 0 ? 2 : -size)), Math.round(y + size * 0.3), size, 1);
+    }
+  }
+  return pixelTexture(c);
+}
+
+/**
+ * BONES: a ribcage half-buried in the ground.
+ *
+ * The best thing a set-dressing prop can do is imply a history the game never mentions,
+ * and something enormous died in this cave long before the lab was built. It is drawn as
+ * bone-pale against dark earth - nearly the brightest static thing down there - so it also
+ * gives the lower half of the frame something to look at that is not another plant.
+ *
+ * Ribs are arcs of decreasing height with their feet sunk into the dirt, and the spine is
+ * a run of vertebrae behind them. Nothing is symmetric: a buried skeleton has settled.
+ */
+export function bonesTexture(seed: string, w = 210, h = 90): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+
+  const boneLit = mixHex(PAL.stoneEdge, PAL.lampCore, 0.28);
+  const boneMid = mixHex(PAL.stoneLit, PAL.vineMid, 0.25);
+  const boneDark = mixHex(PAL.stoneMid, PAL.vineDark, 0.4);
+
+  // The spine, lying along the ground with the ribs rising off it.
+  const spineY = h - 16;
+  for (let x = 8; x < w - 8; x += 13) {
+    const wob = Math.round(Math.sin(x * 0.05) * 3);
+    g.fillStyle = boneDark;
+    g.fillRect(x, spineY + wob, 11, 9);
+    g.fillStyle = boneMid;
+    g.fillRect(x + 1, spineY + wob, 9, 6);
+    g.fillStyle = boneLit;
+    g.fillRect(x + 2, spineY + wob, 6, 2);
+  }
+
+  /*
+   * The ribs. Each is a thin arc leaning back from the spine, tallest in the middle of
+   * the cage - and each is drawn twice, one pixel apart, so it has a lit side.
+   */
+  const ribs = 7;
+  for (let i = 0; i < ribs; i++) {
+    const t = i / (ribs - 1);
+    const rootX = Math.round(16 + t * (w - 40));
+    const tall = Math.round((h - 30) * (0.45 + Math.sin(t * Math.PI) * 0.55) * range(rng, 0.9, 1.05));
+    const lean = range(rng, 8, 20) * (t < 0.5 ? 1 : -1);
+    for (let k = 0; k < tall; k++) {
+      const kt = k / tall;
+      const rx = Math.round(rootX + lean * (kt ** 1.6));
+      const ry = spineY - k;
+      if (ry < 0) break;
+      g.fillStyle = kt > 0.82 ? boneDark : boneMid;
+      g.fillRect(rx, ry, 3, 1);
+      g.fillStyle = boneLit;
+      g.fillRect(rx, ry, 1, 1);
+    }
+  }
+
+  // Moss claiming the bones, because everything here is being claimed.
+  for (let i = 0; i < 16; i++) {
+    g.fillStyle = rng() > 0.5 ? PAL.mossDark : mixHex(PAL.mossDark, PAL.mossMid, 0.5);
+    g.fillRect(Math.round(range(rng, 4, w - 6)), Math.round(range(rng, spineY - 10, h - 4)), 3, 2);
+  }
+  return pixelTexture(c);
+}
+
+/**
+ * A dead tree in silhouette, for the FOREGROUND.
+ *
+ * Near-black and drawn as shape only: this hangs in front of the play plane, where the
+ * job is to frame and to parallax, and any interior detail at that depth competes with
+ * the creature. A dead tree is the right species for it - bare branches make a broken,
+ * legible edge where a leafy one makes a blob, and the room is meant to feel like
+ * somewhere the forest has already been through.
+ */
+export function deadTreeTexture(seed: string, w = 220, h = 420): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+  const ink = '#05090b';
+  g.fillStyle = ink;
+
+  /** One limb, tapering, forking as it goes. */
+  const limb = (x: number, y: number, angle: number, len: number, thick: number, depth: number): void => {
+    let cx2 = x;
+    let cy2 = y;
+    let a = angle;
+    for (let i = 0; i < len; i++) {
+      const t = i / len;
+      a += range(rng, -0.05, 0.05);
+      cx2 += Math.cos(a);
+      cy2 += Math.sin(a);
+      const tw = Math.max(1, Math.round(thick * (1 - t)));
+      g.fillRect(Math.round(cx2 - tw / 2), Math.round(cy2), tw, 1);
+      // Fork.
+      if (depth > 0 && i > len * 0.45 && rng() < 0.035) {
+        limb(cx2, cy2, a + range(rng, -1.0, 1.0), len * range(rng, 0.35, 0.6), thick * 0.6, depth - 1);
+      }
+    }
+  };
+
+  // The trunk, rising from the bottom, with a root flare.
+  const baseX = w / 2 + range(rng, -20, 20);
+  const trunkH = h * range(rng, 0.55, 0.7);
+  let tx = baseX;
+  for (let y = 0; y < trunkH; y++) {
+    const t = y / trunkH;
+    if (y % 13 === 0) tx += range(rng, -1.2, 1.2);
+    const flare = y < 60 ? 1 + ((60 - y) / 60) ** 2 * 1.9 : 1;
+    const tw = Math.round(w * 0.085 * (1 - t * 0.55) * flare);
+    g.fillRect(Math.round(tx - tw / 2), h - 1 - y, tw, 1);
+  }
+  // Roots spreading at the foot.
+  for (let i = 0; i < 5; i++) {
+    limb(baseX + range(rng, -14, 14), h - 6, range(rng, 0.15, 0.5) * (i % 2 ? 1 : -1) + (i % 2 ? 0 : Math.PI), range(rng, 26, 60), 7, 0);
+  }
+  // The crown: limbs off the top third of the trunk.
+  const crownY = h - trunkH;
+  for (let i = 0; i < 6; i++) {
+    const up = -Math.PI / 2 + range(rng, -1.1, 1.1);
+    limb(tx + range(rng, -6, 6), crownY + range(rng, 0, trunkH * 0.35), up, range(rng, 70, 150), 9, 2);
+  }
+
+  return pixelTexture(c);
+}
+
+/**
+ * The press: the hammer that comes down on you, drawn as a machine instead of a slab.
+ *
+ * It has been a flat grey rectangle since the greybox and the playtest kept saying so.
+ * Everything else in this room is either grown or rusted, and the one object that can
+ * actually take something from the player was the only thing that looked unfinished -
+ * which also made it read as level furniture rather than as a threat.
+ *
+ * So it is built the way a stamping press is built, top to bottom: a housing that
+ * disappears into the ceiling, a guide rail on each side, a heavy shouldered head with
+ * hazard banding across it, and a hardened striking face at the bottom with the wear of
+ * ten thousand strikes on it. The wide dark shoulder is the important shape - it reads at
+ * a glance as MASS above you, which is the one thing the object has to say.
+ */
+export function pressTexture(seed: string, w = 60, h = 260): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+
+  const steel = mixHex(PAL.stoneMid, PAL.rustDark, 0.28);
+  const steelDark = mixHex(PAL.stoneDark, PAL.rustDark, 0.4);
+  const steelLit = mixHex(PAL.stoneLit, PAL.rustMid, 0.2);
+  const faceMetal = mixHex(PAL.stoneLit, PAL.stoneEdge, 0.5);
+
+  // The shaft, running up out of frame, narrower than the head.
+  const shaftW = Math.round(w * 0.42);
+  const shaftX = Math.round((w - shaftW) / 2);
+  const headTop = Math.round(h * 0.46);
+  g.fillStyle = steelDark;
+  g.fillRect(shaftX, 0, shaftW, headTop + 4);
+  g.fillStyle = steel;
+  g.fillRect(shaftX + 2, 0, shaftW - 4, headTop + 4);
+  g.fillStyle = steelLit;
+  g.fillRect(shaftX + 2, 0, 2, headTop + 4);
+  // Collars up the shaft, so it reads as a ram rather than a pipe.
+  for (let y = 12; y < headTop - 6; y += 34) {
+    g.fillStyle = steelDark;
+    g.fillRect(shaftX - 3, y, shaftW + 6, 7);
+    g.fillStyle = steelLit;
+    g.fillRect(shaftX - 3, y, shaftW + 6, 1);
+  }
+
+  // The guide rails the head runs on, full height, hard against the sides.
+  for (const rx of [0, w - 5]) {
+    g.fillStyle = steelDark;
+    g.fillRect(rx, 0, 5, h);
+    g.fillStyle = mixHex(steel, PAL.rustMid, 0.35);
+    g.fillRect(rx + (rx === 0 ? 4 : 0), 0, 1, h);
+  }
+
+  /*
+   * The head: the wide part. Shouldered at the top so the eye reads a weight sitting on
+   * the ram, banded with hazard stripes, and hardened at the very bottom.
+   */
+  g.fillStyle = steelDark;
+  g.fillRect(3, headTop, w - 6, h - headTop);
+  g.fillStyle = steel;
+  g.fillRect(5, headTop + 3, w - 10, h - headTop - 8);
+  g.fillStyle = steelLit;
+  g.fillRect(5, headTop + 3, w - 10, 2);
+
+  // Hazard band across the shoulder.
+  const bandY = headTop + 14;
+  const bandH = 16;
+  g.fillStyle = mixHex(PAL.lampWarm, steelDark, 0.42);
+  g.fillRect(6, bandY, w - 12, bandH);
+  g.fillStyle = steelDark;
+  for (let x = -bandH; x < w; x += 14) {
+    for (let i = 0; i < bandH; i++) g.fillRect(x + i, bandY + i, 6, 1);
+  }
+  // Scoured back to metal in places - this thing works for a living.
+  for (let i = 0; i < 5; i++) {
+    g.fillStyle = steel;
+    g.fillRect(Math.round(range(rng, 7, w - 12)), bandY + Math.round(range(rng, 0, bandH - 3)), Math.round(range(rng, 3, 7)), 3);
+  }
+
+  // Bolts down the head's cheeks.
+  for (let y = bandY + bandH + 10; y < h - 26; y += 26) {
+    for (const bx of [9, w - 13]) {
+      g.fillStyle = steelDark;
+      g.fillRect(bx, y, 5, 5);
+      g.fillStyle = steelLit;
+      g.fillRect(bx, y, 5, 1);
+      g.fillStyle = mixHex(PAL.rustMid, steel, 0.4);
+      g.fillRect(bx + 1, y + 1, 3, 3);
+    }
+  }
+
+  /*
+   * The striking face. Brightest thing on the object, because it is the part that
+   * matters and the part that has been polished by use - and it puts a light line at the
+   * exact height the player has to judge.
+   */
+  const faceY = h - 18;
+  g.fillStyle = steelDark;
+  g.fillRect(3, faceY - 4, w - 6, 4);
+  g.fillStyle = faceMetal;
+  g.fillRect(4, faceY, w - 8, 12);
+  g.fillStyle = mixHex(faceMetal, PAL.spec, 0.4);
+  g.fillRect(4, faceY, w - 8, 2);
+  g.fillStyle = steelDark;
+  g.fillRect(4, h - 6, w - 8, 6);
+  // Chips out of the striking edge.
+  for (let i = 0; i < 6; i++) {
+    g.fillStyle = steelDark;
+    g.fillRect(Math.round(range(rng, 5, w - 9)), faceY + Math.round(range(rng, 2, 9)), Math.round(range(rng, 2, 5)), 2);
+  }
+
+  // Ooze that has been squeezed out of something and dried on the face.
+  for (let i = 0; i < 3; i++) {
+    const dx = Math.round(range(rng, 8, w - 12));
+    g.fillStyle = mixHex(PAL.mossDark, steelDark, 0.35);
+    g.fillRect(dx, faceY - Math.round(range(rng, 10, 30)), 2, Math.round(range(rng, 10, 30)));
+  }
+
+  return pixelTexture(c);
+}
+
+/**
+ * A wall-mounted striker plate: the button you hit rather than the button you stand on.
+ *
+ * Same family as the floor plate - dark socket, brass, one amber eye - turned through
+ * ninety degrees and given the things a wall fitting has that a floor fitting does not: a
+ * bracket bolted through at top and bottom, and a struck face that is worn in the middle
+ * rather than along one edge.
+ */
+export function strikerTexture(seed: string, w = 40, h = 96): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+
+  const brassDark = mixHex(PAL.rustDark, PAL.stoneMid, 0.4);
+  const brassMid = mixHex(PAL.rustMid, PAL.stoneLit, 0.35);
+  const brassLit = mixHex(PAL.rustLit, PAL.lampWarm, 0.25);
+
+  // The bracket: a plate against the door, bolted top and bottom.
+  g.fillStyle = mixHex(PAL.voidDeep, '#000000', 0.25);
+  g.fillRect(0, 0, Math.round(w * 0.55), h);
+  g.fillStyle = mixHex(PAL.stoneMid, PAL.stoneDark, 0.5);
+  g.fillRect(2, 4, Math.round(w * 0.45), h - 8);
+  for (const by of [10, h - 16]) {
+    g.fillStyle = mixHex(PAL.stoneDark, '#000000', 0.3);
+    g.fillRect(4, by, 6, 6);
+    g.fillStyle = PAL.stoneLit;
+    g.fillRect(4, by, 6, 1);
+  }
+
+  // The striker body, standing proud of the bracket.
+  const bx = Math.round(w * 0.3);
+  const bw = w - bx - 2;
+  const by0 = Math.round(h * 0.16);
+  const bh = Math.round(h * 0.68);
+  g.fillStyle = brassDark;
+  g.fillRect(bx, by0, bw, bh);
+  g.fillStyle = brassMid;
+  g.fillRect(bx + 1, by0 + 1, bw - 2, bh - 2);
+  g.fillStyle = brassLit;
+  g.fillRect(bx + 1, by0 + 1, 2, bh - 2);
+  // Rivets down its edge.
+  g.fillStyle = mixHex(brassDark, '#000000', 0.3);
+  for (let y = by0 + 6; y < by0 + bh - 6; y += 14) g.fillRect(bx + bw - 5, y, 3, 3);
+
+  /*
+   * The eye: amber, dead centre of the struck face, and the only lit thing on the object.
+   * It is what the player aims a flung body at, so it sits where the impact should land.
+   */
+  const eyeR = Math.max(4, Math.round(bw * 0.3));
+  const ex = bx + Math.round(bw * 0.55);
+  const ey = by0 + Math.round(bh / 2);
+  g.fillStyle = mixHex(PAL.lampWarm, brassDark, 0.5);
+  g.fillRect(ex - eyeR - 1, ey - eyeR - 1, eyeR * 2 + 2, eyeR * 2 + 2);
+  g.fillStyle = PAL.lampWarm;
+  g.fillRect(ex - eyeR, ey - eyeR, eyeR * 2, eyeR * 2);
+  g.fillStyle = mixHex(PAL.lampWarm, '#ffffff', 0.35);
+  g.fillRect(ex - Math.round(eyeR / 2), ey - Math.round(eyeR / 2), eyeR, eyeR);
+
+  // Wear where things have hit it.
+  for (let i = 0; i < 5; i++) {
+    g.fillStyle = brassDark;
+    g.fillRect(bx + Math.round(range(rng, 2, bw - 4)), by0 + Math.round(range(rng, 3, bh - 5)), 3, 2);
+  }
+
+  return pixelTexture(c);
+}
+
+/**
  * The latch ring: a white circle that pulses around whichever growth the player would
  * catch if they clicked now.
  *

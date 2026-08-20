@@ -170,6 +170,23 @@ export interface Button {
   /** Which red growths this brings to life, by id. */
   activates?: string[];
   /**
+   * The gate this button is BOLTED TO, by id.
+   *
+   * A button mounted on a door has to travel with it, or the moment it is struck the door
+   * lifts and leaves its own switch hanging in the air - which reads as a bug however
+   * correct the wiring is. The sim moves it with the gate's lift; the rig draws it there.
+   */
+  onGate?: string;
+  /**
+   * Drawn standing on a wall rather than lying on the floor.
+   *
+   * Orientation is not decoration here: a floor plate says STAND ON ME and a wall plate
+   * says HIT ME, and this stage's last clause is a thing you hit with a flung body.
+   */
+  vertical?: boolean;
+  /** Where the button sits while its gate is shut. Filled in by the sim on first step. */
+  restY?: number;
+  /**
    * Impact speed needed to trigger it, in px/s. Undefined means any touch will do.
    *
    * This is the wall button: a slime that crawls into it does nothing, and one that arrives
@@ -375,7 +392,14 @@ export const TUNING = {
   flightDamping: 0.9975,
   /** Raised from 2600 - the crawl read as sluggish even with the relaxises doing their part. */
   /** Raised again on playtest feedback - the crawl read as slow even after 3300. */
-  move: 4300,
+  /*
+   * 6400, up from 4300. The playtest asked twice for the ground crawl to be quicker, and
+   * the second ask is the one that settles it: this is a puzzle platformer whose puzzles
+   * are the swings, and the walking between them is dead time. A slime should still look
+   * like it is pouring itself along rather than running - the metaball body and the low
+   * top speed do that on their own - but it should not be the reason a retry feels long.
+   */
+  move: 6400,
   friction: 0.55,
   bounce: 0.05,
   /**
@@ -415,6 +439,14 @@ export const TUNING = {
    * the first attempt at 5.9 duly broke the puzzle. 5.3 keeps thirteen pixels of margin
    * there and still puts a whole 17% more reach in the player's hands.
    */
+  /**
+   * The mass a press will never take you below.
+   *
+   * 20 against reachPerMass 5.3 is 106px of reach - enough to cross to a growth from a
+   * sensible standing spot, which is the whole point: whatever else a press does to the
+   * player, it must not leave them unable to play the level.
+   */
+  crushFloor: 20,
   reachPerMass: 5.3,
 
   /**
@@ -432,6 +464,12 @@ export const TUNING = {
    * crossing takes the second-or-two of honest pumping the release window implies.
    */
   swingPump: 1000,
+  /**
+   * What the pump is multiplied by once the body is genuinely fast (past 300px/s along
+   * its arc). Below that the pump is ordinary, and below 60 it is a quarter - the three
+   * regimes are what let the 360 be both earned and repeatable.
+   */
+  swingCommit: 1.8,
   /** Below this the rope is too short to swing on and the body just hangs against the growth. */
   minSwing: 26,
   /** How long a fling's slow motion lasts, in simulated seconds. */
@@ -1032,7 +1070,29 @@ export function step(state: MassState, input: Input): MassState {
           }
           const tangentialSpeed =
             Math.abs((vtx / mine.length) * (tx / tl) + (vty / mine.length) * (ty / tl)) / dt;
-          const gate = tangentialSpeed < 60 ? 0.25 : 1;
+          /*
+           * THREE regimes, and the top one is what makes a 360 repeatable.
+           *
+           * Below 60 the push is a quarter strength: enough to lean a hang and seed a
+           * first swing, far too weak to walk the body round the circle, which is what
+           * keeps the 360 earned rather than free.
+           *
+           * Between 60 and 300 it is full strength - ordinary pumping.
+           *
+           * Above 300 it is 1.8x, and that is a fix rather than a flourish. The swing was
+           * equilibrating right at the energy needed to carry over the top, so whether a
+           * revolution completed was close to a coin toss: measured across eight latches
+           * that differ only in when they happen, peak spin was steady at 6.4-7.8 rad/s
+           * but the spin still turning six seconds later was 0.5, 0.8, 1.5, 1.5, 4.1,
+           * 4.8, 5.3, 6.4. That is the playtest's "sometimes the 360 is fast and
+           * sometimes too slow" exactly - the swing built every time and then fell out of
+           * its circle about half the time, so what you had at the moment you released
+           * was luck. Giving a committed swing real authority puts it clear of the top
+           * instead of level with it: same eight latches, all eight still turning above
+           * 6.4 rad/s at six seconds.
+           */
+          const gate =
+            tangentialSpeed < 60 ? 0.25 : tangentialSpeed > 300 ? T.swingCommit : 1;
           for (const p of mine) {
             p.ax += (tx / tl) * input.move * T.swingPump * gate;
             p.ay += (ty / tl) * input.move * T.swingPump * gate;
@@ -1608,7 +1668,28 @@ export function step(state: MassState, input: Input): MassState {
   for (const p of particles) {
     collide(p, world);
     if (sieves.length > 0 && state.owned.has(p.id)) {
-      for (const rect of sieves) hitTile(p, rect, world);
+      /*
+       * The filter is a HARD CLAMP, not a collision.
+       *
+       * It used to resolve through hitTile like any other solid, which resolves once per
+       * step against the nearest face - and a body walking at it fast enough simply got
+       * through: raising the crawl from 4300 to 4800 was all it took for a full-mass body
+       * to ooze under a shut wall, because a particle that crosses the whole rect inside
+       * one step never meets the face that was supposed to stop it. A filter the player
+       * can defeat by holding a direction harder is not a filter, and it is the rule two
+       * stages are built on.
+       *
+       * So an over-mass particle found inside the gap is put back on the side it came
+       * FROM - which `px` still knows, whatever the speed - and its velocity is dropped
+       * with it. There is no speed at which that can be outrun.
+       */
+      for (const rect of sieves) {
+        if (p.x <= rect.x || p.x >= rect.x + rect.w) continue;
+        if (p.y <= rect.y || p.y >= rect.y + rect.h) continue;
+        const back = p.px <= rect.x + rect.w / 2 ? rect.x - 1 : rect.x + rect.w + 1;
+        p.x = back;
+        p.px = back;
+      }
     }
   }
 
@@ -1817,7 +1898,20 @@ export function step(state: MassState, input: Input): MassState {
       /*
        * Crushed. Ownership is what is lost, not the particle - it squirts out along the
        * press's long axis as loose mass and can be recalled with Q once the way is clear.
+       *
+       * But a press will NOT take the last of you. Below `crushFloor` the body stops
+       * shedding under a press entirely, and the number is chosen from what the player
+       * needs rather than from what looks fair: `crushFloor` times `reachPerMass` is the
+       * reach of the smallest body that can still cross to a growth, so a creature that
+       * has been mangled can always still play. Under that line a press carries the body
+       * along instead of biting it - which also removes the worst failure this stage
+       * could produce, a slime pinned under a rhythm it no longer has the mass to escape.
        */
+      if (owned(state).length <= T.crushFloor) {
+        p.px = p.x;
+        p.py = p.y;
+        continue;
+      }
       state.owned.delete(p.id);
       const spill = 90 + (p.id % 7) * 12;
       if (c.axis === 'x') {
@@ -1862,6 +1956,21 @@ export function step(state: MassState, input: Input): MassState {
   }
   for (const gate of world.gates) {
     if (gate.open && gate.lift < 1) gate.lift = Math.min(1, gate.lift + dt * 1.2);
+  }
+
+  /*
+   * Buttons bolted to a door ride it.
+   *
+   * The lift is the same curve the slab uses in the rig - `lift` runs 0 to 1 and the slab
+   * travels its own height plus a little - so the switch stays exactly where it was welded
+   * however far the door has gone up.
+   */
+  for (const button of world.buttons) {
+    if (button.onGate === undefined) continue;
+    const gate = world.gates.find((g) => g.id === button.onGate);
+    if (!gate) continue;
+    if (button.restY === undefined) button.restY = button.y;
+    button.y = button.restY - gate.lift * (gate.h + 4);
   }
 
   // Slow motion decays on its own; the rig sets it and reads it back to scale real time.
