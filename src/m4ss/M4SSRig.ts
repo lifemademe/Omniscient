@@ -69,7 +69,6 @@ import {
   portalTexture,
   wallTexture,
   sillTexture,
-  mixHex,
   vineTexture,
 } from './stageArt.js';
 import {
@@ -110,6 +109,19 @@ import type { Anchor, Button, Critter, Crusher, Gate, MassState } from './mass.j
  * the underside of a gate for the two seconds it takes to crawl through one.
  */
 const BLOB_LIFT = 10;
+
+/**
+ * The creature's own two colours, named once because two things wear them now.
+ *
+ * NOT from PAL, and that is the whole point of hoisting them. Every PAL entry is pre-lifted
+ * for the tone curve and every stage texture is drawn unlit from those lifted values; the
+ * creature is drawn from plain authored hexes through a LIT material instead, because it is
+ * the one object in the room that is meant to look like it is standing in the light rather
+ * than carrying its own. Building the trail out of PAL.slime made it a different green -
+ * paler and yellower than the animal that left it - which was the entire complaint.
+ */
+const SLIME_FILL = '#a8e85c';
+const SLIME_EDGE = '#3f6b1f';
 
 /**
  * How far the body travels along the ground between deposits, in px.
@@ -423,14 +435,14 @@ export class M4SSRig extends ENGINE.SceneNode {
    * hierarchy and it has not moved - it is simply the brightest GREEN.
    */
   private readonly slimeMaterial = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#a8e85c'),
+    color: new THREE.Color(SLIME_FILL),
     roughness: 0.35,
     metalness: 0.05,
     emissive: new THREE.Color('#5c9a2a'),
     side: THREE.DoubleSide,
   });
   private readonly rimMaterial = new THREE.MeshBasicMaterial({
-    color: new THREE.Color('#3f6b1f'),
+    color: new THREE.Color(SLIME_EDGE),
     side: THREE.DoubleSide,
   });
   /*
@@ -2193,11 +2205,22 @@ export class M4SSRig extends ENGINE.SceneNode {
       'SlimeTrailEdge',
       new THREE.BufferGeometry(),
       this.artMaterial({
-        color: new THREE.Color(mixHex(PAL.slime, PAL.voidDeep, 0.55)),
+        color: new THREE.Color(SLIME_EDGE),
         transparent: true,
         opacity: 0.92,
         depthWrite: false,
         side: THREE.DoubleSide,
+        /*
+         * TONE MAPPED, unlike every other material this rig makes.
+         *
+         * artMaterial turns tone mapping off because the stage textures are painted from the
+         * pre-lifted palette - they have already had the curve applied by hand, and running
+         * them through it twice would take it back out. The creature has not: its colours are
+         * plain authored hexes going through a lit material, and the trail is made of the
+         * creature. Left unmapped alongside them the trail came out pale, washed and yellow,
+         * which is exactly what it looked like on screen.
+         */
+        toneMapped: true,
       })
     );
     this.trailEdge.position.z = -0.16;
@@ -2207,11 +2230,14 @@ export class M4SSRig extends ENGINE.SceneNode {
       'SlimeTrail',
       new THREE.BufferGeometry(),
       this.artMaterial({
-        color: new THREE.Color(mixHex(PAL.slime, PAL.slimeGlow, 0.45)),
+        // The body's own fill and the body's own rim - see SLIME_FILL. A lump of the creature
+        // should not be a different colour from the creature.
+        color: new THREE.Color(SLIME_FILL),
         transparent: true,
         opacity: 0.95,
         depthWrite: false,
         side: THREE.DoubleSide,
+        toneMapped: true,
       })
     );
     // In front of the ground and its turf, behind the creature. A trail drawn over the body

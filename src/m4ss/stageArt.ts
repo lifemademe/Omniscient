@@ -3483,7 +3483,7 @@ export function markerTexture(size = 26): THREE.CanvasTexture {
 }
 
 /** Blend two hex colours. Banding and shading only - never for smoothing an edge. */
-export function mixHex(a: string, b: string, t: number): string {
+function mixHex(a: string, b: string, t: number): string {
   const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
   const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
   const k = Math.max(0, Math.min(1, t));
