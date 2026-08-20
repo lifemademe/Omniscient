@@ -495,3 +495,42 @@ cause. The stall at 827 was real and it was not what the player was hitting.
 **The lesson is narrower than the one I wrote down and more useful: a measurement that
 confirms your hypothesis is not a diagnosis.** The plate is gone. The HUD note stays,
 because that one costs nothing and was there before.
+
+## Pass 68: the mirror comes out, and a lesson about fixing what you cannot measure
+
+The playtest: "when I latch onto the growth the mass starts moving left and right", and
+"sometimes the 360 is fast and sometimes too slow to get enough distance after a fling".
+
+Both were the swing-shape MIRROR added in pass 67, and removing it is the whole change.
+The mirror flipped the held teardrop to face the direction of travel whenever spin crossed
+half a radian a second - and a hanging body crosses that constantly, so the shape was
+redistributing mass from one side of the rope to the other over and over. The centroid
+barely moved, which is why a drift test showed nothing; what the eye sees is the BODY
+sliding side to side. And a flip landing mid-pump changed how much of the shape was
+helping, so the same input built a fast revolution one time and a slow one the next.
+
+Measured after removal: both directions sustain equally once circling (7.14 against 7.20
+rad/s), and a hanging body decays rather than pumping itself (48px in the first second,
+28px by the third). All five harnesses pass.
+
+### What did not go in, and why it is worth remembering
+
+Three fixes were built and thrown away before this one-line answer: centring the captured
+shape's across-axis on its mean; regressing out its shear; and capping the across-spread so
+the hold always has a lever. The last one WORKED on its own terms - it turned a 1-in-6
+build failure into six good swings out of six, tightening peak spin from a 17x spread to
+1.2x - and it had to go anyway, because it also made a single held key circle from a dead
+hang. **The coupling that makes a swing reliable to build is the same coupling that makes
+the 360 free**, and the earned swing is the design; the harness said so and it was right.
+
+The deeper error was upstream of all of it. I measured a "1 in 6 latches never builds"
+lottery and treated it as the bug, when the driver in my probe pushed with a FIXED
+direction whenever the body was near the ends of its arc - which is where a real player
+reverses. A test that brakes half the time will report an unreliable swing whatever the sim
+does. Three of my four measurements this pass turned out to be artifacts of the probe
+rather than facts about the game: the idle-drift figure, the lottery, and the directional
+asymmetry that started all of this in pass 67.
+
+**When a measurement keeps changing its answer as the probe changes, the probe is the
+subject.** The one number that stayed put under every rewrite - both directions sustaining
+equally once the body is circling - is the only one that was ever load-bearing.
