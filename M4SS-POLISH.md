@@ -318,3 +318,29 @@ two costumes.
 
 Boundary walls keep the old stone: they are the room's shell, not its ground, and a wall of
 loose earth reads as a cave-in waiting to happen.
+
+## Pass 54: the dots were never particles
+
+The playtest reported "static pixels around the mass" three times. Twice I read it as loose
+simulation particles and culled those - a real fix for a different thing - and the dots
+survived, because they were never particles.
+
+`glowTexture` painted **fourteen hard 2x2 pips into every glow sprite** "so the glow has
+something in it". Every glow sprite: the lanterns, the portal, the growth presences, the
+hover halo, the embers - and the slime's own 260px halo, which is centred on the creature
+and therefore carried its fourteen pips around the player at fixed offsets, for ever. A
+sprite scaled from 128px to 260 turns a 2x2 pip into a hard 4px square, in the one place on
+screen the eye is already looking.
+
+**The lesson, for the next one: when a complaint survives a fix, the fix was aimed at
+something the complaint was not about.** Find the thing that is actually drawn. Deleting six
+lines removed every dot in both stages at once.
+
+| 54 | removals | Pools (the "blue oval"), bell jars (the "black thing"), the vine curtain and the rubble lip (the dense green-to-grey beard at every ground edge) - and their generators with them | Three separate things were drawn at every top edge and stacked into a beard. One of them has to do the job, and the grass crown is the only one that says GROUND rather than decoration. |
+| 54b | the pod | Smaller (radius 0.22 of the sprite, plane 176 to 132), no black outer ring, and a brighter ramp running to the slime's own glow | A hard dark rim reads as a UI token where this has to read as a living thing. Hover still glows only when the growth is live AND within reach - that logic was already right. |
+| 54c | the ground, rebuilt | `dirtTexture` is now FLAT in the vertical - no strata gradient at all - with compaction clumps, embedded stones (lit crowns, never darker than the soil, or they read as holes), grit and one-pixel roots, every feature wrapped in both axes | The first dirt graded light-at-top to dark-at-bottom, which is right for one slab and catastrophic for a texture that repeats: a 300-tall platform tiled it three times and the ground came out as stacked strata with a hard seam at every join. Depth belongs to the interior-fade plane - one gradient over the whole mass rather than one per repeat. |
+| 54d | the crest | The grass mat is drawn per column at a wandering height, above a cleared transparent band, so the moss silhouette rises and falls while the earth line underneath stays straight | The most artificial thing left in the frame was 1280 pixels of perfectly ruled ground. Low frequency on purpose: per-column random reads as noise, a drift over 20-30px reads as terrain. The wander returns to its start height over the last 24 columns so the crest still tiles. |
+| 54e | light that lands | Every lantern throws a warm pool onto the floor beneath it, and the god rays land in cool ones; pools are skipped where there is no floor under the light | The biggest reason the stage read as "a bunch of assets": every light source lit only itself, so nothing in the room was related to anything else. |
+| 54f | the growths hang | Each anchor carries a dark strand running up out of the top of the frame | An object with no support is a game token, not a thing in a room - and the fiction already says these are cultivated tendrils grown down from above. |
+| 54g | the frame closes at the bottom | A dark bank of earth across the very bottom, in front of the play plane | The top has had a canopy since pass 25 and the corners a vignette, but the bottom ran clean off the screen, so the camera sat outside the room looking in at a strip of floor. |
+| 54h | the pit gets its depth | Acid surface dropped from 8px below the floor line to 48 | At 92 the meniscus continued the ground line and the pits read as bright slabs, not holes. A pit needs dark between its lip and its liquid. |

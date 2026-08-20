@@ -688,7 +688,7 @@ export class M4SSRig extends ENGINE.SceneNode {
        * the dirt and the two variants meet without a seam.
        */
       if (!isWall) {
-        const crownH = 46;
+        const crownH = 52;
         const crown = grassMap.clone();
         crown.needsUpdate = true;
         crown.repeat.set(t.w / 128, crownH / 96);
@@ -700,7 +700,9 @@ export class M4SSRig extends ENGINE.SceneNode {
           new THREE.PlaneGeometry(t.w, crownH),
           this.artMaterial({ map: crown, transparent: true, depthWrite: false })
         );
-        turf.position.set(0, -t.h / 2 + crownH / 2, 24);
+        // Lifted by the crest height, so the wandering moss silhouette sits ABOVE the
+        // straight earth line rather than being cut off by it.
+        turf.position.set(0, -t.h / 2 + crownH / 2 - 9, 24);
         node.add(turf);
       }
 
@@ -1053,13 +1055,19 @@ export class M4SSRig extends ENGINE.SceneNode {
     {
       // The surface sits just under the floor line, so the lit meniscus is the first thing
       // visible in the mouth of a pit and the throat below it goes dark.
-      const surfaceY = world.height - 92;
+      /*
+       * DEEPER. At 92 the meniscus sat eight pixels under the floor line and the pits
+       * read as bright slabs continuing the ground rather than as holes with something
+       * at the bottom of them - the first live capture of the rework showed one unbroken
+       * floor across the whole screen. A pit needs dark between its lip and its liquid.
+       */
+      const surfaceY = world.height - 48;
       const bath = decorMesh(
         'Acid',
         new THREE.PlaneGeometry(world.width * 1.2, 150),
         this.artMaterial({ map: acidTexture(`acid-${this.theme.name}`, 256, 128) })
       );
-      bath.position.set(world.width / 2, surfaceY + 60, -6);
+      bath.position.set(world.width / 2, surfaceY + 62, -6);
       this.stage?.add(bath);
 
       const fumes = decorMesh(

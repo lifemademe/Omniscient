@@ -1971,21 +1971,48 @@ export function dirtTexture(
      * removed. What is left is what a grass line actually needs: a dark root band, a lit
      * mat, and short blades breaking the top - and NOTHING hanging below it.
      */
+    /*
+     * The crest: the ground's silhouette WANDERS.
+     *
+     * The single most artificial thing left in the frame was that the top of the world
+     * was a ruled line from one edge to the other - 1280 pixels of perfectly straight
+     * ground, which no cave and no game with a sense of place has ever had. The top rows
+     * of the texture are cleared so the plane above the tile is transparent, and the mat
+     * is drawn per column at a wandering height: the earth line underneath stays straight
+     * (it is collision, and it is honest about that), while the moss riding it rises and
+     * falls a few pixels the way real ground cover does.
+     *
+     * Low frequency on purpose. A per-column random reads as noise; a drift that takes
+     * twenty or thirty pixels to travel reads as terrain.
+     */
+    const crest = 9;
+    g.clearRect(0, 0, w, crest);
     const matH = Math.max(5, Math.round(h * 0.1));
-    g.fillStyle = mixHex(PAL.mossDark, PAL.vineDark, 0.45);
-    g.fillRect(0, 0, w, matH + 3);
-    g.fillStyle = PAL.mossDark;
-    g.fillRect(0, 0, w, matH);
-    g.fillStyle = PAL.mossMid;
-    g.fillRect(0, 0, w, Math.max(2, Math.round(matH * 0.5)));
-    g.fillStyle = PAL.mossLit;
-    g.fillRect(0, 0, w, 2);
-    // Blades: short, sparse, and only ever ABOVE the mat.
+    let rise = crest * 0.5;
+    // Start and end at the same height so the crest tiles without a step.
+    const seam = rise;
+    for (let x = 0; x < w; x++) {
+      if (x % 7 === 0) rise += range(rng, -1.6, 1.6);
+      const blend = x > w - 24 ? (x - (w - 24)) / 24 : 0;
+      const hereRaw = rise * (1 - blend) + seam * blend;
+      const here = Math.max(0, Math.min(crest, Math.round(hereRaw)));
+      const top = crest - here;
+      // Dark root band under everything, then the mat, then the lit crown.
+      g.fillStyle = mixHex(PAL.mossDark, PAL.vineDark, 0.45);
+      g.fillRect(x, top, 1, crest + matH + 3 - top);
+      g.fillStyle = PAL.mossDark;
+      g.fillRect(x, top, 1, crest + matH - top);
+      g.fillStyle = PAL.mossMid;
+      g.fillRect(x, top, 1, Math.max(2, Math.round((crest + matH - top) * 0.5)));
+      g.fillStyle = PAL.mossLit;
+      g.fillRect(x, top, 1, 2);
+    }
+    // Blades: short, sparse, standing out of the crest.
     for (let i = 0; i < w / 9; i++) {
       const bx = Math.round(range(rng, 0, w));
       const bh = Math.round(range(rng, 2, 6));
       for (let d = 0; d < bh; d++) {
-        const y = matH - 1 - d;
+        const y = crest - 1 - d;
         if (y < 0) break;
         g.fillStyle = d > bh * 0.5 ? PAL.mossLit : PAL.mossMid;
         for (const ox of [0, -w, w]) g.fillRect(bx + ox, y, 1, 1);
