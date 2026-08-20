@@ -453,3 +453,38 @@ requires one component at the end. Verified to fail when the force is disabled a
 when it is not: without it the body ends as two pieces and stays that way.
 
 | 66b | the menu stack gets out of the cable's way | STACK_ORIGIN and the facility plate move back 0.14; the cable's tip plane gains a real CABLE_CLEARANCE (0.16) instead of riding MODULE_PLATE.depth | The cable ran through the plates because its tip flew only three centimetres in front of their faces - the offset was measured from the plate CENTRE and the plate is 0.06 deep - so any sag put it inside the plastic. Moving the stack alone would have done nothing: the tip plane is derived FROM the stack, so both would have receded together. The clearance is also larger than HOVER_PUSH, or the plate being reached for would rise into its own cursor. |
+
+## Pass 67: three from one playtest, and only two were bugs
+
+**The 360 could only be built one way round.** The hanging teardrop is captured once at the
+grab and it is not symmetric - a body caught mid-lunge has its bulk to one side of the rope.
+The shape-hold then re-imposes that fixed arrangement while the rope swings, which is a
+torque with a FIXED HANDEDNESS: it helped a swing going one way and fought one going the
+other. Measured before the fix, seeding the swing in either direction ended with the body
+rotating the SAME way; after it, each direction follows the player and both peak at the same
+5.2 rad/s. The shape now mirrors to face the direction of travel, eased at 12% a frame
+rather than snapped - the first version flipped outright and the landing check caught it in
+one run, because mirroring a teardrop in a single frame moves every outer particle the full
+width of the body across the rope and tears pieces off a fast swing.
+
+The shaft's slow-motion check failed on the way through, and the harness was at fault, not
+the game: its driver pushed with HORIZONTAL velocity as a stand-in for "which way round am
+I going", which is only correct at the bottom of the arc. That approximation had been
+riding on the fixed-handedness torque to pass. It pushes along the true tangent now and
+reaches 5.1 rad/s in both directions, so `slowmoAt` stays where the feature wants it.
+
+**Q woke every pile in the level.** Two blocks asked `input.recall` whether a loose particle
+was awake - the inert-deposit branch in the integrator and the immovable-deposit rule in
+overlap resolution - so holding Q woke ALL shed mass at once. A settled deposit rests with
+its particles slightly overlapped; wake it and overlap resolution springs it apart, which is
+exactly the "forces some others to fly away" in the report. Recall now builds a SET of the
+ids it actually called, and only those wake.
+
+**Nothing was blocking stage two.** Measured: a full body walking east stalls at x 827,
+which is the wall at 860; a body shed to 16 walks under it and presses the button. The wall
+is a FILTER and it was working. What was missing is that the game only ever said so in one
+line of small text in the corner of the HUD, and a player standing at an obstacle is looking
+at the obstacle. There is now a plate at the gap itself - "TOO BIG FOR THE GAP / HOLD SPACE
+TO SHED BELOW 25" - which appears only while the body is both too big and near enough to be
+trying. **An invisible rule is indistinguishable from a bug**, and this is the second time
+this stage has taught that lesson.

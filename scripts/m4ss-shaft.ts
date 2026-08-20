@@ -293,11 +293,38 @@ console.log('\n=== M4SS STAGE TWO ===\n');
   // The proven resonance driver from the stage-one 360 block: push WITH the velocity,
   // always. The old bottom-arc-gated pump stopped building once the plumper hanging shape
   // added drag; this one is the strategy the game actually teaches.
+  /*
+   * The driver pushes with the TRUE TANGENTIAL velocity, not with horizontal velocity.
+   *
+   * It used vx as a stand-in for "which way round am I going", which is only correct at
+   * the bottom of the arc - everywhere else it pushes at some angle to the motion, and
+   * near the top it pushes against it. That was good enough to pass while the hanging
+   * shape had a fixed handedness quietly adding torque; once the shape started mirroring
+   * to face the direction of travel (so a 360 can be built either way, which is what a
+   * player asked for) the crude driver could only reach 1.4 rad/s and this check failed.
+   *
+   * The honest fix is to drive it the way the game teaches: push along the arc. A proper
+   * tangential driver reaches 5.1 rad/s in both directions, so the threshold stays where
+   * the feature wants it and the harness stops testing its own approximation.
+   */
   run(state, 10.0, (s) => {
     if (!s.attached) return { move: 0 as const, anchor: g3, recall: false };
     if (Math.abs(s.spin) >= TUNING.slowmoAt * 1.4) return { move: 0 as const, anchor: g3, recall: false };
-    const vx = velocityX(s);
-    return { move: (Math.abs(vx) > 60 ? (vx >= 0 ? 1 : -1) : 1) as 1 | -1, anchor: g3, recall: false };
+    const body = owned(s);
+    const c = centroid(body);
+    const tx = c.y - g3.y;
+    const ty = -(c.x - g3.x);
+    const tl = Math.hypot(tx, ty) || 1;
+    let vx = 0;
+    let vy = 0;
+    for (const p of body) {
+      vx += p.x - p.px;
+      vy += p.y - p.py;
+    }
+    vx /= body.length;
+    vy /= body.length;
+    const along = ((vx * tx) / tl + (vy * ty) / tl) / TUNING.dt;
+    return { move: (Math.abs(along) > 60 ? (along >= 0 ? 1 : -1) : 1) as 1 | -1, anchor: g3, recall: false };
   });
   const spun = Math.abs(state.spin);
   step(state, IDLE);

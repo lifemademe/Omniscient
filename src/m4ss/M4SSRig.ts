@@ -270,6 +270,8 @@ export class M4SSRig extends ENGINE.SceneNode {
   private lanternXs: number[] = [];
   /** The tutorial plates, and the world points they are pinned to. See placeSigns. */
   private readonly signLabels: Array<{ el: HTMLElement; x: number; y: number }> = [];
+  /** The "too big" plate that appears at a sieve gap the body cannot fit through. */
+  private readonly sieveLabels: Array<{ el: HTMLElement; gate: Gate; x: number; y: number }> = [];
   /** The pulsing ring over the growth a click would catch. See chooseTarget. */
   private latchRing: ENGINE.MeshNode | null = null;
   /** The growth a click would catch right now - nearest live growth within reach. */
@@ -475,6 +477,8 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.camera?.setActive(false);
     for (const sign of this.signLabels) sign.el.remove();
     this.signLabels.length = 0;
+    for (const plate of this.sieveLabels) plate.el.remove();
+    this.sieveLabels.length = 0;
     for (const off of this.detach) off();
     this.detach.length = 0;
     // Disconnect the instrument from the shared bus. The bus itself belongs to the
@@ -927,6 +931,53 @@ export class M4SSRig extends ENGINE.SceneNode {
       this.stage?.add(node);
       this.gateNodes.push({ node, gate, restY: gate.y + gate.h / 2 });
     });
+
+    /*
+     * A plate at every sieve gap that says what the gap wants.
+     *
+     * The playtest, in stage two: "something is blocking the path of the mass in front of
+     * the first button". Nothing was broken - a full body stalls at the wall because the
+     * wall is a FILTER, and a shed body walks under it and presses the button, both
+     * measured. But the game only ever said so in one line of small text in the corner of
+     * the HUD, and a player standing at an obstacle is looking at the obstacle.
+     *
+     * So the rule is stated where it is enforced. The plate hangs at the gap, appears only
+     * while the body is too big AND near enough to be trying, and names the number it
+     * wants. An invisible rule is indistinguishable from a bug - that is the whole lesson
+     * here, and it is the second time this stage has taught it.
+     */
+    const gapHost = this.getWorld()?.gameContainer;
+    if (gapHost) {
+      for (const gate of world.gates) {
+        if (gate.sieve === undefined) continue;
+        const label = document.createElement('div');
+        label.style.cssText = [
+          'position:absolute',
+          'transform:translate(-50%,-50%)',
+          'padding:6px 10px',
+          'border-radius:9px',
+          'background:rgba(24,12,6,0.82)',
+          'border:1px solid rgba(232,165,74,0.35)',
+          'color:#f0c58a',
+          'font:12px/1.4 "Courier New",monospace',
+          'letter-spacing:1.5px',
+          'text-align:center',
+          'white-space:pre',
+          'pointer-events:none',
+          'text-shadow:0 1px 2px rgba(0,0,0,0.8)',
+          'z-index:13',
+          'display:none',
+        ].join(';');
+        label.textContent = `TOO BIG FOR THE GAP\nHOLD SPACE TO SHED BELOW ${gate.sieve + 1}`;
+        gapHost.appendChild(label);
+        this.sieveLabels.push({
+          el: label,
+          gate,
+          x: gate.x + gate.w / 2,
+          y: gate.y + gate.h + 34,
+        });
+      }
+    }
 
     /*
      * The presses.
@@ -2417,6 +2468,8 @@ export class M4SSRig extends ENGINE.SceneNode {
     // The plates are DOM, so destroying the stage node does not take them with it.
     for (const sign of this.signLabels) sign.el.remove();
     this.signLabels.length = 0;
+    for (const plate of this.sieveLabels) plate.el.remove();
+    this.sieveLabels.length = 0;
     this.latchRing = null;
     this.target = null;
     this.flies.length = 0;
@@ -3153,13 +3206,38 @@ export class M4SSRig extends ENGINE.SceneNode {
    * centre and already runs every frame.
    */
   private placeSigns(at: { x: number; y: number }): void {
-    if (this.signLabels.length === 0) return;
     const viewHeight = VIEW_WIDTH / CAMERA_ASPECT;
+    const project = (x: number, y: number): { u: number; v: number } => ({
+      u: (x - (at.x - VIEW_WIDTH / 2)) / VIEW_WIDTH,
+      v: (y - (at.y - viewHeight / 2)) / viewHeight,
+    });
     for (const sign of this.signLabels) {
-      const u = (sign.x - (at.x - VIEW_WIDTH / 2)) / VIEW_WIDTH;
-      const v = (sign.y - (at.y - viewHeight / 2)) / viewHeight;
+      const { u, v } = project(sign.x, sign.y);
       sign.el.style.left = `${(u * 100).toFixed(3)}%`;
       sign.el.style.top = `${(v * 100).toFixed(3)}%`;
+    }
+
+    /*
+     * The sieve plate shows only when the body is BOTH too big and close enough to be
+     * trying to get through. Either half alone would be wrong: a permanent sign is
+     * scenery the player stops reading, and one that fires from across the room is
+     * answering a question nobody asked yet.
+     */
+    if (this.sieveLabels.length === 0 || !this.state) return;
+    const body = owned(this.state);
+    if (body.length === 0) return;
+    const home = centroid(body);
+    for (const plate of this.sieveLabels) {
+      const near = Math.abs(home.x - plate.x) < 210 && home.y > plate.gate.y + plate.gate.h - 140;
+      const tooBig = !plate.gate.open && body.length > (plate.gate.sieve ?? Infinity);
+      if (!near || !tooBig) {
+        plate.el.style.display = 'none';
+        continue;
+      }
+      const { u, v } = project(plate.x, plate.y);
+      plate.el.style.display = 'block';
+      plate.el.style.left = `${(u * 100).toFixed(3)}%`;
+      plate.el.style.top = `${(v * 100).toFixed(3)}%`;
     }
   }
 

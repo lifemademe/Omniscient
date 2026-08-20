@@ -294,6 +294,16 @@ export interface MassState {
    */
   swingShape: Array<{ id: number; along: number; across: number }>;
   /**
+   * Which way the hanging shape is facing: +1 as captured, -1 mirrored across the rope.
+   *
+   * The teardrop is captured once at the grab, and it is not symmetric - a body caught
+   * mid-lunge has its bulk to one side of the rope. Holding that fixed arrangement while
+   * the rope swings is a torque with a FIXED HANDEDNESS: it helped a swing going one way
+   * and fought one going the other, which is why a 360 could be built clockwise and not
+   * anticlockwise. The shape now mirrors to face the direction of travel.
+   */
+  swingFace: number;
+  /**
    * Where the body last stood SAFELY - grounded, whole, on real floor. The pit hands a
    * fallen body back HERE, not to the start of the room. It used to respawn at world.start,
    * and the playtest read that as an invisible wall: stage one's exit pit sits just past
@@ -845,6 +855,7 @@ export function makeState(world: World, startMass: number): MassState {
     spin: 0,
     justGripped: false,
     swingShape: [],
+    swingFace: 1,
     startMass,
     lastSafe: { x: world.start.x, y: world.start.y },
     slowmo: 0,
@@ -1121,6 +1132,7 @@ export function step(state: MassState, input: Input): MassState {
      */
     if (state.swingShape.length > 0 && Math.abs(state.spin) >= T.slowmoAt) state.slowmo = 1;
     state.swingRadius = 0;
+    state.swingFace = 1;
     state.spin = 0;
     state.justGripped = false;
     state.swingShape = [];
@@ -1142,6 +1154,22 @@ export function step(state: MassState, input: Input): MassState {
    * level regardless - see the pit handback below. A player cannot be expected to walk into
    * a bottomless pit to press Q.
    */
+  /*
+   * Which shed particles Q has actually woken this step.
+   *
+   * This has to be a SET of ids, not the `input.recall` flag, and that distinction is the
+   * whole of a bug the playtest found: "pressing Q to recall calls the nearest shedded
+   * mass but forces some others to fly away". Two later blocks asked `input.recall` to
+   * decide whether a loose particle is awake - the inert-deposit branch in the integrator
+   * and the immovable-deposit rule in overlap resolution - so holding Q woke EVERY pile in
+   * the level at once. A settled deposit rests with its particles slightly overlapped;
+   * wake it and overlap resolution springs it apart, which is precisely the mass flying
+   * away from piles the player never called.
+   *
+   * Only the cluster being recalled goes in here, so everything else stays asleep.
+   */
+  const waking = new Set<number>();
+
   if (input.recall) {
     /*
      * Q calls home the NEAREST shed lump, and only that one. Recalling everything at once
@@ -1164,6 +1192,7 @@ export function step(state: MassState, input: Input): MassState {
       }
     }
     if (nearest) {
+      for (const p of nearest) waking.add(p.id);
       for (const p of nearest) {
         const dx = home.x - p.x;
         const dy = home.y - p.y;
@@ -1369,7 +1398,7 @@ export function step(state: MassState, input: Input): MassState {
      * horizontal component is zeroed every step: it drops straight down, settles on whatever
      * is under it, and stays on that spot until Q wakes it.
      */
-    if (!state.owned.has(p.id) && !input.recall) {
+    if (!state.owned.has(p.id) && !waking.has(p.id)) {
       const fall = (p.y - p.py) * T.damping;
       p.px = p.x;
       p.py = p.y;
@@ -1419,8 +1448,8 @@ export function step(state: MassState, input: Input): MassState {
            */
           // A settled deposit resists being shoved: the live body takes the whole correction
           // rather than half, so the player cannot bulldoze a pile around by walking into it.
-          const pAwake = state.owned.has(p.id) || input.recall;
-          const qAwake = state.owned.has(q.id) || input.recall;
+          const pAwake = state.owned.has(p.id) || waking.has(p.id);
+          const qAwake = state.owned.has(q.id) || waking.has(q.id);
           if (pAwake && qAwake) {
             p.x += (dx / d) * half;
             p.y += (dy / d) * half;
@@ -1554,13 +1583,40 @@ export function step(state: MassState, input: Input): MassState {
           }
         }
 
+        /*
+         * The shape faces the way the body is going.
+         *
+         * Flipped with HYSTERESIS - only past half a radian a second - for two reasons.
+         * A pendulum crosses zero spin at the ENDS of its arc, where the body is
+         * momentarily still, so a flip there is invisible and costs nothing; and a
+         * threshold of zero would chatter every frame the body hangs at rest, mirroring
+         * the teardrop back and forth at sixty hertz.
+         *
+         * This is what makes the 360 symmetric. Without it the captured teardrop kept one
+         * handedness for ever, which reads as a torque that helps one direction and
+         * fights the other - the playtest could build a revolution clockwise and never
+         * anticlockwise, and the asymmetry measured 7.2 rad/s against nothing at all.
+         */
+        /*
+         * EASED, not snapped. The first version flipped the sign outright and the landing
+         * check caught it immediately: mirroring a teardrop in one frame moves every
+         * outer particle the full width of the body across the rope, which tears pieces
+         * off a fast swing - the flung body arrived in two.
+         *
+         * Easing at 12% a frame morphs the shape over about half a second. It passes
+         * through a narrow profile on the way, which is harmless because the flip only
+         * ever happens near the ENDS of the arc where the body is momentarily still.
+         */
+        const want = state.spin > 0.5 ? 1 : state.spin < -0.5 ? -1 : state.swingFace;
+        state.swingFace += (want - state.swingFace) * 0.12;
+
         for (const slot of state.swingShape) {
           const p = by.get(slot.id);
           if (!p) continue;
           const depth = (slot.along + 1) / 2;
           const width = T.taperTop + (T.taperBottom - T.taperTop) * depth;
           const along = slot.along * halfLength;
-          const across = slot.across * halfWidth * width;
+          const across = slot.across * state.swingFace * halfWidth * width;
           const tx = centre.x + nx * along + -ny * across;
           const ty = centre.y + ny * along + nx * across;
           const mx = (tx - p.x) * hold;
