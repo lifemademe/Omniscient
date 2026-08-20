@@ -1074,16 +1074,18 @@ export class M4SSRig extends ENGINE.SceneNode {
      * state.
      */
     world.buttons.forEach((button, i) => {
+      // The decor plane grew with the redraw - the LOGIC radius is untouched, this is
+      // the picture of the plate, not its pressure zone.
       const node = decorMesh(
         'Button',
-        new THREE.PlaneGeometry(button.radius * 2.6, button.radius),
+        new THREE.PlaneGeometry(button.radius * 3.2, button.radius * 1.4),
         this.artMaterial({
-          map: plateTexture(`plate-${i}`, 72, 26),
+          map: plateTexture(`plate-${i}`, 96, 40),
           transparent: true,
           depthWrite: false,
         })
       );
-      node.position.set(button.x, button.y + 6, 2);
+      node.position.set(button.x, button.y + 4, 2);
       this.stage?.add(node);
       this.buttonNodes.push({ node, button });
     });

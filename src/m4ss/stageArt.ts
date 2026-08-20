@@ -1986,36 +1986,70 @@ export function gateTexture(seed: string, w = 40, h = 590): THREE.CanvasTexture 
  * stone anvil that visibly belongs to the floor. Drawn wider than tall; the rig sinks the
  * whole sprite into its socket when pressed, so the art needs no pressed state.
  */
-export function plateTexture(seed: string, w = 72, h = 26): THREE.CanvasTexture {
+export function plateTexture(seed: string, w = 96, h = 40): THREE.CanvasTexture {
+  /*
+   * Redrawn in the redo: at game scale the old anvil-and-dome read as a yellow dash on
+   * the floor - an interactable with less drawn identity than a mushroom. A power plate
+   * is now a small INSTALLATION: a dark socket sunk into the stone, a brass plate with
+   * riveted corners sitting proud of it, and the amber indicator dome centred on top -
+   * the stage's one reserved artifice colour, on the one thing that asks to be pressed.
+   * The rig sinks the whole sprite on press, so the art still needs no second state.
+   */
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(w, h);
   const cx = w / 2;
 
-  // The stone anvil: a trapezoid base, lit on top like every ledge in the stage.
+  // The socket: a dark recess with a lit forward lip, wider than the plate.
+  g.fillStyle = mixHex(PAL.voidDeep, '#000000', 0.3);
+  g.fillRect(2, h - 10, w - 4, 10);
+  g.fillStyle = mixHex(PAL.stoneMid, PAL.stoneLit, 0.5);
+  g.fillRect(2, h - 10, w - 4, 2);
   g.fillStyle = PAL.stoneDark;
-  g.fillRect(4, h - 8, w - 8, 8);
-  g.fillStyle = PAL.stoneMid;
-  g.fillRect(7, h - 10, w - 14, 4);
+  g.fillRect(0, h - 4, w, 4);
 
-  // The cap: a shallow dome of warm light, brightest at the centre.
-  const capW = w - 26;
-  for (let i = 0; i < 4; i++) {
-    const inset = i * 3;
+  // The plate: brass, shaded in three bands, riveted at the corners.
+  const plateW = w - 22;
+  const plateH = 12;
+  const py = h - 8 - plateH;
+  const brassDark = mixHex(PAL.rustMid, PAL.lampWarm, 0.25);
+  const brassMid = mixHex(PAL.rustLit, PAL.lampWarm, 0.35);
+  const brassLit = mixHex(PAL.lampWarm, PAL.rustLit, 0.55);
+  g.fillStyle = brassDark;
+  g.fillRect(Math.round(cx - plateW / 2), py, plateW, plateH);
+  g.fillStyle = brassMid;
+  g.fillRect(Math.round(cx - plateW / 2) + 1, py + 1, plateW - 2, Math.round(plateH * 0.5));
+  g.fillStyle = brassLit;
+  g.fillRect(Math.round(cx - plateW / 2) + 1, py + 1, plateW - 2, 2);
+  // Rivets, 2x2 so they survive the scale.
+  g.fillStyle = mixHex(PAL.rustDark, '#000000', 0.3);
+  for (const rx of [cx - plateW / 2 + 3, cx + plateW / 2 - 5]) {
+    g.fillRect(Math.round(rx), py + 2, 2, 2);
+    g.fillRect(Math.round(rx), py + plateH - 4, 2, 2);
+  }
+
+  // The indicator dome: amber, stepped, with a bright heart - "warm, wants weight".
+  const capW = Math.round(w * 0.34);
+  for (let i2 = 0; i2 < 4; i2++) {
+    const inset = i2 * Math.max(2, Math.round(capW * 0.09));
     g.fillStyle = [
       mixHex(PAL.lampWarm, PAL.rustDark, 0.45),
       mixHex(PAL.lampWarm, PAL.rustDark, 0.2),
       PAL.lampWarm,
-      mixHex(PAL.lampWarm, '#ffffff', 0.35),
-    ][i];
-    const y = h - 10 - 4 - i * 2;
-    g.fillRect(Math.round(cx - capW / 2 + inset), y, Math.round(capW - inset * 2), h - 10 - y);
+      PAL.lampCore,
+    ][i2];
+    const y2 = py - 5 - i2 * 2;
+    g.fillRect(Math.round(cx - capW / 2 + inset), y2, Math.round(capW - inset * 2), py - y2);
   }
 
-  // Two anchor bolts, dark, so the plate reads as fixed to the floor rather than resting.
-  g.fillStyle = mixHex(PAL.stoneDark, '#000000', 0.4);
-  g.fillRect(6, h - 6, 3, 3);
-  g.fillRect(w - 9, h - 6, 3, 3);
-  void rng;
+  // Wear: two scuffs across the plate where things have landed on it.
+  g.fillStyle = brassDark;
+  g.fillRect(Math.round(cx + range(rng, -plateW * 0.3, plateW * 0.3)), py + 4, 5, 1);
+  g.fillRect(Math.round(cx + range(rng, -plateW * 0.3, plateW * 0.3)), py + 7, 4, 1);
+
+  // Moss creeping onto the socket's edges - everything here is being taken back.
+  g.fillStyle = PAL.mossDark;
+  g.fillRect(2, h - 10, Math.round(range(rng, 4, 9)), 2);
+  g.fillRect(w - 2 - Math.round(range(rng, 4, 9)), h - 10, Math.round(range(rng, 4, 9)), 2);
 
   return pixelTexture(c);
 }
