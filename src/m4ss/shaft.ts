@@ -238,6 +238,14 @@ export const THE_SHAFT: World = {
     /*
      * Bolted to the door it opens, standing upright, on the face the player arrives at.
      *
+     * STRUCK ON THE ARC, not thrown at. This was described here as the target of a fling and
+     * that was wrong, and the wrong description cost a stage: read as a throw, it invites
+     * moving the growth, and the growth's position is the mechanism. g6 hangs at 400 with a
+     * rope of 70, so the west edge of a swinging body reaches x 295 - inside this button's
+     * 256..316. The player builds a revolution and the body itself hammers the plate as it
+     * comes round. Slide the growth 55px right, as was tried, and the body reaches 350: the
+     * button is never touched and the stage cannot be finished. See the harness.
+     *
      * It used to hang in mid-air thirty pixels east of the gate, lying flat like the floor
      * plates - which said STAND ON ME about the one control in the game you are meant to
      * HIT. Mounted on the door and turned upright it states its own rule: a switch on the
@@ -295,7 +303,7 @@ export const THE_SHAFT: World = {
    * anchored by where it CLOSES; the stroke belongs above that, not below.
    */
   crushers: [
-    { x: 560, y: 210, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0, at: 0 },
+    { x: 615, y: 210, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0, at: 0 },
   ],
 
   /**

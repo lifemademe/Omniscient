@@ -384,6 +384,56 @@ console.log('\n=== M4SS STAGE TWO ===\n');
   check('and that opens the heavy gate', fast.world.gates.find((g) => g.id === 'w2')!.open);
 }
 
+// ---------------------------------------------------------------- the finale, actually swung
+{
+  /*
+   * A revolution on g6 must HAMMER the heavy button as it comes round.
+   *
+   * The force check above fires a body at the button from a standing start, which proves the
+   * button's threshold and nothing about whether the stage's last clause is reachable. This
+   * is that clause: the west edge of g6's sweep has to fall inside the button, and the body
+   * has to be moving fast enough when it gets there.
+   *
+   * Unprotected until now, and it went unnoticed for exactly as long. Sliding the growth 55px
+   * right - which looks like a composition tweak - moves the sweep's west edge from 295 to
+   * 350 and the button spans 256..316, so the plate is simply never touched and the last door
+   * never opens. The stage stays finishable now or this check goes red.
+   */
+  const st = makeState(freshShaft(), START_MASS);
+  const g6 = st.world.anchors.find((a) => a.id === 'g6')!;
+  const button = st.world.buttons.find((b) => b.id === 'heavy')!;
+  const rope = g6.rope ?? 70;
+  place(st, g6.x, g6.y + rope + 30);
+  for (const p of st.particles) p.px = p.x + 150 * TUNING.dt;
+
+  let westmost = Infinity;
+  run(st, 14.0, (s) => {
+    for (const q of owned(s)) westmost = Math.min(westmost, q.x);
+    if (!s.attached) return { move: 0 as const, anchor: g6, recall: false };
+    const body = owned(s);
+    const c = centroid(body);
+    let vx = 0;
+    let vy = 0;
+    for (const q of body) {
+      vx += q.x - q.px;
+      vy += q.y - q.py;
+    }
+    const tx = c.y - g6.y;
+    const ty = -(c.x - g6.x);
+    const tl = Math.hypot(tx, ty) || 1;
+    const along = ((vx / body.length) * (tx / tl) + (vy / body.length) * (ty / tl)) / TUNING.dt;
+    return { move: (Math.abs(along) > 60 ? (along >= 0 ? 1 : -1) : 1) as 1 | -1, anchor: g6, recall: false };
+  });
+
+  check(
+    "the sweep's west edge falls inside the heavy button",
+    westmost < button.x + button.radius,
+    `body reaches x ${westmost.toFixed(0)}, button spans ${button.x - button.radius}..${button.x + button.radius}`
+  );
+  check('and a built revolution presses it', button.pressed);
+  check('which opens the last door', st.world.gates.find((g) => g.id === 'w2')!.open);
+}
+
 // ---------------------------------------------------------------- the 360 is one speed
 {
   /*
