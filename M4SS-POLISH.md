@@ -480,11 +480,18 @@ its particles slightly overlapped; wake it and overlap resolution springs it apa
 exactly the "forces some others to fly away" in the report. Recall now builds a SET of the
 ids it actually called, and only those wake.
 
-**Nothing was blocking stage two.** Measured: a full body walking east stalls at x 827,
-which is the wall at 860; a body shed to 16 walks under it and presses the button. The wall
-is a FILTER and it was working. What was missing is that the game only ever said so in one
-line of small text in the corner of the HUD, and a player standing at an obstacle is looking
-at the obstacle. There is now a plate at the gap itself - "TOO BIG FOR THE GAP / HOLD SPACE
-TO SHED BELOW 25" - which appears only while the body is both too big and near enough to be
-trying. **An invisible rule is indistinguishable from a bug**, and this is the second time
-this stage has taught that lesson.
+**Stage two's blockage - and the plate that was the wrong answer to it.** The measurement
+was sound: a full body walking east stalls at x 827, which is the wall at 860, and a body
+shed to 16 walks under it and presses the button. From that I concluded the wall was a
+filter working as designed and the only fault was that the game never said so, and I hung a
+plate at the gap - "TOO BIG FOR THE GAP / HOLD SPACE TO SHED BELOW 25".
+
+The playtest removed it: something else in this same pass had already fixed the real
+blockage. So the diagnosis was wrong even though every measurement in it was right. What I
+tested was the wall, because the wall was what my hypothesis was about - and a probe aimed
+at a hypothesis can only ever confirm or deny THAT, which is not the same as finding the
+cause. The stall at 827 was real and it was not what the player was hitting.
+
+**The lesson is narrower than the one I wrote down and more useful: a measurement that
+confirms your hypothesis is not a diagnosis.** The plate is gone. The HUD note stays,
+because that one costs nothing and was there before.
