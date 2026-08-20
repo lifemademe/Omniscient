@@ -902,5 +902,80 @@ console.log('\n=== M4SS STAGE ONE ===\n');
   );
 }
 
+// ---------------------------------------------------------------- reaching for what you cannot have
+{
+  /*
+   * Clicking a growth that is out of range while falling must cost nothing but the click.
+   *
+   * Two faults were reported as one: "the mass floats an unreasonable distance to the growth
+   * and connects", and "sometimes the mass splits into two". Both lived in the same block.
+   * The reach force drags particles out along the tendril with their weight cancelled
+   * EXACTLY, which is right for a grab you can make and was being applied to grabs you
+   * cannot - so half the creature hung weightless in mid-air, drifting after the growth
+   * until the fall brought the rest of the body into range. And an over-strained tendril
+   * disowned every particle in the reach, which is a split nobody asked for.
+   *
+   * Giving that arm weight instead was tried and measured worse: pulled to different
+   * stations along a 212px line, it sagged and came apart into eight pieces.
+   */
+  const reachFall = (withAnchor: boolean) => {
+    const s = makeState(freshLab(), START_MASS);
+    const g = s.world.anchors[1];
+    const at = home(s);
+    for (const p of s.particles) {
+      p.x += g.x - 420 - at.x;
+      p.px += g.x - 420 - at.x;
+      p.y += g.y - 60 - at.y;
+      p.py += g.y - 60 - at.y;
+    }
+    const y0 = home(s).y;
+    let pieces = 1;
+    run(s, 0.8, (st) => {
+      pieces = Math.max(pieces, visualPieces(owned(st)));
+      return { move: 0 as const, anchor: withAnchor ? g : null, recall: false };
+    });
+    return { fell: home(s).y - y0, pieces, kept: mass(s) };
+  };
+  const plain = reachFall(false);
+  const reaching = reachFall(true);
+  check(
+    'reaching for an out-of-range growth does not hold the body up',
+    Math.abs(plain.fell - reaching.fell) < 12,
+    `fell ${plain.fell.toFixed(0)}px falling plainly, ${reaching.fell.toFixed(0)}px while reaching`
+  );
+  check(
+    'and it costs no mass',
+    reaching.kept === START_MASS,
+    `kept ${reaching.kept} of ${START_MASS}`
+  );
+
+  /*
+   * And the snap itself. Six seconds of holding a growth far out of range: the tendril must
+   * strain, give up and retract, over and over, without ever dividing the creature. Only a
+   * press and the player's own Space may do that.
+   */
+  const strained = makeState(freshLab(), START_MASS);
+  const far = strained.world.anchors[1];
+  {
+    const at = home(strained);
+    for (const p of strained.particles) {
+      p.x += far.x - 500 - at.x;
+      p.px += far.x - 500 - at.x;
+      p.y += far.y + 40 - at.y;
+      p.py += far.y + 40 - at.y;
+    }
+  }
+  let worst = 1;
+  run(strained, 6.0, (st) => {
+    worst = Math.max(worst, visualPieces(owned(st)));
+    return { move: 0 as const, anchor: far, recall: false };
+  });
+  check(
+    'an over-reach never splits the creature',
+    mass(strained) === START_MASS && worst <= 2,
+    `kept ${mass(strained)} of ${START_MASS}, worst ${worst} piece(s), ${strained.snapped} snap(s)`
+  );
+}
+
 console.log(failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);

@@ -18,6 +18,7 @@ import {
   centroid,
   components,
   crusherRect,
+  loose,
   makeState,
   mass,
   owned,
@@ -651,6 +652,72 @@ console.log('\n=== M4SS STAGE TWO ===\n');
     'holding nothing winds the swing down',
     after < before * 0.6,
     `peak ${before.toFixed(1)} rad/s, then ${after.toFixed(1)} after four seconds of no input`
+  );
+}
+
+// ---------------------------------------------------------------- the hammer's rhythm and its bite
+{
+  /*
+   * A hammer is not a metronome. It is winched up against its own weight, it hangs, and
+   * then it falls - and the falling is the part with the fear in it. The old cosine was
+   * symmetric and dwelt at both ends, so the gap it opened was the same event as the gap it
+   * closed and there was no moment that read as "now".
+   */
+  const timed = makeState(freshShaft(), START_MASS);
+  const press = timed.world.crushers![0];
+  place(timed, 100, 620);
+  let rising = 0;
+  let hanging = 0;
+  let dropping = 0;
+  let prev = press.at;
+  run(timed, press.period, () => {
+    const d = press.at - prev;
+    if (d < -0.01) rising += TUNING.dt;
+    else if (d > 0.01) dropping += TUNING.dt;
+    else hanging += TUNING.dt;
+    prev = press.at;
+    return IDLE;
+  });
+  check(
+    'the hammer is slow up and quick down',
+    rising > dropping * 2.5,
+    `${rising.toFixed(2)}s rising against ${dropping.toFixed(2)}s dropping`
+  );
+  check(
+    'and hangs at the top long enough to run under',
+    hanging > 0.7,
+    `${hanging.toFixed(2)}s hanging`
+  );
+
+  /*
+   * And it has to MATTER. Measured before this pass: one full pass took a body from 40 to 31
+   * and then took nothing ever again, while reaching the stage's last growth from the
+   * corridor needs 120px - 23 mass. Being hammered cost nine grams and changed nothing about
+   * what you could still do, which is scenery with a sound effect rather than a hazard.
+   *
+   * The mass is shed, never destroyed, so the answer to being crushed is to go back and call
+   * yourself home. That pairing is what lets the bite be this big without being cruel.
+   */
+  const hit = makeState(freshShaft(), START_MASS);
+  const head = hit.world.crushers![0];
+  const g6 = hit.world.anchors.find((a) => a.id === 'g6')!;
+  place(hit, head.x + head.w / 2, 640);
+  run(hit, 4.0, () => IDLE);
+  const needed = Math.hypot(440 - g6.x, 640 - g6.y);
+  check(
+    'being hammered costs enough to matter',
+    reachOf(hit) < needed,
+    `left with ${mass(hit)} mass and ${reachOf(hit).toFixed(0)}px of reach; the last growth needs ${needed.toFixed(0)}px`
+  );
+  check(
+    'and every gram of it is lying there to be recalled',
+    loose(hit).length === START_MASS - mass(hit) && loose(hit).length > 0,
+    `${loose(hit).length} shed, ${mass(hit)} kept`
+  );
+  check(
+    'and it never takes the last of you',
+    mass(hit) >= TUNING.crushFloor,
+    `floor is ${TUNING.crushFloor}, left ${mass(hit)}`
   );
 }
 

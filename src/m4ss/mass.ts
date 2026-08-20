@@ -506,6 +506,20 @@ export const TUNING = {
    * player, it must not leave them unable to play the level.
    */
   crushFloor: 20,
+  /**
+   * The fraction of the creature a press takes when it catches you.
+   *
+   * Measured backwards from the thing it has to accomplish. Reaching stage two's last growth
+   * from the corridor floor is 120px, which is 23 mass; a body of 40 that keeps 55% of
+   * itself is 22, just under - so being hammered actually stops you, and the answer is to go
+   * back and call your mass home rather than to shrug and carry on. Before this, a full pass
+   * of the press took nine grams and then nothing ever again.
+   *
+   * Floored at crushFloor, and the mass is shed rather than destroyed. That pairing is what
+   * lets the bite be this big without being cruel: the press can take almost half of you, and
+   * all of it is lying on the floor waiting for Q.
+   */
+  crushBite: 0.45,
   /** How long a critter dwells at each end of its beat, in seconds. */
   critterPause: 0.6,
   /**
@@ -1459,21 +1473,53 @@ export function step(state: MassState, input: Input): MassState {
         mine.sort(
           (a, b) => Math.hypot(a.x - tipX, a.y - tipY) - Math.hypot(b.x - tipX, b.y - tipY)
         );
-        for (let i = 0; i < cost; i++) {
-          const p = mine[i];
-          const along = state.tendril * (1 - i / Math.max(1, cost));
-          const gx = home.x + (dx / span) * along - p.x;
-          const gy = home.y + (dy / span) * along - p.y;
-          const d = Math.hypot(gx, gy) || 1;
-          p.ax += (gx / d) * T.reach;
-          p.ay += (gy / d) * T.reach - T.gravity;
+        /*
+         * An arm reaching for something it cannot have does not carry the body.
+         *
+         * The reach force drags `cost` particles out along the tendril with their weight
+         * cancelled exactly, and for a grab you CAN make that is right - the arm shoots out
+         * and the latch is crisp. Applied to a grab you cannot make, it was the playtest's
+         * "the mass floats an unreasonable distance to the growth and connects": clicking a
+         * growth far out of range while falling hung half the creature weightless in
+         * mid-air, stretched toward it, drifting after it until the fall finally brought the
+         * rest of the body into range and it connected. Measured, the body fell 204px in
+         * eight tenths of a second where free fall is 480.
+         *
+         * Letting that arm have weight instead was tried and is worse: the particles are
+         * pulled to different stations along a 212px line, so with gravity on them the line
+         * sags and comes apart - the same probe measured the body in EIGHT pieces, which is
+         * the other half of what was reported.
+         *
+         * So an out-of-range reach is a reach and nothing else. The tendril still extends,
+         * the player still sees the arm go out and fail, and the body falls exactly as it
+         * would have. The growth stays where it is because it was always out of reach.
+         */
+        if (span <= limit) {
+          for (let i = 0; i < cost; i++) {
+            const p = mine[i];
+            const along = state.tendril * (1 - i / Math.max(1, cost));
+            const gx = home.x + (dx / span) * along - p.x;
+            const gy = home.y + (dy / span) * along - p.y;
+            const d = Math.hypot(gx, gy) || 1;
+            p.ax += (gx / d) * T.reach;
+            p.ay += (gy / d) * T.reach - T.gravity;
+          }
         }
 
         if (span > limit && state.tendril >= limit - 0.5) {
           state.strain += dt;
           if (state.strain > T.snapAfter) {
-            for (let i = 0; i < cost; i++) state.owned.delete(mine[i].id);
-            state.snapped += cost;
+            /*
+             * The arm lets go - and takes NOTHING with it.
+             *
+             * It used to disown every particle in the reach, which is where the playtest's
+             * "sometimes the mass splits into two" came from: over-reaching for a growth
+             * tore an arm off, and nobody reads a failed grab as a decision to shed. Only a
+             * press and the player's own Space may divide this creature. A snap is now
+             * purely a failure to connect: the tendril retracts, the reach is spent until
+             * the button is released, and the body is whole.
+             */
+            state.snapped += 1;
             state.tendril = 0;
             state.strain = 0;
             state.broken = true;
@@ -2302,9 +2348,36 @@ export function step(state: MassState, input: Input): MassState {
    */
   for (const c of world.crushers ?? []) {
     const cycle = (state.time / c.period + c.phase) % 1;
-    // Cosine, so it dwells at both ends. A linear press has no moment where the gap is open
-    // and waiting, and a timing puzzle needs one.
-    c.at = c.travel * (0.5 - 0.5 * Math.cos(cycle * Math.PI * 2));
+    /*
+     * WINCH UP, HANG, DROP. Not a cosine.
+     *
+     * A cosine is symmetric and dwells at both ends, which makes a press a metronome: it is
+     * exactly as slow arriving as it is leaving, so there is no moment that reads as "now",
+     * and the gap it opens is the same event as the gap it closes. A hammer is not
+     * symmetric. It is hauled up against its own weight, it hangs there, and then it falls -
+     * and the falling is the part with the fear in it.
+     *
+     * Fifty-five percent of the cycle winching up, thirty hanging, fifteen dropping. At the
+     * shaft's 3.4s period that is a 1.9s rise, a full second of open door, and a half-second
+     * drop. The rise eases out so the head settles rather than clanging into its stop; the
+     * drop is quadratic, because a falling weight accelerates and a hammer that descends at
+     * constant speed reads as a lift.
+     */
+    const RISE = 0.55;
+    const HANG = 0.85;
+    let phase: number;
+    if (cycle < RISE) {
+      // Up, easing to a stop. Smoothstep on the way, so the top is approached and not hit.
+      const t = cycle / RISE;
+      phase = 1 - t * t * (3 - 2 * t);
+    } else if (cycle < HANG) {
+      phase = 0;
+    } else {
+      // Down, accelerating. The last frames of this are the fastest thing in the room.
+      const t = (cycle - HANG) / (1 - HANG);
+      phase = t * t;
+    }
+    c.at = c.travel * phase;
     const rect = crusherRect(c);
     for (const p of particles) {
       if (p.x <= rect.x || p.x >= rect.x + rect.w) continue;
@@ -2335,28 +2408,50 @@ export function step(state: MassState, input: Input): MassState {
         continue;
       }
       /*
-       * Crushed. Ownership is what is lost, not the particle - it squirts out along the
-       * press's long axis as loose mass and can be recalled with Q once the way is clear.
+       * Crushed - and the whole body pays, not just the pixels that were under the head.
        *
-       * But a press will NOT take the last of you. Below `crushFloor` the body stops
-       * shedding under a press entirely, and the number is chosen from what the player
-       * needs rather than from what looks fair: `crushFloor` times `reachPerMass` is the
-       * reach of the smallest body that can still cross to a growth, so a creature that
-       * has been mangled can always still play. Under that line a press carries the body
-       * along instead of biting it - which also removes the worst failure this stage
-       * could produce, a slime pinned under a rhythm it no longer has the mass to escape.
+       * Only disowning the trapped particles was measured to be toothless: one full pass of
+       * the shaft's press took a body from 40 to 31 and then took nothing ever again, while
+       * reaching the stage's last growth from the corridor needs 120px, which is 23 mass.
+       * Being hammered cost nine grams and changed nothing about what you could still do,
+       * which is not a hazard, it is scenery with a sound effect.
+       *
+       * So a catch sheds a FRACTION of the creature (see crushBite): enough that a hit
+       * drops you below what the finale needs, so the answer to being crushed is to go back
+       * for yourself. The mass is shed, never destroyed - it squirts out along the press's
+       * long axis and Q calls it home - which is the same bargain the splitting wall makes,
+       * and the reason a hit can be this expensive without being cruel.
        */
       if (owned(state).length <= T.crushFloor) {
         p.px = p.x;
         p.py = p.y;
         continue;
       }
-      state.owned.delete(p.id);
-      const spill = 90 + (p.id % 7) * 12;
-      if (c.axis === 'x') {
-        p.py = p.y + (p.id % 2 ? spill : -spill) * dt;
-      } else {
-        p.px = p.x + (p.id % 2 ? spill : -spill) * dt;
+      const spill = (q: Particle): void => {
+        const push = 90 + (q.id % 7) * 12;
+        if (c.axis === 'x') {
+          q.py = q.y + (q.id % 2 ? push : -push) * dt;
+        } else {
+          q.px = q.x + (q.id % 2 ? push : -push) * dt;
+        }
+      };
+      const body = owned(state);
+      const bite = Math.max(
+        1,
+        Math.min(body.length - T.crushFloor, Math.round(body.length * T.crushBite))
+      );
+      /*
+       * The particles nearest the head go first, so the mass visibly leaves from where the
+       * blow landed rather than evaporating out of the far side of the creature.
+       */
+      const hit = { x: p.x, y: p.y };
+      body.sort(
+        (a, b) =>
+          Math.hypot(a.x - hit.x, a.y - hit.y) - Math.hypot(b.x - hit.x, b.y - hit.y)
+      );
+      for (let i = 0; i < bite; i++) {
+        state.owned.delete(body[i].id);
+        spill(body[i]);
       }
     }
   }

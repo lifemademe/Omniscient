@@ -920,3 +920,44 @@ returned to the pump and to gravity.
 | 84b | everything downstream re-measured | wind-down now 9.1 to 0.1 in four seconds; turning reads 1.7/1.7/1.7 across 4, 8 and 14 second drives | The honest physics is MORE consistent than the phantom: the old check could not hold a 1.2 rad/s spread, the new one holds 0.0. |
 | 84c | the finale window, restated | the throw lands from 4 of 23 sampled release points; the bar drops from a quarter to three | The old 14/23 was the phantom slingshot's barn door. Sixty degrees of circle aimed under 0.35x slow motion is a finale-grade skill shot; raising the energy ceiling to 3.3 was tried and bought one point - the window is shaped by trajectory, not starved of speed. Ceiling stays 2.7. |
 | 84d | the guard promoted | the turning bar rises from 0.25 revs per window to 1.2 | 0.25 guarded the disease; 1.2 locks in the cure. |
+
+## Pass 85 - the hammer gets teeth, the reach gets honest
+
+Four reports, and two of them turned out to be one bug wearing two faces.
+
+**The hammer's rhythm.** A cosine is symmetric and dwells at both ends, which makes a press a
+metronome: exactly as slow arriving as leaving, no moment that reads as "now", and the gap it
+opens is the same event as the gap it closes. It is winched now - 55% of the cycle rising on
+a smoothstep that settles rather than clangs, 30% hanging, 15% dropping on a quadratic,
+because a falling weight accelerates. At the shaft's 3.4s period: 1.87s up, 1.03s of open
+door, 0.50s of drop.
+
+**The hammer's bite.** Measured first, and the measurement is the whole argument: one full
+pass took a body from 40 to 31 and then took nothing ever again, while reaching the stage's
+last growth from the corridor needs 120px - 23 mass. Being hammered cost nine grams and
+changed nothing about what you could still do. That is scenery with a sound effect. A catch
+now sheds 45% of the creature, from the particles nearest the blow, floored at crushFloor:
+40 becomes 20, which is 106px of reach against the 120 the finale needs. The answer to being
+crushed is to go back and call yourself home - and every gram is lying there, because the
+mass is shed and never destroyed. Same bargain the splitting wall makes.
+
+**The float and the split were the same block.** The reach force drags particles out along
+the tendril with their weight cancelled EXACTLY - right for a grab you can make, and it was
+being applied to grabs you cannot. Half the creature hung weightless in mid-air, drifting
+after an out-of-range growth until the fall brought the rest of the body into range and it
+connected. And an over-strained tendril disowned every particle in the reach, which is a
+split nobody asked for.
+
+Giving that arm weight was tried and measured WORSE: pulled to different stations along a
+212px line, it sagged and came apart into eight pieces - the same fault, louder. An
+out-of-range reach is now a reach and nothing else. The tendril extends, the player watches
+it fail, and the body falls exactly as it would have: 205px in eight tenths of a second,
+against 205px falling plainly. A 0.7px difference.
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 85a | winch, hang, drop | piecewise profile replacing the cosine | The drop is the part with the fear in it. |
+| 85b | `crushBite: 0.45` | a catch sheds a fraction of the body, nearest the blow first | Measured backwards from the finale's 120px: a hit has to drop you below what you need, or it is not a hazard. |
+| 85c | out-of-range reach carries nothing | the reach force applies only when `span <= limit` | 480px was the textbook free fall; this sim has drag and 205 is its real one. Reaching now costs exactly the click. |
+| 85d | a snap takes no mass | `owned.delete` removed from the tendril break | Only a press and the player's own Space may divide this creature. |
+| 85e | seven checks | rhythm, hang, bite, recall, floor, no-float, no-split | Including the negative one that matters: an over-reach held for six seconds keeps all forty grams and stays one piece. |
