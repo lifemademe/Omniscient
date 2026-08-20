@@ -1145,9 +1145,17 @@ export class M4SSRig extends ENGINE.SceneNode {
      */
     this.latchRing = decorMesh(
       'LatchRing',
-      // 112 across, down from 150: the ring should sit just outside the lantern rather
-      // than enclose a region of the room around it.
-      new THREE.PlaneGeometry(112, 112),
+      /*
+       * 84 across. The ring is now barely wider than the lantern it marks, which is the
+       * point: at every larger size it was drawing a circle in the ROOM, and the eye
+       * reads a circle in a room as a place rather than as a label. Hugging the object,
+       * it stops being scenery and becomes punctuation.
+       *
+       * The band thins with it - it is a fraction of the texture, and the texture is
+       * being displayed smaller - which is the right direction anyway. A hairline that
+       * pulses is easier to ignore until you want it than a stroke that sits there.
+       */
+      new THREE.PlaneGeometry(84, 84),
       this.artMaterial({
         map: ringTexture(128),
         transparent: true,
