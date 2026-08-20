@@ -1308,84 +1308,90 @@ export function atmosphereTexture(seed: string, w = 1024, h = 576): THREE.Canvas
 }
 
 /**
- * The bush that stands in front of a growth.
+ * The growth, drawn as the LANTERN.
  *
- * The growths were red torus rings - a programmer's marker for "grabbable here". The
- * reference answer is a plant: a clump of broad leaves and fronds with a bright core, drawn
- * once and placed in front of every anchor. The core stays readable as a target because it
- * is the brightest thing in the sprite and the leaves radiate away from it, which is exactly
- * how the reference sheet draws its interactables.
+ * The playtest pointed at one of the backdrop lamps and said: make the growth that. It is
+ * the right call, and for a reason worth stating - the lamp is the only object in the
+ * stage that already reads correctly at a glance from any distance, because it is built
+ * the way a light is built rather than the way a plant is: a small hot core, a soft body
+ * of glow around it, and nothing else competing. Everything the growth has to do (be
+ * findable, be unmistakable, say "alive") is what a lamp does by nature.
  *
- * Drawn on a transparent canvas so it can sit as a billboard over the level.
+ * So this is a hanging lamp of living tissue. A stepped halo, an inner membrane, and a
+ * bright vertical filament at the heart - the same anatomy as the lantern, in the
+ * reserved chartreuse instead of the reserved amber. Dead cultures keep the shape and
+ * lose the fire: ember red, no filament, the glow gone cold.
+ *
+ * The halo steps are drawn as octagons rather than circles. At this size a stepped circle
+ * spends its whole silhouette on the eight pixels that give the game away, and an octagon
+ * is what those steps want to be anyway - it reads as a lantern's faceted shade.
  */
 export function bushTexture(seed: string, size = 160, dead = false): THREE.CanvasTexture {
-  /*
-   * A POD, not a bush.
-   *
-   * The old growth was a pixel shrub - layered leaves, purple caps, a spray of roots - and
-   * the playtest's verdict was that it read as scenery: "make the growth a simple shape,
-   * remove the pixel bushes art". It was right, and for a reason worth writing down: this
-   * is the single most important object on the screen, the thing the whole game asks you
-   * to find and click, and detail is the enemy of that. A silhouette the eye can name in
-   * one frame beats any amount of rendering (the bible's P1).
-   *
-   * So: one bulb. A dark rim, a banded body, a bright heart, and a short stem to say which
-   * way is up. Live is the reserved chartreuse; dead is the ember red, same shape, so the
-   * two read as states of one object rather than as two different plants.
-   */
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(size, size);
-  const cx = size / 2;
-  const cy = size / 2;
-  // Smaller, per the ask: the pod was reading as a lily pad at 0.27 of the sprite. The
-  // sprite plane shrinks with it in the rig, so this is a real size cut, not a crop.
-  const r = size * 0.22;
+  const cx = Math.round(size / 2);
+  const cy = Math.round(size / 2);
 
-  /*
-   * Brighter, per the ask. The live pod now walks from a mid green straight up to the
-   * slime's own glow, so the thing you have to find is lit from the inside - it is a
-   * cultivated organism running on the lab's feed, and when the feed reaches it, it
-   * SHOWS. The dead pod keeps the same four-step structure in ember red so the two read
-   * as one object in two states.
-   */
-  const bands = dead
-    ? ['#5a2018', '#8f3524', '#b8492c', PAL.rustLit]
-    : [PAL.mossMid, PAL.mossLit, PAL.slime, PAL.slimeGlow];
-  const heart = dead ? mixHex('#c4553f', PAL.lampWarm, 0.5) : mixHex(PAL.slimeGlow, '#ffffff', 0.5);
-
-  // The stem, first, so the bulb sits over its top.
-  g.fillStyle = dead ? '#2a1a14' : mixHex(PAL.vineMid, PAL.leafDark, 0.5);
-  g.fillRect(Math.round(cx - 3), Math.round(cy), 6, Math.round(r * 1.5));
-  // Two short leaves off the stem - the only detail the shape keeps.
-  g.fillRect(Math.round(cx - 14), Math.round(cy + r * 0.9), 11, 3);
-  g.fillRect(Math.round(cx + 4), Math.round(cy + r * 1.15), 11, 3);
-
-  /*
-   * The bulb, as concentric bands drawn from the outside in. Each band is a filled disc,
-   * so the silhouette is a clean circle and the interior is stepped - no gradient, no
-   * stray pixels outside the rim.
-   */
-  const disc = (radius: number, fill: string): void => {
+  /** One filled octagon of radius r - the halo's step shape. */
+  const facet = (r: number, fill: string): void => {
     g.fillStyle = fill;
-    for (let dy = -radius; dy <= radius; dy++) {
-      const half = Math.round(Math.sqrt(Math.max(0, radius * radius - dy * dy)));
-      if (half > 0) g.fillRect(Math.round(cx - half), Math.round(cy + dy), half * 2, 1);
+    const cut = Math.round(r * 0.42);
+    for (let dy = -r; dy <= r; dy++) {
+      const ay = Math.abs(dy);
+      let half = r;
+      if (ay > r - cut) half = r - (ay - (r - cut));
+      if (half <= 0) continue;
+      g.fillRect(cx - half, cy + dy, half * 2, 1);
     }
   };
+
+  const halo = dead
+    ? ['#2a1210', '#4a1c14', '#6b2a1c']
+    : [
+        mixHex(PAL.leafDark, PAL.voidDeep, 0.5),
+        mixHex(PAL.mossDark, PAL.leafDark, 0.4),
+        PAL.mossDark,
+      ];
+  const body = dead
+    ? ['#8f3524', mixHex('#c4553f', PAL.lampWarm, 0.25)]
+    : [PAL.mossMid, PAL.mossLit];
+  const coreFill = dead ? mixHex('#c4553f', PAL.lampWarm, 0.45) : PAL.slimeGlow;
+
+  // The halo: three faceted steps, widest and dimmest first.
+  facet(Math.round(size * 0.30), halo[0]);
+  facet(Math.round(size * 0.24), halo[1]);
+  facet(Math.round(size * 0.19), halo[2]);
+  // The membrane: the lamp's shade, where the light is already strong.
+  facet(Math.round(size * 0.145), body[0]);
+  facet(Math.round(size * 0.105), body[1]);
+
   /*
-   * No black outer ring. The first pod carried one and the playtest asked for it gone: a
-   * hard dark rim reads as a UI token - a button, a marker - where this has to read as a
-   * living thing that belongs to the room. What replaces it is one step of the pod's own
-   * darkest green, which still separates the shape from the background without drawing a
-   * line around it.
+   * The filament: a small upright bar of the brightest colour in the palette, with a
+   * one-pixel white heart. This is the whole reason the lantern reads - the eye finds a
+   * hot POINT inside a soft field, which is what a light looks like and what a painted
+   * blob never does.
    */
-  disc(r + 2, bands[0]);
-  bands.forEach((fill, i2) => disc(r * (1 - i2 * 0.19), fill));
-  // The heart, offset up-left toward the key light, and a small specular above it.
-  g.fillStyle = heart;
-  disc(r * 0.26, heart);
-  g.fillStyle = dead ? mixHex(heart, '#ffffff', 0.2) : mixHex(PAL.slimeGlow, '#ffffff', 0.35);
-  g.fillRect(Math.round(cx - r * 0.42), Math.round(cy - r * 0.5), 4, 3);
+  if (!dead) {
+    const fw = Math.max(4, Math.round(size * 0.045));
+    const fh = Math.max(7, Math.round(size * 0.085));
+    g.fillStyle = mixHex(coreFill, PAL.mossLit, 0.35);
+    g.fillRect(cx - fw, cy - fh, fw * 2, fh * 2);
+    g.fillStyle = coreFill;
+    g.fillRect(cx - Math.round(fw * 0.6), cy - Math.round(fh * 0.8), Math.round(fw * 1.2), Math.round(fh * 1.6));
+    g.fillStyle = '#ffffff';
+    g.fillRect(cx - 1, cy - Math.round(fh * 0.45), 2, Math.round(fh * 0.9));
+  } else {
+    // A dead culture keeps a cooling ember where its filament was.
+    g.fillStyle = coreFill;
+    g.fillRect(cx - 3, cy - 4, 6, 8);
+  }
+
+  // The cap: a dark collar at the top where the stalk enters, so the lamp HANGS.
+  const capW = Math.round(size * 0.075);
+  g.fillStyle = dead ? '#2a1a16' : mixHex(PAL.vineMid, PAL.leafDark, 0.45);
+  g.fillRect(cx - capW, cy - Math.round(size * 0.31), capW * 2, Math.round(size * 0.055));
+  g.fillStyle = dead ? '#3a2620' : PAL.vineMid;
+  g.fillRect(cx - Math.round(capW * 0.4), cy - Math.round(size * 0.35), Math.round(capW * 0.8), Math.round(size * 0.06));
   void rng;
 
   return pixelTexture(c);
@@ -2020,6 +2026,56 @@ export function dirtTexture(
     }
   }
 
+  return pixelTexture(c);
+}
+
+/**
+ * The latch ring: a white circle that pulses around whichever growth the player would
+ * catch if they clicked now.
+ *
+ * Drawn as a ring rather than a disc, and in white rather than in any of the stage's
+ * families, because it is the one piece of pure UI left in the frame and it should not
+ * pretend otherwise - the growth says "I am alive", the ring says "I am the one". Two
+ * thicknesses so it survives being scaled: an inner hard ring and an outer soft one.
+ */
+export function ringTexture(size = 128): THREE.CanvasTexture {
+  const { c, g } = surface(size, size);
+  const cx = size / 2;
+  const outer = size / 2 - 2;
+  const inner = outer - Math.max(3, Math.round(size * 0.055));
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const d = Math.hypot(x - cx + 0.5, y - cx + 0.5);
+      if (d > outer || d < inner) continue;
+      // Soft at both edges of the band, solid through its middle.
+      const t = (d - inner) / (outer - inner);
+      const edge = Math.min(t, 1 - t) * 2;
+      g.fillStyle = edge > 0.55 ? '#ffffff' : edge > 0.25 ? '#dfeee8' : '#9fc4b6';
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+  return pixelTexture(c);
+}
+
+/**
+ * One drifting mote, as a sprite rather than as a pixel painted into a sheet.
+ *
+ * The distinction is the whole point. Static motes baked into a texture were removed
+ * twice for reading as dead pixels stuck to the screen; the same motes MOVING read as
+ * air, insects, spores - as the room being alive. So this is a tiny sprite the rig
+ * animates: a soft two-step body so it never has a hard edge at any scale.
+ */
+export function moteTexture(colour: string, size = 8): THREE.CanvasTexture {
+  const { c, g } = surface(size, size);
+  const cx = size / 2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const d = Math.hypot(x - cx + 0.5, y - cx + 0.5) / (size / 2);
+      if (d > 1) continue;
+      g.fillStyle = d < 0.4 ? colour : mixHex(colour, '#000000', 0.55);
+      g.fillRect(x, y, 1, 1);
+    }
+  }
   return pixelTexture(c);
 }
 

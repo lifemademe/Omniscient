@@ -344,3 +344,32 @@ lines removed every dot in both stages at once.
 | 54f | the growths hang | Each anchor carries a dark strand running up out of the top of the frame | An object with no support is a game token, not a thing in a room - and the fiction already says these are cultivated tendrils grown down from above. |
 | 54g | the frame closes at the bottom | A dark bank of earth across the very bottom, in front of the play plane | The top has had a canopy since pass 25 and the corners a vignette, but the bottom ran clean off the screen, so the camera sat outside the room looking in at a strip of floor. |
 | 54h | the pit gets its depth | Acid surface dropped from 8px below the floor line to 48 | At 92 the meniscus continued the ground line and the pits read as bright slabs, not holes. A pit needs dark between its lip and its liquid. |
+
+## Pass 55: the lamp, the ring, and an engine fact worth knowing
+
+**Writing `material.opacity` from the frame loop does not reach the renderer through a
+MeshNode here. Node `visible` and node transforms do.**
+
+Found while the new latch ring refused to appear: it was created, positioned and given a
+pulsing opacity every frame, and never showed - while four flies created three lines later
+and animated by POSITION were on screen immediately. Switching the ring to `visible` plus a
+scale pulse fixed it instantly.
+
+Two things had been quietly broken by the same fault for several passes:
+
+- **The hover halo** has been faded in and out since the pass that added it, so it had
+  never once appeared. That is a fair part of why the playtest kept reporting that growths
+  did not respond to the pointer - the fix "add a halo" was correct and the halo was
+  invisible.
+- **The growth presence halo** was set to opacity 0 when a growth died and kept glowing
+  instead. On a stage whose second clause is telling a live growth from a dead one, that is
+  a mechanic leaking, not a decoration.
+
+Both now use `visible` and scale.
+
+| 55 | the growth IS the lantern | `bushTexture` redrawn as a hanging lamp: three faceted halo steps, a membrane, and a bright upright filament with a white heart; dead keeps the shape and loses the fire | The playtest pointed at a backdrop lamp and said make the growth that. It is the right call - the lamp is the only object in the stage that already reads correctly at any distance, because it is built the way a light is built: a small hot core in a soft field. Everything the growth must do is what a lamp does by nature. |
+| 55b | flies | Four motes orbit every live growth on their own ellipse, speed and phase | These are the motes deleted from `glowTexture` in pass 54, given back their movement. The complaint was never that the stage had specks in it - it was that they were STATIC. Orbiting a light they read as what insects do around a lamp at night, which is the image the growth is now built from. |
+| 55c | air, as real particles | 46 drifting motes with per-mote vectors, sine wobble and wrapping, at z -18 | Restored on the ask, and deliberately BEHIND the play plane so they can never sit on the creature. That placement is the whole difference between air and the dead pixels that got deleted twice. |
+| 55d | proximity latching | Any live growth within reach makes the nearest one to the BODY wear a pulsing white ring; LMB takes whatever is ringed | Point-and-click asked the player to aim at a small target with the same hand that times the release, in a game whose skill is the swing - and it stayed silent until the click, so "can I reach that" was only answered by getting it wrong. Nearest to the body rather than to the pointer: with two ringed, the one you can hold longest is the near one. While hanging, the ring stays on the growth being held. |
+| 55e | the slime goes green | Body #a8e85c, rim, belly, shine and halo all moved into the reserved chartreuse | It sat at #79d9b0, a blue-leaning aqua that read as white against a green room - which is how it kept winning the value test while looking like a bubble rather than like something grown in this lab. Still the brightest thing on screen; simply the brightest GREEN. |
+| 55f | the sign follows the mechanic | HOLD CLICK ON GROWTH becomes HOLD CLICK WHEN RINGED | Telling the player to point at something the game now points at for them is worse than saying nothing. Still no letter M - the 3px font's M is its N. |

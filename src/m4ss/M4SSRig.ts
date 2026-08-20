@@ -43,12 +43,14 @@ import {
   godRayTexture,
   pipeStackTexture,
   markerTexture,
+  moteTexture,
   occluderTexture,
   gateTexture,
   glowTexture,
   interiorFadeTexture,
   plateTexture,
   propTexture,
+  ringTexture,
   setStageTheme,
   THEME_GALLERY,
   THEME_STACK,
@@ -267,6 +269,27 @@ export class M4SSRig extends ENGINE.SceneNode {
   /** Where the backdrop hung its lanterns, in level x. Filled by buildBackdrop, spent by
    * buildLevel's floor pools - light that lands has to know where it came from. */
   private lanternXs: number[] = [];
+  /** The pulsing ring over the growth a click would catch. See chooseTarget. */
+  private latchRing: ENGINE.MeshNode | null = null;
+  /** The growth a click would catch right now - nearest live growth within reach. */
+  private target: Anchor | null = null;
+  /** Flies: small motes orbiting each live growth, animated in the art tick. */
+  private readonly flies: Array<{
+    node: ENGINE.MeshNode;
+    anchor: Anchor;
+    radius: number;
+    speed: number;
+    phase: number;
+    squash: number;
+  }> = [];
+  /** Drifting air motes - a real particle system, not pixels painted into a sheet. */
+  private readonly airMotes: Array<{
+    node: ENGINE.MeshNode;
+    vx: number;
+    vy: number;
+    wobble: number;
+    phase: number;
+  }> = [];
   private vignette: ENGINE.MeshNode | null = null;
   /** Smoothed camera height, in level coordinates. See viewCentre. */
   private cameraY = 0;
@@ -299,15 +322,24 @@ export class M4SSRig extends ENGINE.SceneNode {
    * Emissive carries most of the colour because the slime should glow slightly in a dark
    * facility, and because it makes the body legible before any light is tuned.
    */
+  /*
+   * GREEN, not mint. The body used to sit at #79d9b0 - a blue-leaning aqua that read as
+   * white against a green room, which is how it kept winning the value test while looking
+   * like a bubble rather than like something grown in this lab. The whole creature now
+   * lives in the reserved chartreuse family: the same hue as the culture medium in the
+   * seams, the ooze in the gates and the live growths, because the fiction is that they
+   * are all the same substance. It is still the brightest thing on screen - that is the
+   * hierarchy and it has not moved - it is simply the brightest GREEN.
+   */
   private readonly slimeMaterial = new THREE.MeshStandardMaterial({
-    color: new THREE.Color('#79d9b0'),
+    color: new THREE.Color('#a8e85c'),
     roughness: 0.35,
     metalness: 0.05,
-    emissive: new THREE.Color('#2f9a74'),
+    emissive: new THREE.Color('#5c9a2a'),
     side: THREE.DoubleSide,
   });
   private readonly rimMaterial = new THREE.MeshBasicMaterial({
-    color: new THREE.Color('#2f6b57'),
+    color: new THREE.Color('#3f6b1f'),
     side: THREE.DoubleSide,
   });
   /*
@@ -324,14 +356,14 @@ export class M4SSRig extends ENGINE.SceneNode {
    * and dark for the belly, and the blob is lit from above with no lighting and no UVs.
    */
   private readonly shineMaterial = new THREE.MeshBasicMaterial({
-    color: new THREE.Color('#cdf5e0'),
+    color: new THREE.Color('#e8fbb0'),
     side: THREE.DoubleSide,
     transparent: true,
     opacity: 0.5,
     toneMapped: false,
   });
   private readonly bellyMaterial = new THREE.MeshBasicMaterial({
-    color: new THREE.Color('#3f9a7c'),
+    color: new THREE.Color('#6aa832'),
     side: THREE.DoubleSide,
     transparent: true,
     opacity: 0.55,
@@ -1041,6 +1073,101 @@ export class M4SSRig extends ENGINE.SceneNode {
     }
 
     /*
+     * The latch ring, parked off screen until a growth is in range. One sprite reused for
+     * whichever growth is currently the target - there is only ever one.
+     */
+    this.latchRing = decorMesh(
+      'LatchRing',
+      new THREE.PlaneGeometry(150, 150),
+      this.artMaterial({
+        map: ringTexture(128),
+        transparent: true,
+        opacity: 0.82,
+        depthWrite: false,
+      })
+    );
+    this.latchRing.position.set(-999, -999, 22);
+    this.latchRing.visible = false;
+    this.stage?.add(this.latchRing);
+
+    /*
+     * Flies. Four motes orbiting every live growth on their own ellipse, at their own
+     * speed and phase.
+     *
+     * These are the motes that were deleted from glowTexture, given back their movement.
+     * The complaint about them was never that the stage had specks in it - it was that
+     * the specks were STATIC, painted into a sprite, stuck to the creature like dirt on
+     * the lens. Orbiting a light, they read as the thing insects do around a lamp at
+     * night, which is exactly the image the growth is now built from.
+     */
+    for (const a of world.anchors) {
+      for (let i = 0; i < 4; i++) {
+        const node = decorMesh(
+          'GrowthFly',
+          new THREE.PlaneGeometry(5, 5),
+          this.artMaterial({
+            map: moteTexture('#c8f076'),
+            transparent: true,
+            opacity: 0.85,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          })
+        );
+        node.position.set(a.x, a.y, 21);
+        this.stage?.add(node);
+        this.flies.push({
+          node,
+          anchor: a,
+          radius: 26 + i * 7,
+          speed: 0.5 + i * 0.23,
+          phase: i * 1.7 + a.x * 0.01,
+          squash: 0.45 + i * 0.12,
+        });
+      }
+    }
+
+    /*
+     * The air, as real particles.
+     *
+     * Restored on the playtest's ask, and deliberately BEHIND the play plane (z -18) so
+     * they can never sit on the creature - that is the whole difference between air and
+     * the dead pixels that got deleted twice. Each mote drifts on its own vector with a
+     * slow sine wobble across it, and wraps when it leaves the level, so the room always
+     * has the same amount of life in it without anything being spawned or destroyed.
+     */
+    {
+      const seedRng = ((seed: number) => () => {
+        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+        return seed / 0x7fffffff;
+      })(world.width * 31 + world.height);
+      const count = 46;
+      const mote = moteTexture(this.theme.name === 'gallery' ? '#9fd86a' : '#7fc8d8');
+      for (let i = 0; i < count; i++) {
+        const size = seedRng() > 0.75 ? 5 : 3;
+        const node = decorMesh(
+          'AirMote',
+          new THREE.PlaneGeometry(size, size),
+          this.artMaterial({
+            map: mote,
+            transparent: true,
+            opacity: 0.2 + seedRng() * 0.3,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          })
+        );
+        node.position.set(seedRng() * world.width, seedRng() * world.height, -18);
+        this.stage?.add(node);
+        this.airMotes.push({
+          node,
+          vx: (seedRng() - 0.35) * 9,
+          vy: -4 - seedRng() * 9,
+          wobble: 4 + seedRng() * 9,
+          phase: seedRng() * Math.PI * 2,
+        });
+      }
+    }
+
+    /*
      * The acid at the bottom of every pit.
      *
      * One bath spanning the world, sitting BEHIND the floor masses (z -6, against tile art
@@ -1546,7 +1673,7 @@ export class M4SSRig extends ENGINE.SceneNode {
       'SlimeGlow',
       new THREE.PlaneGeometry(260, 260),
       this.artMaterial({
-        map: glowTexture('slime-glow', '#9ff0c8'),
+        map: glowTexture('slime-glow', '#b9e86a'),
         transparent: true,
         opacity: 0.42,
         blending: THREE.AdditiveBlending,
@@ -1814,45 +1941,113 @@ export class M4SSRig extends ENGINE.SceneNode {
     };
   }
 
-  private grab(event: MouseEvent): void {
-    const world = this.state?.world;
-    if (!world) return;
-    const at = this.toLevel(event);
-    if (!at) return;
-    const wx = at.x;
-    const wy = at.y;
+  /**
+   * Latch onto whatever the ring is on.
+   *
+   * The old rule was POINT AND CLICK: the growth nearest the cursor, within ninety pixels
+   * of it, and within reach. Two things were wrong with it. It asked the player to aim at
+   * a small target with the same hand that has to time a release, in a game whose actual
+   * skill is the swing; and it stayed silent until the click, so the answer to "can I
+   * reach that yet" arrived only after getting it wrong.
+   *
+   * Now the world answers first. Any live growth inside the body's reach is a candidate,
+   * the nearest one to the body wears a pulsing white ring (see chooseTarget), and the
+   * click simply takes it. Aim disappears as a skill and nothing is lost, because there
+   * was never a moment in either stage where the interesting choice was WHICH growth -
+   * the interesting choice is when to let go.
+   *
+   * The event is still taken because the browser hands it over and because the mouse is
+   * still what presses the button; it just no longer decides anything.
+   */
+  private grab(_event: MouseEvent): void {
+    if (!this.state) return;
+    /*
+     * Out of reach is ANSWERED, not swallowed. If there is no target at all, say why -
+     * the reach economy is the game and it should never be silent about itself. The
+     * nearest live growth beyond reach is the one the player was probably going for.
+     */
+    if (!this.target) {
+      const world = this.state.world;
+      const bodyAt = centroid(owned(this.state));
+      let nearest: Anchor | null = null;
+      let nearestD = Infinity;
+      for (const a of world.anchors) {
+        if (a.live === false) continue;
+        const d = Math.hypot(a.x - bodyAt.x, a.y - bodyAt.y);
+        if (d < nearestD) {
+          nearestD = d;
+          nearest = a;
+        }
+      }
+      if (nearest) {
+        this.denied = { anchor: nearest, t: 0.6 };
+        if (this.hudNote) this.hudNote.textContent = 'out of reach - grow closer or shed less';
+      }
+      this.latched = null;
+      return;
+    }
+    this.latched = this.target;
+  }
 
-    let best: Anchor | null = null;
-    let bestD = 90;
-    for (const a of world.anchors) {
-      // Dead growths are not targets. step() refuses them anyway, but latching onto one and
-      // watching nothing happen reads as the click being lost rather than as the plant being
-      // dead, and this is the stage where telling those apart is the puzzle.
-      if (a.live === false) continue;
-      const d = Math.hypot(a.x - wx, a.y - wy);
-      if (d < bestD) {
+  /**
+   * Which growth a click would catch, and the ring that says so.
+   *
+   * Nearest live growth to the BODY, inside reach. Nearest to the body rather than to the
+   * pointer because the body is what has to get there - with two growths pulsing, the one
+   * you can hold onto longest is the near one, and that is the one the player means.
+   *
+   * The ring pulses rather than sitting still, because a static ring is indistinguishable
+   * from art at a glance and this has to read as an OFFER. It breathes about once a
+   * second and tightens as it brightens.
+   */
+  private chooseTarget(): void {
+    const state = this.state;
+    if (!state) {
+      this.target = null;
+      return;
+    }
+    // While hanging, the ring belongs to the growth being held - it is still the answer to
+    // "what is the click doing", and moving it to a neighbour mid-swing is a lie.
+    if (state.attached && this.latched) {
+      this.target = this.latched;
+    } else {
+      const bodyAt = centroid(owned(state));
+      const limit = reachOf(state);
+      let best: Anchor | null = null;
+      let bestD = Infinity;
+      for (const a of state.world.anchors) {
+        if (a.live === false) continue;
+        const d = Math.hypot(a.x - bodyAt.x, a.y - bodyAt.y);
+        if (d > limit || d >= bestD) continue;
         bestD = d;
         best = a;
       }
+      this.target = best;
     }
+
     /*
-     * Out of reach is ANSWERED, not swallowed. The old behaviour latched the intent, sent
-     * the tendril, and let it fall short - which reads as a dropped click, and the
-     * playtest asked for "a reasonable distance the mass should be from a growth". The
-     * distance already exists (reach = mass times REACH_PER_MASS, it is the game's whole
-     * economy); what was missing was the game SAYING so at the moment of the click.
+     * The pulse is a TRANSFORM, and the show/hide is `visible`.
+     *
+     * The first version animated the material's opacity, and the ring never appeared on
+     * screen once - while the flies created three lines later, animated by position, were
+     * visible immediately. Whatever the engine does with a material handed to
+     * MeshNode.create, writing opacity through it from the frame loop does not reach the
+     * renderer here. Node transforms and node visibility demonstrably do, so the pulse
+     * rides the scale instead: it breathes about two thirds of a second, tightening as it
+     * grows. Same read, on a path that is proven every frame by everything else moving.
      */
-    if (best && this.state) {
-      const bodyAt = centroid(owned(this.state));
-      const span = Math.hypot(best.x - bodyAt.x, best.y - bodyAt.y);
-      if (span > reachOf(this.state)) {
-        this.denied = { anchor: best, t: 0.6 };
-        if (this.hudNote) this.hudNote.textContent = 'out of reach - grow closer or shed less';
-        this.latched = null;
-        return;
-      }
+    const ring = this.latchRing;
+    if (!ring) return;
+    if (!this.target) {
+      ring.visible = false;
+      ring.position.set(-999, -999, 22);
+      return;
     }
-    this.latched = best;
+    const pulse = (Math.sin(this.artClock * 4.2) + 1) / 2;
+    const scale = 1.22 - pulse * 0.22;
+    ring.visible = true;
+    ring.position.set(this.target.x, this.target.y, 22);
+    ring.scale.set(scale, scale, 1);
   }
 
   // -- frame ------------------------------------------------------------------------------
@@ -2048,6 +2243,10 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.slimeGlow = null;
     this.portalAt = null;
     this.hoverHalo = null;
+    this.latchRing = null;
+    this.target = null;
+    this.flies.length = 0;
+    this.airMotes.length = 0;
     this.canopy = null;
     this.vignette = null;
 
@@ -2527,20 +2726,45 @@ export class M4SSRig extends ENGINE.SceneNode {
      * changes every frame as mass is shed and recovered. A hover computed at pointer-move
      * time would go stale the moment the player split.
      */
-    this.hovered = null;
-    if (this.pointer) {
-      let best: Anchor | null = null;
-      let bestD = 80;
-      for (const a of state.world.anchors) {
-        if (a.live === false) continue;
-        if (Math.hypot(a.x - home.x, a.y - home.y) > limit) continue;
-        const d = Math.hypot(a.x - this.pointer.x, a.y - this.pointer.y);
-        if (d < bestD) {
-          bestD = d;
-          best = a;
+    /*
+     * The hover highlight follows the TARGET now, not the pointer. The growth that would
+     * be caught is the growth that should look catchable, and since the ring already says
+     * which one that is, the two have to agree - a plant lit as reachable while the ring
+     * sits on its neighbour is worse than no feedback at all.
+     */
+    this.chooseTarget();
+    this.hovered = this.target;
+    void limit;
+
+    /*
+     * The flies orbit, and the air drifts. Both are animated here rather than baked into a
+     * texture, which is the entire distinction between motes that read as life and motes
+     * that read as dead pixels stuck to the screen.
+     */
+    for (const fly of this.flies) {
+      const dead = fly.anchor.live === false;
+      fly.node.visible = !dead;
+      if (dead) continue;
+      const t = this.artClock * fly.speed + fly.phase;
+      fly.node.position.x = fly.anchor.x + Math.cos(t) * fly.radius;
+      fly.node.position.y = fly.anchor.y + Math.sin(t * 1.3) * fly.radius * fly.squash;
+    }
+    {
+      const w = state.world.width;
+      const h = state.world.height;
+      for (const mote of this.airMotes) {
+        const at = mote.node.position;
+        at.x += (mote.vx + Math.sin(this.artClock * 0.7 + mote.phase) * mote.wobble) * deltaTime;
+        at.y += mote.vy * deltaTime;
+        // Wrap rather than respawn: the room keeps exactly the amount of air it started
+        // with, and nothing ever pops into existence in front of the player.
+        if (at.y < -20) {
+          at.y = h + 20;
+          at.x = Math.random() * w;
         }
+        if (at.x < -20) at.x = w + 20;
+        if (at.x > w + 20) at.x = -20;
       }
-      this.hovered = best;
     }
 
     /*
@@ -2587,17 +2811,25 @@ export class M4SSRig extends ENGINE.SceneNode {
       }
     }
 
-    // The halo follows the hover, breathing slightly so it reads as live, not painted.
+    /*
+     * The halo follows the hover, breathing so it reads as live rather than painted.
+     *
+     * Shown with `visible` and sized with `scale`, NOT by fading the material's opacity -
+     * the latch ring proved that opacity written from the frame loop never reaches the
+     * renderer through a MeshNode here. This halo has been faded in and out since the pass
+     * that added it and has therefore never once appeared on screen, which is a fair part
+     * of why the playtest kept saying growths did not respond to the pointer. The fade is
+     * gone; it snaps on, and the breathe carries the life.
+     */
     if (this.hoverHalo) {
-      const material = this.hoverHalo.material as THREE.MeshBasicMaterial;
       if (this.hovered) {
+        this.hoverHalo.visible = true;
         this.hoverHalo.position.x = this.hovered.x;
         this.hoverHalo.position.y = this.hovered.y;
         const breathe = 1 + Math.sin(this.artClock * 5) * 0.06;
         this.hoverHalo.scale.set(breathe, breathe, 1);
-        material.opacity = Math.min(0.55, material.opacity + 0.08);
       } else {
-        material.opacity = Math.max(0, material.opacity - 0.12);
+        this.hoverHalo.visible = false;
       }
     }
     for (const [anchor, node] of this.anchorNodes) {
@@ -2629,11 +2861,18 @@ export class M4SSRig extends ENGINE.SceneNode {
       const dead = anchor.live === false;
       const ember = this.emberNodes.get(anchor);
       if (ember) ember.visible = dead;
+      /*
+       * The presence halo breathes on its SCALE, and hides with `visible`. Its opacity
+       * was being written every frame and never reaching the renderer (see the latch
+       * ring), so a dead growth's halo was not actually going out - it just kept the
+       * opacity it was created with. On a stage whose second clause is telling a live
+       * growth from a dead one, that is a mechanic leaking, not a decoration.
+       */
       const presence = this.presenceNodes.get(anchor);
       if (presence) {
-        (presence.material as THREE.MeshBasicMaterial).opacity = dead
-          ? 0
-          : 0.18 + Math.sin(this.artClock * 2.2 + anchor.x) * 0.05;
+        presence.visible = !dead;
+        const breathe = 1 + Math.sin(this.artClock * 2.2 + anchor.x) * 0.07;
+        presence.scale.set(breathe, breathe, 1);
       }
       const art = this.growthArt.get(anchor);
       const wanted = art ? (dead ? art.dead : art.live) : null;

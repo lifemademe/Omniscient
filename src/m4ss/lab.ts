@@ -194,7 +194,16 @@ export const THE_LAB: World = {
    */
   signs: [
     { x: 96, y: 566, lines: ['A D', 'WALK'] },
-    { x: 320, y: 380, lines: ['HOLD CLICK', 'ON GROWTH'] },
+    /*
+     * The wording follows the mechanic. It used to read HOLD CLICK ON GROWTH, which was an
+     * instruction to AIM - and aiming is no longer part of it: a growth inside reach wears
+     * a pulsing ring and the click takes whichever one is ringed. Telling the player to
+     * point at something the game now points at for them is worse than saying nothing.
+     *
+     * No letter M anywhere in these stencils. The font is three pixels wide and its M is
+     * indistinguishable from its N at that size, which cost a pass to discover.
+     */
+    { x: 320, y: 380, lines: ['HOLD CLICK', 'WHEN RINGED'] },
     { x: 700, y: 520, lines: ['HOLD SPACE', 'TO SPLIT'] },
     { x: 952, y: 520, lines: ['Q', 'RECALL'] },
   ],

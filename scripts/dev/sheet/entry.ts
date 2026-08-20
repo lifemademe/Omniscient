@@ -103,6 +103,7 @@ const S = 'm4ss';
 art.setStageTheme(art.THEME_GALLERY);
 show('growth-live', art.bushTexture(S, 160, false), 2);
 show('growth-dead', art.bushTexture(S, 160, true), 2);
+show('ring', art.ringTexture(128), 2);
 show('dirt-grass', art.dirtTexture(S, 128, 96, 'grass'), 3);
 show('dirt-plain', art.dirtTexture(S, 128, 96, 'plain'), 3);
 show('acid', art.acidTexture(S, 256, 128), 2);
