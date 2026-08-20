@@ -1039,13 +1039,15 @@ export class M4SSRig extends ENGINE.SceneNode {
      * Purely visual. The pit's kill plane is the sim's, far below this, and untouched.
      */
     {
-      const surfaceY = world.height - 74;
+      // The surface sits just under the floor line, so the lit meniscus is the first thing
+      // visible in the mouth of a pit and the throat below it goes dark.
+      const surfaceY = world.height - 92;
       const bath = decorMesh(
         'Acid',
         new THREE.PlaneGeometry(world.width * 1.2, 150),
         this.artMaterial({ map: acidTexture(`acid-${this.theme.name}`, 256, 128) })
       );
-      bath.position.set(world.width / 2, surfaceY + 51, -6);
+      bath.position.set(world.width / 2, surfaceY + 60, -6);
       this.stage?.add(bath);
 
       const fumes = decorMesh(
@@ -1054,7 +1056,7 @@ export class M4SSRig extends ENGINE.SceneNode {
         this.artMaterial({
           map: glowTexture('acid-glow', PAL.mossLit),
           transparent: true,
-          opacity: 0.34,
+          opacity: 0.22,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
         })

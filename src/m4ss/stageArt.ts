@@ -2129,15 +2129,23 @@ export function acidTexture(seed: string, w = 256, h = 128): THREE.CanvasTexture
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(w, h);
 
+  /*
+   * Round 3, off the first live capture: in the game the pit came out as a flat tan slab,
+   * because five of the six bands were bright and the pit only ever shows a slice of the
+   * texture. Depth is the whole read here - a bath you can see the bottom of is a puddle.
+   * So the light lives in the top tenth and everything under it falls away fast to a
+   * near-black throat, which also puts the pit back under the bible's rule that the
+   * environment holds the dark: the acid's MENISCUS is bright, the acid is not.
+   */
   const bands = [
-    mixHex(PAL.mossLit, PAL.slimeGlow, 0.6),
+    mixHex(PAL.mossLit, PAL.slimeGlow, 0.7),
     PAL.mossLit,
-    mixHex(PAL.mossMid, PAL.mossLit, 0.45),
-    PAL.mossMid,
-    mixHex(PAL.mossDark, PAL.voidDeep, 0.35),
-    mixHex(PAL.voidDeep, '#000000', 0.2),
+    mixHex(PAL.mossMid, PAL.mossDark, 0.35),
+    mixHex(PAL.mossDark, PAL.voidDeep, 0.55),
+    mixHex(PAL.voidDeep, '#000000', 0.35),
+    '#000000',
   ];
-  const baseY = h * 0.2;
+  const baseY = h * 0.1;
 
   for (let x = 0; x < w; x++) {
     const wave =
@@ -2145,10 +2153,11 @@ export function acidTexture(seed: string, w = 256, h = 128): THREE.CanvasTexture
       Math.sin((x / w) * Math.PI * 10 + 1.2) * 1.6;
     const top = Math.round(baseY + wave);
 
-    // The body, in bands that follow the surface down.
+    // The body, in bands that follow the surface down - squared so the fall-off is fast
+    // near the top and the throat is black for most of the depth.
     for (let y = top; y < h; y++) {
       const t = (y - top) / (h - top);
-      const idx = Math.min(bands.length - 1, 1 + Math.floor(t * (bands.length - 1)));
+      const idx = Math.min(bands.length - 1, 1 + Math.floor(Math.sqrt(t) * (bands.length - 1)));
       g.fillStyle = bands[idx];
       g.fillRect(x, y, 1, 1);
     }
@@ -2168,7 +2177,7 @@ export function acidTexture(seed: string, w = 256, h = 128): THREE.CanvasTexture
   // Bubbles rising, and fumes coming off the top.
   for (let i = 0; i < 12; i++) {
     const bx = Math.round(range(rng, 0, w));
-    const by = Math.round(range(rng, baseY + 8, h * 0.75));
+    const by = Math.round(range(rng, baseY + 6, baseY + h * 0.22));
     g.fillStyle = bands[0];
     g.fillRect(bx, by, 2, 2);
   }
