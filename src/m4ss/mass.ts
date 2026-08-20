@@ -570,6 +570,20 @@ export const TUNING = {
    */
   swingEnergy: 2.7,
   /**
+   * Sideways push while falling, in px/s^2, against a ground crawl of 6400.
+   *
+   * Measured rather than guessed, and both numbers are load-bearing. Over nine tenths of a
+   * second of flight - a long throw - holding a direction turns 233px of travel into 339px:
+   * enough to save a throw that came down just short of a lip, and a real assist rather than
+   * a token one. Walking off stage one's start lip holding the same key reaches x 424 against
+   * a far lip at 480, so the pit is still a pit.
+   *
+   * That second number is the one to protect. The swing has to stay the only thing in this
+   * game that produces real distance; the day a player can cross a pit by stepping off it and
+   * leaning is the day the growths stop mattering. Both are checked in scripts/m4ss-stage.ts.
+   */
+  airMove: 420,
+  /**
    * How fast a swing bleeds off while the player is holding nothing, per second.
    *
    * The other half of the same complaint - "it keeps doing the 360 even when I am not
@@ -1081,9 +1095,30 @@ export function step(state: MassState, input: Input): MassState {
 
   if (input.move !== 0) {
     for (const p of particles) {
-      // Only what is touching something can push against it. Airborne slime cannot steer,
-      // which is most of why reaching matters at all.
-      if (state.owned.has(p.id) && p.grounded) p.ax += input.move * T.move;
+      if (!state.owned.has(p.id)) continue;
+      if (p.grounded) {
+        p.ax += input.move * T.move;
+      } else if (!state.attached) {
+        /*
+         * A body in flight can lean.
+         *
+         * It could not, and the comment that used to sit here said why: "airborne slime
+         * cannot steer, which is most of why reaching matters at all." That rule made every
+         * fling final at the instant of release, which is clean and, in play, unforgiving -
+         * a throw that comes down four pixels short of a lip is indistinguishable from one
+         * that was never going to make it, and the player has a whole second of falling to
+         * watch it happen with nothing to do.
+         *
+         * So the lean is deliberately small - see TUNING.airMove. It extends a throw that was
+         * nearly right; it cannot rescue one that was never close, and it cannot replace the
+         * swing, which is where all the real distance still comes from.
+         *
+         * `state.attached` here is last frame's value, which is what makes this safe: while
+         * the rope has hold, the pump owns the input, and this only takes over a frame after
+         * the release.
+         */
+        p.ax += input.move * T.airMove;
+      }
     }
   }
 

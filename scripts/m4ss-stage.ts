@@ -757,5 +757,58 @@ console.log('\n=== M4SS STAGE ONE ===\n');
   );
 }
 
+// ---------------------------------------------------------------- leaning in mid-air
+{
+  /*
+   * A body in flight can lean, and the two things that matter about it pull opposite ways.
+   *
+   * It has to DO something - a rescue that is worth nothing is worse than none, because the
+   * player learns to hold the key and gets nothing for it. And it must not become flight:
+   * the swing is the only thing in this game that produces real distance, and a pit that can
+   * be crossed by stepping off it and leaning would retire the growths entirely.
+   */
+  // This harness has no place() helper - the shaft's does. Inlined rather than imported.
+  const put = (s: MassState, x: number, y: number) => {
+    const at = home(s);
+    for (const p of s.particles) {
+      p.x += x - at.x;
+      p.px += x - at.x;
+      p.y += y - at.y;
+      p.py += y - at.y;
+    }
+  };
+  const thrown = (hold: -1 | 0 | 1) => {
+    const s = makeState(freshLab(), START_MASS);
+    put(s, 300, 300);
+    for (const p of s.particles) {
+      p.px = p.x - 500 * TUNING.dt;
+      p.py = p.y + 300 * TUNING.dt;
+    }
+    const from = home(s).x;
+    run(s, 0.9, () => ({ move: hold, anchor: null, recall: false }));
+    return home(s).x - from;
+  };
+  const free = thrown(0);
+  const leaning = thrown(1);
+  check(
+    'holding a direction in flight extends a throw',
+    leaning > free * 1.2,
+    `${free.toFixed(0)}px free, ${leaning.toFixed(0)}px leaning`
+  );
+
+  const walked = makeState(freshLab(), START_MASS);
+  put(walked, 250, 600);
+  let furthest = -Infinity;
+  run(walked, 3.1, (s) => {
+    furthest = Math.max(furthest, home(s).x);
+    return { move: 1, anchor: null, recall: false };
+  });
+  check(
+    'but the pit still cannot be walked across',
+    furthest < 470,
+    `stepped off the lip holding D and reached x ${furthest.toFixed(0)}; the far lip is 480`
+  );
+}
+
 console.log(failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);

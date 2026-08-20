@@ -816,3 +816,29 @@ containment and takes the creature off the board.
 | 80b | and the creature stays gone | `vanish()` hides every mesh it is made of, including the trail | The stage is NOT rebuilt afterwards, so forty particles all sitting on one point would spring apart the moment the sim ran again - the specimen would burst back out of the hole that just ate it. |
 | 80c | the frame stays frozen | the final warp keeps owning the tick after its veil lifts | The room the veil lifts off is empty and the readout says CONTAINED; nothing should move in it again until the console takes the screen back. The contained countdown runs outside the freeze, so the handback still happens on time. |
 | 80d | swallowed stays swallowed | `paintSlime` returns early | Hiding the meshes is not enough on its own: paintSlime sets the eyes visible again on every frame, so without this the creature's face comes back and floats in the mouth of the hole. |
+
+## Pass 81 - a body in flight can lean
+
+The rule this replaces was stated in the source and was a deliberate one: "airborne slime
+cannot steer, which is most of why reaching matters at all." It is clean, and in play it is
+unforgiving. Every fling was final at the instant of release, so a throw that comes down four
+pixels short of a lip is indistinguishable from one that was never going to make it - and the
+player spends a whole second falling, watching it happen, with nothing to do.
+
+Holding A or D in the air now adds a sideways push. 420px/s^2 against a ground crawl of 6400,
+and the ratio is the design rather than the number.
+
+Both halves are measured and both are checked, because they pull opposite ways:
+
+- It has to DO something. Over nine tenths of a second of flight, holding a direction turns
+  233px of travel into 339. A rescue worth nothing is worse than none, because the player
+  learns to hold the key and gets nothing back.
+- It must not become flight. Stepping off stage one's start lip and holding D reaches x 424
+  against a far lip at 480. The pit is still a pit, and that is the number to protect: the
+  swing has to stay the only thing in this game that produces real distance, or the growths
+  stop mattering.
+
+One consequence worth stating plainly: this makes stage one's finale more forgiving. The
+window on a committed revolution was about a third of the release points, and a lean widens
+it. That is a trade, not a free win - it was made on purpose, for a game whose audience gets
+two minutes with it.
