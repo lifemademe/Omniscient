@@ -842,3 +842,29 @@ One consequence worth stating plainly: this makes stage one's finale more forgiv
 window on a committed revolution was about a third of the release points, and a lean widens
 it. That is a trade, not a free win - it was made on purpose, for a game whose audience gets
 two minutes with it.
+
+## Pass 82 - the counter-clockwise 360, understood at last
+
+Reported three times across two sessions, patched twice at the surface, and this pass
+finally found what it actually was: **whether a held key could build a circle was a
+lottery**. A one-key swing equilibrates in a modest wobble around 300px/s - thirty pixels of
+height - and whether it ever escaped was decided by a parametric resonance with the level
+geometry. In stage one that resonance pays CLOCKWISE: sink the floor 200px and the held-D
+360 dies entirely, measured. It never pays counter-clockwise anywhere. Players learned
+"hold D" because it happened to work, and the same habit failed in the mirror. Every prior
+fix tuned the pump; none of them touched the lottery.
+
+The robust answer is a verb, not a finer-tuned pump. **THE WHIP: a fast swing against your
+held key gets slung the other way.** Above 340px/s along the arc - reachable only by a real
+arrival or an earned swing, far above anything a dead hang can build - holding the opposing
+key mirrors every particle's tangential motion about the rope. Energy is preserved exactly,
+so a committed clockwise circle becomes a committed counter-clockwise circle in one press:
+spin -5.5 became +7.8 and crested, in the harness, for ever.
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 82a | the whip | opposing key above `swingReverseAt: 340` reflects tangential velocity, gated on arc-like motion | The input a player who wants the other direction is ALREADY giving. Stage two's fling arrivals exceed 340, so latching with A held converts on arrival; stage one's route is build-then-reverse. Gated on tangential dominating radial because just after a grip the body is mostly falling and the tangential sign of a fall is junk - judged there, this fired backwards, measured. |
+| 82b | soft brake | pushes AGAINST motion keep `swingBrake: 0.34` of the pump | Letting-off stays meaningful; a held key no longer fights its own backswing at full force. |
+| 82c | deterministic commit | `swingCommitAt: 240`, down from a magic 300 | The one-key equilibrium sits at ~300, approached from below - a threshold exactly there never engaged, and the boost that decides a circle was handed to noise. At 240 it engages before equilibrium. |
+| 82d | the guard survives | dead hang, either key, 20 seconds: never crests | The whip cannot loosen it: a swing built from stillness by a held key already circulates the way that key points, and the whip only fires on opposition. |
+| 82e | it is all in the harness | build-commits, reversal, crest, guard | Four checks, so the fourth report of this bug has something to fail against. |

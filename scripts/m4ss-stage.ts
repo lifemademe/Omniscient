@@ -810,5 +810,47 @@ console.log('\n=== M4SS STAGE ONE ===\n');
   );
 }
 
+// ---------------------------------------------------------------- the reversal verb
+{
+  /*
+   * A committed swing against the held key gets slung the other way - the counter-clockwise
+   * fix, reported twice before it was understood. Whether a held key could build a circle
+   * was a resonance lottery that paid clockwise and never paid the mirror; the robust
+   * answer is a verb, not a finer-tuned pump. Build a circle however you like, press the
+   * other key, and it is your circle pointed the other way, at the same speed - the
+   * reflection preserves energy exactly.
+   */
+  const spun = makeState(freshLab(), START_MASS);
+  const g1 = spun.world.anchors[0];
+  {
+    const at = home(spun);
+    for (const p of spun.particles) {
+      p.x += g1.x - at.x;
+      p.px += g1.x - at.x;
+      p.y += g1.y + (g1.rope ?? 110) + 30 - at.y;
+      p.py += g1.y + (g1.rope ?? 110) + 30 - at.y;
+    }
+    for (const p of spun.particles) p.px = p.x - 150 * TUNING.dt;
+  }
+  // Hold D for three seconds - a held key commits off an eastward latch in ~2.2. The driver
+  // must keep the ANCHOR held throughout: an early version returned IDLE once fast, which
+  // releases the rope and zeroes the spin it was about to measure.
+  run(spun, 3.0, () => ({ move: 1, anchor: g1, recall: false }));
+  const before = spun.spin;
+  check('a held D off an eastward latch still commits a circle', Math.abs(before) > 3.5, `spin ${before.toFixed(1)}`);
+  run(spun, 0.5, () => ({ move: -1, anchor: g1, recall: false }));
+  check(
+    'and pressing A slings it round the other way at speed',
+    Math.sign(spun.spin) === -Math.sign(before) && Math.abs(spun.spin) > 3,
+    `spin ${before.toFixed(1)} became ${spun.spin.toFixed(1)}`
+  );
+  let crested = false;
+  run(spun, 2.0, (s) => {
+    if (s.attached && home(s).y < g1.y) crested = true;
+    return { move: -1, anchor: g1, recall: false };
+  });
+  check('and the reversed circle crests counter-clockwise', crested);
+}
+
 console.log(failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);

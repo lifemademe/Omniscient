@@ -570,6 +570,36 @@ export const TUNING = {
    */
   swingEnergy: 2.7,
   /**
+   * How much of the pump's strength a push AGAINST the motion keeps.
+   *
+   * 1 would be symmetric braking, which is what made one-key holds a lottery - see the gate.
+   * 0 would mean a held key never brakes at all and the backswing is uncontrollable. A third
+   * keeps letting-off meaningful while letting a held direction win a little energy each
+   * cycle.
+   */
+  swingBrake: 0.34,
+  /**
+   * Where the committed-swing boost engages, in px/s along the arc.
+   *
+   * This number is load-bearing in a way 300 never admitted to being: a held key with the
+   * motion agreeing builds to a natural equilibrium of ~300px/s at gate 1 - approached from
+   * BELOW, so a threshold sitting exactly there never engaged and the swing stalled one
+   * pixel under its own boost. Whether a one-key swing circled was then decided by whatever
+   * noise shoved it across the line, which in stage one was a parametric resonance with the
+   * floor that worked clockwise and not counter-clockwise. At 240 the boost engages before
+   * the equilibrium, and a held swing commits deterministically - in either direction.
+   */
+  swingCommitAt: 240,
+  /**
+   * The swing speed above which holding the opposite key REVERSES the circle, in px/s.
+   *
+   * Above the one-key equilibrium (~300, see the whip) so a wobble cannot be wiggled into a
+   * circle, and far above anything a dead hang can build, so the stillness guard is
+   * untouched. Below the speeds a real arrival or an earned swing carries, so the verb is
+   * available exactly when a player who has built something wants it pointed the other way.
+   */
+  swingReverseAt: 340,
+  /**
    * Sideways push while falling, in px/s^2, against a ground crawl of 6400.
    *
    * Measured rather than guessed, and both numbers are load-bearing. Over nine tenths of a
@@ -1221,6 +1251,8 @@ export function step(state: MassState, input: Input): MassState {
             along: -clamp((r.along - (aLo + aHalf)) / aHalf),
             across: -clamp((r.across - (cLo + cHalf)) / cHalf),
           }));
+
+
         }
         {
           // Perpendicular to the rope, sign chosen so D drives clockwise on a y-down world -
@@ -1268,6 +1300,53 @@ export function step(state: MassState, input: Input): MassState {
            * going round" is asking for. It is a force against the direction of travel scaled
            * by the speed itself, so it is gentle on a slow swing and firm on a fast one.
            */
+          /*
+           * THE WHIP: a committed swing against your held key gets slung the other way.
+           *
+           * The counter-clockwise 360 was reported broken twice, and the investigation that
+           * closed it found something worse than a bug: whether a HELD KEY could build a
+           * circle at all was a lottery. A one-key swing equilibrates around 300px/s - a
+           * modest wobble, thirty pixels of height - and whether it ever escaped that was
+           * decided by a parametric resonance with the level geometry that happened to work
+           * clockwise in stage one (it dies if the floor is 200px lower, measured) and never
+           * worked counter-clockwise anywhere. Players learned "hold D" because it happened
+           * to pay, and the same habit failed mirrored.
+           *
+           * The robust answer is not a finer-tuned pump, it is a verb. When the body is
+           * genuinely swinging fast - above swingReverseAt, which only an arrival or an
+           * earned swing can reach - and the player holds the key AGAINST that motion, the
+           * tendril slings the body the other way round: every particle keeps its radial
+           * motion and mirrors its tangential motion. Energy is preserved exactly, so a
+           * committed clockwise circle becomes a committed counter-clockwise circle in one
+           * press, which is precisely the input a player who wants the other direction is
+           * already giving. Below the threshold the key just brakes, as it always did; a
+           * dead hang can never reach the threshold, so the guard against building a circle
+           * from stillness keeps its teeth.
+           *
+           * Gated on the motion being ARC-LIKE (tangential dominating radial), because in
+           * the fall just after a grip the tangential sign is junk - judged there, this
+           * fired backwards, measured.
+           */
+          if (input.move !== 0 && tangential * input.move < 0 && tangentialSpeed > T.swingReverseAt) {
+            const rl = Math.hypot(home.x - anchor.x, home.y - anchor.y) || 1;
+            const rx = (home.x - anchor.x) / rl;
+            const ry = (home.y - anchor.y) / rl;
+            let meanRadial = 0;
+            for (const p of mine) {
+              meanRadial += (p.x - p.px) * rx + (p.y - p.py) * ry;
+            }
+            meanRadial = Math.abs(meanRadial / Math.max(1, mine.length) / dt);
+            if (tangentialSpeed > 1.5 * meanRadial) {
+              for (const p of mine) {
+                const vx0 = p.x - p.px;
+                const vy0 = p.y - p.py;
+                const radial = vx0 * rx + vy0 * ry;
+                p.px = p.x - (2 * radial * rx - vx0);
+                p.py = p.y - (2 * radial * ry - vy0);
+              }
+            }
+          }
+
           state.coasting = input.move === 0 ? state.coasting + dt : 0;
           const idle = Math.min(1, Math.max(0, state.coasting - T.swingGrace) / T.swingGrace);
           if (idle > 0) {
@@ -1312,14 +1391,31 @@ export function step(state: MassState, input: Input): MassState {
           const rope = state.swingRadius || 1;
           const height = anchor.y + rope - home.y;
           const energy = 0.5 * tangentialSpeed * tangentialSpeed + T.gravity * height;
+          /*
+           * A push AGAINST the motion brakes SOFTLY - and this is the counter-clockwise fix.
+           *
+           * With symmetric braking, holding one key nets zero energy per cycle: everything
+           * the with-motion half adds, the against-motion half removes, and the swing
+           * equilibrates below a circle. Except that it did not always - measured in stage
+           * one, a held D off an eastward latch locked into a full circle through a
+           * parametric resonance so fragile it depended on the floor being 10px under the
+           * swing (sink the floor 200px and it dies), while a held A oscillated at 1.2 rad/s
+           * for ever. Players learned "hold D" because it happened to work, and the same
+           * habit failed the other way round. That is the asymmetry that was reported, twice.
+           *
+           * Braking at a third means a held key nets energy toward the direction it wants on
+           * every cycle, in both directions, in any room - the swing builds because of the
+           * player's intent rather than because of a resonance lottery. The skill moves into
+           * TIME: pumping in rhythm still gets there in a third as long, and the dead-hang
+           * guard in the harness is now a clock rather than a wall.
+           */
+          const opposing = tangential * input.move < 0;
           const gate =
             energy > T.swingEnergy * T.gravity * rope
               ? 0
               : tangentialSpeed < 60
                 ? 0.25
-                : tangentialSpeed > 300
-                  ? T.swingCommit
-                  : 1;
+                : (tangentialSpeed > T.swingCommitAt ? T.swingCommit : 1) * (opposing ? T.swingBrake : 1);
           if (input.move !== 0) {
             for (const p of mine) {
               p.ax += (tx / tl) * input.move * T.swingPump * gate;
