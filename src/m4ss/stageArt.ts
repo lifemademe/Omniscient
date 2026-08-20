@@ -2011,9 +2011,16 @@ export function plateTexture(seed: string, w = 96, h = 40): THREE.CanvasTexture 
   const plateW = w - 22;
   const plateH = 12;
   const py = h - 8 - plateH;
-  const brassDark = mixHex(PAL.rustMid, PAL.lampWarm, 0.25);
-  const brassMid = mixHex(PAL.rustLit, PAL.lampWarm, 0.35);
-  const brassLit = mixHex(PAL.lampWarm, PAL.rustLit, 0.55);
+  /*
+   * Round 2 brass. The first mixes leaned on the lamp family and the live capture showed
+   * a flat yellow slab with a clipped white chip on top - the lamp colours are authored
+   * to clip (that is what a lamp IS) and metal borrowing them clips with them. Brass is
+   * now grounded in the metal families with only a breath of lamp, and the dome tops out
+   * at lampWarm - the indicator glows amber, never white.
+   */
+  const brassDark = mixHex(PAL.rustDark, PAL.stoneMid, 0.4);
+  const brassMid = mixHex(PAL.rustMid, PAL.stoneLit, 0.35);
+  const brassLit = mixHex(PAL.rustLit, PAL.lampWarm, 0.25);
   g.fillStyle = brassDark;
   g.fillRect(Math.round(cx - plateW / 2), py, plateW, plateH);
   g.fillStyle = brassMid;
@@ -2028,18 +2035,24 @@ export function plateTexture(seed: string, w = 96, h = 40): THREE.CanvasTexture 
   }
 
   // The indicator dome: amber, stepped, with a bright heart - "warm, wants weight".
-  const capW = Math.round(w * 0.34);
-  for (let i2 = 0; i2 < 4; i2++) {
-    const inset = i2 * Math.max(2, Math.round(capW * 0.09));
+  const capW = Math.round(w * 0.3);
+  for (let i2 = 0; i2 < 3; i2++) {
+    const inset = i2 * Math.max(2, Math.round(capW * 0.12));
     g.fillStyle = [
-      mixHex(PAL.lampWarm, PAL.rustDark, 0.45),
-      mixHex(PAL.lampWarm, PAL.rustDark, 0.2),
+      mixHex(PAL.lampWarm, PAL.rustDark, 0.55),
+      mixHex(PAL.lampWarm, PAL.rustDark, 0.25),
       PAL.lampWarm,
-      PAL.lampCore,
     ][i2];
-    const y2 = py - 5 - i2 * 2;
+    const y2 = py - 4 - i2 * 2;
     g.fillRect(Math.round(cx - capW / 2 + inset), y2, Math.round(capW - inset * 2), py - y2);
   }
+
+  // A dark outline around the whole brass body, so the plate is an OBJECT on the stone
+  // rather than a paint stripe - the capture read the outline-less version as a slab.
+  g.fillStyle = mixHex(PAL.voidDeep, '#000000', 0.4);
+  g.fillRect(Math.round(cx - plateW / 2) - 1, py - 1, plateW + 2, 1);
+  g.fillRect(Math.round(cx - plateW / 2) - 1, py, 1, plateH);
+  g.fillRect(Math.round(cx + plateW / 2), py, 1, plateH);
 
   // Wear: two scuffs across the plate where things have landed on it.
   g.fillStyle = brassDark;
@@ -2516,19 +2529,24 @@ export function domeTexture(seed: string, w = 1280, h = 520): THREE.CanvasTextur
     // The lights left on: whole PANES glowing warm, low in the dome, bounded by their
     // own ribs - a lit window, not a pixel. Sized off the radius so every dome carries
     // lights that survive the display scale.
+    /*
+     * Round 3: dimmed INTO the glass. At radius*0.09 with a lampCore chip these rendered
+     * as crisp yellow cards floating on the midground - two capture rounds were spent
+     * hunting them as "mystery buttons". A window seen through a hundred metres of haze
+     * is a warm BLUR in the glass: small, borderless, mixed well toward the pane it
+     * lives in, and never carrying the clipping core colour.
+     */
     for (let l = 0; l < 3; l++) {
       const t = range(rng, 0.5, 0.8);
       const half = Math.round(radius * Math.sqrt(Math.max(0, 1 - (1 - t) ** 2)));
-      const lw = Math.max(8, Math.round(radius * 0.09));
-      const lh = Math.max(6, Math.round(radius * 0.055));
+      const lw = Math.min(12, Math.max(6, Math.round(radius * 0.05)));
+      const lh = Math.min(8, Math.max(4, Math.round(radius * 0.032)));
       const lx = cx + Math.round(range(rng, -half * 0.7, half * 0.7 - lw));
       const ly = baseY - rows + Math.round(rows * t);
-      g.fillStyle = mixHex(PAL.lampWarm, paneRamp[2], 0.4);
-      g.fillRect(lx - 1, ly - 1, lw + 2, lh + 2);
-      g.fillStyle = PAL.lampWarm;
+      g.fillStyle = mixHex(PAL.lampWarm, paneRamp[2], 0.55);
+      g.fillRect(lx - 2, ly - 1, lw + 4, lh + 2);
+      g.fillStyle = mixHex(PAL.lampWarm, paneRamp[2], 0.3);
       g.fillRect(lx, ly, lw, lh);
-      g.fillStyle = PAL.lampCore;
-      g.fillRect(lx + 2, ly + 1, Math.round(lw * 0.4), Math.max(2, Math.round(lh * 0.4)));
     }
 
     /*

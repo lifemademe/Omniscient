@@ -732,7 +732,20 @@ export class M4SSRig extends ENGINE.SceneNode {
         const pools = t.w > 340 ? 2 : 1;
         for (let i = 0; i < pools; i++) {
           const pw = Math.round(Math.min(210, t.w * 0.32));
-          const px = t.x + t.w * (pools === 1 ? 0.5 : 0.28 + i * 0.44);
+          let px = t.x + t.w * (pools === 1 ? 0.5 : 0.28 + i * 0.44);
+          /*
+           * Pools dodge buttons. Both place themselves by tile fraction, blind to each
+           * other, and the live capture showed stage one's power plate half-swallowed by
+           * the water that happened to land on it (pool z 5, plate z 2). An interactable
+           * must never lose its silhouette to decor: the pool slides aside, clamped to
+           * its own tile.
+           */
+          for (const b of world.buttons) {
+            if (Math.abs(b.y - t.y) < 60 && Math.abs(b.x - px) < pw / 2 + 55) {
+              px = b.x + (b.x > t.x + t.w / 2 ? -1 : 1) * (pw / 2 + 70);
+              px = Math.max(t.x + pw / 2 + 8, Math.min(t.x + t.w - pw / 2 - 8, px));
+            }
+          }
           const pond = decorMesh(
             'Pool',
             new THREE.PlaneGeometry(pw, 30),
