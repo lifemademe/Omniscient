@@ -325,7 +325,7 @@ export class M4SSRig extends ENGINE.SceneNode {
    * reads it, no collision touches it, and a body that has left a trail behaves exactly like
    * one that has not. State that only the renderer consumes belongs to the renderer.
    */
-  private trail: Array<{ x: number; ground: number; r: number; born: number }> = [];
+  private trail: Array<{ x: number; ground: number; r: number; ry: number; born: number }> = [];
   private trailNode: ENGINE.MeshNode | null = null;
   private trailEdge: ENGINE.MeshNode | null = null;
   private lastStamp: { x: number; y: number } | null = null;
@@ -2252,17 +2252,25 @@ export class M4SSRig extends ENGINE.SceneNode {
         // the same feedback the glow gives, written on the floor.
         const scale = 0.6 + Math.min(0.4, mine.length * 0.01);
         /*
-         * Jittered per deposit, and this is what makes it read as hills rather than as a kerb.
+         * Width and HEIGHT jittered independently, which is the difference between a row of
+         * beads and a smear.
          *
-         * Deposits of identical radius fuse into a smooth-topped slab - the field has nothing
-         * to swell over. Varying the radius by a sixth gives the ridge a lumpy crest for free,
-         * because a fatter point pushes the contour further out exactly where it sits. Derived
-         * from the position it was laid at, so the same walk leaves the same trail without a
-         * seeded generator up here.
+         * A round deposit can only be as tall as it is wide, so varying one radius varies both
+         * together and the ridge comes out as a string of equal-ish lumps. Slime dragged along
+         * a floor does not do that: it is wider than it is tall everywhere, and its height
+         * wanders along its length for reasons that have nothing to do with its width - a thin
+         * spot here, a thick pool where the creature paused there.
+         *
+         * So the deposit is an ellipse: half again as wide as the nominal radius, and anywhere
+         * between a third and a full radius tall. Both are derived from the position it was
+         * laid at, using different constants, so the two vary independently and the same walk
+         * still leaves the same trail without a seeded generator up here.
          */
-        const jitter = Math.abs(Math.sin(at.x * 12.9898 + at.y * 78.233)) % 1;
-        const r = TRAIL_BLOB * scale * (0.84 + jitter * 0.32);
-        this.trail.push({ x: at.x, ground: at.y, r, born: state.time });
+        const jx = Math.abs(Math.sin(at.x * 12.9898 + at.y * 78.233)) % 1;
+        const jy = Math.abs(Math.sin(at.x * 39.3468 + at.y * 11.135)) % 1;
+        const r = TRAIL_BLOB * scale * (1.02 + jx * 0.44);
+        const ry = TRAIL_BLOB * scale * (0.34 + jy * 0.62);
+        this.trail.push({ x: at.x, ground: at.y, r, ry, born: state.time });
         if (this.trail.length > TRAIL_MAX) this.trail.splice(0, this.trail.length - TRAIL_MAX);
       }
     }
@@ -2278,17 +2286,23 @@ export class M4SSRig extends ENGINE.SceneNode {
      *
      * Held near full for the first third so a fresh mark is a mark, not an entrance.
      */
-    const points: Array<{ x: number; y: number; r: number }> = [];
+    const points: Array<{ x: number; y: number; r: number; ry: number }> = [];
     for (const blob of this.trail) {
       const age = state.time - blob.born;
       if (age > TRAIL_LIFE) continue;
       const k = Math.min(1, (1 - age / TRAIL_LIFE) * 1.5);
       const r = blob.r * k;
-      if (r < 2) continue;
-      // Seated on the ground: the contour reaches out about half the field radius, so the
-      // centre rides up as the deposit shrinks and the ridge stays ON the floor instead of
-      // lifting off it.
-      points.push({ x: blob.x, y: blob.ground - r * TRAIL_SEAT, r });
+      const ry = blob.ry * k;
+      if (ry < 2) continue;
+      /*
+       * Seated on the ground, and it is the HEIGHT that decides where the centre goes now.
+       *
+       * The contour reaches out about 0.574 of a radius, so a centre parked TRAIL_SEAT of the
+       * vertical radius above the floor leaves the blob's underside just into the turf however
+       * tall it happens to be - and it rides up as the deposit shrinks, so the ridge stays on
+       * the floor instead of lifting off it.
+       */
+      points.push({ x: blob.x, y: blob.ground - ry * TRAIL_SEAT, r, ry });
     }
 
     this.replace(this.trailEdge, buildSurface(points, { cell: 4, threshold: TRAIL_EDGE }));

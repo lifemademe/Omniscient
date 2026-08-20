@@ -667,3 +667,24 @@ out of the creature.
 | 73d | lumpy on purpose | radius jittered a sixth per deposit, from the position it was laid at | Identical radii fuse into a smooth-topped slab - the field has nothing to swell over. A sixth of variation gives a lumpy crest for free, and deriving it from position keeps the same walk leaving the same trail. |
 | 73e | 2.6 seconds, not 7 | | At seven the stage slowly filled in with everywhere the player had ever been, which is a map. What a trail carries is "I came from THERE, just now". |
 | 73f | the outline is load-bearing | dark contour behind the bright one | Both stages are walked on bright yellow-green turf and the slime is bright yellow-green. Laid flat on grass in its own colour the trail vanished - twice. The creature only reads because it carries its own shading; the trail gets the same treatment. |
+
+## Pass 74 - the smear
+
+**A round deposit can only be as tall as it is wide.** Varying one radius varies both
+together, so the ridge came out as a string of roughly equal lumps - beads, not a smear.
+Slime dragged along a floor is wider than it is tall everywhere, and its height wanders
+along its length for reasons that have nothing to do with its width: a thin spot here, a
+thick pool where the creature paused there.
+
+So the field takes a second radius. `FieldPoint.ry` makes a point elliptical, and left unset
+it is `r` - the isotropic case reduces to the identical arithmetic, verified rather than
+argued: sampled 4000 points over the settled body, the largest difference between the old
+form and the new one is 2.7e-15, which is double-precision noise. The body's contour is
+untouched.
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 74a | elliptical field points | `FieldPoint.ry` in surface.ts | The only way to vary a deposit's height without also varying its width. Strict generalisation; nothing that does not ask for it can be affected. |
+| 74b | wide and varied | width 1.02-1.46 of nominal, height 0.34-0.96, jittered independently | Both derived from the position the deposit was laid at, with different constants, so they vary independently and the same walk still leaves the same trail. |
+| 74c | seated by height | the centre now rides on `ry`, not `r` | The blob's underside stays just into the turf however tall it happens to be, and still rides up as it shrinks. |
+| 74d | padding by actual reach | `buildSurface` pads by the largest `r`/`ry` any point has, not by a constant | `pad` was written when every point shared one radius. A point reaching further than the default gets its contour silently cut flat at the edge of the sampled grid. The body is unaffected - its largest per-point radius is 15 against a pad of 20. |

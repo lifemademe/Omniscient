@@ -39,6 +39,19 @@ export interface FieldPoint {
    * particles leave it unset and keep behaving exactly as before.
    */
   r?: number;
+  /**
+   * This point's field radius along Y, if it is not the same as along X.
+   *
+   * Added for the trail. A round point can only ever make a round blob, so a run of them is a
+   * row of beads - and what slime left on the floor looks like is a SMEAR: wider than it is
+   * tall, and varying in height along its length independently of how wide it is. One radius
+   * cannot express that, because in a circle the two are the same number.
+   *
+   * Left unset it is `r`, and the field is then exactly what it was before - the isotropic
+   * case reduces to the identical arithmetic, so nothing that does not ask for this can be
+   * affected by it.
+   */
+  ry?: number;
 }
 
 export interface SurfaceOptions {
@@ -71,10 +84,12 @@ function sample(points: FieldPoint[], x: number, y: number, r2: number): number 
   for (const p of points) {
     const dx = x - p.x;
     const dy = y - p.y;
-    const d2 = dx * dx + dy * dy;
-    const pr2 = p.r === undefined ? r2 : p.r * p.r;
-    if (d2 >= pr2) continue;
-    const t = 1 - d2 / pr2;
+    const rx2 = p.r === undefined ? r2 : p.r * p.r;
+    const ry2 = p.ry === undefined ? rx2 : p.ry * p.ry;
+    // Elliptical, and identical to the old circular form whenever ry is unset: with
+    // rx2 === ry2 this is 1 - (dx*dx + dy*dy) / r2, term for term.
+    const t = 1 - (dx * dx) / rx2 - (dy * dy) / ry2;
+    if (t <= 0) continue;
     total += t * t;
   }
   return total;
@@ -115,10 +130,19 @@ export function buildSurface(
     if (p.x > maxX) maxX = p.x;
     if (p.y > maxY) maxY = p.y;
   }
-  minX -= pad;
-  minY -= pad;
-  maxX += pad;
-  maxY += pad;
+  /*
+   * Pad by the largest reach any point actually has, not by a constant.
+   *
+   * `pad` was written when every point shared one radius. A point with its own r - or now its
+   * own ry - can reach further than the default, and a contour that runs off the sampled grid
+   * is silently cut flat at the edge of it.
+   */
+  let reach = pad;
+  for (const p of points) reach = Math.max(reach, p.r ?? 0, p.ry ?? 0);
+  minX -= reach;
+  minY -= reach;
+  maxX += reach;
+  maxY += reach;
 
   const cols = Math.max(2, Math.ceil((maxX - minX) / cell) + 1);
   const rows = Math.max(2, Math.ceil((maxY - minY) / cell) + 1);
