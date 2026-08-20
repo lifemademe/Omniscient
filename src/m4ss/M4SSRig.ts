@@ -294,6 +294,14 @@ export class M4SSRig extends ENGINE.SceneNode {
   /** Set the frame the player reaches the portal. The stage is over. */
   private cleared = false;
   /**
+   * True once the last portal has swallowed the specimen.
+   *
+   * Hiding the meshes is not enough on its own: paintSlime sets the eyes visible again on
+   * every frame it runs, so without this the creature's face comes back and floats in the
+   * mouth of the hole that just ate it.
+   */
+  private swallowed = false;
+  /**
    * Called a beat after the LAST portal is reached, if anybody is listening.
    *
    * OmniscientRig sets this to its own exit: M4SS runs inside Keller's contact view, so
@@ -343,7 +351,7 @@ export class M4SSRig extends ENGINE.SceneNode {
    * not step while this runs - the creature is IN the portal, not standing beside it
    * waiting for a curtain.
    */
-  private warp: { t: number; out: boolean } | null = null;
+  private warp: { t: number; out: boolean; final: boolean } | null = null;
   private warpVeil: HTMLElement | null = null;
   /**
    * Which stage is loaded. The portal advances it.
@@ -2912,6 +2920,33 @@ export class M4SSRig extends ENGINE.SceneNode {
    * flared portal before the screen is taken away; handing back to Keller on the same
    * frame as the arrival made the whole ending subliminal.
    */
+  /**
+   * Take the creature off the board, after the last portal has swallowed it.
+   *
+   * Everything the specimen is made of, including the marks it left: a trail still lying on
+   * the floor of a room whose occupant has just been contained is a loose end, and the last
+   * image of the mission should be the room without it. The nodes are hidden rather than
+   * destroyed - the rig is about to be unmounted wholesale and there is no sense racing it.
+   */
+  private vanish(): void {
+    this.swallowed = true;
+    for (const node of [
+      this.body,
+      this.rim,
+      this.belly,
+      this.shine,
+      this.strays,
+      this.cord,
+      this.slimeGlow,
+      this.trailNode,
+      this.trailEdge,
+      ...this.eyes,
+      ...this.flightDots,
+    ]) {
+      if (node) node.visible = false;
+    }
+  }
+
   private contain(): void {
     saveM4ssContained();
     if (this.hudLabel) this.hudLabel.textContent = 'SPECIMEN CONTAINED';
@@ -2926,7 +2961,7 @@ export class M4SSRig extends ENGINE.SceneNode {
    * portal was touched, which made finishing a stage feel like a level-select, not an
    * arrival.
    */
-  private beginWarp(): void {
+  private beginWarp(final = false): void {
     if (this.warp) return;
     const container = this.getWorld()?.gameContainer;
     if (container) {
@@ -2938,7 +2973,7 @@ export class M4SSRig extends ENGINE.SceneNode {
       container.appendChild(veil);
       this.warpVeil = veil;
     }
-    this.warp = { t: 0, out: true };
+    this.warp = { t: 0, out: true, final };
   }
 
   /** Drive the warp. Returns true while it owns the frame - the sim does not step under it. */
@@ -3001,7 +3036,19 @@ export class M4SSRig extends ENGINE.SceneNode {
         this.warpVeil.style.opacity = String(Math.max(0, Math.min(1, (warp.t - 0.45) / 0.4)));
       }
       if (warp.t >= 0.95) {
-        this.advance();
+        /*
+         * A middle portal swaps the stage behind the veil. The LAST one has nothing to swap
+         * to, so it records the containment and takes the creature off the board instead -
+         * and the difference matters, because the stage is not rebuilt afterwards. Left
+         * alone, forty particles all sitting on one point would spring apart the instant the
+         * sim ran again and the specimen would burst back out of the hole that just ate it.
+         */
+        if (warp.final) {
+          this.contain();
+          this.vanish();
+        } else {
+          this.advance();
+        }
         warp.out = false;
         warp.t = 0;
       }
@@ -3012,10 +3059,13 @@ export class M4SSRig extends ENGINE.SceneNode {
     if (warp.t >= 0.75) {
       this.warpVeil?.remove();
       this.warpVeil = null;
-      this.warp = null;
+      // A middle warp hands the frame back. The final one holds it: the room the veil lifts
+      // off is empty, the readout says CONTAINED, and nothing should move in it again until
+      // the console takes the screen back.
+      if (!warp.final) this.warp = null;
     }
     // The veil is lifting off a live stage: let the sim run underneath it.
-    return false;
+    return warp.final;
   }
 
   private advance(): void {
@@ -3074,6 +3124,7 @@ export class M4SSRig extends ENGINE.SceneNode {
 
     this.state = makeState(STAGES[this.stageIndex](), 40);
     this.cleared = false;
+    this.swallowed = false;
     this.latched = null;
     this.hovered = null;
     this.splitHold = 0;
@@ -3193,6 +3244,8 @@ export class M4SSRig extends ENGINE.SceneNode {
   private paintSlime(): void {
     const state = this.state;
     if (!state) return;
+    // Contained. There is nothing left to draw, and drawing it would put it back.
+    if (this.swallowed) return;
 
     // The level is y-down and the world is y-up, so the contour is built flipped.
     // Level coordinates: the stage flips and scales them.
@@ -3452,8 +3505,16 @@ export class M4SSRig extends ENGINE.SceneNode {
           this.cleared = true;
           this.portal.scale.set(1.25, 1.25, 1.25);
           this.voice.play('portal');
-          if (this.stageIndex + 1 < STAGES.length) this.beginWarp();
-          else this.contain();
+          /*
+           * Both portals swallow. The last one used to skip straight to contain().
+           *
+           * The wormhole was written as a BETWEEN-stages transition, so it only ran when
+           * there was a next stage to go to - and the final portal, the one that ends the
+           * whole mission, was the single place in the game where the creature simply
+           * stopped existing instead of being drawn in. That is the last thing the player
+           * sees of it, and it was the only arrival with no arrival.
+           */
+          this.beginWarp(this.stageIndex + 1 >= STAGES.length);
         }
       }
     }

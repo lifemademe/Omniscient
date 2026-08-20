@@ -797,3 +797,22 @@ nudges it again.
 | 79b | the harness asks both halves | the arc must NOT reach the button, and a release must | The old check fired a body at the button from a standing start, which is why the growth could be moved twice in two directions with nothing objecting. |
 | 79c | and it tracks across the swing | westmost sampled every frame, not read off the body once | A single sample is wherever the arc happened to be on that frame - the first version reported 479 for a sweep that reaches 335, and would have passed on a layout where the arc does hit the plate. |
 | 79d | the portal moves behind the creature | z 8 and 6 down to -0.3 and -0.35 | The doorway drew over the animal, so arriving at the exit hid the thing the player had spent two stages steering, at the exact moment it mattered. The window is narrow: tile faces at -1, turf at -0.5, trail at -0.16, body at 0. |
+
+## Pass 80 - both portals swallow
+
+The wormhole was written as a BETWEEN-stages transition, and the clear branch said so
+literally: `if (this.stageIndex + 1 < STAGES.length) this.beginWarp(); else this.contain();`.
+So the final portal - the one that ends the whole mission - was the single place in the game
+where the creature stopped existing instead of being drawn in. That is the last thing the
+player ever sees of it, and it was the only arrival with no arrival.
+
+Both portals run the spiral now. The last one differs only in what happens when the spiral
+finishes: a middle portal swaps the stage behind the veil, the final one records the
+containment and takes the creature off the board.
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 80a | the last portal swallows | `beginWarp(final)`, and `tickWarp` branches at the end of the pull | One animation, two endings. |
+| 80b | and the creature stays gone | `vanish()` hides every mesh it is made of, including the trail | The stage is NOT rebuilt afterwards, so forty particles all sitting on one point would spring apart the moment the sim ran again - the specimen would burst back out of the hole that just ate it. |
+| 80c | the frame stays frozen | the final warp keeps owning the tick after its veil lifts | The room the veil lifts off is empty and the readout says CONTAINED; nothing should move in it again until the console takes the screen back. The contained countdown runs outside the freeze, so the handback still happens on time. |
+| 80d | swallowed stays swallowed | `paintSlime` returns early | Hiding the meshes is not enough on its own: paintSlime sets the eyes visible again on every frame, so without this the creature's face comes back and floats in the mouth of the hole. |
