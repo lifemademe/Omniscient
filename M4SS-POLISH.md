@@ -707,3 +707,15 @@ and shine contours on top of its fill and the trail is a single pass.
 | --- | --- | --- | --- |
 | 75a | one skin | `slimeSkin()`, plus `SLIME_FILL` / `SLIME_EDGE` / `SLIME_EMISSIVE` | Two objects meant to be the same substance have to go through the same lighting. A shared hex through two different materials is not a shared appearance. |
 | 75b | the trail is lit | the fill contour is a MeshStandardMaterial, not `artMaterial` | `artMaterial` turns tone mapping off because the stage textures are painted from the pre-lifted palette and have had the curve applied by hand. The creature has not - and the trail is made of the creature, not of the palette. |
+
+## Pass 76 - flatter
+
+Deposits go from roughly three to two to roughly three to ONE: the vertical radius drops
+from 0.34-0.96 of nominal to 0.19-0.52, width untouched. At the old ratio the ridge still
+read as a row of hills sitting on the floor rather than as something smeared along it -
+height is what says whether slime was dragged or dropped. Measured off the frame afterwards,
+the trail's median band is 4 screen pixels against a body of about 55.
+
+The cull that drops a spent deposit came down with it, from a vertical radius of 2 to 1.1: a
+flat deposit starts only a few pixels tall, and the old floor would have taken half of them
+off the ground before they had aged at all.

@@ -2295,15 +2295,20 @@ export class M4SSRig extends ENGINE.SceneNode {
          * wanders along its length for reasons that have nothing to do with its width - a thin
          * spot here, a thick pool where the creature paused there.
          *
-         * So the deposit is an ellipse: half again as wide as the nominal radius, and anywhere
-         * between a third and a full radius tall. Both are derived from the position it was
-         * laid at, using different constants, so the two vary independently and the same walk
-         * still leaves the same trail without a seeded generator up here.
+         * So the deposit is an ellipse, and a FLAT one: half again as wide as the nominal
+         * radius, and between a fifth and half of it tall. Roughly three to one, which is the
+         * number that matters here - at the first ratio, nearer three to two, the ridge still
+         * read as a row of hills sitting on the floor rather than as something smeared along
+         * it. Height is what says whether slime was dragged or dropped.
+         *
+         * Both are derived from the position it was laid at, using different constants, so the
+         * two vary independently and the same walk still leaves the same trail without a
+         * seeded generator up here.
          */
         const jx = Math.abs(Math.sin(at.x * 12.9898 + at.y * 78.233)) % 1;
         const jy = Math.abs(Math.sin(at.x * 39.3468 + at.y * 11.135)) % 1;
         const r = TRAIL_BLOB * scale * (1.02 + jx * 0.44);
-        const ry = TRAIL_BLOB * scale * (0.34 + jy * 0.62);
+        const ry = TRAIL_BLOB * scale * (0.19 + jy * 0.33);
         this.trail.push({ x: at.x, ground: at.y, r, ry, born: state.time });
         if (this.trail.length > TRAIL_MAX) this.trail.splice(0, this.trail.length - TRAIL_MAX);
       }
@@ -2327,7 +2332,9 @@ export class M4SSRig extends ENGINE.SceneNode {
       const k = Math.min(1, (1 - age / TRAIL_LIFE) * 1.5);
       const r = blob.r * k;
       const ry = blob.ry * k;
-      if (ry < 2) continue;
+      // Culled small, not tall: a flat deposit starts at a few pixels of height, so the old
+      // floor of 2 would have taken half of them off the floor before they had aged at all.
+      if (ry < 1.1) continue;
       /*
        * Seated on the ground, and it is the HEIGHT that decides where the centre goes now.
        *
