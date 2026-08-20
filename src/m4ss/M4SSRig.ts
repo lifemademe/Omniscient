@@ -53,14 +53,11 @@ import {
   THEME_GALLERY,
   THEME_STACK,
   vignetteTexture,
-  lipTexture,
-  poolTexture,
   bushTexture,
   PAL,
   portalTexture,
   signTexture,
   stoneTexture,
-  vesselTexture,
   vineTexture,
 } from './stageArt.js';
 import {
@@ -267,6 +264,9 @@ export class M4SSRig extends ENGINE.SceneNode {
   /** The stage's art identity - palette, light direction, midground kind. Set at the top
    * of buildLevel() so every generator call below it draws the right world. */
   private theme = THEME_GALLERY;
+  /** Where the backdrop hung its lanterns, in level x. Filled by buildBackdrop, spent by
+   * buildLevel's floor pools - light that lands has to know where it came from. */
+  private lanternXs: number[] = [];
   private vignette: ENGINE.MeshNode | null = null;
   /** Smoothed camera height, in level coordinates. See viewCentre. */
   private cameraY = 0;
@@ -715,81 +715,6 @@ export class M4SSRig extends ENGINE.SceneNode {
       }
 
       /*
-       * A vine curtain over every top edge.
-       *
-       * This replaces the flat green lip. The lip was doing a real job - outlining the
-       * playable surface - and a hard 7px band does it in the most graphic way possible. A
-       * ragged curtain of hanging strands outlines the same edge with an irregular boundary,
-       * which is what stops a platform reading as a floating slab.
-       */
-      const vines = vineTexture(`vine-${t.x}-${t.y}`);
-      vines.repeat.set(Math.max(1, t.w / 128), 1);
-      const curtain = decorMesh(
-        'Vines',
-        new THREE.PlaneGeometry(t.w, 54),
-        this.artMaterial({ map: vines, transparent: true, depthWrite: false })
-      );
-      curtain.position.set(t.x + t.w / 2, t.y + 22, 2);
-      this.stage?.add(curtain);
-      this.vineMaps.push({ map: vines, phase: t.x * 0.013 });
-
-      /*
-       * The ragged lip, straddling the top edge.
-       *
-       * Centred ON the edge, so its solid lower half covers the box's own square corner and
-       * its broken upper half becomes the silhouette. 34 tall against a 64px texture whose
-       * midline is the edge, which puts about 17 units of rubble above the platform - enough
-       * to break the line, not enough to look like a wall.
-       *
-       * Only tiles wide enough to be platforms get one. The boundary walls are 60 wide and
-       * 720 tall, and a rubble fringe along the top of a wall that runs off the top of the
-       * frame is decoration nobody will ever see.
-       */
-      /*
-       * Standing water, on the wider platforms only.
-       *
-       * Two per platform at most and never on a ledge narrower than 200, because a pool needs
-       * room to read as a pool rather than as a bright smear. Sat at z 5 - above the lip's
-       * rubble, below the vines - so the growth at the platform edge still overlaps it and it
-       * looks like water lying ON the stone rather than a decal floating over it.
-       *
-       * These are the brightest pixels in the level and they exist for that reason: eleven
-       * passes left `value range` the most stubborn axis in the run, with the whole gap at the
-       * top of the range. See poolTexture.
-       */
-      if (t.w >= 200) {
-        const pools = t.w > 340 ? 2 : 1;
-        for (let i = 0; i < pools; i++) {
-          const pw = Math.round(Math.min(210, t.w * 0.32));
-          let px = t.x + t.w * (pools === 1 ? 0.5 : 0.28 + i * 0.44);
-          /*
-           * Pools dodge buttons. Both place themselves by tile fraction, blind to each
-           * other, and the live capture showed stage one's power plate half-swallowed by
-           * the water that happened to land on it (pool z 5, plate z 2). An interactable
-           * must never lose its silhouette to decor: the pool slides aside, clamped to
-           * its own tile.
-           */
-          for (const b of world.buttons) {
-            if (Math.abs(b.y - t.y) < 60 && Math.abs(b.x - px) < pw / 2 + 55) {
-              px = b.x + (b.x > t.x + t.w / 2 ? -1 : 1) * (pw / 2 + 70);
-              px = Math.max(t.x + pw / 2 + 8, Math.min(t.x + t.w - pw / 2 - 8, px));
-            }
-          }
-          const pond = decorMesh(
-            'Pool',
-            new THREE.PlaneGeometry(pw, 30),
-            this.artMaterial({
-              map: poolTexture(`pool-${t.x}-${i}`),
-              transparent: true,
-              depthWrite: false,
-            })
-          );
-          pond.position.set(px, t.y + 9, 5);
-          this.stage?.add(pond);
-        }
-      }
-
-      /*
        * Broken corners at both ends of every standable slab.
        *
        * Only on tiles that are platforms rather than boundary walls, and only on the ends
@@ -815,17 +740,15 @@ export class M4SSRig extends ENGINE.SceneNode {
         }
       }
 
-      if (t.w >= 120) {
-        const lip = lipTexture(`lip-${t.x}-${t.y}`);
-        lip.repeat.set(Math.max(1, t.w / 256), 1);
-        const fringe = decorMesh(
-          'Lip',
-          new THREE.PlaneGeometry(t.w, 34),
-          this.artMaterial({ map: lip, transparent: true, depthWrite: false })
-        );
-        fringe.position.set(t.x + t.w / 2, t.y, 4);
-        this.stage?.add(fringe);
-      }
+      /*
+       * No vine curtain and no rubble lip any more.
+       *
+       * Three separate things used to be drawn at every top edge - a 54px curtain of
+       * hanging strands, a 34px band of broken rubble, and the grass crown - and stacked
+       * they made the dense green-at-the-top, grey-at-the-bottom beard the playtest asked
+       * to have removed. One of them has to do the job, and the crown is the right one: it
+       * is the only one that says GROUND rather than decoration.
+       */
     }
 
     /*
@@ -841,7 +764,9 @@ export class M4SSRig extends ENGINE.SceneNode {
     world.anchors.forEach((a, i) => {
       const node = decorMesh(
         'Growth',
-        new THREE.PlaneGeometry(176, 176),
+        // 132, down from 176: the pod's own radius came down too, so this is the sprite
+        // following the art rather than cropping it.
+        new THREE.PlaneGeometry(132, 132),
         this.artMaterial({
           map: bushTexture(`growth-${i}`, 160, a.live === false),
           transparent: true,
@@ -860,7 +785,7 @@ export class M4SSRig extends ENGINE.SceneNode {
        */
       const presence = decorMesh(
         'GrowthPresence',
-        new THREE.PlaneGeometry(230, 230),
+        new THREE.PlaneGeometry(190, 190),
         this.artMaterial({
           map: glowTexture('presence-glow', '#7fe0a0'),
           transparent: true,
@@ -986,27 +911,6 @@ export class M4SSRig extends ENGINE.SceneNode {
         const count = Math.floor(tile.w / 140);
         for (let i = 0; i < count && planted < 22; i++) {
           const px = tile.x + 40 + ((i + 0.3 + rng() * 0.5) / count) * (tile.w - 80);
-          /*
-           * Every seventh plant in the Gallery is a BELL JAR instead: the lab's own
-           * furniture among the flora that outlived it, capped at two so the prop stays
-           * an event rather than a set dressing pattern. Behind the plants (z 10) and a
-           * touch taller than them - glass over stone, unmistakably built.
-           */
-          if (this.theme.name === 'gallery' && planted % 7 === 3 && planted < 18) {
-            const jar = decorMesh(
-              'BellJar',
-              new THREE.PlaneGeometry(52, 71),
-              this.artMaterial({
-                map: vesselTexture(`vessel-${planted}`),
-                transparent: true,
-                depthWrite: false,
-              })
-            );
-            jar.position.set(px, tile.y - 32, 10);
-            this.stage?.add(jar);
-            planted += 1;
-            continue;
-          }
           const kind = rng() > 0.45 ? 'fern' : 'shroom';
           // 62px, up from 44: at 44 the playtest could not find them at all. Decoration
           // that needs pointing out is not decorating anything.
@@ -1024,6 +928,114 @@ export class M4SSRig extends ENGINE.SceneNode {
           planted += 1;
         }
       }
+    }
+
+    /*
+     * LIGHT THAT LANDS.
+     *
+     * The single biggest reason the stage read as "a bunch of assets" rather than as a
+     * place: every light source in it lit only itself. Lanterns glowed, god rays fell,
+     * and the ground under both was exactly as dark as the ground anywhere else - so
+     * nothing in the room was related to anything else. In the games this is measured
+     * against, light is the thing that ties a frame together: it comes from somewhere,
+     * it falls on something, and the floor tells you where the windows are.
+     *
+     * So every lantern now throws a pool onto the floor below it, and the god rays land
+     * in cool pools of their own. Additive ellipses on the walked surface, sized by how
+     * far the light has fallen, so a high lantern spreads wide and dim and a low one
+     * pools tight and bright.
+     */
+    {
+      const floorY = world.tiles.reduce(
+        (best, t) => (t.h < 400 && t.y > 100 && t.y < best ? t.y : best),
+        world.height
+      );
+      const pools: Array<{ x: number; warm: boolean }> = this.lanternXs.map((x) => ({
+        x,
+        warm: true,
+      }));
+      // Two cool pools where the shafts come down, placed off the level's own thirds so
+      // they never land in the same place as a lantern.
+      pools.push({ x: world.width * 0.36, warm: false });
+      pools.push({ x: world.width * 0.72, warm: false });
+
+      for (const pool of pools) {
+        if (pool.x < -100 || pool.x > world.width + 100) continue;
+        // Is there floor under this light at all? A pool hanging over a pit is worse than
+        // no pool: it lights the air above a hole.
+        const under = world.tiles.find(
+          (t) => t.h < 400 && t.y > 100 && pool.x > t.x + 20 && pool.x < t.x + t.w - 20
+        );
+        if (!under) continue;
+        const glow = decorMesh(
+          'FloorPool',
+          new THREE.PlaneGeometry(pool.warm ? 420 : 340, pool.warm ? 150 : 120),
+          this.artMaterial({
+            map: glowTexture(pool.warm ? 'pool-warm' : 'pool-cool', pool.warm ? PAL.lampWarm : PAL.hazeNear),
+            transparent: true,
+            opacity: pool.warm ? 0.3 : 0.22,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          })
+        );
+        glow.position.set(pool.x, under.y + 4, 7);
+        this.stage?.add(glow);
+      }
+      void floorY;
+    }
+
+    /*
+     * THE GROWTHS HANG FROM SOMETHING.
+     *
+     * They used to float at mid-height with nothing above them, which is the other half
+     * of the diagram problem: an object with no support is a game token, not a thing in a
+     * room. Each one now carries a strand running up out of the top of the frame - the
+     * cultivated tendril it grew down from, which is what the fiction says it is anyway.
+     * Behind the play plane so it never crosses the player, and dark, so it reads as
+     * structure rather than as another glowing thing to look at.
+     */
+    for (const a of world.anchors) {
+      const strand = decorMesh(
+        'GrowthStalk',
+        new THREE.PlaneGeometry(7, a.y),
+        this.artMaterial({
+          map: vineTexture(`stalk-${a.x}`),
+          transparent: true,
+          opacity: 0.85,
+          depthWrite: false,
+        })
+      );
+      strand.position.set(a.x, a.y / 2, -12);
+      this.stage?.add(strand);
+    }
+
+    /*
+     * THE FRAME CLOSES AT THE BOTTOM.
+     *
+     * The top of the view has had a canopy since pass 25 and the corners have had a
+     * vignette, but the bottom ran clean off the screen - so the camera sat outside the
+     * room looking in at a strip of floor. A dark bank of earth across the very bottom,
+     * IN FRONT of the play plane, puts the camera inside the room: the near ground rises
+     * between you and the floor, exactly as the references frame their own.
+     *
+     * It sits below the walk line by construction (the tiles' top edge is the walk line
+     * and this starts well beneath it), so it can never hide the player.
+     */
+    {
+      const bankTop = world.height - 46;
+      const bank = decorMesh(
+        'NearBank',
+        new THREE.PlaneGeometry(world.width * 1.4, 120),
+        this.artMaterial({
+          map: occluderTexture(`bank-${this.theme.name}`, 'leaves', 1280, 120),
+          transparent: true,
+          depthWrite: false,
+        })
+      );
+      // Flipped, so the ragged edge faces UP out of the bottom of the frame.
+      bank.scale.set(1, -1, 1);
+      bank.position.set(world.width / 2, bankTop + 60, 68);
+      this.stage?.add(bank);
     }
 
     /*
@@ -1369,6 +1381,7 @@ export class M4SSRig extends ENGINE.SceneNode {
      * place in this project where those two conventions happen to agree.
      */
     const spread = glowTexture('lantern-glow', PAL.lampWarm);
+    this.lanternXs = far.lanterns.map((l) => world.width / 2 + (l.u - 0.5) * world.width * 1.6);
     for (const lamp of far.lanterns) {
       const halo = decorMesh(
         'LanternGlow',

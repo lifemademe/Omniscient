@@ -1173,166 +1173,6 @@ export function endCapTexture(seed: string, w = 64, h = 128): THREE.CanvasTextur
 }
 
 /**
- * A standing pool, for the top of a platform.
- *
- * Pass 11 tried to widen the stage's value range with one and two pixel speculars scattered
- * over every lit stone, and it measured worse than doing nothing: a single pixel is below the
- * resolution of both the screen and any sampling of it, so it never reads as a highlight and
- * merely muddies its neighbours. The finding survived the revert - nothing in this stage is
- * wet enough to catch light, and the reference sets the top of its range on running water -
- * and this is that finding delivered at a size that can actually register.
- *
- * A pool is the right carrier because it is large, flat, horizontal and therefore the one
- * surface in a side-on scene that can plausibly mirror the light source. The bright bands
- * across it are reflections, and they are the brightest pixels in the level by a wide margin.
- */
-/*
- * Redrawn after the playtest called these "black oval shaped artifacts in the ground" -
- * which is what they were: a dark ellipse with a thin highlight, reading as a hole. Water
- * in a bioluminescent cavern should GLOW: the body is lit teal, the rim catches the moss
- * light, and a couple of cyan sparks sit on the surface. The brightest pixels in the level
- * still live here, which was always the pool's actual job.
- */
-export function poolTexture(seed: string, w = 128, h = 32): THREE.CanvasTexture {
-  const rng = createRng(seedFrom(seed));
-  const { c, g } = surface(w, h);
-  const cx = w / 2;
-  const cy = h * 0.42;
-
-  // The water body: banded teal, lit from within, widest band brightest at the surface.
-  const fills = [
-    mixHex(PAL.bioCyan, PAL.voidDeep, 0.55),
-    mixHex(PAL.bioCyan, PAL.voidDeep, 0.3),
-    mixHex(PAL.bioCyan, PAL.bioCore, 0.25),
-  ];
-  fills.forEach((fill, i2) => {
-    const rx = (w / 2 - 3) * (1 - i2 * 0.16);
-    const ry = (h / 2 - 2) * (1 - i2 * 0.22);
-    g.fillStyle = fill;
-    for (let dy = -ry; dy <= ry; dy++) {
-      const half = Math.round(rx * Math.sqrt(Math.max(0, 1 - (dy / ry) ** 2)));
-      if (half > 0) g.fillRect(Math.round(cx - half), Math.round(cy + dy + i2), half * 2, 1);
-    }
-  });
-
-  // The surface line: the brightest stroke in the level, broken so it reads as ripple.
-  g.fillStyle = mixHex(PAL.bioCore, '#ffffff', 0.4);
-  for (let x = 6; x < w - 6; x += Math.round(range(rng, 5, 12))) {
-    g.fillRect(x, Math.round(cy - 1), Math.round(range(rng, 3, 7)), 1);
-  }
-
-  // Two sparks sitting on the water.
-  for (let i2 = 0; i2 < 2; i2++) {
-    const sx = Math.round(cx + range(rng, -w * 0.3, w * 0.3));
-    g.fillStyle = PAL.bioCore;
-    g.fillRect(sx, Math.round(cy - 2), 2, 2);
-  }
-
-  /*
-   * Reflections: water doubles every light (the 08_50_08 reference reflects each glow as
-   * a vertical smear). Two broken columns falling from the surface line, brightest at the
-   * top, drawn as dashes so the water keeps moving.
-   */
-  for (let i2 = 0; i2 < 2; i2++) {
-    const rx = Math.round(cx + range(rng, -w * 0.28, w * 0.28));
-    const depth = Math.round(range(rng, h * 0.2, h * 0.4));
-    for (let d = 0; d < depth; d++) {
-      if (d % 3 === 2) continue;
-      g.fillStyle = d < depth * 0.4 ? mixHex(PAL.bioCore, PAL.bioCyan, 0.4) : PAL.bioCyan;
-      g.fillRect(rx, Math.round(cy + 1 + d), 2, 1);
-    }
-  }
-
-  return pixelTexture(c);
-}
-
-/**
- * The ragged lip that sits on a platform's top edge.
- *
- * Every platform in this stage is a box, so every platform reads with a dead-straight top and
- * a square-cut end - which is the last strongly "tile map" thing in the frame. The reference
- * never shows a straight edge: there is always rubble, a tuft of growth, or a broken corner
- * poking up out of the line.
- *
- * Drawn on a transparent canvas whose LOWER half is solid platform and whose upper half is
- * empty except for the things breaking upward through it. Straddled over the real edge, the
- * solid half hides the box's own corner and the broken half becomes the silhouette. The
- * collision box underneath is untouched - this is paint over a level that already plays, and
- * the harness would catch it if it were not.
- */
-export function lipTexture(seed: string, w = 256, h = 64): THREE.CanvasTexture {
-  const rng = createRng(seedFrom(seed));
-  const { c, g } = surface(w, h);
-  const line = Math.round(h * 0.5);
-
-  /*
-   * The solid half: the top of the platform, in stone AND its moss.
-   *
-   * The first version drew plain stone here and it measurably dimmed the stage - palette fell
-   * five points and the highlights with it. The reason is that this band sits exactly over the
-   * brightest, most varied strip in the whole level: the moss run along a platform's top edge.
-   * Covering that with grey rubble is a straight trade of the stage's best pixels for a
-   * broken silhouette, and there is no reason to accept the trade when the lip can simply
-   * carry the moss itself.
-   */
-  for (let x = 0; x < w; x++) {
-    const shade = Math.floor(rng() * 4);
-    g.fillStyle = ramp(PAL.stoneDark, PAL.stoneEdge, 6, 1 + shade);
-    g.fillRect(x, line, 1, h - line);
-  }
-  mossRun(g, rng, 0, w, line, 16);
-
-  /*
-   * Rubble breaking upward through the line.
-   *
-   * Irregular in height AND in spacing, because evenly spaced bumps read as crenellations.
-   * Each lump is drawn as a stack of narrowing rows so its own silhouette is stepped too.
-   */
-  let x = 0;
-  while (x < w) {
-    const gap = Math.round(range(rng, 2, 26));
-    x += gap;
-    if (x >= w) break;
-    const lumpW = Math.round(range(rng, 4, 22));
-    const lumpH = Math.round(range(rng, 2, line * 0.85));
-    for (let i = 0; i < lumpH; i++) {
-      const t = i / lumpH;
-      const inset = Math.round(t * lumpW * 0.42 + range(rng, 0, 1.4));
-      const wide = lumpW - inset * 2;
-      if (wide <= 0) break;
-      g.fillStyle = ramp(PAL.stoneDark, PAL.stoneEdge, 6, 1 + Math.floor((1 - t) * 3));
-      g.fillRect(x + inset, line - i, wide, 1);
-    }
-    // Moss caps most of them, which is what ties the rubble to the rest of the surface.
-    if (rng() > 0.25) {
-      const capH = Math.round(range(rng, 1, 4));
-      g.fillStyle = ramp(PAL.mossDark, PAL.mossLit, 5, 2 + Math.floor(rng() * 3));
-      g.fillRect(x + 1, line - lumpH - capH, Math.max(1, lumpW - 2), capH);
-    }
-    x += lumpW;
-  }
-
-  // Tufts of growth standing proud of the rubble, taller and thinner than the stone.
-  for (let i = 0; i < Math.round(w / 14); i++) {
-    const tx = Math.round(range(rng, 0, w));
-    const th = Math.round(range(rng, 4, line * 0.95));
-    g.fillStyle = ramp(PAL.mossDark, PAL.mossMid, 4, 1 + Math.floor(rng() * 2));
-    g.fillRect(tx, line - th, 1, th);
-    if (rng() > 0.55) {
-      g.fillStyle = PAL.mossLit;
-      g.fillRect(tx, line - th, 1, 2);
-    }
-    // A leaf hanging off some of them.
-    if (rng() > 0.78) {
-      g.fillStyle = PAL.leafMid;
-      g.fillRect(tx + (rng() > 0.5 ? 1 : -2), line - th + 2, 2, 2);
-    }
-  }
-
-  return pixelTexture(c);
-}
-
-/**
  * A glow, for things that emit.
  *
  * The stage has three light sources - the portal, the lanterns and the slime itself - and
@@ -1392,13 +1232,25 @@ export function glowTexture(seed: string, colour: string, size = 128): THREE.Can
   }
   g.putImageData(img, 0, 0);
 
-  // A few motes caught in the near field, so the glow has something in it.
-  for (let i = 0; i < 14; i++) {
-    const a = range(rng, 0, Math.PI * 2);
-    const d = range(rng, size * 0.12, size * 0.42);
-    g.fillStyle = colour;
-    g.fillRect(Math.round(cx + Math.cos(a) * d), Math.round(cx + Math.sin(a) * d), 2, 2);
-  }
+  /*
+   * The motes are GONE, and this is the note that keeps them gone.
+   *
+   * Fourteen hard 2x2 pips used to be painted into every glow sprite "so the glow has
+   * something in it". Every glow sprite: the lanterns, the portal, the growth presences,
+   * the hover halo, the embers - and the slime's own 260px halo, which is centred on the
+   * creature and therefore carried its fourteen pips AROUND THE PLAYER, at fixed offsets,
+   * for ever.
+   *
+   * That is the "static pixels that follow the mass", reported three times. Twice I read
+   * it as loose sim particles and culled those instead, which fixed a real but different
+   * thing and left the actual cause untouched: the dots were never particles at all, they
+   * were painted into the halo. A sprite scaled from 128px to 260 turns a 2x2 pip into a
+   * 4px square with hard edges, in the one place on screen the eye is already looking.
+   *
+   * The lesson for the next one: when a complaint survives a fix, the fix was aimed at
+   * something the complaint was not about. Find the thing that is actually drawn.
+   */
+  void rng;
 
   return pixelTexture(c);
 }
@@ -1485,17 +1337,21 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
   const { c, g } = surface(size, size);
   const cx = size / 2;
   const cy = size / 2;
-  const r = size * 0.27;
+  // Smaller, per the ask: the pod was reading as a lily pad at 0.27 of the sprite. The
+  // sprite plane shrinks with it in the rig, so this is a real size cut, not a crop.
+  const r = size * 0.22;
 
+  /*
+   * Brighter, per the ask. The live pod now walks from a mid green straight up to the
+   * slime's own glow, so the thing you have to find is lit from the inside - it is a
+   * cultivated organism running on the lab's feed, and when the feed reaches it, it
+   * SHOWS. The dead pod keeps the same four-step structure in ember red so the two read
+   * as one object in two states.
+   */
   const bands = dead
-    ? ['#3a1410', '#6b2418', '#8f3524', PAL.rustLit]
-    : [
-        mixHex(PAL.leafDark, PAL.voidDeep, 0.35),
-        PAL.mossMid,
-        PAL.mossLit,
-        PAL.slime,
-      ];
-  const heart = dead ? mixHex('#c4553f', PAL.lampWarm, 0.35) : PAL.slimeGlow;
+    ? ['#5a2018', '#8f3524', '#b8492c', PAL.rustLit]
+    : [PAL.mossMid, PAL.mossLit, PAL.slime, PAL.slimeGlow];
+  const heart = dead ? mixHex('#c4553f', PAL.lampWarm, 0.5) : mixHex(PAL.slimeGlow, '#ffffff', 0.5);
 
   // The stem, first, so the bulb sits over its top.
   g.fillStyle = dead ? '#2a1a14' : mixHex(PAL.vineMid, PAL.leafDark, 0.5);
@@ -1516,7 +1372,14 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
       if (half > 0) g.fillRect(Math.round(cx - half), Math.round(cy + dy), half * 2, 1);
     }
   };
-  disc(r + 3, mixHex(PAL.voidDeep, '#000000', 0.25));
+  /*
+   * No black outer ring. The first pod carried one and the playtest asked for it gone: a
+   * hard dark rim reads as a UI token - a button, a marker - where this has to read as a
+   * living thing that belongs to the room. What replaces it is one step of the pod's own
+   * darkest green, which still separates the shape from the background without drawing a
+   * line around it.
+   */
+  disc(r + 2, bands[0]);
   bands.forEach((fill, i2) => disc(r * (1 - i2 * 0.19), fill));
   // The heart, offset up-left toward the key light, and a small specular above it.
   g.fillStyle = heart;
@@ -1994,116 +1857,139 @@ export function dirtTexture(
   h = 96,
   variant: 'plain' | 'grass' = 'plain'
 ): THREE.CanvasTexture {
+  /*
+   * Round 2, and the fault it fixes is the one the playtest named: "the ground texture
+   * does not make sense".
+   *
+   * The first version graded itself from light at the top to dark at the bottom, which is
+   * correct for ONE slab of earth and catastrophic for a texture that repeats. A 300-tall
+   * platform tiles this three times over, so the ground came out as three stacked strata
+   * with a hard light/dark seam at every join - stripes across the dirt, exactly what
+   * "seamless" was supposed to have ruled out.
+   *
+   * So the material is now FLAT in the vertical: no gradient, no top, no bottom, just
+   * earth. Depth comes from the interior-fade plane the rig already lays over deep tiles,
+   * which is where a depth cue belongs - one gradient over the whole mass rather than one
+   * per repeat.
+   *
+   * What gives it structure instead is compaction: clumps of packed soil in a few values,
+   * embedded stones, grit and root threads, all wrapped at BOTH edges so every feature
+   * continues across every join in both axes.
+   */
   const rng = createRng(seedFrom(seed + variant));
   const { c, g } = surface(w, h);
 
-  /*
-   * The ramp, brightened after the first draft came back as black mud on the texture
-   * sheet. Earth has to READ as earth - the playtest asked for dirt, and a floor the eye
-   * files as "dark" is not dirt, it is absence. The top of the ramp is warmed toward rust
-   * so the ground is the one large brown field in a green room, which also gives the moss
-   * and the slime something that is not their own hue to sit against.
-   */
   const earth = [
-    mixHex(PAL.vineDark, PAL.voidDeep, 0.3),
+    mixHex(PAL.vineDark, PAL.voidDeep, 0.35),
     PAL.vineDark,
-    mixHex(PAL.vineDark, PAL.vineMid, 0.55),
+    mixHex(PAL.vineDark, PAL.vineMid, 0.5),
     PAL.vineMid,
-    mixHex(PAL.vineMid, PAL.rustMid, 0.3),
+    mixHex(PAL.vineMid, PAL.rustMid, 0.28),
   ];
 
-  // The ground itself: horizontal bands of packed earth, darkest at the bottom, with the
-  // band boundaries wandering so the strata do not read as ruled lines.
-  const bandCount = 5;
-  for (let y = 0; y < h; y++) {
-    const t = y / h;
-    const wobble = Math.sin(y * 0.7) * 0.03 + Math.sin(y * 0.23) * 0.04;
-    const idx = Math.max(0, Math.min(bandCount - 1, Math.floor((1 - t + wobble) * bandCount)));
-    g.fillStyle = earth[idx];
-    g.fillRect(0, y, w, 1);
-  }
-
-  // Grit: two-pixel flecks a step off their own band, dense enough to read as soil.
-  for (let i = 0; i < (w * h) / 55; i++) {
-    const x = Math.round(range(rng, 0, w));
-    const y = Math.round(range(rng, 0, h));
-    const t = 1 - y / h;
-    // Two steps off the local band rather than one: at one step the grit averaged into
-    // its own background and the soil came out as a flat wash.
-    const idx = Math.floor(t * bandCount) + (rng() > 0.5 ? 2 : -2);
-    g.fillStyle = earth[Math.max(0, Math.min(bandCount - 1, idx))];
-    g.fillRect(x, y, 2, 1);
-  }
-
-  /** A pebble, drawn twice when it straddles an edge so the tile stays seamless. */
-  const pebble = (x: number, y: number, pr: number, lit: string, dark: string): void => {
+  /** Draw at x, and at its wraps, so nothing is ever cut by an edge. */
+  const wrapped = (x: number, y: number, fw: number, fh: number, fill: string): void => {
+    g.fillStyle = fill;
     for (const ox of [0, -w, w]) {
-      for (let dy = -pr; dy <= pr; dy++) {
-        const half = Math.round(Math.sqrt(Math.max(0, pr * pr - dy * dy)));
-        if (half <= 0) continue;
-        g.fillStyle = dy < -pr * 0.2 ? lit : dark;
-        g.fillRect(Math.round(x + ox - half), Math.round(y + dy), half * 2, 1);
+      for (const oy of [0, -h, h]) {
+        g.fillRect(Math.round(x + ox), Math.round(y + oy), fw, fh);
       }
     }
   };
-  for (let i = 0; i < 11; i++) {
-    const pr = range(rng, 3, 8);
-    pebble(
-      range(rng, 0, w),
-      range(rng, h * 0.2, h - 4),
-      pr,
-      mixHex(PAL.stoneMid, PAL.vineMid, 0.35),
-      mixHex(PAL.stoneDark, PAL.vineDark, 0.45)
-    );
+
+  // The base: the middle of the ramp, so clumps can go both lighter and darker.
+  g.fillStyle = earth[2];
+  g.fillRect(0, 0, w, h);
+
+  /*
+   * Clumps of compacted soil: soft-edged patches a step either side of the base. Drawn as
+   * rows of varying width rather than as circles, which keeps them irregular - earth has
+   * no round shapes in it.
+   */
+  for (let i = 0; i < 26; i++) {
+    const cx2 = range(rng, 0, w);
+    const cy2 = range(rng, 0, h);
+    const cr = range(rng, 5, 15);
+    const fill = earth[rng() > 0.5 ? 3 : 1];
+    for (let dy = -cr; dy <= cr; dy++) {
+      const half = Math.sqrt(Math.max(0, cr * cr - dy * dy)) * range(rng, 0.7, 1.15);
+      if (half < 1) continue;
+      wrapped(cx2 - half, cy2 + dy, Math.round(half * 2), 1, fill);
+    }
   }
 
-  // Roots threading down through the earth, wrapped at the edges like the pebbles.
-  for (let i = 0; i < 4; i++) {
+  // Grit: two-pixel flecks across the full range, dense enough to read as soil at a glance.
+  for (let i = 0; i < (w * h) / 42; i++) {
+    const idx = Math.floor(range(rng, 0, earth.length));
+    wrapped(range(rng, 0, w), range(rng, 0, h), 2, 1, earth[Math.min(earth.length - 1, idx)]);
+  }
+
+  /*
+   * Stones buried in the earth: a dark body with a lit crown, since even in a cross
+   * section the eye wants a light direction. These are the only hard shapes in the
+   * material and they are what stops it reading as noise.
+   */
+  for (let i = 0; i < 9; i++) {
+    const sx = range(rng, 0, w);
+    const sy = range(rng, 0, h);
+    const sr = range(rng, 3, 8);
+    // Lighter than the earth around them, not darker: the first pass mixed these off
+    // stoneDark and they read as HOLES punched in the ground rather than as stones
+    // sitting in it. A buried stone catches more light than the soil, never less.
+    const body = mixHex(PAL.stoneMid, PAL.vineMid, 0.45);
+    const crown = mixHex(PAL.stoneLit, PAL.vineMid, 0.3);
+    for (let dy = -sr; dy <= sr; dy++) {
+      const half = Math.round(Math.sqrt(Math.max(0, sr * sr - dy * dy)));
+      if (half <= 0) continue;
+      wrapped(sx - half, sy + dy, half * 2, 1, dy < -sr * 0.35 ? crown : body);
+    }
+    // The shadow the stone sits in.
+    wrapped(sx - sr, sy + sr, sr * 2, 1, earth[0]);
+  }
+
+  /*
+   * Roots threading through. One step off the base rather than the darkest step, and one
+   * pixel wide: at 2px in the darkest earth they came out as hard black scratches ruled
+   * across the soil, which is the same fault the strata had - a graphic line where the
+   * material wants a texture.
+   */
+  for (let i = 0; i < 5; i++) {
     let x = range(rng, 0, w);
-    const y0 = range(rng, 0, h * 0.5);
-    const len = range(rng, h * 0.25, h * 0.7);
-    g.fillStyle = mixHex(PAL.vineMid, PAL.voidDeep, 0.35);
+    const y0 = range(rng, 0, h);
+    const len = range(rng, h * 0.3, h * 0.9);
     for (let d = 0; d < len; d++) {
-      if (d % 6 === 0) x += range(rng, -1.2, 1.2);
-      const y = Math.round(y0 + d);
-      if (y >= h) break;
-      for (const ox of [0, -w, w]) g.fillRect(Math.round(x + ox), y, 2, 1);
+      if (d % 5 === 0) x += range(rng, -1.3, 1.3);
+      wrapped(x, y0 + d, 1, 1, earth[1]);
     }
   }
 
   if (variant === 'grass') {
     /*
-     * The crown. A mat of living green across the top rows, blades standing up out of it,
-     * and roots hanging down into the earth below - the fringe is what lets the grass tile
-     * sit on the plain one without a visible join.
+     * The crown, cut back hard. It used to hang a fringe of moss tongues and roots down
+     * into the dirt, and with the vine curtain and the rubble lip also drawn at that
+     * edge the ground grew a dense green-to-grey beard that the playtest asked to have
+     * removed. What is left is what a grass line actually needs: a dark root band, a lit
+     * mat, and short blades breaking the top - and NOTHING hanging below it.
      */
-    const matH = Math.max(6, Math.round(h * 0.13));
-    g.fillStyle = mixHex(PAL.mossDark, PAL.leafDark, 0.4);
+    const matH = Math.max(5, Math.round(h * 0.1));
+    g.fillStyle = mixHex(PAL.mossDark, PAL.vineDark, 0.45);
+    g.fillRect(0, 0, w, matH + 3);
+    g.fillStyle = PAL.mossDark;
     g.fillRect(0, 0, w, matH);
     g.fillStyle = PAL.mossMid;
-    g.fillRect(0, 0, w, Math.max(2, Math.round(matH * 0.45)));
-    g.fillStyle = mixHex(PAL.mossLit, PAL.mossMid, 0.35);
+    g.fillRect(0, 0, w, Math.max(2, Math.round(matH * 0.5)));
+    g.fillStyle = PAL.mossLit;
     g.fillRect(0, 0, w, 2);
-
-    // Blades standing above the mat, seeded, each shaded along its length.
-    for (let i = 0; i < w / 5; i++) {
+    // Blades: short, sparse, and only ever ABOVE the mat.
+    for (let i = 0; i < w / 9; i++) {
       const bx = Math.round(range(rng, 0, w));
-      const bh = Math.round(range(rng, 3, 11));
-      const lean = rng() > 0.5 ? 1 : -1;
+      const bh = Math.round(range(rng, 2, 6));
       for (let d = 0; d < bh; d++) {
         const y = matH - 1 - d;
         if (y < 0) break;
-        g.fillStyle = d > bh * 0.6 ? PAL.mossLit : PAL.mossMid;
-        const x = Math.round(bx + lean * Math.round(d / 4));
-        for (const ox of [0, -w, w]) g.fillRect(x + ox, y - Math.round(bh * 0.6), 1, 1);
+        g.fillStyle = d > bh * 0.5 ? PAL.mossLit : PAL.mossMid;
+        for (const ox of [0, -w, w]) g.fillRect(bx + ox, y, 1, 1);
       }
-    }
-    // The fringe: roots and moss tongues reaching down into the dirt.
-    for (let i = 0; i < w / 7; i++) {
-      const fx = Math.round(range(rng, 0, w));
-      const fl = Math.round(range(rng, 2, 12));
-      g.fillStyle = rng() > 0.5 ? PAL.mossDark : mixHex(PAL.mossDark, PAL.vineMid, 0.5);
-      for (const ox of [0, -w, w]) g.fillRect(fx + ox, matH, 2, fl);
     }
   }
 
@@ -2187,66 +2073,6 @@ export function acidTexture(seed: string, w = 256, h = 128): THREE.CanvasTexture
     g.fillStyle = mixHex(PAL.mossLit, PAL.voidDeep, range(rng, 0.4, 0.75));
     g.fillRect(fx, fy, 2, 2);
   }
-
-  return pixelTexture(c);
-}
-
-/**
- * A bell jar: the lab's purpose, sitting on its floor. Glass dome on a stone plinth with
- * a culture sample still glowing inside - the one prop that says "someone was studying
- * something here" without a word of text. Drawn per the 08_50_08 reference's vessels:
- * rim-lit glass (two vertical highlight slivers, a lit crown), the culture as a soft blob
- * of the slime's own family, two bubbles rising.
- */
-export function vesselTexture(seed: string, w = 44, h = 60): THREE.CanvasTexture {
-  const rng = createRng(seedFrom(seed));
-  const { c, g } = surface(w, h);
-  const cx = w / 2;
-
-  // The plinth: three stone rows, lit top.
-  const plinthH = 10;
-  g.fillStyle = PAL.stoneMid;
-  g.fillRect(2, h - plinthH, w - 4, plinthH);
-  g.fillStyle = PAL.stoneLit;
-  g.fillRect(2, h - plinthH, w - 4, 2);
-  g.fillStyle = PAL.stoneDark;
-  g.fillRect(2, h - 2, w - 4, 2);
-
-  // The glass: a dome outline one pixel thick, interior barely darker than the air.
-  const glassTop = 6;
-  const glassBottom = h - plinthH;
-  const rimLit = mixHex(PAL.hazeNear, PAL.bioCore, 0.35);
-  const rimDim = mixHex(PAL.hazeNear, PAL.hazeFar, 0.5);
-  for (let y = glassTop; y < glassBottom; y++) {
-    const t = (y - glassTop) / (glassBottom - glassTop);
-    const half = t < 0.25 ? Math.round((w / 2 - 3) * Math.sqrt(t / 0.25)) : w / 2 - 3;
-    // Interior: a whisper darker, so the glass contains air rather than paint.
-    g.fillStyle = mixHex(PAL.voidMid, PAL.hazeFar, 0.3);
-    g.fillRect(Math.round(cx - half), y, half * 2, 1);
-    // The rim.
-    g.fillStyle = y < glassTop + 8 ? rimLit : rimDim;
-    g.fillRect(Math.round(cx - half), y, 1, 1);
-    g.fillRect(Math.round(cx + half) - 1, y, 1, 1);
-  }
-  // Crown highlight and two rim slivers - the glass catching the growth light.
-  g.fillStyle = rimLit;
-  g.fillRect(Math.round(cx) - 3, glassTop, 6, 1);
-  g.fillRect(Math.round(cx - w * 0.28), Math.round(h * 0.3), 1, Math.round(h * 0.3));
-  g.fillStyle = mixHex(rimLit, rimDim, 0.5);
-  g.fillRect(Math.round(cx + w * 0.3), Math.round(h * 0.36), 1, Math.round(h * 0.22));
-
-  // The culture: a pooled blob, brightest at its heart, two bubbles above it.
-  const by = glassBottom - 4;
-  for (let row = 0; row < 9; row++) {
-    const half = Math.round((w * 0.26) * Math.sqrt(Math.max(0, 1 - (row / 9) ** 2)));
-    g.fillStyle = row < 3 ? PAL.mossLit : PAL.mossMid;
-    g.fillRect(Math.round(cx - half), by - row, half * 2, 1);
-  }
-  g.fillStyle = PAL.slimeGlow;
-  g.fillRect(Math.round(cx) - 2, by - 3, 4, 3);
-  g.fillStyle = PAL.slime;
-  g.fillRect(Math.round(cx + range(rng, -6, 6)), by - Math.round(range(rng, 12, 20)), 2, 2);
-  g.fillRect(Math.round(cx + range(rng, -6, 6)), by - Math.round(range(rng, 22, 30)), 2, 2);
 
   return pixelTexture(c);
 }
