@@ -810,7 +810,9 @@ export class M4SSRig extends ENGINE.SceneNode {
          * additive sprite - light ADDS, that is the whole of what makes something look
          * lit rather than painted. Same size as the lantern's glow, same blend.
          */
-        new THREE.PlaneGeometry(166, 166),
+        // 128, down from 166: "less wide". The falloff tightened with it, so this is the
+        // sprite following the art rather than cropping it.
+        new THREE.PlaneGeometry(128, 128),
         this.artMaterial({
           map: bushTexture(`growth-${i}`, 160, a.live === false),
           transparent: true,
@@ -830,11 +832,13 @@ export class M4SSRig extends ENGINE.SceneNode {
        */
       const presence = decorMesh(
         'GrowthPresence',
-        new THREE.PlaneGeometry(230, 230),
+        // Tighter and dimmer than the growth itself: this is the bloom AROUND the lamp,
+        // and at 230 it was a wide flat wash that made the whole object read as dull.
+        new THREE.PlaneGeometry(170, 170),
         this.artMaterial({
-          map: glowTexture('presence-glow', '#7fe0a0'),
+          map: glowTexture('presence-glow', '#a8f06a'),
           transparent: true,
-          opacity: a.live === false ? 0 : 0.3,
+          opacity: a.live === false ? 0 : 0.26,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
         })
@@ -1084,38 +1088,45 @@ export class M4SSRig extends ENGINE.SceneNode {
     }
 
     /*
-     * THE SEPARATION SCRIM, and why a flat dark plane is the right answer.
+     * THE DEPTH FOG - and why the first attempt at this was backwards.
      *
-     * The playtest's note was "find a way to separate the background from the player's
-     * view of the gameplay things", and it is the correct diagnosis: this stage has six
-     * layers of drawn detail behind the play plane, all rendered with the same contrast
-     * as the platforms the player is standing on, so the eye has to work out which green
-     * shape is a place to stand and which is a tree forty metres away.
+     * Separating the background from the play plane was the right goal and a dark scrim
+     * was the wrong instrument. Darkening pushes everything toward black, which does
+     * reduce the background's contrast, but it also drags the whole frame down and takes
+     * the light out of anything glowing behind it - the growths went dull the moment it
+     * went in.
      *
-     * Every trick for this comes down to the same principle - make the background lose a
-     * competition it should never have been in. Depth of field is out (this is pixel art
-     * and a blur would smear the very edges that make it read); recolouring each layer is
-     * a tuning problem with six knobs that fight each other. One dark plane in front of
-     * ALL of them costs a single draw and moves every background value down together,
-     * which keeps their relationships intact while dropping them out of the play plane's
-     * range. It is the oldest trick in scene painting and it is still the best one.
+     * Distance does not make things darker. It makes them LIGHTER, flatter and closer to
+     * the colour of the air, because there is more air in the way scattering light into
+     * the line of sight - which is why every distant hill is pale blue and why the
+     * reference's greenhouse glows pale teal behind a foreground of near-black stone.
+     * That is aerial perspective, and a fog plane is how you buy it: normal blending
+     * toward a pale haze colour lifts the background's blacks toward mid-tone while
+     * barely touching its highlights, so the layers behind it lose their CONTRAST rather
+     * than their light.
      *
-     * At z -50: behind the tiles (whose bodies start at -46), in front of the rays, the
-     * haze, the forest, the architecture and the backdrop.
+     * The play plane keeps its full range and is now the darkest, most saturated thing in
+     * the frame - which is exactly the relationship the reference has, and the one that
+     * makes a platform read as standable at a glance.
+     *
+     * At z -50: in front of the rays, the haze, the forest, the architecture and the
+     * backdrop; behind the tiles, whose bodies start at -46.
      */
     {
-      const scrim = decorMesh(
-        'Separation',
+      const fog = decorMesh(
+        'DepthFog',
         new THREE.PlaneGeometry(world.width * 2, world.height * 2),
         this.artMaterial({
-          color: new THREE.Color(PAL.voidDeep),
+          color: new THREE.Color(
+            this.theme.name === 'gallery' ? '#3d7a6c' : '#2f5f70'
+          ),
           transparent: true,
-          opacity: 0.42,
+          opacity: 0.46,
           depthWrite: false,
         })
       );
-      scrim.position.set(world.width / 2, world.height / 2, -50);
-      this.stage?.add(scrim);
+      fog.position.set(world.width / 2, world.height / 2, -50);
+      this.stage?.add(fog);
     }
 
     /*

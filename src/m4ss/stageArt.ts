@@ -1337,14 +1337,25 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
   ];
   const STEPS = 10;
   // The glow's colour, and how far it reaches as a fraction of the sprite.
-  const tint = dead ? [156, 74, 52] : [150, 214, 96];
-  const reach = dead ? 0.62 : 0.86;
+  /*
+   * Hotter and narrower, after the first version read as dull and wide.
+   *
+   * Two numbers do that. The TINT is what the falloff is multiplied by, and at
+   * [150,214,96] the brightest pixel the glow could ever produce was already a mid green -
+   * additive or not, a light cannot be brighter than its own colour. And the REACH spends
+   * the sprite's area: at 0.86 the energy was spread across the whole plane, which is what
+   * "wide" and "washed out" both mean. Pulled in to 0.58 with a steeper curve, the same
+   * light is concentrated - the core is genuinely bright and the edge still dies to
+   * nothing.
+   */
+  const tint = dead ? [180, 86, 58] : [196, 248, 122];
+  const reach = dead ? 0.5 : 0.58;
 
   const img = g.createImageData(size, size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const u = Math.hypot(x - cx + 0.5, y - cx + 0.5) / ((size / 2) * reach);
-      const fall = u >= 1 ? 0 : (1 - u) ** 2;
+      const fall = u >= 1 ? 0 : (1 - u) ** 2.6;
       const f = fall * STEPS;
       const step = Math.floor(f) + (f % 1 > BAYER[y & 3][x & 3] / 16 ? 1 : 0);
       const k = Math.min(STEPS, step) / STEPS;
