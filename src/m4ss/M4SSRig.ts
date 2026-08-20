@@ -626,6 +626,8 @@ export class M4SSRig extends ENGINE.SceneNode {
      */
     const stoneMap = stoneTexture(`m4ss-stone-${this.theme.name}`);
     const wallMap = stoneTexture(`m4ss-stone-${this.theme.name}`, 128, 96, 'wall');
+    /** Every pool placed below, so the ooze-fall can pick the most visible one. */
+    const poolSpots: Array<{ x: number; y: number }> = [];
 
     for (const t of world.tiles) {
       /*
@@ -742,41 +744,7 @@ export class M4SSRig extends ENGINE.SceneNode {
           );
           pond.position.set(px, t.y + 9, 5);
           this.stage?.add(pond);
-
-          /*
-           * The fall that feeds it. One per stage, Gallery only, over the first pool of
-           * the first wide platform: a broken feed pipe up at midground height pouring
-           * culture medium into the water - the reference's brightest moment, and the
-           * story of why these pools glow at all. Behind the play plane (z -14) so the
-           * slime always crosses IN FRONT of the liquid: decor, never obstacle.
-           */
-          if (this.theme.name === 'gallery' && !this.oozeFallMat && pools === 2 && i === 0) {
-            const drop = 190;
-            const mat = this.artMaterial({
-              map: oozeFallTexture(`fall-${t.x}`, 16, 256),
-              transparent: true,
-              opacity: 0.9,
-              depthWrite: false,
-            });
-            const fall = decorMesh('OozeFall', new THREE.PlaneGeometry(20, drop), mat);
-            fall.position.set(px, t.y - drop / 2 + 6, -14);
-            this.stage?.add(fall);
-            this.oozeFallMat = mat;
-            // The landing glow: water lit by what lands in it.
-            const splash = decorMesh(
-              'FallGlow',
-              new THREE.PlaneGeometry(120, 120),
-              this.artMaterial({
-                map: glowTexture('fall-glow', '#b9d94a'),
-                transparent: true,
-                opacity: 0.3,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false,
-              })
-            );
-            splash.position.set(px, t.y + 4, 6);
-            this.stage?.add(splash);
-          }
+          poolSpots.push({ x: px, y: t.y });
         }
       }
 
@@ -1015,6 +983,48 @@ export class M4SSRig extends ENGINE.SceneNode {
           planted += 1;
         }
       }
+    }
+
+    /*
+     * The ooze-fall, over whichever pool sits nearest the stage's centre. The first
+     * version fed "the first pool of the first wide tile", which is a composition
+     * decision delegated to tile declaration order - it landed offscreen-left behind the
+     * HUD. The centre-most pool is on camera in every framing that matters. Gallery
+     * only: a broken feed pipe pouring culture medium into the water, the reference's
+     * brightest moment and the story of why these pools glow. Behind the play plane
+     * (z -14), so the slime always crosses in front: decor, never obstacle.
+     */
+    if (this.theme.name === 'gallery' && poolSpots.length > 0) {
+      const centre = world.width / 2;
+      const spot = poolSpots.reduce((best, q) =>
+        Math.abs(q.x - centre) < Math.abs(best.x - centre) ? q : best
+      );
+      // From above the frame all the way down: the source is off-screen, like the
+      // reference's falls, so the column never has to explain itself mid-air.
+      const drop = spot.y + 4;
+      const mat = this.artMaterial({
+        map: oozeFallTexture('fall-centre', 16, 512),
+        transparent: true,
+        opacity: 0.78,
+        depthWrite: false,
+      });
+      const fall = decorMesh('OozeFall', new THREE.PlaneGeometry(16, drop), mat);
+      fall.position.set(spot.x, spot.y - drop / 2 + 6, -14);
+      this.stage?.add(fall);
+      this.oozeFallMat = mat;
+      const splash = decorMesh(
+        'FallGlow',
+        new THREE.PlaneGeometry(120, 120),
+        this.artMaterial({
+          map: glowTexture('fall-glow', '#b9d94a'),
+          transparent: true,
+          opacity: 0.3,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      splash.position.set(spot.x, spot.y + 4, 6);
+      this.stage?.add(splash);
     }
 
     /*

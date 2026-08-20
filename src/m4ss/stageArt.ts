@@ -2091,28 +2091,25 @@ export function oozeFallTexture(seed: string, w = 16, h = 256): THREE.CanvasText
   const { c, g } = surface(w, h);
   const cx = Math.floor(w / 2);
 
-  // The mouth: a broken pipe stub, dark metal, two rivets, a cracked lip.
-  const metal = mixHex(PAL.stoneDark, PAL.rustDark, 0.35);
-  g.fillStyle = mixHex(metal, '#000000', 0.35);
-  g.fillRect(0, 0, w, 10);
-  g.fillStyle = metal;
-  g.fillRect(1, 1, w - 2, 8);
-  g.fillStyle = mixHex(metal, PAL.stoneLit, 0.4);
-  g.fillRect(1, 1, w - 2, 1);
-  g.fillStyle = PAL.rustMid;
-  g.fillRect(2, 6, 2, 3);
-  g.fillRect(w - 4, 5, 2, 4);
-
-  // The liquid: a solid core with ragged bright edges, thinning as it falls.
-  for (let y = 10; y < h; y++) {
-    const t = (y - 10) / (h - 10);
-    const core = Math.max(2, Math.round(5 * (1 - t * 0.4)));
-    g.fillStyle = PAL.mossLit;
+  /*
+   * No pipe mouth: the source is OFF-FRAME. The first version carried a 10px pipe stub at
+   * the texture's top, and at game scale it vanished - the live capture showed a liquid
+   * column materialising in mid-air, which is worse than no source at all. The reference
+   * pours its falls in from outside the frame, so this one runs from the world's top
+   * (above anything the camera shows) down to its pool, and the eye supplies the pipe.
+   *
+   * Value discipline: the fall is DECOR, third tier - a thread of slimeGlow every seventh
+   * row is all the brightness it keeps; edges sit at mossMid so growth halos and the
+   * player stay louder.
+   */
+  for (let y = 0; y < h; y++) {
+    const t = y / h;
+    const core = Math.max(2, Math.round(4 * (1 - t * 0.35)));
+    g.fillStyle = PAL.mossMid;
     g.fillRect(cx - Math.floor(core / 2) - 1, y, core + 2, 1);
     g.fillStyle = PAL.slime;
     g.fillRect(cx - Math.floor(core / 2), y, core, 1);
-    // The bright thread down the middle, broken so it reads as running.
-    if (y % 5 !== 4) {
+    if (y % 7 < 4) {
       g.fillStyle = PAL.slimeGlow;
       g.fillRect(cx, y, 1, 1);
     }
