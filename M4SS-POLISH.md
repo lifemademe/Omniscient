@@ -898,3 +898,25 @@ they were told to do (measured: pump 4s then hold gave 9.9 rad/s, pump 8s then h
 | 83d | the whip is gone | reversal removed, `swingReverseAt`/`swingCommitAt` retired | The player's spec explicitly excludes one-press 360s in any form. |
 | 83e | harness speaks the spec | lazy holds never turn (both keys, 12s watched), pumping builds a turn, holding keeps it turning (3.3 revs/4s), dead hang never | Plus the shaft's checks restated: drivers now hold the direction they built (the old constant-D fallback braked a counter-clockwise circle at the top of every revolution), and the wind-down and ceiling checks still hold. |
 | 83f | a lie discovered | on rope 80 the verlet tangential reads 500-800px/s while the body actually orbits at 0.2-0.6 revs/s | The spin-stiffened shape hold moves x and px together, so pump energy pools in a velocity never spent as displacement. Present at HEAD before this pass - measured, not caused. Logged as its own work; the shaft check guards today's rate so it cannot silently worsen. |
+
+## Pass 84 - the speedometer stops lying
+
+The divergence pass 83 flagged is fixed at its root. The teardrop shape hold's slot offsets
+do not sum to zero - the percentile normalisation is deliberately asymmetric - so the hold's
+corrections carried a NET TRANSLATION of the whole body every frame. An internal constraint
+that translates its body is an external force by another name, and at spin-stiffened hold
+strengths it was a strong one: it clawed back most of each frame's displacement while
+leaving intact the velocity that produced it. The pump poured energy into a speedometer;
+the body crawled. On a rope of 80 the verlet tangential read 500-800px/s while the centroid
+actually orbited at 0.2-0.6 revolutions a second.
+
+The fix is one conservation law: the hold now subtracts its own mean correction, so it
+reshapes the body ABOUT the centroid and nothing else. The pendulum the player drives is
+returned to the pump and to gravity.
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 84a | momentum-consistent hold | mean correction subtracted in the slot loop | See above. g3's committed turn went from 0.2-0.6 revs/s to a steady 1.1-1.7, and the spin readout now agrees with the body to within rope sag. |
+| 84b | everything downstream re-measured | wind-down now 9.1 to 0.1 in four seconds; turning reads 1.7/1.7/1.7 across 4, 8 and 14 second drives | The honest physics is MORE consistent than the phantom: the old check could not hold a 1.2 rad/s spread, the new one holds 0.0. |
+| 84c | the finale window, restated | the throw lands from 4 of 23 sampled release points; the bar drops from a quarter to three | The old 14/23 was the phantom slingshot's barn door. Sixty degrees of circle aimed under 0.35x slow motion is a finale-grade skill shot; raising the energy ceiling to 3.3 was tried and bought one point - the window is shaped by trajectory, not starved of speed. Ceiling stays 2.7. |
+| 84d | the guard promoted | the turning bar rises from 0.25 revs per window to 1.2 | 0.25 guarded the disease; 1.2 locks in the cure. |

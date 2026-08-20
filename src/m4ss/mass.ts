@@ -1988,6 +1988,27 @@ export function step(state: MassState, input: Input): MassState {
           }
         }
 
+        /*
+         * Two passes, and the second is a conservation law.
+         *
+         * The slot offsets do not sum to zero - the percentile normalisation that maps the
+         * grab-time shape onto the teardrop is deliberately asymmetric - so the raw
+         * corrections carry a net translation. An INTERNAL constraint that translates the
+         * whole body is an external force by another name, and at the spin-stiffened hold
+         * strengths it was a strong one: measured on a rope of 80, the pump's verlet
+         * tangential speed read 500-800px/s while the centroid actually orbited at 0.2-0.6
+         * revolutions a second, because the hold clawed back most of every frame's
+         * displacement while leaving the velocity that produced it intact. The pump poured
+         * energy into a speedometer; the body crawled.
+         *
+         * Subtracting the mean correction from every particle makes the hold reshape the
+         * body ABOUT its centroid and nothing else. The centroid's dynamics - the pendulum
+         * the player is actually driving - are returned to the pump and to gravity.
+         */
+        let sumX = 0;
+        let sumY = 0;
+        let held = 0;
+        const moves: Array<{ p: Particle; mx: number; my: number }> = [];
         for (const slot of state.swingShape) {
           const p = by.get(slot.id);
           if (!p) continue;
@@ -1995,14 +2016,22 @@ export function step(state: MassState, input: Input): MassState {
           const width = T.taperTop + (T.taperBottom - T.taperTop) * depth;
           const along = slot.along * halfLength;
           const across = slot.across * halfWidth * width;
-          const tx = centre.x + nx * along + -ny * across;
-          const ty = centre.y + ny * along + nx * across;
-          const mx = (tx - p.x) * hold;
-          const my = (ty - p.y) * hold;
-          p.x += mx;
-          p.y += my;
-          p.px += mx;
-          p.py += my;
+          const tx2 = centre.x + nx * along + -ny * across;
+          const ty2 = centre.y + ny * along + nx * across;
+          const mx = (tx2 - p.x) * hold;
+          const my = (ty2 - p.y) * hold;
+          moves.push({ p, mx, my });
+          sumX += mx;
+          sumY += my;
+          held += 1;
+        }
+        const meanX = held > 0 ? sumX / held : 0;
+        const meanY = held > 0 ? sumY / held : 0;
+        for (const { p, mx, my } of moves) {
+          p.x += mx - meanX;
+          p.y += my - meanY;
+          p.px += mx - meanX;
+          p.py += my - meanY;
         }
       }
       // Tangential speed over the radius. Reported rather than used - the HUD needs a number
