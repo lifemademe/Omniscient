@@ -3574,7 +3574,21 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * clears the grass and leaves the docks standing has not done the job.
    */
   const bankWeeds = scatter(rng, {
-    modelUrl: '@project/assets/models/Plants/SM_WildGrass_01.glb',
+    /*
+     * SM_EagleFern_01, because SM_WildGrass_01 IS NOT IN THIS PROJECT.
+     *
+     * assets/models/Plants holds three files - EagleFern, SilverFir and WildCarrot - and
+     * the grass was never among them, so every load of this scene 404'd and the bank came
+     * up bare. The comment a few hundred lines above about all three grasses 404'ing was
+     * the same wound: that one was a constructed path the asset pipeline could not see,
+     * this one is a literal path to a file that does not exist. Same symptom, different
+     * cause, and worth telling apart - a path bug is fixed by writing it out, a missing
+     * asset is only fixed by using one that is actually there.
+     *
+     * A rank fern is a fair weed for a neglected bank, and it keeps the scene inside the
+     * assets this project ships.
+     */
+    modelUrl: '@project/assets/models/Plants/SM_EagleFern_01.glb',
     at: new THREE.Vector3(-2.75, 0, -0.2),
     width: 1.5,
     depth: 7.6,

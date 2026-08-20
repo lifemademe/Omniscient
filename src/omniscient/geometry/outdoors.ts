@@ -222,6 +222,22 @@ export function greenhouse(
         3
       )
     );
+    /*
+     * UV and INDEX, or the whole building refuses to merge.
+     *
+     * mergeGeometries requires every geometry in the batch to carry the SAME attribute
+     * set and to agree about whether they are indexed. Every other piece of glass here is
+     * a PlaneGeometry, which arrives with position, normal, uv AND an index; this apex was
+     * hand-built with position only, normals computed after, and no index at all - so the
+     * merge threw "All geometries must have compatible attributes" and named the apex's
+     * position in the array, which is a hard error that takes the entire contact scene
+     * down with it.
+     *
+     * A triangle's UVs are arbitrary here (the glass material is not textured), but they
+     * have to EXIST for the attribute sets to match.
+     */
+    apex.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 0.5, 1], 2));
+    apex.setIndex([0, 1, 2]);
     apex.computeVertexNormals();
     glass.push(apex);
 

@@ -1327,78 +1327,100 @@ export function atmosphereTexture(seed: string, w = 1024, h = 576): THREE.Canvas
  */
 export function bushTexture(seed: string, size = 160, dead = false): THREE.CanvasTexture {
   /*
-   * BANDED, not dithered - which is why the last version looked blurry.
+   * The lantern, described exactly: a LEMON RECTANGLE with a BROWN OUTLINE, a BROWN ROPE
+   * running up from its top, and a glow around the whole thing.
    *
-   * It was a dithered radial falloff: ten steps of ordered Bayer with the alpha fading to
-   * nothing. That is the right way to draw a HALO and the wrong way to draw an OBJECT. A
-   * dither is a checkerboard of two values pretending to be a third, so at the size this
-   * sprite is displayed the whole thing was a field of alternating pixels with no edge
-   * anywhere in it, and the eye reads that as out of focus. (It was never behind the fog:
-   * the growth sits at z 20 and the fog at z -50, seventy units of scene apart.)
+   * Every previous attempt drew a green blob of some kind - dithered, additive, banded,
+   * faded - and all of them missed the same point, which is that the reference lamp is
+   * not a glow with a core, it is an OBJECT that is lit. It has a made shape (a rectangle
+   * with a rim), it is made of something (the rim is brown, the pane is lemon), and it is
+   * HUNG (the rope). Those three facts are what the eye reads as a lantern; the glow is
+   * the atmosphere around them, and it lives in the additive halo the rig hangs behind
+   * this sprite.
    *
-   * Everything else in this stage is drawn in hard bands, and so is this now: four solid
-   * rings with clean boundaries, brightest at the core, plus the filament. It has a
-   * silhouette again. The SOFT part of a lamp - the bloom in the air around it - is a
-   * separate additive halo the rig hangs behind it, which is where softness belongs and
-   * where it cannot smear the object it belongs to.
+   * The pane keeps the slime's family - lemon is the creature's own highlight colour -
+   * so the growth still reads as the same substance as the mass, which is both the
+   * fiction and the value hierarchy.
    */
   const { c, g } = surface(size, size);
-  const cx = size / 2;
+  const cx = Math.round(size / 2);
+  const cy = Math.round(size / 2);
+
+  // paneW is a HALF-width, so 0.17 made the lamp sixty wide against forty-four tall - a
+  // landscape box, where the reference's lantern is plainly a portrait one.
+  const paneW = Math.round(size * 0.085);
+  const paneH = Math.round(size * 0.26);
+  const rim = Math.max(2, Math.round(size * 0.022));
+
+  const brown = dead ? '#3a2a1e' : '#5a4526';
+  const brownLit = dead ? '#4a3626' : '#7a6134';
+  const pane = dead ? '#8f4a2e' : '#e8fbb0';
+  const paneHot = dead ? '#c4553f' : '#fdffee';
+  const paneDim = dead ? '#6b3524' : '#c8e07a';
 
   /*
-   * The BODY is the slime's own green; the dark is only a rim.
+   * The rope first, so the lamp's collar covers where it lands. Brown, two strands with a
+   * lit side, running from the top of the sprite down to the lamp - the rig also hangs a
+   * long stalk continuing it up out of the frame, and the two have to meet.
+   */
+  const ropeX = cx - 1;
+  const ropeTop = 0;
+  const ropeBottom = cy - Math.round(paneH / 2) - rim;
+  g.fillStyle = brown;
+  g.fillRect(ropeX, ropeTop, 3, ropeBottom - ropeTop);
+  g.fillStyle = brownLit;
+  g.fillRect(ropeX, ropeTop, 1, ropeBottom - ropeTop);
+  // Twist marks, so it reads as rope rather than as a wire.
+  g.fillStyle = dead ? '#2a1e14' : '#40301a';
+  for (let y = ropeTop + 4; y < ropeBottom; y += 6) g.fillRect(ropeX, y, 3, 1);
+
+  // The collar the lamp hangs from.
+  const collarW = Math.round(paneW * 0.7);
+  g.fillStyle = brown;
+  g.fillRect(cx - collarW, ropeBottom - 2, collarW * 2, rim + 3);
+  g.fillStyle = brownLit;
+  g.fillRect(cx - collarW, ropeBottom - 2, collarW * 2, 1);
+
+  /*
+   * The lamp: a brown box with a lemon pane in it. Drawn outline-first so the rim is
+   * exactly `rim` thick on every side and the pane cannot leak past it.
+   */
+  const bx = cx - paneW - rim;
+  const by = cy - Math.round(paneH / 2) - rim;
+  const bw = (paneW + rim) * 2;
+  const bh = paneH + rim * 2;
+  g.fillStyle = brown;
+  g.fillRect(bx, by, bw, bh);
+  g.fillStyle = brownLit;
+  g.fillRect(bx, by, bw, 1);
+  g.fillRect(bx, by, 1, bh);
+
+  // The pane, in three steps out from its hot middle - a lit surface, not a flat fill.
+  g.fillStyle = paneDim;
+  g.fillRect(bx + rim, by + rim, bw - rim * 2, bh - rim * 2);
+  g.fillStyle = pane;
+  g.fillRect(bx + rim + 1, by + rim + 1, bw - rim * 2 - 2, bh - rim * 2 - 2);
+  g.fillStyle = paneHot;
+  g.fillRect(
+    cx - Math.round(paneW * 0.45),
+    cy - Math.round(paneH * 0.32),
+    Math.max(2, Math.round(paneW * 0.9)),
+    Math.max(3, Math.round(paneH * 0.64))
+  );
+
+  // A foot, so the lamp has a bottom and does not read as a floating card.
+  g.fillStyle = brown;
+  g.fillRect(cx - Math.round(collarW * 0.8), by + bh, Math.round(collarW * 1.6), rim);
+
+  /*
+   * NO painted glow. A first version stamped two faded discs behind the fitting and they
+   * did what discs drawn with a radius always do - gave the lamp a visible circular edge,
+   * the same ring the banded version was rebuilt to get rid of.
    *
-   * The first banded version ran dark-to-bright from the outside in over four evenly
-   * spaced radii, which put the darkest band on the largest disc - so more than half the
-   * sprite's area was a muted moss green and the growth read dark however bright its core
-   * was. Area is what the eye averages. Now the slime colour owns the body and the dark
-   * step is a thin rim doing nothing but holding the silhouette.
+   * The glow belongs to the rig's additive halo, which is a proper dithered falloff with
+   * no boundary anywhere in it. One object per job: this sprite is the fitting, that
+   * sprite is the light it throws.
    */
-  const bands: Array<{ r: number; fill: string }> = dead
-    ? [
-        { r: 1, fill: '#5a1e14' },
-        { r: 0.88, fill: '#a03a24' },
-        { r: 0.72, fill: '#c4553f' },
-        { r: 0.4, fill: '#e08a52' },
-      ]
-    : [
-        { r: 1, fill: mixHex(PAL.mossDark, PAL.voidDeep, 0.35) },
-        { r: 0.88, fill: PAL.mossLit },
-        { r: 0.72, fill: '#a8e85c' },
-        { r: 0.4, fill: '#c8f08a' },
-      ];
-  const heart = dead ? '#f0b06a' : '#e8fbb0';
-  const outer = (size / 2) * (dead ? 0.44 : 0.5);
-
-  /** One hard-edged disc - integer rows, no dither, no alpha ramp. */
-  const disc = (r: number, fill: string): void => {
-    g.fillStyle = fill;
-    for (let dy = -r; dy <= r; dy++) {
-      const half = Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
-      if (half > 0) g.fillRect(Math.round(cx - half), Math.round(cx + dy), half * 2, 1);
-    }
-  };
-
-  for (const band of bands) disc(outer * band.r, band.fill);
-
-  /*
-   * The filament: the hot point that makes the eye read "light" rather than "ball". Kept
-   * upright and hard-edged, with a white heart, exactly as the lantern has.
-   */
-  const fw = Math.max(3, Math.round(size * 0.03));
-  const fh = Math.max(6, Math.round(size * 0.06));
-  g.fillStyle = heart;
-  g.fillRect(Math.round(cx - fw), Math.round(cx - fh), fw * 2, fh * 2);
-  if (!dead) {
-    g.fillStyle = '#ffffff';
-    g.fillRect(
-      Math.round(cx - fw * 0.45),
-      Math.round(cx - fh * 0.6),
-      Math.max(2, Math.round(fw * 0.9)),
-      Math.round(fh * 1.2)
-    );
-  }
-
   void seed;
   return pixelTexture(c);
 }
@@ -1569,6 +1591,36 @@ export function signTexture(seed: string, lines: string[], scale = 4): THREE.Can
    * exposure 0.5 takes it back down to "old paint" on screen.
    */
   const INK = '#b8ceb4';
+
+  /*
+   * A dark rounded panel under the text, asked for and overdue.
+   *
+   * These stencils are the only writing in the stage and they were painted straight onto
+   * whatever happened to be behind them - a tree, the haze, a platform edge - so their
+   * legibility changed with the camera and with every art pass that altered the backdrop.
+   * A panel makes that a non-question: the text now carries its own contrast with it.
+   *
+   * Rounded by corner cuts on integer pixels, never by an arc - one anti-aliased curve and
+   * the whole stage stops being pixel art. Drawn at 78% so it darkens what is behind it
+   * without becoming a solid black slab hanging in the room.
+   */
+  const pad = scale * 2;
+  const panelW = c.width;
+  const panelH = c.height;
+  const cut = Math.max(2, scale);
+  g.globalAlpha = 0.78;
+  g.fillStyle = mixHex(PAL.voidDeep, '#000000', 0.35);
+  g.fillRect(cut, 0, panelW - cut * 2, panelH);
+  g.fillRect(0, cut, panelW, panelH - cut * 2);
+  g.fillRect(Math.round(cut / 2), Math.round(cut / 2), panelW - cut, panelH - cut);
+  // A one-pixel lit top edge, the same trick every ledge in the stage uses, so the panel
+  // reads as a plate fixed to something rather than as a hole cut in the picture.
+  g.globalAlpha = 0.5;
+  g.fillStyle = mixHex(PAL.stoneMid, PAL.mossDark, 0.4);
+  g.fillRect(cut, 0, panelW - cut * 2, 1);
+  g.globalAlpha = 1;
+  void pad;
+
   lines.forEach((line, row) => {
     let x = scale;
     const top = scale + row * glyphH;
