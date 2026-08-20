@@ -1100,6 +1100,26 @@ export class M4SSRig extends ENGINE.SceneNode {
       );
       node.position.set(button.x, button.y + 4, 2);
       this.stage?.add(node);
+      /*
+       * The find-me glow. The squint test measured the Stack's wake plate BELOW the
+       * environment mean - an interactable losing to the wallpaper. Every other thing
+       * the player can use already carries a halo (growths, portal, hover); the plate
+       * gets the same treatment in its own reserved amber, small and low, so at any
+       * blur the floor says "something warm here wants weight".
+       */
+      const buttonGlow = decorMesh(
+        'ButtonGlow',
+        new THREE.PlaneGeometry(96, 96),
+        this.artMaterial({
+          map: glowTexture('button-glow', PAL.lampWarm),
+          transparent: true,
+          opacity: 0.3,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      buttonGlow.position.set(button.x, button.y - 4, 1);
+      this.stage?.add(buttonGlow);
       this.buttonNodes.push({ node, button });
     });
   }
