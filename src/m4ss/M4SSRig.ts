@@ -801,22 +801,25 @@ export class M4SSRig extends ENGINE.SceneNode {
       const node = decorMesh(
         'Growth',
         /*
-         * ADDITIVE, and 166 across - which is what finally made it the lamp.
+         * NORMAL blending, because this is an OBJECT again.
          *
-         * Drawn as a glow but composited normally, the sprite was painting semi-opaque
-         * dark green over the background instead of adding light to it, and the first
-         * live capture showed two faint smudges where the growths should be. The real
-         * lantern in the backdrop has never had that problem because its halo is an
-         * additive sprite - light ADDS, that is the whole of what makes something look
-         * lit rather than painted. Same size as the lantern's glow, same blend.
+         * It went additive when the sprite was a soft falloff, and that was the right call
+         * then - a glow composited normally paints semi-opaque green over the background
+         * instead of adding light to it, which is why the first attempt showed two faint
+         * smudges. But additive has no silhouette by construction: it can only ever
+         * brighten what is behind it, so the darker outer bands of a banded sprite come
+         * out as more light rather than as an edge.
+         *
+         * The growth is drawn in hard bands now, so it wants the opposite treatment: the
+         * BODY composites normally and keeps its edge, and the additive halo hung behind
+         * it does the glowing. That is how the backdrop lantern has always been built - a
+         * small solid lamp inside a separate soft bloom - and it is why that lamp reads
+         * crisp and lit at the same time.
          */
-        // 128, down from 166: "less wide". The falloff tightened with it, so this is the
-        // sprite following the art rather than cropping it.
         new THREE.PlaneGeometry(128, 128),
         this.artMaterial({
           map: bushTexture(`growth-${i}`, 160, a.live === false),
           transparent: true,
-          blending: THREE.AdditiveBlending,
           depthWrite: false,
         })
       );

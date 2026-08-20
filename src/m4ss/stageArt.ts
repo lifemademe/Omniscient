@@ -1326,89 +1326,58 @@ export function atmosphereTexture(seed: string, w = 1024, h = 576): THREE.Canvas
  * the reach, with a cooling coal instead of a filament and no white at all.
  */
 export function bushTexture(seed: string, size = 160, dead = false): THREE.CanvasTexture {
+  /*
+   * BANDED, not dithered - which is why the last version looked blurry.
+   *
+   * It was a dithered radial falloff: ten steps of ordered Bayer with the alpha fading to
+   * nothing. That is the right way to draw a HALO and the wrong way to draw an OBJECT. A
+   * dither is a checkerboard of two values pretending to be a third, so at the size this
+   * sprite is displayed the whole thing was a field of alternating pixels with no edge
+   * anywhere in it, and the eye reads that as out of focus. (It was never behind the fog:
+   * the growth sits at z 20 and the fog at z -50, seventy units of scene apart.)
+   *
+   * Everything else in this stage is drawn in hard bands, and so is this now: four solid
+   * rings with clean boundaries, brightest at the core, plus the filament. It has a
+   * silhouette again. The SOFT part of a lamp - the bloom in the air around it - is a
+   * separate additive halo the rig hangs behind it, which is where softness belongs and
+   * where it cannot smear the object it belongs to.
+   */
   const { c, g } = surface(size, size);
   const cx = size / 2;
 
-  const BAYER = [
-    [0, 8, 2, 10],
-    [12, 4, 14, 6],
-    [3, 11, 1, 9],
-    [15, 7, 13, 5],
-  ];
-  const STEPS = 10;
-  // The glow's colour, and how far it reaches as a fraction of the sprite.
-  /*
-   * Hotter and narrower, after the first version read as dull and wide.
-   *
-   * Two numbers do that. The TINT is what the falloff is multiplied by, and at
-   * [150,214,96] the brightest pixel the glow could ever produce was already a mid green -
-   * additive or not, a light cannot be brighter than its own colour. And the REACH spends
-   * the sprite's area: at 0.86 the energy was spread across the whole plane, which is what
-   * "wide" and "washed out" both mean. Pulled in to 0.58 with a steeper curve, the same
-   * light is concentrated - the core is genuinely bright and the edge still dies to
-   * nothing.
-   */
-  /*
-   * The live growth glows with the MASS'S OWN COLOUR AND INTENSITY.
-   *
-   * Asked for directly, and it is right on both counts. Visually, everything else in this
-   * palette is muted structure and the two things that matter are the creature and the
-   * thing it grabs, so they should be the only two objects lit to the top of the range -
-   * anything dimmer reads as scenery, which is precisely the "dull" complaint. And in the
-   * fiction they are the SAME SUBSTANCE: a cultivated anchor-organism and the specimen
-   * were grown in the same tanks on the same feed, so a growth glowing in the slime's
-   * exact green is the story showing rather than telling.
-   *
-   * `tint` is the slime's body colour (#a8e85c) and `core` its shine (#e8fbb0), the two
-   * values the creature itself is drawn from.
-   */
-  const tint = dead ? [180, 86, 58] : [168, 232, 92];
-  const reach = dead ? 0.5 : 0.62;
-  /*
-   * A flat bright PLATEAU before the falloff starts, which is the other half of matching
-   * the mass. The slime is a solid body of colour with a halo around it; a pure radial
-   * falloff has no solid anything - its brightest pixel is a single point at the centre
-   * and everything else is already dimmer. Holding full intensity out to 0.42 gives the
-   * growth a body, and the glow then falls off from its edge exactly as the slime's does.
-   */
-  const plateau = dead ? 0.3 : 0.42;
+  const bands = dead
+    ? ['#7a2a1c', '#a03a24', '#c4553f', '#e08a52']
+    : [mixHex(PAL.mossDark, PAL.mossMid, 0.5), PAL.mossMid, PAL.mossLit, '#a8e85c'];
+  const heart = dead ? '#f0b06a' : '#e8fbb0';
+  const outer = (size / 2) * (dead ? 0.44 : 0.5);
 
-  const img = g.createImageData(size, size);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const u = Math.hypot(x - cx + 0.5, y - cx + 0.5) / ((size / 2) * reach);
-      const fall =
-        u >= 1 ? 0 : u <= plateau ? 1 : ((1 - u) / (1 - plateau)) ** 2.2;
-      const f = fall * STEPS;
-      const step = Math.floor(f) + (f % 1 > BAYER[y & 3][x & 3] / 16 ? 1 : 0);
-      const k = Math.min(STEPS, step) / STEPS;
-      if (k <= 0) continue;
-      const o = (y * size + x) * 4;
-      img.data[o] = Math.round(tint[0] * k);
-      img.data[o + 1] = Math.round(tint[1] * k);
-      img.data[o + 2] = Math.round(tint[2] * k);
-      // Alpha follows the falloff too, so the sprite has no disc edge to catch the eye.
-      img.data[o + 3] = Math.round(255 * Math.min(1, k * 1.35));
+  /** One hard-edged disc - integer rows, no dither, no alpha ramp. */
+  const disc = (r: number, fill: string): void => {
+    g.fillStyle = fill;
+    for (let dy = -r; dy <= r; dy++) {
+      const half = Math.round(Math.sqrt(Math.max(0, r * r - dy * dy)));
+      if (half > 0) g.fillRect(Math.round(cx - half), Math.round(cx + dy), half * 2, 1);
     }
-  }
-  g.putImageData(img, 0, 0);
+  };
+
+  bands.forEach((fill, i2) => disc(outer * (1 - i2 * 0.19), fill));
 
   /*
-   * The filament. Small, upright, and the only hard-edged thing in the sprite - which is
-   * the whole trick: the eye finds a hot POINT inside a soft field and reads "light".
+   * The filament: the hot point that makes the eye read "light" rather than "ball". Kept
+   * upright and hard-edged, with a white heart, exactly as the lantern has.
    */
-  const fw = Math.max(3, Math.round(size * 0.035));
-  const fh = Math.max(6, Math.round(size * 0.07));
-  if (dead) {
-    g.fillStyle = mixHex('#c4553f', PAL.lampWarm, 0.35);
-    g.fillRect(Math.round(cx - fw), Math.round(cx - fh * 0.6), fw * 2, Math.round(fh * 1.2));
-  } else {
-    g.fillStyle = mixHex(PAL.mossLit, PAL.slimeGlow, 0.5);
-    g.fillRect(Math.round(cx - fw * 1.6), Math.round(cx - fh), Math.round(fw * 3.2), fh * 2);
-    g.fillStyle = PAL.slimeGlow;
-    g.fillRect(Math.round(cx - fw), Math.round(cx - fh * 0.8), fw * 2, Math.round(fh * 1.6));
+  const fw = Math.max(3, Math.round(size * 0.03));
+  const fh = Math.max(6, Math.round(size * 0.06));
+  g.fillStyle = heart;
+  g.fillRect(Math.round(cx - fw), Math.round(cx - fh), fw * 2, fh * 2);
+  if (!dead) {
     g.fillStyle = '#ffffff';
-    g.fillRect(Math.round(cx - fw * 0.4), Math.round(cx - fh * 0.5), Math.max(2, Math.round(fw * 0.8)), Math.round(fh));
+    g.fillRect(
+      Math.round(cx - fw * 0.45),
+      Math.round(cx - fh * 0.6),
+      Math.max(2, Math.round(fw * 0.9)),
+      Math.round(fh * 1.2)
+    );
   }
 
   void seed;
