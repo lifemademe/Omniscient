@@ -300,6 +300,8 @@ export class M4SSRig extends ENGINE.SceneNode {
     restY: number;
   }> = [];
   private readonly buttonNodes: Array<{ node: ENGINE.MeshNode; button: Button }> = [];
+  /** The chevrons hovering over unpressed plates. See buildLevel. */
+  private readonly buttonFlags: Array<{ node: ENGINE.MeshNode; button: Button }> = [];
 
   private readonly held = new Set<string>();
   private latched: Anchor | null = null;
@@ -798,12 +800,21 @@ export class M4SSRig extends ENGINE.SceneNode {
     world.anchors.forEach((a, i) => {
       const node = decorMesh(
         'Growth',
-        // 132, down from 176: the pod's own radius came down too, so this is the sprite
-        // following the art rather than cropping it.
-        new THREE.PlaneGeometry(132, 132),
+        /*
+         * ADDITIVE, and 166 across - which is what finally made it the lamp.
+         *
+         * Drawn as a glow but composited normally, the sprite was painting semi-opaque
+         * dark green over the background instead of adding light to it, and the first
+         * live capture showed two faint smudges where the growths should be. The real
+         * lantern in the backdrop has never had that problem because its halo is an
+         * additive sprite - light ADDS, that is the whole of what makes something look
+         * lit rather than painted. Same size as the lantern's glow, same blend.
+         */
+        new THREE.PlaneGeometry(166, 166),
         this.artMaterial({
           map: bushTexture(`growth-${i}`, 160, a.live === false),
           transparent: true,
+          blending: THREE.AdditiveBlending,
           depthWrite: false,
         })
       );
@@ -819,11 +830,11 @@ export class M4SSRig extends ENGINE.SceneNode {
        */
       const presence = decorMesh(
         'GrowthPresence',
-        new THREE.PlaneGeometry(190, 190),
+        new THREE.PlaneGeometry(230, 230),
         this.artMaterial({
           map: glowTexture('presence-glow', '#7fe0a0'),
           transparent: true,
-          opacity: a.live === false ? 0 : 0.22,
+          opacity: a.live === false ? 0 : 0.3,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
         })
@@ -1073,6 +1084,41 @@ export class M4SSRig extends ENGINE.SceneNode {
     }
 
     /*
+     * THE SEPARATION SCRIM, and why a flat dark plane is the right answer.
+     *
+     * The playtest's note was "find a way to separate the background from the player's
+     * view of the gameplay things", and it is the correct diagnosis: this stage has six
+     * layers of drawn detail behind the play plane, all rendered with the same contrast
+     * as the platforms the player is standing on, so the eye has to work out which green
+     * shape is a place to stand and which is a tree forty metres away.
+     *
+     * Every trick for this comes down to the same principle - make the background lose a
+     * competition it should never have been in. Depth of field is out (this is pixel art
+     * and a blur would smear the very edges that make it read); recolouring each layer is
+     * a tuning problem with six knobs that fight each other. One dark plane in front of
+     * ALL of them costs a single draw and moves every background value down together,
+     * which keeps their relationships intact while dropping them out of the play plane's
+     * range. It is the oldest trick in scene painting and it is still the best one.
+     *
+     * At z -50: behind the tiles (whose bodies start at -46), in front of the rays, the
+     * haze, the forest, the architecture and the backdrop.
+     */
+    {
+      const scrim = decorMesh(
+        'Separation',
+        new THREE.PlaneGeometry(world.width * 2, world.height * 2),
+        this.artMaterial({
+          color: new THREE.Color(PAL.voidDeep),
+          transparent: true,
+          opacity: 0.42,
+          depthWrite: false,
+        })
+      );
+      scrim.position.set(world.width / 2, world.height / 2, -50);
+      this.stage?.add(scrim);
+    }
+
+    /*
      * The latch ring, parked off screen until a growth is in range. One sprite reused for
      * whichever growth is currently the target - there is only ever one.
      */
@@ -1292,6 +1338,26 @@ export class M4SSRig extends ENGINE.SceneNode {
       );
       buttonGlow.position.set(button.x, button.y - 4, 1);
       this.stage?.add(buttonGlow);
+
+      /*
+       * A marker over the plate: the same down-pointing chevron the shed lumps wear.
+       *
+       * Asked for directly, and it earns its place - a plate is a small flat thing lying
+       * on a floor full of small flat things, and it is the one object in stage one whose
+       * whole job is to be walked to. Reusing the shed marker rather than inventing a
+       * second arrow keeps one vocabulary: in this game a hovering chevron means GO HERE,
+       * whatever is underneath it. It hides once the plate is down, because an
+       * instruction that outlives its task is noise.
+       */
+      const flag = decorMesh(
+        'ButtonMarker',
+        new THREE.PlaneGeometry(30, 30),
+        this.artMaterial({ map: markerTexture(), transparent: true, depthWrite: false })
+      );
+      flag.position.set(button.x, button.y - 54, 24);
+      this.stage?.add(flag);
+      this.buttonFlags.push({ node: flag, button });
+
       this.buttonNodes.push({ node, button });
     });
   }
@@ -2177,18 +2243,52 @@ export class M4SSRig extends ENGINE.SceneNode {
        * frozen, so these writes are animation, not physics - by the time the sim runs
        * again this body has been rebuilt for the next stage anyway.
        */
+      /*
+       * The wormhole.
+       *
+       * It used to be a straight pull - every particle closing 14% of its remaining
+       * distance to the portal per tick - which is an exponential ease and reads as the
+       * slime being deleted toward a point. A wormhole is not a vacuum cleaner: what
+       * makes one legible is that the thing going in ORBITS while it falls, faster and
+       * faster as it gets closer, so the body draws a spiral rather than a line.
+       *
+       * So each particle is moved in polar coordinates around the portal: the radius
+       * closes at a steady fraction, and the angle advances at a rate that RISES as the
+       * radius shrinks - the same reason a skater speeds up pulling their arms in, and
+       * the reason the last few frames whip.
+       *
+       * The sim is frozen while this runs, so these writes are animation rather than
+       * physics; by the time the sim steps again the body has been rebuilt for stage two.
+       */
       const at = this.portalAt;
       if (at) {
         for (const q of owned(state)) {
-          q.x += (at.x - q.x) * 0.14;
-          q.y += (at.y - q.y) * 0.14;
+          const dx = q.x - at.x;
+          const dy = q.y - at.y;
+          const r = Math.hypot(dx, dy);
+          if (r < 1.5) {
+            q.x = at.x;
+            q.y = at.y;
+          } else {
+            // How far in the fall has come, 0 at the lip and 1 at the throat.
+            const closeness = Math.max(0, Math.min(1, 1 - r / 190));
+            const spin = 0.16 + closeness * closeness * 1.5;
+            const theta = Math.atan2(dy, dx) + spin;
+            const pulled = r * 0.9 - 1.6;
+            q.x = at.x + Math.cos(theta) * pulled;
+            q.y = at.y + Math.sin(theta) * pulled;
+          }
           q.px = q.x;
           q.py = q.y;
         }
       }
-      this.portalPhase += deltaTime * 5;
-      if (this.warpVeil) this.warpVeil.style.opacity = String(Math.min(1, warp.t / 0.55));
-      if (warp.t >= 0.6) {
+      // The portal spins up to meet it, and the veil holds off until the body is well in -
+      // there is no point animating a swallow nobody can see.
+      this.portalPhase += deltaTime * (6 + warp.t * 14);
+      if (this.warpVeil) {
+        this.warpVeil.style.opacity = String(Math.max(0, Math.min(1, (warp.t - 0.45) / 0.4)));
+      }
+      if (warp.t >= 0.95) {
         this.advance();
         warp.out = false;
         warp.t = 0;
@@ -2226,6 +2326,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.anchorNodes.clear();
     this.gateNodes.length = 0;
     this.buttonNodes.length = 0;
+    this.buttonFlags.length = 0;
     this.crusherNodes = [];
     this.growthArt.clear();
     this.emberNodes.clear();
@@ -2712,6 +2813,13 @@ export class M4SSRig extends ENGINE.SceneNode {
     for (const { node, button } of this.buttonNodes) {
       const target = button.y + 6 + (button.pressed ? 7 : 0);
       node.position.y += (target - node.position.y) * 0.25;
+    }
+    // The chevron bobs while its plate is up, and goes out when the plate goes down.
+    for (const { node, button } of this.buttonFlags) {
+      node.visible = !button.pressed;
+      if (!button.pressed) {
+        node.position.y = button.y - 54 + Math.sin(this.artClock * 3.4 + button.x) * 5;
+      }
     }
 
     const mine = owned(state);

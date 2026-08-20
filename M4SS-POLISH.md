@@ -373,3 +373,26 @@ Both now use `visible` and scale.
 | 55d | proximity latching | Any live growth within reach makes the nearest one to the BODY wear a pulsing white ring; LMB takes whatever is ringed | Point-and-click asked the player to aim at a small target with the same hand that times the release, in a game whose skill is the swing - and it stayed silent until the click, so "can I reach that" was only answered by getting it wrong. Nearest to the body rather than to the pointer: with two ringed, the one you can hold longest is the near one. While hanging, the ring stays on the growth being held. |
 | 55e | the slime goes green | Body #a8e85c, rim, belly, shine and halo all moved into the reserved chartreuse | It sat at #79d9b0, a blue-leaning aqua that read as white against a green room - which is how it kept winning the value test while looking like a bubble rather than like something grown in this lab. Still the brightest thing on screen; simply the brightest GREEN. |
 | 55f | the sign follows the mechanic | HOLD CLICK ON GROWTH becomes HOLD CLICK WHEN RINGED | Telling the player to point at something the game now points at for them is worse than saying nothing. Still no letter M - the 3px font's M is its N. |
+
+## Pass 56: light adds, or it is not light
+
+The growth was redrawn as a lamp in pass 55 and still did not look like one. Put side by
+side with the backdrop lantern the difference was total, and it came down to two things,
+both of which are worth keeping written down.
+
+**A lamp is not a lamp-shaped object.** The first attempt drew faceted plates, a dark shell
+and a lit interior - a machined fitting bolted to the air. The real lantern has no outline
+at all: it is a radial falloff with a hot point in it, and almost all of its area is light
+dying into the dark. Redrawn as exactly that (the same ten-step ordered-Bayer falloff
+`glowTexture` uses, with the lamp's filament at the centre), the shape was finally right.
+
+**And it still read as a smudge, because it was composited normally.** A glow painted with
+normal blending paints semi-opaque green OVER the background; it does not add to it. The
+backdrop lantern has never had that problem because its halo is additive. Light ADDS - that
+is the whole of what makes something look lit rather than painted - and one blending flag
+was the difference between two faint smears and two lamps hanging in a forest.
+
+| 56 | the growth, finally | Radial dithered falloff with a filament core, additive, 166px - the lantern's own size and blend | See above. Dead cultures keep the falloff at 0.62 reach in ember red, with a cooling coal and no white. |
+| 56b | the wormhole | The warp moves each particle in POLAR coordinates around the portal: radius closes at a steady fraction, angle advances at a rate that rises as the radius shrinks, so the last frames whip. Veil held off until 0.45s so the swallow is visible; portal spins up to meet it | It used to be a straight pull, which is an exponential ease and reads as the slime being deleted toward a point. What makes a wormhole legible is that the thing going in ORBITS while it falls. |
+| 56c | separation | One dark plane at z -50, in front of the rays, haze, forest, architecture and backdrop, behind the tiles | Six layers of drawn detail sat behind the play plane at the same contrast as the platforms, so the eye had to work out which green shape was standable. Depth of field is out - this is pixel art and a blur destroys the edges that make it read - and recolouring six layers is six knobs that fight. One plane moves every background value down TOGETHER, keeping their relationships while dropping them out of the play plane's range. Oldest trick in scene painting. |
+| 56d | the plate is signposted | A bobbing chevron over every unpressed button, the same glyph the shed lumps wear | Asked for. One vocabulary: a hovering chevron means GO HERE, whatever is under it. It goes out when the plate goes down, because an instruction that outlives its task is noise. |

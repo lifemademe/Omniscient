@@ -1308,92 +1308,76 @@ export function atmosphereTexture(seed: string, w = 1024, h = 576): THREE.Canvas
 }
 
 /**
- * The growth, drawn as the LANTERN.
+ * The growth, built the way the lantern is built - because the playtest put the two side
+ * by side and they were not the same thing at all.
  *
- * The playtest pointed at one of the backdrop lamps and said: make the growth that. It is
- * the right call, and for a reason worth stating - the lamp is the only object in the
- * stage that already reads correctly at a glance from any distance, because it is built
- * the way a light is built rather than the way a plant is: a small hot core, a soft body
- * of glow around it, and nothing else competing. Everything the growth has to do (be
- * findable, be unmistakable, say "alive") is what a lamp does by nature.
+ * The first attempt at "make it the lamp" drew a lamp-SHAPED OBJECT: faceted plates, a
+ * dark shell, a lit interior. Next to the real lantern it read as a machined fitting
+ * bolted to the air, because the lantern is not an object at all - it is a GLOW with a hot
+ * point in it. Its edge is soft, it has no outline, and almost all of its area is light
+ * falling off into the dark. That is what has to be copied.
  *
- * So this is a hanging lamp of living tissue. A stepped halo, an inner membrane, and a
- * bright vertical filament at the heart - the same anatomy as the lantern, in the
- * reserved chartreuse instead of the reserved amber. Dead cultures keep the shape and
- * lose the fire: ember red, no filament, the glow gone cold.
+ * So this is a radial falloff, dithered in ten steps exactly like `glowTexture` (same
+ * ordered Bayer, for the same reason - a random dither crawls when the thing it is on
+ * moves), with the lamp's own filament at the centre: a small upright body, a brighter
+ * core, and a near-white heart. No shell, no rim, no hard pixel anywhere on the outside.
  *
- * The halo steps are drawn as octagons rather than circles. At this size a stepped circle
- * spends its whole silhouette on the eight pixels that give the game away, and an octagon
- * is what those steps want to be anyway - it reads as a lantern's faceted shade.
+ * Dead cultures keep the shape and lose the fire: the same falloff in ember red, at half
+ * the reach, with a cooling coal instead of a filament and no white at all.
  */
 export function bushTexture(seed: string, size = 160, dead = false): THREE.CanvasTexture {
-  const rng = createRng(seedFrom(seed));
   const { c, g } = surface(size, size);
-  const cx = Math.round(size / 2);
-  const cy = Math.round(size / 2);
+  const cx = size / 2;
 
-  /** One filled octagon of radius r - the halo's step shape. */
-  const facet = (r: number, fill: string): void => {
-    g.fillStyle = fill;
-    const cut = Math.round(r * 0.42);
-    for (let dy = -r; dy <= r; dy++) {
-      const ay = Math.abs(dy);
-      let half = r;
-      if (ay > r - cut) half = r - (ay - (r - cut));
-      if (half <= 0) continue;
-      g.fillRect(cx - half, cy + dy, half * 2, 1);
+  const BAYER = [
+    [0, 8, 2, 10],
+    [12, 4, 14, 6],
+    [3, 11, 1, 9],
+    [15, 7, 13, 5],
+  ];
+  const STEPS = 10;
+  // The glow's colour, and how far it reaches as a fraction of the sprite.
+  const tint = dead ? [156, 74, 52] : [150, 214, 96];
+  const reach = dead ? 0.62 : 0.86;
+
+  const img = g.createImageData(size, size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = Math.hypot(x - cx + 0.5, y - cx + 0.5) / ((size / 2) * reach);
+      const fall = u >= 1 ? 0 : (1 - u) ** 2;
+      const f = fall * STEPS;
+      const step = Math.floor(f) + (f % 1 > BAYER[y & 3][x & 3] / 16 ? 1 : 0);
+      const k = Math.min(STEPS, step) / STEPS;
+      if (k <= 0) continue;
+      const o = (y * size + x) * 4;
+      img.data[o] = Math.round(tint[0] * k);
+      img.data[o + 1] = Math.round(tint[1] * k);
+      img.data[o + 2] = Math.round(tint[2] * k);
+      // Alpha follows the falloff too, so the sprite has no disc edge to catch the eye.
+      img.data[o + 3] = Math.round(255 * Math.min(1, k * 1.35));
     }
-  };
-
-  const halo = dead
-    ? ['#2a1210', '#4a1c14', '#6b2a1c']
-    : [
-        mixHex(PAL.leafDark, PAL.voidDeep, 0.5),
-        mixHex(PAL.mossDark, PAL.leafDark, 0.4),
-        PAL.mossDark,
-      ];
-  const body = dead
-    ? ['#8f3524', mixHex('#c4553f', PAL.lampWarm, 0.25)]
-    : [PAL.mossMid, PAL.mossLit];
-  const coreFill = dead ? mixHex('#c4553f', PAL.lampWarm, 0.45) : PAL.slimeGlow;
-
-  // The halo: three faceted steps, widest and dimmest first.
-  facet(Math.round(size * 0.30), halo[0]);
-  facet(Math.round(size * 0.24), halo[1]);
-  facet(Math.round(size * 0.19), halo[2]);
-  // The membrane: the lamp's shade, where the light is already strong.
-  facet(Math.round(size * 0.145), body[0]);
-  facet(Math.round(size * 0.105), body[1]);
+  }
+  g.putImageData(img, 0, 0);
 
   /*
-   * The filament: a small upright bar of the brightest colour in the palette, with a
-   * one-pixel white heart. This is the whole reason the lantern reads - the eye finds a
-   * hot POINT inside a soft field, which is what a light looks like and what a painted
-   * blob never does.
+   * The filament. Small, upright, and the only hard-edged thing in the sprite - which is
+   * the whole trick: the eye finds a hot POINT inside a soft field and reads "light".
    */
-  if (!dead) {
-    const fw = Math.max(4, Math.round(size * 0.045));
-    const fh = Math.max(7, Math.round(size * 0.085));
-    g.fillStyle = mixHex(coreFill, PAL.mossLit, 0.35);
-    g.fillRect(cx - fw, cy - fh, fw * 2, fh * 2);
-    g.fillStyle = coreFill;
-    g.fillRect(cx - Math.round(fw * 0.6), cy - Math.round(fh * 0.8), Math.round(fw * 1.2), Math.round(fh * 1.6));
-    g.fillStyle = '#ffffff';
-    g.fillRect(cx - 1, cy - Math.round(fh * 0.45), 2, Math.round(fh * 0.9));
+  const fw = Math.max(3, Math.round(size * 0.035));
+  const fh = Math.max(6, Math.round(size * 0.07));
+  if (dead) {
+    g.fillStyle = mixHex('#c4553f', PAL.lampWarm, 0.35);
+    g.fillRect(Math.round(cx - fw), Math.round(cx - fh * 0.6), fw * 2, Math.round(fh * 1.2));
   } else {
-    // A dead culture keeps a cooling ember where its filament was.
-    g.fillStyle = coreFill;
-    g.fillRect(cx - 3, cy - 4, 6, 8);
+    g.fillStyle = mixHex(PAL.mossLit, PAL.slimeGlow, 0.5);
+    g.fillRect(Math.round(cx - fw * 1.6), Math.round(cx - fh), Math.round(fw * 3.2), fh * 2);
+    g.fillStyle = PAL.slimeGlow;
+    g.fillRect(Math.round(cx - fw), Math.round(cx - fh * 0.8), fw * 2, Math.round(fh * 1.6));
+    g.fillStyle = '#ffffff';
+    g.fillRect(Math.round(cx - fw * 0.4), Math.round(cx - fh * 0.5), Math.max(2, Math.round(fw * 0.8)), Math.round(fh));
   }
 
-  // The cap: a dark collar at the top where the stalk enters, so the lamp HANGS.
-  const capW = Math.round(size * 0.075);
-  g.fillStyle = dead ? '#2a1a16' : mixHex(PAL.vineMid, PAL.leafDark, 0.45);
-  g.fillRect(cx - capW, cy - Math.round(size * 0.31), capW * 2, Math.round(size * 0.055));
-  g.fillStyle = dead ? '#3a2620' : PAL.vineMid;
-  g.fillRect(cx - Math.round(capW * 0.4), cy - Math.round(size * 0.35), Math.round(capW * 0.8), Math.round(size * 0.06));
-  void rng;
-
+  void seed;
   return pixelTexture(c);
 }
 
