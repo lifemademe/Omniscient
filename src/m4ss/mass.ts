@@ -349,6 +349,10 @@ export interface MassState {
   regroup: number;
   /** Seconds of immunity left after a critter hit. See TUNING.critterStun. */
   stunned: number;
+  /** Seconds the CURRENT direction key has been held without release or reversal. */
+  heldFor: number;
+  /** Latched while the swing is TURNING - energy hysteresis, see circulateExit. */
+  turning: boolean;
   /**
    * How long the player has been holding no direction while on a growth.
    *
@@ -579,26 +583,56 @@ export const TUNING = {
    */
   swingBrake: 0.34,
   /**
-   * Where the committed-swing boost engages, in px/s along the arc.
+   * How long a pressed direction stays at full pumping strength, in seconds.
    *
-   * This number is load-bearing in a way 300 never admitted to being: a held key with the
-   * motion agreeing builds to a natural equilibrium of ~300px/s at gate 1 - approached from
-   * BELOW, so a threshold sitting exactly there never engaged and the swing stalled one
-   * pixel under its own boost. Whether a one-key swing circled was then decided by whatever
-   * noise shoved it across the line, which in stage one was a parametric resonance with the
-   * floor that worked clockwise and not counter-clockwise. At 240 the boost engages before
-   * the equilibrium, and a held swing commits deterministically - in either direction.
+   * This is the striking of the deal the player asked for in so many words: "swing left and
+   * right by pressing A and D, higher and higher, until I can make a turn - and holding one
+   * key must not be a 360." Pumping IS alternation, so each fresh press pushes at full
+   * strength for about one half-period of the swing and then goes stale; a player pressing
+   * in rhythm is always fresh, and a player just leaning on a key is strong for under a
+   * second and feeble after. Rhythmic one-sided tapping still works, because tapping in
+   * time with the arc is pumping - what dies is the lazy hold.
    */
-  swingCommitAt: 240,
+  pumpFresh: 0.9,
   /**
-   * The swing speed above which holding the opposite key REVERSES the circle, in px/s.
+   * Where the strong-swing boost engages while BUILDING, in px/s along the arc.
    *
-   * Above the one-key equilibrium (~300, see the whip) so a wobble cannot be wiggled into a
-   * circle, and far above anything a dead hang can build, so the stillness guard is
-   * untouched. Below the speeds a real arrival or an earned swing carries, so the verb is
-   * available exactly when a player who has built something wants it pointed the other way.
+   * Without it, resonant pumping equilibrates around 2.3 rad/s on the shaft's short ropes -
+   * measured - and reaching a turn depended on parametric charity from nearby geometry, the
+   * exact lottery this redesign exists to kill. With it, rhythm punches through to
+   * circulating energy on every rope in the game. A lazy hold cannot exploit it: freshness
+   * expires at 0.9s and a lazy crest was measured to need 2.2s of full-strength pushing.
    */
-  swingReverseAt: 340,
+  swingBuildAt: 240,
+  /** What a stale held key keeps of the pump while still building. As weak as a lean. */
+  pumpStale: 0.25,
+  /**
+   * The energy, in multiples of gravity times rope, above which the swing counts as ABLE TO
+   * TURN - and a held key switches from pumping to sustaining.
+   *
+   * Carrying over the top needs 2.0 exactly (two rope-heights, arriving with nothing), and
+   * the threshold sits deliberately UNDER that, at 1.7: a marginal crest carries almost no
+   * spare energy, and a threshold above it left the held key stale at the exact moment the
+   * player had earned the turn - measured, the circle died at the top with 0.2 revolutions.
+   * At 1.7 the handover happens on the last upswing: the moment a pumped swing is genuinely
+   * about to crest, holding the direction takes over at swingCommit strength and drives it
+   * round - "then hold A or D to keep turning".
+   *
+   * A lazy hold cannot reach it: the one-key stall was measured at roughly 0.25 of a
+   * rope-energy, seven times below this line.
+   */
+  circulateEnergy: 1.7,
+  /**
+   * Where a turning swing stops counting as turning - the exit of a hysteresis pair.
+   *
+   * Without it, a transient dip below circulateEnergy (slosh over the top is enough)
+   * dropped a held-key circle into the building band with a key that had been held for
+   * seconds - stale, a quarter strength - and the circle died with the player doing
+   * exactly what they were told to do. Measured: pump 4s then hold gave 9.9 rad/s; pump
+   * 8s then hold gave 3.1. Entered above circulateEnergy, a turn now survives until the
+   * swing genuinely falls out of its circle.
+   */
+  circulateExit: 1.35,
   /**
    * Sideways push while falling, in px/s^2, against a ground crawl of 6400.
    *
@@ -1058,6 +1092,8 @@ export function makeState(world: World, startMass: number): MassState {
     regroup: 0,
     stunned: 0,
     coasting: 0,
+    heldFor: 0,
+    turning: false,
     snapped: 0,
     time: 0,
   };
@@ -1121,6 +1157,21 @@ export function step(state: MassState, input: Input): MassState {
   for (const p of particles) {
     p.ax = 0;
     p.ay = T.gravity;
+  }
+
+  /*
+   * How stale is this key? Freshness is measured from the last frame the input was zero or
+   * pointed the other way, so alternating pumps are always fresh and a lazy hold goes stale
+   * in under a second. Tracked here, where input first arrives, because the swing gate a
+   * few hundred lines down is what spends it.
+   */
+  if (input.move === 0) {
+    state.heldFor = 0;
+  } else if (Math.sign(state.heldFor) !== input.move) {
+    // A fresh press, or a reversal: the clock restarts, signed by the key that owns it.
+    state.heldFor = input.move * dt;
+  } else {
+    state.heldFor += input.move * dt;
   }
 
   if (input.move !== 0) {
@@ -1300,53 +1351,6 @@ export function step(state: MassState, input: Input): MassState {
            * going round" is asking for. It is a force against the direction of travel scaled
            * by the speed itself, so it is gentle on a slow swing and firm on a fast one.
            */
-          /*
-           * THE WHIP: a committed swing against your held key gets slung the other way.
-           *
-           * The counter-clockwise 360 was reported broken twice, and the investigation that
-           * closed it found something worse than a bug: whether a HELD KEY could build a
-           * circle at all was a lottery. A one-key swing equilibrates around 300px/s - a
-           * modest wobble, thirty pixels of height - and whether it ever escaped that was
-           * decided by a parametric resonance with the level geometry that happened to work
-           * clockwise in stage one (it dies if the floor is 200px lower, measured) and never
-           * worked counter-clockwise anywhere. Players learned "hold D" because it happened
-           * to pay, and the same habit failed mirrored.
-           *
-           * The robust answer is not a finer-tuned pump, it is a verb. When the body is
-           * genuinely swinging fast - above swingReverseAt, which only an arrival or an
-           * earned swing can reach - and the player holds the key AGAINST that motion, the
-           * tendril slings the body the other way round: every particle keeps its radial
-           * motion and mirrors its tangential motion. Energy is preserved exactly, so a
-           * committed clockwise circle becomes a committed counter-clockwise circle in one
-           * press, which is precisely the input a player who wants the other direction is
-           * already giving. Below the threshold the key just brakes, as it always did; a
-           * dead hang can never reach the threshold, so the guard against building a circle
-           * from stillness keeps its teeth.
-           *
-           * Gated on the motion being ARC-LIKE (tangential dominating radial), because in
-           * the fall just after a grip the tangential sign is junk - judged there, this
-           * fired backwards, measured.
-           */
-          if (input.move !== 0 && tangential * input.move < 0 && tangentialSpeed > T.swingReverseAt) {
-            const rl = Math.hypot(home.x - anchor.x, home.y - anchor.y) || 1;
-            const rx = (home.x - anchor.x) / rl;
-            const ry = (home.y - anchor.y) / rl;
-            let meanRadial = 0;
-            for (const p of mine) {
-              meanRadial += (p.x - p.px) * rx + (p.y - p.py) * ry;
-            }
-            meanRadial = Math.abs(meanRadial / Math.max(1, mine.length) / dt);
-            if (tangentialSpeed > 1.5 * meanRadial) {
-              for (const p of mine) {
-                const vx0 = p.x - p.px;
-                const vy0 = p.y - p.py;
-                const radial = vx0 * rx + vy0 * ry;
-                p.px = p.x - (2 * radial * rx - vx0);
-                p.py = p.y - (2 * radial * ry - vy0);
-              }
-            }
-          }
-
           state.coasting = input.move === 0 ? state.coasting + dt : 0;
           const idle = Math.min(1, Math.max(0, state.coasting - T.swingGrace) / T.swingGrace);
           if (idle > 0) {
@@ -1409,13 +1413,40 @@ export function step(state: MassState, input: Input): MassState {
            * TIME: pumping in rhythm still gets there in a third as long, and the dead-hang
            * guard in the harness is now a clock rather than a wall.
            */
+          /*
+           * The pump, as the player specified it: "swing left and right by pressing A and D,
+           * higher and higher, until I can make a turn - then hold A or D to keep turning."
+           *
+           * Four regimes, in the order they are asked:
+           *
+           *  - Above the ENERGY CEILING the pump buys nothing more (see swingEnergy).
+           *  - Above CIRCULATING energy the swing can carry over the top, and a held key in
+           *    the direction of motion sustains the revolution at commit strength - this is
+           *    "keep turning". Held against it, it brakes the circle back down, which is
+           *    how you stop or set up the other way.
+           *  - Near-still, a quarter: enough to lean a hang, never enough to walk it round.
+           *  - In between - BUILDING - a fresh press pushes at full strength and a stale
+           *    hold is as weak as a lean (see pumpFresh). Building therefore takes rhythm:
+           *    alternating in time with the arc is always fresh, and a lazy held key stops
+           *    paying in under a second. Holding one key was measured to buy a full 360
+           *    through a resonance lottery that paid clockwise in stage one and nowhere
+           *    else; this regime is what closes it.
+           */
           const opposing = tangential * input.move < 0;
+          state.turning =
+            energy > (state.turning ? T.circulateExit : T.circulateEnergy) * T.gravity * rope;
+          const circulating = state.turning;
+          const fresh = Math.abs(state.heldFor) < T.pumpFresh;
           const gate =
             energy > T.swingEnergy * T.gravity * rope
               ? 0
-              : tangentialSpeed < 60
-                ? 0.25
-                : (tangentialSpeed > T.swingCommitAt ? T.swingCommit : 1) * (opposing ? T.swingBrake : 1);
+              : circulating
+                ? (opposing ? T.swingBrake : T.swingCommit)
+                : tangentialSpeed < 60
+                  ? 0.25
+                  : (tangentialSpeed > T.swingBuildAt ? T.swingCommit : 1) *
+                    (fresh ? 1 : T.pumpStale) *
+                    (opposing ? T.swingBrake : 1);
           if (input.move !== 0) {
             for (const p of mine) {
               p.ax += (tx / tl) * input.move * T.swingPump * gate;
@@ -1508,6 +1539,7 @@ export function step(state: MassState, input: Input): MassState {
     state.swingRadius = 0;
     state.spin = 0;
     state.justGripped = false;
+    state.turning = false;
     state.swingShape = [];
   }
 

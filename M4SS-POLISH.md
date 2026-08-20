@@ -868,3 +868,33 @@ spin -5.5 became +7.8 and crested, in the harness, for ever.
 | 82c | deterministic commit | `swingCommitAt: 240`, down from a magic 300 | The one-key equilibrium sits at ~300, approached from below - a threshold exactly there never engaged, and the boost that decides a circle was handed to noise. At 240 it engages before equilibrium. |
 | 82d | the guard survives | dead hang, either key, 20 seconds: never crests | The whip cannot loosen it: a swing built from stillness by a held key already circulates the way that key points, and the whip only fires on opposition. |
 | 82e | it is all in the harness | build-commits, reversal, crest, guard | Four checks, so the fourth report of this bug has something to fail against. |
+
+## Pass 83 - the swing's contract, as specified
+
+The player wrote the design themselves this time: "swing left and right by pressing A and D,
+higher and higher, until I can make a turn - then hold A or D to keep turning in that
+direction. Holding one key must not be a 360." That vetoes both the whip (pass 82's reversal
+verb made a held key produce a circle) and the older accident where held-D circled through
+the floor-resonance lottery. Both are gone; what replaces them is a pump with a memory.
+
+**Freshness.** A pressed direction pushes at full strength for 0.9 seconds and then goes
+stale - a quarter strength, no better than a lean. Alternating in rhythm with the arc is
+always fresh, so pumping builds "higher and higher"; a lazy hold stops paying in under a
+second. The resonance lottery starves with it: locking in needed seconds of full-strength
+held pushing, and the harness now watches twelve seconds of lazy hold in each direction and
+requires that it never turns.
+
+**Turning.** Above 1.7 rope-energies the swing counts as able to turn, and a held key in the
+direction of motion sustains it at commit strength regardless of staleness - "hold to keep
+turning". Entered at 1.7, left at 1.35: without that hysteresis a transient dip dropped the
+circle into the building band with a stale key and it died with the player doing exactly what
+they were told to do (measured: pump 4s then hold gave 9.9 rad/s, pump 8s then hold gave 3.1).
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 83a | fresh/stale pumping | `pumpFresh 0.9`, `pumpStale 0.25`, `heldFor` tracked in state | Rhythm is strong, holding is weak - the spec's first clause, and the lottery-killer. |
+| 83b | turn-and-hold | `circulateEnergy 1.7` enter, `circulateExit 1.35` leave, sustain at `swingCommit` | The spec's second clause. 1.7 sits under a marginal crest's 2.0 so the handover happens on the last upswing; a lazy hold stalls at ~0.25 rope-energies, seven times below the line. |
+| 83c | build boost stays fresh-gated | `swingBuildAt 240` re-engages the 1.8x for FRESH pushes only | Without it, rhythmic pumping topped out at 2.3 rad/s on the shaft's short ropes and reaching a turn depended on geometric charity. A lazy hold cannot exploit it: freshness expires at 0.9s and a lazy crest needed 2.2s. |
+| 83d | the whip is gone | reversal removed, `swingReverseAt`/`swingCommitAt` retired | The player's spec explicitly excludes one-press 360s in any form. |
+| 83e | harness speaks the spec | lazy holds never turn (both keys, 12s watched), pumping builds a turn, holding keeps it turning (3.3 revs/4s), dead hang never | Plus the shaft's checks restated: drivers now hold the direction they built (the old constant-D fallback braked a counter-clockwise circle at the top of every revolution), and the wind-down and ceiling checks still hold. |
+| 83f | a lie discovered | on rope 80 the verlet tangential reads 500-800px/s while the body actually orbits at 0.2-0.6 revs/s | The spin-stiffened shape hold moves x and px together, so pump energy pools in a velocity never spent as displacement. Present at HEAD before this pass - measured, not caused. Logged as its own work; the shaft check guards today's rate so it cannot silently worsen. |

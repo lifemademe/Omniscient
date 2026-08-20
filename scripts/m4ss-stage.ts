@@ -810,46 +810,96 @@ console.log('\n=== M4SS STAGE ONE ===\n');
   );
 }
 
-// ---------------------------------------------------------------- the reversal verb
+// ---------------------------------------------------------------- pump, then turn
 {
   /*
-   * A committed swing against the held key gets slung the other way - the counter-clockwise
-   * fix, reported twice before it was understood. Whether a held key could build a circle
-   * was a resonance lottery that paid clockwise and never paid the mirror; the robust
-   * answer is a verb, not a finer-tuned pump. Build a circle however you like, press the
-   * other key, and it is your circle pointed the other way, at the same speed - the
-   * reflection preserves energy exactly.
+   * The swing's contract, as the player specified it after three rounds of direction bugs:
+   * "swing left and right by pressing A and D, higher and higher, until I can make a turn -
+   * then hold A or D to keep turning. Holding one key must not be a 360."
+   *
+   * Four clauses, each checked in both directions where direction exists. The third is the
+   * one with history: whether a held key could circle used to be a parametric-resonance
+   * lottery that paid clockwise in stage one and nowhere else, which taught players a habit
+   * that failed mirrored.
    */
-  const spun = makeState(freshLab(), START_MASS);
-  const g1 = spun.world.anchors[0];
-  {
-    const at = home(spun);
-    for (const p of spun.particles) {
-      p.x += g1.x - at.x;
-      p.px += g1.x - at.x;
-      p.y += g1.y + (g1.rope ?? 110) + 30 - at.y;
-      p.py += g1.y + (g1.rope ?? 110) + 30 - at.y;
+  const arrive = (): { s: MassState; g: Anchor } => {
+    const s = makeState(freshLab(), START_MASS);
+    const g = s.world.anchors[0] as Anchor;
+    const at = home(s);
+    for (const p of s.particles) {
+      p.x += g.x - at.x;
+      p.px = p.x;
+      p.y += g.y + (g.rope ?? 110) + 30 - at.y;
+      p.py = p.y;
     }
-    for (const p of spun.particles) p.px = p.x - 150 * TUNING.dt;
+    for (const p of s.particles) p.px = p.x - 150 * TUNING.dt;
+    return { s, g };
+  };
+  const alongOf = (s: MassState, g: Anchor): number => {
+    const body = owned(s);
+    const c = centroid(body);
+    let vx = 0;
+    let vy = 0;
+    for (const q of body) {
+      vx += q.x - q.px;
+      vy += q.y - q.py;
+    }
+    const tx = c.y - g.y;
+    const ty = -(c.x - g.x);
+    const tl = Math.hypot(tx, ty) || 1;
+    return ((vx / body.length) * (tx / tl) + (vy / body.length) * (ty / tl)) / TUNING.dt;
+  };
+  const energyOf = (s: MassState, g: Anchor): number => {
+    const rope = s.swingRadius || 1;
+    const t = alongOf(s, g);
+    return (0.5 * t * t + TUNING.gravity * (g.y + rope - home(s).y)) / (TUNING.gravity * rope);
+  };
+
+  // 1. A lazy hold never turns, in either direction - watched over the whole run, because
+  // a crest that happens mid-run and decays would slip past a final-frame check.
+  for (const key of [1, -1] as Array<1 | -1>) {
+    const lazy = arrive();
+    let ever = false;
+    run(lazy.s, 12.0, (st) => {
+      if (st.attached && home(st).y < lazy.g.y) ever = true;
+      return { move: key, anchor: lazy.g, recall: false };
+    });
+    check(`holding ${key > 0 ? 'D' : 'A'} alone never makes the turn`, !ever);
   }
-  // Hold D for three seconds - a held key commits off an eastward latch in ~2.2. The driver
-  // must keep the ANCHOR held throughout: an early version returned IDLE once fast, which
-  // releases the rope and zeroes the spin it was about to measure.
-  run(spun, 3.0, () => ({ move: 1, anchor: g1, recall: false }));
-  const before = spun.spin;
-  check('a held D off an eastward latch still commits a circle', Math.abs(before) > 3.5, `spin ${before.toFixed(1)}`);
-  run(spun, 0.5, () => ({ move: -1, anchor: g1, recall: false }));
-  check(
-    'and pressing A slings it round the other way at speed',
-    Math.sign(spun.spin) === -Math.sign(before) && Math.abs(spun.spin) > 3,
-    `spin ${before.toFixed(1)} became ${spun.spin.toFixed(1)}`
-  );
-  let crested = false;
-  run(spun, 2.0, (s) => {
-    if (s.attached && home(s).y < g1.y) crested = true;
-    return { move: -1, anchor: g1, recall: false };
+
+  // 2+3. Pumping in rhythm builds the swing high enough to turn, and holding then keeps
+  // turning - measured as sustained revolutions, not as a single crest.
+  const { s, g } = arrive();
+  let dir: 1 | -1 = 1;
+  let committed = false;
+  run(s, 14.0, (st) => {
+    if (committed) return { move: dir, anchor: g, recall: false };
+    const along = alongOf(st, g);
+    if (energyOf(st, g) > 1.75 && Math.abs(along) > 250) {
+      committed = true;
+      dir = along >= 0 ? 1 : -1;
+      return { move: dir, anchor: g, recall: false };
+    }
+    return { move: (Math.abs(along) > 40 ? (along >= 0 ? 1 : -1) : 1) as 1 | -1, anchor: g, recall: false };
   });
-  check('and the reversed circle crests counter-clockwise', crested);
+  check('pumping in rhythm builds a swing that can turn', committed);
+  let last = Math.atan2(home(s).y - g.y, home(s).x - g.x);
+  let turned = 0;
+  run(s, 4.0, () => {
+    const c = home(s);
+    const now = Math.atan2(c.y - g.y, c.x - g.x);
+    let d = now - last;
+    if (d > Math.PI) d -= Math.PI * 2;
+    if (d < -Math.PI) d += Math.PI * 2;
+    turned += d;
+    last = now;
+    return { move: dir, anchor: g, recall: false };
+  });
+  check(
+    'and holding that direction keeps it turning',
+    Math.abs(turned) / (2 * Math.PI) > 2.5,
+    `${(Math.abs(turned) / (2 * Math.PI)).toFixed(1)} revolutions in 4s of holding`
+  );
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} FAILED\n`);
