@@ -745,3 +745,31 @@ kept circling: that is "it keeps doing the 360 even when I am not holding A or D
 | 77b | letting go winds it down | `swingIdle` against the tangent, after `swingGrace` | It has to be a DURATION, not a per-frame test. Pumping in rhythm means holding nothing for most of every cycle, and the first version bled the swing on every pass over the top - stage one's finale fling stopped reaching the shelf, because its driver releases at the crest of each loop. Half a second of grace, then a ramp. |
 | 77c | the band is narrow | 2.6, 2.7 and 2.8 land the finale fling whole; 2.5 and 2.9 tear it | At 2.9 the sustained swing is violent enough that the throw pulls the body into eight pieces in mid-air. Worth knowing before anyone raises it. |
 | 77d | measure peaks, not phases | two of the new checks | Angular speed is highest at the bottom of the arc and lowest at the top, so sampling `spin` once samples whatever phase the clock landed on. The first version of the consistency check read 9.4, 8.4 and 6.9 for three swings that were all circling steadily - it was measuring its own stopping point. |
+
+## Pass 78 - which way am I going to leave
+
+"Where will I go when I release?" is the one question the player cannot answer during a 360,
+and it is answered by the creature rather than by a piece of UI. A blob held on a rope at
+nine radians a second is not a ball: it is dragged into a teardrop with the blunt end
+trailing and the point leading, and that point is exactly the direction it will leave in. So
+the shape IS the indicator - no screen furniture, nothing to explain, and it scales honestly,
+because a lazy swing stays round and only a committed one turns into a comet.
+
+Four dots go with it, showing a third of a second of flight from the body's current velocity.
+Four, not a line: at a revolution and a half a second a long dotted arc strobes into
+unreadability, and four is enough to curve, which is what separates "this is where you would
+go" from a laser sight pointing somewhere.
+
+**The deformation lives in its own module so it can be measured.** `swingShape.ts` is pure
+arithmetic on a list of points and imports nothing from the engine, which means the harness
+can drive it - and that matters more than usual here, because the whole feature is a claim
+about a shape. "Is it actually narrower at the front than the back" has a numeric answer that
+no amount of squinting at a capture settles.
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 78a | the teardrop | stretch 0.55 along the arc, pinch 0.3 across, and taper the LEADING half a further 0.42 | The taper is the whole feature. Stretch and pinch alone give a symmetrical ellipse, which points both ways at once - worse than not pointing at all, because it looks like information and is not. |
+| 78b | driven by the ceiling | the shape scales with speed measured against `sqrt(2 * swingEnergy * g * rope)` | So a full comet means a full-energy revolution on any rope in the game, rather than one particular pixel speed. The dots use the same number, so the two agree by construction. |
+| 78c | drawn, never simulated | applied to the drawn points, like BLOB_LIFT | The swing's physics were measured and retuned over several passes; none of it should move because the creature is being drawn more expressively. |
+| 78d | the dots bake their own fade | one texture per dot, shown with `visible` | Nothing writes `material.opacity` from the frame loop - it does not reliably reach the renderer through a MeshNode, and presents as a dot that simply never appears. |
+| 78e | the check measured its own mistake | compare the outer THIRD of each end, not each half | A half includes the fat middle, so both halves report the middle's width. The first version duly declared a wider front for a shape that profiles at 5.6px there against 7.9 at the back. |

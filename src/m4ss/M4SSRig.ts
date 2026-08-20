@@ -24,6 +24,7 @@ import * as THREE from 'three';
 
 import { decorMesh } from '../omniscient/art/mesh.js';
 import { buildSurface } from './surface.js';
+import { teardrop } from './swingShape.js';
 import { freshLab } from './lab.js';
 import { freshShaft } from './shaft.js';
 import { loadM4ssStage, saveM4ssContained, saveM4ssStage } from '../omniscient/session/persistence.js';
@@ -144,6 +145,10 @@ function slimeSkin(extra: THREE.MeshStandardMaterialParameters = {}): THREE.Mesh
     ...extra,
   });
 }
+
+/** How far ahead the flight dots predict, in seconds, and how many there are. */
+const DOT_REACH = 0.34;
+const DOT_COUNT = 4;
 
 /**
  * How far the body travels along the ground between deposits, in px.
@@ -359,6 +364,18 @@ export class M4SSRig extends ENGINE.SceneNode {
    * reads it, no collision touches it, and a body that has left a trail behaves exactly like
    * one that has not. State that only the renderer consumes belongs to the renderer.
    */
+  /**
+   * The flight dots: a few frames of where the body would go if it let go now.
+   *
+   * Four, not a line. At a revolution and a half a second a long dotted arc strobes into
+   * unreadability - and four is enough to curve, which is what separates "this is where you
+   * would go" from a laser sight pointing somewhere.
+   *
+   * Each dot owns its own texture with its fade baked IN, so showing and hiding is `visible`
+   * and nothing ever writes `material.opacity` from the frame loop - which does not reliably
+   * reach the renderer through a MeshNode, and presents as a dot that simply never appears.
+   */
+  private flightDots: ENGINE.MeshNode[] = [];
   private trail: Array<{ x: number; ground: number; r: number; ry: number; born: number }> = [];
   private trailNode: ENGINE.MeshNode | null = null;
   private trailEdge: ENGINE.MeshNode | null = null;
@@ -2350,9 +2367,90 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.replace(this.trailNode, buildSurface(points, { cell: 4, threshold: TRAIL_FILL }));
   }
 
+  /**
+   * The dots, built once and moved every frame.
+   *
+   * Drawn in the creature's own colour so they read as ITS trajectory rather than as an
+   * overlay, and sized down along the run so the arc has a direction even when it is short.
+   */
+  private buildFlightDots(): void {
+    for (let i = 0; i < DOT_COUNT; i++) {
+      const fade = 1 - i / DOT_COUNT;
+      const size = 13 - i * 2;
+      const dot = decorMesh(
+        `FlightDot${i}`,
+        new THREE.PlaneGeometry(size, size),
+        this.artMaterial({
+          map: glowTexture(`flight-dot-${i}`, SLIME_FILL, 32),
+          transparent: true,
+          opacity: 0.28 + fade * 0.5,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      dot.visible = false;
+      // In front of the creature: this is the one thing that has to be legible over it.
+      dot.position.z = 4;
+      this.stage?.add(dot);
+      this.flightDots.push(dot);
+    }
+  }
+
+  /**
+   * Pull the drawn body into a teardrop along its arc, and lay the flight dots ahead of it.
+   *
+   * Both answer the same question - which way am I going to leave - and both are driven by the
+   * same number, the body's speed against the swing ceiling, so they agree with each other by
+   * construction. At a hang the creature is round and there are no dots; at a committed
+   * revolution it is a comet with its point on the tangent and four dots curving off it.
+   */
+  private paintSwingShape(state: MassState, mine: Array<{ x: number; y: number }>): void {
+    const anchor = this.latched;
+    let speed = 0;
+    let vx = 0;
+    let vy = 0;
+    if (mine.length > 0) {
+      for (const p of owned(state)) {
+        vx += p.x - p.px;
+        vy += p.y - p.py;
+      }
+      vx = vx / mine.length / TUNING.dt;
+      vy = vy / mine.length / TUNING.dt;
+      speed = Math.hypot(vx, vy);
+    }
+
+    /*
+     * Measured against what the swing is ALLOWED to reach, not against a constant, so the
+     * shape means the same thing on every rope in the game - full comet is a full-energy
+     * revolution wherever it happens.
+     */
+    const rope = state.swingRadius || 0;
+    const ceiling = rope > 0 ? Math.sqrt(2 * TUNING.swingEnergy * TUNING.gravity * rope) : 0;
+    const drive = state.attached && ceiling > 0 ? Math.min(1, Math.max(0, speed / ceiling)) : 0;
+
+    // The shape itself - see swingShape.ts, which is a module precisely so this claim can
+    // be measured rather than squinted at.
+    if (anchor && drive > 0.12) teardrop(mine, vx, vy, drive);
+
+    /*
+     * The dots. Shown only once the swing is worth aiming - below that they are clutter over
+     * a creature that is barely moving, and the answer to "where will I go" is "not far".
+     */
+    const show = state.attached && drive > 0.45;
+    this.flightDots.forEach((dot, i) => {
+      dot.visible = show;
+      if (!show) return;
+      const at = ((i + 1) / DOT_COUNT) * DOT_REACH;
+      const c = centroid(owned(state));
+      dot.position.x = c.x + vx * at;
+      dot.position.y = c.y - BLOB_LIFT + vy * at + 0.5 * TUNING.gravity * at * at;
+    });
+  }
+
   private buildSlime(): void {
     const empty = new THREE.BufferGeometry();
     this.buildTrail();
+    this.buildFlightDots();
     this.rim = decorMesh('SlimeRim', empty.clone(), this.rimMaterial);
     this.rim.position.z = -2;
     this.stage?.add(this.rim);
@@ -2932,6 +3030,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.trail.length = 0;
     this.trailNode = null;
     this.trailEdge = null;
+    this.flightDots.length = 0;
     this.lastStamp = null;
     this.growthArt.clear();
     this.emberNodes.clear();
@@ -3085,6 +3184,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     // Level coordinates: the stage flips and scales them.
     this.paintTrail(state);
     const mine = owned(state).map((p) => ({ x: p.x, y: p.y - BLOB_LIFT }));
+    this.paintSwingShape(state, mine);
 
     /*
      * While hanging, the body and the growth are one shape.

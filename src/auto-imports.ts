@@ -7,6 +7,7 @@ import './m4ss/SlimeAudio.js';
 import './m4ss/sporelingArt.js';
 import './m4ss/stageArt.js';
 import './m4ss/surface.js';
+import './m4ss/swingShape.js';
 import './omniscient/art/brickwork.js';
 import './omniscient/art/certainty.js';
 import './omniscient/art/cursor.js';

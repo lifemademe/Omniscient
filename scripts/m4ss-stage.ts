@@ -17,6 +17,7 @@
  */
 
 import { freshLab, THE_LAB } from '../src/m4ss/lab.js';
+import { teardrop } from '../src/m4ss/swingShape.js';
 import {
   absorbTouching,
   centroid,
@@ -690,6 +691,69 @@ console.log('\n=== M4SS STAGE ONE ===\n');
     'a torn body puts itself back together',
     tornInto > 1 && components(owned(torn)).length === 1,
     `tore into ${tornInto}, ended as ${components(owned(torn)).length}`
+  );
+}
+
+// ---------------------------------------------------------------- the swing reads as a teardrop
+{
+  /*
+   * The shape that tells the player which way they will leave.
+   *
+   * It is a claim about geometry, so it gets measured: taken from a real settled body, is the
+   * drawn shape actually longer along the direction of travel, narrower across it, and
+   * narrower at the FRONT than the back? The last one is the whole feature - stretch and pinch
+   * alone give a symmetrical ellipse, which points both ways at once and is worse than not
+   * pointing at all, because it looks like information and is not.
+   */
+  const shaped = makeState(freshLab(), START_MASS);
+  run(shaped, 3.0, () => IDLE);
+  const body = owned(shaped).map((p) => ({ x: p.x, y: p.y }));
+  const c = {
+    x: body.reduce((a, p) => a + p.x, 0) / body.length,
+    y: body.reduce((a, p) => a + p.y, 0) / body.length,
+  };
+  // Travelling due east, so "along" is x and "across" is y and the arithmetic stays readable.
+  const length = (pts: Array<{ x: number; y: number }>) =>
+    Math.max(...pts.map((p) => p.x - c.x)) - Math.min(...pts.map((p) => p.x - c.x));
+  /*
+   * The outer THIRD of each end, not each half.
+   *
+   * A half includes the fat middle, so both halves report the middle's width and the
+   * measurement says nothing - which is exactly what the first version of this check did,
+   * reporting a wider front for a shape that is demonstrably narrower there. A teardrop is
+   * fattest at its waist; the claim is about its ENDS.
+   */
+  const endWidth = (pts: Array<{ x: number; y: number }>, front: boolean) => {
+    const reach = Math.max(...pts.map((p) => Math.abs(p.x - c.x)));
+    const end = pts.filter((p) => (front ? p.x - c.x > reach * 0.45 : p.x - c.x < -reach * 0.45));
+    return end.length ? Math.max(...end.map((p) => Math.abs(p.y - c.y))) : 0;
+  };
+
+  const wasLong = length(body);
+  const wasWide = endWidth(body, false);
+  const shapedBody = body.map((p) => ({ ...p }));
+  teardrop(shapedBody, 600, 0, 1);
+
+  check(
+    'a driven swing stretches the body along its travel',
+    length(shapedBody) > wasLong * 1.3,
+    `${wasLong.toFixed(0)}px to ${length(shapedBody).toFixed(0)}px`
+  );
+  check(
+    'and narrows it across',
+    endWidth(shapedBody, false) < wasWide,
+    `half-width ${wasWide.toFixed(1)}px to ${endWidth(shapedBody, false).toFixed(1)}px`
+  );
+  check(
+    'and the LEADING end is the narrow one - a drop, not a sausage',
+    endWidth(shapedBody, true) < endWidth(shapedBody, false) * 0.85,
+    `front ${endWidth(shapedBody, true).toFixed(1)}px against back ${endWidth(shapedBody, false).toFixed(1)}px`
+  );
+  const untouched = body.map((p) => ({ ...p }));
+  teardrop(untouched, 600, 0, 0);
+  check(
+    'and a body that is not swinging is left alone',
+    untouched.every((p, i) => Math.abs(p.x - body[i].x) < 1e-9 && Math.abs(p.y - body[i].y) < 1e-9)
   );
 }
 
