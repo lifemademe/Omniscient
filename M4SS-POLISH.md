@@ -244,3 +244,57 @@ capture-critique cycles, every one of which found the next fault:
 Both stages verified live at 240fps. The gameplay harnesses passed after every pass - no
 art change moved a platform.
 | 31 | playtest batch | Pools redrawn as glowing teal water (they read as "black oval artifacts"); wall-variant stone (big blocks, drip stains) so walls stop being floors; WORLD-ALIGNED texture offsets so adjacent tiles continue one pattern (the "not seamless" seams); tile boxes become near-black shadow slabs with the art on a front plane (the "flat 2D game with 3D background" read); growths get constant presence halos and a bigger sprite; props up to 62px and denser; segmented specimen gauge with a blob glyph; shed-mass chevron markers; out-of-reach click flashes the growth and says why; the sieve explains itself in the HUD; portal up to 176px; hanging teardrop plumper (0.54/0.48); crawl 3300 to 4300; Q recalls the NEAREST lump only; the pit returns the body to its LAST SAFE FOOTING instead of the room start - which was the real identity of "the button is blocking my movement" | Verified live: every change visible in one capture. The static-pixel complaint (isolated marching-squares islands around the body) is addressed by the draw-input cull; the canopy hairline was never a drawing problem - RepeatWrapping bled the solid top row into the bottom edge, fixed with ClampToEdge after two futile rounds of clamping the drawn strands. |
+
+## The redo (passes 32-49): a containment laboratory that the forest ate
+
+Run against M4SS-ART-BIBLE.md, written first (phase A): the reference set's own margin
+calls it "an overgrown greenhouse-laboratory - nature and alchemy entwine", and the old
+direction had shipped the forest and forgotten the lab. Every pass below was verified by a
+live editor capture, one worst-thing per cycle; harnesses green after every one.
+
+| 32 | StageTheme | PAL becomes a swappable active palette; the Stack gets its own cold table (stone/haze/moss walk blue, amber becomes cyan service light, rust heavier), its own forest colours and a 0.4 flora density | Two stages stop being one room twice; generators unchanged - they read PAL at draw time |
+| 33 | the stone | Rounded pillowed stones in mixed courses, grout ooze (culture medium flooding seam channels, beaded drips), pipes woven full-span through the masonry; wall variant at a bigger scale | The exec-* tile reference does three things the block grid never did; two texture-sheet critique rounds (buttons-on-a-board, timber pipe, timid ooze) before it went in |
+| 34 | architecture | domeTexture (glass lattice, drum, broken panes, lit windows) for the Gallery at -190; pipeStackTexture (runs, tanks, catwalks, pilot gauges) for the Stack | The midground must be a different KIND of thing than trees; two value rounds - saucer-stripe dome and black-on-black pipes - before either read |
+| 35 | light | godRayTexture (diagonal Gallery / vertical Stack), floorMistTexture (lost bottom edge), pool reflection smears | Light gains a direction, the ground line dissolves, water doubles its lights |
+| 36 | the face | Two pupil planes with catch-lights riding the body's upper quartile, velocity lean, blink timer; hidden during fast spins | The reference slime's charm is its eyes; ours was emotionally a puddle |
+| 37 | occluders | The 120% layer: leaves into the Gallery's top, pipe hardware from the Stack's side walls, world-fixed at z 70 | The parallax spec's missing sixth layer |
+| 38 | the gate | Containment bulkhead: cold steel panels, rust as patina, warning band at the foot, one status lamp | The first live capture's worst thing: the rust gate was the loudest object in the game |
+| 39 | midground reads | Backdrop machinery cooled to steel; dome forward to -190, panes brightened, drum calmed | The dome was eaten by the layer in front of it; a rust slab was the most saturated object on screen |
+| 40 | eaten architecture | Growth clumps on the drum cornice and glass bottom, strands down the panes, the foot dissolving into dark | Clean edges among organic silhouettes read as stickers (the pass-26 lesson, applied to the new thing) |
+| 41 | rays round 2 | Nested solid strips with stepped alpha instead of row dithering | The Stack capture read the vertical shafts as digital rain |
+| 42 | spores + HUD | Big motes become crosses (no frame corners); HUD glyph gains the creature's eyes; bible amended - the HUD stays a Pelagic OS window because M4SS is a feed on Keller's desktop, and her OS chrome IS the diegetic frame | The boxed halo squares floated as dead pixels; vine-metal UI would be the wrong fiction |
+| 43 | gauge discipline | Pipe-stack pilot gauges dimmed into their tanks, no clipping core | Two capture rounds were spent hunting them as "mystery buttons" - tanks hide behind tiles, gauges peeked through gaps as white chips |
+| 44 | glass centre | Pane grid fades toward the flanks; extra growth nibbles on the glass's bottom rows | The dome ended on a straight line and tiled uniformly across the frame |
+| 45 | the fall | oozeFallTexture feeding the centre-most pool, source OFF-FRAME, dim edges, shimmering opacity; landing glow | The reference's brightest moment; round 1 poured from an invisible pipe stub in mid-air, round 2 runs from above the frame |
+| 46 | bell jars | vesselTexture: glass dome on a plinth, culture glowing inside, two per Gallery among the floor props | The one prop that says "someone was studying something here" |
+| 47 | the plate | Power-plate redraw: socket, riveted brass, amber dome; decor plane enlarged (logic radius untouched); round 2 grounded the brass in metal families after the lamp mixes clipped | An interactable had less drawn identity than a mushroom |
+| 48 | water yields | Pools dodge buttons (slide aside, clamped to their tile); dome windows dimmed into the glass | Stage one's plate was half-swallowed by the pool that landed on it; the dome's windows were the "mystery buttons" all along |
+| 49 | find-me glow | Buttons carry a small amber halo | The squint test MEASURED the Stack's plate below the environment mean |
+
+### Exit criteria, as verified
+
+- **Squint test (measured, 20% + blur, mean luminance):** Gallery - player 132, portal rim
+  71, button 49, gate band 36, growths 30-34, environment 25. Stack - player 111, button
+  36, ember 33, growths 27-32, gate 29, environment 24. Player dominates everywhere;
+  interactables sit at or above the hazard band (the gate's one bright feature is its
+  warning band, which is deliberate); nothing interactable sits below the wallpaper.
+- **Thumbnail test:** warm-green horizontal Gallery vs cold-teal vertical Stack -
+  unmistakable at any size.
+- **Three consecutive clean examinations** after the last change: Gallery full-frame
+  hostile pass, Stack full-frame hostile pass + measured squint, reference side-by-side.
+  None found a flaw at "would embarrass us on a Steam page" severity.
+- Zero TEMP-VERIFY in the tree, all five harnesses green, every pass committed.
+
+### The honest gap list (what still needs a human artist)
+
+- **Painted density.** The reference is hand-painted: every rock face uniquely rendered,
+  warm bounce light on undersides, painterly edge control. fillRect generators match its
+  value structure and composition, not its brushwork. This is the permanent gap.
+- **Creatures.** The reference frames carry enemies (thornling, snapper, gloopod); the
+  game has none - by design, but the frames read emptier for it.
+- **Swing readability in motion** remains a human-eyes item: two scripted-input attempts
+  failed to latch (input focus, not gameplay), so the 360/fling was not re-judged in
+  motion this run. Ambient motion (spore drift, fall shimmer, blink) verified on frames.
+- **The lit strand tips** from Background1 (hanging moss catching light) were not done -
+  the canopy is still pure silhouette.
+- Audio was out of scope for this gauntlet entirely.
