@@ -424,3 +424,32 @@ there.
 | 64 | the tutorial text becomes DOM | Sign sprites replaced by labels in the game's own font on a translucent rounded plate, projected from their WORLD point into the container every frame; `signTexture` and its pixel-font import deleted | The sprite version bought one real thing - text living IN the room rather than on Keller's software - and it cost more than it bought. At three pixels wide `M`, `N` and `W` sit within one row of each other (W is 101/101/111/111/101, M is 101/111/111/101/101), so WHEN rendered closer to NHEN, and an earlier pass had already reworded signs to dodge the letter M rather than admit the font could not carry them. Instructions are the one thing in a game that must be unambiguous, and a font that cannot spell is not a style choice. The plates still belong to the place - they track their world point, so a scrolling stage would carry them - and the panel is a real border-radius rather than corner-cut rectangles faked on a canvas. |
 
 | 65 | the portal loses its jambs | The two stone uprights removed; the membrane is the whole object now | This arch has come apart in two passes. The head with its moss and vines went first (the busiest thing in frame at the one moment the player is meant to be reading a doorway), and the jambs were kept to say the way through was BUILT - which at this size they were not earning: they read as two grey panels flanking the iris rather than as masonry, and the transit tube does not need masonry to be legible. It stands on a stone shelf that already looks built. Silhouette-first: the fewer shapes the eye has to resolve, the faster it finds the way out. |
+
+## Pass 66: a force written below the integrator is not a force
+
+The playtest: "the recall is not working properly, the mass was still split in two, but
+green like the two separate parts were playable."
+
+Two green, separately-steerable lumps is precisely two OWNED components with nothing
+pulling them together - and the thing meant to pull them together, `rejoin`, **had never
+run once**. It was added in pass 50 and written BELOW the integration loop. Accelerations
+are zeroed at the top of every step and spent by that loop, so a force added after it is
+wiped by the next step's reset before it is ever integrated. The code was correct, the
+constant was tuned, and the whole block was dead.
+
+**The rule this leaves behind: anything that PUSHES a particle has to be written between
+the reset and the integrator. Below the integrator is where POSITION CORRECTIONS go (the
+rope constraint lives there and is right to) and the two are not interchangeable.**
+
+The block moved up next to the other forces, and it now cancels three quarters of gravity
+on the way home the way recall does - without that, a lump on a ledge below the body is
+pulled sideways into the wall beneath it and grinds there, which reads as the rejoin being
+broken rather than as the lump being stuck.
+
+A regression check went into `m4ss-stage.ts`, because a dead force is invisible to every
+other check in the file - nothing else asks the body to do something only that force can
+do. It tears the body 120px apart (past linkRange 15, so cohesion cannot close it) and
+requires one component at the end. Verified to fail when the force is disabled and pass
+when it is not: without it the body ends as two pieces and stays that way.
+
+| 66b | the menu stack gets out of the cable's way | STACK_ORIGIN and the facility plate move back 0.14; the cable's tip plane gains a real CABLE_CLEARANCE (0.16) instead of riding MODULE_PLATE.depth | The cable ran through the plates because its tip flew only three centimetres in front of their faces - the offset was measured from the plate CENTRE and the plate is 0.06 deep - so any sag put it inside the plastic. Moving the stack alone would have done nothing: the tip plane is derived FROM the stack, so both would have receded together. The clearance is also larger than HOVER_PUSH, or the plate being reached for would rise into its own cursor. |

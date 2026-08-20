@@ -659,5 +659,39 @@ console.log('\n=== M4SS STAGE ONE ===\n');
   );
 }
 
+// ---------------------------------------------------------------- a torn body heals
+{
+  /*
+   * An OWNED body that gets torn in two must put itself back together.
+   *
+   * This exists because the force that does it - `rejoin` - was written BELOW the
+   * integrator when it was added, which meant it never ran: accelerations are zeroed at
+   * the top of every step and spent by the integration loop, so anything added after that
+   * loop is wiped before it is integrated. The bug reached the playtest as "the mass was
+   * still split in two, but green, like the two separate parts were playable", which is
+   * exactly what two owned components with nothing pulling them together look like.
+   *
+   * A dead force is invisible to every other check in this file, because nothing else
+   * asks the body to do something only that force can do. So this asks directly: tear it,
+   * wait, and require ONE component at the end.
+   */
+  const torn = makeState(freshLab(), START_MASS);
+  run(torn, 2.0, () => IDLE);
+  const half = owned(torn).slice(0, Math.floor(owned(torn).length / 2));
+  // 120px is comfortably past linkRange (15), so cohesion alone cannot close it - measured
+  // with the force disabled, the body stays in pieces at this distance.
+  for (const p of half) {
+    p.x += 120;
+    p.px = p.x;
+  }
+  const tornInto = components(owned(torn)).length;
+  run(torn, 6.0, () => IDLE);
+  check(
+    'a torn body puts itself back together',
+    tornInto > 1 && components(owned(torn)).length === 1,
+    `tore into ${tornInto}, ended as ${components(owned(torn)).length}`
+  );
+}
+
 console.log(failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);

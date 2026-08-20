@@ -108,7 +108,35 @@ const PITCH = 0.193;
  * sits at y 0.44 - six centimetres clear of the desk lamp, which tops out at 0.38 and has
  * already had to be moved once for occupying the same space as SHUT DOWN.
  */
-const STACK_ORIGIN = new THREE.Vector3(-0.95, 1.3, -0.35 + DESK_SHIFT);
+/*
+ * z -0.49, twelve centimetres further back than it was.
+ *
+ * The cable was passing THROUGH the plates. It runs from the machine's shoulder up to
+ * whichever module the pointer is over, and the plane its tip flies on was set to
+ * STACK_ORIGIN.z + MODULE_PLATE.depth - which is only three centimetres in front of the
+ * plate's front face, since the plate is 0.06 deep and that offset is measured from its
+ * CENTRE. Any sag in the cable between anchor and tip put it inside the plastic.
+ *
+ * Two changes open the gap and they have to go together: the stack moves back, and the
+ * cable's plane keeps a real clearance in front of it (CABLE_CLEARANCE) rather than
+ * riding the plate depth. Moving the stack alone would have done nothing at all, because
+ * the tip plane is derived FROM the stack - both would have receded together and the
+ * cable would still have crossed them.
+ *
+ * The wall is at -1.98 and DESK_SHIFT is -0.72, so at -1.21 in world the plates still
+ * float three quarters of a metre clear of the wall. The facility plate above them moves
+ * with them (see hangFacilityPlate) - they are one composition and the eye reads the
+ * title and the list as a single column.
+ */
+const STACK_ORIGIN = new THREE.Vector3(-0.95, 1.3, -0.49 + DESK_SHIFT);
+/**
+ * How far in front of the plate stack the cable's loose end flies.
+ *
+ * Big enough that the cable, which sags on its way across, stays clear of the plastic for
+ * its whole length - and bigger than HOVER_PUSH, or the plate the player is reaching for
+ * would rise into its own cursor.
+ */
+const CABLE_CLEARANCE = 0.16;
 /** How far a hovered plate pushes out toward the player. */
 const HOVER_PUSH = 0.045;
 
@@ -164,7 +192,7 @@ export class MainMenu {
     // Cable tip flies on a plane just in front of the plates.
     this.cablePlane = new THREE.Plane(
       new THREE.Vector3(0, 0, 1),
-      -(origin.z + STACK_ORIGIN.z + MODULE_PLATE.depth)
+      -(origin.z + STACK_ORIGIN.z + MODULE_PLATE.depth / 2 + CABLE_CLEARANCE)
     );
   }
 

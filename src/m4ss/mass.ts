@@ -1311,6 +1311,54 @@ export function step(state: MassState, input: Input): MassState {
     }
   }
 
+  /*
+   * Owned pieces come home.
+   *
+   * Shedding with Space makes particles LOOSE; anything still owned is meant to be one
+   * creature. Accidents happen anyway - a crusher, a tight gap, a bad landing, a recall
+   * that arrives off-centre - and without this a torn-off owned lump rounds itself into
+   * its own little slime and crawls alongside the player for ever, because components()
+   * gives each cluster its own skin and nothing pulls two clusters together.
+   *
+   * ## Where this sits, and why that is the whole point
+   *
+   * This block spent its first outing BELOW the integrator, which meant it did nothing at
+   * all: accelerations are zeroed at the top of every step and spent by the integration
+   * loop a few dozen lines down, so a force added after that loop was wiped by the next
+   * step's reset before it was ever integrated. The playtest reported exactly what a
+   * dead force looks like - "the mass was still split in two, but green, like the two
+   * separate parts were playable" - two owned components, both steering, neither ever
+   * closing the gap.
+   *
+   * Anything that pushes a particle has to be written between the reset and the
+   * integrator. Below the integrator is a position correction (see the rope), not a
+   * force, and the two are not interchangeable.
+   */
+  if (!state.attached && !reaching) {
+    const parts = components(owned(state));
+    if (parts.length > 1) {
+      let main = parts[0];
+      for (const part of parts) if (part.length > main.length) main = part;
+      const target = centroid(main);
+      for (const part of parts) {
+        if (part === main) continue;
+        for (const q of part) {
+          const dx = target.x - q.x;
+          const dy = target.y - q.y;
+          const d = Math.hypot(dx, dy) || 1;
+          q.ax += (dx / d) * T.rejoin;
+          /*
+           * Most of gravity is cancelled on the way home, the same way recall does it.
+           * A lump left on a ledge below the body would otherwise be pulled sideways
+           * into the wall under it and sit there grinding, which reads as the rejoin
+           * being broken rather than as the lump being stuck.
+           */
+          q.ay += (dy / d) * T.rejoin - T.gravity * 0.75;
+        }
+      }
+    }
+  }
+
   for (const p of particles) {
     /*
      * Shed mass falls, and does nothing else.
@@ -1385,40 +1433,6 @@ export function step(state: MassState, input: Input): MassState {
             q.x -= (dx / d) * half * 2;
             q.y -= (dy / d) * half * 2;
           }
-        }
-      }
-    }
-  }
-
-  /*
-   * Owned pieces come home.
-   *
-   * Shedding with Space makes particles LOOSE; anything still owned is meant to be one
-   * creature. Accidents happen anyway - a crusher, a tight gap, a bad landing - and until
-   * now a torn-off owned lump simply rounded itself into its own little slime and crawled
-   * alongside the player for ever, because components() gives each cluster its own skin and
-   * nothing at all pulls two clusters together.
-   *
-   * So the smaller owned components are drawn toward the largest one, gently, and only when
-   * the player is neither reaching nor hanging (both of those are supposed to stretch the
-   * body). It is weak enough that a deliberate squeeze through a sieve still pinches the
-   * body in two for as long as the gap demands, and firm enough that the creature is whole
-   * again a moment after it is free.
-   */
-  if (!state.attached && !reaching) {
-    const parts = components(owned(state));
-    if (parts.length > 1) {
-      let main = parts[0];
-      for (const part of parts) if (part.length > main.length) main = part;
-      const target = centroid(main);
-      for (const part of parts) {
-        if (part === main) continue;
-        for (const p of part) {
-          const dx = target.x - p.x;
-          const dy = target.y - p.y;
-          const d = Math.hypot(dx, dy) || 1;
-          p.ax += (dx / d) * T.rejoin;
-          p.ay += (dy / d) * T.rejoin;
         }
       }
     }
