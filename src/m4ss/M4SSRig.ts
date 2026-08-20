@@ -2135,10 +2135,24 @@ export class M4SSRig extends ENGINE.SceneNode {
         depthWrite: false,
       })
     );
-    halo.position.set(this.portalAt.x, this.portalAt.y, 6);
+    /*
+     * BEHIND the creature, and this is a depth decision rather than a taste one.
+     *
+     * The portal used to sit at z 8 with the slime at 0, so the doorway drew over the animal:
+     * arriving at the exit, the thing the player has spent two stages steering disappeared
+     * behind the scenery at the exact moment it mattered. The creature is the subject of every
+     * frame in this game and nothing in the room may cover it.
+     *
+     * The window it drops into is narrow and worth stating. The tile faces are at -1 and the
+     * grass crowns at -0.5, so anything further back than that is buried in the ground; the
+     * trail lies at -0.16 and -0.1 and the body at 0. -0.35 and -0.3 put the door in front of
+     * the floor it stands on, behind the slime it belongs to, and with the turf drawing over
+     * its foot - which reads as the portal standing IN the grass rather than on top of it.
+     */
+    halo.position.set(this.portalAt.x, this.portalAt.y, -0.35);
     this.stage?.add(halo);
 
-    node.position.set(this.portalAt.x, this.portalAt.y, 8);
+    node.position.set(this.portalAt.x, this.portalAt.y, -0.3);
     this.stage?.add(node);
     this.portal = node;
 

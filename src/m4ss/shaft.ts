@@ -156,7 +156,7 @@ export const THE_SHAFT: World = {
      * 25px short of the gate - a growth whose circle intersects the door it opens is a growth
      * that opens the door by accident.
      */
-    { id: 'g6', x: 400, y: 520, rope: 70 },
+    { id: 'g6', x: 440, y: 520, rope: 70 },
   ],
 
   gates: [
@@ -238,13 +238,19 @@ export const THE_SHAFT: World = {
     /*
      * Bolted to the door it opens, standing upright, on the face the player arrives at.
      *
-     * STRUCK ON THE ARC, not thrown at. This was described here as the target of a fling and
-     * that was wrong, and the wrong description cost a stage: read as a throw, it invites
-     * moving the growth, and the growth's position is the mechanism. g6 hangs at 400 with a
-     * rope of 70, so the west edge of a swinging body reaches x 295 - inside this button's
-     * 256..316. The player builds a revolution and the body itself hammers the plate as it
-     * comes round. Slide the growth 55px right, as was tried, and the body reaches 350: the
-     * button is never touched and the stage cannot be finished. See the harness.
+     * THROWN AT, and it took three readings of this clause to settle that.
+     *
+     * It was first written as a fling target, then measured to be a strike - with g6 at 400
+     * the west edge of a swinging body reached x 295, inside this button's 256..316, so the
+     * revolution hammered the plate as it came round and no release was needed. That is not
+     * the beat: it makes the button something the swing does TO you rather than something you
+     * aim, and it fires the moment the arc is fast enough whether or not you meant it.
+     *
+     * So the growth moved out to 440. The sweep now reaches 335 and stops 19px short of the
+     * plate, which cannot be struck by swinging at all - and a release off a built revolution
+     * lands on it from 27 of 46 sampled points in one rotation and 16 of 46 in the other. The
+     * stage's last clause is finally the one it was always described as: build the circle,
+     * pick the moment, let go, hit the door.
      *
      * It used to hang in mid-air thirty pixels east of the gate, lying flat like the floor
      * plates - which said STAND ON ME about the one control in the game you are meant to

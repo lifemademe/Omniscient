@@ -773,3 +773,27 @@ no amount of squinting at a capture settles.
 | 78c | drawn, never simulated | applied to the drawn points, like BLOB_LIFT | The swing's physics were measured and retuned over several passes; none of it should move because the creature is being drawn more expressively. |
 | 78d | the dots bake their own fade | one texture per dot, shown with `visible` | Nothing writes `material.opacity` from the frame loop - it does not reliably reach the renderer through a MeshNode, and presents as a dot that simply never appears. |
 | 78e | the check measured its own mistake | compare the outer THIRD of each end, not each half | A half includes the fat middle, so both halves report the middle's width. The first version duly declared a wider front for a shape that profiles at 5.6px there against 7.9 at the back. |
+
+## Pass 79 - the finale becomes a throw, and the door gets out of the way
+
+**The last clause has now been read three ways, and this is the one the game wanted.** It was
+written as a fling target, measured to be a strike, and is now a throw for real. With g6 at
+400 the west edge of a swinging body reached x 295, inside the button's 256..316 - so the
+revolution hammered the plate as it came round and no release was needed. That makes the
+button something the swing does TO you rather than something you aim, and it fires the moment
+the arc is fast enough whether or not you meant it.
+
+At 440 the sweep reaches 335 and stops 19px short. The plate cannot be struck by swinging at
+all, and a release off a built revolution lands on it from 27 of 46 sampled points in one
+rotation and 16 of 46 in the other. Build the circle, pick the moment, let go, hit the door.
+
+The position was found by sweeping, not guessed: 440 lands 27/46, 470 lands 1, 500 lands 0,
+530 lands 5. The window is narrow and not monotonic, which is worth knowing before anyone
+nudges it again.
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 79a | g6 to 440 | | Far enough that the arc can never touch the plate, close enough to aim at. |
+| 79b | the harness asks both halves | the arc must NOT reach the button, and a release must | The old check fired a body at the button from a standing start, which is why the growth could be moved twice in two directions with nothing objecting. |
+| 79c | and it tracks across the swing | westmost sampled every frame, not read off the body once | A single sample is wherever the arc happened to be on that frame - the first version reported 479 for a sweep that reaches 335, and would have passed on a layout where the arc does hit the plate. |
+| 79d | the portal moves behind the creature | z 8 and 6 down to -0.3 and -0.35 | The doorway drew over the animal, so arriving at the exit hid the thing the player had spent two stages steering, at the exact moment it mattered. The window is narrow: tile faces at -1, turf at -0.5, trail at -0.16, body at 0. |

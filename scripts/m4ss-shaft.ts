@@ -384,54 +384,95 @@ console.log('\n=== M4SS STAGE TWO ===\n');
   check('and that opens the heavy gate', fast.world.gates.find((g) => g.id === 'w2')!.open);
 }
 
-// ---------------------------------------------------------------- the finale, actually swung
+// ---------------------------------------------------------------- the finale, actually thrown
 {
   /*
-   * A revolution on g6 must HAMMER the heavy button as it comes round.
+   * The stage's last clause: build a revolution on g6, pick a moment, let go, hit the door.
    *
-   * The force check above fires a body at the button from a standing start, which proves the
-   * button's threshold and nothing about whether the stage's last clause is reachable. This
-   * is that clause: the west edge of g6's sweep has to fall inside the button, and the body
-   * has to be moving fast enough when it gets there.
+   * Two halves, and the second one is the one the playtest asked for. The throw has to be
+   * possible - and the SWING must not be able to do it, because a plate the arc can touch is
+   * a plate that fires whether or not the player meant it, which turns the finale from
+   * something you aim into something that happens to you.
    *
-   * Unprotected until now, and it went unnoticed for exactly as long. Sliding the growth 55px
-   * right - which looks like a composition tweak - moves the sweep's west edge from 295 to
-   * 350 and the button spans 256..316, so the plate is simply never touched and the last door
-   * never opens. The stage stays finishable now or this check goes red.
+   * The force check above fires a body at the button from a standing start. That proves the
+   * threshold and nothing about whether any of this is reachable, which is how the growth
+   * came to be moved twice in two directions with nothing objecting.
    */
-  const st = makeState(freshShaft(), START_MASS);
-  const g6 = st.world.anchors.find((a) => a.id === 'g6')!;
-  const button = st.world.buttons.find((b) => b.id === 'heavy')!;
-  const rope = g6.rope ?? 70;
-  place(st, g6.x, g6.y + rope + 30);
-  for (const p of st.particles) p.px = p.x + 150 * TUNING.dt;
+  const swingTo = (extra: number) => {
+    const st = makeState(freshShaft(), START_MASS);
+    const g6 = st.world.anchors.find((a) => a.id === 'g6')!;
+    const rope = g6.rope ?? 70;
+    place(st, g6.x, g6.y + rope + 30);
+    for (const p of st.particles) p.px = p.x + 150 * TUNING.dt;
+    const drive = (s: MassState) => {
+      if (!s.attached) return { move: 0 as const, anchor: g6, recall: false };
+      const body = owned(s);
+      const c = centroid(body);
+      let vx = 0;
+      let vy = 0;
+      for (const q of body) {
+        vx += q.x - q.px;
+        vy += q.y - q.py;
+      }
+      const tx = c.y - g6.y;
+      const ty = -(c.x - g6.x);
+      const tl = Math.hypot(tx, ty) || 1;
+      const along = ((vx / body.length) * (tx / tl) + (vy / body.length) * (ty / tl)) / TUNING.dt;
+      return { move: (Math.abs(along) > 60 ? (along >= 0 ? 1 : -1) : 1) as 1 | -1, anchor: g6, recall: false };
+    };
+    run(st, 7.0, drive);
+    for (let i = 0; i < extra; i++) step(st, drive(st));
+    return st;
+  };
 
+  /*
+   * Swing for a good while without ever releasing: the plate must stay untouched.
+   *
+   * The westmost point has to be tracked ACROSS the swing, not read off the body once it
+   * stops - a single sample is wherever the arc happened to be on that frame, and the first
+   * version of this reported 479 for a sweep that actually reaches 335. It would have passed
+   * on a layout where the arc does hit the plate, which is the one thing it exists to catch.
+   */
+  const arc = swingTo(0);
   let westmost = Infinity;
-  run(st, 14.0, (s) => {
-    for (const q of owned(s)) westmost = Math.min(westmost, q.x);
-    if (!s.attached) return { move: 0 as const, anchor: g6, recall: false };
-    const body = owned(s);
-    const c = centroid(body);
-    let vx = 0;
-    let vy = 0;
-    for (const q of body) {
-      vx += q.x - q.px;
-      vy += q.y - q.py;
-    }
-    const tx = c.y - g6.y;
-    const ty = -(c.x - g6.x);
-    const tl = Math.hypot(tx, ty) || 1;
-    const along = ((vx / body.length) * (tx / tl) + (vy / body.length) * (ty / tl)) / TUNING.dt;
-    return { move: (Math.abs(along) > 60 ? (along >= 0 ? 1 : -1) : 1) as 1 | -1, anchor: g6, recall: false };
-  });
-
+  for (let i = 0; i < 3 / TUNING.dt; i++) {
+    step(arc, { move: 0, anchor: arc.world.anchors.find((a) => a.id === 'g6')!, recall: false });
+    for (const q of owned(arc)) westmost = Math.min(westmost, q.x);
+  }
+  const plate = arc.world.buttons.find((b) => b.id === 'heavy')!;
   check(
-    "the sweep's west edge falls inside the heavy button",
-    westmost < button.x + button.radius,
-    `body reaches x ${westmost.toFixed(0)}, button spans ${button.x - button.radius}..${button.x + button.radius}`
+    'swinging alone never reaches the heavy button',
+    !plate.pressed && westmost > plate.x + plate.radius,
+    `sweep reaches x ${westmost.toFixed(0)}, plate ends at ${plate.x + plate.radius}`
   );
-  check('and a built revolution presses it', button.pressed);
-  check('which opens the last door', st.world.gates.find((g) => g.id === 'w2')!.open);
+
+  // And a release off that revolution must be able to land on it.
+  let landed = 0;
+  let sampled = 0;
+  let closest = Infinity;
+  for (let f = 0; f < 92; f += 4) {
+    sampled += 1;
+    const st = swingTo(f);
+    const button = st.world.buttons.find((b) => b.id === 'heavy')!;
+    for (let i = 0; i < 1.6 / TUNING.dt; i++) {
+      step(st, IDLE);
+      const c = centroid(owned(st));
+      closest = Math.min(closest, Math.hypot(c.x - button.x, c.y - button.y));
+    }
+    if (button.pressed) landed += 1;
+  }
+  check(
+    'but a release off a built revolution lands on it',
+    landed > 0,
+    landed > 0
+      ? `${landed} of ${sampled} sampled release points`
+      : `none of ${sampled}; closest approach ${closest.toFixed(0)}px`
+  );
+  check(
+    'with a window wide enough to aim for',
+    landed >= sampled * 0.25,
+    `${landed} of ${sampled} release points`
+  );
 }
 
 // ---------------------------------------------------------------- the 360 is one speed
