@@ -816,7 +816,9 @@ export class M4SSRig extends ENGINE.SceneNode {
          * small solid lamp inside a separate soft bloom - and it is why that lamp reads
          * crisp and lit at the same time.
          */
-        new THREE.PlaneGeometry(128, 128),
+        // 104: a lantern, not a lamp-post. Small enough to be furniture in the room,
+        // big enough that its pane is unmistakably the brightest green in it.
+        new THREE.PlaneGeometry(104, 104),
         this.artMaterial({
           map: bushTexture(`growth-${i}`, 160, a.live === false),
           transparent: true,
@@ -839,7 +841,7 @@ export class M4SSRig extends ENGINE.SceneNode {
         // and at 230 it was a wide flat wash that made the whole object read as dull.
         // The slime's own halo colour and opacity, at the slime's own size - the creature
         // and the thing it grabs are lit alike because they are the same substance.
-        new THREE.PlaneGeometry(230, 230),
+        new THREE.PlaneGeometry(200, 200),
         this.artMaterial({
           map: glowTexture('presence-glow', '#b9e86a'),
           transparent: true,
@@ -3028,7 +3030,21 @@ export class M4SSRig extends ENGINE.SceneNode {
        * the only warm thing in a green stage and the whole second clause of stage two is
        * telling the two apart across a room.
        */
-      material.color.set(within || dead || hovered || anchor === this.latched ? '#ffffff' : '#c2d8bc');
+      /*
+       * NO TINT AT ALL any more, in any state.
+       *
+       * The last version still multiplied out-of-reach growths by #c2d8bc, and that was
+       * the reason the pane could never match the mass: a body standing anywhere but
+       * directly underneath is out of reach, so four fifths brightness WAS the lantern's
+       * normal appearance, and no amount of brightening the texture could show through a
+       * multiply applied on the way to the screen.
+       *
+       * Nothing is lost by dropping it. Reachability is answered by the pulsing ring, on
+       * the one growth a click would actually take, which is both more precise than a
+       * tint and legible at a glance. Dead growths are already a different SPRITE - ember
+       * red, no filament - so they never needed the tint either.
+       */
+      material.color.set('#ffffff');
       // A growth you are hanging from is doing something, so it reads as bigger. A hovered
       // one leans toward that without arriving, so the two never look the same.
       const scale = anchor === this.latched ? 1.16 : hovered ? 1.1 : 1;

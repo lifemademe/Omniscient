@@ -1354,9 +1354,16 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
 
   const brown = dead ? '#3a2a1e' : '#5a4526';
   const brownLit = dead ? '#4a3626' : '#7a6134';
-  const pane = dead ? '#8f4a2e' : '#e8fbb0';
-  const paneHot = dead ? '#c4553f' : '#fdffee';
-  const paneDim = dead ? '#6b3524' : '#c8e07a';
+  /*
+   * The pane is lit to the MASS's own values: #a8e85c is the creature's body colour and
+   * #e8fbb0 its shine, so the brightest thing inside the lantern is exactly as bright as
+   * the brightest thing on the slime. They are the same substance and now they measure
+   * the same. The near-white the pane used to carry read as grey against a green room -
+   * whiter is not brighter when everything around it is a hue.
+   */
+  const pane = dead ? '#8f4a2e' : '#c8f07a';
+  const paneHot = dead ? '#c4553f' : '#e8fbb0';
+  const paneDim = dead ? '#6b3524' : '#a8e85c';
 
   /*
    * The rope first, so the lamp's collar covers where it lands. Brown, two strands with a
