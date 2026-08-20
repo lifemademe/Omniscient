@@ -122,6 +122,28 @@ const BLOB_LIFT = 10;
  */
 const SLIME_FILL = '#a8e85c';
 const SLIME_EDGE = '#3f6b1f';
+const SLIME_EMISSIVE = '#5c9a2a';
+
+/**
+ * The creature's skin, as a material - so anything made of the creature is made the same way.
+ *
+ * Sharing the COLOUR was not enough, and the frame said so: the body came out #9fb867 on
+ * screen and the trail, wearing the same hex through a flat unlit material, came out #588526.
+ * The gap is the material, not the colour. The body is lit and carries an emissive, and ACES
+ * at exposure 0.5 pulls a flat fill of the same hex a long way down. Two objects that are
+ * meant to be the same substance have to go through the same lighting, or matching them is an
+ * endless exercise in hand-picking hexes against a tone curve.
+ */
+function slimeSkin(extra: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial {
+  return new THREE.MeshStandardMaterial({
+    color: new THREE.Color(SLIME_FILL),
+    roughness: 0.35,
+    metalness: 0.05,
+    emissive: new THREE.Color(SLIME_EMISSIVE),
+    side: THREE.DoubleSide,
+    ...extra,
+  });
+}
 
 /**
  * How far the body travels along the ground between deposits, in px.
@@ -434,13 +456,7 @@ export class M4SSRig extends ENGINE.SceneNode {
    * are all the same substance. It is still the brightest thing on screen - that is the
    * hierarchy and it has not moved - it is simply the brightest GREEN.
    */
-  private readonly slimeMaterial = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(SLIME_FILL),
-    roughness: 0.35,
-    metalness: 0.05,
-    emissive: new THREE.Color('#5c9a2a'),
-    side: THREE.DoubleSide,
-  });
+  private readonly slimeMaterial = slimeSkin();
   private readonly rimMaterial = new THREE.MeshBasicMaterial({
     color: new THREE.Color(SLIME_EDGE),
     side: THREE.DoubleSide,
@@ -2229,16 +2245,8 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.trailNode = decorMesh(
       'SlimeTrail',
       new THREE.BufferGeometry(),
-      this.artMaterial({
-        // The body's own fill and the body's own rim - see SLIME_FILL. A lump of the creature
-        // should not be a different colour from the creature.
-        color: new THREE.Color(SLIME_FILL),
-        transparent: true,
-        opacity: 0.95,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        toneMapped: true,
-      })
+      // The creature's own skin, lit the same way the creature is - see slimeSkin.
+      slimeSkin({ transparent: true, opacity: 0.95, depthWrite: false })
     );
     // In front of the ground and its turf, behind the creature. A trail drawn over the body
     // would put a smear on the animal that made it.

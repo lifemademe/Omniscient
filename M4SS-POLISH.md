@@ -688,3 +688,22 @@ untouched.
 | 74b | wide and varied | width 1.02-1.46 of nominal, height 0.34-0.96, jittered independently | Both derived from the position the deposit was laid at, with different constants, so they vary independently and the same walk still leaves the same trail. |
 | 74c | seated by height | the centre now rides on `ry`, not `r` | The blob's underside stays just into the turf however tall it happens to be, and still rides up as it shrinks. |
 | 74d | padding by actual reach | `buildSurface` pads by the largest `r`/`ry` any point has, not by a constant | `pad` was written when every point shared one radius. A point reaching further than the default gets its contour silently cut flat at the edge of the sampled grid. The body is unaffected - its largest per-point radius is 15 against a pad of 20. |
+
+## Pass 75 - the trail is made of the creature
+
+**Sharing the colour was not enough, and the frame proved it.** Sampled off a capture, the
+body rendered `#9fb867` and the trail - wearing the identical authored hex through a flat
+unlit material - rendered `#588526`. The gap was never the colour. The body is a LIT
+standard material carrying an emissive, and ACES at exposure 0.5 pulls a flat fill of the
+same hex a long way further down than it pulls a lit one.
+
+So the creature's skin is a function now. `slimeSkin()` builds the material, the body and
+both trail contours are made from it, and matching them stopped being an exercise in
+hand-picking hexes against a tone curve. Re-measured after: body `#9fb867`, trail `#89b040` -
+the same hue family, the trail about eight percent darker because the body carries its belly
+and shine contours on top of its fill and the trail is a single pass.
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 75a | one skin | `slimeSkin()`, plus `SLIME_FILL` / `SLIME_EDGE` / `SLIME_EMISSIVE` | Two objects meant to be the same substance have to go through the same lighting. A shared hex through two different materials is not a shared appearance. |
+| 75b | the trail is lit | the fill contour is a MeshStandardMaterial, not `artMaterial` | `artMaterial` turns tone mapping off because the stage textures are painted from the pre-lifted palette and have had the curve applied by hand. The creature has not - and the trail is made of the creature, not of the palette. |
