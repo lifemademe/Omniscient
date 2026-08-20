@@ -1456,53 +1456,6 @@ export function atmosphereTexture(seed: string, w = 1024, h = 576): THREE.Canvas
 }
 
 /**
- * Drifting spores, on their own tiling layer.
- *
- * These used to be painted into the atmosphere texture beside the light shafts, which meant
- * they could never move: scrolling that texture would have dragged the shafts with them, and
- * light does not drift. Separated, the motes can be scrolled and the shafts stay put, which
- * is the only arrangement that is physically sensible and also the only one that looks right.
- *
- * The stage has been a still photograph for fifteen passes - nothing in it moves except the
- * portal's membrane - and a room with no air movement reads as a diorama however well it is
- * painted. This is the cheapest possible fix: one texture, tiled, offset a little every frame.
- *
- * Deliberately WRAPPING and seamless, since it is scrolled forever. Nothing is drawn within a
- * few pixels of an edge, so no mote is ever cut in half at the seam.
- */
-export function sporeTexture(seed: string, size = 256, count = 90): THREE.CanvasTexture {
-  const rng = createRng(seedFrom(seed));
-  const { c, g } = surface(size, size);
-
-  for (let i = 0; i < count; i++) {
-    const x = Math.round(range(rng, 4, size - 8));
-    const y = Math.round(range(rng, 4, size - 8));
-    const roll = rng();
-    if (roll > 0.94) {
-      /*
-       * The big ones are CROSSES, not boxed squares. The old 5px halo square around a 3px
-       * core, doubled by the near layer's scale, floated through the live Stack capture
-       * as white chips in teal frames - dead pixels, not spores. A plus-shape has no
-       * corners to read as a frame and still carries the size.
-       */
-      g.fillStyle = mixHex(PAL.bioCyan, PAL.bioCore, 0.4);
-      g.fillRect(x - 1, y, 4, 2);
-      g.fillRect(x, y - 1, 2, 4);
-      g.fillStyle = PAL.bioCore;
-      g.fillRect(x, y, 2, 2);
-    } else if (roll > 0.66) {
-      g.fillStyle = mixHex(PAL.bioCyan, PAL.bioCore, 0.5);
-      g.fillRect(x, y, 2, 2);
-    } else {
-      g.fillStyle = roll > 0.4 ? PAL.mossLit : PAL.bioCyan;
-      g.fillRect(x, y, 1, 1);
-    }
-  }
-
-  return pixelTexture(c);
-}
-
-/**
  * The bush that stands in front of a growth.
  *
  * The growths were red torus rings - a programmer's marker for "grabbable here". The
@@ -1514,167 +1467,63 @@ export function sporeTexture(seed: string, size = 256, count = 90): THREE.Canvas
  * Drawn on a transparent canvas so it can sit as a billboard over the level.
  */
 export function bushTexture(seed: string, size = 160, dead = false): THREE.CanvasTexture {
+  /*
+   * A POD, not a bush.
+   *
+   * The old growth was a pixel shrub - layered leaves, purple caps, a spray of roots - and
+   * the playtest's verdict was that it read as scenery: "make the growth a simple shape,
+   * remove the pixel bushes art". It was right, and for a reason worth writing down: this
+   * is the single most important object on the screen, the thing the whole game asks you
+   * to find and click, and detail is the enemy of that. A silhouette the eye can name in
+   * one frame beats any amount of rendering (the bible's P1).
+   *
+   * So: one bulb. A dark rim, a banded body, a bright heart, and a short stem to say which
+   * way is up. Live is the reserved chartreuse; dead is the ember red, same shape, so the
+   * two read as states of one object rather than as two different plants.
+   */
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(size, size);
   const cx = size / 2;
-  const cy = size * 0.58;
+  const cy = size / 2;
+  const r = size * 0.27;
+
+  const bands = dead
+    ? ['#3a1410', '#6b2418', '#8f3524', PAL.rustLit]
+    : [
+        mixHex(PAL.leafDark, PAL.voidDeep, 0.35),
+        PAL.mossMid,
+        PAL.mossLit,
+        PAL.slime,
+      ];
+  const heart = dead ? mixHex('#c4553f', PAL.lampWarm, 0.35) : PAL.slimeGlow;
+
+  // The stem, first, so the bulb sits over its top.
+  g.fillStyle = dead ? '#2a1a14' : mixHex(PAL.vineMid, PAL.leafDark, 0.5);
+  g.fillRect(Math.round(cx - 3), Math.round(cy), 6, Math.round(r * 1.5));
+  // Two short leaves off the stem - the only detail the shape keeps.
+  g.fillRect(Math.round(cx - 14), Math.round(cy + r * 0.9), 11, 3);
+  g.fillRect(Math.round(cx + 4), Math.round(cy + r * 1.15), 11, 3);
 
   /*
-   * A dead growth is DRAWN dead, not tinted dead.
-   *
-   * The obvious implementation is to multiply the live sprite by red at runtime, and the
-   * comment on the reach tinting in M4SSRig already says why that fails: a flat ring can be
-   * switched green-to-red and stay legible, a painted sprite cannot - multiplying it turns a
-   * plant into a stain. It also collides with the tint that means "out of reach", and those
-   * two must never be confusable, because telling them apart IS the second clause of stage
-   * two.
-   *
-   * So red is its own palette through the same generator - and its own SILHOUETTE, which is
-   * the half that matters more. Hue alone would make stage two unplayable for anyone with
-   * red-green colour blindness, which is one player in twelve, and the mechanic these plants
-   * carry is the stage's whole second clause. So a dead growth also WILTS: the live plant
-   * fans its leaves upward, the dead one's droop level and below, shorter and thinner, with
-   * withered strands hanging off the clump. In greyscale - which is the honest test - the
-   * two read as different plants at a glance, and the harness measures exactly that.
-   *
-   * The core stays in the same place at the same size, unlit: the target is visible, so the
-   * route stays readable from the floor, which is why red growths exist rather than absent
-   * ones. The bioluminescent spores are dropped entirely rather than recoloured - they are
-   * the thing that says this plant is alive, and a dead one should not be shedding them.
+   * The bulb, as concentric bands drawn from the outside in. Each band is a filled disc,
+   * so the silhouette is a clean circle and the interior is stepped - no gradient, no
+   * stray pixels outside the rim.
    */
-  const leafDark = dead ? '#5e2b22' : PAL.leafDark;
-  const leafMid = dead ? '#8a3a29' : PAL.leafMid;
-  const leafLit = dead ? '#b04f31' : PAL.leafLit;
-  const capDark = dead ? '#6b2f28' : PAL.capDark;
-  const capLit = dead ? '#9c4433' : PAL.capLit;
-
-  // Roots and stems first, so everything else sits on them.
-  g.strokeStyle = PAL.vineDark;
-  for (let i = 0; i < 14; i++) {
-    const a = range(rng, Math.PI * 0.1, Math.PI * 0.9);
-    let x = cx;
-    let y = cy + 20;
-    const len = range(rng, 20, 46);
-    g.fillStyle = i % 2 ? PAL.vineDark : PAL.vineMid;
-    for (let s = 0; s < len; s++) {
-      x += Math.cos(a) * 1.1;
-      y += Math.sin(a) * 0.5;
-      g.fillRect(Math.round(x), Math.round(y), 2, 2);
-    }
-  }
-
-  // Broad leaves, radiating. Dark ones first and lit ones last so the clump has depth.
-  const leaf = (a: number, len: number, wide: number, colour: string): void => {
-    g.fillStyle = colour;
-    for (let s = 0; s < len; s++) {
-      const t = s / len;
-      const half = Math.round(wide * Math.sin(t * Math.PI) * (1 - t * 0.25));
-      const x = cx + Math.cos(a) * s;
-      const y = cy + Math.sin(a) * s * 0.8;
-      if (half <= 0) continue;
-      g.fillRect(Math.round(x - half), Math.round(y), half * 2, 2);
+  const disc = (radius: number, fill: string): void => {
+    g.fillStyle = fill;
+    for (let dy = -radius; dy <= radius; dy++) {
+      const half = Math.round(Math.sqrt(Math.max(0, radius * radius - dy * dy)));
+      if (half > 0) g.fillRect(Math.round(cx - half), Math.round(cy + dy), half * 2, 1);
     }
   };
-  /*
-   * Enough leaves to be a bush, at a size that fills the sprite.
-   *
-   * The first pass drew about twenty short fronds in the middle third of a 128px canvas and
-   * the result was a dead spider: at the scale these sit in the level it read as a speck of
-   * debris rather than as a plant. The reference clump is DENSE - forty-odd overlapping
-   * leaves, the darkest at the back, the whole thing filling its footprint - so the counts
-   * and the lengths both roughly doubled, and the arc widened past the horizontal so leaves
-   * spill sideways instead of standing straight up.
-   */
-  // Dead leaves hang at and below the horizontal; live ones fan the full arc upward.
-  const arc = (from: number, to: number): number =>
-    dead
-      ? // Two droops, one each side, none rising past ~20 degrees above level.
-        (rng() > 0.5 ? range(rng, Math.PI * 0.82, Math.PI * 1.08) : range(rng, Math.PI * 1.92, Math.PI * 2.18))
-      : range(rng, from, to);
-  const sag = dead ? 0.72 : 1;
-  for (let i = 0; i < 22; i++) {
-    leaf(arc(Math.PI * 0.98, Math.PI * 2.02), range(rng, 34, 56) * sag, range(rng, 6, 13) * sag, leafDark);
-  }
-  for (let i = 0; i < 18; i++) {
-    // Off a ramp rather than one flat mid-green, so the clump has internal depth.
-    leaf(
-      arc(Math.PI * 1.02, Math.PI * 1.98),
-      range(rng, 26, 46) * sag,
-      range(rng, 5, 11) * sag,
-      ramp(leafDark, leafLit, 5, 1 + Math.floor(rng() * 3))
-    );
-  }
-  for (let i = 0; i < 12; i++) {
-    leaf(arc(Math.PI * 1.08, Math.PI * 1.92), range(rng, 18, 34) * sag, range(rng, 3, 8) * sag, leafLit);
-  }
-
-  /*
-   * Caps, and there are five of them because two was decoration.
-   *
-   * The reference's plant clusters always carry a second colour - purple caps, a pale stem -
-   * and it is doing two jobs at once: it breaks the green, and it gives the clump internal
-   * contrast so it reads as a tangle of things rather than as one silhouette. At two, small
-   * and dark, they were invisible against the leaves.
-   */
-  for (let i = 0; i < 5; i++) {
-    const mx = cx + range(rng, -34, 34);
-    const my = cy + range(rng, -10, 12);
-    const r = range(rng, 5, 9);
-    blob(g, rng, mx, my + 2, r * 0.35, leafDark, 0.5);
-    blob(g, rng, mx, my, r, capDark, 1.7);
-    blob(g, rng, mx, my - r * 0.35, r * 0.62, capLit, 1.9);
-  }
-
-  // Bioluminescent spores drifting off the clump. Cold against the warm green, and the thing
-  // that says this plant is alive rather than painted on.
-  for (let i = 0; i < (dead ? 0 : 9); i++) {
-    const sx = cx + range(rng, -46, 46);
-    const sy = cy + range(rng, -40, 16);
-    g.fillStyle = PAL.bioCyan;
-    g.fillRect(Math.round(sx), Math.round(sy), 2, 2);
-    g.fillStyle = PAL.bioCore;
-    g.fillRect(Math.round(sx), Math.round(sy), 1, 1);
-  }
-
-  if (dead) {
-    /*
-     * Withered strands, the silhouette's second tell: nothing on the live plant hangs.
-     * Slightly wandering verticals off the underside of the clump, in the stem colour,
-     * with a curled tip. Length is most of the sprite's lower half, so the droop reads
-     * at level scale, not only in close-up.
-     */
-    for (let i = 0; i < 5; i++) {
-      let x = cx + range(rng, -34, 34);
-      const drop = range(rng, 26, 44);
-      g.fillStyle = i % 2 ? PAL.vineDark : leafDark;
-      for (let dy = 0; dy < drop; dy++) {
-        g.fillRect(Math.round(x), Math.round(cy + 8 + dy), 2, 1);
-        if (dy % 6 === 0) x += range(rng, -1.2, 1.2);
-      }
-      // The curl at the tip.
-      g.fillRect(Math.round(x + 1), Math.round(cy + 8 + drop), 3, 2);
-    }
-  }
-
-  /*
-   * The core: what the player is actually aiming at.
-   *
-   * On a dead growth it is still THERE - same size, same place - and simply unlit. That is
-   * the difference between "you cannot use this yet" and "there is nothing here": the target
-   * is visible, so the route is readable from the floor of the room, which is the whole
-   * reason red growths exist rather than absent ones.
-   */
-  if (dead) {
-    blob(g, rng, cx, cy - 6, 16, '#4a2018');
-    blob(g, rng, cx, cy - 6, 12, '#6d2f21');
-    blob(g, rng, cx, cy - 7, 8, '#93412a');
-    blob(g, rng, cx, cy - 8, 5, '#bd5c38');
-  } else {
-    blob(g, rng, cx, cy - 6, 16, PAL.mossDark);
-    blob(g, rng, cx, cy - 6, 12, PAL.mossMid);
-    blob(g, rng, cx, cy - 7, 8, PAL.slime);
-    blob(g, rng, cx, cy - 8, 5, PAL.slimeGlow);
-  }
+  disc(r + 3, mixHex(PAL.voidDeep, '#000000', 0.25));
+  bands.forEach((fill, i2) => disc(r * (1 - i2 * 0.19), fill));
+  // The heart, offset up-left toward the key light, and a small specular above it.
+  g.fillStyle = heart;
+  disc(r * 0.26, heart);
+  g.fillStyle = dead ? mixHex(heart, '#ffffff', 0.2) : mixHex(PAL.slimeGlow, '#ffffff', 0.35);
+  g.fillRect(Math.round(cx - r * 0.42), Math.round(cy - r * 0.5), 4, 3);
+  void rng;
 
   return pixelTexture(c);
 }
@@ -1796,24 +1645,22 @@ export function portalTexture(seed: string, phase: number, size = 128): THREE.Ca
     }
   }
 
-  // The arch: two jambs and a head, in stone, with moss on the top edge.
+  /*
+   * Two jambs, and nothing over them.
+   *
+   * The arch used to carry a stone head with a moss run and hanging vines along it, and
+   * the playtest asked for exactly that to go: "remove the top grass/stone part of the
+   * portal". It was the busiest thing in the frame at the one moment the player is
+   * supposed to be reading a doorway. What remains is the pair of uprights - enough to say
+   * the way through is BUILT, with the membrane itself uninterrupted above.
+   */
   g.fillStyle = PAL.stoneMid;
-  g.fillRect(cx - 44, 18, 12, size - 18);
-  g.fillRect(cx + 32, 18, 12, size - 18);
-  for (let dy = 0; dy < 34; dy++) {
-    const half = Math.round(Math.sqrt(Math.max(0, 44 * 44 - dy * dy)) * 0.95);
-    g.fillRect(cx - half, 18 + 34 - dy, half * 2 - Math.max(0, (half - 12) * 2), 2);
-  }
+  g.fillRect(cx - 44, 30, 12, size - 30);
+  g.fillRect(cx + 32, 30, 12, size - 30);
   g.fillStyle = PAL.stoneEdge;
-  g.fillRect(cx - 44, 18, 12, 2);
-  g.fillRect(cx + 32, 18, 12, 2);
-
-  mossRun(g, rng, cx - 46, cx + 46, 16, 12);
-  for (let i = 0; i < 5; i++) {
-    const vx = cx + range(rng, -46, 46);
-    g.fillStyle = PAL.mossDark;
-    g.fillRect(Math.round(vx), 20, 1, Math.round(range(rng, 8, 30)));
-  }
+  g.fillRect(cx - 44, 30, 12, 2);
+  g.fillRect(cx + 32, 30, 12, 2);
+  void rng;
 
   return pixelTexture(c);
 }
@@ -2123,50 +1970,213 @@ export function propTexture(seed: string, kind: 'fern' | 'shroom', size = 48): T
 }
 
 /**
- * The ooze-fall: culture medium pouring from a broken feed pipe. The 08_49_58 reference
- * builds its brightest moment out of exactly this - green liquid falls off an edge, glows,
- * and pools - and the bible calls the pools "fed" a requirement: our water glowed but
- * nothing filled it. The texture carries its own source (a dark pipe mouth at the top) so
- * the liquid is never a light beam: it comes OUT of something and lands IN something.
+ * DIRT, which is what the playtest asked the floors to become - "change the floor to dirt,
+ * the top part should have grass texture at the top, and a second variation of the dirt
+ * texture below with only dirt to blend it in".
  *
- * Drawn as broken vertical dashes around a solid core - liquid, not laser - with beads
- * that read as droplets. The rig pulses its opacity gently; the shimmer is the cheapest
- * honest motion in the game.
+ * Two variants of one material, so they blend by construction:
+ *
+ *   'plain' is the body - packed earth in stepped bands, pebbles, root threads and the
+ *   occasional buried stone. It tiles in both axes.
+ *   'grass' is the same earth with a living crown on top: a moss-green mat, blades
+ *   breaking the line upward, and roots trailing down into the dirt so the two variants
+ *   meet in a fringe rather than on a seam.
+ *
+ * Seamlessness is the whole discipline here. Nothing is drawn within a few pixels of an
+ * edge unless it is also drawn wrapped around to the other side: every horizontal feature
+ * is either full-width or is drawn twice, at x and at x-w, so the pattern continues across
+ * the join. The rig then offsets each tile by its WORLD position, so two tiles that touch
+ * continue one field of earth.
  */
-export function oozeFallTexture(seed: string, w = 16, h = 256): THREE.CanvasTexture {
-  const rng = createRng(seedFrom(seed));
+export function dirtTexture(
+  seed: string,
+  w = 128,
+  h = 96,
+  variant: 'plain' | 'grass' = 'plain'
+): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed + variant));
   const { c, g } = surface(w, h);
-  const cx = Math.floor(w / 2);
 
   /*
-   * No pipe mouth: the source is OFF-FRAME. The first version carried a 10px pipe stub at
-   * the texture's top, and at game scale it vanished - the live capture showed a liquid
-   * column materialising in mid-air, which is worse than no source at all. The reference
-   * pours its falls in from outside the frame, so this one runs from the world's top
-   * (above anything the camera shows) down to its pool, and the eye supplies the pipe.
-   *
-   * Value discipline: the fall is DECOR, third tier - a thread of slimeGlow every seventh
-   * row is all the brightness it keeps; edges sit at mossMid so growth halos and the
-   * player stay louder.
+   * The ramp, brightened after the first draft came back as black mud on the texture
+   * sheet. Earth has to READ as earth - the playtest asked for dirt, and a floor the eye
+   * files as "dark" is not dirt, it is absence. The top of the ramp is warmed toward rust
+   * so the ground is the one large brown field in a green room, which also gives the moss
+   * and the slime something that is not their own hue to sit against.
    */
+  const earth = [
+    mixHex(PAL.vineDark, PAL.voidDeep, 0.3),
+    PAL.vineDark,
+    mixHex(PAL.vineDark, PAL.vineMid, 0.55),
+    PAL.vineMid,
+    mixHex(PAL.vineMid, PAL.rustMid, 0.3),
+  ];
+
+  // The ground itself: horizontal bands of packed earth, darkest at the bottom, with the
+  // band boundaries wandering so the strata do not read as ruled lines.
+  const bandCount = 5;
   for (let y = 0; y < h; y++) {
     const t = y / h;
-    const core = Math.max(2, Math.round(4 * (1 - t * 0.35)));
-    g.fillStyle = PAL.mossMid;
-    g.fillRect(cx - Math.floor(core / 2) - 1, y, core + 2, 1);
-    g.fillStyle = PAL.slime;
-    g.fillRect(cx - Math.floor(core / 2), y, core, 1);
-    if (y % 7 < 4) {
-      g.fillStyle = PAL.slimeGlow;
-      g.fillRect(cx, y, 1, 1);
+    const wobble = Math.sin(y * 0.7) * 0.03 + Math.sin(y * 0.23) * 0.04;
+    const idx = Math.max(0, Math.min(bandCount - 1, Math.floor((1 - t + wobble) * bandCount)));
+    g.fillStyle = earth[idx];
+    g.fillRect(0, y, w, 1);
+  }
+
+  // Grit: two-pixel flecks a step off their own band, dense enough to read as soil.
+  for (let i = 0; i < (w * h) / 55; i++) {
+    const x = Math.round(range(rng, 0, w));
+    const y = Math.round(range(rng, 0, h));
+    const t = 1 - y / h;
+    // Two steps off the local band rather than one: at one step the grit averaged into
+    // its own background and the soil came out as a flat wash.
+    const idx = Math.floor(t * bandCount) + (rng() > 0.5 ? 2 : -2);
+    g.fillStyle = earth[Math.max(0, Math.min(bandCount - 1, idx))];
+    g.fillRect(x, y, 2, 1);
+  }
+
+  /** A pebble, drawn twice when it straddles an edge so the tile stays seamless. */
+  const pebble = (x: number, y: number, pr: number, lit: string, dark: string): void => {
+    for (const ox of [0, -w, w]) {
+      for (let dy = -pr; dy <= pr; dy++) {
+        const half = Math.round(Math.sqrt(Math.max(0, pr * pr - dy * dy)));
+        if (half <= 0) continue;
+        g.fillStyle = dy < -pr * 0.2 ? lit : dark;
+        g.fillRect(Math.round(x + ox - half), Math.round(y + dy), half * 2, 1);
+      }
+    }
+  };
+  for (let i = 0; i < 11; i++) {
+    const pr = range(rng, 3, 8);
+    pebble(
+      range(rng, 0, w),
+      range(rng, h * 0.2, h - 4),
+      pr,
+      mixHex(PAL.stoneMid, PAL.vineMid, 0.35),
+      mixHex(PAL.stoneDark, PAL.vineDark, 0.45)
+    );
+  }
+
+  // Roots threading down through the earth, wrapped at the edges like the pebbles.
+  for (let i = 0; i < 4; i++) {
+    let x = range(rng, 0, w);
+    const y0 = range(rng, 0, h * 0.5);
+    const len = range(rng, h * 0.25, h * 0.7);
+    g.fillStyle = mixHex(PAL.vineMid, PAL.voidDeep, 0.35);
+    for (let d = 0; d < len; d++) {
+      if (d % 6 === 0) x += range(rng, -1.2, 1.2);
+      const y = Math.round(y0 + d);
+      if (y >= h) break;
+      for (const ox of [0, -w, w]) g.fillRect(Math.round(x + ox), y, 2, 1);
     }
   }
-  // Beads: droplets thrown clear of the column.
-  for (let i = 0; i < 9; i++) {
-    const by = Math.round(range(rng, 20, h - 8));
-    const bx = cx + Math.round(range(rng, 3, 6)) * (rng() > 0.5 ? 1 : -1);
-    g.fillStyle = rng() > 0.5 ? PAL.slime : PAL.mossLit;
+
+  if (variant === 'grass') {
+    /*
+     * The crown. A mat of living green across the top rows, blades standing up out of it,
+     * and roots hanging down into the earth below - the fringe is what lets the grass tile
+     * sit on the plain one without a visible join.
+     */
+    const matH = Math.max(6, Math.round(h * 0.13));
+    g.fillStyle = mixHex(PAL.mossDark, PAL.leafDark, 0.4);
+    g.fillRect(0, 0, w, matH);
+    g.fillStyle = PAL.mossMid;
+    g.fillRect(0, 0, w, Math.max(2, Math.round(matH * 0.45)));
+    g.fillStyle = mixHex(PAL.mossLit, PAL.mossMid, 0.35);
+    g.fillRect(0, 0, w, 2);
+
+    // Blades standing above the mat, seeded, each shaded along its length.
+    for (let i = 0; i < w / 5; i++) {
+      const bx = Math.round(range(rng, 0, w));
+      const bh = Math.round(range(rng, 3, 11));
+      const lean = rng() > 0.5 ? 1 : -1;
+      for (let d = 0; d < bh; d++) {
+        const y = matH - 1 - d;
+        if (y < 0) break;
+        g.fillStyle = d > bh * 0.6 ? PAL.mossLit : PAL.mossMid;
+        const x = Math.round(bx + lean * Math.round(d / 4));
+        for (const ox of [0, -w, w]) g.fillRect(x + ox, y - Math.round(bh * 0.6), 1, 1);
+      }
+    }
+    // The fringe: roots and moss tongues reaching down into the dirt.
+    for (let i = 0; i < w / 7; i++) {
+      const fx = Math.round(range(rng, 0, w));
+      const fl = Math.round(range(rng, 2, 12));
+      g.fillStyle = rng() > 0.5 ? PAL.mossDark : mixHex(PAL.mossDark, PAL.vineMid, 0.5);
+      for (const ox of [0, -w, w]) g.fillRect(fx + ox, matH, 2, fl);
+    }
+  }
+
+  return pixelTexture(c);
+}
+
+/**
+ * The acid: what actually lies at the bottom of a pit.
+ *
+ * The pits were empty black, which asks the player to fear a colour. Now they hold a bath
+ * of the lab's own spent medium - the brightest, most saturated green in the level, banded
+ * like the pools but far more toxic - so a gap in the floor reads as a THING rather than
+ * an absence. Tiles horizontally: the surface line and every band run the full width.
+ */
+export function acidTexture(seed: string, w = 256, h = 128): THREE.CanvasTexture {
+  /*
+   * Round 2: the first draft was four solid horizontal slabs and read as a flag rather
+   * than as liquid. What makes a fluid legible is that its boundaries UNDULATE - the
+   * surface rides a wave, and every band below follows it - so the whole thing is drawn
+   * per column now, off two sine terms, with the bright meniscus tracking the wave.
+   * Horizontal periods divide the texture width exactly, so it still tiles.
+   */
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+
+  const bands = [
+    mixHex(PAL.mossLit, PAL.slimeGlow, 0.6),
+    PAL.mossLit,
+    mixHex(PAL.mossMid, PAL.mossLit, 0.45),
+    PAL.mossMid,
+    mixHex(PAL.mossDark, PAL.voidDeep, 0.35),
+    mixHex(PAL.voidDeep, '#000000', 0.2),
+  ];
+  const baseY = h * 0.2;
+
+  for (let x = 0; x < w; x++) {
+    const wave =
+      Math.sin((x / w) * Math.PI * 4) * 3 +
+      Math.sin((x / w) * Math.PI * 10 + 1.2) * 1.6;
+    const top = Math.round(baseY + wave);
+
+    // The body, in bands that follow the surface down.
+    for (let y = top; y < h; y++) {
+      const t = (y - top) / (h - top);
+      const idx = Math.min(bands.length - 1, 1 + Math.floor(t * (bands.length - 1)));
+      g.fillStyle = bands[idx];
+      g.fillRect(x, y, 1, 1);
+    }
+    // The meniscus: the hot line where acid meets air, two rows thick.
+    g.fillStyle = bands[0];
+    g.fillRect(x, top, 1, 2);
+  }
+
+  // Broken highlights riding the crests - the brightest pixels in the level.
+  g.fillStyle = mixHex(PAL.slimeGlow, '#ffffff', 0.35);
+  for (let x = 0; x < w; x += Math.round(range(rng, 7, 18))) {
+    const wave =
+      Math.sin((x / w) * Math.PI * 4) * 3 + Math.sin((x / w) * Math.PI * 10 + 1.2) * 1.6;
+    g.fillRect(x, Math.round(baseY + wave) - 1, Math.round(range(rng, 3, 9)), 1);
+  }
+
+  // Bubbles rising, and fumes coming off the top.
+  for (let i = 0; i < 12; i++) {
+    const bx = Math.round(range(rng, 0, w));
+    const by = Math.round(range(rng, baseY + 8, h * 0.75));
+    g.fillStyle = bands[0];
     g.fillRect(bx, by, 2, 2);
+  }
+  for (let i = 0; i < 16; i++) {
+    const fx = Math.round(range(rng, 0, w));
+    const fy = Math.round(range(rng, baseY - 14, baseY - 2));
+    g.fillStyle = mixHex(PAL.mossLit, PAL.voidDeep, range(rng, 0.4, 0.75));
+    g.fillRect(fx, fy, 2, 2);
   }
 
   return pixelTexture(c);

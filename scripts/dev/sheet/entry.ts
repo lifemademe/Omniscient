@@ -101,6 +101,12 @@ function show(label: string, tex: { image: CanvasImageSource & { width: number; 
 const S = 'm4ss';
 // Both stage identities, side by side - the thumbnail test happens here first.
 art.setStageTheme(art.THEME_GALLERY);
+show('growth-live', art.bushTexture(S, 160, false), 2);
+show('growth-dead', art.bushTexture(S, 160, true), 2);
+show('dirt-grass', art.dirtTexture(S, 128, 96, 'grass'), 3);
+show('dirt-plain', art.dirtTexture(S, 128, 96, 'plain'), 3);
+show('acid', art.acidTexture(S, 256, 128), 2);
+show('portal-new', art.portalTexture(S, 0), 3);
 show('stone-gallery', art.stoneTexture(S), 3);
 show('wall-gallery', art.stoneTexture(S, 128, 96, 'wall'), 3);
 art.setStageTheme(art.THEME_STACK);
@@ -123,7 +129,6 @@ show('sign', art.signTexture(S, ['HOLD SPACE', 'TO SPLIT']), 2);
 show('gate', art.gateTexture(S, 40, 590), 1);
 show('plate', art.plateTexture(S), 3);
 show('vine', art.vineTexture(S), 3);
-show('spores', art.sporeTexture(S), 2);
 show('portal', art.portalTexture(S, 0), 3);
 show('glow', art.glowTexture(S, '#7fe0a0'), 2);
 

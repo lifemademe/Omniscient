@@ -34,6 +34,8 @@ import {
   backdropTexture,
   endCapTexture,
   canopyTexture,
+  acidTexture,
+  dirtTexture,
   domeTexture,
   eyeTexture,
   floorMistTexture,
@@ -42,7 +44,6 @@ import {
   pipeStackTexture,
   markerTexture,
   occluderTexture,
-  oozeFallTexture,
   gateTexture,
   glowTexture,
   interiorFadeTexture,
@@ -54,7 +55,6 @@ import {
   vignetteTexture,
   lipTexture,
   poolTexture,
-  sporeTexture,
   bushTexture,
   PAL,
   portalTexture,
@@ -177,7 +177,6 @@ export class M4SSRig extends ENGINE.SceneNode {
   private readonly anchorNodes = new Map<Anchor, ENGINE.MeshNode>();
   private portal: ENGINE.MeshNode | null = null;
   private slimeGlow: ENGINE.MeshNode | null = null;
-  private readonly sporeLayers: Array<{ map: THREE.Texture; speed: number }> = [];
   private readonly vineMaps: Array<{ map: THREE.Texture; phase: number }> = [];
   /** Seconds since the stage was built. Drives every idle animation in the scene. */
   private artClock = 0;
@@ -268,8 +267,6 @@ export class M4SSRig extends ENGINE.SceneNode {
   /** The stage's art identity - palette, light direction, midground kind. Set at the top
    * of buildLevel() so every generator call below it draws the right world. */
   private theme = THEME_GALLERY;
-  /** The ooze-fall's material, shimmered gently in updateGrowths' art tick. */
-  private oozeFallMat: THREE.MeshBasicMaterial | null = null;
   private vignette: ENGINE.MeshNode | null = null;
   /** Smoothed camera height, in level coordinates. See viewCentre. */
   private cameraY = 0;
@@ -624,10 +621,19 @@ export class M4SSRig extends ENGINE.SceneNode {
      * tile's own dimensions keeps the block size constant across the whole stage, so it all
      * reads as one quarry.
      */
-    const stoneMap = stoneTexture(`m4ss-stone-${this.theme.name}`);
+    /*
+     * DIRT, not stone, on the playtest's ask. The body of every mass is plain packed
+     * earth; walked surfaces get a separate grass crown laid along their top edge (see
+     * below), which is what "grass at the top, dirt below to blend it in" asks for and is
+     * also far more robust than baking the grass into the tile texture - the crown sits at
+     * the top edge whatever the tile's height, instead of being stretched by it.
+     *
+     * The boundary walls keep the old stone: they are the room's shell, not its ground,
+     * and a wall of loose earth reads as a cave-in waiting to happen.
+     */
+    const dirtMap = dirtTexture(`m4ss-dirt-${this.theme.name}`, 128, 96, 'plain');
+    const grassMap = dirtTexture(`m4ss-dirt-${this.theme.name}`, 128, 96, 'grass');
     const wallMap = stoneTexture(`m4ss-stone-${this.theme.name}`, 128, 96, 'wall');
-    /** Every pool placed below, so the ooze-fall can pick the most visible one. */
-    const poolSpots: Array<{ x: number; y: number }> = [];
 
     for (const t of world.tiles) {
       /*
@@ -637,7 +643,7 @@ export class M4SSRig extends ENGINE.SceneNode {
        * ground and walls share a material has no gravity in its art.
        */
       const isWall = t.h > t.w * 1.6;
-      const face = (isWall ? wallMap : stoneMap).clone();
+      const face = (isWall ? wallMap : dirtMap).clone();
       face.needsUpdate = true;
       face.repeat.set(t.w / 128, t.h / 96);
       /*
@@ -675,6 +681,29 @@ export class M4SSRig extends ENGINE.SceneNode {
        * something solid instead of a patterned rectangle. Only tiles deep enough to have
        * an interior get one - a thin ledge is all surface.
        */
+      /*
+       * The grass crown: one strip of the grass variant along the top of every walked
+       * surface, its own height regardless of how deep the mass below it is. Drawn just in
+       * front of the tile face so its downward fringe of roots and moss tongues overlaps
+       * the dirt and the two variants meet without a seam.
+       */
+      if (!isWall) {
+        const crownH = 46;
+        const crown = grassMap.clone();
+        crown.needsUpdate = true;
+        crown.repeat.set(t.w / 128, crownH / 96);
+        // World-aligned in x so neighbouring tiles continue one run of turf; pinned to the
+        // texture's own top in y, because the crown IS the top.
+        crown.offset.set((t.x % 128) / 128, 1 - crownH / 96);
+        const turf = decorMesh(
+          'TileCrown',
+          new THREE.PlaneGeometry(t.w, crownH),
+          this.artMaterial({ map: crown, transparent: true, depthWrite: false })
+        );
+        turf.position.set(0, -t.h / 2 + crownH / 2, 24);
+        node.add(turf);
+      }
+
       if (t.h > 120) {
         const fade = decorMesh(
           'TileFade',
@@ -757,7 +786,6 @@ export class M4SSRig extends ENGINE.SceneNode {
           );
           pond.position.set(px, t.y + 9, 5);
           this.stage?.add(pond);
-          poolSpots.push({ x: px, y: t.y });
         }
       }
 
@@ -999,45 +1027,40 @@ export class M4SSRig extends ENGINE.SceneNode {
     }
 
     /*
-     * The ooze-fall, over whichever pool sits nearest the stage's centre. The first
-     * version fed "the first pool of the first wide tile", which is a composition
-     * decision delegated to tile declaration order - it landed offscreen-left behind the
-     * HUD. The centre-most pool is on camera in every framing that matters. Gallery
-     * only: a broken feed pipe pouring culture medium into the water, the reference's
-     * brightest moment and the story of why these pools glow. Behind the play plane
-     * (z -14), so the slime always crosses in front: decor, never obstacle.
+     * The acid at the bottom of every pit.
+     *
+     * One bath spanning the world, sitting BEHIND the floor masses (z -6, against tile art
+     * at about -1), so it is invisible except through the gaps between them - which is
+     * exactly where a pit is. The playtest asked for "a layer of green/acidic water in the
+     * pit", and it does more than decorate: a hole in the floor now reads as a thing to
+     * avoid rather than as an absence of floor. Its own glow sits in front of it so the
+     * surface throws light up into the gap.
+     *
+     * Purely visual. The pit's kill plane is the sim's, far below this, and untouched.
      */
-    if (this.theme.name === 'gallery' && poolSpots.length > 0) {
-      const centre = world.width / 2;
-      const spot = poolSpots.reduce((best, q) =>
-        Math.abs(q.x - centre) < Math.abs(best.x - centre) ? q : best
+    {
+      const surfaceY = world.height - 74;
+      const bath = decorMesh(
+        'Acid',
+        new THREE.PlaneGeometry(world.width * 1.2, 150),
+        this.artMaterial({ map: acidTexture(`acid-${this.theme.name}`, 256, 128) })
       );
-      // From above the frame all the way down: the source is off-screen, like the
-      // reference's falls, so the column never has to explain itself mid-air.
-      const drop = spot.y + 4;
-      const mat = this.artMaterial({
-        map: oozeFallTexture('fall-centre', 16, 512),
-        transparent: true,
-        opacity: 0.78,
-        depthWrite: false,
-      });
-      const fall = decorMesh('OozeFall', new THREE.PlaneGeometry(16, drop), mat);
-      fall.position.set(spot.x, spot.y - drop / 2 + 6, -14);
-      this.stage?.add(fall);
-      this.oozeFallMat = mat;
-      const splash = decorMesh(
-        'FallGlow',
-        new THREE.PlaneGeometry(120, 120),
+      bath.position.set(world.width / 2, surfaceY + 51, -6);
+      this.stage?.add(bath);
+
+      const fumes = decorMesh(
+        'AcidGlow',
+        new THREE.PlaneGeometry(world.width * 1.2, 190),
         this.artMaterial({
-          map: glowTexture('fall-glow', '#b9d94a'),
+          map: glowTexture('acid-glow', PAL.mossLit),
           transparent: true,
-          opacity: 0.3,
+          opacity: 0.34,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
         })
       );
-      splash.position.set(spot.x, spot.y + 4, 6);
-      this.stage?.add(splash);
+      fumes.position.set(world.width / 2, surfaceY, -5);
+      this.stage?.add(fumes);
     }
 
     /*
@@ -1414,49 +1437,19 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.stage?.add(air);
 
     /*
-     * Two spore layers at different depths and speeds.
+     * The spores are GONE, and this note is here so they do not come back by accident.
      *
-     * One would drift; two make PARALLAX, and parallax out of two textures is the cheapest
-     * depth cue there is. The near layer is bigger, faster and thinner on the ground; the far
-     * one is small, slow and dense. Between them the air in front of the level acquires a
-     * front and a back, which a single sheet of motes cannot suggest however many are on it.
+     * Two drifting sheets of motes used to hang in front of the play plane. The playtest
+     * called them twice: "static pixel points decorating around the mass slime", and
+     * separately asked what "that blue sphere" was - which was this layer's largest mote,
+     * a pale cyan cross scaled up by the near sheet's tiling. Neither reading is wrong.
+     * Anything drifting in front of the creature competes with it, and the creature is the
+     * one thing on screen that must never have to share attention.
      *
-     * Both tile, so the scroll never ends and never seams. See sporeTexture.
+     * The air still moves: god rays, the floor mist, the acid's fumes, the growth halos'
+     * breathing and the burst particles. None of those sit between the camera and the
+     * player.
      */
-    /*
-     * Counts are PER TILE, and the tile repeats - so the number on screen is count times the
-     * repeat squared.
-     *
-     * The first attempt asked for 120 and 70 at repeats of 3.2 and 1.7, which is about
-     * fourteen hundred motes in frame. It snowed. The static layer this replaced had 220 in
-     * total and that was the right density, so the counts below are chosen to land near it:
-     * 12 x 3.2^2 is 123, and 30 x 1.7^2 is 87.
-     *
-     * Same arithmetic slip as the lamp squares in pass 4 - a number that looks reasonable in
-     * the space it is authored in, multiplied by something on the way to the screen.
-     */
-    const drifts: Array<{ z: number; tile: number; speed: number; opacity: number; count: number }> = [
-      { z: 24, tile: 3.2, speed: 0.013, opacity: 0.45, count: 12 },
-      { z: 40, tile: 1.7, speed: 0.031, opacity: 0.6, count: 30 },
-    ];
-    for (const [i, layer] of drifts.entries()) {
-      const map = sporeTexture(`spores-${i}`, 256, layer.count);
-      map.repeat.set(layer.tile, layer.tile);
-      const sheet = decorMesh(
-        'Spores',
-        new THREE.PlaneGeometry(world.width * 1.2, world.height * 1.2),
-        this.artMaterial({
-          map,
-          transparent: true,
-          opacity: layer.opacity,
-          blending: THREE.AdditiveBlending,
-          depthWrite: false,
-        })
-      );
-      sheet.position.set(world.width / 2, world.height / 2, layer.z);
-      this.stage?.add(sheet);
-      this.sporeLayers.push({ map, speed: layer.speed });
-    }
   }
 
   /**
@@ -2021,7 +2014,6 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.presenceNodes.clear();
     this.shedMarkers.length = 0;
     this.denied = null;
-    this.sporeLayers.length = 0;
     this.vineMaps.length = 0;
     this.body = null;
     this.shine = null;
@@ -2035,7 +2027,6 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.hoverHalo = null;
     this.canopy = null;
     this.vignette = null;
-    this.oozeFallMat = null;
 
     this.state = makeState(STAGES[this.stageIndex](), 40);
     this.cleared = false;
@@ -2216,9 +2207,23 @@ export class M4SSRig extends ENGINE.SceneNode {
         });
       }
     }
-    this.replace(this.body, buildSurface(drawn, { cell: 4 }));
+    /*
+     * ROUNDER, per the playtest - and done here, in the drawing, rather than in the sim.
+     *
+     * The obvious lever was the physics: `roundness` sets the radius inside which surface
+     * tension leaves a particle alone, and tightening it from 0.5 to 0.44 did give a
+     * rounder creature. It also cost the swing most of its energy - the measured top of a
+     * pumped arc fell from 2.3 rad/s to 0.8, because a tighter skin is a stronger internal
+     * damper - and the swing is the entire game. So the sim keeps its slack and the
+     * RENDER does the rounding, which is free and touches nothing the player can feel.
+     *
+     * A bigger field radius per particle with a matching threshold rise fills the crevices
+     * between particles without inflating the silhouette: the blob is the same size, its
+     * outline is smoother, and small internal dents stop showing.
+     */
+    this.replace(this.body, buildSurface(drawn, { cell: 3, radius: 21, threshold: 1.55 }));
     // A second contour at a lower threshold is a rim: the same shape, slightly fatter.
-    this.replace(this.rim, buildSurface(drawn, { cell: 5, threshold: 0.72 }));
+    this.replace(this.rim, buildSurface(drawn, { cell: 4, radius: 21, threshold: 1.2 }));
 
     /*
      * Shading, from two more contours at HIGHER thresholds - see shineMaterial.
@@ -2249,15 +2254,17 @@ export class M4SSRig extends ENGINE.SceneNode {
 
     const lifted = mine.map((q) => ({ x: q.x + this.shineLean, y: q.y - 7 }));
     const dropped = mine.map((q) => ({ x: q.x - this.shineLean * 0.4, y: q.y + 6 }));
-    this.replace(this.belly, buildSurface(dropped, { cell: 5, threshold: 1.45 }));
-    this.replace(this.shine, buildSurface(lifted, { cell: 5, threshold: 2.1 }));
+    // Belly and shine ride the same fatter field, so they stay nested inside the rounder
+    // body rather than poking through the places its outline just filled in.
+    this.replace(this.belly, buildSurface(dropped, { cell: 4, radius: 21, threshold: 2.15 }));
+    this.replace(this.shine, buildSurface(lifted, { cell: 4, radius: 21, threshold: 3.1 }));
     // Same lone-pixel rule as the body: a shed LUMP draws, a shed CRUMB of one particle
     // mid-flight does not - it reads as a stray pixel, and it lands and clusters soon.
     const strandedAll = loose(state).map((p) => ({ x: p.x, y: p.y }));
     const strandedPoints = strandedAll.filter(
       (q) => strandedAll.length <= 2 || !isLone(q, strandedAll)
     );
-    this.replace(this.strays, buildSurface(strandedPoints, { cell: 5 }));
+    this.replace(this.strays, buildSurface(strandedPoints, { cell: 4, radius: 21, threshold: 1.55 }));
 
     if (state.tip && !state.attached && mine.length > 0) {
       const home = centroid(owned(state));
@@ -2367,21 +2374,6 @@ export class M4SSRig extends ENGINE.SceneNode {
       vine.map.offset.x = Math.sin(this.artClock * 0.34 + vine.phase) * 0.006;
     }
 
-    /*
-     * The spores drift: up, and slightly across.
-     *
-     * Upward because they are buoyant and because a downward drift reads as falling debris,
-     * which is a different and much bleaker room. The sideways component is a fraction of the
-     * vertical one and differs per layer, so the two sheets separate over time instead of
-     * moving as one sheet - the whole point of having two.
-     *
-     * Texture offsets rather than moved geometry: the sheets are enormous and the wrap is
-     * free, so this is two number updates a frame for the only continuous motion in the stage.
-     */
-    for (const [i, layer] of this.sporeLayers.entries()) {
-      layer.map.offset.y -= layer.speed * deltaTime;
-      layer.map.offset.x += layer.speed * (i === 0 ? 0.22 : -0.15) * deltaTime;
-    }
 
     /*
      * The portal breathes, and notices when you arrive.
@@ -2619,10 +2611,6 @@ export class M4SSRig extends ENGINE.SceneNode {
         (presence.material as THREE.MeshBasicMaterial).opacity = dead
           ? 0
           : 0.18 + Math.sin(this.artClock * 2.2 + anchor.x) * 0.05;
-      }
-      // The ooze-fall runs: a slow opacity breath is the cheapest honest liquid motion.
-      if (this.oozeFallMat) {
-        this.oozeFallMat.opacity = 0.82 + Math.sin(this.artClock * 3.1) * 0.1;
       }
       const art = this.growthArt.get(anchor);
       const wanted = art ? (dead ? art.dead : art.live) : null;
