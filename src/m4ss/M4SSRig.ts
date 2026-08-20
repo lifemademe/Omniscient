@@ -834,11 +834,13 @@ export class M4SSRig extends ENGINE.SceneNode {
         'GrowthPresence',
         // Tighter and dimmer than the growth itself: this is the bloom AROUND the lamp,
         // and at 230 it was a wide flat wash that made the whole object read as dull.
-        new THREE.PlaneGeometry(170, 170),
+        // The slime's own halo colour and opacity, at the slime's own size - the creature
+        // and the thing it grabs are lit alike because they are the same substance.
+        new THREE.PlaneGeometry(230, 230),
         this.artMaterial({
-          map: glowTexture('presence-glow', '#a8f06a'),
+          map: glowTexture('presence-glow', '#b9e86a'),
           transparent: true,
-          opacity: a.live === false ? 0 : 0.26,
+          opacity: a.live === false ? 0 : 0.42,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
         })
@@ -1121,7 +1123,10 @@ export class M4SSRig extends ENGINE.SceneNode {
             this.theme.name === 'gallery' ? '#3d7a6c' : '#2f5f70'
           ),
           transparent: true,
-          opacity: 0.46,
+          // 0.35: enough haze to sink the background a full step behind the play plane,
+          // little enough that the forest keeps its shapes. 0.46 separated the layers and
+          // flattened the midground into one wash doing it.
+          opacity: 0.35,
           depthWrite: false,
         })
       );

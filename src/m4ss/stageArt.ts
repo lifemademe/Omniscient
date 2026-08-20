@@ -1348,14 +1348,37 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
    * light is concentrated - the core is genuinely bright and the edge still dies to
    * nothing.
    */
-  const tint = dead ? [180, 86, 58] : [196, 248, 122];
-  const reach = dead ? 0.5 : 0.58;
+  /*
+   * The live growth glows with the MASS'S OWN COLOUR AND INTENSITY.
+   *
+   * Asked for directly, and it is right on both counts. Visually, everything else in this
+   * palette is muted structure and the two things that matter are the creature and the
+   * thing it grabs, so they should be the only two objects lit to the top of the range -
+   * anything dimmer reads as scenery, which is precisely the "dull" complaint. And in the
+   * fiction they are the SAME SUBSTANCE: a cultivated anchor-organism and the specimen
+   * were grown in the same tanks on the same feed, so a growth glowing in the slime's
+   * exact green is the story showing rather than telling.
+   *
+   * `tint` is the slime's body colour (#a8e85c) and `core` its shine (#e8fbb0), the two
+   * values the creature itself is drawn from.
+   */
+  const tint = dead ? [180, 86, 58] : [168, 232, 92];
+  const reach = dead ? 0.5 : 0.62;
+  /*
+   * A flat bright PLATEAU before the falloff starts, which is the other half of matching
+   * the mass. The slime is a solid body of colour with a halo around it; a pure radial
+   * falloff has no solid anything - its brightest pixel is a single point at the centre
+   * and everything else is already dimmer. Holding full intensity out to 0.42 gives the
+   * growth a body, and the glow then falls off from its edge exactly as the slime's does.
+   */
+  const plateau = dead ? 0.3 : 0.42;
 
   const img = g.createImageData(size, size);
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const u = Math.hypot(x - cx + 0.5, y - cx + 0.5) / ((size / 2) * reach);
-      const fall = u >= 1 ? 0 : (1 - u) ** 2.6;
+      const fall =
+        u >= 1 ? 0 : u <= plateau ? 1 : ((1 - u) / (1 - plateau)) ** 2.2;
       const f = fall * STEPS;
       const step = Math.floor(f) + (f % 1 > BAYER[y & 3][x & 3] / 16 ? 1 : 0);
       const k = Math.min(STEPS, step) / STEPS;
