@@ -361,6 +361,12 @@ export const TUNING = {
    * would bury the reach force), and the wall gap in lab.ts narrowed to stay smaller than
    * the now-taller body.
    */
+  /*
+   * 0.44, down from 0.5: the radius inside which surface tension leaves a particle alone,
+   * as a multiple of sqrt(count)*rest. SMALLER means the skin starts pulling sooner, so
+   * the resting body is a tighter, rounder mound - the playtest asked for a rounder slime
+   * and this is the number that decides it.
+   */
   roundness: 0.5,
   tension: 950,
   maxTension: 14000,
@@ -379,6 +385,12 @@ export const TUNING = {
    * the remaining body apart and cost 60% in six lumps; at 3600 the same failure costs 20%
    * in one, and every successful reach still arrives whole.
    */
+  /*
+   * How hard a torn-off OWNED lump is pulled back to the main body. Weak on purpose: it
+   * must never fight a deliberate squeeze through a sieve, only heal an accident once the
+   * gap is behind you.
+   */
+  rejoin: 900,
   reach: 3600,
   /**
    * Pixels of tendril per gram. The difficulty dial for the whole game.
@@ -393,7 +405,17 @@ export const TUNING = {
    * so 4.6/9 of the mass - which is the version of "your reach is bought with mass" that can
    * actually be felt. At 1.8 it was a fifth, and a fifth is a rounding error.
    */
-  reachPerMass: 4.6,
+  /*
+   * 5.3, up from 4.6, on the playtest's ask: "increase the distance the mass can latch on
+   * to a growth from". A full 40-mass body reaches 212px rather than 184.
+   *
+   * The ceiling is a level-design fact, not a taste: stage one's second clause is that a
+   * body squeezed small enough for the sieve (24) must NOT be able to reach the high
+   * growth at 140px, so it has to go back for the mass it left. That fails above 5.83, and
+   * the first attempt at 5.9 duly broke the puzzle. 5.3 keeps thirteen pixels of margin
+   * there and still puts a whole 17% more reach in the player's hands.
+   */
+  reachPerMass: 5.3,
 
   /**
    * Tangential push per particle while swinging, from A/D.
@@ -428,7 +450,17 @@ export const TUNING = {
    * A slow release is a drop, not a fling, and slowing time for a drop makes the whole game
    * feel like it is buffering.
    */
-  slowmoAt: 2.6,
+  /*
+   * 2.1, down from 2.6. Fixing the latch-split firmed the body during a reach (only the
+   * arm is exempt from surface tension now, not the whole creature), and a firmer body
+   * takes a little less energy in at the grip: the measured top of a well-pumped swing on
+   * the shaft's short rope fell from just over 2.6 rad/s to 2.3. The swing is unchanged in
+   * every way the player can feel - it still crosses, still flings, still carries the 360 -
+   * so the threshold follows the physics rather than the physics being bent to keep an old
+   * threshold true. A passive hang still measures near zero, which is the only thing this
+   * number has to stay clear of.
+   */
+  slowmoAt: 2.1,
   /**
    * How much of the body's arrival speed survives the grab.
    *
@@ -1196,13 +1228,43 @@ export function step(state: MassState, input: Input): MassState {
   /*
    * Surface tension, per component, so a stranded lump rounds itself up too.
    *
-   * While the player is REACHING - tendril out, not yet attached - the owned body is exempt.
+   * While the player is REACHING - tendril out, not yet attached - the ARM is exempt.
    * Tension at these strengths pulls an outlying particle home at up to 14000, and the reach
    * force stretching the tendril along its line is 3600: with both on, the arm loses to its
    * own skin and can never extend. An arm you are deliberately stretching out is the one part
    * of a slime that is not trying to be a sphere.
+   *
+   * THE ARM, though - not the creature. The first version of this exemption skipped every
+   * owned particle, which is what the sentence above always meant and not what it said, and
+   * the playtest found the difference: with the skin off the WHOLE body during a reach, the
+   * mound had nothing holding it together while the tendril hauled on it, so latching tore
+   * the slime into two or three pieces. They all stayed owned, so they all answered A and D,
+   * and the player landed on the far side driving a small herd of themselves.
+   *
+   * So the exemption is geometric now: only particles that have travelled out along the
+   * reach line past `armFrom` are exempt. Everything still piled at home keeps full skin.
    */
   const reaching = anchor !== null && !state.attached && !state.broken;
+  let armX = 0;
+  let armY = 0;
+  let armFrom = 0;
+  if (reaching && anchor) {
+    const mine = owned(state);
+    if (mine.length > 0) {
+      const home = centroid(mine);
+      const dx = anchor.x - home.x;
+      const dy = anchor.y - home.y;
+      const d = Math.hypot(dx, dy) || 1;
+      armX = dx / d;
+      armY = dy / d;
+      /*
+       * Where the arm starts: a body-radius out from the centroid, along the reach. Inside
+       * that is the mound and keeps its skin; beyond it is the tendril the player is
+       * deliberately stretching, and it is left alone.
+       */
+      armFrom = Math.sqrt(mine.length) * T.rest * T.roundness;
+    }
+  }
   /*
    * Grouped within ownership, for the same reason cohesion is: components() sees only
    * proximity, so a shed lump still touching the player counted as one component, and one
@@ -1231,7 +1293,12 @@ export function step(state: MassState, input: Input): MassState {
     const natural = Math.sqrt(group.length) * T.rest * T.roundness;
     for (const p of group) {
       const mineP = state.owned.has(p.id);
-      if (reaching && mineP) continue;
+      if (reaching && mineP) {
+        // Only the reaching arm is exempt - see above. `home` is this component's centre,
+        // so the projection is measured from the body the particle actually belongs to.
+        const along = (p.x - home.x) * armX + (p.y - home.y) * armY;
+        if (along > armFrom) continue;
+      }
       const relax = mineP ? drivenRelax : 1;
       const dx = home.x - p.x;
       const dy = home.y - p.y;
@@ -1318,6 +1385,40 @@ export function step(state: MassState, input: Input): MassState {
             q.x -= (dx / d) * half * 2;
             q.y -= (dy / d) * half * 2;
           }
+        }
+      }
+    }
+  }
+
+  /*
+   * Owned pieces come home.
+   *
+   * Shedding with Space makes particles LOOSE; anything still owned is meant to be one
+   * creature. Accidents happen anyway - a crusher, a tight gap, a bad landing - and until
+   * now a torn-off owned lump simply rounded itself into its own little slime and crawled
+   * alongside the player for ever, because components() gives each cluster its own skin and
+   * nothing at all pulls two clusters together.
+   *
+   * So the smaller owned components are drawn toward the largest one, gently, and only when
+   * the player is neither reaching nor hanging (both of those are supposed to stretch the
+   * body). It is weak enough that a deliberate squeeze through a sieve still pinches the
+   * body in two for as long as the gap demands, and firm enough that the creature is whole
+   * again a moment after it is free.
+   */
+  if (!state.attached && !reaching) {
+    const parts = components(owned(state));
+    if (parts.length > 1) {
+      let main = parts[0];
+      for (const part of parts) if (part.length > main.length) main = part;
+      const target = centroid(main);
+      for (const part of parts) {
+        if (part === main) continue;
+        for (const p of part) {
+          const dx = target.x - p.x;
+          const dy = target.y - p.y;
+          const d = Math.hypot(dx, dy) || 1;
+          p.ax += (dx / d) * T.rejoin;
+          p.ay += (dy / d) * T.rejoin;
         }
       }
     }
@@ -1535,7 +1636,19 @@ export function step(state: MassState, input: Input): MassState {
     let standLine = 0;
     for (const t of world.tiles) standLine = Math.max(standLine, t.y);
     const alive = owned(state).filter((p) => !fell.has(p.id) && p.y < standLine + T.rest);
-    if (alive.length > 0) {
+    /*
+     * A DRIP comes back to the body; a BODY comes back to its footing.
+     *
+     * The host-stacking below is written for a few particles scraped off on a corner: each
+     * one lands on top of a specific body particle, round-robin. A whole creature going
+     * down a pit crosses the kill plane a few particles at a time, so the last one or two
+     * still standing became hosts for all the rest - forty particles stacked on one point,
+     * pressed against whatever was beside them, which resolved into the tall vertical
+     * column the playtest photographed. The threshold sends any real fall to the wholesale
+     * respawn, which arranges the creature properly.
+     */
+    const mostOfMe = fallen.length > Math.max(3, owned(state).length * 0.34);
+    if (alive.length > 0 && !mostOfMe) {
       /*
        * Each return lands directly on top of a specific body particle - one rest-spacing
        * above it, round-robin across the body. Two earlier placements failed in two
