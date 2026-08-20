@@ -3009,17 +3009,26 @@ export class M4SSRig extends ENGINE.SceneNode {
       }
       const hovered = !dead && anchor === this.hovered;
       if (this.denied && this.denied.anchor === anchor && this.denied.t > 0) continue;
-      material.color.set(
-        dead
-          ? '#ffffff'
-          : anchor === this.latched
-            ? '#ffffff'
-            : hovered
-              ? '#ffffff'
-              : within
-                ? '#cfe8b4'
-                : '#5a6f78'
-      );
+      /*
+       * The tint is nearly gone, and this is why.
+       *
+       * Multiplying the sprite by #5a6f78 when out of reach was draining a cold blue-grey
+       * over it, and since a body standing anywhere but right underneath is out of reach
+       * most of the time, that WAS the growth's normal appearance - dark, desaturated and
+       * nothing like the creature it is made of. It looked like the fog had it; the fog
+       * was seventy units behind it and innocent.
+       *
+       * That tint was also doing a job the game now does better elsewhere. It existed to
+       * answer "can I get to that", and the pulsing ring answers it outright, on the one
+       * growth the click would actually take. So reachability drops to a whisper here - a
+       * slight dim, still green, still plainly the same substance as the mass - and the
+       * ring carries the message.
+       *
+       * DEAD still overrides everything as a hue change rather than a value one: red is
+       * the only warm thing in a green stage and the whole second clause of stage two is
+       * telling the two apart across a room.
+       */
+      material.color.set(within || dead || hovered || anchor === this.latched ? '#ffffff' : '#c2d8bc');
       // A growth you are hanging from is doing something, so it reads as bigger. A hovered
       // one leans toward that without arriving, so the two never look the same.
       const scale = anchor === this.latched ? 1.16 : hovered ? 1.1 : 1;

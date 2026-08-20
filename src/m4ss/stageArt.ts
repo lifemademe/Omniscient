@@ -1345,9 +1345,28 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
   const { c, g } = surface(size, size);
   const cx = size / 2;
 
-  const bands = dead
-    ? ['#7a2a1c', '#a03a24', '#c4553f', '#e08a52']
-    : [mixHex(PAL.mossDark, PAL.mossMid, 0.5), PAL.mossMid, PAL.mossLit, '#a8e85c'];
+  /*
+   * The BODY is the slime's own green; the dark is only a rim.
+   *
+   * The first banded version ran dark-to-bright from the outside in over four evenly
+   * spaced radii, which put the darkest band on the largest disc - so more than half the
+   * sprite's area was a muted moss green and the growth read dark however bright its core
+   * was. Area is what the eye averages. Now the slime colour owns the body and the dark
+   * step is a thin rim doing nothing but holding the silhouette.
+   */
+  const bands: Array<{ r: number; fill: string }> = dead
+    ? [
+        { r: 1, fill: '#5a1e14' },
+        { r: 0.88, fill: '#a03a24' },
+        { r: 0.72, fill: '#c4553f' },
+        { r: 0.4, fill: '#e08a52' },
+      ]
+    : [
+        { r: 1, fill: mixHex(PAL.mossDark, PAL.voidDeep, 0.35) },
+        { r: 0.88, fill: PAL.mossLit },
+        { r: 0.72, fill: '#a8e85c' },
+        { r: 0.4, fill: '#c8f08a' },
+      ];
   const heart = dead ? '#f0b06a' : '#e8fbb0';
   const outer = (size / 2) * (dead ? 0.44 : 0.5);
 
@@ -1360,7 +1379,7 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
     }
   };
 
-  bands.forEach((fill, i2) => disc(outer * (1 - i2 * 0.19), fill));
+  for (const band of bands) disc(outer * band.r, band.fill);
 
   /*
    * The filament: the hot point that makes the eye read "light" rather than "ball". Kept
