@@ -642,3 +642,28 @@ other way.
 | 72d | the trail | `trailTexture` + one rebuilt geometry per frame, fade carried in vertex alpha | One draw call however long the trail gets, and alpha in the colour attribute goes through the same path as the vertices - it cannot fail to apply the way a frame-written `material.opacity` can. |
 | 72e | the trail is DARK | mixed 74% to the void, not 46% | Its first colour was the player's green pulled slightly down, and in the editor it was invisible: the walked surface of both stages is bright grass, and a dull green over a bright green of similar value has nothing to read against. Wet ground is dark ground. |
 | 72f | the threshold | `sillTexture` under the portal in both stages | Stage one's exit is a 75px shelf that was wearing the same loose earth as everything else - odd ground for a working doorway, and the one place the floor texture showed as an arbitrary crop rather than as a pattern. |
+
+## Pass 73 - the trail becomes slime
+
+**Two wrong models before the right one, and the third was the player's suggestion.** The
+trail started as a STAIN - a dark wet patch soaked into the floor - which was the wrong read
+of what this creature does. It does not dampen the ground it crosses; it leaves some of
+itself on it. The second attempt was that, as stamped sprite mounds, and sprites have a
+ceiling: they can only ever OVERLAP. Two mounds sitting on each other give a scalloped edge
+and a doubled alpha seam wherever they cross, and a row of identical ones reads as a fence.
+
+The third is metaball deposits in the field the creature's own body is built from. Points in
+a shared field FUSE - a run of them becomes one continuous ridge that swells where they pile
+up and pinches where the creature was moving fastest - and there is no seam anywhere because
+there are no two things to seam. It also makes "the same colour as the mass" structural
+rather than a matching exercise: the trail is drawn by the creature's own contour builder,
+out of the creature.
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 73a | deposits, not decals | `buildSurface` at threshold 0.45 over the trail points, plus a fatter darker contour at 0.26 behind it | Measured first: the field bump peaks at 1.0, so the body's threshold of 1.55 is only reachable because forty particles overlap. A sparse trail needs a threshold under 1 or it produces no geometry at all - which is exactly the kind of silent nothing this rig specialises in. |
+| 73b | age is spent on RADIUS | each deposit shrinks with age instead of fading | A trail that fades is a decal dissolving; a trail that shrinks is a slime settling. It also gives the tail a shape it could not otherwise have: the oldest end thins, pinches, and breaks into separate beads before it goes, which the field does on its own once neighbouring points stop reaching each other. |
+| 73c | seated, not floating | the point's centre rides up as its radius falls, so the contour's bottom stays on the floor | A fixed centre would lift the ridge off the ground as it shrank. |
+| 73d | lumpy on purpose | radius jittered a sixth per deposit, from the position it was laid at | Identical radii fuse into a smooth-topped slab - the field has nothing to swell over. A sixth of variation gives a lumpy crest for free, and deriving it from position keeps the same walk leaving the same trail. |
+| 73e | 2.6 seconds, not 7 | | At seven the stage slowly filled in with everywhere the player had ever been, which is a map. What a trail carries is "I came from THERE, just now". |
+| 73f | the outline is load-bearing | dark contour behind the bright one | Both stages are walked on bright yellow-green turf and the slime is bright yellow-green. Laid flat on grass in its own colour the trail vanished - twice. The creature only reads because it carries its own shading; the trail gets the same treatment. |

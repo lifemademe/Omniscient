@@ -69,7 +69,7 @@ import {
   portalTexture,
   wallTexture,
   sillTexture,
-  trailTexture,
+  mixHex,
   vineTexture,
 } from './stageArt.js';
 import {
@@ -111,20 +111,45 @@ import type { Anchor, Button, Critter, Crusher, Gate, MassState } from './mass.j
  */
 const BLOB_LIFT = 10;
 
-/** How far the body has to travel along the ground before it leaves another mark, in px. */
-const TRAIL_STEP = 13;
-/** Seconds a blot lasts. Long enough to see a route, short enough that a room does not fill. */
-const TRAIL_LIFE = 7;
-/** The most blots kept at once - about two full crossings of a stage. */
-const TRAIL_MAX = 130;
 /**
- * How opaque a fresh blot is.
+ * How far the body travels along the ground between deposits, in px.
  *
- * Low on purpose. The trail is residue and the creature is alive, and the brightest green in
- * the frame has to stay the one that can move; a trail that reads as strongly as the player
- * turns every room into a diagram of where the player has been.
+ * Set against TRAIL_BLOB and the field threshold rather than by eye: at r 15 and threshold
+ * 0.45 the midpoint between two deposits 15px apart sits well above the contour, so the run
+ * fuses into one ridge with a visible swell over each deposit. Push the spacing past about
+ * 20 and the ridge breaks into beads while the creature is still walking.
  */
-const TRAIL_PEAK = 0.62;
+const TRAIL_STEP = 15;
+/**
+ * The field radius of one fresh deposit.
+ *
+ * At threshold 0.45 an isolated one contours at r * 0.574, so 15 gives a hill about 17px
+ * tall - measured, not guessed. Scaled down for a smaller body at the stamp.
+ */
+const TRAIL_BLOB = 15;
+/**
+ * The two contours: the bright body of the ridge, and a fatter darker one behind it.
+ *
+ * The outline is not decoration. Both stages are walked on bright yellow-green turf and the
+ * slime is bright yellow-green, so a trail in the creature's own colour laid flat on grass
+ * disappears into it - which is exactly what the first two attempts did. The creature itself
+ * only reads because it carries its own shading; the trail gets the same treatment.
+ */
+const TRAIL_FILL = 0.45;
+const TRAIL_EDGE = 0.26;
+/** Where a contour sits relative to its point, as a fraction of the field radius. */
+const TRAIL_SEAT = 0.5;
+/**
+ * Seconds a deposit lasts.
+ *
+ * Down from seven. At seven a stage slowly filled in with everywhere the player had ever
+ * been, which is a map rather than a trail - and the information a trail actually carries is
+ * "I came from THERE, just now". Short enough that what is on screen is always the last few
+ * seconds of travel, long enough to still be a tail rather than a flicker.
+ */
+const TRAIL_LIFE = 2.6;
+/** The most deposits kept at once. At this life it is never near the cap; it is a backstop. */
+const TRAIL_MAX = 90;
 
 /**
  * The stages, in order. The portal at the end of one loads the next.
@@ -300,8 +325,9 @@ export class M4SSRig extends ENGINE.SceneNode {
    * reads it, no collision touches it, and a body that has left a trail behaves exactly like
    * one that has not. State that only the renderer consumes belongs to the renderer.
    */
-  private trail: Array<{ x: number; y: number; r: number; born: number }> = [];
+  private trail: Array<{ x: number; ground: number; r: number; born: number }> = [];
   private trailNode: ENGINE.MeshNode | null = null;
+  private trailEdge: ENGINE.MeshNode | null = null;
   private lastStamp: { x: number; y: number } | null = null;
   /** One sprite per critter, each owning the canvas it repaints. See sporelingSprite. */
   private critterNodes: Array<{
@@ -2139,35 +2165,52 @@ export class M4SSRig extends ENGINE.SceneNode {
   }
 
   /**
-   * The trail mesh: one geometry, rebuilt every frame, with the fade carried in VERTEX ALPHA.
+   * The trail: two metaball contours over the deposits, rebuilt every frame.
    *
-   * The obvious build is one node per blot with its opacity animated down, and it is the one
-   * this project has been bitten by twice: material properties written from the frame loop do
-   * not reliably survive a MeshNode, and a hundred nodes appearing and disappearing per
-   * corridor is a lot of scene graph for some wet patches. Alpha in the colour attribute goes
-   * through the same path as the vertices themselves, so it cannot fail to apply, and the
-   * whole trail costs one draw call however long it gets.
+   * Built from the SAME field the creature's own body is built from, and that is the whole
+   * argument for doing it this way. Sprites can only ever overlap - two stamped mounds sitting
+   * on each other give a scalloped edge and a doubled alpha seam where they cross. Points in a
+   * shared field FUSE: a run of deposits becomes one continuous ridge that swells where they
+   * pile up and pinches where the creature was moving fastest, and there is no seam anywhere
+   * because there are no two things to seam.
+   *
+   * It also makes "the same colour as the mass" structural rather than a matching exercise.
+   * The trail is made of the creature, drawn by the creature's own contour builder.
+   *
+   * Two contours: a fatter dark one behind, a brighter one in front. See TRAIL_EDGE for why
+   * the outline is load-bearing rather than decorative.
    */
   private buildTrail(): void {
+    /*
+     * DOUBLE-SIDED, and this is not belt and braces - it is why the first trail was invisible.
+     *
+     * The stage node is scaled (SCALE, -SCALE, SCALE) to turn level space, which is y-down,
+     * into world space, which is y-up. A negative scale on one axis REVERSES triangle winding,
+     * so geometry built here faces away from the camera and is culled - silently, with no
+     * error and nothing on screen, which is the most expensive kind of wrong.
+     */
+    this.trailEdge = decorMesh(
+      'SlimeTrailEdge',
+      new THREE.BufferGeometry(),
+      this.artMaterial({
+        color: new THREE.Color(mixHex(PAL.slime, PAL.voidDeep, 0.55)),
+        transparent: true,
+        opacity: 0.92,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      })
+    );
+    this.trailEdge.position.z = -0.16;
+    this.stage?.add(this.trailEdge);
+
     this.trailNode = decorMesh(
       'SlimeTrail',
       new THREE.BufferGeometry(),
       this.artMaterial({
-        map: trailTexture('m4ss-trail'),
+        color: new THREE.Color(mixHex(PAL.slime, PAL.slimeGlow, 0.45)),
         transparent: true,
+        opacity: 0.95,
         depthWrite: false,
-        vertexColors: true,
-        /*
-         * DOUBLE-SIDED, and this is not belt and braces - it is the whole reason the trail
-         * was invisible on its first run in the editor.
-         *
-         * The stage node is scaled (SCALE, -SCALE, SCALE) to turn level space, which is
-         * y-down, into world space, which is y-up. A negative scale on one axis REVERSES
-         * triangle winding, so every quad built by hand in this file faces away from the
-         * camera and is culled - silently, with no error and nothing on screen, which is the
-         * most expensive kind of wrong. The generated meshes get away with it because their
-         * builder happens to wind the other way.
-         */
         side: THREE.DoubleSide,
       })
     );
@@ -2186,7 +2229,7 @@ export class M4SSRig extends ENGINE.SceneNode {
    * particles count, so a swing leaves no trail in mid-air - the mark is contact.
    */
   private paintTrail(state: MassState): void {
-    if (!this.trailNode) return;
+    if (!this.trailNode || !this.trailEdge) return;
 
     const mine = owned(state);
     let sumX = 0;
@@ -2205,40 +2248,51 @@ export class M4SSRig extends ENGINE.SceneNode {
         Math.hypot(at.x - this.lastStamp.x, at.y - this.lastStamp.y) > TRAIL_STEP;
       if (moved) {
         this.lastStamp = at;
-        // Sized from the body, so a split creature leaves a thinner mark than a whole one -
+        // Sized from the body, so a split creature leaves a thinner ridge than a whole one -
         // the same feedback the glow gives, written on the floor.
-        const r = 11 + Math.min(13, mine.length * 0.32);
-        this.trail.push({ x: at.x, y: at.y - r * 0.35, r, born: state.time });
+        const scale = 0.6 + Math.min(0.4, mine.length * 0.01);
+        /*
+         * Jittered per deposit, and this is what makes it read as hills rather than as a kerb.
+         *
+         * Deposits of identical radius fuse into a smooth-topped slab - the field has nothing
+         * to swell over. Varying the radius by a sixth gives the ridge a lumpy crest for free,
+         * because a fatter point pushes the contour further out exactly where it sits. Derived
+         * from the position it was laid at, so the same walk leaves the same trail without a
+         * seeded generator up here.
+         */
+        const jitter = Math.abs(Math.sin(at.x * 12.9898 + at.y * 78.233)) % 1;
+        const r = TRAIL_BLOB * scale * (0.84 + jitter * 0.32);
+        this.trail.push({ x: at.x, ground: at.y, r, born: state.time });
         if (this.trail.length > TRAIL_MAX) this.trail.splice(0, this.trail.length - TRAIL_MAX);
       }
     }
 
-    const verts: number[] = [];
-    const uvs: number[] = [];
-    const colours: number[] = [];
-    for (const blot of this.trail) {
-      const age = state.time - blot.born;
+    /*
+     * Age is spent on RADIUS rather than on opacity.
+     *
+     * A trail that fades out is a decal dissolving; a trail that shrinks is a slime settling.
+     * It also gives the tail a shape it could not have otherwise: as the oldest deposits
+     * thin, the ridge behind the creature narrows, pinches, and finally breaks into separate
+     * beads before it goes - which is what the field does on its own once neighbouring points
+     * stop reaching each other, with nothing to author.
+     *
+     * Held near full for the first third so a fresh mark is a mark, not an entrance.
+     */
+    const points: Array<{ x: number; y: number; r: number }> = [];
+    for (const blob of this.trail) {
+      const age = state.time - blob.born;
       if (age > TRAIL_LIFE) continue;
-      /*
-       * Full for the first stretch, then away. A mark that starts fading the instant it is
-       * made never reads as a mark at all - it reads as a flicker under the creature.
-       */
-      const left = 1 - age / TRAIL_LIFE;
-      const a = Math.min(1, left * 2.2) * TRAIL_PEAK;
-      const r = blot.r;
-      const x0 = blot.x - r;
-      const x1 = blot.x + r;
-      const y0 = blot.y - r * 0.7;
-      const y1 = blot.y + r * 0.7;
-      verts.push(x0, y0, 0, x1, y0, 0, x1, y1, 0, x0, y0, 0, x1, y1, 0, x0, y1, 0);
-      uvs.push(0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0);
-      for (let i = 0; i < 6; i++) colours.push(1, 1, 1, a);
+      const k = Math.min(1, (1 - age / TRAIL_LIFE) * 1.5);
+      const r = blob.r * k;
+      if (r < 2) continue;
+      // Seated on the ground: the contour reaches out about half the field radius, so the
+      // centre rides up as the deposit shrinks and the ridge stays ON the floor instead of
+      // lifting off it.
+      points.push({ x: blob.x, y: blob.ground - r * TRAIL_SEAT, r });
     }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 4));
-    this.replace(this.trailNode, geometry);
+
+    this.replace(this.trailEdge, buildSurface(points, { cell: 4, threshold: TRAIL_EDGE }));
+    this.replace(this.trailNode, buildSurface(points, { cell: 4, threshold: TRAIL_FILL }));
   }
 
   private buildSlime(): void {
@@ -2822,6 +2876,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.critterNodes = [];
     this.trail.length = 0;
     this.trailNode = null;
+    this.trailEdge = null;
     this.lastStamp = null;
     this.growthArt.clear();
     this.emberNodes.clear();

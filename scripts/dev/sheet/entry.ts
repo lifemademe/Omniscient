@@ -175,7 +175,6 @@ show('plate', art.plateTexture(S), 3);
 show('vine', art.vineTexture(S), 3);
 show('portal', art.portalTexture(S, 0), 3);
 show('glow', art.glowTexture(S, '#7fe0a0'), 2);
-show('trail', art.trailTexture(S), 6);
 show('sill', art.sillTexture(S, 96, 30), 4);
 
 /*

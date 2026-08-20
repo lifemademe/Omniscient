@@ -497,92 +497,6 @@ function mossRun(
  * Irregular rather than round, with a dithered fringe, because a circle repeated ninety
  * times down a corridor reads as a string of beads.
  */
-export function trailTexture(seed: string, size = 32): THREE.CanvasTexture {
-  const rng = createRng(seedFrom(seed));
-  const { c, g } = surface(size, size);
-
-  /*
-   * DARKER than the ground, not greener.
-   *
-   * The first version was the player's green pulled a little toward the void, and in the
-   * editor it was invisible: the walked surface of both stages is bright grass, and a dull
-   * green laid over a bright green of similar value has nothing to read against. Wet ground
-   * is DARK ground - water sinks into a surface and drops its value - so the blot is mostly
-   * void with the slime's hue still in it, and the only bright thing on it is the specular.
-   * That reads on the grass the player walks on and on the dirt below it, which a single
-   * green never could.
-   */
-  const wet = mixHex(PAL.slime, PAL.voidDeep, 0.74);
-  const core = mixHex(PAL.slime, PAL.voidDeep, 0.62);
-  const sheen = mixHex(PAL.slimeGlow, PAL.voidMid, 0.25);
-
-  const mid = size / 2;
-  const rx = size * 0.46;
-  const ry = size * 0.36;
-
-  // The body of the blot: an ellipse walked row by row with a wandering half-width, so no
-  // two blots have the same outline and none of them is a circle.
-  const edge: number[] = [];
-  let drift = 0;
-  for (let y = 0; y < size; y++) {
-    const t = (y - mid) / ry;
-    if (Math.abs(t) > 1) {
-      edge.push(0);
-      continue;
-    }
-    drift += range(rng, -0.9, 0.9);
-    drift = Math.max(-2.5, Math.min(2.5, drift));
-    const half = Math.max(0, Math.round(rx * Math.sqrt(1 - t * t) + drift));
-    edge.push(half);
-    g.fillStyle = wet;
-    g.fillRect(Math.round(mid - half), y, half * 2, 1);
-  }
-
-  // A denser middle, so the blot has a value inside it rather than being a flat stamp.
-  for (let y = 0; y < size; y++) {
-    const half = edge[y];
-    if (half < 3) continue;
-    const inner = Math.round(half * range(rng, 0.4, 0.62));
-    g.fillStyle = core;
-    g.fillRect(Math.round(mid - inner), y, inner * 2, 1);
-  }
-
-  // One highlight, off-centre. Wet things have a specular; without it this is a stain.
-  const hx = Math.round(mid + range(rng, -3, 3));
-  const hy = Math.round(mid + range(rng, -4, 2));
-  g.fillStyle = sheen;
-  g.fillRect(hx - 2, hy, 4, 1);
-  g.fillRect(hx - 1, hy - 1, 2, 1);
-
-  /*
-   * The falloff, applied to ALPHA rather than drawn in colour - and this is the whole
-   * difference between a smear and a lump.
-   *
-   * The first version was a hard-edged silhouette at a flat opacity, and ninety of them down
-   * a corridor read as a line of olive pebbles: a shape has an outline, and an outline is the
-   * one thing a wet patch does not have. Multiplying alpha by a squared radial falloff, with
-   * a per-pixel dither in the outer half, gives an edge that dissolves instead of stopping.
-   * The dither matters as much as the falloff: a smooth alpha ramp on a nearest-neighbour
-   * texture bands visibly, and dithering it is how every other soft edge in this stage is
-   * made.
-   */
-  const px = g.getImageData(0, 0, size, size);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const i = (y * size + x) * 4 + 3;
-      if (px.data[i] === 0) continue;
-      const dx = (x - mid) / rx;
-      const dy = (y - mid) / ry;
-      const d = Math.min(1, Math.sqrt(dx * dx + dy * dy));
-      const fall = (1 - d) * (1 - d);
-      const dithered = d > 0.5 && rng() > fall * 2.4 ? 0 : fall;
-      px.data[i] = Math.round(255 * Math.min(1, dithered * 1.35));
-    }
-  }
-  g.putImageData(px, 0, 0);
-
-  return pixelTexture(c);
-}
 
 /**
  * The threshold under a portal: the one piece of ARCHITECTURE on the ground in either stage.
@@ -3569,7 +3483,7 @@ export function markerTexture(size = 26): THREE.CanvasTexture {
 }
 
 /** Blend two hex colours. Banding and shading only - never for smoothing an edge. */
-function mixHex(a: string, b: string, t: number): string {
+export function mixHex(a: string, b: string, t: number): string {
   const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
   const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
   const k = Math.max(0, Math.min(1, t));
