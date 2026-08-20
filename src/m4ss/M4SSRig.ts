@@ -69,6 +69,7 @@ import {
   PAL,
   portalTexture,
   wallTexture,
+  grateTexture,
   sillTexture,
   vineTexture,
 } from './stageArt.js';
@@ -148,6 +149,8 @@ function slimeSkin(extra: THREE.MeshStandardMaterialParameters = {}): THREE.Mesh
 
 /** How far ahead the flight dots predict, in seconds, and how many there are. */
 const DOT_REACH = 0.34;
+/** The longer look-ahead used in slow motion - aiming time is what slow motion is for. */
+const DOT_REACH_SLOWMO = 0.5;
 const DOT_COUNT = 4;
 
 /**
@@ -364,7 +367,7 @@ export class M4SSRig extends ENGINE.SceneNode {
   private pointer: { x: number; y: number } | null = null;
   /** The growth the pointer is over and the body could actually reach, if any. */
   private hovered: Anchor | null = null;
-  private crusherNodes: Array<{ node: ENGINE.MeshNode; crusher: Crusher }> = [];
+  private crusherNodes: Array<{ node: ENGINE.MeshNode; crusher: Crusher; prevAt: number }> = [];
   /**
    * The trail: where the creature has been, oldest first.
    *
@@ -419,6 +422,12 @@ export class M4SSRig extends ENGINE.SceneNode {
   private readonly signLabels: Array<{ el: HTMLElement; x: number; y: number }> = [];
   /** The pulsing ring over the growth a click would catch. See chooseTarget. */
   private latchRing: ENGINE.MeshNode | null = null;
+  /** 1 the frame the tendril grips, decaying - drives the ring's grip flash. */
+  private gripFlash = 0;
+  /** The slow-motion vignette veil. DOM, like the warp veil, so opacity is per-frame safe. */
+  private slowmoVeil: HTMLElement | null = null;
+  /** What the world's post-processing looked like before this rig took the screen. */
+  private savedPost: { tone: unknown; bloom: unknown } | null = null;
   /** The growth a click would catch right now - nearest live growth within reach. */
   private target: Anchor | null = null;
   /** Flies: small motes orbiting each live growth, animated in the art tick. */
@@ -561,6 +570,43 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.setTickEnabled(true);
 
     /*
+     * M4SS owns its look while it owns the screen.
+     *
+     * The stage's whole palette is pre-lifted for ACES at exposure 0.5 (see stageArt's
+     * lift()), but which post config actually ran depended on the door you came in
+     * through: standalone got the scene default (0.5, no bloom) and the console handed
+     * over its own (0.62, bloom for the CRT) - the same rooms, a quarter brighter, on the
+     * path the audience actually plays. Every capture-based judgement to date was made on
+     * the standalone look. Configured here and restored on unmount, both doors now lead
+     * to the same game.
+     *
+     * And bloom is ON, deliberately: the palette puts its accents - slime, lanterns,
+     * portal, acid - at the top of the range, which is exactly what a threshold bloom
+     * feeds on. The glow this stage has been faking with painted halo sprites gets a real
+     * optical bleed on top.
+     */
+    {
+      const post = this.getWorld()?.postProcessManager;
+      if (post) {
+        this.savedPost = {
+          tone: post.getEffectConfig(ENGINE.PostProcessPass.ToneMapping),
+          bloom: post.getEffectConfig(ENGINE.PostProcessPass.Bloom),
+        };
+        post.configureEffect(ENGINE.PostProcessPass.ToneMapping, {
+          enabled: true,
+          mode: THREE.ACESFilmicToneMapping,
+          exposure: 0.5,
+        });
+        post.configureEffect(ENGINE.PostProcessPass.Bloom, {
+          enabled: true,
+          strength: 0.35,
+          threshold: 0.75,
+          radius: 0.6,
+        });
+      }
+    }
+
+    /*
      * 40, down from 45, and the size on screen is the reason.
      *
      * The body is a phyllotaxis disc of radius sqrt(count) * rest * 0.62, so mass and
@@ -621,6 +667,25 @@ export class M4SSRig extends ENGINE.SceneNode {
     // Disconnect the instrument from the shared bus. The bus itself belongs to the
     // console and stays up - only the slime's routes through it are ours to tear down.
     this.voice.dispose();
+    // Hand the look back the way it was found - the console's CRT bloom is not ours to keep.
+    const post = this.getWorld()?.postProcessManager;
+    if (post && this.savedPost) {
+      if (this.savedPost.tone) {
+        post.configureEffect(
+          ENGINE.PostProcessPass.ToneMapping,
+          this.savedPost.tone as Record<string, unknown>
+        );
+      }
+      if (this.savedPost.bloom) {
+        post.configureEffect(
+          ENGINE.PostProcessPass.Bloom,
+          this.savedPost.bloom as Record<string, unknown>
+        );
+      }
+      this.savedPost = null;
+    }
+    this.slowmoVeil?.remove();
+    this.slowmoVeil = null;
   }
 
   // -- setup ------------------------------------------------------------------------------
@@ -820,7 +885,12 @@ export class M4SSRig extends ENGINE.SceneNode {
        * for the ground and the walls are the same") and it was right - a room whose
        * ground and walls share a material has no gravity in its art.
        */
-      const isWall = t.h > t.w * 1.6;
+      /*
+       * The ceiling counts as wall. It is 1280x60, so the shape test called it a floor and
+       * dressed it in walked dirt - round clods hanging upside down over the whole room.
+       * Nothing stands on the ceiling; it is shell, and shell wears masonry.
+       */
+      const isWall = t.h > t.w * 1.6 || t.y <= 0;
       const face = (isWall ? wallMap : dirtMap).clone();
       face.needsUpdate = true;
       /*
@@ -1094,6 +1164,29 @@ export class M4SSRig extends ENGINE.SceneNode {
       node.add(face);
       this.stage?.add(node);
       this.gateNodes.push({ node, gate, restY: gate.y + gate.h / 2 });
+
+      /*
+       * The grate across a sieve's gap. The fiction says "containment grate" and the HUD
+       * says "too big for the gap", but the opening itself was an empty dark rectangle -
+       * the rule was enforced invisibly. Three rusted bars say both halves at a glance.
+       * Static, and NOT parented to the gate node: the grate belongs to the doorway, and
+       * the sim already lets legal bodies pass straight through the bars.
+       */
+      if (gate.sieve !== undefined) {
+        const gapTop = gate.y + gate.h;
+        const gapH = world.height - gapTop < 200 ? 30 : 30;
+        const grate = decorMesh(
+          'SieveGrate',
+          new THREE.PlaneGeometry(gate.w, gapH),
+          this.artMaterial({
+            map: grateTexture(`grate-${gate.id ?? gate.x}`, gate.w, gapH),
+            transparent: true,
+            depthWrite: false,
+          })
+        );
+        grate.position.set(gate.x + gate.w / 2, gapTop + gapH / 2, -2);
+        this.stage?.add(grate);
+      }
     });
 
     /*
@@ -1129,7 +1222,7 @@ export class M4SSRig extends ENGINE.SceneNode {
       node.add(face);
       node.position.set(crusher.x + crusher.w / 2, crusher.y + crusher.h / 2, -20);
       this.stage?.add(node);
-      this.crusherNodes.push({ node, crusher });
+      this.crusherNodes.push({ node, crusher, prevAt: crusher.at });
     }
 
     /*
@@ -1590,6 +1683,8 @@ export class M4SSRig extends ENGINE.SceneNode {
           })
         );
         tree.position.set(x, world.height - tall / 2 + 40, 72);
+        // Mirror every second tree: with the trunk lean this doubles the silhouette pool.
+        if (i % 2 === 1) tree.scale.x = -1;
         this.stage?.add(tree);
       });
     }
@@ -2398,14 +2493,20 @@ export class M4SSRig extends ENGINE.SceneNode {
   private buildFlightDots(): void {
     for (let i = 0; i < DOT_COUNT; i++) {
       const fade = 1 - i / DOT_COUNT;
-      const size = 13 - i * 2;
+      /*
+       * 22 down to 13, roughly doubled from the first build - which was verified invisible:
+       * twelve frames of committed 360 in the review recording, zero dots on screen. Seven
+       * to thirteen pixels of faint additive green over teal is below the read threshold of
+       * a moving frame.
+       */
+      const size = 22 - i * 3;
       const dot = decorMesh(
         `FlightDot${i}`,
         new THREE.PlaneGeometry(size, size),
         this.artMaterial({
           map: glowTexture(`flight-dot-${i}`, SLIME_FILL, 32),
           transparent: true,
-          opacity: 0.28 + fade * 0.5,
+          opacity: 0.5 + fade * 0.4,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
         })
@@ -2455,17 +2556,29 @@ export class M4SSRig extends ENGINE.SceneNode {
     if (anchor && drive > 0.12) teardrop(mine, vx, vy, drive);
 
     /*
-     * The dots. Shown only once the swing is worth aiming - below that they are clutter over
-     * a creature that is barely moving, and the answer to "where will I go" is "not far".
+     * The dots - and they are strongest at the moment that used to have none.
+     *
+     * The first build gated them on `attached && drive > 0.45`, which meant they flickered
+     * on only near the bottom of a committed arc and vanished entirely at release - the
+     * single moment the player is actually AIMING, in slow motion, was the one moment with
+     * no aim line. Now: on the rope they appear from drive 0.2 and grow with it; off the
+     * rope they run whenever slow motion is live, reading further ahead (half a second
+     * against a third), because aiming time is what slow motion IS.
+     *
+     * Scaled by aim rather than faded - material opacity written per frame does not
+     * reliably reach the renderer through a MeshNode, but node scale does.
      */
-    const show = state.attached && drive > 0.45;
+    const aiming = state.attached ? Math.max(0, (drive - 0.2) / 0.8) : state.slowmo;
+    const show = mine.length > 0 && aiming > 0.05;
+    const reach = state.attached ? DOT_REACH : DOT_REACH_SLOWMO;
     this.flightDots.forEach((dot, i) => {
       dot.visible = show;
       if (!show) return;
-      const at = ((i + 1) / DOT_COUNT) * DOT_REACH;
+      const at = ((i + 1) / DOT_COUNT) * reach;
       const c = centroid(owned(state));
       dot.position.x = c.x + vx * at;
       dot.position.y = c.y - BLOB_LIFT + vy * at + 0.5 * TUNING.gravity * at * at;
+      dot.scale.setScalar(0.55 + 0.65 * Math.min(1, aiming));
     });
   }
 
@@ -2584,6 +2697,25 @@ export class M4SSRig extends ENGINE.SceneNode {
       '<div data-role="note" style="margin-top:6px;opacity:0.75;font-size:10px">&nbsp;</div>',
       '</div>',
     ].join('');
+    /*
+     * The slow-motion veil: the one visual answer to the game's signature moment.
+     *
+     * Slow motion scaled time and audio and changed nothing on screen - the release-and-aim
+     * beat looked identical to ordinary falling. A DOM radial vignette (same pattern as the
+     * warp veil, because DOM opacity is per-frame safe where MeshNode material opacity is
+     * not) plus a four-percent camera push-in (see the camera block) reads as the world
+     * holding its breath, for about thirty lines.
+     */
+    const veil = document.createElement('div');
+    veil.style.cssText = [
+      'position:absolute;inset:0;pointer-events:none;z-index:20;opacity:0;',
+      'background:radial-gradient(ellipse at center,',
+      'rgba(0,0,0,0) 44%, rgba(6,12,16,0.28) 74%, rgba(4,8,12,0.55) 100%)',
+    ].join('');
+    container.appendChild(veil);
+    this.slowmoVeil = veil;
+    this.detach.push(() => veil.remove());
+
     container.appendChild(hud);
     this.hud = hud;
     this.hudMass = hud.querySelector('[data-role="mass"]');
@@ -2601,6 +2733,7 @@ export class M4SSRig extends ENGINE.SceneNode {
   private paintHud(): void {
     const state = this.state;
     if (!this.hud || !state) return;
+    if (this.slowmoVeil) this.slowmoVeil.style.opacity = String(state.slowmo * 0.9);
 
     /*
      * The bar is a fraction of the mass you STARTED with, not of the mass you have.
@@ -2822,17 +2955,27 @@ export class M4SSRig extends ENGINE.SceneNode {
      * rides the scale instead: it breathes about two thirds of a second, tightening as it
      * grows. Same read, on a path that is proven every frame by everything else moving.
      */
+    if (this.state?.justGripped) this.gripFlash = 1;
+    this.gripFlash = Math.max(0, this.gripFlash - 1 / 24);
     const ring = this.latchRing;
     if (!ring) return;
-    if (!this.target) {
+    /*
+     * The grip flash: the ring kicks out a third and snaps back over a quarter second when
+     * the tendril takes hold, and it stays visible on the LATCHED growth while it does -
+     * the ring was purely a target affordance before, so the single most tactile event in
+     * the game (the clunk of connection) had no visual event at all.
+     */
+    const flashing = this.gripFlash > 0 && this.latched;
+    const aim = this.target ?? (flashing ? this.latched : null);
+    if (!aim) {
       ring.visible = false;
       ring.position.set(-999, -999, 22);
       return;
     }
     const pulse = (Math.sin(this.artClock * 4.2) + 1) / 2;
-    const scale = 1.14 - pulse * 0.14;
+    const scale = (1.14 - pulse * 0.14) * (1 + 0.35 * this.gripFlash);
     ring.visible = true;
-    ring.position.set(this.target.x, this.target.y, 22);
+    ring.position.set(aim.x, aim.y, 22);
     ring.scale.set(scale, scale, 1);
   }
 
@@ -3588,9 +3731,24 @@ export class M4SSRig extends ENGINE.SceneNode {
      * who cannot see what is in range cannot tell a mechanic from a bug in the two minutes
      * they will spend with this.
      */
-    for (const { node, crusher } of this.crusherNodes) {
+    for (const entry of this.crusherNodes) {
+      const { node, crusher } = entry;
       const at = crusherRect(crusher);
       node.position.set(at.x + at.w / 2, at.y + at.h / 2, -20);
+      /*
+       * The slam. The winch-hang-drop profile accelerates the head into the floor and used
+       * to land it in silence - all that anticipation, no punctuation. Dust bursts off both
+       * edges of the striking face and the camera takes a kick smaller than the heavy
+       * door's (0.22 against 0.35): the door is a story beat, the press is weather.
+       */
+      const slammed = crusher.at >= crusher.travel - 1 && entry.prevAt < crusher.travel - 6;
+      if (slammed) {
+        const floorY = crusher.y + crusher.at + crusher.h;
+        this.burst(crusher.x - 4, floorY - 4, '#6b7a6b', 7, 210);
+        this.burst(crusher.x + crusher.w + 4, floorY - 4, '#6b7a6b', 7, 210);
+        this.shake = Math.max(this.shake, 0.22);
+      }
+      entry.prevAt = crusher.at;
     }
 
     /*
@@ -3628,7 +3786,15 @@ export class M4SSRig extends ENGINE.SceneNode {
     }
     // The chevron bobs while its plate is up, and goes out when the plate goes down.
     for (const { node, button } of this.buttonFlags) {
-      node.visible = !button.pressed;
+      /*
+       * The chevron is a nearby hint, not a permanent fixture. Hung in mid-air with no
+       * tether it read as a floating pickup from across the room; inside ~500px it is
+       * doing its actual job - "this plate, here" - and past that it goes out. Visibility
+       * rather than opacity, because per-frame material opacity does not survive MeshNode.
+       */
+      const me = this.state ? centroid(owned(this.state)) : null;
+      const near = me ? Math.hypot(me.x - button.x, me.y - button.y) < 520 : true;
+      node.visible = !button.pressed && near;
       if (!button.pressed) {
         node.position.x = button.x;
         node.position.y = button.y - 54 + Math.sin(this.artClock * 3.4 + button.x) * 5;
@@ -3798,6 +3964,15 @@ export class M4SSRig extends ENGINE.SceneNode {
       const art = this.growthArt.get(anchor);
       const wanted = art ? (dead ? art.dead : art.live) : null;
       if (wanted && material.map !== wanted) {
+        /*
+         * Waking is a moment now. The texture used to swap silently - the stage's biggest
+         * state change (the shaft going from impossible to open) happened with less
+         * fanfare than a button press. Ash floods to lemon AND the lantern throws sparks.
+         */
+        if (!dead && material.map === art?.dead) {
+          this.burst(anchor.x, anchor.y, '#d8f26a', 12, 240);
+          this.shake = Math.max(this.shake, 0.12);
+        }
         material.map = wanted;
         material.needsUpdate = true;
       }
@@ -3929,7 +4104,13 @@ export class M4SSRig extends ENGINE.SceneNode {
       at.x += Math.sin(this.shake * 70) * 5 * k;
       at.y += Math.cos(this.shake * 55) * 3 * k;
     }
-    this.camera.position.copy(place(at.x, at.y).setZ(CAMERA_BACK));
+    /*
+     * Slow motion pushes the camera in four percent. Together with the veil it is the
+     * difference between "the clock changed" and "the world is holding its breath" - and it
+     * eases with slowmo's own decay, so the release breathes back out on its own.
+     */
+    const push = 1 - 0.04 * (this.state?.slowmo ?? 0);
+    this.camera.position.copy(place(at.x, at.y).setZ(CAMERA_BACK * push));
     this.aim(this.camera.position, place(at.x, at.y));
   }
 

@@ -1,5 +1,24 @@
 # M4SS Art Review — Findings and Exact Fixes
 
+**STATUS (updated same day)**: Items 1, 2, 3, 4, 6, 7, 8, 9, 14, 15, 18 + tree-mirroring
+are IMPLEMENTED (commit: "The review's first sweep"). Item 10 was retired — the portal
+membrane already animates at idle (portalPhase += 1/120, redrawn at 8fps); only a halo bob
+would remain and it is not worth a line. The "red decor lantern" halves of item 4 turned
+out to be g2 itself seen twice — there are no red decor lanterns; the husk redesign is the
+whole fix and is in.
+
+**PENDING VISUAL CONFIRMATION** — Studio crashed five times during this pass (Electron
+`BrowserWindow.emit` on play-mode exit; also served a stale play bundle after relaunch even
+with a fresh .dist). Everything below is verified by types/lint/harnesses only:
+bloom values (threshold 0.75 / strength 0.35 / radius 0.6 — judge lanterns halo softly, HUD
+must not wash; tune threshold first), dot sizes at play scale, slow-mo veil strength (0.9 ×
+slowmo), husk read at distance, grate read, press slam dust amount. One manual play-through
+covers all of it.
+
+**STILL OPEN**: items 5 (sporeling outline + shadow blob), 11 (trail fade-in), 12 (stage-2
+west silhouettes), 13 (stack accent brightness — re-judge AFTER bloom), 16 (portal nudge),
+17 (stage-2 god rays), P4 sweep.
+
 Senior-artist pass over both stages, 2026-08-20. Evidence: two full recordings
 (`scripts/dev/review-s1-sheet.png`, 16s of pace → latch → committed 360;
 `review-s2-sheet.png`, 18s eastward traverse), far-chamber still (`rv-farchamber.png`),

@@ -1460,8 +1460,18 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
   const paneH = Math.round(size * 0.26);
   const rim = Math.max(2, Math.round(size * 0.022));
 
-  const brown = dead ? '#3a2a1e' : '#5a4526';
-  const brownLit = dead ? '#4a3626' : '#7a6134';
+  /*
+   * DEAD IS OUT, not red.
+   *
+   * The dead palette used to be warm reds (#8f4a2e pane, #c4553f hot), which drew a lit
+   * red lantern - and the review could not tell the stage's most puzzle-critical object
+   * from decor. Twice, in two different frames, the reviewer catalogued g2 as "a red decor
+   * lantern". A dead lamp is DARK: ash-grey pane, cold frame, and one small ember low in
+   * the glass to say it could live again. The wake is then a real transformation - ash
+   * floods to lemon - instead of red trading for green.
+   */
+  const brown = dead ? '#2e2620' : '#5a4526';
+  const brownLit = dead ? '#3c332a' : '#7a6134';
   /*
    * The pane is lit to the MASS's own values: #a8e85c is the creature's body colour and
    * #e8fbb0 its shine, so the brightest thing inside the lantern is exactly as bright as
@@ -1469,9 +1479,9 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
    * the same. The near-white the pane used to carry read as grey against a green room -
    * whiter is not brighter when everything around it is a hue.
    */
-  const pane = dead ? '#8f4a2e' : '#c8f07a';
-  const paneHot = dead ? '#c4553f' : '#e8fbb0';
-  const paneDim = dead ? '#6b3524' : '#a8e85c';
+  const pane = dead ? '#3a3531' : '#c8f07a';
+  const paneHot = dead ? '#48413b' : '#e8fbb0';
+  const paneDim = dead ? '#2c2825' : '#a8e85c';
 
   /*
    * The rope first, so the lamp's collar covers where it lands. Brown, two strands with a
@@ -1537,6 +1547,25 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
    * sprite is the light it throws.
    */
   void seed;
+  /*
+   * The husk's one coal, and its crooked hang.
+   *
+   * A single 4px ember low in the dead pane - the only saturated thing on the object -
+   * says "this can be lit" without saying "this is lit". And the whole pane region is
+   * nudged two pixels down-right of the frame, so the dead lantern hangs visibly AJAR:
+   * even in silhouette it reads as broken rather than as a different colour of working.
+   */
+  if (dead) {
+    const shift = g.getImageData(0, 0, size, size);
+    g.clearRect(0, 0, size, size);
+    g.putImageData(shift, 2, 2);
+    const ex = cx - 2;
+    const ey = cy + Math.round(size * 0.1);
+    g.fillStyle = '#c8502a';
+    g.fillRect(ex, ey, 4, 3);
+    g.fillStyle = '#e8784a';
+    g.fillRect(ex + 1, ey + 1, 2, 1);
+  }
   return pixelTexture(c);
 }
 
@@ -2352,12 +2381,22 @@ export function deadTreeTexture(seed: string, w = 220, h = 420): THREE.CanvasTex
     }
   };
 
-  // The trunk, rising from the bottom, with a root flare.
+  /*
+   * The trunk - with a LEAN, and it is the lean that stops the forest repeating.
+   *
+   * The review put two of these side by side and they read as the same tree: every seed
+   * jittered within the same upright skeleton, so the silhouettes converged. A whole-trunk
+   * lean of up to eight degrees, chosen once per tree, changes the silhouette's gesture -
+   * which is the thing the eye actually compares - where per-row jitter only changes its
+   * texture.
+   */
   const baseX = w / 2 + range(rng, -20, 20);
-  const trunkH = h * range(rng, 0.55, 0.7);
+  const trunkH = h * range(rng, 0.5, 0.72);
+  const lean = range(rng, -0.14, 0.14);
   let tx = baseX;
   for (let y = 0; y < trunkH; y++) {
     const t = y / trunkH;
+    tx += lean;
     if (y % 13 === 0) tx += range(rng, -1.2, 1.2);
     const flare = y < 60 ? 1 + ((60 - y) / 60) ** 2 * 1.9 : 1;
     const tw = Math.round(w * 0.085 * (1 - t * 0.55) * flare);
@@ -2596,6 +2635,42 @@ export function sporelingSprite(): {
       texture.needsUpdate = true;
     },
   };
+}
+
+/**
+ * The grate across a sieve gate's gap.
+ *
+ * The fiction has always said "containment grate" and the HUD says "too big for the gap",
+ * but the art showed an empty dark opening - the rule was enforced invisibly. Three rusted
+ * bars explain both halves of it at a glance: small things pass between bars, big things
+ * do not. Paint only; the sieve clamp in the sim already does the physics.
+ */
+export function grateTexture(seed: string, w = 40, h = 30): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+  const barDark = mixHex(PAL.rustDark, PAL.stoneDark, 0.5);
+  const barMid = mixHex(PAL.rustMid, PAL.stoneMid, 0.45);
+  const barLit = mixHex(PAL.rustLit, PAL.stoneLit, 0.35);
+  for (let i = 0; i < 3; i++) {
+    const bx = Math.round(6 + i * ((w - 12) / 2)) - 2;
+    g.fillStyle = barDark;
+    g.fillRect(bx - 1, 0, 6, h);
+    g.fillStyle = barMid;
+    g.fillRect(bx, 0, 4, h);
+    g.fillStyle = barLit;
+    g.fillRect(bx, 0, 1, h);
+    // A rust blotch or two per bar, so they read as old iron rather than as printed lines.
+    for (let b = 0; b < 2; b++) {
+      g.fillStyle = PAL.rustMid;
+      g.fillRect(bx + Math.round(range(rng, 0, 2)), Math.round(range(rng, 3, h - 5)), 2, 2);
+    }
+  }
+  // The lintel they hang from.
+  g.fillStyle = barDark;
+  g.fillRect(0, 0, w, 3);
+  g.fillStyle = barLit;
+  g.fillRect(0, 0, w, 1);
+  return pixelTexture(c);
 }
 
 /**
