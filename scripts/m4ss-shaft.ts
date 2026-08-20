@@ -384,6 +384,172 @@ console.log('\n=== M4SS STAGE TWO ===\n');
   check('and that opens the heavy gate', fast.world.gates.find((g) => g.id === 'w2')!.open);
 }
 
+// ---------------------------------------------------------------- the 360 is one speed
+{
+  /*
+   * The swing has been reported three times now - "sometimes fast, sometimes too slow", then
+   * "the speed is not consistent", then "sometimes it is too fast, and it keeps going when I
+   * am not holding anything". Every previous fix was judged by hand off a one-off probe, and
+   * every one of them left a different edge of the same problem behind. So it gets checks.
+   *
+   * Two properties, and between them they are what "consistent" means:
+   *
+   *   1. A committed swing CONVERGES. Pump for four seconds or for twelve and you arrive at
+   *      the same speed, because the pump has a ceiling. Without one, a multiplier that
+   *      switches on at speed and never switches off makes the result a function of how long
+   *      the key was held, which is a stopwatch rather than a skill.
+   *   2. Letting go WINDS IT DOWN. A pendulum carried clear of the top of its circle will
+   *      keep circling on ordinary drag alone; the player has to be able to stop.
+   */
+  const IDLE_ON = (g: Anchor) => ({ move: 0 as const, anchor: g, recall: false });
+  const drive = (g: Anchor) => (s: MassState) => {
+    if (!s.attached) return { move: 0 as const, anchor: g, recall: false };
+    const body = owned(s);
+    const c = centroid(body);
+    const tx = c.y - g.y;
+    const ty = -(c.x - g.x);
+    const tl = Math.hypot(tx, ty) || 1;
+    let vx = 0;
+    let vy = 0;
+    for (const p of body) {
+      vx += p.x - p.px;
+      vy += p.y - p.py;
+    }
+    const along = ((vx / body.length) * (tx / tl) + (vy / body.length) * (ty / tl)) / TUNING.dt;
+    return { move: (Math.abs(along) > 60 ? (along >= 0 ? 1 : -1) : 1) as 1 | -1, anchor: g, recall: false };
+  };
+
+  /** A mid-chain latch, arriving with the speed a fling would have brought. */
+  const swinging = (id: string): MassState => {
+    const st = makeState(freshShaft(), START_MASS);
+    const g = st.world.anchors.find((a) => a.id === id)!;
+    place(st, g.x, g.y + (g.rope ?? 80) + 30);
+    for (const p of st.particles) p.px = p.x + 150 * TUNING.dt;
+    return st;
+  };
+
+  /*
+   * Measured as the PEAK over a final revolution, not as the spin at the instant the run
+   * stops. Angular speed on a pendulum is highest at the bottom of the arc and lowest at the
+   * top, so sampling it once samples whatever phase the clock happened to land on - the first
+   * version of this check read 9.4, 8.4 and 6.9 for three swings that were all circling
+   * steadily, and was measuring its own stopping point.
+   */
+  const spins: number[] = [];
+  for (const seconds of [4, 8, 14]) {
+    const st = swinging('g3');
+    const g = st.world.anchors.find((a) => a.id === 'g3')!;
+    run(st, seconds, drive(g));
+    const driver = drive(g);
+    let peak = 0;
+    for (let i = 0; i < 1.5 / TUNING.dt; i++) {
+      step(st, driver(st));
+      peak = Math.max(peak, Math.abs(st.spin));
+    }
+    spins.push(peak);
+  }
+  const lo = Math.min(...spins);
+  const hi = Math.max(...spins);
+  check(
+    'pumping for longer does not buy a faster swing',
+    hi - lo < 1.2 && lo > TUNING.slowmoAt,
+    `peak over a revolution after 4s, 8s and 14s: ${spins.map((n) => n.toFixed(1)).join(', ')} rad/s`
+  );
+
+  /*
+   * The ceiling, stated in the units it is written in. A body cannot be driven past
+   * swingMax along its arc however long it is pumped.
+   */
+  const fast = swinging('g3');
+  const g3b = fast.world.anchors.find((a) => a.id === 'g3')!;
+  let peakAlong = 0;
+  const driver = drive(g3b);
+  for (let i = 0; i < 14 / TUNING.dt; i++) {
+    step(fast, driver(fast));
+    const body = owned(fast);
+    const c = centroid(body);
+    const tx = c.y - g3b.y;
+    const ty = -(c.x - g3b.x);
+    const tl = Math.hypot(tx, ty) || 1;
+    let vx = 0;
+    let vy = 0;
+    for (const p of body) {
+      vx += p.x - p.px;
+      vy += p.y - p.py;
+    }
+    const along = Math.abs(((vx / body.length) * (tx / tl) + (vy / body.length) * (ty / tl)) / TUNING.dt);
+    peakAlong = Math.max(peakAlong, along);
+  }
+  /*
+   * The ceiling is an energy, so the speed it permits at the bottom of the arc is
+   * sqrt(2 * swingEnergy * g * rope). Checked in px/s because that is the unit the rest of
+   * the stage is specified in - the heavy button wants 420 of them.
+   */
+  const rope = g3b.rope ?? 80;
+  const permitted = Math.sqrt(2 * TUNING.swingEnergy * TUNING.gravity * rope);
+  check(
+    'and it never outruns the ceiling by much',
+    peakAlong < permitted * 1.15,
+    `peak ${peakAlong.toFixed(0)}px/s along the arc, ceiling allows ${permitted.toFixed(0)}`
+  );
+
+  /*
+   * Letting go. The body keeps the growth - this is not a release, it is a player who has
+   * stopped pressing keys - and the swing has to come down on its own.
+   */
+  const coast = swinging('g3');
+  const g3c = coast.world.anchors.find((a) => a.id === 'g3')!;
+  const coastDriver = drive(g3c);
+  run(coast, 8.0, coastDriver);
+  // Peaks again, for the same reason as above: one sample is one phase of the arc.
+  let before = 0;
+  for (let i = 0; i < 1.5 / TUNING.dt; i++) {
+    step(coast, coastDriver(coast));
+    before = Math.max(before, Math.abs(coast.spin));
+  }
+  run(coast, 4.0, () => ({ move: 0 as const, anchor: g3c, recall: false }));
+  let after = 0;
+  for (let i = 0; i < 1.5 / TUNING.dt; i++) {
+    step(coast, IDLE_ON(g3c));
+    after = Math.max(after, Math.abs(coast.spin));
+  }
+  check(
+    'holding nothing winds the swing down',
+    after < before * 0.6,
+    `peak ${before.toFixed(1)} rad/s, then ${after.toFixed(1)} after four seconds of no input`
+  );
+}
+
+// ---------------------------------------------------------------- the presses close ON the floor
+{
+  /*
+   * A press is anchored by where it CLOSES, and nothing checked that.
+   *
+   * The gap check below measures the OPEN end, so raising the stroke from 60 to 190 without
+   * moving the rest position passed every test while pushing the closed end a hundred and
+   * thirty pixels into the corridor floor - a hammer visibly burying itself in the ground.
+   * The stroke belongs above the floor, not below it.
+   */
+  const world = freshShaft();
+  for (const c of world.crushers ?? []) {
+    const shut = c.y + c.travel + c.h;
+    const floor = world.tiles
+      .filter((t) => t.x < c.x + c.w && t.x + t.w > c.x && t.y >= c.y)
+      .map((t) => t.y)
+      .sort((a, b) => a - b)[0];
+    check(
+      `the press at ${c.x} closes onto the floor and not through it`,
+      floor !== undefined && shut <= floor + 1,
+      `closes at ${shut}, floor is at ${floor}`
+    );
+    check(
+      `and it opens a gap taller than the body`,
+      floor !== undefined && floor - (c.y + c.h) >= 60,
+      `gap ${floor === undefined ? '?' : floor - (c.y + c.h)}px`
+    );
+  }
+}
+
 // ---------------------------------------------------------------- the sporeling's ledge
 {
   const world = freshShaft();

@@ -719,3 +719,29 @@ the trail's median band is 4 screen pixels against a body of about 55.
 The cull that drops a spent deposit came down with it, from a vertical radius of 2 to 1.1: a
 flat deposit starts only a few pixels tall, and the old floor would have taken half of them
 off the ground before they had aged at all.
+
+## Pass 77 - the press stops digging, and the 360 gets a ceiling
+
+**The press was burying itself, and the travel change did it.** `at` runs 0 to travel and is
+ADDED to y, so raising the stroke from 60 to 190 in pass 69 without moving the rest position
+pushed the CLOSED end down instead of lifting the open one: 340 + 190 + 260 puts the head at
+790 against a corridor floor at 660, a hundred and thirty pixels inside it. Anchored at 210
+it closes exactly on 660 and opens a 190px gap above it. A press is anchored by where it
+closes; the stroke belongs above that.
+
+Nothing caught it because the only check measured the OPEN end. There is now one that
+measures the closed end against the floor beneath it.
+
+**The 360 was uncapped, and both halves of the complaint follow from that.** swingCommit
+multiplies the pump by 1.8 above 300px/s and never switched off - a positive feedback loop
+whose only opponent is drag, so where a swing ended up was a function of how long the key
+happened to be held. That is "sometimes it is too fast". And pass 69 deliberately pushed a
+committed swing clear of the energy needed to carry over the top, so a pendulum left alone
+kept circling: that is "it keeps doing the 360 even when I am not holding A or D".
+
+| # | what | change | why |
+| --- | --- | --- | --- |
+| 77a | a ceiling, in ENERGY | `swingEnergy: 2.7` - the pump adds nothing above 2.7 x gravity x rope | The first attempt capped instantaneous SPEED and the harness caught it as the wrong invariant: speed on a pendulum peaks at the bottom, so a speed cap binds only there, and 520px/s made carrying a rope of 80 over the top physically impossible. Long pumps built up and fell out - 4s gave 3.5 rad/s, 8s gave 6.2, 14s gave 1.5. Energy is the same number wherever you measure it. Now: 9.6, 9.5, 9.7. |
+| 77b | letting go winds it down | `swingIdle` against the tangent, after `swingGrace` | It has to be a DURATION, not a per-frame test. Pumping in rhythm means holding nothing for most of every cycle, and the first version bled the swing on every pass over the top - stage one's finale fling stopped reaching the shelf, because its driver releases at the crest of each loop. Half a second of grace, then a ramp. |
+| 77c | the band is narrow | 2.6, 2.7 and 2.8 land the finale fling whole; 2.5 and 2.9 tear it | At 2.9 the sustained swing is violent enough that the throw pulls the body into eight pieces in mid-air. Worth knowing before anyone raises it. |
+| 77d | measure peaks, not phases | two of the new checks | Angular speed is highest at the bottom of the arc and lowest at the top, so sampling `spin` once samples whatever phase the clock landed on. The first version of the consistency check read 9.4, 8.4 and 6.9 for three swings that were all circling steadily - it was measuring its own stopping point. |

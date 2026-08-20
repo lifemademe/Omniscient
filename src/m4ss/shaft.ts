@@ -285,9 +285,17 @@ export const THE_SHAFT: World = {
    * time a run past it, and it was right. At 190 the head lifts most of a body-height
    * clear, the rhythm is legible from across the room, and the period is long enough to
    * walk it rather than sprint it.
+   *
+   * AND THE EXTRA TRAVEL GOES UPWARD. y 210 rather than 340, which is the whole of a fix
+   * for a bug the travel change shipped: `at` runs 0 to travel and is ADDED to y, so
+   * raising the stroke without moving the rest position simply pushed the closed end
+   * further down - 210 + 190 + 260 lands the head exactly on the corridor floor at 660,
+   * where 340 + 190 + 260 was 790, a hundred and thirty pixels INSIDE it. The playtest saw
+   * a hammer burying itself in the ground, which is exactly what it was doing. A press is
+   * anchored by where it CLOSES; the stroke belongs above that, not below.
    */
   crushers: [
-    { x: 560, y: 340, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0, at: 0 },
+    { x: 560, y: 210, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0, at: 0 },
   ],
 
   /**

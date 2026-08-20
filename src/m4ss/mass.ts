@@ -350,6 +350,14 @@ export interface MassState {
   /** Seconds of immunity left after a critter hit. See TUNING.critterStun. */
   stunned: number;
   /**
+   * How long the player has been holding no direction while on a growth.
+   *
+   * Reset by any push. Drives the idle bleed, which is what stops a swing nobody is driving
+   * from circling for ever - see TUNING.swingGrace for why it is a duration rather than a
+   * per-frame test.
+   */
+  coasting: number;
+  /**
    * The body's shape at the moment it grabbed on, in the rope's own frame.
    *
    * Each entry is one particle's offset from the centroid, split into "along the rope" and
@@ -528,6 +536,65 @@ export const TUNING = {
    * regimes are what let the 360 be both earned and repeatable.
    */
   swingCommit: 1.8,
+  /**
+   * The ceiling on a swing, as ENERGY, in multiples of gravity times the rope length.
+   *
+   * This is the missing half of swingCommit and the reason the playtest kept saying the 360
+   * is "sometimes too fast". A 1.8x multiplier that switches on at speed and never switches
+   * off is a positive feedback loop: past the threshold every push is stronger, which keeps
+   * you past the threshold, and the only thing opposing it is drag. Where a swing ended up
+   * was therefore a function of how long the key happened to be held - a stopwatch, not a
+   * skill.
+   *
+   * The first attempt capped instantaneous tangential SPEED, and the harness caught it being
+   * the wrong invariant. Speed on a pendulum is highest at the bottom and lowest at the top,
+   * so a speed cap binds only at the bottom - and the number it binds at has to clear the
+   * whole circle. Carrying a rope of 80 over the top against gravity 1500 needs 775px/s at
+   * the bottom before drag; a cap of 520 made a full revolution physically impossible, and
+   * long pumps duly built up and then fell out. Measured: four seconds gave 3.5 rad/s, eight
+   * gave 6.2, fourteen gave 1.5.
+   *
+   * Energy is the invariant that does not care where on the circle you measure it. Held at a
+   * constant, a committed revolution converges on ONE speed at every point of the arc, which
+   * is the property that makes the shaft's jumps learnable and the heavy button's 420px/s a
+   * threshold rather than a lottery.
+   *
+   * 2.7, and the window is narrower than it looks. Completing a circle needs 2.5 - half a
+   * rope-length of speed at the top plus two rope-lengths of height - so this keeps about
+   * eight percent in hand: enough that drag and a sloppy line do not cost the revolution.
+   *
+   * The ceiling above is stage one's finale. Held at 2.9 the sustained swing is violent
+   * enough that the fling tears the body into pieces in mid-air, which the harness checks
+   * for; 2.6, 2.7 and 2.8 all land it whole, 2.5 and 2.9 do not. That is a narrower band
+   * than a number like this should have, and it is worth knowing that raising it is not free.
+   */
+  swingEnergy: 2.7,
+  /**
+   * How fast a swing bleeds off while the player is holding nothing, per second.
+   *
+   * The other half of the same complaint - "it keeps doing the 360 even when I am not
+   * holding A or D". It did, and honestly: pass 69 deliberately pushed a committed swing
+   * clear of the energy needed to carry over the top, and a pendulum above that line with
+   * only ordinary drag on it will circle for a very long time on its own.
+   *
+   * So letting go now means something. This is an exponential decay with a time constant of
+   * about three seconds, which costs a coasting swing its circle in roughly two.
+   *
+   * It does NOT apply the instant a key is released - see swingGrace. Pumping in rhythm means
+   * holding nothing for most of every revolution, so a bleed that fires on any idle frame
+   * fights the pump rather than the coast. The first version did exactly that and stage one's
+   * finale fling stopped reaching the shelf: its driver holds nothing over the top of every
+   * loop, and the bleed was taking the swing apart a little on each pass.
+   */
+  swingIdle: 0.34,
+  /**
+   * How long the player has to be holding nothing before the swing starts winding down.
+   *
+   * Long enough to cover the gaps in normal pumping - a rhythm has both hands off the keys
+   * for a good part of each cycle - and short enough that a player who has genuinely stopped
+   * sees the swing answer within about a second.
+   */
+  swingGrace: 0.55,
   /** Below this the rope is too short to swing on and the body just hangs against the growth. */
   minSwing: 26,
   /** How long a fling's slow motion lasts, in simulated seconds. */
@@ -946,6 +1013,7 @@ export function makeState(world: World, startMass: number): MassState {
     slowmo: 0,
     regroup: 0,
     stunned: 0,
+    coasting: 0,
     snapped: 0,
     time: 0,
   };
@@ -1119,7 +1187,7 @@ export function step(state: MassState, input: Input): MassState {
             across: -clamp((r.across - (cLo + cHalf)) / cHalf),
           }));
         }
-        if (input.move !== 0) {
+        {
           // Perpendicular to the rope, sign chosen so D drives clockwise on a y-down world -
           // which is the direction the body is facing when it runs off a ledge to the right.
           const tx = home.y - anchor.y;
@@ -1151,8 +1219,28 @@ export function step(state: MassState, input: Input): MassState {
             vtx += p.x - p.px;
             vty += p.y - p.py;
           }
-          const tangentialSpeed =
-            Math.abs((vtx / mine.length) * (tx / tl) + (vty / mine.length) * (ty / tl)) / dt;
+          // Signed along the tangent, because the idle bleed below needs to know which way
+          // the body is going in order to push against it.
+          const tangential =
+            ((vtx / mine.length) * (tx / tl) + (vty / mine.length) * (ty / tl)) / dt;
+          const tangentialSpeed = Math.abs(tangential);
+
+          /*
+           * Nobody driving: the swing winds down.
+           *
+           * Applied whether or not a key is held is wrong - that would fight the pump. This
+           * runs only when the player is holding nothing, which is what "I let go and it kept
+           * going round" is asking for. It is a force against the direction of travel scaled
+           * by the speed itself, so it is gentle on a slow swing and firm on a fast one.
+           */
+          state.coasting = input.move === 0 ? state.coasting + dt : 0;
+          const idle = Math.min(1, Math.max(0, state.coasting - T.swingGrace) / T.swingGrace);
+          if (idle > 0) {
+            for (const p of mine) {
+              p.ax -= (tx / tl) * tangential * T.swingIdle * idle;
+              p.ay -= (ty / tl) * tangential * T.swingIdle * idle;
+            }
+          }
           /*
            * THREE regimes, and the top one is what makes a 360 repeatable.
            *
@@ -1174,11 +1262,34 @@ export function step(state: MassState, input: Input): MassState {
            * instead of level with it: same eight latches, all eight still turning above
            * 6.4 rad/s at six seconds.
            */
+          /*
+           * FOUR regimes now, and the new one is the ceiling - see TUNING.swingEnergy for why
+           * a multiplier with no upper bound made the 360's speed a function of how long the
+           * key was held rather than of anything the player did.
+           *
+           * Height is measured from the BOTTOM of the circle, so the energy is the same
+           * number wherever the body happens to be on the arc - which is the entire reason
+           * this is energy and not speed.
+           *
+           * The ceiling only stops the pump ADDING. It does not brake, so a player who has
+           * already earned a fast swing keeps it; they simply cannot keep buying more.
+           */
+          const rope = state.swingRadius || 1;
+          const height = anchor.y + rope - home.y;
+          const energy = 0.5 * tangentialSpeed * tangentialSpeed + T.gravity * height;
           const gate =
-            tangentialSpeed < 60 ? 0.25 : tangentialSpeed > 300 ? T.swingCommit : 1;
-          for (const p of mine) {
-            p.ax += (tx / tl) * input.move * T.swingPump * gate;
-            p.ay += (ty / tl) * input.move * T.swingPump * gate;
+            energy > T.swingEnergy * T.gravity * rope
+              ? 0
+              : tangentialSpeed < 60
+                ? 0.25
+                : tangentialSpeed > 300
+                  ? T.swingCommit
+                  : 1;
+          if (input.move !== 0) {
+            for (const p of mine) {
+              p.ax += (tx / tl) * input.move * T.swingPump * gate;
+              p.ay += (ty / tl) * input.move * T.swingPump * gate;
+            }
           }
         }
       } else {
