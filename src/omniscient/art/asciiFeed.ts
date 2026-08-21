@@ -478,8 +478,21 @@ function drawCar(
   const px = Math.round(FEED_W / 2 + (sx / z) * b.fx - 0.5);
   const py = Math.round(FEED_H / 2 - (sy / z) * b.fy - 0.5);
 
-  // Width in characters from the real width of a car, so it grows as it arrives.
-  const cells = Math.max(1, Math.min(14, Math.round(((wide ? 2.6 : 1.9) / z) * b.fx)));
+  /*
+   * Width in characters from the real width of a car, so it grows as it arrives - but
+   * capped SHORT.
+   *
+   * A car two metres wide eleven metres from this lens projects to sixteen characters, and
+   * a sixteen character run of solid blocks does not read as a car. It reads as a rule
+   * drawn across the picture, which is exactly what it looked like in the recording: two
+   * bright horizontal bars per frame with no relationship to the street. Six characters is
+   * about the longest a horizontal run stays an object rather than becoming a line.
+   *
+   * The suspect gets a little more, because being unmistakable is his entire job - but he
+   * is separated from traffic by COLOUR, which nothing else in this feed wears, so he does
+   * not need length to do it.
+   */
+  const cells = Math.max(1, Math.min(wide ? 8 : 5, Math.round(((wide ? 2.6 : 1.9) / z) * b.fx)));
   for (let i = 0; i < cells; i++) put(rows, px - Math.floor(cells / 2) + i, py, '▬', colour);
 }
 
