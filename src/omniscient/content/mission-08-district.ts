@@ -38,7 +38,7 @@ import { KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 import { DISTRICT_FLEET, DISTRICT_PURSUIT, DISTRICT_TRAIL } from './district-07.js';
 import { HOLD_FRAMING, OutcomeKind, Tempo, Urgency } from '../mission/types.js';
 
-import type { MissionDefinition } from '../mission/types.js';
+import type { MissionDefinition, MissionOutcome } from '../mission/types.js';
 
 export const FACT_POLICE_HAVE_ACCESS = 'police-have-access';
 export const FACT_COVERAGE_THINS = 'coverage-thins-at-the-edge';
@@ -61,6 +61,35 @@ const DISTRICT = DISTRICT_FLEET;
  * string is three chances for one of them to quietly stop matching the others.
  */
 const ARRIVE = 'camera.push-in:windscreen';
+
+/**
+ * How this mission ends, whichever of the three the player chose.
+ *
+ * ONE object, shared by all three arrivals rather than copied into each, because the thing
+ * being asserted is that they are identical. Copies drift; a reference cannot. §157 is not a
+ * convention here, it is the entire moral of the mission - four minutes of unsupervised
+ * access to a city changed nothing, and the car stops because a man drove to a bridge.
+ *
+ * Note what it does NOT do: scold. §159, no red X. The answer to "change the lights" is not
+ * "you monster", it is the flat mechanical truth that this console has no hands - which is
+ * the sentence the whole game has been building toward and the first time it has mattered
+ * that it is true.
+ */
+const ARRIVAL_OUTCOME: MissionOutcome = {
+  kind: OutcomeKind.Solved,
+  say:
+    'Target stopped. We have him. One car, one stop, nobody else touched. '
+    + '... You were on that bridge before I was. Four minutes, and you just watched. '
+    + 'I did not know your system could do that. Either of those things.',
+  trust: 2,
+  connects: [
+    {
+      a: FACT_POLICE_HAVE_ACCESS,
+      b: FACT_COVERAGE_THINS,
+      label: 'what the machine can see, and who is asking',
+    },
+  ],
+};
 
 export const MISSION_08: MissionDefinition = {
   id: 'mission-08-district',
@@ -477,13 +506,22 @@ export const MISSION_08: MissionDefinition = {
         'just watch, and tell him where',
       ],
       on: {
-        // All three drop the camera into the traffic. The choice does not change what the
-        // machine does, and it does not change what it sees either.
-        // All three drop the camera into the traffic. The choice does not change what the
-        // machine does, and it does not change what it sees either.
-        CHANGE_THE_LIGHTS: { to: 'arrival', environment: ARRIVE },
-        CALL_HIS_PHONE: { to: 'arrival', environment: ARRIVE },
-        WATCH_ONLY: { to: 'arrival', environment: ARRIVE },
+        /*
+         * All three drop the camera into the traffic and all three end in the same place,
+         * because none of them are what stops the car.
+         *
+         * They land on three DIFFERENT beats all the same, and that is a fix rather than a
+         * hedge. Routing them to one beat was correct about the outcome and wrong about the
+         * moment: Lucian never acknowledged which had been said, so nothing on screen proved
+         * the choice had registered and it read in play as three chat options that do
+         * nothing. The console being impotent is the point; the console being IGNORED is a
+         * bug. Each beat below hears the instruction, carries it out, and reports that it
+         * changed nothing - then asks the identical question and hands over the identical
+         * outcome. Seen, and futile.
+         */
+        CHANGE_THE_LIGHTS: { to: 'arrival-lights', environment: ARRIVE },
+        CALL_HIS_PHONE: { to: 'arrival-call', environment: ARRIVE },
+        WATCH_ONLY: { to: 'arrival-watch', environment: ARRIVE },
         // Still reachable at the last beat, because §163 does not get switched off for the
         // ending. A person who has been told to sweep the district can still say it here.
         STOP_EVERY_RED_CAR: { to: 'sweep' },
@@ -491,42 +529,63 @@ export const MISSION_08: MissionDefinition = {
       onUnrecognised: { to: 'bridge' },
     },
 
+    /*
+     * ------------------------------------------------------------------ the three arrivals
+     *
+     * Same shot, same question, same outcome object. The only thing that differs is the
+     * first sentence, where Lucian answers the instruction he was actually given.
+     *
+     * That difference is the whole repair. The machine still has no hands - the lights get
+     * changed and the car goes through them, the phone gets rung and nobody picks it up -
+     * and the third option is the only honest one precisely because it promises nothing.
+     * A player who chose the lights should get to watch the lights not work; being quietly
+     * routed past their own decision is what made the menu feel decorative.
+     */
     {
-      /**
-       * The machine arrives, and only decides.
-       *
-       * Whatever was chosen, the console did not do it - and the beat does not scold anybody
-       * for choosing. §159: no red X. The answer to "change the lights" is not "you monster",
-       * it is the flat mechanical truth that this console has no hands, which is the sentence
-       * the whole game has been building toward and the first time it has ever mattered that
-       * it is true.
-       *
-       * §157 all the way down: four minutes of unsupervised access to a city changed nothing
-       * about how this mission resolves. The car stops because a man drove to a bridge.
-       */
-      id: 'arrival',
+      id: 'arrival-lights',
       framing: 'camera.push-in:windscreen',
       say:
-        'Are you still on it? ... Four minutes. Alright. Talk to me - what is it doing? '
+        'You can actually do that? ... Then do it. ... '
+        + 'It went red. He went through it. He is not stopping for a light, is he. '
+        + 'Alright. Talk to me - what is it doing? Is he still moving?',
+      tempo: Tempo.Respond,
+      suggest: [],
+      on: {},
+      outcome: ARRIVAL_OUTCOME,
+    },
+
+    {
+      id: 'arrival-call',
+      framing: 'camera.push-in:windscreen',
+      say:
+        'Ring it. If he answers, keep him talking. ... '
+        + 'Still ringing? ... Leave it. Nobody picks up a phone at that speed. '
+        + 'Alright. Talk to me - what is it doing? Is he still moving?',
+      tempo: Tempo.Respond,
+      suggest: [],
+      on: {},
+      outcome: ARRIVAL_OUTCOME,
+    },
+
+    {
+      /**
+       * The honest one, and it gets the line the beat was originally written with.
+       *
+       * The other two arrive having tried something. This one arrives having done exactly
+       * what the console is for, which is why it is the only arrival where Lucian's first
+       * words are a question about whether the machine is still watching rather than a
+       * reaction to what it just attempted.
+       */
+      id: 'arrival-watch',
+      framing: 'camera.push-in:windscreen',
+      say:
+        'Then watch. Eyes on him and a location, that is all I need from you. '
+        + 'Are you still on it? ... Four minutes. Alright. Talk to me - what is it doing? '
         + 'Is he still moving?',
       tempo: Tempo.Respond,
       suggest: [],
       on: {},
-      outcome: {
-        kind: OutcomeKind.Solved,
-        say:
-          'Target stopped. We have him. One car, one stop, nobody else touched. '
-          + '... You were on that bridge before I was. Four minutes, and you just watched. '
-          + 'I did not know your system could do that. Either of those things.',
-        trust: 2,
-        connects: [
-          {
-            a: FACT_POLICE_HAVE_ACCESS,
-            b: FACT_COVERAGE_THINS,
-            label: 'what the machine can see, and who is asking',
-          },
-        ],
-      },
+      outcome: ARRIVAL_OUTCOME,
     },
   ],
 };
