@@ -105,131 +105,8 @@ export interface BandingOptions {
  */
 export const PAINT_UNIFORMS = {
   uPaintBands: { value: 3 },
-  /**
-   * How far the shadows go cold and the lights go warm.
-   *
-   * After banding, this is the biggest single lever on whether a frame reads as painted.
-   * A renderer darkens a surface towards black as it turns from the light; a painter turns
-   * it BLUE, because that is what the sky is doing to it, and puts the warmth back only
-   * where light lands. Arcane and Disco Elysium both push this absurdly far - their shadows
-   * are often more saturated than their lights, which is a thing no physically based
-   * renderer will ever do on its own.
-   */
-  uPaintTint: { value: 0.55 },
-  /**
-   * Brush break-up, in SCREEN space.
-   *
-   * Screen space rather than UV, and that is the whole trick: paint sits on the canvas, not
-   * on the object. A stroke pattern that slides about with the surface reads as a texture on
-   * a thing; one that stays put while the camera moves reads as the image having been made
-   * of paint.
-   */
-  uPaintBrush: { value: 0.42 },
-  /** Stroke size, in pixels. Large is gouache, small is oil. */
-  uPaintBrushScale: { value: 0.055 },
-  /**
-   * Canvas tooth. The quietest of the four and the one that stops the others reading as a
-   * filter - real paint sits on a surface with a grain, and every pixel in these references
-   * is very slightly interrupted by it.
-   */
-  uPaintTooth: { value: 0.1 },
-  /**
-   * 0.17, settled with the F8 panel against the reference frames.
-   *
-   * 0.02 is a cel shader - the light pool on a wall gets a razor edge and the whole room
-   * reads as a comic. 0.30, the first guess, was so soft the banding could not be seen at
-   * all in a capture. This is the value where a pool of light has a definite edge you
-   * could point at and still looks brushed rather than inked.
-   */
   uPaintSoft: { value: 0.17 },
 };
-
-/**
- * The painted surface, on top of the banded light.
- *
- * ## Why this is not a post-process
- *
- * It should be one. It is not, because the engine owns the composer and every stylised
- * effect it ships - Retro, Pixelation - extends WebGPUOnlyEffect while this project renders
- * on WebGL. There is no paint pass to configure and no way to add one to the chain.
- *
- * So it goes where this project already does its look work: injected at the end of the
- * fragment shader, reading gl_FragCoord. That IS screen space - the brush and the tooth
- * stay pinned to the frame while the camera moves, which is the whole difference between
- * "the image is made of paint" and "the object has a paint texture on it". The one thing it
- * cannot do that a real pass could is see its neighbours, so there is no edge detection
- * here and no smearing across silhouettes.
- *
- * ## Why it is bolted onto applyPaintBanding
- *
- * Every MeshStandardMaterial in the game goes through that function already - palette.ts
- * converts them wholesale. Anything short of that would paint half a room.
- */
-function paintSurface(shader: THREE.WebGLProgramParametersWithUniforms): void {
-  shader.uniforms.uPaintTint = PAINT_UNIFORMS.uPaintTint;
-  shader.uniforms.uPaintBrush = PAINT_UNIFORMS.uPaintBrush;
-  shader.uniforms.uPaintBrushScale = PAINT_UNIFORMS.uPaintBrushScale;
-  shader.uniforms.uPaintTooth = PAINT_UNIFORMS.uPaintTooth;
-
-  /*
-   * TWO injections, and the split is not tidiness - it is the difference between compiling
-   * and not.
-   *
-   * `dithering_fragment` sits INSIDE main(). GLSL does not allow a uniform declaration or a
-   * function definition inside a function body, so putting the whole block there produced
-   * "Fragment shader is not compiled" on every MeshStandardMaterial in the game and a room
-   * lit by nothing at all. Declarations go at global scope on `common`, which every
-   * material includes; only the executable part goes where the colour is final.
-   *
-   * Worth being precise about the failure mode, because the comment below used to claim
-   * this injection fails safely. A RENAMED chunk does - the replace misses and the paint
-   * simply does not happen. Invalid GLSL does not: the material draws nothing. Neither is
-   * loud, so neither can be trusted to announce itself.
-   */
-  const declarations = [
-    'uniform float uPaintTint;',
-    'uniform float uPaintBrush;',
-    'uniform float uPaintBrushScale;',
-    'uniform float uPaintTooth;',
-    'float paintHash( vec2 p ) {',
-    '  return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 );',
-    '}',
-    'float paintNoise( vec2 p ) {',
-    '  vec2 i = floor( p );',
-    '  vec2 f = fract( p );',
-    '  f = f * f * ( 3.0 - 2.0 * f );',
-    '  float a = paintHash( i );',
-    '  float b = paintHash( i + vec2( 1.0, 0.0 ) );',
-    '  float c = paintHash( i + vec2( 0.0, 1.0 ) );',
-    '  float d = paintHash( i + vec2( 1.0, 1.0 ) );',
-    '  return mix( mix( a, b, f.x ), mix( c, d, f.x ), f.y );',
-    '}',
-    '#include <common>',
-  ].join('\n');
-
-  const paint = [
-    '#include <dithering_fragment>',
-    '{',
-    '  vec2 pp = gl_FragCoord.xy;',
-    '  float lum = dot( gl_FragColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );',
-    '  vec3 cool = vec3( 0.74, 0.88, 1.14 );',
-    '  vec3 warm = vec3( 1.12, 1.01, 0.86 );',
-    '  vec3 tint = mix( cool, warm, smoothstep( 0.12, 0.68, lum ) );',
-    '  gl_FragColor.rgb *= mix( vec3( 1.0 ), tint, uPaintTint );',
-    '  float b1 = paintNoise( pp * uPaintBrushScale );',
-    '  float b2 = paintNoise( pp * uPaintBrushScale * 4.0 + 19.0 );',
-    '  float stroke = ( b1 - 0.5 ) + ( b2 - 0.5 ) * 0.33;',
-    '  float bite = 1.0 - abs( lum - 0.45 ) * 1.7;',
-    '  gl_FragColor.rgb *= 1.0 + stroke * uPaintBrush * clamp( bite, 0.0, 1.0 );',
-    '  float tooth = paintNoise( pp * 0.7 + 41.0 );',
-    '  gl_FragColor.rgb *= 1.0 - tooth * uPaintTooth;',
-    '}',
-  ].join('\n');
-
-  shader.fragmentShader = shader.fragmentShader
-    .replace('#include <common>', declarations)
-    .replace('#include <dithering_fragment>', paint);
-}
 
 /**
  * Banded light on a material that stays PBR.
@@ -282,8 +159,6 @@ export function applyPaintBanding(
         pars,
       ].join('\n')
     );
-
-    paintSurface(shader);
   };
 
   // Materials sharing the injection must share a program: without a stable key, three

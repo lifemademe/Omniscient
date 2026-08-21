@@ -887,44 +887,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
       get: () => PAINT_UNIFORMS.uPaintSoft.value,
       set: (v) => (PAINT_UNIFORMS.uPaintSoft.value = v),
     });
-    /*
-     * The painted-surface layer, live.
-     *
-     * All four go to zero, and zero is the look this game shipped with yesterday - which is
-     * the point of putting them here rather than behind a constant. Judging a style against
-     * a reference means flipping back and forth in front of the same frame, and a rebuild
-     * between every comparison is how you end up convincing yourself of whichever one you
-     * saw last.
-     */
-    tune.slider({
-      label: 'tint (cold dark / warm light)',
-      min: 0,
-      max: 1,
-      get: () => PAINT_UNIFORMS.uPaintTint.value,
-      set: (v) => (PAINT_UNIFORMS.uPaintTint.value = v),
-    });
-    tune.slider({
-      label: 'brush',
-      min: 0,
-      max: 1.2,
-      get: () => PAINT_UNIFORMS.uPaintBrush.value,
-      set: (v) => (PAINT_UNIFORMS.uPaintBrush.value = v),
-    });
-    tune.slider({
-      label: 'brush scale',
-      min: 0.01,
-      max: 0.3,
-      get: () => PAINT_UNIFORMS.uPaintBrushScale.value,
-      set: (v) => (PAINT_UNIFORMS.uPaintBrushScale.value = v),
-    });
-    tune.slider({
-      label: 'canvas tooth',
-      min: 0,
-      max: 0.4,
-      get: () => PAINT_UNIFORMS.uPaintTooth.value,
-      set: (v) => (PAINT_UNIFORMS.uPaintTooth.value = v),
-    });
-
     tune.group('key + sky');
     tune.slider({ label: 'key', min: 0, max: 6, get: () => rig.key.intensity, set: (v) => (rig.key.intensity = v) });
     tune.slider({ label: 'sky', min: 0, max: 4, get: () => rig.sky.intensity, set: (v) => (rig.sky.intensity = v) });
