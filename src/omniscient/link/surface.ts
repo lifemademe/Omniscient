@@ -212,6 +212,8 @@ export interface StandingView {
 
 export interface SurfaceState {
   mode: SurfaceMode;
+  /** This beat's device is the payoff - open it with no reading pause. See Beat.handsOver. */
+  handsOver?: boolean;
   contactName: string;
   /** Where they are calling from, e.g. "Coastal repair shop, Portu Vech". */
   contactLocation?: string;

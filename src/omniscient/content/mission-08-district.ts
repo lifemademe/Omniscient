@@ -341,6 +341,7 @@ export const MISSION_08: MissionDefinition = {
       id: 'network',
       say: 'You are in? Right. Tell me which one it is and I will go and stand in front of it.',
       tempo: Tempo.Think,
+      handsOver: true,
       device: {
         kind: 'traces',
         prompt:
@@ -421,6 +422,7 @@ export const MISSION_08: MissionDefinition = {
         'That is the one. That is our plate. Now where is he going? I have units I can move '
         + 'but I can only put them in one place.',
       tempo: Tempo.Think,
+      handsOver: true,
       device: {
         kind: 'pursuit',
         prompt:
@@ -453,6 +455,7 @@ export const MISSION_08: MissionDefinition = {
         + 'nothing but whatever happened to get written down. Where does he come out?',
       tempo: Tempo.Think,
       learn: [FACT_COVERAGE_THINS],
+      handsOver: true,
       device: {
         kind: 'trail',
         prompt:

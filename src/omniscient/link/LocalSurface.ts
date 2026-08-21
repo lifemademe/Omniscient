@@ -1267,7 +1267,7 @@ export class LocalSurface implements InterventionSurface {
      * the input. A device arriving on one of those is the thing the player just asked to be
      * given, so it is handed over at once.
      */
-    if (state.mode === 'action') {
+    if (state.mode === 'action' || state.handsOver === true) {
       this.tab = 'console';
       return;
     }

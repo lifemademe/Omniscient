@@ -461,7 +461,8 @@ export class SessionController {
     if (!this.contact || !this.runtime) return;
 
     const finished = this.runtime.isFinished;
-    const tempo = this.runtime.getCurrentBeat().tempo;
+    const beat = this.runtime.getCurrentBeat();
+    const tempo = beat.tempo;
 
     const hints: HintView[] = this.runtime.getAvailableHints().map((hint) => ({
       id: hint.id,
@@ -491,6 +492,7 @@ export class SessionController {
 
     this.surface.present({
       mode: tempo === Tempo.Act ? 'action' : 'chat',
+      handsOver: beat.handsOver === true,
       contactName: this.contact.name,
       contactLocation: this.contact.location,
       standing: { trust: standing.trust, jobs: standing.jobs, lost: standing.lost },

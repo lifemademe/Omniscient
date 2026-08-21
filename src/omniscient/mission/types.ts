@@ -412,6 +412,20 @@ export interface Beat {
    */
   device?: Device;
   /**
+   * Hand the device over at once, with no reading pause.
+   *
+   * The console waits a beat before taking the screen so it does not steal focus from a
+   * reply mid-sentence - correct when the player asked a QUESTION and the answer is the
+   * payoff. It is dead time when the device IS the payoff: when they asked for the tool, or
+   * when they just finished operating one and the next follows from it. Reported twice on
+   * mission 08, where every device beat sat for a second and a half doing nothing.
+   *
+   * Separate from `Tempo.Act`, which already skips the pause but also puts ACT NOW under
+   * the input. That is a claim about time pressure, and a beat can hand something over
+   * without hurrying anybody - mission 08's chase is deliberately untimed and says so.
+   */
+  handsOver?: boolean;
+  /**
    * Present on a beat that ends the request badly (§155 / §163).
    *
    * Failure has to be genuinely reachable, or the player never gets to write themselves
