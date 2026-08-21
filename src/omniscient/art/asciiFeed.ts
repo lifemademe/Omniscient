@@ -134,8 +134,16 @@ const KEY = [0.58, 0.26, 0.43, 0.17, 0.62, 0.62];
  * which puts the carriageway in the middle of the shot where the thing being watched
  * actually is, and lets the walls fall away to the sides.
  */
-const EYE = 4.8;
-const PITCH = -0.27;
+const EYE = 7;
+const PITCH = -0.38;
+/*
+ * Raised again after measuring the live picture rather than looking at it: at 4.8m, 56 per
+ * cent of every frame was a single colour band - near wall - because a three metre street
+ * puts a building four metres from the lens on both sides, and the road was a slot up the
+ * middle. Seven metres is where a junction camera is actually mounted, and it points the
+ * lens at the carriageway instead of at the shopfronts. Higher still trades the wall slab
+ * for a roof slab, which is no better until roofs are worth drawing.
+ */
 /** Past this the district is fog and the renderer stops paying for it. */
 const FAR = 150;
 /**
@@ -686,7 +694,7 @@ export function renderFeed(
   for (let i = 0; i < 2; i++) {
     const period = 11 + i * 6;
     const phase = ((clock + i * 5.1) % period) / period;
-    const along = (i === 0 ? phase : 1 - phase) * 80 + 7;
+    const along = (i === 0 ? phase : 1 - phase) * 36 + 11;
     drawCar(rows, basis, along, i === 0 ? 1.1 : -1.1, FEED_COLOURS.traffic);
   }
 
@@ -699,9 +707,16 @@ export function renderFeed(
    * - see the camera placement above - so a car on a two metre offset is driving through
    * the shopfronts, and at the near end of the run it swung right out of the corridor and
    * across the pavement.
+   *
+   * The RUN is short, and that is the raised camera's doing rather than a preference. From
+   * seven metres up looking down, a car sitting at road height passes out of the top of
+   * frame beyond about fifty metres and out of the bottom inside about eight - so a sweep
+   * tuned for the old eye height put the suspect off screen at both ends. audit-pursuit
+   * caught it, which is what it is for: the geometry that hides him is invisible in code
+   * and obvious the moment somebody measures the frames.
    */
   if (suspect !== null) {
-    drawCar(rows, basis, 70 - suspect * 57, -1.1, FEED_COLOURS.suspect, true);
+    drawCar(rows, basis, 46 - suspect * 35, -1.1, FEED_COLOURS.suspect, true);
   }
 
   // A scanline, sweeping. Cheapest possible "this is a live feed and not a picture".
