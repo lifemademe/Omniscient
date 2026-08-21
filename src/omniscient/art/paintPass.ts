@@ -47,6 +47,8 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import type { ComposerPass } from './composerPass.js';
+
 import { FRAGMENT, PAINT_LOOKS, VERTEX } from './paintShader.js';
 
 import type { PaintLook, PaintLookName } from './paintShader.js';
@@ -54,7 +56,7 @@ import type { PaintLook, PaintLookName } from './paintShader.js';
 export { PAINT_LOOKS } from './paintShader.js';
 export type { PaintLook, PaintLookName } from './paintShader.js';
 
-class PaintPass {
+class PaintPass implements ComposerPass {
   public enabled = true;
   public needsSwap = true;
   public renderToScreen = false;
@@ -114,6 +116,23 @@ class PaintPass {
 
   public setDepthTexture(): void {
     /* No depth needed - this reads colour only. */
+  }
+
+  /**
+   * Returns the depth texture this pass owns, which is none.
+   *
+   * Not optional, and its absence is a latent crash rather than a missing feature. The
+   * composer's teardown walks every pass calling `getDepthTexture()` so it can release what
+   * they hold, and a hand-rolled pass without it takes the whole rebuild down with
+   * "t.getDepthTexture is not a function".
+   *
+   * It went unnoticed for as long as there was exactly ONE custom pass in the stack: nothing
+   * ever rebuilt the composer after it was added, so the dispose path was never walked.
+   * Registering a second one is what runs it, and the failure lands on whichever pass is
+   * already mounted rather than on the new one - which is why this comment is on both.
+   */
+  public getDepthTexture(): THREE.DepthTexture | null {
+    return null;
   }
 
   public render(

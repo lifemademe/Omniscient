@@ -21,6 +21,8 @@ import './omniscient/art/mesh.js';
 import './omniscient/art/noise.js';
 import './omniscient/art/obn.js';
 import './omniscient/art/painterly.js';
+import './omniscient/art/paintPass.js';
+import './omniscient/art/paintShader.js';
 import './omniscient/art/palette.js';
 import './omniscient/art/rainGlass.js';
 import './omniscient/art/retro.js';

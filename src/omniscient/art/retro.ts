@@ -25,7 +25,13 @@
  * an object with the shape EffectComposer calls, and that shape is small:
  *
  *     enabled, needsSwap, renderToScreen, renderer, mainScene, mainCamera
- *     setSize(w, h), initialize(...), setDepthTexture(t), render(...), dispose()
+ *     setSize(w, h), initialize(...), setDepthTexture(t), getDepthTexture(),
+ *     render(...), dispose()
+ *
+ * `getDepthTexture` was missing from this list and from both passes, and it is the one
+ * that is not optional - the composer's teardown calls it on every pass. It only bites
+ * when a SECOND custom pass is registered, because that is the first thing that rebuilds
+ * the composer and therefore the first thing that walks the dispose path.
  *
  * So this is a hand-rolled pass wrapping a ShaderMaterial. No new dependency, no second
  * copy of the postprocessing library, and no risk of one library's `Effect` being handed to
@@ -69,6 +75,8 @@
 
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
+
+import type { ComposerPass } from './composerPass.js';
 
 /** One complete look. Every field is a shader uniform; there is no master strength knob. */
 export interface RetroLook {
@@ -265,7 +273,7 @@ void main() {
  * Everything public here is called by EffectComposer, so the names are its names rather
  * than ones chosen for this file.
  */
-class RetroPass {
+class RetroPass implements ComposerPass {
   public enabled = true;
   /** We write the result to outputBuffer, so the composer must swap after us. */
   public needsSwap = true;
@@ -379,6 +387,23 @@ class RetroPass {
   public initialize(): void {}
 
   public setDepthTexture(): void {}
+
+  /**
+   * Returns the depth texture this pass owns, which is none.
+   *
+   * Not optional, and its absence is a latent crash rather than a missing feature. The
+   * composer's teardown walks every pass calling `getDepthTexture()` so it can release what
+   * they hold, and a hand-rolled pass without it takes the whole rebuild down with
+   * "t.getDepthTexture is not a function".
+   *
+   * It went unnoticed for as long as there was exactly ONE custom pass in the stack: nothing
+   * ever rebuilt the composer after it was added, so the dispose path was never walked.
+   * Registering a second one is what runs it, and the failure lands on whichever pass is
+   * already mounted rather than on the new one - which is why this comment is on both.
+   */
+  public getDepthTexture(): THREE.DepthTexture | null {
+    return null;
+  }
 
   public setSize(width: number, height: number): void {
     (this.material.uniforms.uResolution.value as THREE.Vector2).set(width, height);
