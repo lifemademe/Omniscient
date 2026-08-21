@@ -272,3 +272,41 @@ own acknowledgement line before the identical arrival:
 
 Each is seen, each is futile. Preserves the thesis and removes the broken-button read.
 Roughly an hour, in `mission-08-district.ts` alone.
+
+---
+
+## 13. Three cutscenes, one outcome — DECIDED 2026-08-21
+
+Three different *cutscenes*, not three different *endings*. The car reaches the bridge and
+stops in all three; §157 is untouched. This is already how the beats are built — three
+arrivals sharing one `ARRIVAL_OUTCOME` object — and this extends it to the picture.
+
+| Choice | Shot | Says |
+|---|---|---|
+| change the lights at the bridge | stay in the WIREFRAME; the junction flips, the car goes through it | the machine acting, in its own native language |
+| call the number in his file | the phone on the passenger seat, lighting and ringing out | the machine reaching a person who does not answer |
+| just watch, and tell him where | first person through the driver's glasses | the machine invited rather than reaching |
+
+**Why this is affordable.** The call and the glasses share one environment: the same seat,
+the same windscreen, different framing. So it is ONE set plus three framings, not three
+sets. The lights ending costs nothing new — it is the wireframe we are already in.
+
+**Why `just watch` gets the glasses.** The honest choice earns the most intimate view. You
+promised only to watch, so you get to actually watch, and the machine is inside that car
+because it was invited rather than because it reached. The other two are the machine trying
+something; this is the one where it does exactly what it is for.
+
+### 13.1 The plant is no longer optional
+
+§9 deferred it. If we build the glasses ending it stops being deferrable: the final cutscene
+would be the first time the player learns the machine can see through personal devices, at
+exactly the moment the mission is cashing in its thesis. That reads as a cheat.
+
+### 13.2 Build order
+
+1. `geometry/carInterior.ts` — the set, as a pure builder. Harness-testable like wireCity.
+2. Register it hidden in `scene-wire-city`, with a prop action per ending.
+3. The three framings, as registered shots.
+4. The plant, earlier in the game.
+
+Estimate 2-2.5 days for 1-3, half a day for 4. Freeze is Sept 2.
