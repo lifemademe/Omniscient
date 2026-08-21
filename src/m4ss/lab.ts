@@ -155,7 +155,35 @@ export const THE_LAB: World = {
      * to sit far enough above the floor that a body which fitted under the wall cannot reach
      * it, because that is the only thing making the button worth pressing.
      */
-    { x: 1020, y: 460, rope: 78 },
+    /*
+     * Raised 25px, and given 22 more rope.
+     *
+     * Raised because it read as too close to the ground for the growth the whole second half
+     * of the stage is about. The sweep now bottoms out 42px clear of the floor rather than
+     * 38, and the anchor sits 165 above it rather than 140 - which WIDENS the margin on this
+     * stage's load-bearing rule rather than narrowing it. A body that fits under the gate
+     * still cannot reach up here, by more than it could before.
+     *
+     * The rope goes 78 to 100 to close most of the gap with the first growth, which was
+     * reported twice as the two latching at different heights. They did, and they do: the
+     * body hangs its rope length below the lamp, so 120 there against 78 here put the
+     * creature 42px further down on one than the other. 20px now. Both numbers were
+     * individually justified and that never made it stop looking wrong - it looked wrong
+     * because it was inconsistent, and two objects drawn alike are entitled to behave alike.
+     *
+     * It cannot go past about 100. Beyond that the check that this growth can be swung OVER
+     * THE TOP starts failing - a longer rope needs more energy to circulate and the ceiling
+     * is fixed, so the revolution the finale depends on stops being reachable. 110, 120 and
+     * 130 were tried and every one failed exactly there.
+     *
+     * Which is why the remaining 20px stays. Closing it means shortening the FIRST growth to
+     * match, and that number cannot be trusted to this harness: its pump driver is a
+     * bang-bang controller written against rope 120, and swept across ropes it passes 120,
+     * 115 and 80 while failing everything between. That pattern is a probe outside its
+     * calibrated range, not a stage getting worse - so the opening swing, which is the most
+     * hand-tuned moment in the game, is left alone until there is a better oracle for it.
+     */
+    { x: 1020, y: 435, rope: 100 },
   ],
 
   /**

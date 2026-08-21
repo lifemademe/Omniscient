@@ -875,7 +875,24 @@ console.log('\n=== M4SS STAGE ONE ===\n');
   run(s, 14.0, (st) => {
     if (committed) return { move: dir, anchor: g, recall: false };
     const along = alongOf(st, g);
-    if (energyOf(st, g) > 1.75 && Math.abs(along) > 250) {
+    /*
+     * The speed gate is RELATIVE TO THE ROPE, and 250 was not.
+     *
+     * `alongOf` is tangential speed, and on a pendulum peak speed scales with the square
+     * root of the rope: the same energy multiple on a rope two thirds as long produces four
+     * fifths of the speed. So a fixed 250 quietly asks a short rope for a speed its geometry
+     * cannot reach at the energy the same condition demands, and the test fails for a
+     * property of the test.
+     *
+     * Found while trying to answer whether the two growths could hang at a matching height,
+     * where sweeping the rope produced a pass/fail pattern with no monotonic sense in it -
+     * 120 passed, 110 through 85 failed, 80 passed. That is not what a stage getting
+     * gradually worse looks like; it is what a threshold in the wrong units looks like.
+     *
+     * Anchored at the shipped rope so the check is unchanged where it has always run.
+     */
+    const gate = 250 * Math.sqrt((st.swingRadius || 120) / 120);
+    if (energyOf(st, g) > 1.75 && Math.abs(along) > gate) {
       committed = true;
       dir = along >= 0 ? 1 : -1;
       return { move: dir, anchor: g, recall: false };
