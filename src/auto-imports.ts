@@ -11,6 +11,7 @@ import './m4ss/swingShape.js';
 import './omniscient/art/asciiFeed.js';
 import './omniscient/art/brickwork.js';
 import './omniscient/art/certainty.js';
+import './omniscient/art/composerPass.js';
 import './omniscient/art/cursor.js';
 import './omniscient/art/debake.js';
 import './omniscient/art/decals.js';

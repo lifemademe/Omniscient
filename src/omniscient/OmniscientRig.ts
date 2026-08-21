@@ -37,7 +37,7 @@ import {
 } from './session/persistence.js';
 import { installCursor } from './art/cursor.js';
 import { installRetro, setRetroLook } from './art/retro.js';
-import { PAINT_LOOKS, installPaint, paintValues, setPaintLook } from './art/paintPass.js';
+import { installPaint, setPaintLook } from './art/paintPass.js';
 import { ScanTargets } from './link/ScanTargets.js';
 import { MowerPlot } from './link/MowerPlot.js';
 import { DriveKeys } from './view/mowing.js';
@@ -888,66 +888,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
       get: () => PAINT_UNIFORMS.uPaintSoft.value,
       set: (v) => (PAINT_UNIFORMS.uPaintSoft.value = v),
     });
-    /*
-     * The painterly pass, live.
-     *
-     * Radius and strength are the two that matter - they are the Kuwahara filter, which is
-     * the part doing the actual work. Ink, tint and tooth are dressing on top of it. All
-     * five go to zero and zero is the unpainted picture, which is the comparison worth
-     * making before any of the others.
-     */
-    tune.group('painterly pass');
-    tune.slider({
-      label: 'kuwahara radius',
-      min: 0,
-      max: 8,
-      get: () => paintValues()?.radius ?? 0,
-      set: (v) => {
-        const values = paintValues();
-        if (values) values.radius = v;
-      },
-    });
-    tune.slider({
-      label: 'strength',
-      min: 0,
-      max: 1,
-      get: () => paintValues()?.strength ?? 0,
-      set: (v) => {
-        const values = paintValues();
-        if (values) values.strength = v;
-      },
-    });
-    tune.slider({
-      label: 'ink',
-      min: 0,
-      max: 1,
-      get: () => paintValues()?.ink ?? 0,
-      set: (v) => {
-        const values = paintValues();
-        if (values) values.ink = v;
-      },
-    });
-    tune.slider({
-      label: 'cold shadow / warm light',
-      min: 0,
-      max: 1,
-      get: () => paintValues()?.tint ?? 0,
-      set: (v) => {
-        const values = paintValues();
-        if (values) values.tint = v;
-      },
-    });
-    tune.slider({
-      label: 'canvas tooth',
-      min: 0,
-      max: 0.4,
-      get: () => paintValues()?.tooth ?? 0,
-      set: (v) => {
-        const values = paintValues();
-        if (values) values.tooth = v;
-      },
-    });
-
     tune.group('key + sky');
     tune.slider({ label: 'key', min: 0, max: 6, get: () => rig.key.intensity, set: (v) => (rig.key.intensity = v) });
     tune.slider({ label: 'sky', min: 0, max: 4, get: () => rig.sky.intensity, set: (v) => (rig.sky.intensity = v) });
@@ -3019,14 +2959,20 @@ export class OmniscientRig extends ENGINE.SceneNode {
       if (this.retroMounted) setRetroLook('console', true);
     }
     /*
-     * The painterly pass, mounted the same way and for the same reason.
+     * The painterly pass, built and not mounted.
      *
-     * Starts at `painted` rather than `off` because it was asked for in order to be LOOKED
-     * at, and a feature that has to be found in a panel before it can be judged has not been
-     * delivered. Every one of its four parts goes to zero on the F8 panel, and zero is the
-     * picture this game had before the pass existed.
+     * Judged in the game twice and rejected twice - as smudged textures in its per-material
+     * form, and as not what this game is in its Kuwahara form. The look this project is
+     * actually going for is the pixel/PS1 one the CRT pass gives it, and a painterly filter
+     * over pixel art is two art directions arguing rather than either of them working.
+     *
+     * Not mounted rather than mounted-at-zero, because a zeroed pass is still a full-screen
+     * blit and still a second entry in the composer - and it was adding a second pass that
+     * detonated the latent getDepthTexture fault in the CRT. Nothing gained, a rebuild
+     * risked. Flip this to true to look at it again; the F8 sliders come back with it.
      */
-    if (!this.paintMounted && this.post) {
+    const PAINT_PASS = false;
+    if (PAINT_PASS && !this.paintMounted && this.post) {
       this.paintMounted = installPaint(this.post);
       if (this.paintMounted) setPaintLook('painted', true);
     }
