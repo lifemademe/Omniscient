@@ -174,6 +174,28 @@ console.log('\n=== THE CAMERA FEED ===');
   });
   check('the post-commit feed can show the suspect', showsSuspect(shown));
 
+  /*
+   * The review sweeps the suspect from the vanishing point to the near kerb over about a
+   * second and a third, so he has to be ON SCREEN for the whole drive - a perspective
+   * change that put him behind the header strip or off the bottom edge for part of it would
+   * turn the mission's best moment into a flicker, and nothing else would fail.
+   */
+  let onScreen = 0;
+  const frames = 11;
+  for (let i = 0; i < frames; i++) {
+    const rows = renderFeed(city2, chase2.hops[0].options[0].cell, {
+      clock: 1 + i * 0.125,
+      suspect: i / (frames - 1),
+      label: 'CAM',
+    });
+    if (showsSuspect(rows)) onScreen += 1;
+  }
+  check(
+    'the suspect stays in frame for the whole crossing',
+    onScreen === frames,
+    `${onScreen} of ${frames} frames`
+  );
+
   const dead = renderFeed(city2, { x: 0, y: 0 }, { clock: 1, dead: true, label: 'CAM' });
   const deadText = dead.map((row) => row.map((cell) => cell.ch).join('')).join('');
   check('a camera with no coverage reads NO SIGNAL', deadText.includes('NO SIGNAL'));
