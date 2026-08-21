@@ -27,7 +27,7 @@ import { describe } from '../mission/pursuit.js';
 import { reached } from '../mission/pipes.js';
 import { narrow } from '../mission/traces.js';
 import { audio } from '../audio/ConsoleAudio.js';
-import { feedToHtml, renderFeed } from '../art/asciiFeed.js';
+import { FEED_W, feedToHtml, renderFeed } from '../art/asciiFeed.js';
 import { DISTRICT_CITY } from '../content/district-07.js';
 
 import type { BeamState } from '../mission/beam.js';
@@ -350,13 +350,13 @@ const BOARD_CSS = `
 .omni-feed__screen {
   margin: 0;
   font-family: ui-monospace, Menlo, Consolas, monospace;
-  font-size: 7px;
+  /* font-size is set from measurement - see fitFeed. */
+  font-size: 8px;
   line-height: 1;
   letter-spacing: 0;
   white-space: pre;
   color: #2f4a37;
 }
-.omni-feed--big .omni-feed__screen { font-size: 10px; }
 .omni-feed__caption {
   padding-top: 4px;
   font-size: 9px;
@@ -1422,6 +1422,8 @@ export class BoardPanel {
   private feedSince = 0;
   private feedClock = 0;
   private feedTimer: number | null = null;
+  /** Last (room, big) the glyph size was solved for, so the fit is not re-measured at 8fps. */
+  private feedFit = '';
   /**
    * The review. Non-null only while the route the player just sent is being played back
    * camera by camera.
@@ -1529,8 +1531,7 @@ export class BoardPanel {
       return;
     }
     this.feedPlay = { steps, step: 0, t: 0, done };
-    // The review is the thing being looked at, so it gets the room to be looked at.
-    this.feedParts?.box.classList.add('omni-feed--big');
+    // The review is the thing being looked at, so fitFeed gives it the bigger glyph cap.
     this.paintFeed();
   }
 
@@ -1556,7 +1557,6 @@ export class BoardPanel {
     const play = this.feedPlay;
     if (!play) return;
     this.feedPlay = null;
-    this.feedParts?.box.classList.remove('omni-feed--big');
     if (this.feedParts) this.feedParts.caption.className = 'omni-feed__caption';
     const done = play.done;
     play.done = null;
@@ -1598,6 +1598,7 @@ export class BoardPanel {
       since: step.since,
     });
     parts.screen.innerHTML = feedToHtml(rows);
+    this.fitFeed();
 
     const settled = play.t > enter + cross;
     const verdict =
@@ -1608,6 +1609,38 @@ export class BoardPanel {
     parts.caption.className = settled
       ? `omni-feed__caption omni-feed__caption--${step.fails === null ? 'hit' : 'miss'}`
       : 'omni-feed__caption';
+  }
+
+  /**
+   * Size the glyphs to the room the panel actually has.
+   *
+   * The feed is a fixed 88-column picture and the console panel is not a fixed width - it
+   * shares a `1fr auto 1fr` grid with whatever else the beat put on the board. A hard-coded
+   * font size is therefore a guess that is wrong on some layouts, and being wrong here does
+   * not degrade gracefully: one column too many and the road's vanishing point is off the
+   * right edge, which reads as a broken picture rather than a small one.
+   *
+   * The advance width is MEASURED rather than assumed at the usual 0.6em, because the stack
+   * falls through ui-monospace, Menlo and Consolas and those do not agree. Cached against
+   * the room it solved for, so the 8fps repaint does not reflow twice a frame.
+   */
+  private fitFeed(): void {
+    const parts = this.feedParts;
+    if (!parts) return;
+    const room = parts.screen.clientWidth;
+    if (room < 40) return; // not laid out yet - the next paint will catch it
+    const key = `${String(room)}:${String(this.feedPlay !== null)}`;
+    if (key === this.feedFit) return;
+    this.feedFit = key;
+
+    const base = 10;
+    parts.screen.style.fontSize = `${String(base)}px`;
+    const advance = parts.screen.scrollWidth / FEED_W;
+    if (advance <= 0) return;
+    // Bigger while the review is playing - the footage is the thing being looked at.
+    const cap = this.feedPlay ? 13 : 9;
+    const fit = Math.max(5, Math.min(cap, (base * room) / (advance * FEED_W)));
+    parts.screen.style.fontSize = `${fit.toFixed(2)}px`;
   }
 
   private paintFeed(): void {
@@ -1630,6 +1663,7 @@ export class BoardPanel {
     });
     // Authored markup only - every character in it came from asciiFeed, which escapes.
     parts.screen.innerHTML = feedToHtml(rows);
+    this.fitFeed();
     parts.caption.textContent = `${this.feedLabel} - LIVE`;
   }
 
