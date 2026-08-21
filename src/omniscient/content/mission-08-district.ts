@@ -42,6 +42,22 @@ import type { MissionDefinition, MissionOutcome } from '../mission/types.js';
 
 export const FACT_POLICE_HAVE_ACCESS = 'police-have-access';
 export const FACT_COVERAGE_THINS = 'coverage-thins-at-the-edge';
+/**
+ * The car is not one signal. It is several, travelling together.
+ *
+ * This is the plant for the ending, and it has to exist in PHASE ONE or the last shot is a
+ * cheat. `just watch, and tell him where` resolves into first person behind a driver's own
+ * glasses, and if that is the first time the player learns the machine can see through a
+ * personal device it reads as the game inventing a power at the moment it needs one.
+ *
+ * Planted here it is the opposite: the answer to a question the console already raised.
+ * The player spends phase one looking at a list of vehicles and can notice, if they look,
+ * that several of the rows are reporting more than one device. Nothing says what that will
+ * be worth. Twenty minutes later the machine is inside a car, and it did not reach in - it
+ * read something that had been travelling with him all evening and was on the list the
+ * whole time.
+ */
+export const FACT_DEVICES_TRAVEL_TOGETHER = 'devices-travel-together';
 export const FACT_PARTIAL_PLATE = 'partial-plate-district-07';
 
 /**
@@ -152,6 +168,19 @@ export const MISSION_08: MissionDefinition = {
       label: 'Two characters of the plate, read at night',
       domain: KnowledgeDomain.Signal,
     },
+    {
+      id: FACT_DEVICES_TRAVEL_TOGETHER,
+      label: 'The network reads devices, and devices travel with people',
+      domain: KnowledgeDomain.Signal,
+      /**
+       * Incidental, like the policeman's terminal and for the same reason.
+       *
+       * Stated as a conclusion it becomes a lesson, and a lesson is a thing the player
+       * expects to be tested on. This one only has to be TRUE and available - it is doing
+       * its work at the end of the mission, in a shot, not in an answer.
+       */
+      incidental: true,
+    },
   ],
 
   /**
@@ -177,6 +206,24 @@ export const MISSION_08: MissionDefinition = {
         'The junctions downtown are covered several times over. Past the ring the ' +
         'network is guessing between one camera and the next.',
       keywords: ['cameras', 'edge', 'junctions'],
+    },
+    {
+      /*
+       * The quietest hint in the game and the one the ending stands on.
+       *
+       * §106 / §95: a hint surfaces what is OBSERVABLE, never the answer. "Several of these
+       * rows are reporting more than one device" is a thing sitting on screen in front of
+       * the player during phase one. What it will be worth is not said, and must not be -
+       * the moment it explains itself it stops being a detail the player noticed and
+       * becomes a briefing.
+       */
+      id: 'devices',
+      summary: 'Some of these vehicles are reporting more than one device.',
+      detail:
+        'A car is one signal. A phone in it is another, a watch is a third, a pair of '
+        + 'glasses is a fourth. The network does not know they are in the same car. It '
+        + 'knows they have been moving together all evening.',
+      keywords: ['device', 'devices', 'phone', 'glasses', 'signals'],
     },
     {
       id: 'witness',
@@ -342,11 +389,23 @@ export const MISSION_08: MissionDefinition = {
       say: 'You are in? Right. Tell me which one it is and I will go and stand in front of it.',
       tempo: Tempo.Think,
       handsOver: true,
+      /*
+       * Recorded for everyone who opens the network, not only for whoever opens the hint.
+       *
+       * The hint is the noticeable version - a detail sitting on screen for a player who
+       * looks. But the fact is load-bearing for the ENDING, and a plant that only some
+       * players receive is a plant that fails for the rest of them at the exact moment it
+       * has to hold. §214's rule applies: if they heard it, they know it - and opening the
+       * district network IS hearing it, because the list in front of them is the thing
+       * being described.
+       */
+      learn: [FACT_DEVICES_TRAVEL_TOGETHER],
       device: {
         kind: 'traces',
         prompt:
-          'DISTRICT 07 // 180 TRACKED. Narrow on what the police actually have. '
-          + 'Every fact they gave you removes cars; none of them removes it alone.',
+          'DISTRICT 07 // 180 TRACKED, 411 DEVICES MOVING WITH THEM. Narrow on what the '
+          + 'police actually have. Every fact they gave you removes cars; none of them '
+          + 'removes it alone.',
         fleet: DISTRICT.fleet,
         evidence: DISTRICT.evidence,
         /**

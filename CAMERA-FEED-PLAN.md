@@ -304,9 +304,22 @@ exactly the moment the mission is cashing in its thesis. That reads as a cheat.
 
 ### 13.2 Build order
 
-1. `geometry/carInterior.ts` — the set, as a pure builder. Harness-testable like wireCity.
-2. Register it hidden in `scene-wire-city`, with a prop action per ending.
-3. The three framings, as registered shots.
-4. The plant, earlier in the game.
+1. **DONE** `geometry/carInterior.ts` — the set, as a pure builder, with `preview-car.ts`
+   measuring the proportions that decide whether it feels like a place.
+2. **DONE** registered hidden in `scene-wire-city`, one prop action per ending.
+3. **DONE, differently.** No new shots. All three endings take the existing `windscreen`
+   drop and the car is built at the end of it, so the move that was already there becomes
+   the resolve instead of being replaced by a cut. The two extra framings that were written
+   first were deleted: a camera that swings to the phone tells the player to look at it, and
+   the whole point of where that phone sits is that it goes off beside somebody who is not.
+4. **DONE, and not where §9 expected.** The plant is inside mission 08's own first phase
+   rather than a dead feed in mission 01: the network reads DEVICES as well as vehicles, and
+   several rows are carrying more than one. Stated in the traces prompt, noticeable as a
+   hint, recorded as `FACT_DEVICES_TRAVEL_TOGETHER` for everyone who opens the network. The
+   ending then does not invent a power - the machine reads something that had been
+   travelling with him all evening and was on the list the whole time.
 
-Estimate 2-2.5 days for 1-3, half a day for 4. Freeze is Sept 2.
+Also built: `art/rainGlass.ts`, and the first lights this scene has ever had.
+
+**Not verified.** None of the above has been seen. Lighting and rain are precisely the class
+of thing the harnesses cannot check.
