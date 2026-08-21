@@ -16,12 +16,29 @@
  * A character reconstruction stays honest that this is a machine inferring a street from a
  * data feed, not a photograph of one.
  *
- * ## Why this file imports nothing
+ * ## This is a 3D renderer, and the first version was not
  *
- * It is arithmetic on a district and returns rows of coloured cells. No THREE, no engine,
- * no DOM - so the harness can drive it headlessly and assert things about what the player
- * will actually see. The same discipline as m4ss/swingShape.ts, for the same reason: a
- * claim about a picture deserves a measurement, not a squint at a screenshot.
+ * The first attempt PAINTED a street: buildings as stacked rectangles, the road as a
+ * hand-drawn trapezoid, everything sorted by hand. It read as a skyline poster rather than
+ * as a camera at head height, and no amount of tuning the trapezoid was going to fix that,
+ * because the picture had no camera in it - only an artist's impression of one.
+ *
+ * This version casts a ray per character cell into the actual district: eye at shop-camera
+ * height on the kerb, boxes from `city.blocks`, ground plane at zero. Occlusion, parallax,
+ * foreshortening and the road's convergence all fall out of the arithmetic instead of being
+ * drawn on, and the camera can stand anywhere and look any way without a new special case.
+ *
+ * A raycast rather than a rasteriser, which is the unusual choice and the right one at this
+ * resolution: 88x26 is 2288 rays against a few dozen culled boxes, which is nothing, and in
+ * exchange every hard part of a rasteriser - near-plane clipping, depth buffers, which face
+ * am I on, where on the wall am I - is either free or a subtraction.
+ *
+ * ## Why this file imports no engine
+ *
+ * Arithmetic on a district, returning rows of coloured cells. No THREE, no engine, no DOM -
+ * so the harness can drive it headlessly and assert things about what the player will
+ * actually see. The same discipline as m4ss/swingShape.ts, for the same reason: a claim
+ * about a picture deserves a measurement, not a squint at a screenshot.
  *
  * ## The rule that outranks every other decision here
  *
@@ -31,6 +48,8 @@
  * `suspect` argument that the pre-commit caller passes as null, and there is no other route
  * by which a car can enter the picture.
  */
+
+import { CELL } from '../geometry/wireCity.js';
 
 import type { Block, WireCity } from '../geometry/wireCity.js';
 
@@ -43,15 +62,20 @@ export interface FeedCell {
 export type FeedRow = FeedCell[];
 
 /**
- * The console's own palette. NOT the cyberpunk rainbow of the reference art: this feed
- * hangs inside a green-on-dark operator console, and a red-and-yellow skyline would read as
- * a different game embedded in this one.
+ * The feed's palette. Console greens only.
+ *
+ * Depth is carried by COLOUR and detail by CHARACTER, which is the split that keeps a
+ * one-hue picture legible: a near wall and a far wall can be the same density of glyph and
+ * still sit at different distances, because the far one is drawn in a green closer to the
+ * background.
  */
 export const FEED_COLOURS = {
   /** Structure, far. Barely above the background - mass without detail. */
   far: '#16281d',
-  /** Structure, near. */
-  near: '#1f3b28',
+  /** Structure, mid. */
+  near: '#24462f',
+  /** Structure, near. The wall you could touch. */
+  close: '#31603f',
   /** The lit edge of a block, so a silhouette has a top. */
   edge: '#2b5c39',
   /** Ordinary windows. */
@@ -59,15 +83,7 @@ export const FEED_COLOURS = {
   /** The few windows that are properly lit. */
   windowLit: '#5f9c6c',
   road: '#1b241e',
-  /*
-   * The kerbs and the centre line, and they are BRIGHT on purpose.
-   *
-   * At the old #33443a they sat between the road grain and the pavement speckle and the
-   * whole lower half of the frame read as one field of noise - the road was drawn and
-   * invisible at the same time. These two converging lines are the entire perspective cue;
-   * if they do not read, the camera looks like it is pointed at a skyline rather than down
-   * a street, and the car has nothing to drive on.
-   */
+  /** Kerbs and lane markings - the geometry that says "this is a street". */
   marking: '#4a7a58',
   /** Ambient traffic - present, unremarkable. */
   traffic: '#8fbf9a',
@@ -83,32 +99,45 @@ export const FEED_COLOURS = {
 export const FEED_W = 88;
 export const FEED_H = 26;
 
-/** Where the horizon sits. Everything below is road, everything above is skyline. */
-/*
- * Where the sky stops.
+/**
+ * Density ramp, sparse to solid.
  *
- * Was 17, which left six rows of ground on a 26 row frame - not enough to fit a road that
- * converges, so the corridor had to open five columns a row and the edges came out as
- * scattered marks. Nine rows is the minimum that reads, and the skyline loses nothing it
- * was using: the buildings sit well above it.
+ * Sparse-first matters more than the exact glyphs: a surface turned away from the camera
+ * has to thin towards nothing rather than switch to a different character of the same
+ * weight, or the shading reads as pattern instead of as light.
  */
-const HORIZON = 14;
+const RAMP = ' .:-=+*#%@';
+
+/**
+ * How lit each wall orientation is, indexed by the face the slab test reports.
+ *
+ * A single low sun somewhere off to one side. Four constants rather than a light vector
+ * because there are only ever four wall orientations in a grid city, and the only thing the
+ * shading has to achieve is that two walls meeting at a corner are different tones.
+ */
+const KEY = [0.46, 0.2, 0.34, 0.13, 0.5, 0.5];
+
+/** Eye height, metres. A camera over a shop door - not a drone, and not a person. */
+const EYE = 3.4;
+/** How far down it looks. Enough to put the near kerb in shot, not enough to lose the sky. */
+const PITCH = -0.16;
+/** Past this the district is fog and the renderer stops paying for it. */
+const FAR = 150;
 
 export interface FeedOptions {
-  /** Seconds of feed time. Drives traffic, flicker and the scanline. */
+  /** Seconds. Drives traffic, window flicker and the scanline. */
   clock: number;
   /**
    * The suspect's position across the frame, 0 to 1, or null for "not in this shot".
    *
-   * Null is the pre-commit case and the default. See the header: the puzzle dies if this is
-   * ever populated before the player has chosen.
+   * Read the file header before passing anything but null from a new caller.
    */
   suspect?: number | null;
-  /** Camera identifier, drawn in the header strip. */
+  /** Camera id for the header strip. */
   label?: string;
   /** Seconds since the last confirmed sighting, drawn in the header strip. */
   since?: number;
-  /** No coverage here: the shot is static and the chrome says so. */
+  /** No coverage here - draw the dead-channel state instead of a street. */
   dead?: boolean;
 }
 
@@ -146,94 +175,262 @@ function text(rows: FeedRow[], x: number, y: number, s: string, colour: string):
  * roads are a grid and a camera bolted to a pole looks along one of them.
  */
 export function facingOf(cell: { x: number; y: number }): { fx: number; fy: number } {
-  const pick = Math.floor(hash(cell.x, cell.y, 9) * 4);
-  return [
-    { fx: 1, fy: 0 },
-    { fx: -1, fy: 0 },
-    { fx: 0, fy: 1 },
-    { fx: 0, fy: -1 },
-  ][pick];
+  const quarter = Math.floor(hash(cell.x, cell.y, 11) * 4);
+  if (quarter === 0) return { fx: 1, fy: 0 };
+  if (quarter === 1) return { fx: -1, fy: 0 };
+  if (quarter === 2) return { fx: 0, fy: 1 };
+  return { fx: 0, fy: -1 };
 }
 
-/** A block placed in the camera's own frame: how far ahead, how far to the side. */
-interface Seen {
+/** Grid cell to metres. The same conversion wireCity uses, so both draw one district. */
+function metres(size: number, x: number, y: number): { wx: number; wz: number } {
+  const half = (size * CELL) / 2;
+  return { wx: x * CELL - half + CELL / 2, wz: y * CELL - half + CELL / 2 };
+}
+
+interface Box {
+  x0: number;
+  x1: number;
+  z0: number;
+  z1: number;
+  top: number;
   block: Block;
-  depth: number;
-  lateral: number;
 }
 
 /**
- * The blocks inside the view cone, furthest first.
+ * The boxes worth casting against.
  *
- * The first version of this took a square of blocks around the camera and projected them
- * with a fudge that mixed both axes, which drew every building in the district on top of
- * every other one - a solid wall of glyphs with no sky and no street. A camera has a
- * DIRECTION; blocks behind it are not in shot, and blocks far to the side leave the frame.
- * Painter's order (far first) so near buildings occlude the ones behind them.
+ * Everything behind the camera or beyond the fog is dropped before a single ray is fired,
+ * which turns a district of a few hundred blocks into a few dozen and is the whole reason a
+ * per-cell raycast is affordable here.
  */
-function visible(city: WireCity, cx: number, cy: number): Seen[] {
-  const { fx, fy } = facingOf({ x: cx, y: cy });
-  const out: Seen[] = [];
+function culled(city: WireCity, eyeX: number, eyeZ: number, fx: number, fz: number): Box[] {
+  const out: Box[] = [];
   for (const block of city.blocks) {
-    const rx = block.x - cx;
-    const ry = block.y - cy;
-    const depth = rx * fx + ry * fy;
-    const lateral = rx * -fy + ry * fx;
-    if (depth < 0.6 || depth > 9) continue;
-    if (Math.abs(lateral) > depth * 1.4 + 1.2) continue;
-    out.push({ block, depth, lateral });
+    const { wx, wz } = metres(city.size, block.x, block.y);
+    const dx = wx - eyeX;
+    const dz = wz - eyeZ;
+    // Behind the camera, with a cell of slack so a block level with the lens still draws
+    // the sliver of wall that would genuinely be in shot.
+    if (dx * fx + dz * fz < -CELL) continue;
+    if (Math.hypot(dx, dz) > FAR) continue;
+    out.push({
+      x0: wx - block.w / 2,
+      x1: wx + block.w / 2,
+      z0: wz - block.d / 2,
+      z1: wz + block.d / 2,
+      top: block.height,
+      block,
+    });
   }
-  return out.sort((a, b) => b.depth - a.depth);
+  return out;
+}
+
+interface Hit {
+  t: number;
+  /** 0/1 a wall square to x, 2/3 a wall square to z, 4 the roof. */
+  face: number;
+  box: Box;
 }
 
 /**
- * Draw one block as a face of windows.
+ * Nearest box along a ray, by slab test.
  *
- * Real perspective, in the only two lines of it this renderer needs: everything divides by
- * depth, so a block twice as far away is half as wide and half as tall and sits half as far
- * from the centre of the frame. Window density rises downtown because `Block.downtown` is
- * the same number that decided how tall the building is.
+ * Returns which face was struck as well as the distance, because the face decides how
+ * bright the surface is and which way its window grid runs - and the slab test knows it for
+ * free, having just worked out which slab was the last one entered.
  */
-function face(rows: FeedRow[], seen: Seen, clock: number): void {
-  const { block, depth, lateral } = seen;
-  const screenX = Math.round(FEED_W / 2 + (lateral / depth) * 30);
-  const w = Math.max(2, Math.round((block.w / depth) * 1.9));
-  const h = Math.max(1, Math.round((block.height / depth) * 1.5));
-  const top = Math.max(0, HORIZON - h);
-  const body = depth > 4.5 ? FEED_COLOURS.far : FEED_COLOURS.near;
-  const half = Math.floor(w / 2);
+function castBoxes(
+  boxes: Box[],
+  ox: number,
+  oy: number,
+  oz: number,
+  dx: number,
+  dy: number,
+  dz: number,
+  limit: number
+): Hit | null {
+  let best: Hit | null = null;
+  for (const box of boxes) {
+    let near = 0.05;
+    let far = best ? best.t : limit;
+    let face = 4;
+    let miss = false;
 
-  for (let x = screenX - half; x <= screenX + half; x++) {
-    for (let y = top; y < HORIZON; y++) {
-      put(rows, x, y, y === top ? '─' : '▒', y === top ? FEED_COLOURS.edge : body);
+    if (Math.abs(dx) < 1e-6) {
+      if (ox < box.x0 || ox > box.x1) continue;
+    } else {
+      let t0 = (box.x0 - ox) / dx;
+      let t1 = (box.x1 - ox) / dx;
+      const low = t0 < t1;
+      if (!low) {
+        const swap = t0;
+        t0 = t1;
+        t1 = swap;
+      }
+      if (t0 > near) {
+        near = t0;
+        face = low ? 0 : 1;
+      }
+      if (t1 < far) far = t1;
+      if (near > far) continue;
     }
-  }
 
-  // Windows: a sparse grid inside the face, a few lit, flickering slowly. Skipped entirely
-  // on distant blocks - at that size they would be noise on a silhouette.
-  if (depth > 6) return;
-  for (let x = screenX - half + 1; x < screenX + half; x += 2) {
-    for (let y = top + 1; y < HORIZON - 1; y += 2) {
-      const seed = hash(block.x * 31 + x, block.y * 17 + y);
-      if (seed > 0.3 + block.downtown * 0.25) continue;
-      const flicker = hash(x, y, Math.floor(clock * 1.4)) > 0.86;
-      const lit = seed < 0.1 + block.downtown * 0.16;
-      put(
-        rows,
-        x,
-        y,
-        lit ? '▪' : '·',
-        flicker ? FEED_COLOURS.windowLit : lit ? FEED_COLOURS.window : FEED_COLOURS.dim
-      );
+    if (Math.abs(dy) < 1e-6) {
+      if (oy < 0 || oy > box.top) continue;
+    } else {
+      let t0 = (0 - oy) / dy;
+      let t1 = (box.top - oy) / dy;
+      const roofFirst = t1 < t0;
+      if (roofFirst) {
+        const swap = t0;
+        t0 = t1;
+        t1 = swap;
+      }
+      if (t0 > near) {
+        near = t0;
+        face = roofFirst ? 4 : 5;
+      }
+      if (t1 < far) far = t1;
+      if (near > far) continue;
     }
+
+    if (Math.abs(dz) < 1e-6) {
+      if (oz < box.z0 || oz > box.z1) miss = true;
+    } else {
+      let t0 = (box.z0 - oz) / dz;
+      let t1 = (box.z1 - oz) / dz;
+      const low = t0 < t1;
+      if (!low) {
+        const swap = t0;
+        t0 = t1;
+        t1 = swap;
+      }
+      if (t0 > near) {
+        near = t0;
+        face = low ? 2 : 3;
+      }
+      if (t1 < far) far = t1;
+      if (near > far) miss = true;
+    }
+    if (miss) continue;
+
+    if (near > 0.05 && (!best || near < best.t)) best = { t: near, face, box };
   }
+  return best;
+}
+
+/** Distance to a colour band. Depth is carried by hue, detail by glyph. */
+function depthColour(t: number): string {
+  if (t < 22) return FEED_COLOURS.close;
+  if (t < 55) return FEED_COLOURS.near;
+  return FEED_COLOURS.far;
+}
+
+function ramp(level: number): string {
+  const i = Math.max(0, Math.min(RAMP.length - 1, Math.round(level * (RAMP.length - 1))));
+  return RAMP[i];
+}
+
+/**
+ * The ground, where a ray misses everything and drops below the horizon.
+ *
+ * The markings are derived from the SAME grid the buildings stand on rather than drawn as a
+ * converging trapezoid: a point is carriageway when it falls in the gap between footprints,
+ * and a lane marking when it is near the line running down the middle of that gap. Doing it
+ * in world space is what makes the markings converge correctly at any camera angle, and it
+ * is also less code than faking it was.
+ */
+function ground(
+  city: WireCity,
+  wx: number,
+  wz: number,
+  t: number,
+  clock: number
+): { ch: string; colour: string } {
+  const half = (city.size * CELL) / 2;
+  // Position within this cell, 0..1 on each axis. The street is the outer margin.
+  const u = ((((wx + half) / CELL) % 1) + 1) % 1;
+  const v = ((((wz + half) / CELL) % 1) + 1) % 1;
+  const edgeU = Math.min(u, 1 - u);
+  const edgeV = Math.min(v, 1 - v);
+  const kerb = 0.16;
+
+  const centreLine = Math.min(edgeU, edgeV) < 0.028;
+  const onKerb = Math.abs(edgeU - kerb) < 0.02 || Math.abs(edgeV - kerb) < 0.02;
+
+  if (centreLine && t < 70) {
+    // Dashed, and the dashes walk towards the camera so the surface reads as moving past.
+    const along = Math.floor((edgeU < edgeV ? wz : wx) * 0.45 - clock * 2.5);
+    if (along % 2 === 0) return { ch: '─', colour: FEED_COLOURS.marking };
+  }
+  if (onKerb && t < 90) return { ch: '│', colour: FEED_COLOURS.marking };
+
+  // Tarmac. Grain that thins with distance, so the near road is a surface and the far road
+  // a suggestion - and never dense enough to compete with the markings.
+  const grain = hash(Math.round(wx * 2), Math.round(wz * 2), 3);
+  const density = t < 18 ? 0.3 : t < 45 ? 0.16 : 0.06;
+  if (grain < density) return { ch: ramp(0.12 + grain), colour: FEED_COLOURS.road };
+  return { ch: ' ', colour: FEED_COLOURS.road };
+}
+
+interface Basis {
+  eyeX: number;
+  eyeZ: number;
+  facing: { fx: number; fy: number };
+  fwd: { x: number; y: number; z: number };
+  right: { x: number; y: number; z: number };
+  up: { x: number; y: number; z: number };
+  fx: number;
+  fy: number;
+  boxes: Box[];
+}
+
+/**
+ * A car, placed in world metres and projected through the same camera as the district.
+ *
+ * Projected rather than plotted in screen space, so it shrinks correctly with distance, sits
+ * on the road at any camera angle, and - the part that matters - is HIDDEN when a building
+ * is between it and the lens. A car that shone through a wall would tell the player the
+ * machine can see round corners, which is the one thing this mission is about not being able
+ * to do.
+ */
+function drawCar(
+  rows: FeedRow[],
+  b: Basis,
+  along: number,
+  lane: number,
+  colour: string,
+  wide = false
+): void {
+  const wx = b.eyeX + b.facing.fx * along - b.facing.fy * lane;
+  const wz = b.eyeZ + b.facing.fy * along + b.facing.fx * lane;
+
+  const rx = wx - b.eyeX;
+  const ry = 0.7 - EYE;
+  const rz = wz - b.eyeZ;
+  const z = rx * b.fwd.x + ry * b.fwd.y + rz * b.fwd.z;
+  if (z < 1.5) return;
+
+  const dist = Math.hypot(rx, ry, rz);
+  const blocked = castBoxes(b.boxes, b.eyeX, EYE, b.eyeZ, rx / dist, ry / dist, rz / dist, dist);
+  if (blocked) return;
+
+  const sx = rx * b.right.x + ry * b.right.y + rz * b.right.z;
+  const sy = rx * b.up.x + ry * b.up.y + rz * b.up.z;
+  const px = Math.round(FEED_W / 2 + (sx / z) * b.fx - 0.5);
+  const py = Math.round(FEED_H / 2 - (sy / z) * b.fy - 0.5);
+
+  // Width in characters from the real width of a car, so it grows as it arrives.
+  const cells = Math.max(1, Math.min(14, Math.round(((wide ? 2.6 : 1.9) / z) * b.fx)));
+  for (let i = 0; i < cells; i++) put(rows, px - Math.floor(cells / 2) + i, py, '▬', colour);
 }
 
 /**
  * Render one camera's view.
  *
  * `suspect` defaults to absent, which is the safe default in the sense that matters: a
- * caller that forgets to think about it cannot accidentally give the puzzle away.
+ * caller that forgets it cannot leak the answer - see the file header.
  */
 export function renderFeed(
   city: WireCity,
@@ -244,98 +441,146 @@ export function renderFeed(
   const { clock, suspect = null, label, since, dead = false } = options;
 
   if (dead) {
-    // No coverage. The header still reports, because a camera that is not there is a fact
-    // the machine knows rather than an absence of information.
     for (let y = 0; y < FEED_H; y++) {
       for (let x = 0; x < FEED_W; x++) {
         if (hash(x, y, Math.floor(clock * 8)) > 0.986) put(rows, x, y, '·', FEED_COLOURS.dim);
       }
     }
+    text(rows, Math.floor(FEED_W / 2) - 4, Math.floor(FEED_H / 2), 'NO SIGNAL', FEED_COLOURS.dim);
     text(rows, 2, 1, `CAM ${label ?? '--'}`, FEED_COLOURS.dim);
-    text(rows, Math.floor(FEED_W / 2) - 5, Math.floor(FEED_H / 2), 'NO SIGNAL', FEED_COLOURS.chrome);
     return rows;
   }
 
-  for (const seen of visible(city, cell.x, cell.y)) face(rows, seen, clock);
+  /*
+   * The camera, at the JUNCTION - the corner of the cell, where two roads cross.
+   *
+   * A cell's centre is where its BUILDING is, so an eye there is inside a wall. The first
+   * fix stepped half a cell sideways, which put it in the carriageway and produced a
+   * picture of two walls: this district's footprints are 0.5-0.72 of an 8m cell, so its
+   * streets are about three metres wide and standing in one is standing in an alley.
+   *
+   * The corner is where a camera goes anyway - "cameras on junctions" is what the generator
+   * says - and it is also the only place with any air in it. Four blocks corner onto the
+   * point, so the two cross-streets open a gap in each wall, and looking along the road
+   * gives a corridor punched with those gaps marching away to the vanishing point. That
+   * repetition is what sells the depth; a smooth wall has nothing to measure distance by.
+   */
+  const facing = facingOf(cell);
+  const { wx, wz } = metres(city.size, cell.x, cell.y);
+  const eyeX = wx + CELL * 0.5;
+  const eyeZ = wz + CELL * 0.5;
+
+  const cosP = Math.cos(PITCH);
+  const sinP = Math.sin(PITCH);
+  const fwd = { x: facing.fx * cosP, y: sinP, z: facing.fy * cosP };
+  const right = { x: -facing.fy, y: 0, z: facing.fx };
+  const up = { x: -facing.fx * sinP, y: cosP, z: -facing.fy * sinP };
 
   /*
-   * The road, drawn as a corridor that converges on the vanishing point.
+   * Focal lengths in character cells, and they are not equal.
    *
-   * The centre line is what makes a flat band of characters read as a surface going away
-   * from you: it narrows to nothing at the horizon and opens to the full width of the frame
-   * at the player's feet, and the dashes along it lengthen as they approach, which is the
-   * whole of the perspective cue.
-   */
-  const vanish = Math.floor(FEED_W / 2);
-
-  /*
-   * The horizon, so the sky stops and the ground starts.
+   * A monospace cell is about twice as tall as it is wide, so an unadjusted projection
+   * stretches the picture vertically by two and every building comes out a chimney whatever
+   * its real proportions. Halving the vertical focal length is that correction.
    *
-   * Only where nothing is standing - a near building's base reaches this row, and a rule
-   * drawn straight through it would put a stripe across the front of the block.
+   * The horizontal angle is about fifty degrees rather than a wide seventy. Wide put most
+   * of the frame on the two walls immediately beside the lens and left the street itself a
+   * slot up the middle - and the street is the only part of this picture anything happens
+   * in. Longer glass trades the near walls for depth down the road, which is the trade a
+   * camera watching traffic would actually be set up to make.
    */
-  for (let x = 0; x < FEED_W; x++) {
-    if (rows[HORIZON][x].ch === ' ') put(rows, x, HORIZON, '─', FEED_COLOURS.far);
-  }
-  put(rows, vanish, HORIZON, '┼', FEED_COLOURS.edge);
+  const fx = FEED_W / 2 / Math.tan(0.44);
+  const fy = fx * 0.5;
 
-  let lastHalf = 2;
-  for (let y = HORIZON + 1; y < FEED_H - 2; y++) {
-    const t = (y - HORIZON) / (FEED_H - 2 - HORIZON);
-    /*
-     * How wide the road is at this row, and it stops SHORT of the frame edge.
-     *
-     * At the old `2 + t * FEED_W / 2` the near end of the corridor was 92 columns across an
-     * 88 column frame, so both kerbs walked off the sides and the two lines that carry the
-     * whole perspective simply were not in the picture for the rows closest to the camera.
-     */
-    const halfWidth = Math.round(2 + t * 40);
+  const boxes = culled(city, eyeX, eyeZ, fwd.x, fwd.z);
+  const basis: Basis = { eyeX, eyeZ, facing, fwd, right, up, fx, fy, boxes };
 
-    /*
-     * Tarmac, and the restraint here is the point.
-     *
-     * The first version textured the road AND speckled the pavement either side at similar
-     * weight, which made one uniform field of noise from kerb to frame edge - drawn, and
-     * unreadable. The road now gets a sparse grain that thickens towards the camera and the
-     * pavement gets nothing at all, so the only textured region in the lower half of the
-     * frame is the one the car drives on.
-     */
-    for (let x = vanish - halfWidth; x <= vanish + halfWidth; x++) {
-      if (hash(x, y, 3) < 0.04 + t * 0.10) put(rows, x, y, '░', FEED_COLOURS.road);
-      else put(rows, x, y, ' ', FEED_COLOURS.road);
-    }
-    // Pavement: cleared, not decorated. It is not where anything happens.
-    for (let x = 0; x < vanish - halfWidth; x++) put(rows, x, y, ' ', FEED_COLOURS.far);
-    for (let x = vanish + halfWidth + 1; x < FEED_W; x++) put(rows, x, y, ' ', FEED_COLOURS.far);
+  for (let py = 0; py < FEED_H; py++) {
+    for (let px = 0; px < FEED_W; px++) {
+      const sx = (px - FEED_W / 2 + 0.5) / fx;
+      const sy = (FEED_H / 2 - py - 0.5) / fy;
+      let dx = fwd.x + right.x * sx + up.x * sy;
+      let dy = fwd.y + right.y * sx + up.y * sy;
+      let dz = fwd.z + right.z * sx + up.z * sy;
+      const len = Math.hypot(dx, dy, dz);
+      dx /= len;
+      dy /= len;
+      dz /= len;
 
-    /*
-     * The kerbs, drawn as a CONNECTED edge rather than one mark per row.
-     *
-     * The corridor opens by about five columns a row, so a single glyph at each row's edge
-     * position renders as a column of unrelated dashes scattered across the lower frame -
-     * which is exactly what it looked like. Filling the horizontal run between this row's
-     * edge and the last one turns those dashes into a staircase, and a staircase reads as a
-     * line going away from you. It is the oldest trick in ASCII art and there is no
-     * substitute for it at this resolution.
-     */
-    for (let x = Math.min(lastHalf, halfWidth); x <= Math.max(lastHalf, halfWidth); x++) {
-      put(rows, vanish - x, y, '─', FEED_COLOURS.marking);
-      put(rows, vanish + x, y, '─', FEED_COLOURS.marking);
-    }
-    lastHalf = halfWidth;
+      const hit = castBoxes(boxes, eyeX, EYE, eyeZ, dx, dy, dz, FAR);
+      const groundT = dy < -1e-6 ? -EYE / dy : Infinity;
 
-    /*
-     * The centre line, dashed, flowing towards the camera.
-     *
-     * Spaced by DISTANCE rather than by row: a fixed row period draws evenly spaced dashes,
-     * which is what a flat ladder looks like, not a road. Raising t to a power compresses
-     * the dashes towards the horizon and stretches them at the near edge, and subtracting
-     * the clock walks the whole ladder downwards - between them that is most of the sense
-     * that this surface is moving past a fixed camera.
-     */
-    const along = Math.pow(t, 1.7) * 26 - clock * 4;
-    if (t > 0.12 && Math.floor(along) % 4 < 2) {
-      put(rows, vanish, y, '║', FEED_COLOURS.marking);
+      if (hit && hit.t <= groundT) {
+        const { t, face, box } = hit;
+        const hx = eyeX + dx * t;
+        const hy = EYE + dy * t;
+        const hz = eyeZ + dz * t;
+
+        if (face === 4) {
+          // The roof, which at this eye height is only ever the top edge of a near block -
+          // and a hard top edge is what gives a silhouette its shoulder.
+          put(rows, px, py, '─', FEED_COLOURS.edge);
+          continue;
+        }
+
+        /*
+         * Windows, placed on the actual wall.
+         *
+         * From the hit's position on the face, so they hold still as the district moves and
+         * stay square as the wall recedes - which a screen-space pattern cannot do, and
+         * which is most of what separates a building from a hatched rectangle.
+         */
+        const along = face < 2 ? hz : hx;
+        const gw = Math.floor(along / 2.2);
+        const gh = Math.floor(hy / 2.6);
+        const lit = hash(gw, gh, box.block.x * 7 + box.block.y) > 0.81 - box.block.downtown * 0.22;
+        const paneU = ((((along / 2.2) % 1) + 1) % 1);
+        const paneV = ((((hy / 2.6) % 1) + 1) % 1);
+        const inPane = paneU > 0.26 && paneU < 0.94 && paneV > 0.28 && paneV < 0.92;
+        /*
+         * A pane has a frame and a core, and only the core is bright.
+         *
+         * Filling the whole pane with the lit colour is perspective-correct and reads
+         * terribly: a window two metres across at eight metres covers a dozen character
+         * cells, so the near walls came out as slabs of the brightest green on screen with
+         * the street a dark slot between them. Bright at the middle and stepped down at the
+         * edges keeps the recession honest - near windows are large and framed, far ones
+         * collapse to a single pip - without any one of them shouting.
+         */
+        const core = paneU > 0.42 && paneU < 0.78 && paneV > 0.42 && paneV < 0.8;
+
+        if (lit && inPane && t < 90) {
+          // A few flicker, on their own slow clocks. Nothing in a city is static.
+          const flicker = hash(gw, gh, Math.floor(clock * 0.7)) > 0.9;
+          if (core && !flicker) put(rows, px, py, '■', FEED_COLOURS.windowLit);
+          else put(rows, px, py, flicker ? ':' : '▪', FEED_COLOURS.window);
+          continue;
+        }
+
+        /*
+         * Plain wall, lit by face rather than by viewing angle.
+         *
+         * Shading on how square-on the ray was is what a raytracer does to a mirror, and on
+         * a street it is exactly wrong: the wall running along beside the camera is met
+         * nearly head-on at the edges of frame, so it came out as the brightest thing in
+         * the shot - a solid slab of glyphs down both sides with the street a slot between
+         * them. A fixed key direction instead gives the four wall orientations four
+         * constant tones, so a corner reads as a corner and distance is the only other
+         * thing changing.
+         */
+        const fog = Math.max(0, 1 - t / FAR);
+        put(rows, px, py, ramp(KEY[face] * (0.35 + fog * 0.65)), depthColour(t));
+        continue;
+      }
+
+      if (groundT < FAR) {
+        const g = ground(city, eyeX + dx * groundT, eyeZ + dz * groundT, groundT, clock);
+        put(rows, px, py, g.ch, g.colour);
+        continue;
+      }
+
+      // Sky. Empty, but for the few marks that stop it reading as a dead panel.
+      if (hash(px, py, 9) > 0.993) put(rows, px, py, '·', FEED_COLOURS.dim);
     }
   }
 
@@ -345,33 +590,30 @@ export function renderFeed(
    * makes the suspect's absence readable when a wrong camera is chosen.
    */
   for (let i = 0; i < 2; i++) {
-    const period = 9 + i * 5;
-    const t = ((clock + i * 4.3) % period) / period;
-    // Coming towards the camera: it starts at the vanishing point, small, and arrives wide.
-    const approach = i === 0 ? t : 1 - t;
-    const y = HORIZON + 1 + Math.round(approach * (FEED_H - 4 - HORIZON));
-    const spread = Math.round(2 + approach * (FEED_W / 2));
-    const x = vanish + Math.round((i === 0 ? -0.45 : 0.45) * spread);
-    text(rows, x, y, approach > 0.55 ? '▬▬' : '▬', FEED_COLOURS.traffic);
+    const period = 11 + i * 6;
+    const phase = ((clock + i * 5.1) % period) / period;
+    const along = (i === 0 ? phase : 1 - phase) * 80 + 7;
+    drawCar(rows, basis, along, i === 0 ? 1.1 : -1.1, FEED_COLOURS.traffic);
   }
 
   /*
-   * The suspect, when the caller has earned the right to show it. Wider and brighter than
-   * ambient traffic and wearing a colour nothing else in this feed uses, because the whole
-   * point of the moment is that you know it the instant it enters frame.
+   * The suspect, when the caller has earned the right to show it. Same projection, brighter
+   * colour, wider mark - the point of the moment is that you know it the instant it enters
+   * frame. It drives towards the camera, so `suspect` runs 0 far to 1 near.
+   *
+   * Lane offsets are about a metre, not two. This district's streets are three metres wide
+   * - see the camera placement above - so a car on a two metre offset is driving through
+   * the shopfronts, and at the near end of the run it swung right out of the corridor and
+   * across the pavement.
    */
   if (suspect !== null) {
-    const y = HORIZON + 1 + Math.round(suspect * (FEED_H - 4 - HORIZON));
-    const spread = Math.round(2 + suspect * (FEED_W / 2));
-    const x = vanish + Math.round(0.4 * spread) - 1;
-    text(rows, x, y, suspect > 0.5 ? '▬▬▬' : '▬▬', FEED_COLOURS.suspect);
+    drawCar(rows, basis, 70 - suspect * 57, -1.1, FEED_COLOURS.suspect, true);
   }
 
   // A scanline, sweeping. Cheapest possible "this is a live feed and not a picture".
   const scan = Math.floor((clock * 6) % FEED_H);
   for (let x = 0; x < FEED_W; x += 3) {
-    const at = rows[scan][x];
-    if (at.ch === ' ') put(rows, x, scan, '·', FEED_COLOURS.dim);
+    if (rows[scan][x].ch === ' ') put(rows, x, scan, '·', FEED_COLOURS.dim);
   }
 
   // Chrome.

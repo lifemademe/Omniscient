@@ -196,6 +196,39 @@ console.log('\n=== THE CAMERA FEED ===');
     `${onScreen} of ${frames} frames`
   );
 
+  /*
+   * And it has to be visible from EVERY camera the player could have picked, not just one.
+   *
+   * The renderer hides a car when a building stands between it and the lens, which is right
+   * - a feed that saw round corners would be telling the player the opposite of what this
+   * mission is about. But it means a badly placed camera can show an empty street on a
+   * CORRECT pick, and the review would then contradict the verdict the runtime is about to
+   * give. That is a silent content bug of exactly the kind district-07 keeps warning about:
+   * nothing throws, the picture is simply wrong.
+   */
+  let clear = 0;
+  let checked = 0;
+  for (const hop of chase2.hops) {
+    for (const option of hop.options) {
+      checked += 1;
+      let seen = 0;
+      for (let i = 0; i < frames; i++) {
+        const rows = renderFeed(city2, option.cell, {
+          clock: 1 + i * 0.125,
+          suspect: i / (frames - 1),
+          label: 'CAM',
+        });
+        if (showsSuspect(rows)) seen += 1;
+      }
+      if (seen >= frames - 2) clear += 1;
+    }
+  }
+  check(
+    'the car is visible from every camera it could be reviewed at',
+    clear === checked,
+    `${clear} of ${checked} cameras have a clear line down the street`
+  );
+
   const dead = renderFeed(city2, { x: 0, y: 0 }, { clock: 1, dead: true, label: 'CAM' });
   const deadText = dead.map((row) => row.map((cell) => cell.ch).join('')).join('');
   check('a camera with no coverage reads NO SIGNAL', deadText.includes('NO SIGNAL'));
