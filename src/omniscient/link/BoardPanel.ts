@@ -402,16 +402,45 @@ const BOARD_CSS = `
   gap: 3px;
   margin-bottom: 8px;
 }
+/*
+ * A sighting, and it is a button.
+ *
+ * Every one of these is a decision the player made, and until now the record of it was
+ * furniture - you could read your route back and not touch it. Reported after a lost chase:
+ * the run that failed is right there on screen naming the hop you doubt, and the only way
+ * to act on it was to redo the whole thing from the scene. Clicking one now goes back to it.
+ */
 .omni-hop__step {
   display: flex;
   gap: 10px;
   align-items: baseline;
+  width: 100%;
   padding: 3px 8px;
+  border: 0;
   border-left: 2px solid rgba(127, 224, 138, 0.45);
   background: rgba(10, 24, 15, 0.6);
+  font: inherit;
   font-size: 11px;
+  text-align: left;
   color: rgba(159, 216, 168, 0.75);
+  cursor: pointer;
 }
+.omni-hop__step:hover,
+.omni-hop__step:focus-visible {
+  background: rgba(20, 44, 26, 0.85);
+  color: #c8ecd0;
+  outline: none;
+}
+/* Says what the click does, without a row of buttons saying it in words. */
+.omni-hop__step::after {
+  margin-left: auto;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  opacity: 0;
+  content: 'GO BACK';
+}
+.omni-hop__step:hover::after,
+.omni-hop__step:focus-visible::after { opacity: 0.75; }
 .omni-hop__step b {
   font-weight: normal;
   letter-spacing: 0.14em;
@@ -1323,6 +1352,7 @@ export class BoardPanel {
     this.picks = [];
     this.pursuitTrail = [];
     this.pursuitLost = [];
+    this.pursuitLostPicks = [];
     this.pursuitNote = null;
 
     const panel = document.createElement('div');
@@ -1355,8 +1385,66 @@ export class BoardPanel {
   private pursuitTrail: Array<{ cam: string; where: string }> = [];
   /** The route that failed, kept on screen beside the new one so "on the 3rd hop" means something. */
   private pursuitLost: Array<{ cam: string; where: string }> = [];
+  /**
+   * The option ids behind `pursuitLost`, kept so the failed route can be RESUMED.
+   *
+   * Without them the lost run is a picture of a decision rather than the decision itself,
+   * and going back to the hop you doubt means re-answering the ones you were sure about.
+   */
+  private pursuitLostPicks: string[] = [];
   /** The last verdict shown, so a new one is an edge rather than a state. */
   private pursuitNote: string | null = null;
+
+  /**
+   * Go back to a sighting and choose again.
+   *
+   * `index` is the hop being reconsidered, so everything before it is kept and everything
+   * from it onwards is dropped - which is what "change this one" means and what the player
+   * is pointing at when they click it.
+   *
+   * Resuming from the LOST run adopts it. Leaving it on screen as well would put the same
+   * route in the panel twice, once as history and once as the thing being built, and the
+   * player has just said which of those they meant. The verdict stays in the status line,
+   * so nothing about what happened is lost - only the need to redo the hops they were
+   * already sure about.
+   */
+  private rewindTo(index: number, lost: boolean): void {
+    const picks = lost ? this.pursuitLostPicks : this.picks;
+    const trail = lost ? this.pursuitLost : this.pursuitTrail;
+    this.picks = picks.slice(0, index);
+    this.pursuitTrail = trail.slice(0, index);
+    this.hopIndex = index;
+    if (lost) {
+      this.pursuitLost = [];
+      this.pursuitLostPicks = [];
+    }
+    audio.play('seat');
+    this.refreshPursuit();
+  }
+
+  /** One row of the route, as a control that goes back to it. */
+  private buildStep(
+    step: { cam: string; where: string },
+    index: number,
+    lost: boolean,
+    newest: boolean
+  ): HTMLElement {
+    const row = document.createElement('button');
+    row.type = 'button';
+    row.className = `omni-hop__step${lost ? ' omni-hop__step--lost' : ''}${
+      newest ? ' omni-hop__step--new' : ''
+    }`;
+    const cam = document.createElement('b');
+    cam.textContent = `${String(index + 1)}. ${step.cam}`;
+    const where = document.createElement('span');
+    where.textContent = step.where;
+    row.append(cam, where);
+    row.addEventListener('mousedown', (event) => {
+      event.preventDefault();
+      this.rewindTo(index, lost);
+    });
+    return row;
+  }
 
   private refreshPursuit(): void {
     const view = this.view;
@@ -1375,6 +1463,7 @@ export class BoardPanel {
       this.pursuitNote = view.note;
       if (this.pursuitTrail.length > 0) {
         this.pursuitLost = this.pursuitTrail;
+        this.pursuitLostPicks = [...this.picks];
         this.pursuitTrail = [];
         this.picks = [];
         this.hopIndex = 0;
@@ -1386,38 +1475,24 @@ export class BoardPanel {
 
     trail.replaceChildren();
     this.pursuitLost.forEach((step, index) => {
-      const row = document.createElement('div');
-      row.className = 'omni-hop__step omni-hop__step--lost';
-      const cam = document.createElement('b');
-      cam.textContent = `${index + 1}. ${step.cam}`;
-      const where = document.createElement('span');
-      where.textContent = step.where;
-      row.append(cam, where);
-      trail.appendChild(row);
+      trail.appendChild(this.buildStep(step, index, true, false));
     });
     if (this.pursuitLost.length > 0) {
       const gap = document.createElement('div');
       gap.className = 'omni-hop__again';
       /*
-       * Says what actually happens. The chase restarts from the scene, not from the hop
-       * that failed - the picks go up as one route and there is nothing in the view that
-       * says which hop the runtime disliked except the sentence in the note, so resuming
-       * partway would be the panel guessing. Two clicks to redo, on a three-hop chase.
+       * It used to say the chase restarts from the scene, because it did - the picks went
+       * up as one route and nothing in the panel let you re-enter it partway. That was a
+       * fair description of a bad rule: the run that failed is on screen naming the hop you
+       * doubt, and the only thing to do with it was read it.
        */
-      gap.textContent = 'LOST HIM - picking him up again from the scene';
+      gap.textContent = 'LOST HIM - click a sighting above to go back and choose again';
       trail.appendChild(gap);
     }
 
     this.pursuitTrail.forEach((step, index) => {
-      const row = document.createElement('div');
       const newest = index === this.pursuitTrail.length - 1;
-      row.className = `omni-hop__step${newest ? ' omni-hop__step--new' : ''}`;
-      const cam = document.createElement('b');
-      cam.textContent = `${index + 1}. ${step.cam}`;
-      const where = document.createElement('span');
-      where.textContent = step.where;
-      row.append(cam, where);
-      trail.appendChild(row);
+      trail.appendChild(this.buildStep(step, index, false, newest));
     });
 
     const hop = view.hops[this.hopIndex];
@@ -1427,7 +1502,8 @@ export class BoardPanel {
       this.send.disabled = false;
       this.status.className = 'omni-board__status';
       this.status.textContent =
-        view.note ?? `${this.pursuitTrail.length} sightings - read the route back, then send it`;
+        view.note
+        ?? `${String(this.pursuitTrail.length)} sightings - click one to change it, or send it`;
       return;
     }
 
