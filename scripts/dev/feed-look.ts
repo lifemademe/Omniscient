@@ -16,7 +16,7 @@ const cams = DISTRICT_CITY.cameras.slice(0, 3);
 for (const [i, cam] of cams.entries()) {
   shots.push({
     title: `CAM ${String(200 + i * 10)} - idle, no suspect (what the player sees before choosing)`,
-    html: feedToHtml(renderFeed(DISTRICT_CITY, cam, { clock: 1.5, label: `2${String(i)}0`, since: 6 })),
+    html: feedToHtml(renderFeed(DISTRICT_CITY, cam, { clock: 1.5, label: `CAM 2${String(i)}0`, since: 6 })),
   });
 }
 for (const t of [0, 0.35, 0.7, 1]) {
@@ -29,7 +29,7 @@ for (const t of [0, 0.35, 0.7, 1]) {
 }
 shots.push({
   title: 'NO SIGNAL - past the ring, where coverage runs out',
-  html: feedToHtml(renderFeed(DISTRICT_CITY, { x: 0, y: 0 }, { clock: 1, dead: true, label: '--' })),
+  html: feedToHtml(renderFeed(DISTRICT_CITY, { x: 0, y: 0 }, { clock: 1, dead: true, label: 'CAM --' })),
 });
 
 const page = `<!doctype html><meta charset="utf-8"><title>feed</title>

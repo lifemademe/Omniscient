@@ -14,11 +14,16 @@
  * wireCity's header calls the third tier "first person, OMNISCIENT inside a system that is
  * connected to it" - and with the resolve mission 08 was written to end on.
  *
- * ## Why it takes the whole stage
+ * ## Why it is opaque, and why it is inset
  *
- * Opaque, over the diorama. The machine is not observing the district any more, it is
- * looking through one of its cameras, and showing both at once would be two statements of
- * one idea with the weaker one on top. The wireframe comes back the moment the feed closes.
+ * Opaque over the diorama: the machine is not observing the district while it is looking
+ * through one of its cameras, and showing both at once is two statements of one idea with
+ * the weaker one on top. The wireframe comes back the moment the feed closes.
+ *
+ * Inset rather than edge to edge, though, and under the stage's own instruments. It is a
+ * monitor the machine has put up inside its viewport, not the viewport turning into
+ * something else - and at full bleed it swallowed the connection cards and the END CALL
+ * button, so the console lost its controls the moment a camera opened.
  *
  * ## What this file owns
  *
@@ -27,7 +32,7 @@
  * business living in a class whose job is drawing option buttons.
  */
 
-import { FEED_W, feedToHtml, renderFeed } from '../art/asciiFeed.js';
+import { FEED_H, FEED_W, feedToHtml, renderFeed } from '../art/asciiFeed.js';
 
 import type { HopFailure } from '../mission/pursuit.js';
 import type { WireCity } from '../geometry/wireCity.js';
@@ -67,18 +72,37 @@ const CROSS = 1.3;
 
 export const FEED_STYLES = `
 /*
- * The feed over the stage. A character grid, so monospace, and it must not wrap - a feed
- * that reflows is a feed that has stopped being a picture.
+ * The feed is a monitor INSET into the stage, not a sheet over it.
+ *
+ * At inset 0 with a high z-index it covered the connection cards, the trust readout and the
+ * END CALL button - the machine's own furniture - so the console lost its instruments the
+ * moment a camera opened. It sits inside the viewport brackets now, with its own hairline
+ * so it reads as a screen the machine has put up rather than as the screen becoming
+ * something else, and it paints UNDER the readouts and controls (see their z-index below).
  */
 .omni-feed {
   position: absolute;
-  inset: 0;
+  inset: 12px;
   display: none;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 2px;
+  border: 1px solid #1c3a27;
   background: #050a07;
-  z-index: 4;
+  z-index: 1;
+}
+/*
+ * The stage's own instruments stay on top of anything drawn into the stage.
+ *
+ * They are in normal flow and the feed is positioned, so without this the feed wins on
+ * paint order no matter how low its z-index goes. Bevelled panels with their own
+ * backgrounds, so they stay perfectly legible over the picture.
+ */
+.omni-cv__readouts,
+.omni-cv__actions {
+  position: relative;
+  z-index: 2;
 }
 .omni-feed--on { display: flex; }
 .omni-feed__screen {
@@ -283,9 +307,10 @@ class FeedOverlay {
     const root = this.root;
     const screen = this.screen;
     if (!root || !screen) return;
-    const room = root.clientWidth - 24;
-    if (room < 60) return;
-    const key = `${String(room)}:${String(this.play !== null)}`;
+    const room = root.clientWidth - 26;
+    const tall = root.clientHeight - 44;
+    if (room < 60 || tall < 40) return;
+    const key = `${String(room)}x${String(tall)}`;
     if (key === this.fitKey) return;
     this.fitKey = key;
 
@@ -293,7 +318,17 @@ class FeedOverlay {
     screen.style.fontSize = `${String(base)}px`;
     const advance = screen.scrollWidth / FEED_W;
     if (advance <= 0) return;
-    const fit = Math.max(6, Math.min(22, (base * room) / (advance * FEED_W)));
+    /*
+     * Solved against BOTH axes, smaller wins.
+     *
+     * Width alone was enough while this lived in a narrow console column. On the stage the
+     * box is wider than it is tall, so a width fit overflowed the bottom and left the
+     * caption stranded far below the picture. Line height is 1, so a row is exactly one
+     * font size and the vertical solve is just the division.
+     */
+    const byWidth = (base * room) / (advance * FEED_W);
+    const byHeight = tall / FEED_H;
+    const fit = Math.max(6, Math.min(26, byWidth, byHeight));
     screen.style.fontSize = `${fit.toFixed(2)}px`;
   }
 

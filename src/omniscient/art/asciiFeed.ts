@@ -114,15 +114,39 @@ const RAMP = ' .:-=+*#%@';
  * A single low sun somewhere off to one side. Four constants rather than a light vector
  * because there are only ever four wall orientations in a grid city, and the only thing the
  * shading has to achieve is that two walls meeting at a corner are different tones.
+ *
+ * Low values, and deliberately. These were roughly doubled and the wall beside the lens
+ * came out as a field of the ramp's heavy glyphs across a third of the frame - correct for
+ * a surface a few metres away and wrong for the picture, because it buried the kerbs, the
+ * centre line and the traffic under the one thing in shot that nothing ever happens on. The
+ * buildings are here to frame a street, not to be the subject of the shot.
  */
-const KEY = [0.46, 0.2, 0.34, 0.13, 0.5, 0.5];
+const KEY = [0.3, 0.13, 0.22, 0.09, 0.34, 0.34];
 
-/** Eye height, metres. A camera over a shop door - not a drone, and not a person. */
-const EYE = 3.4;
-/** How far down it looks. Enough to put the near kerb in shot, not enough to lose the sky. */
-const PITCH = -0.16;
+/**
+ * Eye height and tilt.
+ *
+ * Raised from 3.4m and tilted harder after seeing it in the console. At head height on a
+ * three-metre street the flanking walls fill the frame edge to edge - there is no sky, no
+ * horizon, and nothing but wall to orient on, so the picture reads as texture rather than
+ * as a place. A junction camera is mounted above the lights and angled down at the road,
+ * which puts the carriageway in the middle of the shot where the thing being watched
+ * actually is, and lets the walls fall away to the sides.
+ */
+const EYE = 4.8;
+const PITCH = -0.27;
 /** Past this the district is fog and the renderer stops paying for it. */
 const FAR = 150;
+/**
+ * Where the fog finishes the job.
+ *
+ * Separate from FAR, and shorter, because the two do different work: FAR is a budget and
+ * this is composition. Shading that only reached zero at the cull distance meant the far
+ * end of every street was a full field of dim glyphs out to the top of the frame - the
+ * whole picture covered, with no dark to read the near structure against. Surfaces now fade
+ * to nothing well inside the district, so distance ends in darkness.
+ */
+const FADE = 85;
 
 export interface FeedOptions {
   /** Seconds. Drives traffic, window flicker and the scanline. */
@@ -171,15 +195,29 @@ function text(rows: FeedRow[], x: number, y: number, s: string, colour: string):
  *
  * A junction camera points down a street, and WHICH street decides everything about the
  * picture - so it is derived from the cell rather than chosen at random each call, and the
- * same camera therefore always shows the same view. Four cardinal facings, because the
- * roads are a grid and a camera bolted to a pole looks along one of them.
+ * same camera therefore always shows the same view. Two cardinal facings to choose from,
+ * because the roads are a grid and a camera on a pole looks along one of them.
+ *
+ * It always looks INWARDS, and that is not a nicety. A free choice of four sent cameras
+ * near the district edge staring out of it: two cells of street, then the wall of the last
+ * building filling a third of the frame and open nothing beyond. Half the chase happens out
+ * where coverage thins - that is the whole design of phase three - so the cameras most
+ * likely to be pointed at emptiness are exactly the ones the player spends longest looking
+ * at. Facing the middle guarantees every one of them has a street to look down.
+ *
+ * The hash still chooses WHICH axis, so the views stay varied and each camera still always
+ * shows the same one.
  */
-export function facingOf(cell: { x: number; y: number }): { fx: number; fy: number } {
-  const quarter = Math.floor(hash(cell.x, cell.y, 11) * 4);
-  if (quarter === 0) return { fx: 1, fy: 0 };
-  if (quarter === 1) return { fx: -1, fy: 0 };
-  if (quarter === 2) return { fx: 0, fy: 1 };
-  return { fx: 0, fy: -1 };
+export function facingOf(cell: { x: number; y: number }, size: number): { fx: number; fy: number } {
+  const middle = (size - 1) / 2;
+  const dx = middle - cell.x;
+  const dz = middle - cell.y;
+  // A camera already on the centre line has no inward direction on that axis, so it takes
+  // the other one rather than picking a sign at random.
+  let useX = hash(cell.x, cell.y, 11) > 0.5;
+  if (Math.abs(useX ? dx : dz) < 1) useX = !useX;
+  if (useX) return { fx: dx >= 0 ? 1 : -1, fy: 0 };
+  return { fx: 0, fy: dz >= 0 ? 1 : -1 };
 }
 
 /** Grid cell to metres. The same conversion wireCity uses, so both draw one district. */
@@ -346,25 +384,35 @@ function ground(
   wx: number,
   wz: number,
   t: number,
-  clock: number
+  clock: number,
+  facing: { fx: number; fy: number }
 ): { ch: string; colour: string } {
   const half = (city.size * CELL) / 2;
   // Position within this cell, 0..1 on each axis. The street is the outer margin.
   const u = ((((wx + half) / CELL) % 1) + 1) % 1;
   const v = ((((wz + half) / CELL) % 1) + 1) % 1;
-  const edgeU = Math.min(u, 1 - u);
-  const edgeV = Math.min(v, 1 - v);
+
+  /*
+   * Markings belong to the street the camera is looking DOWN, not to both axes.
+   *
+   * Testing each axis independently painted the entire grid, cross-streets included - and a
+   * kerb running left to right across the shot lands on one row of the frame as a bar of
+   * pipes the full width of the picture. Three of those were on screen at once and the
+   * street read as a ladder. Only the perpendicular offset decides a kerb now, and only the
+   * along-street distance advances the centre line.
+   */
+  const across = facing.fx !== 0 ? v : u;
+  const along = facing.fx !== 0 ? wx : wz;
+  const edge = Math.min(across, 1 - across);
   const kerb = 0.16;
 
-  const centreLine = Math.min(edgeU, edgeV) < 0.028;
-  const onKerb = Math.abs(edgeU - kerb) < 0.02 || Math.abs(edgeV - kerb) < 0.02;
-
-  if (centreLine && t < 70) {
+  if (edge < 0.03 && t < 70) {
     // Dashed, and the dashes walk towards the camera so the surface reads as moving past.
-    const along = Math.floor((edgeU < edgeV ? wz : wx) * 0.45 - clock * 2.5);
-    if (along % 2 === 0) return { ch: '─', colour: FEED_COLOURS.marking };
+    if (Math.floor(along * 0.45 - clock * 2.5) % 2 === 0) {
+      return { ch: '─', colour: FEED_COLOURS.marking };
+    }
   }
-  if (onKerb && t < 90) return { ch: '│', colour: FEED_COLOURS.marking };
+  if (Math.abs(edge - kerb) < 0.022 && t < 90) return { ch: '│', colour: FEED_COLOURS.marking };
 
   // Tarmac. Grain that thins with distance, so the near road is a surface and the far road
   // a suggestion - and never dense enough to compete with the markings.
@@ -447,7 +495,7 @@ export function renderFeed(
       }
     }
     text(rows, Math.floor(FEED_W / 2) - 4, Math.floor(FEED_H / 2), 'NO SIGNAL', FEED_COLOURS.dim);
-    text(rows, 2, 1, `CAM ${label ?? '--'}`, FEED_COLOURS.dim);
+    text(rows, 2, 1, label ?? 'CAM --', FEED_COLOURS.dim);
     return rows;
   }
 
@@ -465,7 +513,7 @@ export function renderFeed(
    * gives a corridor punched with those gaps marching away to the vanishing point. That
    * repetition is what sells the depth; a smooth wall has nothing to measure distance by.
    */
-  const facing = facingOf(cell);
+  const facing = facingOf(cell, city.size);
   const { wx, wz } = metres(city.size, cell.x, cell.y);
   const eyeX = wx + CELL * 0.5;
   const eyeZ = wz + CELL * 0.5;
@@ -567,14 +615,30 @@ export function renderFeed(
          * them. A fixed key direction instead gives the four wall orientations four
          * constant tones, so a corner reads as a corner and distance is the only other
          * thing changing.
+         *
+         * And it wears the window grid whether the windows are lit or not. Only lit panes
+         * had any structure before, so an unlit building was a flat field of one character
+         * and mid-distance collapsed into forty columns of identical dots with nothing to
+         * read scale or depth against. A lattice on EVERY wall gives each one storeys and
+         * bays, and because it is placed from the hit position it converges with the wall -
+         * so it doubles as the perspective cue a smooth surface cannot provide.
          */
-        const fog = Math.max(0, 1 - t / FAR);
-        put(rows, px, py, ramp(KEY[face] * (0.35 + fog * 0.65)), depthColour(t));
+        const fog = Math.max(0, 1 - t / FADE);
+        /*
+         * The lattice stops well before the fog does.
+         *
+         * Past about fifty metres a two metre window is narrower than a character cell, so
+         * `inPane` samples the grid faster than the grid can be drawn and the wall turns
+         * into an even field of dots - forty columns of moire that read as one flat tone.
+         * Distant buildings get the plain face instead and are allowed to simply fade.
+         */
+        const bay = t < 50 ? (inPane ? 1.3 : 0.65) : 1;
+        put(rows, px, py, ramp(KEY[face] * bay * Math.pow(fog, 1.4)), depthColour(t));
         continue;
       }
 
       if (groundT < FAR) {
-        const g = ground(city, eyeX + dx * groundT, eyeZ + dz * groundT, groundT, clock);
+        const g = ground(city, eyeX + dx * groundT, eyeZ + dz * groundT, groundT, clock, facing);
         put(rows, px, py, g.ch, g.colour);
         continue;
       }
@@ -616,8 +680,9 @@ export function renderFeed(
     if (rows[scan][x].ch === ' ') put(rows, x, scan, '·', FEED_COLOURS.dim);
   }
 
-  // Chrome.
-  text(rows, 2, 1, `CAM ${label ?? '--'}`, FEED_COLOURS.chrome);
+  // Chrome. The label is drawn verbatim - it arrived as "CAM 203" and a `CAM ` prefix here
+  // put "CAM CAM 203" on screen.
+  text(rows, 2, 1, label ?? 'CAM --', FEED_COLOURS.chrome);
   if (since !== undefined) {
     const stamp = `T+${since.toFixed(0)}s`;
     text(rows, FEED_W - stamp.length - 2, 1, stamp, FEED_COLOURS.chrome);
