@@ -27,11 +27,11 @@ import { describe } from '../mission/pursuit.js';
 import { reached } from '../mission/pipes.js';
 import { narrow } from '../mission/traces.js';
 import { audio } from '../audio/ConsoleAudio.js';
-import { FEED_W, feedToHtml, renderFeed } from '../art/asciiFeed.js';
 import { DISTRICT_CITY } from '../content/district-07.js';
+import { FEED_STYLES, feedOverlay } from './FeedOverlay.js';
 
 import type { BeamState } from '../mission/beam.js';
-import type { Cell, Hop, HopFailure } from '../mission/pursuit.js';
+
 import type { ClueId, Evidence } from '../mission/traces.js';
 import { createKitPlate } from './kit.js';
 import type { DeviceView, PlayerMessage } from './surface.js';
@@ -335,42 +335,6 @@ const BOARD_CSS = `
   color: #e0a24c;
 }
 .omni-hop__options { display: flex; flex-direction: column; gap: 4px; }
-/*
- * The camera feed. A character grid, so it must be monospace and it must not wrap - a feed
- * that reflows is a feed that stops being a picture. Zero letter-spacing and a line-height
- * of 1 keep the glyph cells square enough that the road's perspective reads.
- */
-.omni-feed {
-  margin: 6px 0 8px;
-  padding: 6px 8px;
-  border: 1px solid #1a2f21;
-  background: #070d0a;
-  overflow: hidden;
-}
-.omni-feed__screen {
-  margin: 0;
-  font-family: ui-monospace, Menlo, Consolas, monospace;
-  /* font-size is set from measurement - see fitFeed. */
-  font-size: 8px;
-  line-height: 1;
-  letter-spacing: 0;
-  white-space: pre;
-  color: #2f4a37;
-}
-.omni-feed__caption {
-  padding-top: 4px;
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: #3f6b4a;
-}
-/*
- * The two verdicts. Deliberately not red and green - this console has one accent, and a
- * miss reading as an ERROR would say the player did something wrong when what actually
- * happened is that a camera saw an empty street. Dim for nothing, objective-bright for him.
- */
-.omni-feed__caption--hit { color: #d8ffb0; }
-.omni-feed__caption--miss { color: #2f4a37; }
 .omni-hop__option {
   display: flex;
   align-items: baseline;
@@ -680,7 +644,9 @@ export function injectBoardStyles(): void {
 
   const style = document.createElement('style');
   style.id = STYLE_ID;
-  style.textContent = BOARD_CSS;
+  // The overlay's rules ride along here rather than in a second <style>: it is part of the
+  // pursuit board's surface even though it draws over the stage rather than inside the panel.
+  style.textContent = BOARD_CSS + FEED_STYLES;
   document.head.appendChild(style);
 }
 
@@ -918,6 +884,16 @@ export class BoardPanel {
    */
   public update(view: DeviceView | undefined): void {
     this.view = view ?? null;
+    /*
+     * The camera feed belongs to the chase and to nothing else.
+     *
+     * It draws over the Contact View's stage rather than inside this panel, so it does not
+     * disappear when the board does - a feed left up would sit on top of the diorama for
+     * the rest of the mission with no obvious way to get rid of it. Taking it down here
+     * covers every route out: the beat moving on, a different device opening, the player
+     * hanging up.
+     */
+    if (view?.kind !== 'pursuit') feedOverlay.hide();
     if (!view) {
       this.element.style.display = 'none';
       return;
@@ -1361,29 +1337,11 @@ export class BoardPanel {
     const options = document.createElement('div');
     options.className = 'omni-hop__options';
 
-    /*
-     * The feed sits between the question and the answers, because that is the order the
-     * player thinks in: he was there, this is what the cameras can see, which one do I pick.
-     */
-    const feedBox = document.createElement('div');
-    feedBox.className = 'omni-feed';
-    const screen = document.createElement('pre');
-    screen.className = 'omni-feed__screen';
-    const caption = document.createElement('div');
-    caption.className = 'omni-feed__caption';
-    feedBox.append(screen, caption);
-    // Skip. Someone replaying a chase for the fourth time has seen the footage.
-    feedBox.addEventListener('mousedown', () => {
-      if (this.feedPlay) this.endPlayback();
-    });
-    this.feedParts = { box: feedBox, screen, caption };
-
     // Trail above the question: the route reads top to bottom, oldest first, and the thing
     // being decided is always at the bottom where the last answer just landed.
-    panel.append(trail, sighting, feedBox, options);
+    panel.append(trail, sighting, options);
     this.grid.appendChild(panel);
     this.pursuitParts = { trail, sighting, options };
-    this.startFeed();
     this.refreshPursuit();
   }
 
@@ -1395,277 +1353,10 @@ export class BoardPanel {
    * moved with it and "five blocks straight ahead" can no longer be recomputed.
    */
   private pursuitTrail: Array<{ cam: string; where: string }> = [];
-
-  /**
-   * The run that lost him, kept until the player starts a new one.
-   *
-   * A wrong chase used to leave the player nowhere to go: the trail was played out, the
-   * board said TRAIL ENDS, and the only control on screen was a SEND IT that would post the
-   * identical wrong route again. The runtime always intended a retry - `onWrong` returns to
-   * the same beat - but the panel is cached by render key, so `build()` never ran and the
-   * chase kept its old picks.
-   *
-   * Throwing the route away the instant it fails is the other wrong answer. The note says
-   * WHICH hop went wrong, and that sentence is useless if the thing it refers to has just
-   * been deleted. So the failed run stays, greyed, until the first pick of the new one.
-   */
-  /**
-   * The camera feed under the sighting line, and which camera it is pointed at.
-   *
-   * One screen shared by every option rather than a thumbnail each: three animated grids
-   * side by side is three times the reading cost for a panel whose job is to make ONE
-   * decision easier, and the hover already says which camera is being considered.
-   */
-  private feedParts: { box: HTMLElement; screen: HTMLElement; caption: HTMLElement } | null = null;
-  private feedCell: { x: number; y: number } | null = null;
-  private feedLabel = '';
-  private feedSince = 0;
-  private feedClock = 0;
-  private feedTimer: number | null = null;
-  /** Last (room, big) the glyph size was solved for, so the fit is not re-measured at 8fps. */
-  private feedFit = '';
-  /**
-   * The review. Non-null only while the route the player just sent is being played back
-   * camera by camera.
-   *
-   * It hangs off SEND rather than off the verdict coming back, which is the one decision in
-   * here worth arguing about. Playing it per-pick would answer each hop the moment it was
-   * made, and this chase is deliberately graded as a whole route - `pursuitLost` exists so
-   * that a failed run stays on screen next to the new one, and per-hop feedback would turn
-   * three hops of deduction into three guesses with a buzzer. Playing it after the verdict
-   * would mean it never runs on a WIN, because a correct route moves the beat on and takes
-   * this board away with it - and the win is the moment worth watching.
-   *
-   * So: the player commits, then watches the footage they assembled, then the machine
-   * speaks. Which is also the order the fiction wants.
-   */
-  private feedPlay: {
-    steps: Array<{ cell: Cell; label: string; since: number; fails: HopFailure | null }>;
-    step: number;
-    t: number;
-    done: (() => void) | null;
-  } | null = null;
+  /** The route that failed, kept on screen beside the new one so "on the 3rd hop" means something. */
   private pursuitLost: Array<{ cam: string; where: string }> = [];
   /** The last verdict shown, so a new one is an edge rather than a state. */
   private pursuitNote: string | null = null;
-
-  /**
-   * Drive the feed at eight frames a second.
-   *
-   * Not requestAnimationFrame: this is a surveillance monitor, and a low, slightly uneven
-   * frame rate is most of what makes a picture read as a live feed rather than as an
-   * illustration. It is also eighty per cent cheaper for a panel that is only ever a
-   * secondary thing on screen.
-   */
-  private startFeed(): void {
-    this.stopFeed();
-    this.feedTimer = window.setInterval(() => {
-      this.feedClock += 0.125;
-      if (this.feedPlay) this.stepPlayback(0.125);
-      this.paintFeed();
-    }, 125);
-  }
-
-  private stopFeed(): void {
-    if (this.feedTimer !== null) window.clearInterval(this.feedTimer);
-    this.feedTimer = null;
-    /*
-     * A panel closing mid-review CANCELS the submission rather than completing it. Firing
-     * it would grade a route while the player is looking at something else and move the
-     * mission on behind their back. Nothing is lost: the picks survive, and refreshPursuit
-     * re-enables send the moment the board comes back up.
-     */
-    if (this.feedPlay) {
-      this.feedPlay.done = null;
-      this.endPlayback();
-    }
-  }
-
-  /**
-   * Point the feed at a camera.
-   *
-   * `suspect` is never passed from here and that is deliberate rather than incidental - see
-   * asciiFeed's header. This mission is won by narrowing rather than searching, and a feed
-   * that showed the car before the player committed would turn three hops of inference into
-   * "pick the one with the car in it".
-   */
-  private aimFeed(cell: { x: number; y: number }, label: string, since: number): void {
-    this.feedCell = cell;
-    this.feedLabel = label;
-    this.feedSince = since;
-    this.paintFeed();
-  }
-
-  /**
-   * How long one camera is held during the review, and what happens inside that window.
-   *
-   * The car crosses in the middle third rather than immediately, because a street that is
-   * empty for a beat first is what makes the crossing land - and on a wrong camera that
-   * same empty beat IS the answer, arriving as a picture a second before the caption says
-   * it in words.
-   */
-  private static readonly PLAY_HOLD = 2.5;
-  private static readonly PLAY_ENTER = 0.6;
-  private static readonly PLAY_CROSS = 1.3;
-
-  /**
-   * Play the route the player just sent, then hand control back.
-   *
-   * Stops on the first camera that saw nothing: that is where he was lost, and continuing
-   * past it would be the panel showing footage of a car that, in the fiction, nobody has
-   * eyes on any more.
-   */
-  private playRoute(hops: Hop[], picks: string[], done: () => void): void {
-    const steps = picks.map((id, index) => {
-      const hop = hops[index];
-      const option = hop.options.find((candidate) => candidate.id === id) ?? hop.options[0];
-      return {
-        cell: option.cell,
-        label: `CAM ${String(200 + index * 10 + hop.options.indexOf(option))}`,
-        since: hop.seconds,
-        fails: option.fails,
-      };
-    });
-    if (steps.length === 0) {
-      done();
-      return;
-    }
-    this.feedPlay = { steps, step: 0, t: 0, done };
-    // The review is the thing being looked at, so fitFeed gives it the bigger glyph cap.
-    this.paintFeed();
-  }
-
-  private stepPlayback(dt: number): void {
-    const play = this.feedPlay;
-    if (!play) return;
-    play.t += dt;
-    if (play.t < BoardPanel.PLAY_HOLD) return;
-
-    const current = play.steps[play.step];
-    // A camera that saw nothing ends the review - see playRoute.
-    if (!current || current.fails !== null || play.step + 1 >= play.steps.length) {
-      this.endPlayback();
-      return;
-    }
-    play.step += 1;
-    play.t = 0;
-    audio.play('seat');
-  }
-
-  /** Finish the review now - the timer running out, a click to skip, or the panel closing. */
-  private endPlayback(): void {
-    const play = this.feedPlay;
-    if (!play) return;
-    this.feedPlay = null;
-    if (this.feedParts) this.feedParts.caption.className = 'omni-feed__caption';
-    const done = play.done;
-    play.done = null;
-    done?.();
-  }
-
-  /**
-   * What a camera says once the footage has been watched.
-   *
-   * Each wrong answer is a SENTENCE, not a buzzer - the same discipline pursuit.ts sets out
-   * in its header, where every decoy fails for exactly one nameable reason. The reason is
-   * already in the data; this is the first place the player gets to hear it.
-   */
-  private static readonly PLAY_VERDICT: Record<HopFailure, string> = {
-    behind: 'NOTHING. That is back the way he came.',
-    unreachable: 'NOTHING. He could not have covered that ground yet.',
-    'off-route': 'NOTHING. He would have had to turn, and nobody saw him turn.',
-  };
-
-  private paintPlayback(parts: { screen: HTMLElement; caption: HTMLElement }): void {
-    const play = this.feedPlay;
-    if (!play) return;
-    const step = play.steps[play.step];
-    const enter = BoardPanel.PLAY_ENTER;
-    const cross = BoardPanel.PLAY_CROSS;
-
-    /*
-     * The car's position across the frame, or null for an empty street. Only ever non-null
-     * on a camera that genuinely picked him up - `fails === null` is the same field the
-     * runtime grades against, so the picture cannot disagree with the verdict.
-     */
-    const during = play.t >= enter && play.t <= enter + cross;
-    const suspect = step.fails === null && during ? (play.t - enter) / cross : null;
-
-    const rows = renderFeed(DISTRICT_CITY, step.cell, {
-      clock: this.feedClock,
-      suspect,
-      label: step.label,
-      since: step.since,
-    });
-    parts.screen.innerHTML = feedToHtml(rows);
-    this.fitFeed();
-
-    const settled = play.t > enter + cross;
-    const verdict =
-      step.fails === null ? 'THERE HE IS.' : BoardPanel.PLAY_VERDICT[step.fails];
-    parts.caption.textContent = settled
-      ? `${step.label} - ${verdict}`
-      : `${step.label} - REVIEWING ${String(play.step + 1)}/${String(play.steps.length)}`;
-    parts.caption.className = settled
-      ? `omni-feed__caption omni-feed__caption--${step.fails === null ? 'hit' : 'miss'}`
-      : 'omni-feed__caption';
-  }
-
-  /**
-   * Size the glyphs to the room the panel actually has.
-   *
-   * The feed is a fixed 88-column picture and the console panel is not a fixed width - it
-   * shares a `1fr auto 1fr` grid with whatever else the beat put on the board. A hard-coded
-   * font size is therefore a guess that is wrong on some layouts, and being wrong here does
-   * not degrade gracefully: one column too many and the road's vanishing point is off the
-   * right edge, which reads as a broken picture rather than a small one.
-   *
-   * The advance width is MEASURED rather than assumed at the usual 0.6em, because the stack
-   * falls through ui-monospace, Menlo and Consolas and those do not agree. Cached against
-   * the room it solved for, so the 8fps repaint does not reflow twice a frame.
-   */
-  private fitFeed(): void {
-    const parts = this.feedParts;
-    if (!parts) return;
-    const room = parts.screen.clientWidth;
-    if (room < 40) return; // not laid out yet - the next paint will catch it
-    const key = `${String(room)}:${String(this.feedPlay !== null)}`;
-    if (key === this.feedFit) return;
-    this.feedFit = key;
-
-    const base = 10;
-    parts.screen.style.fontSize = `${String(base)}px`;
-    const advance = parts.screen.scrollWidth / FEED_W;
-    if (advance <= 0) return;
-    // Bigger while the review is playing - the footage is the thing being looked at.
-    const cap = this.feedPlay ? 13 : 9;
-    const fit = Math.max(5, Math.min(cap, (base * room) / (advance * FEED_W)));
-    parts.screen.style.fontSize = `${fit.toFixed(2)}px`;
-  }
-
-  private paintFeed(): void {
-    const parts = this.feedParts;
-    if (!parts) return;
-    if (this.feedPlay) {
-      this.paintPlayback(parts);
-      return;
-    }
-    parts.caption.className = 'omni-feed__caption';
-    if (!this.feedCell) {
-      parts.screen.textContent = '';
-      parts.caption.textContent = 'SELECT A CAMERA TO LOOK THROUGH';
-      return;
-    }
-    const rows = renderFeed(DISTRICT_CITY, this.feedCell, {
-      clock: this.feedClock,
-      label: this.feedLabel,
-      since: this.feedSince,
-    });
-    // Authored markup only - every character in it came from asciiFeed, which escapes.
-    parts.screen.innerHTML = feedToHtml(rows);
-    this.fitFeed();
-    parts.caption.textContent = `${this.feedLabel} - LIVE`;
-  }
 
   private refreshPursuit(): void {
     const view = this.view;
@@ -1789,7 +1480,11 @@ export class BoardPanel {
        * of it existing.
        */
       const look = (): void =>
-        this.aimFeed(option.cell, id.textContent ?? 'CAM', hop.seconds);
+        feedOverlay.aim(DISTRICT_CITY, {
+          cell: option.cell,
+          label: id.textContent ?? 'CAM',
+          since: hop.seconds,
+        });
       row.addEventListener('mouseenter', look);
       row.addEventListener('focus', look);
       row.addEventListener('mousedown', (event) => {
@@ -1813,9 +1508,17 @@ export class BoardPanel {
       options.appendChild(row);
     }
 
-    // Open on the first option, so the panel is never showing a dead screen.
-    if (hop.options.length > 0) {
-      this.aimFeed(hop.options[0].cell, `CAM ${String(200 + this.hopIndex * 10)}`, hop.seconds);
+    /*
+     * Open on the first option, so the stage is never showing a dead screen - and so the
+     * player finds out that looking through a camera is a thing they can do without having
+     * to hover anything to discover it.
+     */
+    if (hop.options.length > 0 && !feedOverlay.reviewing) {
+      feedOverlay.aim(DISTRICT_CITY, {
+        cell: hop.options[0].cell,
+        label: `CAM ${String(200 + this.hopIndex * 10)}`,
+        since: hop.seconds,
+      });
     }
 
     // Nothing to send until the chase has been played out.
@@ -2363,12 +2066,33 @@ export class BoardPanel {
 
     if (view.kind === 'pursuit') {
       if (this.picks.length !== view.hops.length) return;
-      if (this.feedPlay) return;
+      if (feedOverlay.reviewing) return;
       const picks = [...this.picks];
-      // Watch the footage, THEN let the machine speak. See feedPlay for why it is here and
-      // not on the verdict coming back.
+      /*
+       * Watch the footage, THEN let the machine speak.
+       *
+       * Hanging the review on SEND rather than on the verdict coming back is the one
+       * decision here worth arguing about. Playing it per-pick would answer each hop the
+       * moment it was made, and this chase is graded as a whole route on purpose -
+       * `pursuitLost` exists so a failed run stays on screen beside the new one, and
+       * instant feedback would turn three hops of deduction into three guesses with a
+       * buzzer. Playing it after the verdict would mean it never runs on a WIN, because a
+       * correct route moves the beat on and takes this board with it - and the win is the
+       * moment worth watching. So: the player commits, watches, and then is told.
+       */
       this.send.disabled = true;
-      this.playRoute(view.hops, picks, () => {
+      const steps = picks.map((id, index) => {
+        const at = view.hops[index];
+        const option = at.options.find((candidate) => candidate.id === id) ?? at.options[0];
+        return {
+          cell: option.cell,
+          label: `CAM ${String(200 + index * 10 + at.options.indexOf(option))}`,
+          since: at.seconds,
+          fails: option.fails,
+        };
+      });
+      feedOverlay.review(DISTRICT_CITY, steps, () => {
+        feedOverlay.hide();
         this.dispatch({ kind: 'device', submission: { kind: 'pursuit', picks } });
       });
       return;
