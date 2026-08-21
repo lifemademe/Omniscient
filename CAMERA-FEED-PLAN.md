@@ -169,11 +169,106 @@ nothing, it teaches that cameras are a thing OMNISCIENT has, and it makes Lucian
 payoff rather than a surprise. That is a separate decision from this plan and should be made
 on its own merits.
 
-## 10. Decisions needed before code
+## 10. Decisions — DECIDED 2026-08-20
 
-1. **Tier 1, 2, or 3** as the target. (Recommendation: 2.)
-2. **Feed always visible, or opened on hover/click?** (Recommendation: small always-on
-   preview per option, enlarged on hover — reading cost stays low, discovery stays free.)
-3. **Post-commit playback length** — 2s reads as a beat, 4s reads as suspense but slows a
-   retry loop the player may run several times. (Recommendation: 2.5s, skippable on click.)
-4. **The early plant** (§9) — in or out of this piece of work?
+1. **Tier 2** is the target.
+2. **Small always-on preview per option, enlarged on hover.** Reading cost stays low,
+   discovery stays free.
+3. **Post-commit playback 2.5s**, skippable on click.
+4. **Early plant: out of this piece of work.** Revisit if the freeze allows.
+
+---
+
+## 11. The ending — the glasses, and the resolve that was already promised
+
+### 11.1 This is not a new idea; it is an unbuilt one
+
+`mission-08-district.ts`'s header, written before a line of code:
+
+> "The later phases of this mission - the camera hops, the breadcrumbs, and **the moment
+> the wireframe resolves into rain on a windscreen** - are built on that same rule"
+
+Checked: the `windscreen` shot exists (`view/scenes.ts` ~9263) — a four-second drop from
+the overhead to eye level inside the traffic, with a fine note about the little green boxes
+finally passing at eye level "at the exact moment the game admits they are people". **The
+resolve does not exist.** No rain, no glass, no transition out of wireframe. The camera
+move ships; the payoff it was built for does not.
+
+### 11.2 What the glasses are FOR
+
+§157 is absolute: the console never touches anything, it only ever knows. That rule creates
+a problem the windscreen shot currently papers over — *how does the machine get a view from
+inside a stranger's car?* No municipal camera can do that. As it stands the shot is the
+machine imagining eye level, which is licence rather than logic.
+
+Smart glasses on the driver are the licence made legitimate: a connected consumer device,
+on a network, that OMNISCIENT can look through without touching anything. That is tier
+three of `wireCity.ts`'s own thesis — *inside a system that is connected to it* — in its
+purest form, and it is stronger than a camera feed because a camera is infrastructure and
+glasses are personal.
+
+### 11.3 The arc this creates with §1–§9
+
+| stage | what is looked through | distance |
+|---|---|---|
+| wireframe district | nothing — raw network data | the machine's own eye |
+| ASCII camera feed | public municipal infrastructure | cold, fixed, permitted |
+| **the glasses** | **a private device on a person** | **behind his eyes** |
+
+The mission spends three phases at arm's length through cold public cameras, and at the
+climax the machine finds a private one. The feed sets the glasses up; the glasses pay the
+feed off. Build both or the ladder has a rung missing.
+
+### 11.4 The two rules for it
+
+**It must NOT be ASCII.** The entire payoff is the abstraction *dropping*. Everything the
+player has seen for three phases is glyphs and lines; this should be the most rendered
+thing in the game — rain, glass, wiper, dashboard glow, hands. If the glasses were ASCII
+there would be nothing to resolve into.
+
+**The machine must do it UNASKED.** The bridge beat offers a menu of transgressions and the
+punchline is that none of them do anything, because the console has no hands. Then, without
+being offered and without being chosen, it does the one thing nobody put on the menu: it
+looks through a man's own glasses — because looking is all it does, and looking turns out
+to be the most invasive option available. That reframes Lucian's closing line exactly:
+"I did not know your system could do that. **Either of those things.**"
+
+### 11.5 Dependency: the plant
+
+Glasses arriving from nowhere at the climax is a deus ex machina. Something earlier has to
+establish that this driver carries a connected device — a line in the fleet/evidence data,
+or one clause from Lucian while narrowing. Cheapest honest option: add it to the six facts
+the police already know, so the player has *read* it before it matters.
+
+### 11.6 Scope
+
+The camera move exists. What is needed is the resolve and the interior:
+- cross-fade wireframe → rendered over ~1.2s at the end of the existing 4s push-in
+- a simple rendered interior: windscreen frame, rain streaks, wiper arc, dash glow,
+  oncoming headlights — all buildable with the project's existing procedural-texture muscle
+- a `THROUGH: PERSONAL DEVICE — UNSECURED` chrome line, in console green, over the top
+
+Estimate 1–1.5 days on top of Tier 2.
+
+---
+
+## 12. The bridge menu reads as broken (fix alongside)
+
+**Not a bug — but not landing.** The three options at the `bridge` beat all route to
+`arrival` with the same environment cue, and the code comment is explicit that this is the
+point: "They all lead to the same place, because none of them are what stops the car."
+
+The author read it in play as "three chat options that don't do anything", which is the
+signal that matters. Cause: all three produce an identical next beat and Lucian's arrival
+line never acknowledges which was chosen, so nothing on screen proves the choice registered.
+
+**Fix — witness each choice, change nothing.** Do not branch the outcome; §157 and the
+mission's whole moral depend on the console being impotent. Instead give each choice its
+own acknowledgement line before the identical arrival:
+
+- *change the lights* → the console reports the junction switching. He goes through anyway.
+- *call the number* → it rings out. Nobody picks up a phone at speed.
+- *just watch* → the machine says it is watching, which is the only honest one.
+
+Each is seen, each is futile. Preserves the thesis and removes the broken-button read.
+Roughly an hour, in `mission-08-district.ts` alone.
