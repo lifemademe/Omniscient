@@ -40,6 +40,7 @@ import {
 } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
 import { carInterior } from '../geometry/carInterior.js';
+import { createRainGlass } from '../art/rainGlass.js';
 import { CERTAINTY } from '../art/certainty.js';
 import { createFloodwater } from '../art/floodwater.js';
 import { createRipples } from '../art/ripples.js';
@@ -9332,8 +9333,28 @@ function buildWireCity(scene: ContactScene): void {
   cabinGroup.rotation.y = Math.atan2(-facing.x, -facing.z);
   for (const mesh of [cabin, glass, wipers, phone, rim]) cabinGroup.add(mesh);
 
+  /*
+   * The rain, and the light to see it by.
+   *
+   * This scene sets `atmosphere = false` and has no lights in it, because everything else in
+   * it is LineBasicMaterial and line materials do not care. The car is the first lit thing
+   * that has ever stood here, so without these it renders as a black rectangle in front of
+   * the city - which is exactly what it did.
+   *
+   * Three sources, all weak. A cold ambient so the cabin is a shape rather than a
+   * silhouette; a green key from ahead and to the left, which is the district's own light
+   * coming through the glass; and nothing behind, because there is nothing behind - a
+   * back light would invent a world outside the car that this shot never shows.
+   */
+  const rain = createRainGlass(car.windscreen);
+  for (const layer of rain.layers) cabinGroup.add(layer);
+
   const carNode = ENGINE.SceneNode.create({ name: 'CarInterior', position: EYE_AT });
   carNode.add(cabinGroup);
+  carNode.add(new THREE.AmbientLight(new THREE.Color('#1c2c33'), 1.1));
+  const key = new THREE.DirectionalLight(new THREE.Color('#9fd8a8'), 1.4);
+  key.position.set(-3, 2, -6);
+  carNode.add(key);
 
   /** A point in the car's own frame, in world space. */
   const inCar = (local: THREE.Vector3): THREE.Vector3 =>
@@ -9348,6 +9369,7 @@ function buildWireCity(scene: ContactScene): void {
    * visible, so a set nobody has revealed costs nothing.
    */
   let carClock = 0;
+  let wiped = false;
   scene.registerProp('car', carNode, {
     anchors: {
       windscreen: inCar(car.anchors.windscreen),
@@ -9362,7 +9384,22 @@ function buildWireCity(scene: ContactScene): void {
        * a metronome; the pause is what makes the next sweep feel like weather.
        */
       const cycle = carClock % 2.4;
-      wipers.rotation.z = cycle < 0.9 ? Math.sin((cycle / 0.9) * Math.PI) * 0.85 : 0;
+      const sweeping = cycle < 0.9;
+      wipers.rotation.z = sweeping ? Math.sin((cycle / 0.9) * Math.PI) * 0.85 : 0;
+      /*
+       * The blade and the water are one system.
+       *
+       * Cleared at the MIDDLE of the sweep rather than at its start, because that is where
+       * the blade actually crosses the part of the glass the camera is looking through.
+       * Clearing on contact is the whole illusion: rain that fades on a timer next to a
+       * wiper that happens to be moving reads as two unrelated animations.
+       */
+      if (sweeping && !wiped) {
+        rain.wipe();
+        wiped = true;
+      }
+      if (!sweeping) wiped = false;
+      rain.update(deltaTime);
       if (phone.visible) {
         // Bursts of two, the way a phone rings, then a gap somebody could hope into.
         const ring = carClock % 4.2;
@@ -9381,12 +9418,14 @@ function buildWireCity(scene: ContactScene): void {
       'arrive-lights': () => {
         // Stays in the wireframe. Nothing of the car is revealed; the district IS the shot.
         for (const mesh of [cabin, glass, wipers, phone, rim]) mesh.visible = false;
+        rain.setVisible(false);
       },
       'arrive-call': () => {
         for (const mesh of [cabin, glass, wipers, phone]) mesh.visible = true;
         // No spectacles: this ending is not looking through anybody. It is reaching into a
         // car through a phone nobody picks up.
         rim.visible = false;
+        rain.setVisible(true);
         carClock = 0;
       },
       'arrive-watch': () => {
@@ -9395,6 +9434,7 @@ function buildWireCity(scene: ContactScene): void {
         // the thing the machine is looking through.
         phone.visible = false;
         rim.visible = true;
+        rain.setVisible(true);
         carClock = 0;
       },
     },
