@@ -84,7 +84,7 @@ export const FEED_COLOURS = {
   windowLit: '#5f9c6c',
   road: '#1b241e',
   /** Kerbs and lane markings - the geometry that says "this is a street". */
-  marking: '#4a7a58',
+  marking: '#5c9068',
   /** Ambient traffic - present, unremarkable. */
   traffic: '#8fbf9a',
   /**
@@ -115,13 +115,14 @@ const RAMP = ' .:-=+*#%@';
  * because there are only ever four wall orientations in a grid city, and the only thing the
  * shading has to achieve is that two walls meeting at a corner are different tones.
  *
- * Low values, and deliberately. These were roughly doubled and the wall beside the lens
- * came out as a field of the ramp's heavy glyphs across a third of the frame - correct for
- * a surface a few metres away and wrong for the picture, because it buried the kerbs, the
- * centre line and the traffic under the one thing in shot that nothing ever happens on. The
- * buildings are here to frame a street, not to be the subject of the shot.
+ * The SPREAD between them is what is being tuned, not the average. Halving these to quieten
+ * a wall that was shouting also collapsed the range: at a peak of 0.3 the four orientations
+ * landed on two adjacent ramp steps, so every building in the district was one of two flat
+ * tones and a corner stopped reading as a corner. The wall was never the problem - the
+ * problem was lit windows the size of a third of the frame, which is fixed where they are
+ * drawn. These are back up, with a wide gap between the key faces and the shaded ones.
  */
-const KEY = [0.3, 0.13, 0.22, 0.09, 0.34, 0.34];
+const KEY = [0.58, 0.26, 0.43, 0.17, 0.62, 0.62];
 
 /**
  * Eye height and tilt.
@@ -495,7 +496,8 @@ export function renderFeed(
       }
     }
     text(rows, Math.floor(FEED_W / 2) - 4, Math.floor(FEED_H / 2), 'NO SIGNAL', FEED_COLOURS.dim);
-    text(rows, 2, 1, label ?? 'CAM --', FEED_COLOURS.dim);
+    const id = label ?? 'CAM --';
+    text(rows, FEED_W - id.length - 2, 1, id, FEED_COLOURS.dim);
     return rows;
   }
 
@@ -578,6 +580,20 @@ export function renderFeed(
          * stay square as the wall recedes - which a screen-space pattern cannot do, and
          * which is most of what separates a building from a hatched rectangle.
          */
+        /*
+         * Windows exist in a BAND of distance, and nowhere else.
+         *
+         * A window is 2.2m by 2.6m. At eight metres through this lens that is twenty-six
+         * columns across, so one lit window became a bright block a third of the frame wide
+         * and a near building came out as a barcode. Past eighty metres the same window is
+         * under two rows tall and the grid samples faster than it can be drawn, which is
+         * moire. Between those the grid is worth having and outside them the wall is a
+         * plain graded surface - which is also just true: standing under a building you see
+         * wall, not a facade.
+         */
+        const rowsPerFloor = (2.6 / t) * fy;
+        const gridded = rowsPerFloor > 1.5 && rowsPerFloor < 7;
+
         const along = face < 2 ? hz : hx;
         const gw = Math.floor(along / 2.2);
         const gh = Math.floor(hy / 2.6);
@@ -596,8 +612,19 @@ export function renderFeed(
          * collapse to a single pip - without any one of them shouting.
          */
         const core = paneU > 0.42 && paneU < 0.78 && paneV > 0.42 && paneV < 0.8;
+        /*
+         * The joints between bays and between storeys.
+         *
+         * On a wall too close for windows this is all the detail there is, and it is enough:
+         * a building a few metres away shows you its mullions and its floor lines, not a
+         * facade. Filled panes at that range are a third of the frame each - the slab of
+         * bright glyphs down one side that this whole band exists to prevent - but the
+         * LINES between them stay one character wide however close they get, so the wall
+         * keeps its scale instead of going flat.
+         */
+        const joint = paneU < 0.05 || paneU > 0.95 || paneV < 0.06 || paneV > 0.94;
 
-        if (lit && inPane && t < 90) {
+        if (gridded && lit && inPane) {
           // A few flicker, on their own slow clocks. Nothing in a city is static.
           const flicker = hash(gw, gh, Math.floor(clock * 0.7)) > 0.9;
           if (core && !flicker) put(rows, px, py, '■', FEED_COLOURS.windowLit);
@@ -624,16 +651,19 @@ export function renderFeed(
          * so it doubles as the perspective cue a smooth surface cannot provide.
          */
         const fog = Math.max(0, 1 - t / FADE);
-        /*
-         * The lattice stops well before the fog does.
-         *
-         * Past about fifty metres a two metre window is narrower than a character cell, so
-         * `inPane` samples the grid faster than the grid can be drawn and the wall turns
-         * into an even field of dots - forty columns of moire that read as one flat tone.
-         * Distant buildings get the plain face instead and are allowed to simply fade.
-         */
-        const bay = t < 50 ? (inPane ? 1.3 : 0.65) : 1;
-        put(rows, px, py, ramp(KEY[face] * bay * Math.pow(fog, 1.4)), depthColour(t));
+        const detail = gridded
+          ? // In the band: panes and the wall between them.
+            inPane
+            ? 1.3
+            : 0.65
+          : rowsPerFloor >= 7
+            ? // Too close for panes: a dark wall carrying its joints.
+              joint
+              ? 1.15
+              : 0.26
+            : // Too far for either: let it simply fade.
+              1;
+        put(rows, px, py, ramp(KEY[face] * detail * Math.pow(fog, 1.4)), depthColour(t));
         continue;
       }
 
@@ -680,12 +710,22 @@ export function renderFeed(
     if (rows[scan][x].ch === ' ') put(rows, x, scan, '·', FEED_COLOURS.dim);
   }
 
-  // Chrome. The label is drawn verbatim - it arrived as "CAM 203" and a `CAM ` prefix here
-  // put "CAM CAM 203" on screen.
-  text(rows, 2, 1, label ?? 'CAM --', FEED_COLOURS.chrome);
+  /*
+   * Chrome, stacked on the RIGHT.
+   *
+   * The camera id sat at top left, which is exactly where the Contact View keeps its
+   * connection and trust cards - and those are bevelled panels that paint over the feed, so
+   * the one piece of text saying which camera this is was behind them. The right edge of
+   * the stage is clear.
+   *
+   * The label is drawn verbatim: it arrives as "CAM 203", and a `CAM ` prefix here put
+   * "CAM CAM 203" on screen.
+   */
+  const id = label ?? 'CAM --';
+  text(rows, FEED_W - id.length - 2, 1, id, FEED_COLOURS.chrome);
   if (since !== undefined) {
     const stamp = `T+${since.toFixed(0)}s`;
-    text(rows, FEED_W - stamp.length - 2, 1, stamp, FEED_COLOURS.chrome);
+    text(rows, FEED_W - stamp.length - 2, 2, stamp, FEED_COLOURS.chrome);
   }
   // Labelled, because two bare numbers in the corner of a screen read as debug output.
   text(rows, 2, FEED_H - 2, `GRID ${String(cell.x)},${String(cell.y)}`, FEED_COLOURS.dim);
