@@ -71,7 +71,7 @@ export type FeedRow = FeedCell[];
  */
 export const FEED_COLOURS = {
   /** Structure, far. Barely above the background - mass without detail. */
-  far: '#16281d',
+  far: '#1e3326',
   /** Structure, mid. */
   near: '#24462f',
   /** Structure, near. The wall you could touch. */
@@ -82,7 +82,15 @@ export const FEED_COLOURS = {
   window: '#3f6b4a',
   /** The few windows that are properly lit. */
   windowLit: '#5f9c6c',
-  road: '#1b241e',
+  /*
+   * Tarmac, and it has to be ABOVE the background rather than near it.
+   *
+   * At #1b241e the carriageway was within a hair of the panel behind it, so the one part of
+   * the picture this mission is about rendered as a void with two bright lines floating in
+   * it. Dark is right for a road; invisible is not - the kerbs and the centre line need a
+   * surface to be the edges OF.
+   */
+  road: '#2b3c30',
   /** Kerbs and lane markings - the geometry that says "this is a street". */
   marking: '#5c9068',
   /** Ambient traffic - present, unremarkable. */
@@ -426,7 +434,9 @@ function ground(
   // Tarmac. Grain that thins with distance, so the near road is a surface and the far road
   // a suggestion - and never dense enough to compete with the markings.
   const grain = hash(Math.round(wx * 2), Math.round(wz * 2), 3);
-  const density = t < 18 ? 0.3 : t < 45 ? 0.16 : 0.06;
+  // Thicker than it was, for the same reason the colour came up: at a third of the near
+  // cells the road was more gap than surface, and a surface is what carries perspective.
+  const density = t < 18 ? 0.52 : t < 45 ? 0.34 : 0.15;
   if (grain < density) return { ch: ramp(0.12 + grain), colour: FEED_COLOURS.road };
   return { ch: ' ', colour: FEED_COLOURS.road };
 }

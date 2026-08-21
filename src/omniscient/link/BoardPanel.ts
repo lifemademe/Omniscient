@@ -334,6 +334,17 @@ const BOARD_CSS = `
   letter-spacing: 0.06em;
   color: #e0a24c;
 }
+/*
+ * The route is finished, and that is not an alarm.
+ *
+ * This line carries the live question for the whole chase, so it wears the console's amber
+ * - the colour that means "this is the thing in front of you". Reusing it verbatim for the
+ * end of the trail put a warning colour on the one moment nothing is wrong: reported as
+ * "why does it say TRAIL ENDS, is my answer not correct?" by somebody whose answer was
+ * correct and who then pressed SEND and was right. Ordinary green, because the network
+ * running out is the premise of the next phase rather than a fault in this one.
+ */
+.omni-hop__sighting--done { color: rgba(159, 216, 168, 0.9); }
 .omni-hop__options { display: flex; flex-direction: column; gap: 4px; }
 .omni-hop__option {
   display: flex;
@@ -1497,8 +1508,19 @@ export class BoardPanel {
 
     const hop = view.hops[this.hopIndex];
     if (!hop) {
-      // Every hop answered. The picks go up and the runtime decides what they were worth.
-      sighting.textContent = 'TRAIL ENDS - no camera ahead of him';
+      /*
+       * Every hop answered. The picks go up and the runtime decides what they were worth.
+       *
+       * Says the route is COMPLETE first and why it stops second. "TRAIL ENDS" led with the
+       * bad half of a sentence that has no bad half in it: the trail ending is the network
+       * thinning at the district edge, which is authored, expected, and the reason phase
+       * three exists. Read cold, at the moment a player finishes their last pick, it sounds
+       * like the game telling them they got it wrong.
+       */
+      sighting.className = 'omni-hop__sighting omni-hop__sighting--done';
+      sighting.textContent =
+        'ROUTE COMPLETE - there is no camera ahead of him. That is the network ending, '
+        + 'not the trail going cold.';
       this.send.disabled = false;
       this.status.className = 'omni-board__status';
       this.status.textContent =
@@ -1529,6 +1551,8 @@ export class BoardPanel {
      * in the same tone as everything else, as a subordinate clause. Now it leads.
      */
     const turned = this.hopIndex > 0 && view.hops[this.hopIndex - 1].heading !== hop.heading;
+    // Back to the live question, and back to the colour that means "this is in front of you".
+    sighting.className = 'omni-hop__sighting';
     sighting.textContent = turned
       ? `HE TURNED - ${hop.heading} now, not ${view.hops[this.hopIndex - 1].heading}. That was `
         + `${hop.seconds}s ago, still about a block a second. Ahead means ${hop.heading} from here.`
