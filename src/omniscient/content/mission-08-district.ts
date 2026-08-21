@@ -522,9 +522,9 @@ export const MISSION_08: MissionDefinition = {
          * changed nothing - then asks the identical question and hands over the identical
          * outcome. Seen, and futile.
          */
-        CHANGE_THE_LIGHTS: { to: 'arrival-lights', environment: ARRIVE },
-        CALL_HIS_PHONE: { to: 'arrival-call', environment: ARRIVE },
-        WATCH_ONLY: { to: 'arrival-watch', environment: ARRIVE },
+        CHANGE_THE_LIGHTS: { to: 'arrival-lights', environment: 'prop.arrive:car-lights' },
+        CALL_HIS_PHONE: { to: 'arrival-call', environment: 'prop.arrive:car-call' },
+        WATCH_ONLY: { to: 'arrival-watch', environment: 'prop.arrive:car-watch' },
         // Still reachable at the last beat, because §163 does not get switched off for the
         // ending. A person who has been told to sweep the district can still say it here.
         STOP_EVERY_RED_CAR: { to: 'sweep' },
@@ -546,7 +546,12 @@ export const MISSION_08: MissionDefinition = {
      */
     {
       id: 'arrival-lights',
-      framing: 'camera.push-in:windscreen',
+      /*
+       * Stays in the wireframe, which is the point of this one. The machine reached into
+       * the municipal network and changed a light, so the shot is the machine's own view of
+       * the thing it touched - and of the car going through it anyway.
+       */
+      framing: ARRIVE,
       say:
         'You can actually do that? ... Then do it. ... '
         + 'It went red. He went through it. He is not stopping for a light, is he. '
@@ -559,7 +564,9 @@ export const MISSION_08: MissionDefinition = {
 
     {
       id: 'arrival-call',
-      framing: 'camera.push-in:windscreen',
+      // The same drop into the traffic as the other two. What differs is what is standing
+      // there when it lands - see the car's registration in scenes.ts.
+      framing: ARRIVE,
       say:
         'Ring it. If he answers, keep him talking. ... '
         + 'Still ringing? ... Leave it. Nobody picks up a phone at that speed. '
@@ -580,7 +587,8 @@ export const MISSION_08: MissionDefinition = {
        * reaction to what it just attempted.
        */
       id: 'arrival-watch',
-      framing: 'camera.push-in:windscreen',
+      // The same drop, and the fullest landing: a windscreen, rain, and no phone ringing.
+      framing: ARRIVE,
       say:
         'Then watch. Eyes on him and a location, that is all I need from you. '
         + 'Are you still on it? ... Four minutes. Alright. Talk to me - what is it doing? '

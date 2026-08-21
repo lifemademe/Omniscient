@@ -39,6 +39,7 @@ import {
   createRatingPlate,
 } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
+import { carInterior } from '../geometry/carInterior.js';
 import { CERTAINTY } from '../art/certainty.js';
 import { createFloodwater } from '../art/floodwater.js';
 import { createRipples } from '../art/ripples.js';
@@ -9265,6 +9266,150 @@ function buildWireCity(scene: ContactScene): void {
     target: new THREE.Vector3(-8, 3.4, -16),
     duration: 4,
   });
+
+  /*
+   * ------------------------------------------------------------------ the car, and the end
+   *
+   * The header of mission-08-district.ts promised "the moment the wireframe resolves into
+   * rain on a windscreen" before a line of this mission was written, and the windscreen
+   * shot above has been dropping the camera into the traffic for months with nothing at the
+   * bottom of the move. This is what it drops into.
+   *
+   * It lives in THIS scene rather than one of its own, and that is the whole trick. A cut
+   * to another room would be the game changing subject; a set already standing in the
+   * district, revealed as the camera arrives at eye level, is the same continuous look
+   * finally landing on something solid. The wireframe does not end. It resolves.
+   *
+   * Built AT THE END OF THE WINDSCREEN MOVE, which is the part worth getting right.
+   *
+   * The obvious build parks the set somewhere out of the way and cuts to it. That throws
+   * away the only thing this scene already had: a four second drop from the overhead into
+   * the traffic, written months ago with a note about the little green boxes finally
+   * passing at eye level at the exact moment the game admits they are people. A cut would
+   * be the game changing subject. Landing the same move inside a solid car is the wireframe
+   * RESOLVING, which is the sentence the mission header wrote before any of this existed.
+   *
+   * So the driver's eye goes exactly where that shot leaves the camera, facing exactly
+   * where it leaves it looking - derived from the shot rather than typed in, so moving the
+   * shot moves the car and the two can never drift apart.
+   */
+  const EYE_AT = new THREE.Vector3(12, 2.2, 30);
+  const LOOK_AT = new THREE.Vector3(-8, 3.4, -16);
+  const car = carInterior();
+
+  const solid = (colour: string, extra: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial =>
+    new THREE.MeshStandardMaterial({
+      color: new THREE.Color(colour),
+      roughness: 0.82,
+      metalness: 0.05,
+      ...extra,
+    });
+
+  const part = (name: string, geometry: THREE.BufferGeometry, material: THREE.Material): THREE.Mesh => {
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = name;
+    mesh.visible = false;
+    return mesh;
+  };
+
+  const cabin = part('Cabin', car.cabin, solid('#161a1c'));
+  const glass = part(
+    'Windscreen',
+    car.windscreen,
+    solid('#0d1a1e', { transparent: true, opacity: 0.22, roughness: 0.12 })
+  );
+  const wipers = part('Wipers', car.wipers, solid('#0a0c0d'));
+  const phone = part('Phone', car.phone, solid('#0b0e10', { emissive: new THREE.Color('#0b0e10') }));
+  const rim = part('Glasses', car.glasses, solid('#0e1113'));
+
+  /*
+   * A group inside the node carries the yaw, so the set faces down the road the camera is
+   * looking along. The geometry is built looking down -Z; this turns -Z onto the shot's own
+   * view direction.
+   */
+  const facing = LOOK_AT.clone().sub(EYE_AT);
+  const cabinGroup = new THREE.Group();
+  cabinGroup.rotation.y = Math.atan2(-facing.x, -facing.z);
+  for (const mesh of [cabin, glass, wipers, phone, rim]) cabinGroup.add(mesh);
+
+  const carNode = ENGINE.SceneNode.create({ name: 'CarInterior', position: EYE_AT });
+  carNode.add(cabinGroup);
+
+  /** A point in the car's own frame, in world space. */
+  const inCar = (local: THREE.Vector3): THREE.Vector3 =>
+    local.clone().applyEuler(cabinGroup.rotation).add(EYE_AT);
+
+  /*
+   * Wipers and a ringing phone, driven per frame.
+   *
+   * `idle` rather than a tween, because both are things the world does whether or not
+   * anybody cued them - the wiper was sweeping before the machine arrived, and the phone
+   * rings on the network's clock rather than on the console's. Inert until their part is
+   * visible, so a set nobody has revealed costs nothing.
+   */
+  let carClock = 0;
+  scene.registerProp('car', carNode, {
+    anchors: {
+      windscreen: inCar(car.anchors.windscreen),
+      phone: inCar(car.anchors.phone),
+      road: inCar(car.anchors.road),
+    },
+    idle: (deltaTime) => {
+      if (!cabin.visible) return;
+      carClock += deltaTime;
+      /*
+       * One sweep every 2.4 seconds, and it PARKS between them. A wiper that never stops is
+       * a metronome; the pause is what makes the next sweep feel like weather.
+       */
+      const cycle = carClock % 2.4;
+      wipers.rotation.z = cycle < 0.9 ? Math.sin((cycle / 0.9) * Math.PI) * 0.85 : 0;
+      if (phone.visible) {
+        // Bursts of two, the way a phone rings, then a gap somebody could hope into.
+        const ring = carClock % 4.2;
+        const lit = ring < 0.6 || (ring > 1 && ring < 1.6);
+        (phone.material as THREE.MeshStandardMaterial).emissive.setStyle(lit ? '#7fe08a' : '#0b0e10');
+      }
+    },
+    actions: {
+      /*
+       * Three endings, three subsets of one set.
+       *
+       * Each is the machine having done the thing it was asked to do, and none of them
+       * changes what happens next - §157 holds all the way to the credits. What differs is
+       * only which surfaces are in shot and where the lens is.
+       */
+      'arrive-lights': () => {
+        // Stays in the wireframe. Nothing of the car is revealed; the district IS the shot.
+        for (const mesh of [cabin, glass, wipers, phone, rim]) mesh.visible = false;
+      },
+      'arrive-call': () => {
+        for (const mesh of [cabin, glass, wipers, phone]) mesh.visible = true;
+        // No spectacles: this ending is not looking through anybody. It is reaching into a
+        // car through a phone nobody picks up.
+        rim.visible = false;
+        carClock = 0;
+      },
+      'arrive-watch': () => {
+        for (const mesh of [cabin, glass, wipers]) mesh.visible = true;
+        // No phone, because nothing was called - and the rim, because somebody is wearing
+        // the thing the machine is looking through.
+        phone.visible = false;
+        rim.visible = true;
+        carClock = 0;
+      },
+    },
+  });
+
+  /*
+   * There is no second camera move, and that is deliberate.
+   *
+   * Two more shots were registered here - one looking down at the phone, one out at the
+   * road - and they were the wrong instrument. All three endings take the SAME drop into
+   * the traffic; what differs is what is standing there when it lands. A camera that swings
+   * to the phone tells the player to look at it, and the whole point of where that phone
+   * sits is that it goes off beside somebody who is not looking at it. Peripheral vision
+   * does the work a pan would have taken away.
+   */
 
   /*
    * No certainty table here either, and this one is not a choice - the law cannot reach
