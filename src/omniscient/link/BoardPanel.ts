@@ -27,6 +27,8 @@ import { describe } from '../mission/pursuit.js';
 import { reached } from '../mission/pipes.js';
 import { narrow } from '../mission/traces.js';
 import { audio } from '../audio/ConsoleAudio.js';
+import { feedToHtml, renderFeed } from '../art/asciiFeed.js';
+import { DISTRICT_CITY } from '../content/district-07.js';
 
 import type { BeamState } from '../mission/beam.js';
 import type { ClueId, Evidence } from '../mission/traces.js';
@@ -332,6 +334,35 @@ const BOARD_CSS = `
   color: #e0a24c;
 }
 .omni-hop__options { display: flex; flex-direction: column; gap: 4px; }
+/*
+ * The camera feed. A character grid, so it must be monospace and it must not wrap - a feed
+ * that reflows is a feed that stops being a picture. Zero letter-spacing and a line-height
+ * of 1 keep the glyph cells square enough that the road's perspective reads.
+ */
+.omni-feed {
+  margin: 6px 0 8px;
+  padding: 6px 8px;
+  border: 1px solid #1a2f21;
+  background: #070d0a;
+  overflow: hidden;
+}
+.omni-feed__screen {
+  margin: 0;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 7px;
+  line-height: 1;
+  letter-spacing: 0;
+  white-space: pre;
+  color: #2f4a37;
+}
+.omni-feed--big .omni-feed__screen { font-size: 10px; }
+.omni-feed__caption {
+  padding-top: 4px;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #3f6b4a;
+}
 .omni-hop__option {
   display: flex;
   align-items: baseline;
@@ -1322,11 +1353,25 @@ export class BoardPanel {
     const options = document.createElement('div');
     options.className = 'omni-hop__options';
 
+    /*
+     * The feed sits between the question and the answers, because that is the order the
+     * player thinks in: he was there, this is what the cameras can see, which one do I pick.
+     */
+    const feedBox = document.createElement('div');
+    feedBox.className = 'omni-feed';
+    const screen = document.createElement('pre');
+    screen.className = 'omni-feed__screen';
+    const caption = document.createElement('div');
+    caption.className = 'omni-feed__caption';
+    feedBox.append(screen, caption);
+    this.feedParts = { box: feedBox, screen, caption };
+
     // Trail above the question: the route reads top to bottom, oldest first, and the thing
     // being decided is always at the bottom where the last answer just landed.
-    panel.append(trail, sighting, options);
+    panel.append(trail, sighting, feedBox, options);
     this.grid.appendChild(panel);
     this.pursuitParts = { trail, sighting, options };
+    this.startFeed();
     this.refreshPursuit();
   }
 
@@ -1352,9 +1397,76 @@ export class BoardPanel {
    * WHICH hop went wrong, and that sentence is useless if the thing it refers to has just
    * been deleted. So the failed run stays, greyed, until the first pick of the new one.
    */
+  /**
+   * The camera feed under the sighting line, and which camera it is pointed at.
+   *
+   * One screen shared by every option rather than a thumbnail each: three animated grids
+   * side by side is three times the reading cost for a panel whose job is to make ONE
+   * decision easier, and the hover already says which camera is being considered.
+   */
+  private feedParts: { box: HTMLElement; screen: HTMLElement; caption: HTMLElement } | null = null;
+  private feedCell: { x: number; y: number } | null = null;
+  private feedLabel = '';
+  private feedSince = 0;
+  private feedClock = 0;
+  private feedTimer: number | null = null;
   private pursuitLost: Array<{ cam: string; where: string }> = [];
   /** The last verdict shown, so a new one is an edge rather than a state. */
   private pursuitNote: string | null = null;
+
+  /**
+   * Drive the feed at eight frames a second.
+   *
+   * Not requestAnimationFrame: this is a surveillance monitor, and a low, slightly uneven
+   * frame rate is most of what makes a picture read as a live feed rather than as an
+   * illustration. It is also eighty per cent cheaper for a panel that is only ever a
+   * secondary thing on screen.
+   */
+  private startFeed(): void {
+    this.stopFeed();
+    this.feedTimer = window.setInterval(() => {
+      this.feedClock += 0.125;
+      this.paintFeed();
+    }, 125);
+  }
+
+  private stopFeed(): void {
+    if (this.feedTimer !== null) window.clearInterval(this.feedTimer);
+    this.feedTimer = null;
+  }
+
+  /**
+   * Point the feed at a camera.
+   *
+   * `suspect` is never passed from here and that is deliberate rather than incidental - see
+   * asciiFeed's header. This mission is won by narrowing rather than searching, and a feed
+   * that showed the car before the player committed would turn three hops of inference into
+   * "pick the one with the car in it".
+   */
+  private aimFeed(cell: { x: number; y: number }, label: string, since: number): void {
+    this.feedCell = cell;
+    this.feedLabel = label;
+    this.feedSince = since;
+    this.paintFeed();
+  }
+
+  private paintFeed(): void {
+    const parts = this.feedParts;
+    if (!parts) return;
+    if (!this.feedCell) {
+      parts.screen.textContent = '';
+      parts.caption.textContent = 'SELECT A CAMERA TO LOOK THROUGH';
+      return;
+    }
+    const rows = renderFeed(DISTRICT_CITY, this.feedCell, {
+      clock: this.feedClock,
+      label: this.feedLabel,
+      since: this.feedSince,
+    });
+    // Authored markup only - every character in it came from asciiFeed, which escapes.
+    parts.screen.innerHTML = feedToHtml(rows);
+    parts.caption.textContent = `${this.feedLabel} - LIVE`;
+  }
 
   private refreshPursuit(): void {
     const view = this.view;
@@ -1472,6 +1584,15 @@ export class BoardPanel {
       where.textContent = describe(hop.from, hop.heading, option.cell);
 
       row.append(id, where);
+      /*
+       * Hovering an option looks through it. Selection is unchanged - the click still picks
+       * - so the feed is purely what you consult before deciding, which is the whole point
+       * of it existing.
+       */
+      const look = (): void =>
+        this.aimFeed(option.cell, id.textContent ?? 'CAM', hop.seconds);
+      row.addEventListener('mouseenter', look);
+      row.addEventListener('focus', look);
       row.addEventListener('mousedown', (event) => {
         event.preventDefault();
         audio.play('seat');
@@ -1491,6 +1612,11 @@ export class BoardPanel {
         this.refreshPursuit();
       });
       options.appendChild(row);
+    }
+
+    // Open on the first option, so the panel is never showing a dead screen.
+    if (hop.options.length > 0) {
+      this.aimFeed(hop.options[0].cell, `CAM ${String(200 + this.hopIndex * 10)}`, hop.seconds);
     }
 
     // Nothing to send until the chase has been played out.

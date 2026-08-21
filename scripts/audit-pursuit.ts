@@ -24,6 +24,7 @@ import { createRng, seedFrom } from '../src/omniscient/core/rng.js';
 import { wireCity } from '../src/omniscient/geometry/wireCity.js';
 import { auditPursuit, classify, planPursuit } from '../src/omniscient/mission/pursuit.js';
 import { planFleet } from '../src/omniscient/mission/traces.js';
+import { FEED_COLOURS, renderFeed } from '../src/omniscient/art/asciiFeed.js';
 
 const SIZE = 24;
 
@@ -116,6 +117,67 @@ check(
   '  one street over is still on the road',
   classify(from, 'east', 6, { x: 14, y: 11 }) === null
 );
+
+/*
+ * ---------------------------------------------------------------- the camera feed
+ *
+ * The feed exists so a player can look THROUGH a camera before choosing it, and the whole
+ * mission dies if it shows them the answer. `hiddenTruth` says the car "is found by
+ * narrowing, not by searching"; a pre-commit picture with the suspect in it turns three
+ * hops of inference into "pick the one with the car". So the guarantee is not a convention
+ * to be remembered - it is checked here, at every option of every hop.
+ */
+console.log('\n=== THE CAMERA FEED ===');
+{
+  const rng2 = createRng(seedFrom('district-07'));
+  const city2 = wireCity(rng2, { size: SIZE });
+  const fleet2 = planFleet(rng2, 180, SIZE);
+  const chase2 = planPursuit(rng2, {
+    cameras: city2.cameras,
+    start: fleet2.suspect.cell,
+    heading: fleet2.evidence.heading ?? 'east',
+    size: SIZE,
+  });
+
+  const showsSuspect = (rows: ReturnType<typeof renderFeed>): boolean =>
+    rows.some((row) => row.some((cell) => cell.colour === FEED_COLOURS.suspect));
+
+  let leaked = 0;
+  let drew = 0;
+  let options = 0;
+  for (const hop of chase2.hops) {
+    for (const option of hop.options) {
+      options += 1;
+      // Exactly how BoardPanel calls it: no suspect argument, ever.
+      const rows = renderFeed(city2, option.cell, { clock: 1.5, label: 'CAM', since: hop.seconds });
+      if (showsSuspect(rows)) leaked += 1;
+      const ink = rows.reduce((n, row) => n + row.filter((cell) => cell.ch !== ' ').length, 0);
+      if (ink > 200) drew += 1;
+    }
+  }
+  check(
+    'no pre-commit feed ever shows the suspect',
+    leaked === 0,
+    `${options} camera views rendered, ${leaked} leaked`
+  );
+  check(
+    'every camera view actually draws a street',
+    drew === options,
+    `${drew} of ${options} drew more than 200 glyphs`
+  );
+
+  const shown = renderFeed(city2, chase2.hops[0].options[0].cell, {
+    clock: 1.5,
+    suspect: 0.6,
+    label: 'CAM',
+    since: 4,
+  });
+  check('the post-commit feed can show the suspect', showsSuspect(shown));
+
+  const dead = renderFeed(city2, { x: 0, y: 0 }, { clock: 1, dead: true, label: 'CAM' });
+  const deadText = dead.map((row) => row.map((cell) => cell.ch).join('')).join('');
+  check('a camera with no coverage reads NO SIGNAL', deadText.includes('NO SIGNAL'));
+}
 
 console.log(failed === 0 ? '\nALL CHECKS PASSED' : `\n${failed} CHECK(S) FAILED`);
 process.exit(failed === 0 ? 0 : 1);

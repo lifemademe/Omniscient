@@ -57,6 +57,30 @@ export interface WireCity {
   lattice: THREE.BufferGeometry;
   /** Where the network has cameras, as grid cells. */
   cameras: Array<{ x: number; y: number }>;
+  /**
+   * Every block that got built, with the numbers that built it.
+   *
+   * The generator computed these and then threw them away into a BufferGeometry, which was
+   * fine while the wireframe was the only thing that drew this city. The ASCII camera feed
+   * is a SECOND renderer of the same district, and district-07.ts is emphatic about why
+   * that matters: one seed, one order, one district, because two systems that generate
+   * their own copy will quietly disagree. Keeping the numbers means the feed draws the
+   * building the wireframe drew rather than a lookalike from the same seed.
+   */
+  blocks: Block[];
+}
+
+/** One built block, in grid cells and metres. */
+export interface Block {
+  x: number;
+  y: number;
+  /** Metres. The same value the tower's edges were built from. */
+  height: number;
+  /** Footprint, in metres, inset from the cell so there is a street between buildings. */
+  w: number;
+  d: number;
+  /** 1 at the middle of the district, 0 at its edge - drives window density in the feed. */
+  downtown: number;
 }
 
 /**
@@ -133,6 +157,7 @@ export function wireCity(rng: Rng, options: CityOptions): WireCity {
   const roadPoints: number[] = [];
   const latticePoints: number[] = [];
   const cameras: Array<{ x: number; y: number }> = [];
+  const blocks: Block[] = [];
 
   const half = (size * CELL) / 2;
   const middle = (size - 1) / 2;
@@ -164,6 +189,7 @@ export function wireCity(rng: Rng, options: CityOptions): WireCity {
       const w = CELL * range(rng, 0.5, 0.72);
       const d = CELL * range(rng, 0.5, 0.72);
       boxEdges(towerPoints, cellToWorld(size, x, y), w, height, d);
+      blocks.push({ x, y, height, w, d, downtown });
 
       /**
        * Cameras on junctions, thinning out towards the edge.
@@ -183,5 +209,6 @@ export function wireCity(rng: Rng, options: CityOptions): WireCity {
     roads: lines(roadPoints),
     lattice: lines(latticePoints),
     cameras,
+    blocks,
   };
 }
