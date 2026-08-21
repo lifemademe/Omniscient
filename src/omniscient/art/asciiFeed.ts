@@ -58,8 +58,17 @@ export const FEED_COLOURS = {
   window: '#3f6b4a',
   /** The few windows that are properly lit. */
   windowLit: '#5f9c6c',
-  road: '#243028',
-  marking: '#33443a',
+  road: '#1b241e',
+  /*
+   * The kerbs and the centre line, and they are BRIGHT on purpose.
+   *
+   * At the old #33443a they sat between the road grain and the pavement speckle and the
+   * whole lower half of the frame read as one field of noise - the road was drawn and
+   * invisible at the same time. These two converging lines are the entire perspective cue;
+   * if they do not read, the camera looks like it is pointed at a skyline rather than down
+   * a street, and the car has nothing to drive on.
+   */
+  marking: '#4a7a58',
   /** Ambient traffic - present, unremarkable. */
   traffic: '#8fbf9a',
   /**
@@ -75,7 +84,15 @@ export const FEED_W = 88;
 export const FEED_H = 26;
 
 /** Where the horizon sits. Everything below is road, everything above is skyline. */
-const HORIZON = 17;
+/*
+ * Where the sky stops.
+ *
+ * Was 17, which left six rows of ground on a 26 row frame - not enough to fit a road that
+ * converges, so the corridor had to open five columns a row and the edges came out as
+ * scattered marks. Nine rows is the minimum that reads, and the skyline loses nothing it
+ * was using: the buildings sit well above it.
+ */
+const HORIZON = 14;
 
 export interface FeedOptions {
   /** Seconds of feed time. Drives traffic, flicker and the scanline. */
@@ -250,33 +267,74 @@ export function renderFeed(
    * whole of the perspective cue.
    */
   const vanish = Math.floor(FEED_W / 2);
+
+  /*
+   * The horizon, so the sky stops and the ground starts.
+   *
+   * Only where nothing is standing - a near building's base reaches this row, and a rule
+   * drawn straight through it would put a stripe across the front of the block.
+   */
+  for (let x = 0; x < FEED_W; x++) {
+    if (rows[HORIZON][x].ch === ' ') put(rows, x, HORIZON, '─', FEED_COLOURS.far);
+  }
   put(rows, vanish, HORIZON, '┼', FEED_COLOURS.edge);
+
+  let lastHalf = 2;
   for (let y = HORIZON + 1; y < FEED_H - 2; y++) {
     const t = (y - HORIZON) / (FEED_H - 2 - HORIZON);
-    const halfWidth = Math.round(2 + t * (FEED_W / 2));
     /*
-     * The surface has to be DRAWN, not merely bounded.
+     * How wide the road is at this row, and it stops SHORT of the frame edge.
      *
-     * The first pass filled the corridor with spaces and put kerbs down each side, which
-     * renders as two lines of floating pipes with a void between them - the road was
-     * defined and invisible at the same time. Tarmac gets a faint grain that thins with
-     * distance, so the near road reads as a surface and the far road stays a suggestion.
+     * At the old `2 + t * FEED_W / 2` the near end of the corridor was 92 columns across an
+     * 88 column frame, so both kerbs walked off the sides and the two lines that carry the
+     * whole perspective simply were not in the picture for the rows closest to the camera.
      */
-    for (let x = 0; x < FEED_W; x++) {
-      const inRoad = x >= vanish - halfWidth && x <= vanish + halfWidth;
-      if (inRoad) {
-        const grain = hash(x, y, 3) < 0.10 + t * 0.16;
-        put(rows, x, y, grain ? '░' : ' ', FEED_COLOURS.road);
-      } else {
-        // Pavement either side, darker still - it is not where anything happens.
-        put(rows, x, y, hash(x, y, 5) < 0.07 ? '·' : ' ', FEED_COLOURS.far);
-      }
+    const halfWidth = Math.round(2 + t * 40);
+
+    /*
+     * Tarmac, and the restraint here is the point.
+     *
+     * The first version textured the road AND speckled the pavement either side at similar
+     * weight, which made one uniform field of noise from kerb to frame edge - drawn, and
+     * unreadable. The road now gets a sparse grain that thickens towards the camera and the
+     * pavement gets nothing at all, so the only textured region in the lower half of the
+     * frame is the one the car drives on.
+     */
+    for (let x = vanish - halfWidth; x <= vanish + halfWidth; x++) {
+      if (hash(x, y, 3) < 0.04 + t * 0.10) put(rows, x, y, '░', FEED_COLOURS.road);
+      else put(rows, x, y, ' ', FEED_COLOURS.road);
     }
-    put(rows, vanish - halfWidth, y, '│', FEED_COLOURS.marking);
-    put(rows, vanish + halfWidth, y, '│', FEED_COLOURS.marking);
-    // The dashed centre line, its dashes lengthening as they approach.
-    const period = Math.max(2, Math.round(6 - t * 3));
-    if ((Math.floor(y * 2 + clock * 2) % period) < period / 2) {
+    // Pavement: cleared, not decorated. It is not where anything happens.
+    for (let x = 0; x < vanish - halfWidth; x++) put(rows, x, y, ' ', FEED_COLOURS.far);
+    for (let x = vanish + halfWidth + 1; x < FEED_W; x++) put(rows, x, y, ' ', FEED_COLOURS.far);
+
+    /*
+     * The kerbs, drawn as a CONNECTED edge rather than one mark per row.
+     *
+     * The corridor opens by about five columns a row, so a single glyph at each row's edge
+     * position renders as a column of unrelated dashes scattered across the lower frame -
+     * which is exactly what it looked like. Filling the horizontal run between this row's
+     * edge and the last one turns those dashes into a staircase, and a staircase reads as a
+     * line going away from you. It is the oldest trick in ASCII art and there is no
+     * substitute for it at this resolution.
+     */
+    for (let x = Math.min(lastHalf, halfWidth); x <= Math.max(lastHalf, halfWidth); x++) {
+      put(rows, vanish - x, y, '─', FEED_COLOURS.marking);
+      put(rows, vanish + x, y, '─', FEED_COLOURS.marking);
+    }
+    lastHalf = halfWidth;
+
+    /*
+     * The centre line, dashed, flowing towards the camera.
+     *
+     * Spaced by DISTANCE rather than by row: a fixed row period draws evenly spaced dashes,
+     * which is what a flat ladder looks like, not a road. Raising t to a power compresses
+     * the dashes towards the horizon and stretches them at the near edge, and subtracting
+     * the clock walks the whole ladder downwards - between them that is most of the sense
+     * that this surface is moving past a fixed camera.
+     */
+    const along = Math.pow(t, 1.7) * 26 - clock * 4;
+    if (t > 0.12 && Math.floor(along) % 4 < 2) {
       put(rows, vanish, y, '║', FEED_COLOURS.marking);
     }
   }
@@ -322,7 +380,8 @@ export function renderFeed(
     const stamp = `T+${since.toFixed(0)}s`;
     text(rows, FEED_W - stamp.length - 2, 1, stamp, FEED_COLOURS.chrome);
   }
-  text(rows, 2, FEED_H - 2, `${cell.x},${cell.y}`, FEED_COLOURS.dim);
+  // Labelled, because two bare numbers in the corner of a screen read as debug output.
+  text(rows, 2, FEED_H - 2, `GRID ${String(cell.x)},${String(cell.y)}`, FEED_COLOURS.dim);
 
   return rows;
 }
