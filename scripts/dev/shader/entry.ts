@@ -1,18 +1,19 @@
 /**
- * Does the painterly injection actually COMPILE?
+ * Do the hand-written shaders actually COMPILE?
  *
- * Written immediately after shipping one that did not. `applyPaintBanding` splices GLSL
- * into every MeshStandardMaterial in the game through onBeforeCompile, and the failure mode
- * of getting that wrong is not an exception - it is a room lit by nothing, reported as a
- * black screenshot, with the real message buried in a console nobody is reading.
+ * Written after shipping one that did not. There is no way to compile a shader without a
+ * GPU, so this is a real WebGL context in a real browser doing a real draw, reporting the
+ * verdict into the page where a screenshot can read it.
  *
- * There is no way to compile a shader without a GPU, so this is a real WebGL context in a
- * real browser doing a real draw. It renders one frame and writes the verdict into the page
- * where a screenshot can read it.
+ * Two subjects: the material injection (onBeforeCompile, used in ten files) and the
+ * painterly post-process pass. The pass is the one that matters most - it is a full-screen
+ * ShaderMaterial with a Kuwahara loop in it, and a failure there is a black screen rather
+ * than a black object.
  */
 import * as THREE from 'three';
 
 import { applyPaintBanding } from '../../../src/omniscient/art/painterly.js';
+import { FRAGMENT, PAINT_LOOKS, VERTEX } from '../../../src/omniscient/art/paintShader.js';
 
 const out = document.getElementById('out') as HTMLElement;
 const lines: string[] = [];
@@ -21,7 +22,6 @@ const renderer = new THREE.WebGLRenderer({ antialias: false });
 renderer.setSize(320, 240);
 document.body.appendChild(renderer.domElement);
 
-// Every warning and error three emits about programs goes through console.error.
 const errors: string[] = [];
 const realError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
@@ -29,36 +29,61 @@ console.error = (...args: unknown[]) => {
   realError(...args);
 };
 
+// -- 1. the material injection --------------------------------------------------------------
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 4 / 3, 0.1, 100);
 camera.position.set(0, 0, 3);
-
 scene.add(new THREE.AmbientLight(0xffffff, 0.4));
 const key = new THREE.DirectionalLight(0xffffff, 1.2);
 key.position.set(2, 3, 4);
 scene.add(key);
-
-const material = applyPaintBanding(new THREE.MeshStandardMaterial({ color: 0xa08060 }));
-const mesh = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), material);
-scene.add(mesh);
-
+const banded = applyPaintBanding(new THREE.MeshStandardMaterial({ color: 0xa08060 }));
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), banded));
 renderer.render(scene, camera);
-renderer.render(scene, camera);
+
+const materialErrors = errors.length;
+lines.push(`material injection : ${materialErrors === 0 ? 'COMPILES' : 'FAILED'}`);
 
 /*
- * `diagnostics` is set by three when a program fails to link and is not on the public type,
- * because it is not part of the public contract - it is set only in debug builds. It is
- * still the most direct answer to the question this file asks, so it is read through a
- * narrow cast rather than not read at all.
+ * -- 2. the post-process pass --------------------------------------------------------------
+ *
+ * Rebuilt here rather than imported, because installPaint needs an engine pipeline that does
+ * not exist outside the game. What is being proved is the GLSL, and the GLSL is the same
+ * string either way - so this compiles the identical shader with the identical uniforms and
+ * draws one full-screen quad with it.
  */
-const program = renderer.info.programs?.[0] as { diagnostics?: unknown } | undefined;
-lines.push(`programs compiled: ${String(renderer.info.programs?.length ?? 0)}`);
-lines.push(`diagnostics: ${program?.diagnostics ? 'PRESENT' : 'none'}`);
-lines.push(`console.error count: ${String(errors.length)}`);
-for (const e of errors.slice(0, 3)) lines.push(`  ${e.slice(0, 300)}`);
+const passScene = new THREE.Scene();
+const passCamera = new THREE.Camera();
+const source = new THREE.WebGLRenderTarget(320, 240);
 
-// The one that matters. A program with diagnostics is a program that did not link.
-const ok = errors.length === 0 && !program?.diagnostics;
-lines.unshift(ok ? 'RESULT: SHADER COMPILES' : 'RESULT: SHADER FAILED');
+const material = new THREE.ShaderMaterial({
+  vertexShader: VERTEX,
+  fragmentShader: FRAGMENT,
+  depthTest: false,
+  depthWrite: false,
+  uniforms: {
+    tDiffuse: { value: source.texture },
+    uResolution: { value: new THREE.Vector2(320, 240) },
+    uRadius: { value: PAINT_LOOKS.painted.radius },
+    uStrength: { value: PAINT_LOOKS.painted.strength },
+    uInk: { value: PAINT_LOOKS.painted.ink },
+    uTint: { value: PAINT_LOOKS.painted.tint },
+    uTooth: { value: PAINT_LOOKS.painted.tooth },
+    uEncode: { value: 1 },
+  },
+});
+const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material);
+quad.frustumCulled = false;
+passScene.add(quad);
+renderer.setRenderTarget(null);
+renderer.render(passScene, passCamera);
+
+const passErrors = errors.length - materialErrors;
+lines.push(`painterly pass     : ${passErrors === 0 ? 'COMPILES' : 'FAILED'}`);
+lines.push('');
+for (const e of errors.slice(0, 2)) lines.push(e.slice(0, 500));
+
+const ok = errors.length === 0;
+lines.unshift(ok ? 'RESULT: ALL SHADERS COMPILE' : 'RESULT: A SHADER FAILED');
 out.textContent = lines.join('\n');
 out.style.color = ok ? '#7fe08a' : '#ff6b52';

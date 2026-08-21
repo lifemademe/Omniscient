@@ -1076,13 +1076,29 @@ export class M4SSRig extends ENGINE.SceneNode {
        * play at all had less light than the decorative lanterns. Every glowing thing in
        * this palette speaks to the player; the growths now speak first.
        */
+      /*
+       * The halo is the size of the SWING it will give you.
+       *
+       * It was a fixed 200 across on every growth, and that was the fault behind "why is
+       * the second growth's latch point higher". It is not higher - both anchors sit within
+       * ten pixels of each other. The ropes differ: 120 on the first, 78 on the second,
+       * because that second one is simultaneously fitting its sweep between a wall and a
+       * pit, clearing the floor at the bottom of a revolution, and staying 14px out of
+       * reach of a split body so the button is worth pressing.
+       *
+       * Every one of those numbers is defensible and none of them was VISIBLE. Two objects
+       * drawn identically behaved differently, and the only way to find out which was which
+       * was to hang off both. Sizing the halo to `rope * 2` makes it an honest picture of
+       * the circle the body is about to travel - a short-roped growth now looks short before
+       * it is committed to, and the ring that already appears in latch range confirms it.
+       *
+       * Falls back to the old 200 for a growth with no rope of its own, so nothing that
+       * relies on the previous look silently loses its halo.
+       */
+      const halo = a.rope !== undefined ? a.rope * 2 : 200;
       const presence = decorMesh(
         'GrowthPresence',
-        // Tighter and dimmer than the growth itself: this is the bloom AROUND the lamp,
-        // and at 230 it was a wide flat wash that made the whole object read as dull.
-        // The slime's own halo colour and opacity, at the slime's own size - the creature
-        // and the thing it grabs are lit alike because they are the same substance.
-        new THREE.PlaneGeometry(200, 200),
+        new THREE.PlaneGeometry(halo, halo),
         this.artMaterial({
           map: glowTexture('presence-glow', '#b9e86a'),
           transparent: true,
