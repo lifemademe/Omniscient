@@ -3524,13 +3524,25 @@ export class M4SSRig extends ENGINE.SceneNode {
     );
     this.replace(this.strays, buildSurface(strandedPoints, { cell: 4, radius: 21, threshold: 1.55 }));
 
-    if (state.tip && !state.attached && mine.length > 0) {
-      const home = centroid(owned(state));
-      home.y -= BLOB_LIFT;
-      this.replace(this.cord, this.cordGeometry(home, state.tip, state.strain > 0));
-    } else {
-      this.replace(this.cord, new THREE.BufferGeometry());
-    }
+    /*
+     * The reaching cord is not drawn.
+     *
+     * A pale blue line from the body to the tip, shown while the button is held and the
+     * tendril has not landed. Asked for it to go, and it is the right call: it is the only
+     * thing in this stage wearing a colour from outside the palette - everything else is the
+     * slime's greens, the lantern's lemon or the room's browns - so a hard cyan stroke over
+     * the top of it read as UI drawn on the world rather than as part of the creature.
+     *
+     * What is lost is a feedback channel: it was the confirmation that a hold had been
+     * registered before the tendril landed. The grip flash and the ring around a growth in
+     * range both still say that, which is why this can go without replacing it - but if
+     * reaching starts to feel unresponsive, this is the thing that was carrying it, and the
+     * fix is a version of it in the slime's own colour rather than the return of this one.
+     *
+     * Nothing is done here at all. The node is created empty in mount() and never filled,
+     * so clearing it per frame would allocate a BufferGeometry every frame to say the same
+     * nothing - which is what the first version of this hiding did.
+     */
 
     /*
      * The eyes, last, so they know where the body ended up this frame.
@@ -3568,6 +3580,14 @@ export class M4SSRig extends ENGINE.SceneNode {
   }
 
   /** A quad from the body to wherever the tendril has got to, thinning as it goes. */
+  /**
+   * Kept, and currently unused - see the reaching cord in paintBody.
+   *
+   * Deliberately not deleted. The cord was hidden for its COLOUR rather than its existence,
+   * and the note there says the likely successor is this same ribbon in the slime's own
+   * green. Deleting the builder would make that a rewrite instead of a one-line change, and
+   * this is the kind of geometry that took several passes to stop looking like a wire.
+   */
   private cordGeometry(
     from: { x: number; y: number },
     to: { x: number; y: number },
