@@ -151,6 +151,27 @@ export const CONSOLE_CHROME_CSS = `
  * an asymmetry that looked like a bug rather than a choice. Twelve pixels is enough for
  * the bracket to clear and reads as the instrument having a bezel.
  */
+/*
+ * Arriving.
+ *
+ * Nothing in this console ever staggered - every panel, card and line was present and
+ * complete on the first frame it existed. That is what made connecting to somebody feel
+ * like a cut rather than a connection: a link that establishes instantly is not a link, it
+ * is a screenshot.
+ *
+ * One animation, and the ORDER is authored by whoever sets the delay. It is deliberately
+ * short and deliberately does not move much - 4px and a fade. A console assembling itself
+ * with any real motion in it reads as a website, and this is meant to be a machine coming
+ * up rather than a page loading.
+ */
+@keyframes omni-arrive {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.omni-arrive {
+  opacity: 0;
+  animation: omni-arrive 260ms ease-out forwards;
+}
 .omni-cv__readouts {
   display: flex;
   flex-direction: column;

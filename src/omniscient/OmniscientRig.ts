@@ -2662,8 +2662,54 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (container) this.scan ??= new ScanTargets(container);
     this.scan?.setTargets(next?.scanTargets() ?? []);
 
+    /*
+     * The connection, and it used to be a CUT.
+     *
+     * Measured off a capture at six frames a second: one frame the globe, the next a
+     * complete contact view - room, person, three readout cards, chat panel, observed
+     * lines, chips. Everything arrived simultaneously and fully formed. This is the game's
+     * core verb, done nine times, and the moment the fiction is strongest - a machine
+     * reaching down a wire into a stranger's room - and it had less ceremony than opening a
+     * menu.
+     *
+     * Now it arrives wide and settles. The camera starts 16% further out along its own view
+     * axis and pushes to the framed shot over 0.9s, which is a machine's picture stabilising
+     * rather than a director cutting. Derived from the shot rather than authored per scene,
+     * so all eight rooms get it and a new room cannot forget.
+     *
+     * 0.9 seconds is short on purpose. The player does this nine times; anything with real
+     * weight is a delay by the third request. The intent is that they never consciously see
+     * it and would notice at once if it went.
+     */
     const opening = next?.getShot('default');
-    if (opening) this.cutTo(opening);
+    if (opening) {
+      const wide = {
+        position: opening.position.clone().lerp(opening.target, -0.16),
+        target: opening.target.clone(),
+      };
+      this.cutTo(wide);
+      this.moveTo(opening, 0.9);
+    }
+
+    /*
+     * And she notices you.
+     *
+     * The single highest-value frame in the whole entrance, and it costs one cue. Every
+     * rigged contact already registers `reacting` as a prop action; nobody was firing it on
+     * arrival, so the player connected to somebody who did not know they were there.
+     *
+     * Delayed until the push-in has nearly landed, because a reaction that starts while the
+     * camera is still moving reads as part of the move. It has to be a separate event, and
+     * the person has to be the one who causes it.
+     */
+    this.cameraTweener.add(() => undefined, {
+      duration: 0.01,
+      delay: 0.75,
+      channel: 'arrival-notice',
+      onComplete: () => {
+        if (this.phase === Phase.Contact) this.applyEnvironmentCue('prop.reacting:contact');
+      },
+    });
   }
 
   /**

@@ -913,6 +913,19 @@ export class LocalSurface implements InterventionSurface {
     const link = this.buildCard('Connection strength');
     const trust = this.buildCard('Trust level');
     const history = this.buildCard('Completed together');
+    /*
+     * They arrive in the order they mean something.
+     *
+     * CONNECTION STRENGTH first because it is the one that is literally about the link being
+     * made - the machine confirms it has a line before it tells you anything about the
+     * person on the other end. Then TRUST, then the history. 90ms apart, which is under the
+     * threshold at which it reads as a sequence and over the one at which it reads as
+     * simultaneous.
+     */
+    [link, trust, history].forEach((card, index) => {
+      card.card.classList.add('omni-arrive');
+      card.card.style.animationDelay = `${String(index * 90)}ms`;
+    });
     readouts.append(link.card, trust.card, history.card);
 
     const actions = document.createElement('div');
@@ -1537,6 +1550,16 @@ export class LocalSurface implements InterventionSurface {
     const hints = state.hints ?? [];
     const key = hints.map((hint) => `${hint.id}:${hint.detail ? 1 : 0}`).join('|');
     if (key === this.renderedHintKey) return;
+    /*
+     * Staggered on ARRIVAL only, never on a change.
+     *
+     * This list rebuilds whenever any hint changes state - opening one re-renders all three
+     * - so animating unconditionally would fly the whole strip back in every time the player
+     * read something, which is worse than not animating at all. Restricting it to the
+     * transition from nothing to something covers the case that matters (the observations
+     * landing as the link establishes) and no others.
+     */
+    const arriving = this.renderedHintKey === '';
     this.renderedHintKey = key;
 
     strip.replaceChildren();
@@ -1547,11 +1570,17 @@ export class LocalSurface implements InterventionSurface {
     label.textContent = 'Observed';
     strip.appendChild(label);
 
-    for (const hint of hints) {
+    for (const [index, hint] of hints.entries()) {
       const button = document.createElement('button');
       button.type = 'button';
       // `detail` is only set once opened - see SessionController's hint mapping.
       button.className = `omni-observed__item${hint.detail ? ' omni-observed__item--read' : ''}`;
+      if (arriving) {
+        button.classList.add('omni-arrive');
+        // Behind the readout cards, which are still coming in - the machine reports the
+        // link before it reports what it can see through it.
+        button.style.animationDelay = `${String(320 + index * 110)}ms`;
+      }
       this.appendEmphasised(button, hint.summary, hint.keywords);
       button.addEventListener('click', () => this.dispatch({ kind: 'hint', hintId: hint.id }));
       strip.appendChild(button);
