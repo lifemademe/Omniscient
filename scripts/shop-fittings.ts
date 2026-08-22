@@ -271,5 +271,69 @@ console.log('\nthe compressor stands on the floor');
 check('feet on the ground', Math.abs(compressorBox.min.y) < 0.005, `${f(compressorBox.min.y)}m`);
 check('and is under half a metre tall', compressorBox.max.y < 0.6, `${f(compressorBox.max.y)}m`);
 
+/* ------------------------------------------------- the thing the mission is actually about */
+
+/**
+ * Can any camera in this room SEE connector B once the set has been turned round?
+ *
+ * For every build until now the answer was no, and nothing said so. `connector-b` is its own
+ * prop - it has to be, so `prop.clean:connector-b` and `prop.spark:connector-b` resolve to a
+ * place in space - and `registerProp` reparents a prop to the scene root, so it was not a
+ * child of the set and did not turn when the set turned. The plug sits 2cm behind the rear
+ * face; every camera in this room stands on the +Z side of the bench; so the box was between
+ * the lens and the plug before the spin and after it.
+ *
+ * Which means mission 01's entire visual payload - the corroded disc, sixteen beads coming
+ * off one at a time, the clean stagger, the spark - has been playing behind the set. The
+ * mission still worked, because the dialogue carries it. It had simply never shown anybody
+ * the thing it is about.
+ *
+ * Nothing on screen reports that, which is why it is arithmetic here: a ray from each
+ * registered camera to the connector, against the set's own box, at rest and at 180 degrees.
+ *
+ * WHAT THIS DOES NOT PROVE, stated so nobody reads it as stronger than it is. The rotated
+ * position is computed here rather than taken from the game, so this asserts the DESIGN - a
+ * connector on the back of a box is hidden until the box turns, and visible after - and not
+ * that `rotate-rear` actually carries it. Delete `carryConnector` from scenes.ts and these
+ * four checks still pass. What catches that is a play-through, and the beat has not had one.
+ */
+console.log('\nconnector B is hidden at rest and visible when the set turns');
+{
+  // From `createTransmitter`'s defaults and the scene's own placement. Duplicated on purpose.
+  const W = 0.52;
+  const H = 0.22;
+  const D = 0.34;
+  const SET_AT = new THREE.Vector3(0, 0.81, -0.5);
+  const REST = new THREE.Vector3(W * 0.16, H * 0.42, -D / 2 - 0.02);
+
+  /* The set is a box about its own Y axis, so a 180 spin leaves the box where it was. */
+  const setBox = new THREE.Box3(
+    new THREE.Vector3(SET_AT.x - W / 2, SET_AT.y, SET_AT.z - D / 2),
+    new THREE.Vector3(SET_AT.x + W / 2, SET_AT.y + H, SET_AT.z + D / 2)
+  );
+
+  const SHOTS: Array<[string, THREE.Vector3]> = [
+    ['default', new THREE.Vector3(1.32, 1.46, 1.82)],
+    ['transmitter', new THREE.Vector3(0.92, 1.24, 0.92)],
+  ];
+
+  const visibleFrom = (camera: THREE.Vector3, angle: number): boolean => {
+    const at = SET_AT.clone().add(REST.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle));
+    const toward = at.clone().sub(camera);
+    const range = toward.length();
+    const hit = new THREE.Ray(camera, toward.normalize()).intersectBox(setBox, new THREE.Vector3());
+    return !hit || hit.distanceTo(camera) >= range - 0.005;
+  };
+
+  for (const [name, camera] of SHOTS) {
+    /*
+     * At rest it SHOULD be hidden. The plug is on the back of a box facing the room, and a
+     * connector visible before anybody turns the set around would give the diagnosis away.
+     */
+    check(`${name}: hidden while the set faces front`, !visibleFrom(camera, 0));
+    check(`${name}: in view once the set is turned`, visibleFrom(camera, Math.PI));
+  }
+}
+
 console.log(failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);

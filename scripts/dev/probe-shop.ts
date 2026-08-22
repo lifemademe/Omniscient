@@ -44,16 +44,12 @@ function project(shot: string, p: THREE.Vector3, aspect: number): { x: number; y
 
 /** What is actually in the room, as shipped. */
 const POINTS: Array<[string, THREE.Vector3]> = [
-  ['peg x-1.4', new THREE.Vector3(-1.4, 1.9, -1.8)],
-  ['peg x-1.0', new THREE.Vector3(-1.0, 1.9, -1.8)],
-  ['peg x-0.6', new THREE.Vector3(-0.6, 1.9, -1.8)],
-  ['peg x-0.2', new THREE.Vector3(-0.2, 1.9, -1.8)],
-  ['peg x 0.2', new THREE.Vector3(0.2, 1.9, -1.8)],
-  ['peg x 0.6', new THREE.Vector3(0.6, 1.9, -1.8)],
-  ['peg x 1.0', new THREE.Vector3(1.0, 1.9, -1.8)],
-  ['peg x 1.4', new THREE.Vector3(1.4, 1.9, -1.8)],
-  ['peg y1.3 x-1.3', new THREE.Vector3(-1.3, 1.3, -1.8)],
-  ['mirela head', new THREE.Vector3(-0.72, 1.55, -1.14)],
+  ['mains switch', new THREE.Vector3(1.5, 1.36, -1.8)],
+  ['connector-b', new THREE.Vector3(-0.1, 0.92, -0.85)],
+  ['shelf crates', new THREE.Vector3(-2.1, 1.3, -1.4)],
+  ['bench-store L', new THREE.Vector3(-0.72, 0.37, -1.0)],
+  ['bench-store R', new THREE.Vector3(0.82, 0.35, -1.0)],
+  ['the radio', new THREE.Vector3(-0.1, 0.92, -0.55)],
 ];
 
 for (const shot of Object.keys(SHOTS)) {

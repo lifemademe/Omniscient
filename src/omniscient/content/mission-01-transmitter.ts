@@ -109,7 +109,16 @@ export const MISSION_01: MissionDefinition = {
         'One of the connectors on the back has green crust across it. That is what water '
         + 'does to metal, and it is sitting right across the pins.',
       keywords: ['connector', 'green'],
-      cue: 'prop.highlight:connector-b',
+      /*
+       * `reveal` first, then `highlight`.
+       *
+       * The connector opens at SUSPECTED - a breathing box where the plug should be - and
+       * this hint is the moment she says what is on it. `reveal` promotes it to DESCRIBED,
+       * which sweeps the box open and puts the corroded disc underneath on screen; the
+       * highlight then plays on a prop that is actually visible, which it has not been in
+       * any previous build. See the action's note in scenes.ts.
+       */
+      cue: 'prop.reveal:connector-b,prop.highlight:connector-b',
       // Only observable once the set has been turned around.
       revealedBy: 'connector-found',
     },

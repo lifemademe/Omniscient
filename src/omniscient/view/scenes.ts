@@ -1352,6 +1352,48 @@ function buildRepairShop(scene: ContactScene): void {
   }
   setRoot.add(beadRoot);
 
+  /**
+   * Connector B travels with the set, and until now it did not.
+   *
+   * ## The fault
+   *
+   * `connector-b` is registered as its own prop so that `prop.clean:connector-b` and
+   * `prop.spark:connector-b` resolve to a real place in space - and `registerProp` reparents
+   * a prop to the scene root, which is why its world position is composed by hand from
+   * setRoot's. That is all correct and it is also why the connector did not turn when the
+   * set did: it is not a child of the set, so a 180-degree spin moved the box and left the
+   * plug where it was.
+   *
+   * The plug sits 2cm behind the set's rear face. Every camera in this room stands on the
+   * +Z side of the bench, so the set is between the lens and the connector from all three
+   * registered shots - before the spin AND after it. Measured rather than guessed: from the
+   * `transmitter` shot the ray enters the set's box at 1.456m and the connector is at
+   * 1.846m.
+   *
+   * So the entire payload of mission 01 has been playing where nobody can see it. The
+   * corroded disc, the sixteen beads that come off one at a time, the clean stagger, the
+   * spark - all of it, behind the box, in every build. The mission still WORKS, because it
+   * is carried by dialogue; it has simply never shown you the thing it is about.
+   *
+   * ## The fix
+   *
+   * The spin orbits the connector about the set's own axis by the same angle, so the plug
+   * arrives where the rear panel arrives. Recomputed from the resting offset every frame
+   * rather than integrated, so it is exact at any angle and self-corrects if a beat
+   * interrupts a spin halfway.
+   */
+  const CONNECTOR_REST = set.anchors.connectorB.clone();
+  const UP = new THREE.Vector3(0, 1, 0);
+  /** Assigned below, once the connector prop exists. Null until then. */
+  let connectorRoot: ENGINE.SceneNode | null = null;
+  const carryConnector = (angle: number): void => {
+    if (!connectorRoot) return;
+    connectorRoot.position.copy(
+      setRoot.position.clone().add(CONNECTOR_REST.clone().applyAxisAngle(UP, angle))
+    );
+    connectorRoot.rotation.set(0, angle, 0);
+  };
+
   scene.registerProp('transmitter', setRoot, {
     // Inked: Mirela's set - the thing on the bench that stopped working.
     inked: true,
@@ -1361,19 +1403,25 @@ function buildRepairShop(scene: ContactScene): void {
       'rotate-rear': (tweener, node) => {
         const from = node.rotation.y;
         const to = Math.PI;
-        tweener.add((t) => node.rotation.set(node.rotation.x, from + (to - from) * t, node.rotation.z), {
-          duration: 1.1,
-          easing: Ease.outCubic,
-          channel: 'transmitter-spin',
-        });
+        tweener.add(
+          (t) => {
+            const angle = from + (to - from) * t;
+            node.rotation.set(node.rotation.x, angle, node.rotation.z);
+            carryConnector(angle);
+          },
+          { duration: 1.1, easing: Ease.outCubic, channel: 'transmitter-spin' }
+        );
       },
       'rotate-front': (tweener, node) => {
         const from = node.rotation.y;
-        tweener.add((t) => node.rotation.set(node.rotation.x, from * (1 - t), node.rotation.z), {
-          duration: 1.1,
-          easing: Ease.outCubic,
-          channel: 'transmitter-spin',
-        });
+        tweener.add(
+          (t) => {
+            const angle = from * (1 - t);
+            node.rotation.set(node.rotation.x, angle, node.rotation.z);
+            carryConnector(angle);
+          },
+          { duration: 1.1, easing: Ease.outCubic, channel: 'transmitter-spin' }
+        );
       },
     },
   });
@@ -1405,7 +1453,7 @@ function buildRepairShop(scene: ContactScene): void {
    * adding its offset to the anchor is exact; if it ever gains either, this needs to become
    * a proper localToWorld and the scene tree walked once before registering.
    */
-  const connectorRoot = ENGINE.SceneNode.create({
+  connectorRoot = ENGINE.SceneNode.create({
     name: 'ConnectorBRoot',
     position: setRoot.position.clone().add(set.anchors.connectorB),
   });
@@ -1414,6 +1462,27 @@ function buildRepairShop(scene: ContactScene): void {
   scene.registerProp('connector-b', connectorRoot, {
     anchors: { default: new THREE.Vector3(0, 0, -0.02) },
     actions: {
+      /**
+       * She has just described the crust, so the machine can draw it.
+       *
+       * This is the certainty system's ONE teaching moment in the whole game, and until now
+       * it did not happen anywhere a player could see. The tier below SHAPED replaces a prop
+       * with a breathing box - the machine's guess at the volume - and the sweep that opens
+       * that box is what explains every other box in every other room. Mission 01's only
+       * promotion out of SUSPECTED was the mains switch, which projects to screen x 0.984:
+       * behind the console panel, off-frame, every time.
+       *
+       * Here it lands on the object the request is about, in the push-in, at the moment she
+       * says there is green crust across the pins - the machine hearing something and
+       * resolving it, in one gesture, with no tutorial text anywhere.
+       *
+       * DESCRIBED rather than KNOWN, because that is exactly what has happened: she has
+       * described it. `revealOn(FACT_CONNECTOR_CORROSION)` takes it the rest of the way when
+       * the player acts on it, which is the difference between hearing and understanding.
+       */
+      reveal: () => {
+        scene.setCertainty('connector-b', CERTAINTY.DESCRIBED);
+      },
       /** Scrubbing: a short shudder, then the corrosion colour gives way to bright metal. */
       clean: (tweener, node) => {
         const baseX = node.position.x;
@@ -2066,7 +2135,22 @@ function buildRepairShop(scene: ContactScene): void {
      * lonely" was true of no room in the game.
      */
     ['transmitter', CERTAINTY.KNOWN],
-    ['connector-b', CERTAINTY.SHAPED],
+    /*
+     * SUSPECTED, one rung lower than it was, and this is the change that makes the tier
+     * legible anywhere in the game.
+     *
+     * The old note is still right about the direction: these "used to open at DESCRIBED,
+     * which is the state they should REACH", and starting them there made the room as warm
+     * on the first frame as it would ever get. It went to SHAPED. SHAPED renders the prop -
+     * flat and cold, but the prop - so nothing ever showed a player what the box tier means,
+     * and the crates on the shelf sat unexplained for a whole call.
+     *
+     * At SUSPECTED the connector is a small breathing volume instead, and it costs the
+     * opening frame nothing: it sits behind the set and is not visible until she turns the
+     * thing round. Then it is on screen, in the push-in, and the `reveal` action sweeps it
+     * open the moment she says what is on the pins. See that action for the argument.
+     */
+    ['connector-b', CERTAINTY.SUSPECTED],
     ['mains-switch', CERTAINTY.SUSPECTED],
   ] as [string, number][]) {
     scene.setCertainty(id, certainty);
