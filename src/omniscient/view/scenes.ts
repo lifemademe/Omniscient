@@ -84,6 +84,7 @@ import { meadow, meadowGround, stepWind, WIND } from '../geometry/meadow.js';
 import { stylisedWater } from '../geometry/water.js';
 import { rows, scatter } from '../geometry/planting.js';
 import {
+  crateLid,
   createMainsSwitch,
   createShelfStack,
   createTransmitter,
@@ -1143,10 +1144,17 @@ function buildRepairShop(scene: ContactScene): void {
     crate.translate(at, 0.24 + h / 2, z);
     understore.push(crate);
 
-    // Same two-value read as the shelf crates - see the note there for the measurement.
-    const lid = new THREE.BoxGeometry(w * 1.06, 0.016, d * 1.06);
+    /*
+     * Same two-value read as the shelf crates - see the note there for the measurement - and
+     * the same `crateLid`, which is the point of it being a function.
+     *
+     * These four are where the z-fighting showed, because they are the crates nearest the
+     * camera: the lid's top face used to land at exactly the crate's top face and the two
+     * flickered against each other. The fix is in LID_RISE, in one place, for both sets.
+     */
+    const lid = crateLid(w, d);
     lid.rotateY(skew);
-    lid.translate(at, 0.24 + h - 0.008, z);
+    lid.translate(at, 0.24 + h, z);
     understoreLids.push(lid);
   }
   const benchStoreRoot = ENGINE.SceneNode.create({ name: 'BenchStore', position: new THREE.Vector3() });

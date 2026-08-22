@@ -33,6 +33,8 @@ import {
   createTins,
 } from '../src/omniscient/geometry/workshop.js';
 
+import { crateLid } from '../src/omniscient/geometry/props.js';
+
 import type { PropParts } from '../src/omniscient/geometry/props.js';
 
 let failures = 0;
@@ -333,6 +335,51 @@ console.log('\nconnector B is hidden at rest and visible when the set turns');
     check(`${name}: hidden while the set faces front`, !visibleFrom(camera, 0));
     check(`${name}: in view once the set is turned`, visibleFrom(camera, Math.PI));
   }
+}
+
+/* ------------------------------------------------------------------ the crate lids */
+
+/**
+ * Does a lid share a plane with the crate it sits on?
+ *
+ * It did, in both places that build one. The lid was 16mm thick and centred 8mm BELOW the
+ * crate's top face, which put its own top face at exactly that height - two coplanar polygons
+ * at identical depth, which is the textbook cause of z-fighting. It flickered on the crates
+ * under Mirela's bench, where they are nearest the camera, and was reported off a screenshot
+ * rather than found here.
+ *
+ * The check is on the helper rather than on a scene, because the helper is now the only place
+ * a lid is built and the relationship it has to defend is a local one: bite into the crate,
+ * stand proud of it, touch neither face exactly.
+ */
+console.log('\ncrate lids sit proud of their crates, and share no face with them');
+{
+  const lid = crateLid(0.3, 0.25);
+  lid.computeBoundingBox();
+  const box = lid.boundingBox!;
+
+  /*
+   * The crate's top face is y = 0 in this helper's space, so anything AT zero is the fault.
+   * Half a millimetre of tolerance: far below what a depth buffer struggles with at this
+   * scale, and far above float noise out of the box builder.
+   */
+  check('the lid stands above the crate top', box.max.y > 0.004, `top at ${f(box.max.y)}`);
+  check('and bites into it rather than resting on it', box.min.y < -0.001, `base at ${f(box.min.y)}`);
+  check(
+    'so no face of it is coplanar with the crate top',
+    Math.abs(box.max.y) > 0.0005 && Math.abs(box.min.y) > 0.0005,
+    `${f(box.min.y)} .. ${f(box.max.y)}`
+  );
+
+  // And it overhangs, so the SIDES cannot be coplanar either.
+  const size = box.getSize(new THREE.Vector3());
+  check('it overhangs the footprint', size.x > 0.304 && size.z > 0.254, say(box));
+
+  /*
+   * Thin enough to stay a rim. A lid deep enough to read as a second box would undo what it
+   * is for - see the note on the two-value read in createShelfStack.
+   */
+  check('and is a rim rather than a second box', size.y < 0.03, `${f(size.y)}m thick`);
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} FAILED\n`);

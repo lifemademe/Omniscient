@@ -38,6 +38,48 @@ export interface PropParts {
   anchors: Record<string, THREE.Vector3>;
 }
 
+/**
+ * How far a lid overhangs the crate it sits on, as a multiple of the footprint.
+ *
+ * Six per cent, which is a rim rather than a hat, and enough that the lid's four side faces
+ * are nowhere near the crate's.
+ */
+const LID_OVERHANG = 1.06;
+/** Lid thickness. Two-thirds of this is above the crate top - see LID_RISE. */
+const LID_THICK = 0.018;
+/**
+ * How far the lid's CENTRE sits above the crate's top face - and this number is the whole
+ * reason this helper exists.
+ *
+ * It was zero. The lid was 16mm thick, centred 8mm below the crate top, so its own top face
+ * landed at exactly the crate's top face: two coplanar polygons at identical depth, which is
+ * the textbook cause of z-fighting, and it flickered on the crates under Mirela's bench where
+ * they are nearest the camera. Reported from a screenshot.
+ *
+ * At +0.005 the lid bites 4mm into the crate and stands 14mm proud of it. Nothing is
+ * coplanar: not the tops, not the bottoms - the lid's underside is buried inside the crate
+ * rather than resting on its face - and not the sides, which LID_OVERHANG separates.
+ *
+ * A gap would also have fixed the fighting and would have looked worse: a lid floating a
+ * millimetre off its box is a mistake anybody can see, and depth fighting is one only a
+ * person who knows what to look for can name.
+ */
+const LID_RISE = 0.005;
+
+/**
+ * A lid for a crate of this footprint, positioned for a crate whose top face is at y = 0.
+ *
+ * Callers translate and rotate it exactly as they do the crate itself. It is a function
+ * rather than four lines copied twice because it WAS four lines copied twice, in
+ * `createShelfStack` below and in the under-bench crates in `scenes.ts`, and both carried the
+ * same coplanar-face bug. Fixing one and not the other is the obvious next failure.
+ */
+export function crateLid(width: number, depth: number): THREE.BufferGeometry {
+  const lid = new THREE.BoxGeometry(width * LID_OVERHANG, LID_THICK, depth * LID_OVERHANG);
+  lid.translate(0, LID_RISE, 0);
+  return lid;
+}
+
 /** A workbench: top, apron, four legs, and a lower shelf. */
 export function createWorkbench(width = 2.4, depth = 0.9, height = 0.78): PropParts {
   const body: THREE.BufferGeometry[] = [];
@@ -581,7 +623,7 @@ export function createShelfStack(seedKey = 'shelf'): PropParts {
       fittings.push(crate);
 
       /*
-       * A lid, standing a few millimetres proud - and in `body`, not `fittings`.
+       * A lid - and in `body`, not `fittings`.
        *
        * These were bare cubes, which was fine while the SUSPECTED tier's box stood in front
        * of them and became six featureless blocks on a plank the moment that box came off
@@ -595,8 +637,8 @@ export function createShelfStack(seedKey = 'shelf'): PropParts {
        * subtle object, it is an invisible one. Contrast is the only thing that survives this
        * distance, so the read has to be built out of two values rather than one geometry.
        */
-      const lid = new THREE.BoxGeometry(w * 1.06, 0.016, d * 1.06);
-      lid.translate(at, y + h - 0.008, nudge);
+      const lid = crateLid(w, d);
+      lid.translate(at, y + h, nudge);
       lid.rotateY(skew);
       body.push(lid);
     }
