@@ -86,6 +86,7 @@ import './omniscient/globe/GlobeScreen.js';
 import './omniscient/input/Picker.js';
 import './omniscient/knowledge/KnowledgeStore.js';
 import './omniscient/link/BoardPanel.js';
+import './omniscient/link/BootScreen.js';
 import './omniscient/link/BroadcastTransport.js';
 import './omniscient/link/console-chrome.js';
 import './omniscient/link/FeedOverlay.js';

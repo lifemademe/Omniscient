@@ -113,6 +113,46 @@ check(
 clearSave();
 check('no save reads as no save', !hasSave() && loadGame() === null);
 
+/*
+ * saveGame reports whether the write actually landed.
+ *
+ * It used to return void and swallow everything, which was fine until something on screen
+ * started claiming the save had happened - a receipt that cannot be wrong is not a receipt.
+ * The read-back is what catches the case a try/catch cannot: storage that accepts a write
+ * and keeps nothing, which is exactly the failure a player reports as "I do not think the
+ * game is saving".
+ */
+const sample = {
+  ...snapshot,
+  signals: [{ id: 'mirela', state: SignalState.Resolved, hidden: false }],
+  offered: 1,
+  openable: ['tomas'],
+  m4ssStage: 0,
+};
+check('a good write reports true', saveGame(sample) === true);
+
+const realSetItem = window.localStorage.setItem.bind(window.localStorage);
+window.localStorage.setItem = () => {
+  throw new Error('quota');
+};
+check('a throwing write reports false', saveGame(sample) === false);
+window.localStorage.setItem = () => {
+  /* accepts it and keeps nothing - the silent case */
+};
+/*
+ * A DIFFERENT payload, and the first version of this check got it wrong.
+ *
+ * It re-saved the same sample, so the read-back found the identical string still sitting
+ * there from the successful write above and correctly reported true. That is not a bug in
+ * saveGame - if what is stored already equals what was asked for, the save state IS right -
+ * but it means the check has to change the payload to exercise the failure at all.
+ */
+check(
+  'a write that keeps nothing reports false',
+  saveGame({ ...sample, offered: 7 }) === false
+);
+window.localStorage.setItem = realSetItem;
+
 saveGame({
   ...snapshot,
   signals: [

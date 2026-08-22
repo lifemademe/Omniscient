@@ -71,11 +71,25 @@ export interface SaveData {
   lastPlayedContactId?: string | null;
 }
 
-export function saveGame(data: Omit<SaveData, 'version'>): void {
+/**
+ * Write the save, and say whether it actually landed.
+ *
+ * It used to return void and swallow every failure - quota, private mode, no storage at all
+ * - on the reasoning that the game keeps playing either way. That is still true and the
+ * catch stays, but a silent failure became a lie the moment anything on screen claimed the
+ * save had happened. A receipt that cannot be wrong is not a receipt.
+ *
+ * Read back rather than trusting setItem. A quota failure throws and is caught, but a
+ * storage that accepts a write and returns nothing does not - and that is exactly the
+ * failure a player would report as "I don't think the game is saving".
+ */
+export function saveGame(data: Omit<SaveData, 'version'>): boolean {
   try {
-    window.localStorage?.setItem(SAVE_KEY, JSON.stringify({ version: SAVE_VERSION, ...data }));
+    const payload = JSON.stringify({ version: SAVE_VERSION, ...data });
+    window.localStorage?.setItem(SAVE_KEY, payload);
+    return window.localStorage?.getItem(SAVE_KEY) === payload;
   } catch {
-    // Quota, private mode, or no storage at all. The game keeps playing.
+    return false;
   }
 }
 

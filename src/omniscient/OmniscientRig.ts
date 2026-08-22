@@ -1786,34 +1786,88 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * than CRT because it must be legible over whatever the camera is doing, and gone in
    * three seconds. Same typographic voice as the console chrome.
    */
-  private flashSaveNote(): void {
+  /**
+   * Say that the save happened, and say what is IN it.
+   *
+   * Reported as "I don't think the game is saving". It was - persist() runs on every
+   * resolve and the save round-trips; a session earlier the same day loaded back at one
+   * answered. What failed was the telling: twelve pixels at 0.85 opacity in the extreme
+   * bottom corner, during the ride home, which is exactly when the camera is moving and the
+   * eye is following it. A save note nobody sees is a save nobody believes in.
+   *
+   * Three changes, and the third is the one that answers the actual question.
+   *
+   * It is BIGGER and it is bracketed like the rest of the console's chrome, so it reads as
+   * the machine reporting rather than as a caption. It sits above the desk rather than in
+   * the corner of the window, which is where the shot is taking the eye anyway.
+   *
+   * It TICKS. `seat` is the cue this console already uses for a thing accepted by a
+   * mechanism - a pin set, a pipe seated - and a tape taking a write is the same event. A
+   * player looking the wrong way still hears it.
+   *
+   * And it COUNTS. "TAPE WRITTEN - 3 ANSWERED" is the difference between an animation that
+   * claims something happened and a receipt for the thing that happened. Somebody who
+   * doubts the save can read what is on it, which is the only reassurance that survives
+   * scepticism.
+   */
+  private flashSaveNote(written: boolean): void {
     const container = this.getWorld()?.gameContainer;
     if (!container) return;
+
+    const answered = this.signals.filter((s) => s.state === SignalState.Resolved).length;
     const note = document.createElement('div');
-    note.textContent = 'WRITING TO TAPE ...';
     note.style.cssText = [
       'position:absolute',
-      'right:26px',
-      'bottom:22px',
+      'left:50%',
+      'bottom:12%',
+      'transform:translateX(-50%)',
       'z-index:30',
+      'padding:10px 22px',
+      'border:1px solid rgba(127,224,138,0.30)',
+      'background:rgba(6,14,9,0.72)',
       'color:#7fe08a',
-      'font:12px "Courier New",monospace',
-      'letter-spacing:0.2em',
+      'font:15px "Courier New",monospace',
+      'letter-spacing:0.24em',
       'opacity:0',
-      'transition:opacity 0.6s ease',
+      'transition:opacity 0.5s ease',
       'pointer-events:none',
     ].join(';');
+    note.textContent = 'WRITING TO TAPE';
     container.appendChild(note);
-    requestAnimationFrame(() => (note.style.opacity = '0.85'));
+
+    // A tape does not write instantly and should not claim to. Three dots, then the receipt.
+    let dots = 0;
+    const ticking = window.setInterval(() => {
+      dots = (dots + 1) % 4;
+      note.textContent = `WRITING TO TAPE${'.'.repeat(dots)}`;
+    }, 260);
+
+    requestAnimationFrame(() => (note.style.opacity = '1'));
     window.setTimeout(() => {
-      note.textContent = 'TAPE WRITTEN';
-      note.style.opacity = '0.5';
-    }, 1900);
-    window.setTimeout(() => (note.style.opacity = '0'), 2700);
-    window.setTimeout(() => note.remove(), 3400);
+      window.clearInterval(ticking);
+      /*
+       * The truth, whichever it is.
+       *
+       * A failed write is rare - it means storage is full, blocked, or absent - and it is
+       * precisely the case where the player most needs to be told, because the alternative
+       * is them finding out by losing four hours. `reject` rather than `seat`: this console
+       * already has a sound for a mechanism refusing a piece.
+       */
+      audio.play(written ? 'seat' : 'reject');
+      note.textContent = written
+        ? answered === 1
+          ? 'TAPE WRITTEN - 1 ANSWERED'
+          : `TAPE WRITTEN - ${String(answered)} ANSWERED`
+        : 'TAPE WILL NOT WRITE - PROGRESS NOT SAVED';
+      note.style.color = written ? '#d8ffb0' : '#c2483a';
+    }, 1500);
+    // Held a good while afterwards. This is the one moment in the game where the player is
+    // being asked to trust something they cannot see, so it stays until they have read it.
+    window.setTimeout(() => (note.style.opacity = '0'), 4200);
+    window.setTimeout(() => note.remove(), 4900);
   }
 
-  private persist(): void {
+  private persist(): boolean {
     /*
      * "Last played" only counts while it is unfinished. A resolved request writes null -
      * a finished story has no "where was I", and CONTINUE should land on the globe.
@@ -1823,7 +1877,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.signals.find((s) => s.id === this.lastPlayedContactId)?.state !== SignalState.Resolved
         ? this.lastPlayedContactId
         : null;
-    saveGame({
+    return saveGame({
       ...this.knowledge.serialize(),
       signals: this.signals.map((s) => ({ id: s.id, state: s.state, hidden: s.hidden ?? false })),
       offered: this.offered,
@@ -2474,14 +2528,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.activeIndex = null;
 
     this.topUpGlobe();
-    this.persist();
+    const written = this.persist();
     /*
      * Say that the save happened, where the eye is not. "Progress saves" is a promise a
      * player cannot verify without quitting, so a small diegetic line - WRITING TO TAPE -
      * sits in the lower right through the ride home and fades. The persist() above is the
      * fact; this is the receipt.
      */
-    this.flashSaveNote();
+    this.flashSaveNote(written);
 
     /*
      * The last answer arms the ending. Everything in the queue resolved - not merely
