@@ -313,3 +313,56 @@ Three wrong instruments were used before the right one, and the pattern is worth
 What actually settled each one: **diff whole frames** for a global shader change, and **crop
 and look** for a local artefact. The user's two crops did in one message what three
 measurement passes had failed to do.
+
+
+### 6.6 There was no pixelation, and now there is one size of it everywhere
+
+Reported as "is the pixel post processing working? this doesn't look like ps1 pixel style",
+and the answer was that it never had been. Nothing named `Pixelation` was registered anywhere
+— the only "pixelated" in the codebase was CSS `image-rendering` on DOM elements — and
+`retro.ts` had no pixel-size uniform at all. It is a CRT pass: curve, aberration, scanline,
+grille, bleed, vignette, roll, flicker. The engine's own `Pixelation` cannot help, being
+WebGPU-only against this project's forced WebGL. The PS1-ish quality was coming entirely from
+the art.
+
+`uPixel` snaps the output UV to a coarse grid before anything else, so every device pixel in a
+block samples the same point and the blocks are axis-aligned and exact. The order is the
+argument: this is the **signal** being coarse, and everything below it is a tube displaying
+that signal. A television showing a 320-line source curves and scans the coarse image; it does
+not coarsen its own scanlines.
+
+**One size everywhere — 3.** The presets briefly carried different values (2 for the console,
+5 for the wire city) on aesthetic arguments, and both were wrong for the same reason: a pixel
+size that changes between places is a property of the picture, and this game has spent nine
+missions establishing that the picture belongs to one instrument.
+
+**Which forced the menu labels out of the world.** NEW GAME, CONTINUE and SETTINGS are painted
+on the plates as world geometry and at 3 they are mush. Exempting them was never available — a
+plate that stays sharp while the desk it hangs over goes coarse is an object that has left the
+room, and the boot sequence spends eight seconds establishing that the console is a thing
+standing in a place.
+
+So the name moved to **the CRT on the desk**. Hovering a plate makes the tube report what it
+is, in the same 3x5 face the station desk writes in, over a dimmed band across its lower
+third. Nothing new appears on screen; something already there says something — which is what a
+machine with a screen would do, and what §157 asks for. It survives the pixel grid for free,
+being a readout designed for a low-resolution screen in the first place.
+
+A DOM caption under the wordmark was built first and thrown away. It would have worked and it
+was the wrong idea: a label floating on the wall is the interface talking *about* the room
+rather than the machine answering *in* it.
+
+**Verified by measurement, not assumption.** All eight dioramas plus the menu were captured
+and checked for the grid — identical adjacent columns run 23-40% against a 0.0% baseline from
+a pre-pixelation frame. Two scares along the way were both my own instruments: mill road
+measured "100% flat" from a frame caught mid-transition, and the wire city measured "no
+pixelation" because the `machine` preset's grille modulates every column and destroys the
+statistic. Diffing the wire city before and after showed 46.3% of pixels moved — more than the
+repair shop's 25.2%.
+
+`retro.ts` also gained a compile check, which it had never had: `scripts/dev/shader/` covered
+the material injection and the unmounted painterly pass but not the one pass that is actually
+mounted, and therefore the only one whose failure is a black screen. The GLSL moved to
+`retroShader.ts` so a browser bundle can import it without dragging the engine in — the same
+split `paintShader.ts` has from `paintPass.ts`. Proved both ways: all three compile on a real
+GPU, and a deliberate typo prints `CRT pass: FAILED` with the line number.

@@ -20,7 +20,7 @@
  */
 
 import { isM4ssContained } from '../session/persistence.js';
-import { PIXEL_FONT as G } from './pixelFont.js';
+import { drawPixelText } from './pixelFont.js';
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
@@ -440,20 +440,10 @@ function textAt(
   color: string,
   scale = 1
 ): void {
-  ctx.fillStyle = color;
-  let cx = Math.round(x);
-  const top = Math.round(y);
-  for (const ch of str) {
-    const rows = G[ch] ?? G[ch.toUpperCase()];
-    if (rows) {
-      for (let r = 0; r < 5; r++) {
-        for (let c = 0; c < 3; c++) {
-          if (rows[r][c] === '1') ctx.fillRect(cx + c * scale, top + r * scale, scale, scale);
-        }
-      }
-    }
-    cx += 4 * scale;
-  }
+  // The one implementation, in the font's own module. This was a private copy here until the
+  // CRT needed the same glyphs; two copies of a renderer is how two faces end up differing
+  // by a pixel that nobody can find.
+  drawPixelText(ctx, str, x, y, scale, color);
 }
 
 /**

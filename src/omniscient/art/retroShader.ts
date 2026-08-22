@@ -79,23 +79,23 @@ export const RETRO_LOOKS = {
   },
   console: {
     /*
-     * 2, and legibility decides it rather than any argument about what a console is.
+     * 3, the same as everywhere else, and it took removing a piece of the menu to get here.
      *
-     * This went to 3 to match the rooms, on the reasoning that the menu is a physical place
-     * rather than a screen - which is true and turns out not to be the question. The MAIN
-     * MENU is in this preset, and its plate labels are world geometry: NEW GAME, CONTINUE,
-     * SETTINGS all go through this pass like everything else. Captured at all three
-     * settings, cropped to one label: off is crisp, 2 is chunky and readable, 3 is mush.
-     * A player who cannot read the menu is a worse outcome than a menu one step sharper
-     * than the rooms.
+     * This sat at 2 because the main menu's plate labels are world geometry: NEW GAME,
+     * CONTINUE, SETTINGS all go through this pass like everything else, and captured at the
+     * three settings and cropped to one label, off is crisp, 2 is chunky and readable, 3 is
+     * mush. The menu was one step sharper than every room in the game to keep five words
+     * legible.
      *
-     * The chrome above it is unaffected either way - it is DOM over the canvas and never
-     * reaches this shader, which is the whole reason a coarse world sits happily behind a
-     * sharp interface.
-     *
-     * If the rooms ever go coarser than 3, this is the number that cannot follow them.
+     * That is a bad trade for a reason that has nothing to do with sharpness: a menu plate
+     * which stays crisp while the desk it hangs over goes coarse is an object that has left
+     * the room, and this game's entire opening move is the boot screen proving the console
+     * is a thing standing in a place. So the labels left the world instead - see
+     * MenuReadout - and the plates keep their painted text as texture, which at three
+     * pixels a block reads as writing without being readable. Which is what small text on a
+     * screwed-on plate looks like from across a room anyway.
      */
-    pixel: 2,
+    pixel: 3,
     curve: 0.010,
     aberration: 0.0018,
     scanline: 0.055,
@@ -109,9 +109,19 @@ export const RETRO_LOOKS = {
     tint: new THREE.Color(0.99, 1.0, 1.02),
   },
   machine: {
-    // Deep inside it, and the only place the game can afford to be genuinely coarse: the
-    // wire city is lines on black, and a line either survives a 5px grid or it does not.
-    pixel: 5,
+    /*
+     * 3, like everywhere else, and not the 5 this started at.
+     *
+     * The argument for coarser was that the wire city is the deepest the player gets inside
+     * the machine, and lines on black can take it. The argument against is stronger and it
+     * is the same one that settles the console: a pixel size that changes between places is
+     * a property of the PICTURE, and this game has spent nine missions establishing that the
+     * picture belongs to one instrument. A grid that gets chunkier when the subject changes
+     * says the machine swapped screens.
+     *
+     * One size, everywhere, so the grid is the machine rather than the mood.
+     */
+    pixel: 3,
     curve: 0.055,
     aberration: 0.0060,
     scanline: 0.20,

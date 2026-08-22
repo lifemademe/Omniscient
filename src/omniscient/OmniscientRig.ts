@@ -69,6 +69,7 @@ import { KELLER } from './content/contacts.js';
 import { M4SSRig } from '../m4ss/M4SSRig.js';
 import { Picker } from './input/Picker.js';
 import { MainMenu } from './menu/MainMenu.js';
+import { drawMenuLabel } from './crt/menuLabel.js';
 import { EndingPanel } from './menu/EndingPanel.js';
 import { SessionController } from './session/SessionController.js';
 import { VFX_LIBRARY } from './vfx/library.js';
@@ -1595,6 +1596,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
       // z tracks STACK_ORIGIN (see MainMenu): the plates moved back twelve centimetres to
       // get out of the cable's way, and the title has to travel with them or the column
       // stops reading as one object.
+      /*
+       * The offset lives in the GEOMETRY, not on the node.
+       *
+       * Worth knowing, and it cost a build to learn: it means this node's own world
+       * position is the station's origin down by the desk, so anything that asks the
+       * wordmark where it is gets an honest answer to a different question. A hover readout
+       * anchored to it was projected into the dark before the idea was replaced by one that
+       * did not need a position at all - see crt/menuLabel.
+       */
       plate.translate(-0.895, 1.55, -0.49 + DESK_SHIFT);
 
       /**
@@ -1628,6 +1638,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.facilityPlate = decorMesh('FacilityPlate', plate, material);
       this.facilityPlate.visible = this.phase === Phase.Menu;
       station.add(this.facilityPlate);
+
+
     } catch (error) {
       console.warn('[omniscient] facility plate not hung', error);
     }
@@ -1791,6 +1803,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.menu?.attach(this.picker);
     this.menu?.onAction((action) => this.onMenuAction(action));
+
+    /*
+     * Hovering a plate makes the machine say what it is, on its own screen.
+     *
+     * Only the name is recorded here; the drawing happens in the CRT's own redraw, because
+     * the tree clears that canvas every frame and anything painted outside that order is
+     * erased before it is seen.
+     */
+    this.menu?.onHoverChange((spec) => {
+      this.menuLabel = spec ? spec.title : null;
+    });
   }
 
   private onMenuAction(action: MenuAction): void {
@@ -2845,6 +2868,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private disposeSceneJump: (() => void) | null = null;
 
   /**
+   * The menu plate under the pointer, drawn on the CRT because the plates cannot name
+   * themselves any more.
+   *
+   * Their labels are world geometry and the game renders at a three-pixel grid, which turns
+   * small text into texture. See crt/menuLabel for why the tube is the right place for the
+   * name and an overlay on the wall was not.
+   */
+  private menuLabel: string | null = null;
+
+  /**
    * Mount a diorama and look at it, with none of the game in front of it.
    *
    * Deliberately not a session: no mission advances, no trust moves, nothing is marked
@@ -3403,6 +3436,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // has moved is most of what the boat is for.
     this.seaLife?.update(deltaTime);
     if (this.picker) this.menu?.update(deltaTime, this.picker);
+
+
     this.globeScreen?.update(deltaTime);
 
     // Hand over to the globe screen once the camera has arrived inside the CRT.
@@ -3428,6 +3463,21 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.tree.draw(reveal, this.pulse, this.revealFrom);
     } else {
       this.tree.draw(1, this.pulse);
+    }
+
+    /*
+     * The plate name, over the tree, on the frame the tree just drew.
+     *
+     * After `draw` and not before: the tree clears this canvas every frame and re-commits
+     * it, so anything written earlier is gone before it reaches the GPU. `commit` only sets
+     * `needsUpdate`, so raising the flag a second time in one frame costs nothing.
+     *
+     * Menu only. The tube shows the knowledge tree everywhere else and a plate name over a
+     * mission's growth would be the front door talking during a call.
+     */
+    if (this.menuLabel && this.surface && this.phase === Phase.Menu && this.screen === Screen.Tree) {
+      drawMenuLabel(this.surface, this.menuLabel);
+      this.surface.commit();
     }
 
     // Let the resolution finish being watched before the camera leaves it.

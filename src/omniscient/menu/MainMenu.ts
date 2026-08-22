@@ -161,6 +161,7 @@ export class MainMenu {
   private readonly scratch = new THREE.Vector3();
 
   private handlers = new Set<(action: MenuAction) => void>();
+  private hoverHandlers = new Set<(spec: ModuleSpec | null) => void>();
   private unsubscribe: Array<() => void> = [];
   private enabled = true;
   /** The module a plug is currently travelling toward, if any. */
@@ -249,6 +250,17 @@ export class MainMenu {
   }
 
   /** Wire up hover and click. The picker is owned by the rig and shared with the globe. */
+  /**
+   * Be told which plate is under the pointer, or null for none and for a disabled one.
+   *
+   * Exists because the plate labels are no longer legible at the game's pixel size and the
+   * name has to arrive somewhere else - see MenuReadout for the whole argument.
+   */
+  public onHoverChange(handler: (spec: ModuleSpec | null) => void): () => void {
+    this.hoverHandlers.add(handler);
+    return () => this.hoverHandlers.delete(handler);
+  }
+
   public attach(picker: Picker): void {
     for (const module of this.modules.values()) {
       picker.addTarget(module.spec.id, module.node);
@@ -313,6 +325,18 @@ export class MainMenu {
     const entering = id !== null && id !== this.hovered;
     this.hovered = id;
     if (entering && this.modules.get(id)?.spec.disabled !== true) audio.play('tap');
+
+    /*
+     * And tell whoever is listening what the plate is called.
+     *
+     * The names left the world when the game got a pixel grid - see MenuReadout - so this
+     * is now the only way a player learns which socket is which. A disabled plate reports
+     * null rather than its name: CONTINUE before there is a save is not a thing you can
+     * reach for, and naming it would be the menu offering something it will refuse.
+     */
+    const named = id !== null ? this.modules.get(id) : undefined;
+    const spec = named && named.spec.disabled !== true ? named.spec : null;
+    for (const handler of this.hoverHandlers) handler(spec);
 
     for (const [key, module] of this.modules) {
       const hovered = key === id && !module.spec.disabled;

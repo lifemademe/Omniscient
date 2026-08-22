@@ -49,3 +49,50 @@ export const PIXEL_FONT: Record<string, string[]> = {
 };
 
 /** Draw a string as hard blocks. `scale` multiplies both axes and the advance. */
+
+/**
+ * How wide a string is, in pixels, at this scale.
+ *
+ * Advance is 4 cells: three for the glyph and one of air. The last character's trailing
+ * column is included, because a centring calculation that dropped it would sit every label
+ * half a pixel left and nobody would ever find out why.
+ */
+export function pixelTextWidth(text: string, scale: number): number {
+  return text.length * 4 * scale;
+}
+
+/**
+ * Draw a string in the 3x5 face onto any 2D context.
+ *
+ * Lives here rather than in a consumer because it WAS in a consumer: `stationDesk.ts` had a
+ * private copy, and the CRT needed the same thing, and this project has already lost an
+ * afternoon today to two copies of one number drifting apart. A renderer for a font is still
+ * data's business - it takes a context and touches nothing else, so the module keeps the
+ * independence its header claims.
+ *
+ * Unknown characters advance without drawing, so a string with a colon in it comes out
+ * spaced correctly rather than jammed together.
+ */
+export function drawPixelText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  scale: number,
+  color: string
+): void {
+  ctx.fillStyle = color;
+  let cx = Math.round(x);
+  const top = Math.round(y);
+  for (const ch of text) {
+    const rows = PIXEL_FONT[ch] ?? PIXEL_FONT[ch.toUpperCase()];
+    if (rows) {
+      for (let r = 0; r < 5; r++) {
+        for (let c = 0; c < 3; c++) {
+          if (rows[r][c] === '1') ctx.fillRect(cx + c * scale, top + r * scale, scale, scale);
+        }
+      }
+    }
+    cx += 4 * scale;
+  }
+}

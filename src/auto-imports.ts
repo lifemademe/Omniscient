@@ -60,6 +60,7 @@ import './omniscient/crt/coastlines.js';
 import './omniscient/crt/CRTSurface.js';
 import './omniscient/crt/GlobeView.js';
 import './omniscient/crt/KnowledgeTree.js';
+import './omniscient/crt/menuLabel.js';
 import './omniscient/crt/PixelSurface.js';
 import './omniscient/dev/SceneJump.js';
 import './omniscient/dev/TunePanel.js';
