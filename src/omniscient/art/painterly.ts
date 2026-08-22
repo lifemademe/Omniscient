@@ -105,7 +105,37 @@ export interface BandingOptions {
  */
 export const PAINT_UNIFORMS = {
   uPaintBands: { value: 3 },
-  uPaintSoft: { value: 0.17 },
+  /**
+   * How much of each band is a ramp rather than a plateau.
+   *
+   * 0.17 was a hard step, and a hard step is the right shape when ONE light is drawing it.
+   * This injection is inside the per-light loop, so it is never one: every light in a room
+   * lays down its own independent three-step terrace at its own angle, and where those
+   * terraces cross they break into irregular cells a few pixels across. Reported as grainy
+   * shadows, and it is worst in shadow for a reason - the total is small down there, so each
+   * step is a large jump relative to the value it is stepping from.
+   *
+   * Measured before it was changed, on the shop's left wall: a histogram with plateaus at
+   * 69-74 and then nothing at all until 85. That is not noise, it is quantisation, and no
+   * amount of looking at it as "grain" would have found the cause.
+   *
+   * 0.45 keeps 55% of every band flat - the painted read §230 asks for is carried by the big
+   * transitions, not by the small ones - and turns the fine terracing into a gradient. The
+   * alternative fixes are heavier: fewer lights per room, or moving the injection after the
+   * light loop so accumulated light is banded once. Both remain open if this is not enough.
+   *
+   * MEASURED, because a shared uniform read by a shader nobody can breakpoint is exactly the
+   * kind of change that silently does nothing. Frame against frame, 0.17 to 0.45 moves 16.9%
+   * of pixels by more than four luma, against a 5.1% floor between two builds with an
+   * unrelated change in them. It is a real change and a gentle one, which is what it is for.
+   *
+   * The first attempt to measure it looked at edge energy on flat wall patches and reported
+   * no change at all - because a band transition on a wall lit from across the room is a
+   * LOW-frequency event, and a Laplacian cannot see one. The injection was then tested for
+   * life at 2 bands and 0.02 softness, which moved 61.9% of pixels: it is very much alive,
+   * and the metric had been wrong rather than the change. Diff whole frames for this.
+   */
+  uPaintSoft: { value: 0.45 },
 };
 
 /**
