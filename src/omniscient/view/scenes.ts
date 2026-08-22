@@ -1577,7 +1577,14 @@ function buildRepairShop(scene: ContactScene): void {
    */
   const TILT = 0.105;
   const KNOCK = 0.24;
-  const HOLD_UNTIL = 1.4;
+  /*
+   * Long enough that she is gone before it starts.
+   *
+   * She leaves 0.55 after the knock and covers 1.62m at the walk clip's 1.66 m/s, so she is
+   * behind the panel around 1.5s in. Straightening before that would be the machine
+   * reacting to her rather than tidying up in her absence, which is the whole reading.
+   */
+  const HOLD_UNTIL = 1.75;
   const SETTLE = 1.3;
 
   const rollBeat = (tweener: Tweener, delay: number): void => {
@@ -1647,7 +1654,16 @@ function buildRepairShop(scene: ContactScene): void {
          */
         tweener.add(() => undefined, {
           duration: 0.01,
-          delay: AFTER_POINT + 0.25,
+          /*
+           * Half a second after the knock, not a quarter.
+           *
+           * A quarter was enough for the engine to run them in the right order and not
+           * enough for a viewer to SEE the order. The knock takes 0.24s just to reach full
+           * tilt, so at 0.25 she was leaving on the frame it arrived and the two still read
+           * as one event. This gives the picture a beat to be visibly crooked before
+           * anything else moves, which is what makes her the cause of it.
+           */
+          delay: AFTER_POINT + 0.55,
           channel: 'link-walk',
           onComplete: () => {
             /*

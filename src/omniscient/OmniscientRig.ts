@@ -2704,9 +2704,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
     /*
      * And she notices you.
      *
-     * The single highest-value frame in the whole entrance, and it costs one cue. Every
-     * rigged contact already registers `reacting` as a prop action; nobody was firing it on
-     * arrival, so the player connected to somebody who did not know they were there.
+     * The single highest-value frame in the whole entrance, and it costs one cue. Nobody was
+     * firing anything on arrival, so the player connected to somebody who did not know they
+     * were there.
+     *
+     * A NOD, and the first version got this wrong. It fired `reacting`, which gestures.ts
+     * describes as recoiling - Sanda when the follower moves, Vasile when the water rises.
+     * On connection that is a person being startled by the machine, and it reads as one: she
+     * called THEM, she has been waiting, and somebody picking up is not a shock. A nod is
+     * "the cheapest way to make somebody feel listened to", which is exactly the transaction
+     * at that moment and the opposite of a recoil.
      *
      * Delayed until the push-in has nearly landed, because a reaction that starts while the
      * camera is still moving reads as part of the move. It has to be a separate event, and
@@ -2717,7 +2724,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       delay: 0.75,
       channel: 'arrival-notice',
       onComplete: () => {
-        if (this.phase === Phase.Contact) this.applyEnvironmentCue('prop.reacting:contact');
+        if (this.phase === Phase.Contact) this.applyEnvironmentCue('prop.nod:contact');
       },
     });
   }
