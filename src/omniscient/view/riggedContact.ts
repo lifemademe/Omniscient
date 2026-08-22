@@ -454,6 +454,21 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
 const TAKE = 0.25;
 
 /**
+ * Seconds for the idle to become a walk, and for the root to get up to speed.
+ *
+ * Longer than a gesture's takeover, because starting to walk is a bigger change of pose
+ * than raising an arm - a quarter second of it read as a snap into the cycle.
+ *
+ * The same number drives BOTH the crossfade and the acceleration, and that is the whole
+ * fix. The root used to leave at full speed the instant the leg was set while the legs
+ * were still blending in, so for a quarter second she slid across the floor with a
+ * half-formed walk on her - the exact thing WALK_PACE exists to prevent, arriving through
+ * the one door it was not guarding. Ramping the travel on the same curve as the blend
+ * keeps the foot planted through the transition as well as through the stride.
+ */
+const WALK_TAKE = 0.42;
+
+/**
  * Seconds for the arms to come back.
  *
  * One number for three things that used to be three: the clip's fade-out, the
@@ -538,6 +553,8 @@ const ARRIVE = 0.06;
   let walkAction: THREE.AnimationAction | null = null;
   /** Current walk's speed multiplier. One walk runs at a time, so one value is enough. */
   let pace = 1;
+  /** Seconds since this leg began, for easing the root up to speed. See WALK_TAKE. */
+  let legAge = 0;
   let leg: Leg | null = null;
   let route: Leg[] = [];
   let dwell = 0;
@@ -741,10 +758,12 @@ const ARRIVE = 0.06;
       // Both halves of the pace, set together - see WalkOptions.pace.
       action.timeScale = pace;
       action.play();
-      if (baseAction) baseAction.crossFadeTo(action, TAKE, false);
-      else action.fadeIn(TAKE);
+      if (baseAction) baseAction.crossFadeTo(action, WALK_TAKE, false);
+      else action.fadeIn(WALK_TAKE);
       walkAction = action;
       leg = next;
+      // Restarted per leg, so the walk back out eases off the spot the same way.
+      legAge = 0;
     });
   };
 
@@ -769,11 +788,32 @@ const ARRIVE = 0.06;
       return;
     }
 
+    legAge += deltaTime;
+
     const dx = leg.to.x - root.position.x;
     const dz = leg.to.z - root.position.z;
     const distance = Math.hypot(dx, dz);
 
-    const speed = WALK_PACE * options.height * pace;
+    /*
+     * Up to speed on the same curve the legs blend in on.
+     *
+     * smoothstep rather than linear: a linear ramp still starts moving on the first frame,
+     * and the first frame is exactly when the walk cycle has no weight at all. This leaves
+     * from a standstill.
+     */
+    const blend = Math.min(1, legAge / WALK_TAKE);
+    const eased = blend * blend * (3 - 2 * blend);
+    /*
+     * And down again over the last third of a metre.
+     *
+     * The same fault at the other end: without this the last frame clamps the step to
+     * whatever distance remains and she goes from full speed to nothing between two frames.
+     * Floored at a quarter so she always closes - a factor that reaches zero is a person
+     * who never quite arrives.
+     */
+    const closing = Math.min(1, distance / 0.34);
+    const settle = closing * closing * (3 - 2 * closing);
+    const speed = WALK_PACE * options.height * pace * eased * Math.max(0.25, settle);
     if (distance > ARRIVE) {
       const error = turnToward(Math.atan2(dx, dz), deltaTime);
       /*

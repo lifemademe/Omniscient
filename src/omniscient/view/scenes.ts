@@ -1581,14 +1581,15 @@ function buildRepairShop(scene: ContactScene): void {
    * Long enough that she is gone before it starts.
    *
    * She leaves 0.55 after the knock and covers 1.62m at 0.7 of the walk clip's 1.66 m/s -
-   * 1.16 m/s, so 1.4s of travel and behind the panel around 1.9s in. Straightening before
-   * that would be the machine reacting to her rather than tidying up in her absence, which
-   * is the whole reading.
+   * 1.16 m/s. With the walk now easing off the spot and down again at the far end that is
+   * about 1.75s of travel, and she crosses the panel edge around 1.5s into it - so she is
+   * gone about 2.05s after the knock. Straightening before that would be the machine
+   * reacting to her rather than tidying up in her absence, which is the whole reading.
    *
    * This number is downstream of her pace and has to move with it. Slowing her walk without
    * moving this is how the horizon ends up straightening over her shoulder.
    */
-  const HOLD_UNTIL = 2.0;
+  const HOLD_UNTIL = 2.4;
   const SETTLE = 1.3;
 
   const rollBeat = (tweener: Tweener, delay: number): void => {
