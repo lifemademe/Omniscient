@@ -496,10 +496,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * only way forward a NEW GAME that throws away the failure and the note they wrote
      * about it. A save is a save.
      */
-    if (hasSave()) {
-      this.menu.setModuleEnabled('continue', true);
-      this.menu.setModuleEnabled('new-game', false);
-    }
+    this.refreshFrontDoor();
   }
 
   /** Created before beginPlay so it is part of the tree the engine initialises normally. */
@@ -1685,8 +1682,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     const bootContainer = world.gameContainer;
     if (bootContainer) {
+      // Nothing under the boot screen is interactive, and nothing under it should be
+      // visible either - see the note on its background.
+      this.menu?.setEnabled(false);
       this.boot = showBoot(bootContainer, () => {
         this.boot = null;
+        this.menu?.setEnabled(true);
         /*
          * Everything that needs a user gesture happens here, on the same press.
          *
@@ -2041,6 +2042,26 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   /** Back to the machine from the globe. */
+  /**
+   * Warm the plate that is the right answer, and cool the one that is not.
+   *
+   * Called every time the player is put back in front of the menu rather than once at
+   * construction, which is the bug this fixes. It ran at build time only, so on a fresh
+   * install it decided CONTINUE was cold and NEW GAME was warm - and then a player finished
+   * Mirela's request in that same session, wrote a save, came back to the machine, and found
+   * exactly the state that was decided before the save existed. CONTINUE dead, NEW GAME
+   * live, and the only working button the one that throws the evening away.
+   *
+   * A menu that reads state has to read it when the state can have changed, and the moment
+   * it can have changed is the moment the player walks back up to it.
+   */
+  private refreshFrontDoor(): void {
+    if (!this.menu) return;
+    const saved = hasSave();
+    this.menu.setModuleEnabled('continue', saved);
+    this.menu.setModuleEnabled('new-game', !saved);
+  }
+
   private returnToMenu(): void {
     this.globeScreen?.detach();
     this.phone?.setVisible(false);
@@ -2048,6 +2069,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.setPhase(Phase.Menu);
     this.screen = Screen.Tree;
     this.menu?.setEnabled(true);
+    this.refreshFrontDoor();
     this.moveTo(HOME_SHOT, 1.4);
   }
 

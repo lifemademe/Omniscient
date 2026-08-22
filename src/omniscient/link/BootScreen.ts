@@ -46,21 +46,22 @@ const CSS = `
   flex-direction: column;
   justify-content: center;
   padding: 0 8vw;
-  background: #04070500;
+  /*
+   * Opaque from the first frame it exists.
+   *
+   * This faded in over a fifth of a second, on the theory that cutting to black over the
+   * engine's first frame would be a seam. It was not a seam - it was a window, and what came
+   * through it was the main menu, visibly, before the boot screen took over. Reported as the
+   * menu flashing before the splash.
+   *
+   * A fade-in on a screen whose whole job is to be the FIRST thing is a contradiction. The
+   * menu is also switched off underneath now, so there is nothing to see through even if
+   * something ever makes this translucent again.
+   */
+  background: #040705;
   font-family: ui-monospace, Menlo, Consolas, monospace;
   color: #7fe08a;
   cursor: default;
-  /*
-   * Black, but not instantly.
-   *
-   * The engine paints its own first frame before this mounts, and cutting to full black on
-   * top of it is a flash. Fading the ground in over a fifth of a second covers the seam and
-   * reads as a tube warming up rather than as a screen being covered.
-   */
-  animation: omni-boot-ground 0.22s linear forwards;
-}
-@keyframes omni-boot-ground {
-  to { background: #040705; }
 }
 .omni-boot__line {
   font-size: clamp(11px, 1.15vw, 17px);
