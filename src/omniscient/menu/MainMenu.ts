@@ -12,6 +12,7 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { audio } from '../audio/ConsoleAudio.js';
 import { decorMesh } from '../art/mesh.js';
 import { ACCENT, MAT } from '../art/palette.js';
 import { createModule, MODULE_PLATE } from '../geometry/modules.js';
@@ -292,7 +293,26 @@ export class MainMenu {
 
   private setHovered(id: MenuAction | null): void {
     if (!this.enabled) return;
+    /*
+     * The plate answers when the pointer reaches it.
+     *
+     * These were the loudest silent objects in the game: five physical plates that push
+     * toward you and light their label when hovered, and made no sound doing it. The move
+     * was already there and only half of it was landing.
+     *
+     * `tap` is the console's own cue for a soft commit - a suggestion chip, a UI press - and
+     * it is the right one here for the reason it is right there: this is a surface
+     * acknowledging a hand, not a mechanism accepting a part. `seat` belongs to the CLICK,
+     * where a cable goes into a socket, and it already fires there.
+     *
+     * Only on ENTERING a plate, and only a plate that can be used. Firing on every call
+     * would tick continuously while the pointer sat still, and a disabled plate that clicks
+     * back is a plate promising something it will not do - CONTINUE before there is a save,
+     * or NEW GAME after there is one.
+     */
+    const entering = id !== null && id !== this.hovered;
     this.hovered = id;
+    if (entering && this.modules.get(id)?.spec.disabled !== true) audio.play('tap');
 
     for (const [key, module] of this.modules) {
       const hovered = key === id && !module.spec.disabled;
