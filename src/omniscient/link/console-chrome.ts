@@ -164,6 +164,32 @@ export const CONSOLE_CHROME_CSS = `
  * with any real motion in it reads as a website, and this is meant to be a machine coming
  * up rather than a page loading.
  */
+/*
+ * Leaving, which is the arrival run backwards and faster.
+ *
+ * Faster because a departure that lingers is a hesitation, and this machine does not
+ * hesitate - it loses a line. Staggered in the same order the cards arrived, so the
+ * CONNECTION STRENGTH card is first out as well as first in: it is the one that is about
+ * the link, and the link is the thing that just went.
+ *
+ * The stage - the room and whoever is in it - is deliberately absent from this. It is left
+ * standing while everything the console drew over it goes.
+ */
+.omni-cv--leaving .omni-cv__readouts > *,
+.omni-cv--leaving .omni-cv__actions,
+.omni-cv--leaving .omni-objective,
+.omni-cv--leaving .omni-board,
+.omni-cv--leaving .omni-cv__top {
+  animation: omni-leave 220ms ease-in forwards;
+  pointer-events: none;
+}
+.omni-cv--leaving .omni-cv__readouts > *:nth-child(2) { animation-delay: 60ms; }
+.omni-cv--leaving .omni-cv__readouts > *:nth-child(3) { animation-delay: 120ms; }
+.omni-cv--leaving .omni-cv__actions { animation-delay: 90ms; }
+.omni-cv--leaving .omni-cv__top { animation-delay: 150ms; }
+@keyframes omni-leave {
+  to { opacity: 0; transform: translateY(3px); }
+}
 @keyframes omni-arrive {
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: none; }

@@ -313,6 +313,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private boot: BootScreen | null = null;
   /** Contact ids in the order their requests were answered. Drives the record strip. */
   private answered: string[] = [];
+  /** True while the departure sequence is running - see leaveContact. */
+  private leaving = false;
   private screen: Screen = Screen.Tree;
   private menu: MainMenu | null = null;
   private picker: Picker | null = null;
@@ -2039,22 +2041,54 @@ export class OmniscientRig extends ENGINE.SceneNode {
       return;
     }
 
-    const contactId = this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
-    if (contactId) {
-      this.setSignalState(contactId, SignalState.Waiting);
-      this.openable.add(contactId);
-    }
-    this.activeIndex = null;
+    /*
+     * The link drops over six tenths of a second rather than in one frame.
+     *
+     * Arriving somewhere has a push-in, a nod and a staggered assembly; leaving had none of
+     * it, and an asymmetric transition is worse than two matching cuts. The player has been
+     * taught this connection means something, and then it ended like closing a tab.
+     *
+     * The order is the point. The squelch goes and the carrier falls at once, because that
+     * is the link and the link is what just went. The chrome follows over 220ms, card by
+     * card, in the same order it arrived. The ROOM is untouched and the camera drifts a
+     * little further out - so the last thing on screen for a beat is the person, alone, in
+     * a picture the console has stopped annotating.
+     *
+     * Guarded, because END CALL is a button and a button can be pressed twice.
+     */
+    if (this.leaving) return;
+    this.leaving = true;
 
     audio.play('disconnect');
     audio.setOnAir(false);
+    this.phone?.setLeaving(true);
     this.post?.clearOutlineSelection();
 
-    this.releaseUnit(false);
-    this.session?.end();
-    this.scene?.deactivate();
-    this.scene = null;
-    this.showGlobe();
+    const drift = this.cameraPosition.clone().lerp(this.cameraTarget, -0.06);
+    this.moveTo({ position: drift, target: this.cameraTarget.clone() }, 0.62);
+
+    this.cameraTweener.add(() => undefined, {
+      duration: 0.01,
+      delay: 0.62,
+      channel: 'leave-contact',
+      onComplete: () => {
+        this.leaving = false;
+        const contactId =
+          this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
+        if (contactId) {
+          this.setSignalState(contactId, SignalState.Waiting);
+          this.openable.add(contactId);
+        }
+        this.activeIndex = null;
+
+        this.phone?.setLeaving(false);
+        this.releaseUnit(false);
+        this.session?.end();
+        this.scene?.deactivate();
+        this.scene = null;
+        this.showGlobe();
+      },
+    });
   }
 
   /** Back to the machine from the globe. */
@@ -2112,6 +2146,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * reason it belonged to only one of them.
    */
   private showGlobe(): void {
+    // Whatever brought us here, the departure is over. A latch that only clears on its own
+    // happy path is a latch that eventually sticks - and a stuck one makes END CALL dead.
+    this.leaving = false;
     const warpContainer = this.getWorld()?.gameContainer;
     if (warpContainer) playWarp(warpContainer);
     setRetroLook('console');

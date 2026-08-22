@@ -45,6 +45,19 @@ const CSS = `
   display: flex;
   flex-direction: column;
   justify-content: center;
+  /*
+   * The BLOCK is centred; the TEXT is not.
+   *
+   * This was a flex column with a padding and no cross-axis alignment, so every child sat
+   * hard against the left edge of a full-width box - a 320px column of text against two
+   * thousand pixels of empty black on a wide window, which reads as a layout come unstuck
+   * rather than as a margin somebody chose.
+   *
+   * Centring the text instead would be the wrong correction. Left-aligned rows with dot
+   * leaders are what a terminal looks like; centred ones are what a title card looks like,
+   * and this is a terminal. So the column is centred and its contents stay ranged left.
+   */
+  align-items: center;
   padding: 0 8vw;
   /*
    * Opaque from the first frame it exists.
@@ -63,6 +76,8 @@ const CSS = `
   color: #7fe08a;
   cursor: default;
 }
+/* One width for every row, so the column has an edge rather than a ragged left margin. */
+.omni-boot > * { width: min(46ch, 84vw); }
 .omni-boot__line {
   font-size: clamp(11px, 1.15vw, 17px);
   letter-spacing: 0.09em;
@@ -73,7 +88,13 @@ const CSS = `
 .omni-boot__line--told { color: #d8ffb0; }
 .omni-boot__title {
   margin-top: 2.2vh;
-  font-size: clamp(22px, 3.4vw, 54px);
+  /*
+   * Quieter than it was. At 3.4vw against the self-test's 1.15 the title was three times
+   * the body on a wide window and shouted over the two lines that actually say something.
+   * A machine printing its own name after a self-test is stating a fact, not announcing
+   * itself.
+   */
+  font-size: clamp(20px, 2.2vw, 38px);
   letter-spacing: 0.24em;
   color: #d8ffb0;
 }

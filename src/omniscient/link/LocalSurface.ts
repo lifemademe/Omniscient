@@ -1090,13 +1090,31 @@ export class LocalSurface implements InterventionSurface {
     element.textContent = '';
     if (!text) return;
 
+    /*
+     * A block cursor rides the end of the line while it types.
+     *
+     * Without it the bar reads as text appearing slowly, which is a loading state. With it
+     * the same eighteen milliseconds a character read as a machine writing, which is what
+     * this console does everywhere else - the transmit field has a cursor, and this is the
+     * same instrument talking.
+     *
+     * Left standing for a beat after the last character, then removed. A cursor that
+     * vanishes on the final letter takes the writing with it; one that sits there for half
+     * a second is somebody who has finished a sentence.
+     */
     let shown = 0;
     this.objectiveTimer = window.setInterval(() => {
       shown += 1;
-      element.textContent = text.slice(0, shown);
+      element.textContent = `${text.slice(0, shown)}${shown < text.length ? '█' : ''}`;
       if (shown >= text.length && this.objectiveTimer !== null) {
         window.clearInterval(this.objectiveTimer);
         this.objectiveTimer = null;
+        element.textContent = `${text}█`;
+        window.setTimeout(() => {
+          if (this.objectiveText === element && this.objectiveShown === text) {
+            element.textContent = text;
+          }
+        }, 520);
       }
     }, 18);
   }
@@ -1264,6 +1282,25 @@ export class LocalSurface implements InterventionSurface {
    * It is the intervention surface - it belongs on screen when there is somebody to
    * intervene with, and nowhere else. On the main menu it is just a green box.
    */
+  /**
+   * The link dropping, as a thing that takes time.
+   *
+   * Arriving somewhere got a push-in, a nod and a staggered assembly. Leaving was a cut -
+   * and an asymmetric transition is worse than two matching cuts, because the player has
+   * been taught this connection means something and then it ends like closing a tab.
+   *
+   * The chrome goes and the room stays, which is the whole shape of it. The machine's
+   * instruments switch off first, the picture holds a moment longer, and the last thing on
+   * screen is the person, alone, in a room the console has stopped annotating. That is the
+   * correct order for a machine losing a line rather than a director cutting away.
+   *
+   * Reset by the next `update`, which rebuilds the shell for the next contact - so nothing
+   * has to remember to switch it back on.
+   */
+  public setLeaving(leaving: boolean): void {
+    this.shell?.classList.toggle('omni-cv--leaving', leaving);
+  }
+
   public setVisible(visible: boolean): void {
     // The whole console, not just the transcript - hiding one and leaving the frame up
     // left an empty operator shell floating over the main menu.

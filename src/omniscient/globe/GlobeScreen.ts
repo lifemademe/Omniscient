@@ -180,6 +180,22 @@ const GLOBE_CSS = `
  * shelf rather than a rack - a record of what was learned, which is the thing the machine
  * actually keeps.
  */
+/*
+ * A card marks the moment its number changes.
+ *
+ * These readouts re-rendered every frame and therefore never announced anything: a request
+ * resolving moved "7 waiting" to "6 waiting" and "0 answered" to "1", and both happened
+ * invisibly while the player was watching the camera come home. The one screen whose whole
+ * job is to say how the world stands was the only one that never said anything had changed.
+ *
+ * One pulse on the value, and nothing on the meter. The meter is a shape and a shape that
+ * flashes reads as an error; the number is the thing that changed.
+ */
+@keyframes omni-card-changed {
+  0% { color: #d8ffb0; text-shadow: 0 0 12px rgba(216, 255, 176, 0.5); }
+  100% { color: inherit; text-shadow: none; }
+}
+.omni-card__value--changed { animation: omni-card-changed 1.1s ease-out; }
 .omni-record {
   display: flex;
   flex-direction: column;
@@ -819,7 +835,24 @@ export class GlobeScreen {
     for (let i = 0; i < segments.length; i++) {
       segments[i].className = i < Math.min(8, count) ? 'on' : '';
     }
-    card.value.textContent = value;
+    /*
+     * Restarted rather than added, because these render every frame.
+     *
+     * Adding the class when it is already there does nothing at all - the animation is
+     * already running or already finished - so a second change inside the same second would
+     * be silent. Removing it, forcing a reflow by reading offsetWidth, and adding it again
+     * is the standard way to make a CSS animation fire twice, and it is worth the reflow on
+     * three elements that change a handful of times an evening.
+     *
+     * Guarded on the text actually differing. Without that this would flash on every frame
+     * of every draw, which is the opposite of marking a change.
+     */
+    if (card.value.textContent !== value) {
+      card.value.textContent = value;
+      card.value.classList.remove('omni-card__value--changed');
+      void card.value.offsetWidth;
+      card.value.classList.add('omni-card__value--changed');
+    }
     card.sub.textContent = sub;
   }
 
