@@ -695,6 +695,29 @@ export const MAT = {
   viewTown: new THREE.MeshBasicMaterial({ color: '#5f6a70', toneMapped: false, fog: false }),
   /** Unlit - indicator lamps and anything that should read as emitting. */
   lamp: new THREE.MeshBasicMaterial({ color: ACCENT.amber, toneMapped: false }),
+  /**
+   * A fluorescent tube. The only cold emitter in the family.
+   *
+   * Basic and un-tone-mapped for the same reason as `lamp`, and there is a second reason
+   * here: `applyCertainty` skips MeshBasicMaterial outright, so a tube keeps the colour it
+   * was authored with whatever tier the fitting is registered at. That is the correct
+   * behaviour and not a workaround - a lamp does not go cold because nobody has described
+   * it. A standard material in this slot would be pulled blue at SHAPED and read as off.
+   *
+   * NOT #ffffff, and the two points below the top of the range are doing real work.
+   *
+   * The green is what makes it a fluorescent rather than a light. An old halophosphate tube
+   * in a coastal workshop is a touch green, everybody has stood under one, and nobody can
+   * name the cue - it is the difference between "there is a lamp" and "that room has strip
+   * lighting in it". Warm incandescent is `lamp`; this is the other thing entirely.
+   *
+   * And it is held BELOW white on purpose. ART_DIRECTION §1 gives the eye to the brightest
+   * object in frame, and the Kestrel-3 has to win that: it is what the request is about, and
+   * this room has already lost it once to a blank white board (see MAT.equipmentBack). A
+   * clipped tube would take it again. What saves this one is area rather than value - a
+   * 26mm line at four metres is a lead-in, and the radio is a mass.
+   */
+  tube: new THREE.MeshBasicMaterial({ color: '#dfeee6', toneMapped: false }),
   /** The shut-down control. Dirty red, and the only one of its colour on the machine. */
   warningLamp: new THREE.MeshBasicMaterial({ color: ACCENT.warning, toneMapped: false }),
   /** Knowledge green, unlit. The cable's live end and circuit pulses. */

@@ -89,6 +89,12 @@ import {
   createTransmitter,
   createWorkbench,
 } from '../geometry/props.js';
+import {
+  createCableCoil,
+  createCompressor,
+  createFluorescentBatten,
+  createTins,
+} from '../geometry/workshop.js';
 
 /*
  * The fact ids, imported rather than typed out as strings.
@@ -631,6 +637,19 @@ function buildRepairShop(scene: ContactScene): void {
    *
    * Small, cool and short-range, so it lifts the corner and nothing else. It is the same
    * daylight, further in - not a new source, which the room is not allowed another of.
+   *
+   * ADDENDUM, and the second half of that sentence is no longer true: there is a
+   * fluorescent batten on that wall now, two metres over this light, and the corner has a
+   * real reason to be lit. That does not make this redundant. A strip light two metres up
+   * puts very little on a floor at this distance once the falloff is paid, and what it DOES
+   * put there comes down onto standing water and comes back - so this stops being an
+   * invented fill and becomes the bounce off the puddle, which is a thing that was always
+   * physically happening and had nobody to attribute it to.
+   *
+   * The numbers are deliberately left where they were tuned. The batten adds perhaps a
+   * third again to this corner, which is the right direction for a corner that has just
+   * acquired a lamp, and cutting a measured value to compensate for an unmeasured one is
+   * how a lit room becomes two wrong guesses instead of one right one.
    */
   scene.registerProp(
     'corner-fill',
@@ -647,6 +666,208 @@ function buildRepairShop(scene: ContactScene): void {
     'tide-line',
     meshOf('TideLine', mergeGeometries(tideMarks, false) ?? tideMarks[0], MAT.tideStain)
   );
+
+  /*
+   * ------------------------------------------------------------------ the left-hand wall
+   *
+   * Everything from here to the tins is one change with one reason: the left third of this
+   * frame was a floor, a plaster wall and nothing at all.
+   *
+   * That is not a small thing in a game whose most-seen image this is. The room had a bench
+   * with the work on it, a shelf, a stain and a puddle, all of them clustered at or behind
+   * the centre - and to the left of that, from the top of frame to the bottom, four square
+   * metres of unbroken surface. §186 asks for composition before clutter and it is right,
+   * but the answer to a bare wall is not fewer objects; a bare wall reads as a room the
+   * builder stopped building, and the eye has nowhere to go on the way in.
+   *
+   * The placements below are PROJECTED rather than eyeballed - `scripts/dev/probe-shop.ts`
+   * puts a world point on screen through the registered shots. It is the same instrument
+   * the wire beat needed, and it earned its keep again here: the visible stretch of that
+   * wall runs from z -1.85 to about z +0.1 and no further, and the first cable drum built
+   * for this corner was a good object that landed entirely off frame at every aspect ratio
+   * from 4:3 to 21:9. It is a coil on the wall now, for that reason and no other.
+   *
+   * All of it is SHAPED, none of it is SUSPECTED, and that distinction is load-bearing -
+   * see the tier list further down for why.
+   */
+
+  /**
+   * The fluorescent batten, over the puddle.
+   *
+   * ## Where it is
+   *
+   * On the side wall at x -3.025, 2.2m up, running from z -1.85 to -0.55 - which puts it
+   * almost exactly above the water. That is not arrangement for its own sake. This corner
+   * holds the flood evidence and had no light of its own; §131 asks the environment to
+   * carry the evidence and it cannot carry what nobody can see, and the answer until now
+   * was a fill light hanging in mid-air with nothing making it.
+   *
+   * ## What it does to the frame
+   *
+   * The tube runs from about 14% to 30% across and 13% to 18% down: a bright diagonal in
+   * the top-left corner, which is the one part of this composition that had nothing leading
+   * into it. A line pointing down-right toward the bench is worth more than any amount of
+   * dressing at the same cost.
+   *
+   * It is also the only COLD source in this room with a visible fitting. The door light
+   * opposite the lamp is what stops every surface converging on the same orange (see its
+   * note), and it comes from off frame - so the room's entire cold half was, until now,
+   * unattributable. Now half of it is bolted to a wall the player can see.
+   */
+  const batten = createFluorescentBatten({ length: 1.3 });
+  /*
+   * z -1.11 rather than -1.2, which is 9cm of pedantry with a reason. The back wall's inner
+   * face is at -1.825, and the fitting is 9cm longer than its tube once the end caps and the
+   * channel's overhang are counted - so a 1.3m batten centred on -1.2 finishes at -1.91,
+   * with the whole of one cap inside the plaster. The first correction moved it to -1.15 and
+   * measured -1.86, which is the same mistake 3cm smaller; the harness caught both.
+   */
+  const BATTEN_AT = new THREE.Vector3(-2.93, 2.2, -1.11);
+  const battenRoot = ENGINE.SceneNode.create({ name: 'Batten', position: BATTEN_AT.clone() });
+  battenRoot.add(meshOf('BattenChannel', batten.fittings, MAT.metal));
+  battenRoot.add(meshOf('BattenCaps', batten.recesses ?? batten.fittings, MAT.dark));
+  scene.registerProp('batten', battenRoot);
+
+  /*
+   * The tube on its own prop, and it has to be.
+   *
+   * MAT.tube is a MeshBasicMaterial, which `applyCertainty` skips outright - so the tube
+   * keeps its authored colour whatever tier this fitting is registered at, which is the
+   * behaviour a lamp wants. The channel and the caps are standard materials and do get
+   * pulled, which is also correct: the steel is inferred, the light is on.
+   */
+  const tubeRoot = ENGINE.SceneNode.create({ name: 'BattenTube', position: BATTEN_AT.clone() });
+  tubeRoot.add(meshOf('Tube', batten.body, MAT.tube));
+  scene.registerProp('batten-tube', tubeRoot);
+
+  /*
+   * And the light it makes - three points along the tube, a third of a budget each.
+   *
+   * LIGHT.fill rather than a fluorescent green-white, and the restraint is the point. This
+   * room is built on exactly two colours of light: a warm work lamp on the bench and cold
+   * daylight from the door, and every object in it separates because it has a warm side and
+   * a cold side. A third hue would muddy the one arrangement that is working. The GREEN
+   * lives in the tube's own material instead, where it says fluorescent up close without
+   * spilling a third colour over the room.
+   *
+   * 1.1 each, and modest on purpose. §187 wants one key plus controlled practicals; the
+   * work lamp is the key and stays several times this at the bench, so the eye still goes
+   * to the radio. A batten that out-lit the workbench would be a beautifully made mistake.
+   *
+   * The count and the spacing were both changed after looking at it - see the note on the
+   * anchors in `createFluorescentBatten` for what two points did to the wall.
+   */
+  for (const [id, anchor] of [
+    ['batten-lamp-a', batten.anchors.lampA],
+    ['batten-lamp-b', batten.anchors.lampB],
+    ['batten-lamp-c', batten.anchors.lampC],
+  ] as [string, THREE.Vector3][]) {
+    scene.registerProp(
+      id,
+      ENGINE.PointLightNode.create({
+        name: 'BattenLamp',
+        position: BATTEN_AT.clone().add(anchor),
+        intensity: 1.1,
+        color: new THREE.Color(LIGHT.fill),
+        distance: 3.4,
+        decay: 1.5,
+      })
+    );
+  }
+
+  /**
+   * The compressor, standing against the wall in front of the shelf.
+   *
+   * Placed at z -0.35 rather than anywhere nearer the water, and the reason is the
+   * `workshop-floor` shot: that camera exists to show the player the flood damage, and a
+   * machine parked over the puddle would be a prop obscuring the evidence it was brought in
+   * to keep company. From the default shot it fills the lower left - the region the tins
+   * are too small to hold - and from the evidence shot it is behind the camera entirely.
+   *
+   * Its front bleeds off the left edge on a 4:3 window. That is deliberate and checked: the
+   * motor and the flywheel, which are what identify it, stay on frame at every ratio, and
+   * an object running out of the frame is one of the few free ways to say the room does not
+   * stop where the picture does.
+   */
+  const compressor = createCompressor();
+  const compressorRoot = ENGINE.SceneNode.create({
+    name: 'Compressor',
+    position: new THREE.Vector3(-2.72, 0, -0.35),
+  });
+  compressorRoot.add(meshOf('CompressorBody', compressor.body, MAT.equipment));
+  compressorRoot.add(meshOf('CompressorFittings', compressor.fittings, MAT.metal));
+  compressorRoot.add(
+    meshOf('CompressorFeet', compressor.recesses ?? compressor.fittings, MAT.dark)
+  );
+  scene.registerProp('compressor', compressorRoot);
+
+  /**
+   * A coil of cable on a nail, filling the metre of wall between the batten and the floor.
+   *
+   * The one CIRCLE on this side of the room. Everything else here is a box, a plank or a
+   * cylinder lying down, and a corner made entirely of straight edges reads as construction
+   * however well it is lit. It hangs at 1.6m, which is where somebody would actually put it
+   * and which happens to be the middle of the empty band.
+   *
+   * Coax on a workshop wall is also the most specific thing in this room about what Mirela
+   * does for a living, and it costs three toruses to say it.
+   */
+  const coil = createCableCoil('mirela-coil', 0.17);
+  const coilRoot = ENGINE.SceneNode.create({
+    name: 'CableCoil',
+    position: new THREE.Vector3(-2.98, 1.62, -0.95),
+  });
+  coilRoot.add(meshOf('CoilCable', coil.body, MAT.dark));
+  coilRoot.add(meshOf('CoilNail', coil.fittings, MAT.metal));
+  scene.registerProp('cable-coil', coilRoot);
+
+  /**
+   * Tins on the floor, and one of them lying in the water.
+   *
+   * ## The standing three
+   *
+   * On the room side of the compressor, so nothing intersects, and clustered rather than
+   * spaced - things people put down end up in groups. One has its bail handle and its lid
+   * off beside it, which is the difference between stock and something in use.
+   *
+   * ## The fourth one
+   *
+   * Lying on its side inside the puddle, and it is the only one of these four doing a job
+   * beyond filling space. This corner's evidence is a stain on a wall and a dark shape on
+   * the floor, and both of those are things a player has to be TOLD are water. A tin on its
+   * side in the middle of it is not: everybody knows what an object lying in a puddle
+   * means, and it is the one piece of dressing in this room that makes the flood read
+   * without a line of dialogue.
+   *
+   * It is also in frame on the `workshop-floor` shot at 1.6m, which is the closest the
+   * camera ever gets to the evidence. That is where it earns its place.
+   */
+  const tins = createTins(
+    [
+      {
+        at: new THREE.Vector3(0, 0, 0.06),
+        radius: 0.055,
+        height: 0.145,
+        handle: true,
+        openLid: true,
+      },
+      // x -0.06 rather than -0.09: at -0.09 this one's shoulder reached the compressor's
+      // tank end. Three centimetres, and the cluster reads exactly the same.
+      { at: new THREE.Vector3(-0.06, 0, -0.06), radius: 0.04, height: 0.1 },
+      { at: new THREE.Vector3(0.02, 0, -0.16), radius: 0.048, height: 0.125 },
+      // In the water. 12mm up, so the puddle plane at y 0.006 passes under it rather than
+      // through it - a surface and a prop fighting for the same millimetre is a flicker.
+      { at: new THREE.Vector3(0.16, 0.012, -0.36), radius: 0.05, height: 0.13, tipped: 0.62 },
+    ],
+    'mirela-tins'
+  );
+  const tinRoot = ENGINE.SceneNode.create({
+    name: 'Tins',
+    position: new THREE.Vector3(-2.46, 0, -0.66),
+  });
+  tinRoot.add(meshOf('TinBodies', tins.body, MAT.equipment));
+  tinRoot.add(meshOf('TinRims', tins.fittings, MAT.metal));
+  scene.registerProp('tins', tinRoot);
 
   /**
    * The shelf, and separately the things on it.
@@ -1791,6 +2012,24 @@ function buildRepairShop(scene: ContactScene): void {
     ['pegboard', CERTAINTY.SHAPED],
     ['pegboard-tools', CERTAINTY.SHAPED],
     ['tide-line', CERTAINTY.SHAPED],
+    /*
+     * The left wall's fittings, all SHAPED and none SUSPECTED.
+     *
+     * A workshop has a light, a machine and some tins in it - that is inferable from the
+     * one word she has said about where she is, which is exactly what this tier means. The
+     * cold tier is reserved for things whose EXISTENCE is a guess, and it is why the crates
+     * on the shelf are pale boxes. Putting these there would have the machine doubting that
+     * the room has lighting, and would also drop three pale volumes into the darkest corner
+     * of the frame, where the flood evidence needs to be the thing that reads.
+     *
+     * `batten-tube` is in this list for completeness and does nothing: it is a
+     * MeshBasicMaterial and applyCertainty skips it, which is how a lit lamp stays lit.
+     */
+    ['batten', CERTAINTY.SHAPED],
+    ['batten-tube', CERTAINTY.SHAPED],
+    ['compressor', CERTAINTY.SHAPED],
+    ['cable-coil', CERTAINTY.SHAPED],
+    ['tins', CERTAINTY.SHAPED],
     // The shelf is a shelf and she is standing in front of it. What nobody has said a word
     // about is what is in the boxes - on it, and under the bench. Those are the coldest
     // things in the room and are supposed to look like it: this is what turns a flat white
