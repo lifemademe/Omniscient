@@ -212,6 +212,15 @@ export interface StandingView {
 
 export interface SurfaceState {
   mode: SurfaceMode;
+  /**
+   * The request is answered and the beat runtime has nothing left to run.
+   *
+   * A flag rather than a string comparison against `hint`, which is what the surface would
+   * otherwise have to do - `failureHint` returns the words "request resolved" and matching on
+   * those would tie a layout decision to a piece of display copy. Somebody rewording the hint
+   * would silently break the tab behaviour and there would be nothing to grep for.
+   */
+  resolved?: boolean;
   /** This beat's device is the payoff - open it with no reading pause. See Beat.handsOver. */
   handsOver?: boolean;
   contactName: string;

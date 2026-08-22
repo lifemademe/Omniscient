@@ -1564,6 +1564,23 @@ export class LocalSurface implements InterventionSurface {
     else if (spoke && this.tab === 'console') this.tab = 'chat';
 
     /*
+     * And when it is over, come back to the conversation.
+     *
+     * The rule above brings the player back from the console whenever the contact SPEAKS, and
+     * that covers everything except the one beat it matters most on: a request that resolves
+     * on the device itself. Dorin's lock is exactly that - the last thing the player does is
+     * press a pin, the lock opens, and nothing after it is a line of dialogue arriving.
+     *
+     * So the console stayed selected, and what it renders once its work is finished is the
+     * empty state: a blank panel with "nothing to work on yet" at the foot of it. Measured off
+     * a capture, that is about a quarter of the screen left empty at the exact moment the
+     * mission pays off, with REQUEST RESOLVED underneath it.
+     *
+     * The closing line is the payoff and it is on the other tab. This brings it back.
+     */
+    if (state.resolved === true && this.tab === 'console') this.tab = 'chat';
+
+    /*
      * A device that arrives with words opens itself once the words have been read.
      *
      * Two opposite complaints landed on the same line of code, which is how it became

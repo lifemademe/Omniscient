@@ -602,29 +602,128 @@ const BOARD_CSS = `
 .omni-board__legend b { font-weight: normal; }
 .omni-board__legend .sump { color: #8fd6e8; }
 .omni-board__legend .outfall { color: #e0a24c; }
-/* The lock: a row of pins, each carrying the position it has been given in the order. */
-.omni-board__pins { display: flex; gap: 8px; flex-wrap: wrap; }
+/*
+ * The lock, drawn as a lock.
+ *
+ * ## What was here
+ *
+ * Five identical bordered rectangles labelled "pin 1" to "pin 5", in a wrapping flex row
+ * that broke them two-two-one. Two things wrong with that and only one of them is layout.
+ *
+ * A five-pin lock is a ROW - the wrap meant the control did not even have the shape of the
+ * object it stands for. And a labelled box is a form field: nothing about it says lock,
+ * says pin, or says what pressing it does to the mechanism. This is the one interactive
+ * mechanic in a mission about a man who did eleven months and has not touched a lock since,
+ * and it presented as a survey question.
+ *
+ * ## What it is now
+ *
+ * A pin-tumbler cross-section, which is five stacks in a housing with a shear line across
+ * them. Each stack is a driver pin above a key pin. At rest the driver straddles the shear
+ * line, which is exactly why the cylinder will not turn. Set a pin and the stack lifts until
+ * the gap between the two lands ON the line - and that gap at the shear line is, mechanically,
+ * the whole of lockpicking.
+ *
+ * ## What it deliberately does NOT show
+ *
+ * Height. Real pins differ in length and a drawing that varied them would hand the player
+ * the answer, because the order they bind in is what the mission is asking them to find out.
+ * Every stack is identical until it is tried. The picture shows the MECHANISM, not the
+ * solution, and the state it reveals - which pins are currently set - is state the player has
+ * already earned by pressing them.
+ *
+ * It is CSS rather than a canvas because the interaction and the drawing want to be the same
+ * object: the pin you look at is the button you press, so it keeps every bit of the existing
+ * click and ordering logic untouched.
+ */
+.omni-board__lock {
+  position: relative;
+  padding: 10px 12px 8px;
+  border: 1px solid rgba(127, 224, 138, 0.28);
+  border-radius: 3px;
+  background: rgba(6, 14, 9, 0.9);
+}
+/*
+ * The shear line. Amber rather than green because it is the one thing on this panel that
+ * belongs to the lock rather than to the machine reading it, and because the order numerals
+ * are already amber - the two amber things are the two things about the lock's own state.
+ *
+ * 34px is the housing's 10px of padding plus 24 into the stack; both numbers are fixed here
+ * on purpose, because the line has to stay still while the pins move through it.
+ */
+.omni-board__lock::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 34px;
+  height: 1px;
+  background: rgba(224, 162, 76, 0.5);
+  pointer-events: none;
+}
+.omni-board__pins {
+  display: flex;
+  gap: 8px;
+  /* NOT wrap. Five pins are a row, and a row that folds is not a lock any more. */
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
 .omni-board__pin {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  width: 52px;
-  padding: 8px 0 6px;
-  border: 1px solid rgba(127, 224, 138, 0.34);
-  border-radius: 3px;
-  background: rgba(10, 24, 15, 0.85);
-  color: #cfe9d2;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgba(207, 233, 210, 0.7);
   font: inherit;
-  font-size: 11px;
+  font-size: 9px;
+  letter-spacing: 0.06em;
   cursor: pointer;
 }
-.omni-board__pin:hover { border-color: rgba(127, 224, 138, 0.8); }
-.omni-board__pin--picked {
-  border-color: #7fe08a;
-  background: rgba(20, 52, 28, 0.95);
+/*
+ * The stack: driver over key, with the gap between them that has to reach the shear line.
+ *
+ * Positions are stack-local. Driver 0-28, gap 28-32, key 32-56, and the shear line sits at
+ * 24 - inside the driver, which is the locked state. Lifting by 6 puts the gap at 22-26 and
+ * the line lands in the middle of it. Those five numbers are the whole mechanism.
+ */
+.omni-board__pin-stack {
+  position: relative;
+  width: 100%;
+  height: 56px;
+  transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
-/* The number is the whole readout: a pin's place in the order the player is proposing. */
+.omni-board__pin-driver,
+.omni-board__pin-key {
+  position: absolute;
+  left: 24%;
+  right: 24%;
+  border-radius: 1px;
+}
+/* Steel, and dull - a driver pin is the part you are not trying to place. */
+.omni-board__pin-driver {
+  top: 0;
+  height: 28px;
+  background: linear-gradient(90deg, rgba(120, 136, 124, 0.5), rgba(168, 184, 170, 0.85), rgba(120, 136, 124, 0.5));
+}
+/* Brass, and warm - the key pin is the one the pick is under. */
+.omni-board__pin-key {
+  top: 32px;
+  height: 24px;
+  background: linear-gradient(90deg, rgba(150, 104, 44, 0.55), rgba(224, 172, 92, 0.95), rgba(150, 104, 44, 0.55));
+}
+.omni-board__pin:hover .omni-board__pin-stack { transform: translateY(-2px); }
+.omni-board__pin--picked .omni-board__pin-stack { transform: translateY(-6px); }
+/* Set pins hold a little light, so a solved stack reads at a glance from across the panel. */
+.omni-board__pin--picked .omni-board__pin-key {
+  background: linear-gradient(90deg, rgba(180, 128, 56, 0.7), rgba(255, 208, 130, 1), rgba(180, 128, 56, 0.7));
+  box-shadow: 0 0 8px rgba(224, 162, 76, 0.45);
+}
+/* The number is the readout: a pin's place in the order the player is proposing. */
 .omni-board__pin-order {
   min-height: 15px;
   font-size: 13px;
@@ -2048,13 +2147,37 @@ export class BoardPanel {
    * is cheaper to learn than any label explaining it would be.
    */
   private buildLock(pins: Array<{ id: string; label: string }>): void {
+    /*
+     * The housing goes round the row, because the shear line has to be drawn across ALL the
+     * pins at one height and stay there while they move. A line per pin would move with the
+     * pin it belonged to, which is the one thing a shear line never does.
+     */
+    const housing = document.createElement('div');
+    housing.className = 'omni-board__lock';
+
     const row = document.createElement('div');
     row.className = 'omni-board__pins';
+    housing.appendChild(row);
 
     for (const pin of pins) {
       const button = document.createElement('button');
       button.className = 'omni-board__pin';
       button.type = 'button';
+
+      /*
+       * Stack first, numeral under it. The numeral used to sit on top, which put a
+       * variable-height element between the housing's edge and the pins and made the shear
+       * line's offset depend on whether anything had been pressed yet.
+       */
+      const stack = document.createElement('span');
+      stack.className = 'omni-board__pin-stack';
+      const driver = document.createElement('span');
+      driver.className = 'omni-board__pin-driver';
+      const key = document.createElement('span');
+      key.className = 'omni-board__pin-key';
+      stack.appendChild(driver);
+      stack.appendChild(key);
+      button.appendChild(stack);
 
       const order = document.createElement('span');
       order.className = 'omni-board__pin-order';
@@ -2112,7 +2235,8 @@ export class BoardPanel {
       row.appendChild(button);
     }
 
-    this.grid.appendChild(row);
+    // The housing, not the bare row - see buildLock's header for why the shear line needs it.
+    this.grid.appendChild(housing);
   }
 
   /**

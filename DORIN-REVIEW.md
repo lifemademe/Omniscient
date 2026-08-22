@@ -123,65 +123,85 @@ door frame and the lock, and the soffit's mean must fall below the bulb's.
 
 ---
 
-## 3. Dorin is legible but is not in the picture's hierarchy
+## 3. Dorin was behind the console panel — CORRECTED, AND FIXED
 
-**Correcting my own first reading**, which is recorded here because the mistake is instructive.
-Two spot samples said luma 12 and 36 and I was about to report that the contact is invisible.
-Sampled as regions instead:
+**This section originally said the opposite and was wrong twice over.** It is left corrected
+rather than rewritten because the way it went wrong is the useful part.
+
+The first draft said "the contact is invisible", from two spot samples reading luma 12 and 36.
+Re-measured as regions that became "he is legible but marginal" — a figure at screen x 0.27
+with a lit torso at median 31 against a wall at 11.6, a real 2.7x separation.
+
+Both readings were of **the wrong object.** Projected through the shot with
+`scripts/dev/probe-door.ts`, Dorin lands at:
 
 ```
-Dorin, lit torso     mean 30.6   median 31.0   p90 58.0
-wall behind him      mean 12.6   median 11.6   p90 18.5
+Dorin head    x 0.688     the console panel's left edge is 0.645
+Dorin chest   x 0.688
+at 4:3        x 0.754
 ```
 
-He is **2.7× his own background**. He is not invisible and the porch light is reaching him.
-What is true is different and still a problem:
+He was **behind the interface for the entire call.** What is visible at the left of the frame,
+and what both earlier measurements were reading, is a prop on the porch.
 
-- His median (31) sits against a lit door frame at **105** and a soffit at **180**. He is in the
-  bottom quarter of the frame's range.
-- He is at **x 0.27** — the left edge — while the composition's mass is centre-right.
-- He is small, partly cropped by the frame edge, and turned away.
+A capture cannot show you a thing that is not on screen, which is exactly why an eye is the
+wrong instrument for "is the contact in the frame" and a projection is the right one.
 
-For comparison, Mirela in mission 01 stands at x 0.48 with her face brighter than the wall
-behind her. Dorin gets none of that, and he is the more dramatic of the two — a man who did
-eleven months, at his mother's door at two in the morning, with picks in his hand.
+### 3.1 What this collides with, and what was done
 
-### 3.1 The fix
+There is a rule at the top of `scenes.ts` headed **CONTACT FRAMING - measure this, do not
+eyeball it**, and it names this exact scene as a past failure: *"Vasile at 0.00 off axis, Dorin
+at 0.02, Ileana cropped at the crown"*. It requires the contact's PERPENDICULAR distance from
+the camera-to-target line to be 0.45-0.9m, so the person does not stand over the evidence.
 
-Do **not** brighten him. The dark is correct for the scene and his separation is already real.
-Fix the framing instead:
+That rule was satisfied. It is simply a different question from "is he under the console", and
+nobody had asked the second one.
 
-- **Re-aim `registerShot('default')` so he is inside the composition** rather than at its edge —
-  target between him and the lock rather than at the door's centre. The door does not need to be
-  centred; a door seen slightly off-axis with a man beside it is a better picture than a
-  symmetrical door with a man clipped off one side.
-- **Then re-check with `scripts/dev/probe-shop.ts`**, which projects world points through a
-  registered shot. It is written for Mirela's room but the camera maths is general — point it at
-  this scene's shots and it will say exactly where he lands at 16:9 and 4:3.
+**Fixed** by pulling the default shot back from 3.05m to 4.2m and panning the target to x 0.42.
+Panning alone cannot do it - the door leaves the left of frame before he arrives from the right
+- but a wider frame compresses both toward the centre at once. After:
 
----
+```
+Dorin  x 0.586 (0.614 at 4:3)      door x 0.428      lock x 0.474
+perpendicular distance 0.54m       inside the documented 0.45-0.9 band
+```
 
-## 4. The push-in removes the person from the room
+Confirmed on screen: he now stands in the porch light in profile with his hands at the lock,
+face, hat, coat and boots all reading.
 
-`registerShot('lock')` pushes in on the door, and at that framing **Dorin is entirely off
-screen**. Confirmed at t=19s: the frame is door, lock and console, no contact anywhere.
+## 4. The lock push-in removes him — NOT FIXED, and here is why
 
-That is the whole middle of the mission — the pin puzzle, the part the player actually plays —
-performed with the person they are talking to absent.
+Confirmed and unchanged: at `registerShot('lock')` Dorin projects to x 1.09-1.26 and 0.53m from
+the lens. He is not merely off the panel, he is off the frame, and the camera is practically
+inside him.
 
-Mission 01 solved this exact problem and wrote down the solution. From `registerShot('transmitter')`:
+The original recommendation here was to copy mission 01's fix - come in over the shoulder, as
+`registerShot('transmitter')` does for Mirela. **That recommendation does not survive the
+geometry**, and it is worth writing down why so nobody spends the afternoon I spent on it.
 
-> *"This was a metre from the target and aimed square at the box: the transmitter filled the
-> frame, Mirela was nowhere in it, and the whole scene read as a screenshot of a prop. The
-> request is a conversation with somebody — losing her the moment the player looks closely at
-> anything is the wrong trade every time. Now it comes in from her side of the bench, so the set
-> is still the biggest thing in frame and her hands and shoulder hold the left edge."*
+Mirela's set sits ON A BENCH between the camera and her, so a prop close-up naturally contains
+her hands and shoulder. Dorin's lock is 2cm of brass on a door, and he stands 77cm to its side
+and 82cm in front of it. Swept across camera positions from 0.9m to 3.5m out, at every target:
 
-**Apply the same fix here.** Move the lock shot's camera round so it comes in over Dorin's
-shoulder: the lock stays the biggest thing in frame, and his shoulder and hands hold an edge.
-The lesson is already in this codebase; it simply was not carried across.
+- every framing that puts his shoulder inside the visible band drops the perpendicular distance
+  to about **0.17m**, half the 0.35m at which the codebase's own rule says he occludes the
+  subject;
+- every framing that respects the rule puts his shoulder at x 0.70-1.5 — behind the panel or
+  off the frame entirely.
 
----
+There is no camera position at 46 degrees that satisfies both. The real options are:
+
+1. **A per-shot field of view.** `registerShot` has no `fov` today. A 60-70 degree lens on this
+   one shot would fit both comfortably. Cleanest fix, needs a small change to the shot contract.
+2. **Move Dorin.** His position was solved under a reach constraint that was then ABANDONED —
+   the note says no placement reached the lock, so he has no hand targets at all and uses a
+   raised rest instead. The constraint that chose his spot no longer applies, so he can move.
+   Bigger change: rotation, the `stoop` prop, and the reach all move with him.
+3. **Do not push in so far.** The scan bracket `01 LOCK` already points at it legibly, and the
+   new default shot holds the lock at x 0.474. A gentler push keeps both.
+
+**Not attempted here**, because none of the three can be verified without playing the mission to
+that beat, and the dev scene-jump strip mounts a diorama at its default shot only.
 
 ## 5. The lock puzzle looks like a form, not a lock
 
@@ -242,33 +262,31 @@ work on yet" before, and something that closes the loop after.
 
 ---
 
-## 7. The transition home passes through black
+## 7. The transition home is a hard cut, then a slow fade — CORRECTED
 
-Measured mean luma of the diorama area across the transition:
+Originally written as "passes through black", from frames half a second apart. Re-sampled at
+15fps it is a different and more specific fault:
 
 ```
-t=35.0   35.2      the door, warm, open
-t=35.5   35.3
-t=36.0    4.3      <- near black
-t=36.5   15.8
-t=37.0   17.4
-t=40.0   21.2      the workstation
+t=35.00 .. 35.67   mean luma 28.6, flat        the porch
+t=35.73            mean luma  1.39             <- an instant cut
+t=35.80 .. 36.47   1.9 3.0 4.4 6.0 7.7 9.2 11.1 13.1 15.5 18.2 20.9
+t=36.53 onward     ~20.6, flat                 the workstation
 ```
 
-The frame at t=36 is the warp: faint green radial streaks at luma 8–15, a scatter of coloured
-motes, `WRITING TO TAPE.` bottom-centre — and **a small pale rectangle floating at the left**,
-which is the workstation's window seen from far off. In a nearly black frame it is the only
-bright thing, it is unexplained, and it reads as an artefact rather than as a destination.
+So it is **a hard cut to black followed by a 0.73-second fade up.** The fade is deliberate and
+fine. The cut is not: one frame at 28.6 and the next at 1.4, with no fade out at all. An
+asymmetric transition - cut out, fade in - is the shape of a level load, where a symmetric one
+would read as a move.
 
-The intent — a change of medium, `playWarp` — is good. The execution spends about a second at
-one eighth the brightness of either end of the move.
+The cause is visible in `returnHome`: `this.scene?.deactivate()` and `this.scene = null` run on
+the same tick that `moveTo(HOME_SHOT)` starts, so the porch is gone before the camera has left
+it. The warp overlay cannot cover for that — it is deliberately edge-only, masked clear in the
+middle, so there is nothing in the centre of the frame during the cut.
 
-**Fix:** raise the warp's own brightness so the streaks carry the frame (they are the effect;
-they should be visible), and either bring the room up sooner or start the move from inside the
-room so there is never a frame with nothing in it but a stray rectangle. Measure it the same
-way afterwards — the mean should not dip below about half of either end.
-
----
+**Not attempted**, for the same reason as §4: `returnHome` cannot be reached from the scene-jump
+strip, so a change to it cannot be seen. The fix is a short fade or a delayed deactivate, and it
+wants one play-through to tune.
 
 ## 8. The save note covers the thing it is celebrating
 
@@ -310,25 +328,33 @@ from a box you have not proved is empty when the thing is absent.** Both faults 
 
 ---
 
-## 10. Ordered plan
+## 10. Ordered plan — status
 
-Eleven days to the freeze. This is about a day and a half.
+| # | item | state |
+|---|---|---|
+| 1 | **listen to the game** | **STILL OPEN** — the only item nobody can do from a capture |
+| 2 | tab returns to CHAT on resolve (§6) | **DONE** — `SurfaceState.resolved`, a flag not a string match |
+| 3 | save note off the tube (§8) | **DONE** — centred at 27% instead of 50% |
+| 4 | porch light off the soffit (§2) | **DONE and measured** — see below |
+| 5 | lock shot over Dorin's shoulder (§4) | **NOT DONE** — the geometry forbids it, see §4 |
+| 6 | pins in a single row (§5.1) | **DONE** — and drawn as a lock, §5.2 with it |
+| 7 | default shot brings him into frame (§3) | **DONE and measured** — he was behind the panel |
+| 8 | warp does not pass through black (§7) | **NOT DONE** — needs a play-through, see §7 |
+| 9 | draw the lock on the console (§5.2) | **DONE** — pin-tumbler cross-section, CSS |
 
-| # | item | cost | why here |
-|---|---|---|---|
-| 1 | **listen to the game** | 20 min | the only thing here nobody can do from a capture |
-| 2 | tab returns to CHAT on resolve (§6) | 30 min | a quarter of the payoff frame is blank |
-| 3 | save note off the tube (§8) | 20 min | it covers the reward |
-| 4 | porch light off the soffit (§2) | 1h | the eye leaves the picture at the top |
-| 5 | lock shot over Dorin's shoulder (§4) | 1h | the lesson is already written in mission 01 |
-| 6 | pins in a single row (§5.1) | 20 min | the interface should have the shape of the object |
-| 7 | default shot brings him into frame (§3) | 1h | |
-| 8 | warp does not pass through black (§7) | 1h | |
-| 9 | **draw the lock on the console (§5.2)** | 4h | the biggest single quality gain available here |
+### What the fix to §2 measured
 
-Item 1 is still not a formality and is still not something this report can do.
+Before and after, same shot, same sampling:
 
----
+```
+                       before        after
+porch lamp             166.1         176.6
+the wall above it      179.5         156.7     <- was brighter than the lamp; now 20 below
+brightest 2%, centre   x0.67 y0.11   x0.40 y0.21
+```
+
+The eye's target has moved off the top edge of the frame and onto the lamp and door surround.
+Dorin now measures median 34.2 against a wall at 20.8, in frame and lit.
 
 ## 11. What is working, and must not be touched
 

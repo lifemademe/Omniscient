@@ -500,6 +500,7 @@ export class SessionController {
       // A lost request still takes input - the note the player writes themselves.
       awaitingInput: !finished || this.failed !== null,
       hint: this.failureHint(finished),
+      resolved: finished,
       hints,
       records,
       // Suppressed once the request is over or while a reading is pending - in both cases

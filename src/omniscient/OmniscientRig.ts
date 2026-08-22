@@ -1937,7 +1937,21 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const note = document.createElement('div');
     note.style.cssText = [
       'position:absolute',
-      'left:50%',
+      /*
+       * 27%, not 50%, and the reasoning above survives the change intact.
+       *
+       * "It sits above the desk rather than in the corner of the window, which is where the
+       * shot is taking the eye anyway" is right, and it is right for a reason that makes
+       * centring wrong: the eye is at the middle of that shot BECAUSE THE TUBE IS THERE. So a
+       * centred note lands on the CRT and covers the knowledge tree - which has just grown by
+       * one branch, which is the reward the whole mission was for. The receipt was printed
+       * over the thing it is a receipt for.
+       *
+       * 27% puts it in the desk lamp's pool, which is lit, empty, on the same surface, and on
+       * the way the eye is already travelling. Off the tube by about five per cent of the
+       * frame at the settled shot.
+       */
+      'left:27%',
       'bottom:12%',
       'transform:translateX(-50%)',
       'z-index:30',

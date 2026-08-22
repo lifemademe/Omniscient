@@ -8739,11 +8739,40 @@ function buildNightDoor(scene: ContactScene): void {
     'porch',
     ENGINE.PointLightNode.create({
       name: 'Porch',
-      position: porchAt.clone().add(new THREE.Vector3(0, 0, 0.25)),
-      intensity: 9,
+      /*
+       * Further off the facade, and a slacker falloff, because the wall around the bulb was
+       * the brightest thing in the frame.
+       *
+       * Measured off a capture: the surface around the lamp came out at mean luma 179.5
+       * against the bulb itself at 166, with nothing clipping - so the bounce was brighter
+       * than the source. And the centre of mass of the brightest 2% of the whole diorama sat
+       * at y 0.11, the top edge of the picture. §187 gives the eye to the brightest thing, so
+       * in a scene about a door, a lock and a man, the eye went to a blank strip of ceiling
+       * and left.
+       *
+       * The cause is the same one the fluorescent batten hit in Mirela's shop: a point light
+       * a few centimetres from a surface, where the falloff term is enormous. There is a hood
+       * modelled over this bulb and it cannot help - nothing in this project casts shadows,
+       * so the hood is a shape, not an occluder.
+       *
+       * Two changes, and neither is "turn it down":
+       *
+       *  - 0.45 rather than 0.25 forward, so the source is a hand's breadth off the wall
+       *    instead of touching it. It also moves toward the door and toward Dorin, which is
+       *    where the light is wanted.
+       *  - decay 1.25 rather than 1.7. Decay is what sets the near-to-far RATIO, and that
+       *    ratio is the actual fault: at 1.7 the wall at 7cm is eighty times Dorin at 90cm,
+       *    and at 1.25 it is about sixteen. The pool stays tight because `distance` still
+       *    bounds it, which is what the note above is really asking for.
+       *
+       * Intensity rises to 11 to keep the door where it was, since a slacker decay means less
+       * light arrives at the middle distances.
+       */
+      position: porchAt.clone().add(new THREE.Vector3(0, 0, 0.45)),
+      intensity: 11,
       color: new THREE.Color('#ffd49a'),
       distance: 5,
-      decay: 1.7,
+      decay: 1.25,
     })
   );
 
@@ -8848,8 +8877,31 @@ function buildNightDoor(scene: ContactScene): void {
      * Crossing to -x also puts him between the camera and the porch light rather than
      * beside it, so he keeps the profile the original note was right to want.
      */
-    position: new THREE.Vector3(-1.55, 1.7, 3.05),
-    target: new THREE.Vector3(0.05, 1.3, -0.26),
+    /*
+     * Pulled back, and panned right, so that DORIN IS IN THE PICTURE.
+     *
+     * He was not. Projected through the old framing he lands at screen x 0.688, and the
+     * console panel's left edge is at 0.645 - so the contact, in a game whose entire premise
+     * is a conversation with a person, was behind the interface for the whole call. At 4:3 he
+     * was at 0.751, deeper still.
+     *
+     * That was not visible in a capture, which is how it survived: what you see at the left of
+     * the frame is a prop on the porch, and reviewing the recording by eye read it as him.
+     * `scripts/dev/probe-door.ts` settles it in one run.
+     *
+     * Panning alone cannot fix it - the door leaves the left of frame before he arrives from
+     * the right, because he stands 77cm to the door's side and the camera is off to the other.
+     * Pulling BACK is what works: a wider frame compresses everything toward the centre, so
+     * the door comes right and he comes left at the same time. 4.2m with the target at x 0.42
+     * puts him at 0.586 and the door at 0.428, both clear of the panel, and holds at 4:3 where
+     * he lands at 0.614.
+     *
+     * The cost is a smaller warm pool in a bigger dark frame, which is the trade this scene
+     * can best afford: §230 wants "a man in a small circle of yellow with a town of blue
+     * behind", and that reads better at this distance than at three metres, not worse.
+     */
+    position: new THREE.Vector3(-1.55, 1.72, 4.2),
+    target: new THREE.Vector3(0.42, 1.25, -0.26),
   });
   /**
    * The lock, and the camera was standing inside Dorin.
