@@ -752,6 +752,9 @@ export class LocalSurface implements InterventionSurface {
   private endButton: HTMLElement | null = null;
   private objectiveElement: HTMLDivElement | null = null;
   private objectiveText: HTMLSpanElement | null = null;
+  /** What the objective bar is currently showing, so an unchanged one is not retyped. */
+  private objectiveShown = '';
+  private objectiveTimer: number | null = null;
   /** The amber flag above the input while a lost request is waiting for its note. */
   private noteFlag: HTMLDivElement | null = null;
   private hintsElement: HTMLDivElement | null = null;
@@ -1061,6 +1064,43 @@ export class LocalSurface implements InterventionSurface {
   }
 
   /** Build one margin readout. Segments are filled later by fillMeter. */
+  /**
+   * Type the request out rather than printing it.
+   *
+   * This line is the mission statement - the one sentence saying what the player is here to
+   * do - and it appeared complete on the same frame as everything else, which is the fastest
+   * way to make the most important text on screen read as furniture.
+   *
+   * Typed at 18ms a character, which is fast enough that a long objective is finished before
+   * anybody has decided to be impatient, and slow enough to be unmistakably a machine
+   * writing rather than a label appearing. It is the same idea as the `> transmit...` prompt
+   * the player types into: this console writes, it does not render.
+   *
+   * Guarded on the text so a re-present with an unchanged objective does not retype it -
+   * `present()` is called on every state change, and an objective that restarted every time
+   * the contact said something would be a tic rather than an arrival.
+   */
+  private typeObjective(text: string): void {
+    const element = this.objectiveText;
+    if (!element || text === this.objectiveShown) return;
+    this.objectiveShown = text;
+
+    if (this.objectiveTimer !== null) window.clearInterval(this.objectiveTimer);
+    this.objectiveTimer = null;
+    element.textContent = '';
+    if (!text) return;
+
+    let shown = 0;
+    this.objectiveTimer = window.setInterval(() => {
+      shown += 1;
+      element.textContent = text.slice(0, shown);
+      if (shown >= text.length && this.objectiveTimer !== null) {
+        window.clearInterval(this.objectiveTimer);
+        this.objectiveTimer = null;
+      }
+    }, 18);
+  }
+
   private buildCard(label: string): ReadoutCard {
     const card = document.createElement('div');
     card.className = 'omni-card';
@@ -1242,6 +1282,9 @@ export class LocalSurface implements InterventionSurface {
     this.noteFlag = null;
     this.hintsElement = null;
     this.objectiveElement = null;
+    if (this.objectiveTimer !== null) window.clearInterval(this.objectiveTimer);
+    this.objectiveTimer = null;
+    this.objectiveShown = '';
     this.objectiveText = null;
     this.endButton = null;
     this.renderedSuggestKey = '';
@@ -1352,7 +1395,7 @@ export class LocalSurface implements InterventionSurface {
       this.endButton.title = locked ? 'Write your note first' : '';
     }
     if (this.objectiveElement && this.objectiveText) {
-      this.objectiveText.textContent = state.objective ?? '';
+      this.typeObjective(state.objective ?? '');
       this.objectiveElement.hidden = !state.objective;
     }
     if (this.noteFlag) this.noteFlag.hidden = !locked;

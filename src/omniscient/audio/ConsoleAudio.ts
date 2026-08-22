@@ -90,7 +90,15 @@ export type Cue =
   /** The request is solved. */
   | 'solved'
   /** The request failed. */
-  | 'failed';
+  | 'failed'
+  /**
+   * The machine's own three notes. The nearest thing this game has to a theme.
+   *
+   * Deliberately not a jingle and deliberately not often - it plays at the boot, when a
+   * request resolves, and at the ending, and nowhere else. Three uses is what makes three
+   * notes a motif; a fourth would make it a sound effect.
+   */
+  | 'motif';
 
 interface Voice {
   /** Oscillator frequency in Hz, or null for a noise burst. */
@@ -118,6 +126,28 @@ interface Voice {
  * "good" and "bad" as two tones can get without becoming a jingle.
  */
 const CUES: Record<Cue, Voice[]> = {
+  /**
+   * 392, 523, 587 - G, C, D. A rising fourth then a step.
+   *
+   * It resolves upward and then does NOT arrive: the third note is the second of the key it
+   * implies, so the phrase leans forward and stops. That is the machine - something that has
+   * got somewhere and is still listening - and it is why the interval is not the rising
+   * fifth the `solved` cue already owns. Two confident resolutions in the same instrument
+   * would make one of them meaningless.
+   *
+   * Long and quiet. 0.42s a note against 0.16 for everything else here, at a third of the
+   * level, because this is the only cue in the game that is allowed to be MUSIC and music
+   * that arrives at the volume of a button click is a notification.
+   */
+  motif: [
+    { hz: 392, length: 0.42, level: 0.05, type: 'sine' },
+    { hz: 523, length: 0.42, level: 0.045, type: 'sine', delay: 0.3 },
+    { hz: 587, to: 584, length: 0.9, level: 0.04, type: 'sine', delay: 0.62 },
+    // A fifth under the last note, barely there. It is what stops three sines reading as a
+    // test tone - the same trick the carrier bed uses to sound like a room rather than a
+    // frequency.
+    { hz: 196, length: 1.1, level: 0.022, type: 'sine', delay: 0.62 },
+  ],
   connect: [
     { hz: null, band: 1800, length: 0.09, level: 0.5 },
     { hz: 520, to: 660, length: 0.16, level: 0.16, type: 'sine', delay: 0.05 },

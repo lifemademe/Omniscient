@@ -6,6 +6,12 @@ the code. Freeze Sept 2, submission Sept 11.
 Everything below is either something I watched frame by frame or something I read in the
 source. Where I could not observe it I say so rather than guessing.
 
+**Two items in §6 were simply wrong and are struck through rather than deleted.** Both were
+"this is missing" claims about things that were already built, and both came from the same
+mistake: sampling the capture at one frame per second, which cannot show a globe drifting at
+0.02 rad/s or a person breathing. Absence of evidence at 1fps is not evidence of absence.
+The lesson is in the file rather than tidied out of it.
+
 ---
 
 ## 0. The honest headline
@@ -224,8 +230,10 @@ look at the result**, rather than finding out from a judge.
    staggers in. Anywhere a list appears — observed lines, records, hop options, trace
    results — 60–100ms between items would change the feel of the whole UI for almost no
    work. This is the single cheapest "juice" win in the project.
-2. **The globe never moves on its own.** A slow idle rotation (0.02 rad/s) makes it a live
-   instrument rather than a diagram. It should stop while a tooltip is open.
+2. ~~**The globe never moves on its own.**~~ **WRONG — it already does.** `GlobeScreen.update`
+   calls `globe.advance(deltaTime)` every frame and already stops while a point is selected
+   or dragged, with a comment explaining why it resumes without easing. I could not see the
+   drift because I sampled the capture at one frame per second. Nothing to do.
 3. **`SELECT A SIGNAL` and `SOMEBODY IS ALWAYS ASKING.` are static.** The bottom line is
    good writing; let it change with state — how many are waiting, how long the oldest has
    been.
@@ -237,9 +245,10 @@ look at the result**, rather than finding out from a judge.
    everything. That is correct and worth keeping; note it here so it does not get "fixed".
 7. **The scan reticle label** (`01 TRANSMITTER`) is well done. More of that language on
    other interactable props.
-8. **Contact idle.** Mirela is static between lines. Even a 4-second breathing loop and an
-   occasional blink changes a mannequin into a person. Check whether the rig supports it
-   before committing to it.
+8. ~~**Contact idle.**~~ **WRONG — already built, and built well.** `character-node.ts` has a
+   full BREATH system: pitch, roll and sway on separate periods, with the breath rate itself
+   drifting, integrated rather than multiplied so it never repeats. The measurements are in
+   millimetres. Same reason as above - a 1fps sample cannot show a breath. Nothing to do.
 9. **No transition between missions and the globe** — same cut problem, lower stakes.
 10. **The vignette is doing a lot of the atmosphere work alone.** Once rooms are lit
     properly it should come down, or the frame will read as a tunnel.

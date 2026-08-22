@@ -1606,6 +1606,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
       },
       onResolved: () => {
         audio.play('solved');
+        /*
+         * And the machine's own three notes, under the verdict.
+         *
+         * Delayed so it starts as the `solved` fifth is dying rather than on top of it -
+         * two musical cues on the same frame is a chord neither of them meant. This is one
+         * of exactly three places the motif is allowed to play; see the cue table.
+         */
+        window.setTimeout(() => audio.play('motif'), 420);
         this.holdThenReturnHome();
       },
       onFailed: (failure) => {
@@ -2483,6 +2491,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private openEnding(): void {
     if (this.endingShown) return;
     this.endingShown = true;
+    // The third and last time the motif plays. Nothing follows it.
+    audio.play('motif');
 
     const container = this.getWorld()?.gameContainer;
     if (!container) return;
@@ -3017,7 +3027,20 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     if (!this.retroMounted && this.post) {
       this.retroMounted = installRetro(this.post);
-      if (this.retroMounted) setRetroLook('console', true);
+      if (this.retroMounted) {
+        setRetroLook('console', true);
+        /*
+         * The machine waking, and the first of the motif's three outings.
+         *
+         * Hung off the retro pass mounting rather than off beginPlay because that is the
+         * first frame there is anything to wake INTO - the pipeline is built lazily, so
+         * until this point the picture the notes are announcing does not exist yet.
+         *
+         * Late enough that the browser has certainly had a user gesture by now, which is
+         * what an AudioContext needs before it will make a sound at all.
+         */
+        audio.play('motif');
+      }
     }
     /*
      * The painterly pass, built and not mounted.
