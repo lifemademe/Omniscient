@@ -228,7 +228,25 @@ export const MISSION_01: MissionDefinition = {
        * this is only the order the game RECOMMENDS, which is look at the thing, then ask
        * what happened to it.
        */
-      suggest: ['look at the set', 'what happened to it recently'],
+      /*
+       * Three, and the third one is the wire.
+       *
+       * `The supply wire leaves the building` is on screen in OBSERVED from the first frame
+       * of this request, and until now there was NO WAY TO ACT ON IT without guessing the
+       * vocabulary - the beat accepts ASK_SUPPLY and offered no chip for it. This mission's
+       * own note on that intent says "the hint points at it, so there has to be a way to act
+       * on it"; there was not.
+       *
+       * Deliberately last of the three. The other two are about the set in front of her, so
+       * a player working through them in order has had at least one exchange before they
+       * send somebody out of the room - which is what the wire beat wants, because it is a
+       * reward for following an observation rather than an opening move.
+       */
+      suggest: [
+        'look at the set',
+        'what happened to it recently',
+        'follow the supply wire',
+      ],
       on: {
         /*
          * She points at the set on whatever the player says first.
