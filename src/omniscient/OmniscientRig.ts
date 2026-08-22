@@ -38,6 +38,9 @@ import {
 import { installCursor } from './art/cursor.js';
 import { installRetro, setRetroLook } from './art/retro.js';
 import { setRoomTone } from './audio/RoomTone.js';
+import { showBoot } from './link/BootScreen.js';
+
+import type { BootScreen } from './link/BootScreen.js';
 import { installPaint, setPaintLook } from './art/paintPass.js';
 import { ScanTargets } from './link/ScanTargets.js';
 import { MowerPlot } from './link/MowerPlot.js';
@@ -306,6 +309,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private onOverviewKey: ((event: KeyboardEvent) => void) | null = null;
 
   private phase: Phase = Phase.Menu;
+  /** Up until the first keypress. Held so endPlay can take it down. */
+  private boot: BootScreen | null = null;
   private screen: Screen = Screen.Tree;
   private menu: MainMenu | null = null;
   private picker: Picker | null = null;
@@ -1644,10 +1649,40 @@ export class OmniscientRig extends ENGINE.SceneNode {
     };
     window.addEventListener('keydown', this.onOverviewKey);
 
-    // Open on the machine at rest: menu up, tree on the CRT (§174, §183).
+    /*
+     * Open INSIDE the CRT, not on the room.
+     *
+     * The boot screen is the tube's own face, so the camera starts where the tube fills the
+     * frame and pulls back on the first keypress - which is the whole reveal. SCREEN_SHOT
+     * already exists and is already this exact framing; it is what the globe pushes into,
+     * run backwards.
+     */
     this.setPhase(Phase.Menu);
     this.screen = Screen.Tree;
-    this.cutTo(HOME_SHOT);
+    this.cutTo(SCREEN_SHOT);
+
+    const bootContainer = world.gameContainer;
+    if (bootContainer) {
+      this.boot = showBoot(bootContainer, () => {
+        this.boot = null;
+        /*
+         * Everything that needs a user gesture happens here, on the same press.
+         *
+         * A browser will not let an AudioContext make a sound before one, so this press is
+         * literally what gives the machine its voice. Room tone first so the hum is already
+         * under the motif rather than arriving after it.
+         */
+        setRoomTone('home');
+        audio.play('motif');
+        // 2.6s rather than SCREEN_SHOT's own 1.6 - this is the reveal, and it is the only
+        // time this move is the point rather than a way of getting somewhere.
+        this.moveTo(HOME_SHOT, 2.6);
+      });
+    } else {
+      // No container to hang it on: skip the ceremony rather than start inside the tube
+      // with no way out of it.
+      this.cutTo(HOME_SHOT);
+    }
     this.menu?.setEnabled(true);
     this.phone.setVisible(false);
   }
@@ -3034,20 +3069,18 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     if (!this.retroMounted && this.post) {
       this.retroMounted = installRetro(this.post);
-      if (this.retroMounted) {
-        setRetroLook('console', true);
-        /*
-         * The machine waking, and the first of the motif's three outings.
-         *
-         * Hung off the retro pass mounting rather than off beginPlay because that is the
-         * first frame there is anything to wake INTO - the pipeline is built lazily, so
-         * until this point the picture the notes are announcing does not exist yet.
-         *
-         * Late enough that the browser has certainly had a user gesture by now, which is
-         * what an AudioContext needs before it will make a sound at all.
-         */
-        audio.play('motif');
-      }
+      /*
+       * The motif used to fire here as well, and now fires only from the boot screen.
+       *
+       * This was the right hook when the alternative was beginPlay - the pipeline is built
+       * lazily, so this is the first frame there is a picture to announce. It stopped being
+       * right the moment there was a keypress to hang it on instead: that press is a
+       * guaranteed user gesture, which is what an AudioContext needs, and it is the player
+       * switching the machine on rather than the renderer finishing its setup.
+       *
+       * Two of them was two motifs a few hundred milliseconds apart, which is not a motif.
+       */
+      if (this.retroMounted) setRetroLook('console', true);
     }
     /*
      * The painterly pass, built and not mounted.
@@ -3162,6 +3195,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
   public override endPlay(): boolean {
     if (this.onOverviewKey) window.removeEventListener('keydown', this.onOverviewKey);
     this.onOverviewKey = null;
+    /*
+     * The boot screen owns two window listeners and a fistful of timers.
+     *
+     * Leaving play with it still up would leave both attached to a rig that no longer
+     * exists - and in the editor, where play mode is entered and left dozens of times an
+     * hour, that is a keydown handler per session all firing into dead closures.
+     */
+    this.boot?.dispose();
+    this.boot = null;
     this.tune?.dispose();
     this.tune = null;
     this.session?.end();
