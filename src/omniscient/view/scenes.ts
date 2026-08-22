@@ -1594,8 +1594,19 @@ function buildRepairShop(scene: ContactScene): void {
          * makes this her decision rather than a scripted exit.
          */
         const AFTER_POINT = 0.9;
-        rollScene(tweener, 0, 0.115, 0.28, AFTER_POINT);
-        rollScene(tweener, 0.115, 0, 1.4, AFTER_POINT + 1.5);
+        /*
+         * The KNOCK COMES FIRST, and this is the correction that makes the beat read.
+         *
+         * The knock and the walk were on the same delay, which meant the picture lurched
+         * while she was already crossing the room - reported as the tilt happening after she
+         * starts walking, which does not make sense. It does not: a bench does not get
+         * knocked by somebody who has finished leaving. She has to shove off it, THEN go.
+         *
+         * A quarter second between them. Long enough that the causality is unmistakable,
+         * short enough that it is one movement rather than two events.
+         */
+        rollScene(tweener, 0, 0.105, 0.24, AFTER_POINT);
+        rollScene(tweener, 0.105, 0, 1.4, AFTER_POINT + 1.7);
         /*
          * Out past the doorway and back, with a beat at the far end.
          *
@@ -1607,10 +1618,34 @@ function buildRepairShop(scene: ContactScene): void {
          */
         tweener.add(() => undefined, {
           duration: 0.01,
-          delay: AFTER_POINT,
+          delay: AFTER_POINT + 0.25,
           channel: 'link-walk',
           onComplete: () => {
-            mirela?.walk(new THREE.Vector3(-2.6, 0, -0.4), { back: true, dwell: 1.15 });
+            /*
+             * BACK and left, not toward the lens.
+             *
+             * The first target was (-2.6, 0, -0.4), which moved her a metre and a half
+             * TOWARDS the camera as well as across it - so she arrived beside the lens,
+             * cropped at the waist and filling a third of the frame. It read as walking into
+             * the camera rather than away to check something, which is the opposite of the
+             * beat.
+             *
+             * She goes to the back wall instead, which is also where the fiction sends her:
+             * the wire goes out through the wall and up the hill, so the wall is the thing
+             * she has gone to look at. Receding rather than leaving frame is the honest
+             * option in an eight-by-six room - there is nowhere to exit to that is not off
+             * the floor, and a character clipping the edge of the world is worse than one
+             * who stays small and visible at the back.
+             *
+             * Facing set explicitly so she arrives looking AT the wall rather than along her
+             * own path - the default is the direction travelled, which would have her
+             * staring into the corner.
+             */
+            mirela?.walk(new THREE.Vector3(-2.55, 0, -2.2), {
+              back: true,
+              dwell: 1.3,
+              facing: Math.PI,
+            });
           },
         });
       },
