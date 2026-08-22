@@ -78,194 +78,20 @@ import * as THREE from 'three';
 
 import type { ComposerPass } from './composerPass.js';
 
-/** One complete look. Every field is a shader uniform; there is no master strength knob. */
-export interface RetroLook {
-  /** Barrel distortion. 0 is a flat pane; the tube's dark border only appears above 0. */
-  curve: number;
-  /** Radial RGB split, in UV units at the corners. */
-  aberration: number;
-  /** Depth of the scanline troughs, 0-1. */
-  scanline: number;
-  /** Raster pitch in framebuffer rows: one dark line every `scanPitch` pixels. */
-  scanPitch: number;
-  /** Aperture-grille strength - the per-device-pixel RGB triad mask. */
-  grille: number;
-  /** Phosphor persistence: how much of the trailing smear survives. */
-  bleed: number;
-  vignette: number;
-  /** Brightness of the rolling refresh bar. */
-  roll: number;
-  /** Mains-hum flicker amplitude. Small numbers only; this is a nausea risk. */
-  flicker: number;
-  /** Applies in every preset - this is the grade ACES took off, not a retro artefact. */
-  saturation: number;
-  tint: THREE.Color;
-}
-
-/**
- * The three contexts.
- *
- * `world` is deliberately not "off". A slight corner aberration and a soft vignette are
- * camera behaviour, not television behaviour, and they cost nothing while giving the
- * dioramas the lens the reference frames have. Everything that says CRT is at zero.
+/*
+ * The look table and the GLSL live next door, engine-free, so the browser-side shader check
+ * can import them - see retroShader.ts. Re-exported here because every caller in the game
+ * has always got them from this module and there is no reason to move that.
  */
-export const RETRO_LOOKS = {
-  world: {
-    curve: 0,
-    aberration: 0.0008,
-    scanline: 0,
-    scanPitch: 3,
-    grille: 0,
-    bleed: 0,
-    vignette: 0.16,
-    roll: 0,
-    flicker: 0,
-    saturation: 1.16,
-    tint: new THREE.Color(1, 1, 1),
-  },
-  console: {
-    curve: 0.010,
-    aberration: 0.0018,
-    scanline: 0.055,
-    scanPitch: 3,
-    grille: 0,
-    bleed: 0.20,
-    vignette: 0.30,
-    roll: 0.020,
-    flicker: 0.0015,
-    saturation: 1.12,
-    tint: new THREE.Color(0.99, 1.0, 1.02),
-  },
-  machine: {
-    curve: 0.055,
-    aberration: 0.0060,
-    scanline: 0.20,
-    scanPitch: 2,
-    grille: 0.55,
-    bleed: 0.55,
-    vignette: 0.42,
-    roll: 0.055,
-    flicker: 0.004,
-    saturation: 1.05,
-    // Cold phosphor. Green-blue lift with the red pulled down is the colour of a monitor
-    // that has been on for nine hours, and it is the palette the wireframe city is drawn in.
-    tint: new THREE.Color(0.94, 1.02, 1.08),
-  },
-} satisfies Record<string, RetroLook>;
+import { FRAGMENT, RETRO_LOOKS, VERTEX } from './retroShader.js';
 
-export type RetroLookName = keyof typeof RETRO_LOOKS;
+import type { RetroLook, RetroLookName } from './retroShader.js';
 
-const VERTEX = /* glsl */ `
-varying vec2 vUv;
-void main() {
-  vUv = uv;
-  gl_Position = vec4(position.xy, 0.0, 1.0);
-}
-`;
+export { FRAGMENT, RETRO_LOOKS, VERTEX } from './retroShader.js';
+export type { RetroLook, RetroLookName } from './retroShader.js';
 
-const FRAGMENT = /* glsl */ `
-uniform sampler2D tDiffuse;
-uniform vec2 uResolution;
-uniform float uTime;
-uniform float uCurve;
-uniform float uAberration;
-uniform float uScanline;
-uniform float uScanPitch;
-uniform float uGrille;
-uniform float uBleed;
-uniform float uVignette;
-uniform float uRoll;
-uniform float uFlicker;
-uniform float uSaturation;
-uniform vec3 uTint;
-uniform float uEncode;
-varying vec2 vUv;
+/** One complete look. Every field is a shader uniform; there is no master strength knob. */
 
-vec3 linearToSRGB(vec3 c) {
-  c = max(c, vec3(0.0));
-  return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
-}
-
-void main() {
-  vec2 c = vUv - 0.5;
-  float r2 = dot(c, c);
-
-  // Tube curvature. Pushes outward, so the corners sample past the edge of the buffer -
-  // which is what the mask at the bottom is for.
-  vec2 tube = vUv + c * r2 * uCurve;
-
-  // Radial split, weaker in the middle. A real tube converges its guns at the centre and
-  // never quite manages it at the corners.
-  vec2 split = c * uAberration * (0.30 + r2 * 1.6);
-
-  vec3 col;
-  col.r = texture2D(tDiffuse, tube + split).r;
-  col.g = texture2D(tDiffuse, tube).g;
-  col.b = texture2D(tDiffuse, tube - split).b;
-
-  // Phosphor persistence. Taken with max() rather than added, so it can only pull a trail
-  // out behind something already bright instead of fogging the whole frame.
-  if (uBleed > 0.0001) {
-    float tx = 1.0 / uResolution.x;
-    vec3 trail =
-      texture2D(tDiffuse, tube - vec2(tx * 2.0, 0.0)).rgb * 0.55 +
-      texture2D(tDiffuse, tube - vec2(tx * 5.0, 0.0)).rgb * 0.30 +
-      texture2D(tDiffuse, tube - vec2(tx * 9.0, 0.0)).rgb * 0.15;
-    col = max(col, trail * uBleed);
-  }
-
-  // Everything above works on scene-referred light; everything below is a property of the
-  // displayed picture. This is the line between them - see the note in the module header.
-  col = mix(col, linearToSRGB(col), uEncode);
-
-  // Scanlines, in framebuffer rows rather than in UV.
-  //
-  // They were UV-based and a fixed count, which is resolution-independent right up until
-  // the drawing buffer is smaller than the window - and here it is. 620 bands over the
-  // height put the pattern above the buffer's Nyquist limit, so what reached the screen
-  // was not a raster at all but the beat between the two, measured at a 10.5px period
-  // where the maths says 1.7. Anchoring to gl_FragCoord makes the pitch exact at any
-  // buffer size and makes aliasing impossible, which is why the grille below already does.
-  float sl = sin(gl_FragCoord.y * 3.14159265 / uScanPitch);
-  col *= 1.0 - uScanline * sl * sl;
-
-  // Aperture grille, in device pixels rather than UV so it stays one triad per pixel at
-  // any resolution. The gain afterwards returns the average brightness the mask removed.
-  if (uGrille > 0.0001) {
-    float m = mod(gl_FragCoord.x, 3.0);
-    vec3 triad = vec3(step(m, 1.0), step(1.0, m) * step(m, 2.0), step(2.0, m));
-    col *= mix(vec3(1.0), mix(vec3(0.70), vec3(1.16), triad), uGrille);
-    col *= 1.0 + uGrille * 0.22;
-  }
-
-  // The refresh bar drifting up the screen - the artefact you get filming a monitor.
-  if (uRoll > 0.0001) {
-    float roll = fract(tube.y * 0.7 - uTime * 0.09);
-    float bar = smoothstep(0.0, 0.10, roll) * (1.0 - smoothstep(0.10, 0.26, roll));
-    col *= 1.0 + bar * uRoll;
-  }
-
-  col *= 1.0 + sin(uTime * 47.0) * uFlicker;
-
-  // Saturation and tint apply in every preset. This is the grade, not the CRT.
-  float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
-  col = mix(vec3(luma), col, uSaturation);
-  col *= uTint;
-
-  col *= 1.0 - uVignette * smoothstep(0.10, 0.60, r2);
-
-  // Black off anything the curvature pulled in from outside the buffer. Gated on uCurve
-  // because with no curve tube is exactly vUv and this would put a dark rim on a
-  // perfectly flat image.
-  if (uCurve > 0.0001) {
-    vec2 edge = smoothstep(vec2(0.0), vec2(0.004), tube)
-              * smoothstep(vec2(0.0), vec2(0.004), 1.0 - tube);
-    col *= edge.x * edge.y;
-  }
-
-  gl_FragColor = vec4(col, 1.0);
-}
-`;
 
 /**
  * A fullscreen pass shaped like `postprocessing`'s Pass without being one.
@@ -304,6 +130,7 @@ class RetroPass implements ComposerPass {
         tDiffuse: { value: null },
         uResolution: { value: new THREE.Vector2(1920, 1080) },
         uTime: { value: 0 },
+        uPixel: { value: this.target.pixel },
         uCurve: { value: this.target.curve },
         uAberration: { value: this.target.aberration },
         uScanline: { value: this.target.scanline },
@@ -342,6 +169,7 @@ class RetroPass implements ComposerPass {
     if (!immediate) return;
 
     const u = this.material.uniforms;
+    u.uPixel.value = look.pixel;
     u.uCurve.value = look.curve;
     u.uAberration.value = look.aberration;
     u.uScanline.value = look.scanline;
@@ -369,6 +197,18 @@ class RetroPass implements ComposerPass {
     const to = this.target;
 
     u.uTime.value = this.time;
+    /*
+     * Snapped, not eased.
+     *
+     * Every other field crossfades, because a television changing its own behaviour over a
+     * fifth of a second is a television warming up. The signal's resolution is not that: a
+     * picture sliding through 2.7 pixels on its way from 2 to 3 spends that time at a block
+     * size no grid divides evenly, so the blocks shimmer and crawl. It is the one visibly
+     * WRONG state this pass can be in, and it lasts exactly as long as the ease.
+     *
+     * So this one cuts. A source changing resolution cuts in reality too.
+     */
+    u.uPixel.value = to.pixel;
     u.uCurve.value += (to.curve - u.uCurve.value) * k;
     u.uAberration.value += (to.aberration - u.uAberration.value) * k;
     u.uScanline.value += (to.scanline - u.uScanline.value) * k;

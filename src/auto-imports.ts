@@ -27,6 +27,7 @@ import './omniscient/art/paintShader.js';
 import './omniscient/art/palette.js';
 import './omniscient/art/rainGlass.js';
 import './omniscient/art/retro.js';
+import './omniscient/art/retroShader.js';
 import './omniscient/art/ripples.js';
 import './omniscient/art/saltrust.js';
 import './omniscient/art/shadows.js';

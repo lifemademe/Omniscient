@@ -14,6 +14,11 @@ import * as THREE from 'three';
 
 import { applyPaintBanding } from '../../../src/omniscient/art/painterly.js';
 import { FRAGMENT, PAINT_LOOKS, VERTEX } from '../../../src/omniscient/art/paintShader.js';
+import {
+  FRAGMENT as RETRO_FRAGMENT,
+  RETRO_LOOKS,
+  VERTEX as RETRO_VERTEX,
+} from '../../../src/omniscient/art/retroShader.js';
 
 const out = document.getElementById('out') as HTMLElement;
 const lines: string[] = [];
@@ -80,6 +85,54 @@ renderer.render(passScene, passCamera);
 
 const passErrors = errors.length - materialErrors;
 lines.push(`painterly pass     : ${passErrors === 0 ? 'COMPILES' : 'FAILED'}`);
+/*
+ * -- 3. the CRT pass -----------------------------------------------------------------------
+ *
+ * The one that is actually mounted in the game, and therefore the one whose failure is a
+ * black screen. It was not covered here until a `uPixel` term was added to it, which is
+ * exactly the kind of edit that breaks a shader silently: the pass keeps rendering with the
+ * previous program, or stops rendering at all, and neither says anything.
+ *
+ * Every uniform is passed at its `machine` value, because that preset is the only one with
+ * all the branches switched on - grille, bleed, curve and roll are all gated behind
+ * `if (u > 0.0001)` and a zero would compile the branch without ever proving the body.
+ */
+const retroSource = new THREE.WebGLRenderTarget(320, 240);
+const look = RETRO_LOOKS.machine;
+const retro = new THREE.ShaderMaterial({
+  vertexShader: RETRO_VERTEX,
+  fragmentShader: RETRO_FRAGMENT,
+  depthTest: false,
+  depthWrite: false,
+  uniforms: {
+    tDiffuse: { value: retroSource.texture },
+    uResolution: { value: new THREE.Vector2(320, 240) },
+    uTime: { value: 1.5 },
+    uPixel: { value: look.pixel },
+    uCurve: { value: look.curve },
+    uAberration: { value: look.aberration },
+    uScanline: { value: look.scanline },
+    uScanPitch: { value: look.scanPitch },
+    uGrille: { value: look.grille },
+    uBleed: { value: look.bleed },
+    uVignette: { value: look.vignette },
+    uRoll: { value: look.roll },
+    uFlicker: { value: look.flicker },
+    uSaturation: { value: look.saturation },
+    uTint: { value: look.tint },
+    uEncode: { value: 1 },
+  },
+});
+const retroQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), retro);
+retroQuad.frustumCulled = false;
+const retroScene = new THREE.Scene();
+retroScene.add(retroQuad);
+renderer.setRenderTarget(null);
+renderer.render(retroScene, new THREE.Camera());
+
+const retroErrors = errors.length - materialErrors - passErrors;
+lines.push(`CRT pass           : ${retroErrors === 0 ? 'COMPILES' : 'FAILED'}`);
+
 lines.push('');
 for (const e of errors.slice(0, 2)) lines.push(e.slice(0, 500));
 
