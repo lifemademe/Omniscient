@@ -1606,7 +1606,19 @@ function buildRepairShop(scene: ContactScene): void {
          * short enough that it is one movement rather than two events.
          */
         rollScene(tweener, 0, 0.105, 0.24, AFTER_POINT);
-        rollScene(tweener, 0.105, 0, 1.4, AFTER_POINT + 1.7);
+        /*
+         * The correction runs while she is BEHIND THE PANEL.
+         *
+         * 2.3s in: she leaves at 1.15, covers 1.7m at the walk clip's own 1.66 m/s, and is
+         * hidden by about 1.9. The machine tidies its horizon in the window where there is
+         * nothing to watch but the room - which is the point of it. A correction that
+         * happened while she was in shot would look like a reaction to her; happening while
+         * she is gone, it looks like maintenance.
+         *
+         * It finishes at 3.6, which is when she starts back. She returns to a level picture
+         * without having seen it move.
+         */
+        rollScene(tweener, 0.105, 0, 1.3, 2.3);
         /*
          * Out past the doorway and back, with a beat at the far end.
          *
@@ -1622,30 +1634,29 @@ function buildRepairShop(scene: ContactScene): void {
           channel: 'link-walk',
           onComplete: () => {
             /*
-             * BACK and left, not toward the lens.
+             * She walks forward, and the CONSOLE PANEL is what she walks behind.
              *
-             * The first target was (-2.6, 0, -0.4), which moved her a metre and a half
-             * TOWARDS the camera as well as across it - so she arrived beside the lens,
-             * cropped at the waist and filling a third of the frame. It read as walking into
-             * the camera rather than away to check something, which is the opposite of the
-             * beat.
+             * There is nowhere in this room to exit to - the floor is eight by six and every
+             * edge of it is off the world - so the two earlier attempts both failed on the
+             * same problem. Going left put her beside the lens, cropped at the waist. Going
+             * back left her small and visible the whole time, which is not an exit at all.
              *
-             * She goes to the back wall instead, which is also where the fiction sends her:
-             * the wire goes out through the wall and up the hill, so the wall is the thing
-             * she has gone to look at. Receding rather than leaving frame is the honest
-             * option in an eight-by-six room - there is nowhere to exit to that is not off
-             * the floor, and a character clipping the edge of the world is worse than one
-             * who stays small and visible at the back.
+             * The panel is the wing. It covers the right third of the screen permanently, so
+             * a person who walks behind it is genuinely gone, and gone in a way that says
+             * something: the machine's own interface is what stops it seeing her. That is
+             * the most this beat has ever meant and it costs nothing but a heading.
              *
-             * Facing set explicitly so she arrives looking AT the wall rather than along her
-             * own path - the default is the direction travelled, which would have her
-             * staring into the corner.
+             * SOLVED rather than guessed - see scripts/dev/aim.ts, which projects a world
+             * point to a screen fraction using this scene's own camera. Her forward heading
+             * is (0.95, 0.31), the panel edge is at 0.645 of the width, and her head crosses
+             * it at 1.2m. 1.7m puts her centre at 0.79 with a body half-width of about 0.07,
+             * so she is fully behind it with margin rather than clipping its edge - which
+             * would read as a rendering fault rather than as staging.
+             *
+             * 2.2m of depth at that point, against 3.55 where she stands. Closer, but she is
+             * hidden before it can become looming.
              */
-            mirela?.walk(new THREE.Vector3(-2.55, 0, -2.2), {
-              back: true,
-              dwell: 1.3,
-              facing: Math.PI,
-            });
+            mirela?.walk(new THREE.Vector3(0.9, 0, -0.61), { back: true, dwell: 1.4 });
           },
         });
       },
