@@ -377,6 +377,20 @@ export interface WalkOptions {
   /** Seconds standing at the far end before turning back. Only used with `back`. */
   dwell?: number;
   /**
+   * How fast she walks, as a multiple of the clip's own pace. 1 is the measured default.
+   *
+   * Scales the ANIMATION and the travel together, which is the only way to change this
+   * without breaking it. WALK_PACE exists because the clip has no hips translation and the
+   * root is driven by hand, so there is exactly one travel speed at which the planted foot
+   * stays on the ground. Slowing the travel alone makes her moonwalk; slowing the clip
+   * alone makes her treadmill. Slowing both by the same factor keeps the foot planted and
+   * simply makes her a slower walker.
+   *
+   * Below about 0.5 the clip starts to read as slow motion rather than as an amble - the
+   * arm swing gives it away before the legs do.
+   */
+  pace?: number;
+  /**
    * Abandon a walk already in progress rather than being ignored.
    *
    * For the case where something in the fiction overrides where somebody was going - the
@@ -522,6 +536,8 @@ const ARRIVE = 0.06;
     facing: number;
   }
   let walkAction: THREE.AnimationAction | null = null;
+  /** Current walk's speed multiplier. One walk runs at a time, so one value is enough. */
+  let pace = 1;
   let leg: Leg | null = null;
   let route: Leg[] = [];
   let dwell = 0;
@@ -722,6 +738,8 @@ const ARRIVE = 0.06;
       // starting at zero was the whole T-pose.
       action.enabled = true;
       action.weight = 1;
+      // Both halves of the pace, set together - see WalkOptions.pace.
+      action.timeScale = pace;
       action.play();
       if (baseAction) baseAction.crossFadeTo(action, TAKE, false);
       else action.fadeIn(TAKE);
@@ -755,7 +773,7 @@ const ARRIVE = 0.06;
     const dz = leg.to.z - root.position.z;
     const distance = Math.hypot(dx, dz);
 
-    const speed = WALK_PACE * options.height;
+    const speed = WALK_PACE * options.height * pace;
     if (distance > ARRIVE) {
       const error = turnToward(Math.atan2(dx, dz), deltaTime);
       /*
@@ -865,6 +883,7 @@ const ARRIVE = 0.06;
       route = [{ to: to.clone(), facing: walkOptions.facing ?? travelled }];
       if (walkOptions.back) route.push({ to: home, facing: homeFacing });
       dwell = walkOptions.dwell ?? 1.8;
+      pace = walkOptions.pace ?? 1;
       beginLeg();
     },
 

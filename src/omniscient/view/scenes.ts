@@ -1580,11 +1580,15 @@ function buildRepairShop(scene: ContactScene): void {
   /*
    * Long enough that she is gone before it starts.
    *
-   * She leaves 0.55 after the knock and covers 1.62m at the walk clip's 1.66 m/s, so she is
-   * behind the panel around 1.5s in. Straightening before that would be the machine
-   * reacting to her rather than tidying up in her absence, which is the whole reading.
+   * She leaves 0.55 after the knock and covers 1.62m at 0.7 of the walk clip's 1.66 m/s -
+   * 1.16 m/s, so 1.4s of travel and behind the panel around 1.9s in. Straightening before
+   * that would be the machine reacting to her rather than tidying up in her absence, which
+   * is the whole reading.
+   *
+   * This number is downstream of her pace and has to move with it. Slowing her walk without
+   * moving this is how the horizon ends up straightening over her shoulder.
    */
-  const HOLD_UNTIL = 1.75;
+  const HOLD_UNTIL = 2.0;
   const SETTLE = 1.3;
 
   const rollBeat = (tweener: Tweener, delay: number): void => {
@@ -1694,7 +1698,20 @@ function buildRepairShop(scene: ContactScene): void {
              * staging. 2.7m of depth there against 3.55 where she stands, so she is barely
              * closer than she started - hidden long before she could loom.
              */
-            mirela?.walk(new THREE.Vector3(0.9, 0, -1.14), { back: true, dwell: 1.4 });
+            /*
+             * 0.7 pace - unhurried, because she is not.
+             *
+             * She has been leaning over this bench all morning and somebody has just asked
+             * where a wire goes. Nothing about that is urgent, and the clip's own measured
+             * speed is a brisk 1.66 m/s, which read as somebody with somewhere to be.
+             * `pace` scales the animation and the travel together so the planted foot stays
+             * planted - see WalkOptions.
+             */
+            mirela?.walk(new THREE.Vector3(0.9, 0, -1.14), {
+              back: true,
+              dwell: 1.4,
+              pace: 0.7,
+            });
           },
         });
       },
