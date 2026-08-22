@@ -476,8 +476,30 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.menu = new MainMenu(WORKSTATION_ORIGIN);
     this.add(this.menu.root);
-    // The tape deck is authored cold. If there is something on the tape, warm it.
-    if (hasSave()) this.menu.setModuleEnabled('continue', true);
+    /*
+     * The two front-door plates are a pair, and only one of them is ever the right answer.
+     *
+     * CONTINUE ships cold and warms when there is something on the tape. NEW GAME ships
+     * warm and goes cold at the same moment, because from then on it is not an option - it
+     * is the only button in the game that can destroy several hours of somebody's evening,
+     * sitting directly above the one they actually want, with no confirmation on it.
+     *
+     * COLD rather than removed, which is a deliberate departure from "hide it". These are
+     * physical plates in a rack: taking one out leaves a hole in the stack, and a gap where
+     * a control used to be reads as a fault rather than as a decision. The menu already has
+     * a word for "this exists and is not available" - it is what CONTINUE has been saying
+     * since the first boot - so NEW GAME says it back.
+     *
+     * Keyed on the save existing rather than on Mirela specifically, and that difference
+     * matters in one case: a player who LOST her request has a save with nothing resolved
+     * in it. Gating on "first mission complete" would strand them - no CONTINUE, and the
+     * only way forward a NEW GAME that throws away the failure and the note they wrote
+     * about it. A save is a save.
+     */
+    if (hasSave()) {
+      this.menu.setModuleEnabled('continue', true);
+      this.menu.setModuleEnabled('new-game', false);
+    }
   }
 
   /** Created before beginPlay so it is part of the tree the engine initialises normally. */

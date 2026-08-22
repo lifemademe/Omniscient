@@ -262,10 +262,14 @@ export class MainMenu {
   /**
    * Wake or cool one module at runtime.
    *
-   * Exists for exactly one caller: the tape deck. CONTINUE ships authored as disabled -
-   * "present but cold" - and the rig warms it at boot when a save exists. Flipping the
-   * spec is enough; hover and click both read `spec.disabled` live, so there is no lit
-   * state to rebuild.
+   * Two callers now, and they are the same call: the front door is a PAIR. CONTINUE ships
+   * authored as disabled - "present but cold" - and the rig warms it at boot when a save
+   * exists, at which moment NEW GAME goes cold, because from then on it is the only button
+   * in the game that can destroy several hours of somebody's evening and it sits directly
+   * above the one they want.
+   *
+   * Flipping the spec is enough; hover and click both read `spec.disabled` live, so there
+   * is no lit state to rebuild.
    */
   public setModuleEnabled(id: MenuAction, enabled: boolean): void {
     const module = this.modules.get(id);
