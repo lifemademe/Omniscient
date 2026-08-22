@@ -245,3 +245,34 @@ silhouettes; the rest got plain kinds.
 Three of them needed a second pass after looking: the spanner's fork had no visible gap and
 read as a lollipop, the screwdriver's handle was long enough to read as a bottle, and the
 hammer's head was too narrow so the claw took over and it read as a hook.
+
+
+### 6.4 The boxes could never open — reported by the person who designed them
+
+The fix in 6.2 made the SUSPECTED tier draw one box per crate instead of one slab per shelf,
+and the boxes still read as a rendering fault rather than as a statement. The report was
+literal: *"what are these translucent boxes?"*, asked by this project's designer about his own
+game, and then, after the connector work below, *"the translucent boxes are still there"*.
+
+The tier does not mean "contents unknown". It means **not resolved yet**, and the word doing
+the work is *yet* — the whole thing is a promise that the box opens when somebody says what is
+in it. Four props in the game were SUSPECTED with no `revealOn` on any branch of any mission.
+`shelf-crates` and `bench-store` are two of them and they sit in the middle of the first room
+every player sees, for the whole tutorial call. `ruined-box` and `landing` are the others, and
+`landing` is a lit window, so the one warm thing at the night door was a black volume.
+
+A box that never opens is worse than clutter, because it teaches the opposite of the intended
+lesson: a player who watches one do nothing for five minutes concludes that boxes are what
+this game looks like, and the one that *does* open then reads as an effect rather than as an
+answer. The tier spends its meaning before it says anything.
+
+**The rule is now: SUSPECTED only where something can promote it.**
+`scripts/certainty-tiers.ts` enforces it, matching every SUSPECTED entry against the
+`revealOn` calls and the one prop action that promotes by cue.
+
+Taking the tier off the crates put the *original* fault back — pale featureless cubes — so
+the frame was sampled rather than admired. Crates at luma 58-69, wall behind them 57, floor
+54. The problem was never brightness, it was nine points of separation: not a subtle object,
+an invisible one. `MAT.dark` bodies with lighter lids give the two values that read at four
+metres. One under-bench lid then measured 127 against the Kestrel-3 at 112 and had to come
+down again — §187 gives the eye to the brightest thing in frame, and that is the radio.

@@ -899,7 +899,26 @@ function buildRepairShop(scene: ContactScene): void {
   scene.registerProp('shelf', shelfRoot);
 
   const crateRoot = ENGINE.SceneNode.create({ name: 'ShelfCrates', position: SHELF_AT.clone() });
-  crateRoot.add(meshOf('ShelfCrateMesh', shelf.fittings, MAT.plastic));
+  /*
+   * Dark, and the number that decided it is not the one I expected.
+   *
+   * `MAT.plastic` was obviously wrong the moment the SUSPECTED box came off these - its own
+   * note calls it "the lightest thing in the room", and a pale featureless cube on this
+   * shelf was "the single most-reported fault in this game" before the tier existed. It went
+   * to `timberDark` on that argument and the frame was sampled rather than admired: crates
+   * at luma 58-69, the wall behind them at 57, the floor at 54.
+   *
+   * So the fault was never brightness. It was CONTRAST - nine points of separation from the
+   * surface behind, which is not a subtle object, it is an invisible one, and no amount of
+   * hue makes a shape read against a value it matches. `MAT.dark` at #2b2724 drops them
+   * cleanly below the wall, and the lids in the shelf's own light timber (see props.ts) give
+   * each crate a bright band across the top. Two values, which is what reads at four metres.
+   *
+   * It also settles a second measurement: a crate under the bench came out at luma 117
+   * against the Kestrel-3 at 112. §187 gives the eye to the brightest thing in frame and
+   * that has to be the radio, not the storage.
+   */
+  crateRoot.add(meshOf('ShelfCrateMesh', shelf.fittings, MAT.dark));
   scene.registerProp('shelf-crates', crateRoot);
 
   const bench = createWorkbench();
@@ -1108,21 +1127,49 @@ function buildRepairShop(scene: ContactScene): void {
    * of this composition actually needed.
    */
   const understore: THREE.BufferGeometry[] = [];
+  const understoreLids: THREE.BufferGeometry[] = [];
   for (const [x, w, h, d] of [
     [-0.72, 0.42, 0.26, 0.4],
     [-0.24, 0.3, 0.18, 0.34],
     [0.34, 0.46, 0.3, 0.44],
     [0.82, 0.26, 0.22, 0.3],
   ] as const) {
+    const skew = jitter(benchRng, 0.18);
+    const at = x + jitter(benchRng, 0.04);
+    const z = -0.5 + jitter(benchRng, 0.06);
+
     const crate = new THREE.BoxGeometry(w, h, d);
-    crate.rotateY(jitter(benchRng, 0.18));
-    crate.translate(x + jitter(benchRng, 0.04), 0.24 + h / 2, -0.5 + jitter(benchRng, 0.06));
+    crate.rotateY(skew);
+    crate.translate(at, 0.24 + h / 2, z);
     understore.push(crate);
+
+    // Same two-value read as the shelf crates - see the note there for the measurement.
+    const lid = new THREE.BoxGeometry(w * 1.06, 0.016, d * 1.06);
+    lid.rotateY(skew);
+    lid.translate(at, 0.24 + h - 0.008, z);
+    understoreLids.push(lid);
   }
-  scene.registerProp(
-    'bench-store',
-    meshOf('BenchStore', mergeGeometries(understore, false) ?? understore[0], MAT.timberDark)
+  const benchStoreRoot = ENGINE.SceneNode.create({ name: 'BenchStore', position: new THREE.Vector3() });
+  benchStoreRoot.add(
+    meshOf('BenchStoreCrates', mergeGeometries(understore, false) ?? understore[0], MAT.dark)
   );
+  /*
+   * The lids are `timberDark`, not `timber`, and the difference is a measurement.
+   *
+   * These four are the nearest crates to the camera and they sit under the work lamp, so
+   * the same light timber that reads correctly on the shelf two metres further back came
+   * out at luma 127 down here - against the Kestrel-3 at 113. §187 gives the eye to the
+   * brightest thing in frame and that has to be the radio; four pale lids across the bottom
+   * of the composition pull it straight down and out of the picture, which is the exact
+   * fault the boxes under this bench were put here to fix in the first place.
+   *
+   * A step is still a step. Mid brown on near-black keeps the two-value read that makes a
+   * block into a container, at a value that stays in the background where it belongs.
+   */
+  benchStoreRoot.add(
+    meshOf('BenchStoreLids', mergeGeometries(understoreLids, false) ?? understoreLids[0], MAT.timberDark)
+  );
+  scene.registerProp('bench-store', benchStoreRoot);
 
   // A rag, over the bench edge nearest the camera.
   const rag = new THREE.BoxGeometry(0.2, 0.012, 0.26);
@@ -2102,13 +2149,35 @@ function buildRepairShop(scene: ContactScene): void {
     ['compressor', CERTAINTY.SHAPED],
     ['cable-coil', CERTAINTY.SHAPED],
     ['tins', CERTAINTY.SHAPED],
-    // The shelf is a shelf and she is standing in front of it. What nobody has said a word
-    // about is what is in the boxes - on it, and under the bench. Those are the coldest
-    // things in the room and are supposed to look like it: this is what turns a flat white
-    // box from unfinished work into an object nobody has described.
+    /*
+     * The shelf and its boxes, and the rule that took a year to state.
+     *
+     * These were SUSPECTED - drawn as the machine's guess at a volume rather than as boxes -
+     * on the argument that nobody has said what is in them. The argument is true and the
+     * tier was still wrong, because SUSPECTED does not mean "contents unknown". It means NOT
+     * RESOLVED YET, and the word carrying it is "yet": the whole tier is a promise that the
+     * box opens when somebody says what is in it.
+     *
+     * Nothing in this game ever says what is in Mirela's crates. There is no `revealOn` for
+     * them on any branch of any mission, so those boxes could never open - and they sit in
+     * the middle of the first room every player sees, for the whole tutorial call.
+     *
+     * That is worse than clutter. A player who watches a box do nothing for five minutes
+     * concludes that boxes are what this game looks like, and then the one that DOES open
+     * reads as an effect rather than as an answer. The tier spends its meaning before it
+     * gets to say anything. Reported exactly that way, by the person who designed it,
+     * looking at a screenshot of his own game: "what are these translucent boxes?"
+     *
+     * So the rule is now: SUSPECTED only where something can promote it.
+     * `scripts/certainty-tiers.ts` enforces it. Three other props in the game failed the
+     * same test and have moved with these.
+     *
+     * The boxes are still nobody's business, and the room still says so - it says it with
+     * closed crates, which is what a closed crate has always meant.
+     */
     ['shelf', CERTAINTY.SHAPED],
-    ['shelf-crates', CERTAINTY.SUSPECTED],
-    ['bench-store', CERTAINTY.SUSPECTED],
+    ['shelf-crates', CERTAINTY.SHAPED],
+    ['bench-store', CERTAINTY.SHAPED],
     // She never described her bench. She described what is standing on it, and the bench
     // being the brightest mass in frame was the reason the radio lost the eye to it.
     ['bench', CERTAINTY.SHAPED],
@@ -7148,7 +7217,8 @@ function buildFloodedCellar(scene: ContactScene): void {
     ['sump', CERTAINTY.SUSPECTED],
     ['outfall', CERTAINTY.SUSPECTED],
     ['drop', CERTAINTY.SUSPECTED],
-    ['ruined-box', CERTAINTY.SUSPECTED],
+    // No revealOn anywhere, so its box could never open - see the note on Mirela's shelf.
+    ['ruined-box', CERTAINTY.SHAPED],
   ] as [string, number][]) {
     scene.setCertainty(id, certainty);
   }
@@ -8842,7 +8912,13 @@ function buildNightDoor(scene: ContactScene): void {
      * frame - which sounds like a reason to drop it and is the reason to keep it: the door
      * opens later in this mission, and what is behind it should not already be drawn.
      */
-    ['landing', CERTAINTY.SUSPECTED],
+    /*
+     * Same rule, and this one was doing visible damage. `landing` is the lit window on the
+     * stairs - `MAT.landingLight` - and SUSPECTED does not render a prop, it renders a dark
+     * box in its place. So the one warm thing at the night door was a black volume with cyan
+     * edges, permanently, with nothing in the mission able to promote it.
+     */
+    ['landing', CERTAINTY.SHAPED],
   ] as [string, number][]) {
     scene.setCertainty(id, certainty);
   }

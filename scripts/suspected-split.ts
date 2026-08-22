@@ -103,6 +103,10 @@ console.log("\nMirela's shelf: crates, not a slab");
    * The number that matters. `createShelfStack` puts 1-3 crates on each of three levels, so
    * the honest range is three to nine, and anything outside it means the splitter has either
    * fused levels together or come apart into triangles.
+   *
+   * Each crate now also carries a lid standing proud of it, and a lid that overlaps its own
+   * crate merges back into one island - which is behaviour this range depends on. If
+   * `mergeTouching` ever stopped doing that, the count would double and land outside it.
    */
   check('one per crate, within the generator range', boxes.length >= 3 && boxes.length <= 9);
 

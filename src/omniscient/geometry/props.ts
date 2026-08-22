@@ -569,14 +569,36 @@ export function createShelfStack(seedKey = 'shelf'): PropParts {
     for (let i = 0; i < crateCount; i++) {
       const w = range(rng, 0.16, 0.32);
       const h = range(rng, 0.14, 0.26);
-      const crate = new THREE.BoxGeometry(w, h, range(rng, 0.2, 0.32));
-      crate.translate(
-        range(rng, -width / 2 + 0.2, width / 2 - 0.2),
-        0.52 + level * 0.52 + h / 2,
-        jitter(rng, 0.04)
-      );
-      crate.rotateY(jitter(rng, 0.12));
+      const d = range(rng, 0.2, 0.32);
+      const at = range(rng, -width / 2 + 0.2, width / 2 - 0.2);
+      const y = 0.52 + level * 0.52;
+      const skew = jitter(rng, 0.12);
+      const nudge = jitter(rng, 0.04);
+
+      const crate = new THREE.BoxGeometry(w, h, d);
+      crate.translate(at, y + h / 2, nudge);
+      crate.rotateY(skew);
       fittings.push(crate);
+
+      /*
+       * A lid, standing a few millimetres proud - and in `body`, not `fittings`.
+       *
+       * These were bare cubes, which was fine while the SUSPECTED tier's box stood in front
+       * of them and became six featureless blocks on a plank the moment that box came off
+       * (see the note on the shelf in scenes.ts). A rim is the cheapest thing that turns a
+       * block into a container.
+       *
+       * The channel is the point. `body` and `fittings` are two MATERIALS, and the crates go
+       * in the dark one while these go in the light one, so the lid is a bright band across
+       * the top of a dark box rather than a 3mm step nobody can see at four metres. Measured
+       * before it was changed: crates at luma 58-69 against a wall at 57, which is not a
+       * subtle object, it is an invisible one. Contrast is the only thing that survives this
+       * distance, so the read has to be built out of two values rather than one geometry.
+       */
+      const lid = new THREE.BoxGeometry(w * 1.06, 0.016, d * 1.06);
+      lid.translate(at, y + h - 0.008, nudge);
+      lid.rotateY(skew);
+      body.push(lid);
     }
   }
 
