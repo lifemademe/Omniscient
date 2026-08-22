@@ -37,6 +37,7 @@ import {
 } from './session/persistence.js';
 import { installCursor } from './art/cursor.js';
 import { installRetro, setRetroLook } from './art/retro.js';
+import { setRoomTone } from './audio/RoomTone.js';
 import { installPaint, setPaintLook } from './art/paintPass.js';
 import { ScanTargets } from './link/ScanTargets.js';
 import { MowerPlot } from './link/MowerPlot.js';
@@ -1957,6 +1958,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const warpContainer = this.getWorld()?.gameContainer;
     if (warpContainer) playWarp(warpContainer);
     setRetroLook('console');
+    // Home. The desk lamp's hum, the CRT's line whistle and the sea through the window -
+    // the only room the player hears for minutes at a time.
+    setRoomTone('home');
 
     this.setPhase(Phase.Choosing);
     this.screen = Screen.Globe;
@@ -2386,6 +2390,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * same move in reverse - see `mountScene`.
      */
     setRetroLook('console');
+    // The room's air comes home with the picture. Both halves of "a change of medium".
+    setRoomTone('home');
 
     /**
      * And the room goes with you.
@@ -2579,6 +2585,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * own reconstruction of a district it has never seen, and it should look like one.
      */
     setRetroLook(sceneId === 'scene-wire-city' ? 'machine' : 'world');
+    /*
+     * And the room's air, switched from the same line for the same reason.
+     *
+     * Every scene id has a bed - see RoomTone. The wire city's is the odd one, having no air
+     * in it at all, and that absence only reads BECAUSE the other seven are full: a
+     * reconstruction of a district should sound like a machine's guess at one, and a
+     * machine has no recording of what a street sounds like.
+     */
+    setRoomTone(sceneId);
 
     /**
      * Air, or the absence of it.
