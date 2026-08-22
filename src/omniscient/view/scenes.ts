@@ -1562,12 +1562,42 @@ function buildRepairShop(scene: ContactScene): void {
     ? shot.target.clone().sub(shot.position).normalize()
     : new THREE.Vector3(0, 0, -1);
 
-  const rollScene = (tweener: Tweener, from: number, to: number, seconds: number, delay = 0): void => {
+  /**
+   * The whole roll as ONE tween, and that is a bug fix rather than a tidy-up.
+   *
+   * It was two - a knock and a correction, scheduled together on the same channel. `add()`
+   * removes existing tweens on a channel before pushing, so the second call deleted the
+   * first the instant it was made. The knock never ran at all: what played was the
+   * correction, snapping the scene to full tilt at 2.3s and easing it back. Reported
+   * exactly, twice, as the camera tilting after she had already started walking.
+   *
+   * Shaped inside a linear tween rather than split into three, because the shape IS the
+   * event: a knock, a hold while she is away, and a slow settle. Three tweens would be
+   * three chances to make the same mistake.
+   */
+  const TILT = 0.105;
+  const KNOCK = 0.24;
+  const HOLD_UNTIL = 1.4;
+  const SETTLE = 1.3;
+
+  const rollBeat = (tweener: Tweener, delay: number): void => {
+    const total = HOLD_UNTIL + SETTLE;
     tweener.add(
       (t) => {
-        scene.quaternion.setFromAxisAngle(viewAxis, from + (to - from) * t);
+        const at = t * total;
+        const angle =
+          at < KNOCK
+            ? // Fast, because an impact is fast. Anything slower reads as drift, which is a
+              // fault rather than an event.
+              TILT * Ease.outCubic(at / KNOCK)
+            : at < HOLD_UNTIL
+              ? TILT
+              : // Slow, and entirely while she is behind the panel. A machine levelling a
+                // horizon is maintaining rather than reacting.
+                TILT * (1 - Ease.inOutCubic((at - HOLD_UNTIL) / SETTLE));
+        scene.quaternion.setFromAxisAngle(viewAxis, angle);
       },
-      { duration: seconds, delay, easing: Ease.inOutCubic, channel: 'link-roll' }
+      { duration: total, delay, easing: Ease.linear, channel: 'link-roll' }
     );
   };
 
@@ -1605,20 +1635,7 @@ function buildRepairShop(scene: ContactScene): void {
          * A quarter second between them. Long enough that the causality is unmistakable,
          * short enough that it is one movement rather than two events.
          */
-        rollScene(tweener, 0, 0.105, 0.24, AFTER_POINT);
-        /*
-         * The correction runs while she is BEHIND THE PANEL.
-         *
-         * 2.3s in: she leaves at 1.15, covers 1.7m at the walk clip's own 1.66 m/s, and is
-         * hidden by about 1.9. The machine tidies its horizon in the window where there is
-         * nothing to watch but the room - which is the point of it. A correction that
-         * happened while she was in shot would look like a reaction to her; happening while
-         * she is gone, it looks like maintenance.
-         *
-         * It finishes at 3.6, which is when she starts back. She returns to a level picture
-         * without having seen it move.
-         */
-        rollScene(tweener, 0.105, 0, 1.3, 2.3);
+        rollBeat(tweener, AFTER_POINT);
         /*
          * Out past the doorway and back, with a beat at the far end.
          *
@@ -1646,17 +1663,22 @@ function buildRepairShop(scene: ContactScene): void {
              * something: the machine's own interface is what stops it seeing her. That is
              * the most this beat has ever meant and it costs nothing but a heading.
              *
-             * SOLVED rather than guessed - see scripts/dev/aim.ts, which projects a world
-             * point to a screen fraction using this scene's own camera. Her forward heading
-             * is (0.95, 0.31), the panel edge is at 0.645 of the width, and her head crosses
-             * it at 1.2m. 1.7m puts her centre at 0.79 with a body half-width of about 0.07,
-             * so she is fully behind it with margin rather than clipping its edge - which
-             * would read as a rendering fault rather than as staging.
+             * STRAIGHT RIGHT, AT HER OWN DEPTH, because the bench is the real constraint.
              *
-             * 2.2m of depth at that point, against 3.55 where she stands. Closer, but she is
-             * hidden before it can become looming.
+             * createWorkbench is 2.4 by 0.9 at a root of (0, 0, -0.5), so it occupies x
+             * -1.2..1.2 and z -0.95..-0.05. She stands at z -1.14, nineteen centimetres
+             * behind its back edge. The previous target gained half a metre of z on the way
+             * across, which walked her straight through the tabletop - `walk` is a straight
+             * line and does not know the furniture is there.
+             *
+             * Holding her own z keeps her behind it for the whole crossing, and x 0.9 is
+             * where scripts/dev/aim.ts says the panel covers her: screen 0.81 with a body
+             * half-width of 0.06, against a panel edge at 0.645. Hidden with margin rather
+             * than clipping the edge, which would read as a rendering fault rather than as
+             * staging. 2.7m of depth there against 3.55 where she stands, so she is barely
+             * closer than she started - hidden long before she could loom.
              */
-            mirela?.walk(new THREE.Vector3(0.9, 0, -0.61), { back: true, dwell: 1.4 });
+            mirela?.walk(new THREE.Vector3(0.9, 0, -1.14), { back: true, dwell: 1.4 });
           },
         });
       },

@@ -41,14 +41,27 @@ console.log(`standing:  x ${s.x.toFixed(2)}  depth ${s.depth.toFixed(2)}m`);
  * She is rotated Math.PI * 0.4 about Y, so "forward" for her is that heading. Walk along it
  * and report where her head lands, so the first x past the panel edge can simply be read.
  */
-const heading = Math.PI * 0.4;
-const forward = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
-console.log(`forward:   (${forward.x.toFixed(2)}, ${forward.z.toFixed(2)})`);
-for (let d = 0.4; d <= 3.2; d += 0.4) {
-  const p = start.clone().addScaledVector(forward, d);
+/*
+ * The bench is the constraint, not the panel.
+ *
+ * createWorkbench is 2.4 by 0.9 at a root of (0, 0, -0.5), so it occupies x -1.2..1.2 and
+ * z -0.95..-0.05. She stands at z -1.14, which is 0.19m behind its back edge - so any path
+ * that gains z walks her through it, which is what the first staging did.
+ *
+ * Scanned along her own z instead: straight right, behind the bench, until the panel hides
+ * her. Body half-width is added so HIDDEN means all of her rather than her centre.
+ */
+const BENCH = { x0: -1.2, x1: 1.2, z0: -0.95, z1: -0.05 };
+const HALF_BODY = 0.25;
+
+for (let x = -0.4; x <= 3.0; x += 0.3) {
+  const p = new THREE.Vector3(x, HEAD, start.z);
   const r = screen(p);
-  const hidden = r.x > PANEL_LEFT ? 'HIDDEN' : '';
+  const halfOnScreen = HALF_BODY / r.depth / (Math.tan((FOV * Math.PI) / 360) * ASPECT) / 2;
+  const clearsBench = p.z < BENCH.z0 || p.z > BENCH.z1 || x < BENCH.x0 || x > BENCH.x1;
+  const hidden = r.x - halfOnScreen > PANEL_LEFT;
   console.log(
-    `  +${d.toFixed(1)}m -> world (${p.x.toFixed(2)}, ${p.z.toFixed(2)})  screen x ${r.x.toFixed(2)}  depth ${r.depth.toFixed(2)}m ${hidden}`
+    `  x ${x.toFixed(1).padStart(4)} -> screen ${r.x.toFixed(2)} +-${halfOnScreen.toFixed(2)}` +
+      `  depth ${r.depth.toFixed(2)}m  ${hidden ? 'HIDDEN' : '      '} ${clearsBench ? '' : 'IN BENCH'}`
   );
 }
