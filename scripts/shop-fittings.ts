@@ -305,25 +305,50 @@ console.log('\nconnector B is hidden at rest and visible when the set turns');
   const W = 0.52;
   const H = 0.22;
   const D = 0.34;
+  const BAY_DEPTH = 0.085;
   const SET_AT = new THREE.Vector3(0, 0.81, -0.5);
-  const REST = new THREE.Vector3(W * 0.16, H * 0.42, -D / 2 - 0.02);
-
-  /* The set is a box about its own Y axis, so a 180 spin leaves the box where it was. */
-  const setBox = new THREE.Box3(
-    new THREE.Vector3(SET_AT.x - W / 2, SET_AT.y, SET_AT.z - D / 2),
-    new THREE.Vector3(SET_AT.x + W / 2, SET_AT.y + H, SET_AT.z + D / 2)
-  );
+  /**
+   * The connector's visible face, in the set's local space - `connectorFace`, not the old
+   * `connectorB`.
+   *
+   * That anchor is five centimetres out in the air and was never a place to put matter; the
+   * disc sat on it for months without anybody seeing, because it was on the far side of the
+   * set from every camera in the room. The moment the spin started carrying the connector it
+   * arrived proud of the panel, covering the socket. Reported off a screenshot.
+   */
+  const REST = new THREE.Vector3(W * 0.16, H * 0.42, -D / 2 + BAY_DEPTH - 0.009);
 
   const SHOTS: Array<[string, THREE.Vector3]> = [
     ['default', new THREE.Vector3(1.32, 1.46, 1.82)],
     ['transmitter', new THREE.Vector3(0.92, 1.24, 0.92)],
   ];
 
+  /**
+   * The SOLID part of the set, which is not the same as its bounding box.
+   *
+   * The back is open: a bay 85mm deep is cut into the rear face, and the connector lives
+   * inside it. Against the full envelope the connector is inside the box at every angle, so
+   * the old test would have called it occluded both ways and passed for the wrong reason. The
+   * carcass is what actually blocks a sightline, and it moves with the spin - at rest it fills
+   * the front and the bay opens away from the camera; turned, the reverse.
+   */
+  const carcassAt = (angle: number): THREE.Box3 => {
+    const near = angle > Math.PI / 2 ? -D / 2 : -D / 2 + BAY_DEPTH;
+    const far = angle > Math.PI / 2 ? D / 2 - BAY_DEPTH : D / 2;
+    return new THREE.Box3(
+      new THREE.Vector3(SET_AT.x - W / 2, SET_AT.y, SET_AT.z + near),
+      new THREE.Vector3(SET_AT.x + W / 2, SET_AT.y + H, SET_AT.z + far)
+    );
+  };
+
   const visibleFrom = (camera: THREE.Vector3, angle: number): boolean => {
     const at = SET_AT.clone().add(REST.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), angle));
     const toward = at.clone().sub(camera);
     const range = toward.length();
-    const hit = new THREE.Ray(camera, toward.normalize()).intersectBox(setBox, new THREE.Vector3());
+    const hit = new THREE.Ray(camera, toward.normalize()).intersectBox(
+      carcassAt(angle),
+      new THREE.Vector3()
+    );
     return !hit || hit.distanceTo(camera) >= range - 0.005;
   };
 
@@ -335,6 +360,18 @@ console.log('\nconnector B is hidden at rest and visible when the set turns');
     check(`${name}: hidden while the set faces front`, !visibleFrom(camera, 0));
     check(`${name}: in view once the set is turned`, visibleFrom(camera, Math.PI));
   }
+
+  /*
+   * And it is IN the bay rather than in front of it.
+   *
+   * The specific fault that put a pale disc over the socket: the connector was at
+   * `connectorB`, 2cm behind the rear face, so once the spin carried it round it stood proud
+   * of the panel instead of sitting in the recess. Anything at or beyond the rear face is
+   * outside the set.
+   */
+  const face = REST.z;
+  check('the connector face is inside the bay', face > -D / 2 + 0.01, `z ${f(face)} vs rear face ${f(-D / 2)}`);
+  check('and not buried behind the plate', face < -D / 2 + BAY_DEPTH, `z ${f(face)} vs plate ${f(-D / 2 + BAY_DEPTH)}`);
 }
 
 /* ------------------------------------------------------------------ the crate lids */

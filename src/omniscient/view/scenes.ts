@@ -1437,7 +1437,26 @@ function buildRepairShop(scene: ContactScene): void {
    * rather than integrated, so it is exact at any angle and self-corrects if a beat
    * interrupts a spin halfway.
    */
-  const CONNECTOR_REST = set.anchors.connectorB.clone();
+  /*
+   * `rearPanel`, not `connectorB`, and this is the fix for a disc floating over the plug.
+   *
+   * The anchors' own note says it plainly: connectorB is "5cm out in the air in front of the
+   * plug, which is what a camera or an effect wants to be pointed at and is the wrong place
+   * to put matter". The corrosion beads were moved off it for exactly this reason and the
+   * visible connector was left behind - harmlessly, because it sat on the far side of the
+   * set from every camera and nobody could see where it was.
+   *
+   * Making the set's spin carry the connector is what exposed it. The disc came round with
+   * the panel and arrived 5cm proud of it, a fat pale circle covering the socket the whole
+   * mission is about. Reported from a screenshot within a day of that change.
+   *
+   * `connectorFace` rather than `rearPanel`, and the difference is 12mm that matters. A
+   * panel-mount socket keeps its barrel behind the plate with a collar proud of it, so the
+   * mouth of the shell is INSIDE the metalwork - right for the corrosion beads, which grow
+   * out of the joint, and hidden for anything meant to be looked at. The face is the outside
+   * of the collar. See the anchors in `createTransmitter`, which now name all three.
+   */
+  const CONNECTOR_REST = set.anchors.connectorFace.clone();
   const UP = new THREE.Vector3(0, 1, 0);
   /** Assigned below, once the connector prop exists. Null until then. */
   let connectorRoot: ENGINE.SceneNode | null = null;
@@ -1483,7 +1502,16 @@ function buildRepairShop(scene: ContactScene): void {
 
   // Connector B as its own addressable sub-object, so `prop.clean:connector-b` and
   // `prop.spark:connector-b` resolve to a real place in space.
-  const connectorGeo = new THREE.CylinderGeometry(0.036, 0.034, 0.02, 8);
+  /*
+   * Sized to the socket it is the face of, not to a guess.
+   *
+   * `socket(width * 0.16, 0.032, 0.06)` builds the real connector in the transmitter's own
+   * geometry: a 32mm shell with a 39mm collar round its mouth. This disc was 36mm by 20mm
+   * deep, which is not a connector face - it is a second connector, fatter than the one
+   * underneath and standing in front of it. 31mm sits just inside the shell's mouth, and
+   * 8mm deep reads as the end of a plug rather than as a puck.
+   */
+  const connectorGeo = new THREE.CylinderGeometry(0.031, 0.031, 0.008, 10);
   connectorGeo.rotateX(Math.PI / 2);
   const connectorMesh = meshOf('ConnectorB', connectorGeo, MAT.corroded);
   /**
@@ -1510,7 +1538,8 @@ function buildRepairShop(scene: ContactScene): void {
    */
   connectorRoot = ENGINE.SceneNode.create({
     name: 'ConnectorBRoot',
-    position: setRoot.position.clone().add(set.anchors.connectorB),
+    // Same anchor the spin uses - see CONNECTOR_REST for why it is not `connectorB`.
+    position: setRoot.position.clone().add(CONNECTOR_REST),
   });
   connectorRoot.add(connectorMesh);
 

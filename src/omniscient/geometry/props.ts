@@ -568,6 +568,27 @@ export function createTransmitter(params: TransmitterParams = {}): PropParts {
        * looked like it was floating because it was floating.
        */
       rearPanel: new THREE.Vector3(width * 0.16, connectorY, -depth / 2 + BAY.depth + 0.006),
+      /**
+       * Connector B's visible FACE - what a player looking into the open back can see.
+       *
+       * Three anchors now describe the same connector and each answers a different question,
+       * which is why guessing between them keeps going wrong:
+       *
+       *   connectorB   5cm out in the air, for a camera or an effect to aim at
+       *   rearPanel    the shell's mouth, 6mm BEHIND the plate, where the barrel starts
+       *   connectorFace  the outside of the collar, which is the only one you can see
+       *
+       * A panel-mount socket has its barrel behind the panel and a collar proud of it, so
+       * `rearPanel` is inside the metalwork - correct for the corrosion beads, which grow out
+       * of the joint, and wrong for anything that has to be looked at. The visible connector
+       * was put on `connectorB` for a long time and nobody noticed, because it sat on the far
+       * side of the set from every camera in the room until the set learned to turn round.
+       */
+      connectorFace: new THREE.Vector3(
+        width * 0.16,
+        connectorY,
+        -depth / 2 + BAY.depth - 0.009
+      ),
       meter: new THREE.Vector3(-width * 0.22, height * 0.55, depth / 2 + 0.02),
       front: new THREE.Vector3(0, height * 0.5, depth / 2 + 0.3),
       rear: new THREE.Vector3(0, height * 0.5, -depth / 2 - 0.3),
