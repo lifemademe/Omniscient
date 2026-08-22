@@ -2618,6 +2618,56 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.pauseRemaining = HOME_DWELL;
     this.moveTo(HOME_SHOT, HOME_SHOT.duration ?? 2.0);
 
+    /*
+     * Lean toward the tube while the branch draws, then sit back.
+     *
+     * Phase.Home is documented as "watching the tree grow" and HOME_DWELL gives it five and
+     * a half seconds - so the beat was authored long before I looked at it. What was missing
+     * is that the camera spends those seconds at HOME_SHOT, where the CRT is a small shape
+     * across a room, and the game therefore holds for five seconds on something the player
+     * cannot read.
+     *
+     * A PARTIAL push, deliberately. Going all the way to SCREEN_SHOT is the full-face
+     * framing the globe uses, and arriving there would read as entering the globe rather
+     * than as looking at the tree - the same move meaning two different things is how a
+     * camera language stops being one. A push that stops short says "look at this"; one that
+     * arrives says "we are going in".
+     *
+     * Timed inside the dwell rather than replacing it: it starts once the home move has
+     * settled and is back before the dwell expires, so nothing downstream has to know this
+     * happened.
+     */
+    const lean = {
+      position: HOME_SHOT.position.clone().lerp(SCREEN_SHOT.position, 0.34),
+      target: HOME_SHOT.target.clone().lerp(SCREEN_SHOT.target, 0.34),
+    };
+    this.cameraTweener.add(() => undefined, {
+      duration: 0.01,
+      delay: 2.2,
+      channel: 'tree-lean',
+      onComplete: () => {
+        if (this.phase !== Phase.Home) return;
+        this.moveTo(lean, 1.5);
+        this.cameraTweener.add(() => undefined, {
+          duration: 0.01,
+          /*
+           * Back before the dwell expires, not after.
+           *
+           * HOME_DWELL is 5.5s. The lean starts at 2.2 and takes 1.5, so sitting back at 1.8
+           * after it puts the camera home at 5.2 - a beat of stillness before whatever comes
+           * next takes the shot. At 2.6 the return was still in flight when the dwell ended
+           * and got cancelled by the next camera move, which is not a fault anybody would
+           * see but is a move that never finishes.
+           */
+          delay: 1.8,
+          channel: 'tree-sit-back',
+          onComplete: () => {
+            if (this.phase === Phase.Home) this.moveTo(HOME_SHOT, 1.2);
+          },
+        });
+      },
+    });
+
     // Resolving Mirela's request is what puts Tomas on the globe - §163's consequence
     // chain, visible before the player knows why.
     const resolvedId = this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;

@@ -41,6 +41,22 @@ interface Bed {
   /** Filtered noise: [cutoff Hz, Q, gain]. */
   air: [number, number, number] | null;
   /**
+   * Occasional small events: [frequency Hz, decay seconds, gain, mean gap seconds].
+   *
+   * The difference between a place and a place somebody is IN. Room tone says the workshop
+   * has air in it; this says somebody has been working at that bench all morning. One knock
+   * every twenty seconds does more for a room than any amount of steady state, because a
+   * steady state is a texture and an event is a life.
+   *
+   * Deliberately sparse and deliberately irregular - the gap is redrawn as the mean plus or
+   * minus half of it every time, in `build`. A sound on a clock is a machine; a sound at
+   * unpredictable intervals is somebody. This is the one place the project's seeded-rng
+   * discipline does not apply, and ConsoleAudio's header already sanctions it: nothing is
+   * random per play "except small detunes - §123", and a knock that landed on the same beat
+   * every run would be the fault this exists to avoid.
+   */
+  work: [number, number, number, number] | null;
+  /**
    * Movement on the noise filter: [depth Hz, period seconds].
    *
    * The period is what stops a bed being a texture. Sea has a long slow one, water in a
@@ -66,6 +82,7 @@ const BEDS: Record<string, Bed> = {
    * a room with a fan in it.
    */
   'scene-repair-shop': {
+    work: [210, 0.09, 0.05, 19],
     tones: [
       [50, 0.028, 'sine'],
       [100, 0.008, 'sine'],
@@ -76,6 +93,7 @@ const BEDS: Record<string, Bed> = {
 
   /** A cleared house. Emptier than it should be - almost nothing, and a little wind. */
   'scene-cleared-house': {
+    work: [140, 0.16, 0.03, 26],
     tones: [[62, 0.014, 'sine']],
     air: [300, 0.7, 0.016],
     drift: [180, 17],
@@ -88,6 +106,7 @@ const BEDS: Record<string, Bed> = {
    * because it is the only place where the structure itself is singing.
    */
   'scene-beacon-mast': {
+    work: [320, 0.13, 0.045, 15],
     tones: [
       [44, 0.02, 'sine'],
       [190, 0.006, 'triangle'],
@@ -103,6 +122,7 @@ const BEDS: Record<string, Bed> = {
    * rings on it. The drift is slow and shallow, because nothing down there moves much.
    */
   'scene-seedling-tunnel': {
+    work: [900, 0.05, 0.035, 11],
     tones: [[38, 0.03, 'sine']],
     air: [180, 5.5, 0.022],
     drift: [70, 21],
@@ -116,6 +136,7 @@ const BEDS: Record<string, Bed> = {
    * player should hear that it is still coming in.
    */
   'scene-flooded-cellar': {
+    work: [600, 0.07, 0.04, 8],
     tones: [
       [34, 0.026, 'sine'],
       [51, 0.01, 'sine'],
@@ -126,6 +147,7 @@ const BEDS: Record<string, Bed> = {
 
   /** A door at night. Cold, open, and quiet enough that the conversation carries it. */
   'scene-night-door': {
+    work: [170, 0.2, 0.028, 24],
     tones: [[46, 0.016, 'sine']],
     air: [520, 0.8, 0.018],
     drift: [300, 15],
@@ -133,6 +155,7 @@ const BEDS: Record<string, Bed> = {
 
   /** A road by a mill. Open air, and the low water-driven thump of the wheel. */
   'scene-mill-road': {
+    work: [95, 0.28, 0.05, 6],
     tones: [
       [29, 0.022, 'sine'],
       [58, 0.009, 'triangle'],
@@ -154,6 +177,7 @@ const BEDS: Record<string, Bed> = {
    * a square is what a machine makes when it is not pretending to be anything.
    */
   'scene-wire-city': {
+    work: null,
     tones: [
       [72, 0.012, 'square'],
       [216, 0.004, 'sine'],
@@ -171,6 +195,7 @@ const BEDS: Record<string, Bed> = {
    * anybody who grew up with one will feel it before they identify it.
    */
   home: {
+    work: [240, 0.11, 0.032, 22],
     tones: [
       [50, 0.02, 'sine'],
       [15700, 0.0022, 'sine'],
@@ -247,10 +272,42 @@ function build(bed: Bed): Live | null {
     }
   }
 
+  /*
+   * The work, on an irregular timer.
+   *
+   * A short filtered noise burst rather than a tone: a tool set down, a chair shifting, a
+   * drip finding the floor are all impacts, and an impact is broadband. The gap is the mean
+   * plus or minus half of it, redrawn every time - a fixed interval is a metronome, and a
+   * metronome in a room is a machine rather than a person.
+   */
+  let workTimer: number | null = null;
+  if (bed.work) {
+    const [centre, decay, level, gap] = bed.work;
+    const knock = (): void => {
+      const source = ctx.createBufferSource();
+      source.buffer = noise;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      // Detuned per strike, so twenty of them over a mission are not one sound twenty times.
+      filter.frequency.value = centre * (0.82 + Math.random() * 0.36);
+      filter.Q.value = 2.4;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(level, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + decay);
+      source.connect(filter).connect(g).connect(gain);
+      source.start();
+      source.stop(ctx.currentTime + decay + 0.05);
+      workTimer = window.setTimeout(knock, (gap * (0.5 + Math.random())) * 1000);
+    };
+    // The first one waits too, or every room announces itself the moment it is entered.
+    workTimer = window.setTimeout(knock, gap * 1000 * (0.4 + Math.random() * 0.6));
+  }
+
   return {
     gain,
     stop: () => {
       for (const stop of stops) stop();
+      if (workTimer !== null) window.clearTimeout(workTimer);
       gain.disconnect();
     },
   };

@@ -75,25 +75,35 @@ been taught that this connection means something and then it ends like closing a
 screen should be the contact, alone, for about a fifth of a second after their room has gone
 dark. `disconnect` already exists and already fires.
 
-### 2.2 The mission has no ending beat
+### 2.2 ~~The mission has no ending beat~~ — **WRONG, it has a better one than I proposed**
 
-**Observed by absence.** A request resolves, the save note appears, and the camera returns
-home. There is no moment where the player is allowed to have *finished* something. The motif
-now plays 420ms after `solved`, which is the seed of one, but nothing on screen marks it.
+`RESOLVE_HOLD = 4.6` holds the Contact View for four and a half seconds after a request
+resolves, and its comment explains exactly the problem I "found": it was zero once,
+`onResolved` called `returnHome()` on the same tick, and "the contact's closing line was on
+screen for no frames at all". It cites §176 — *resolve, see the consequence, go home* — and
+notes that Adaeze's payoff animation is 1.4s and was being seen for a third of a second from
+behind.
 
-**Build (2 hours):** hold on the contact for a beat after they say the closing line, before
-the camera leaves. One second of somebody looking pleased is worth more than any UI.
+I proposed one second. It already has four and a half, for reasons written down before I got
+here. **Nothing to do.**
 
-### 2.3 The knowledge tree is the game's best idea and is never in shot
+This is the third time across two reviews that I have reported something missing that was
+already built. All three were watch-the-capture findings that a grep would have refuted in
+thirty seconds. The rule for the next pass: **before writing "there is no X", grep for X.**
 
-**Read in source.** `Screen.Tree` is the CRT's resting content and the whole knowledge system
-feeds it — `learn` cues, certainty, `the world remembers`. In 59 seconds of capture it is
-visible only as a small green shape on the tube during the boot pull-back.
+### 2.3 The knowledge tree has a beat; the camera is too far away to see it
 
-**Build (half a day):** on returning home after a resolve, push in on the CRT for two seconds
-while the new branch draws itself, then pull back. The camera move exists (`SCREEN_SHOT`),
-the tree draws itself already, and this converts a background prop into the reward for the
-whole mission.
+**Partly wrong, and corrected here.** The beat exists: `Phase.Home` is documented as "At the
+machine after a request, watching the tree grow" and `HOME_DWELL = 5.5` gives it five and a
+half seconds. So the *time* is authored and my "never in shot" was too strong.
+
+What is true is that the camera spends those seconds at `HOME_SHOT`, where the CRT is a small
+shape across the room. The game holds for five seconds on something the player cannot read.
+
+**Build (2 hours, not half a day):** during the home dwell, drift PART of the way toward the
+tube and back — not to `SCREEN_SHOT`, which is the full-face framing the globe uses and would
+read as entering the globe rather than looking at the tree. A push that stops short says
+"look at this"; one that arrives says "we are going in".
 
 ### 2.4 The globe's left column is now three cards and a shelf, and nothing moves
 
@@ -138,12 +148,12 @@ people polish the wrong things:
 
 Eleven days. This is about two and a half days of work.
 
-| # | item | cost | why here |
+| # | item | cost | state |
 |---|---|---|---|
-| 1 | centre the boot column | 10 min | the only visible layout fault in the game |
-| 2 | **play it with sound on** | 20 min | three audio systems shipped unheard |
-| 3 | END CALL sequence | 3h | the entrance's missing half |
-| 4 | tree push-in on resolve | 4h | turns the best system into the reward |
+| 1 | centre the boot column | 10 min | **DONE** |
+| 2 | **play it with sound on** | 20 min | **STILL OPEN — the only item here I cannot do** |
+| 3 | END CALL sequence | 3h | **DONE** |
+| 4 | tree lean during the home dwell | 2h | **DONE** — was a refinement, not a new beat |
 | 5 | mission ending beat | 2h | lets a finish feel finished |
 | 6 | globe readouts flash on change | 1h | |
 | 7 | objective cursor | 20 min | |
