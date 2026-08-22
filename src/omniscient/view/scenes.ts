@@ -129,6 +129,8 @@ import {
 } from '../content/mission-06-lock.js';
 
 import { placeCharacter } from './character-node.js';
+
+import type { RiggedContact } from './riggedContact.js';
 import { ContactScene } from './ContactScene.js';
 
 import type { CharacterPlacement } from './character-node.js';
@@ -180,12 +182,24 @@ const RIGGED_CAST: Record<string, string> = {
  * what makes this reversible: delete a line from RIGGED_CAST and the generated one comes
  * back, in the same place, holding the same thing.
  */
+/**
+ * Place a contact, and hand the rig back.
+ *
+ * Returns it rather than void so a SCENE can give its own contact something no other
+ * contact does. The shared gesture actions below are properties of the rig and belong to
+ * everybody; a beat where one specific person walks out of shot to check one specific wire
+ * is a property of one room, and registering it here would mean every contact in the game
+ * carrying an action about Mirela's supply cable.
+ *
+ * Null when the character is unrigged or hidden - a caller wanting scene-specific behaviour
+ * has to cope with not getting a rig, which is honest: those characters cannot walk.
+ */
 function addContact(
   scene: ContactScene,
   name: string,
   placement: CharacterPlacement,
   options: { hidden?: boolean } = {}
-): void {
+): RiggedContact | null {
   const modelUrl = RIGGED_CAST[name];
   if (modelUrl && !options.hidden) {
     const rigged = placeRigged(name, {
@@ -222,7 +236,7 @@ function addContact(
       },
     });
     describeContact(scene);
-    return;
+    return rigged;
   }
 
   const contact = placeCharacter(name, placement);
@@ -231,6 +245,7 @@ function addContact(
   contact.root.visible = !options.hidden;
   scene.registerProp('contact', contact.root, { idle: contact.idle });
   describeContact(scene);
+  return null;
 }
 
 /**
@@ -1275,7 +1290,7 @@ function buildRepairShop(scene: ContactScene): void {
   // Mirela herself, generated rather than imported. §209: she stands and idles - every
   // instruction she is given is performed by the bench, the set or the switch, never by
   // her body - so a well-posed static figure is worth more than a rig with no clips.
-  addContact(scene, 'Mirela', {
+  const mirela = addContact(scene, 'Mirela', {
     seed: 'mirela-vasc',
     height: 1.66,
     build: 0.45,
@@ -1490,6 +1505,99 @@ function buildRepairShop(scene: ContactScene): void {
     // instead of cropped at the shoulders by a camera aimed at the furniture.
     position: new THREE.Vector3(1.32, 1.46, 1.82),
     target: new THREE.Vector3(-0.34, 1.06, -0.72),
+  });
+
+  /*
+   * ----------------------------------------------------------------- she checks the wire
+   *
+   * The one moment in this game where the picture stops behaving like a window.
+   *
+   * She knocks the bench getting up, the whole frame lurches off level, she walks out of
+   * shot to follow the supply cable, and while she is gone OMNISCIENT_ quietly rolls its own
+   * horizon back to straight. Then she comes back.
+   *
+   * Three things are being said at once and none of them is said in dialogue:
+   *
+   *  - The view is a DEVICE IN HER ROOM, not a camera the game owns. It moved because she
+   *    moved something. Nothing else in the project establishes that, and mission 08's
+   *    ending - first person through a driver's own glasses - depends on the player having
+   *    accepted it hours earlier.
+   *  - The machine can correct its own picture and nothing else. It cannot stop her leaving,
+   *    cannot follow her, cannot ask her to come back. It levels the horizon, which is the
+   *    only thing in the world it is able to touch. §157, shown rather than stated.
+   *  - She is a person with something to do, and the player's question sent her to do it.
+   *
+   * FIRED BY THE WIRE QUESTION, never by a timer. That distinction is the whole design: a
+   * timed interruption is dead air in a tutorial, and the same seconds arriving as the
+   * consequence of a deduction are a reward. It also means it cannot land before the player
+   * has any agency - their first impression of the contact view must not be that it is
+   * unreliable, or they will distrust the picture for nine missions.
+   *
+   * The tilt rolls the SCENE rather than the camera, about the default shot's own view axis,
+   * which is identical on screen and keeps the whole beat inside this room. Deriving the
+   * axis from the registered shot rather than writing it down means moving that shot moves
+   * this with it.
+   */
+  const link = ENGINE.SceneNode.create({ name: 'LinkBeat', position: new THREE.Vector3() });
+  scene.add(link);
+  const shot = scene.getShot('default');
+  const viewAxis = shot
+    ? shot.target.clone().sub(shot.position).normalize()
+    : new THREE.Vector3(0, 0, -1);
+
+  const rollScene = (tweener: Tweener, from: number, to: number, seconds: number, delay = 0): void => {
+    tweener.add(
+      (t) => {
+        scene.quaternion.setFromAxisAngle(viewAxis, from + (to - from) * t);
+      },
+      { duration: seconds, delay, easing: Ease.inOutCubic, channel: 'link-roll' }
+    );
+  };
+
+  scene.registerProp('link', link, {
+    actions: {
+      /*
+       * `prop.check:link-wire` - see mission-01-transmitter.ts, on the supply-wire beat.
+       *
+       * Timings, and why each is what it is. The knock is FAST (0.28s) because an impact is
+       * fast and anything slower reads as the camera drifting, which is a fault rather than
+       * an event. The correction is SLOW (1.4s) and starts while she is still away, because
+       * a machine levelling a horizon is not reacting, it is maintaining - and because the
+       * player should notice it happening rather than see it already done. The gap in the
+       * middle is deliberately uncomfortable: about a second of an empty bench, which is the
+       * part that makes the shot feel observed rather than composed.
+       */
+      'check-wire': (tweener) => {
+        /*
+         * Everything waits 0.9s, because she POINTS first.
+         *
+         * The same transition fires `prop.point:contact` - she answers where the wire goes
+         * from where she is standing, and only then goes to look at it. Starting the walk on
+         * the same frame as the point would cancel the gesture and lose the half-second that
+         * makes this her decision rather than a scripted exit.
+         */
+        const AFTER_POINT = 0.9;
+        rollScene(tweener, 0, 0.115, 0.28, AFTER_POINT);
+        rollScene(tweener, 0.115, 0, 1.4, AFTER_POINT + 1.5);
+        /*
+         * Out past the doorway and back, with a beat at the far end.
+         *
+         * `back` returns her to the pose and heading she started in, so the bench she was
+         * leaning over is undisturbed when the conversation resumes - a contact who came
+         * back standing slightly wrong would cost more than this beat buys. The dwell is
+         * what she is doing out there; without it she touches the far mark and pivots, which
+         * reads as pacing rather than as checking something.
+         */
+        tweener.add(() => undefined, {
+          duration: 0.01,
+          delay: AFTER_POINT,
+          channel: 'link-walk',
+          onComplete: () => {
+            mirela?.walk(new THREE.Vector3(-2.6, 0, -0.4), { back: true, dwell: 1.15 });
+          },
+        });
+      },
+    },
   });
   scene.registerShot('transmitter', {
     /**

@@ -257,7 +257,16 @@ export const MISSION_01: MissionDefinition = {
          */
         ASK_SUPPLY: {
           to: 'supply',
-          environment: 'prop.point:contact',
+          /*
+           * She points, then goes and looks.
+           *
+           * `link-wire` is the one beat in the game where the picture stops behaving like a
+           * window - see scenes.ts, buildRepairShop. It hangs here rather than on a timer
+           * because what she describes is not in the room ("out through the wall and up the
+           * hill"), so a player who has just worked that out and asked about it is exactly
+           * the player who has earned somebody getting up to check.
+           */
+          environment: 'prop.point:contact,prop.check:link-wire',
         },
         ASK_HISTORY: {
           to: 'history',
