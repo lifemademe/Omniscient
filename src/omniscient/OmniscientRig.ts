@@ -36,7 +36,8 @@ import {
   saveGame,
 } from './session/persistence.js';
 import { installCursor } from './art/cursor.js';
-import { installRetro, setRetroLook } from './art/retro.js';
+import { installRetro, setRetroLook, setRetroScreenQuad } from './art/retro.js';
+import { projectScreenQuad } from './art/screenQuad.js';
 import { setRoomTone } from './audio/RoomTone.js';
 import { showBoot } from './link/BootScreen.js';
 
@@ -810,6 +811,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (screen && this.surface) {
       fitSurfaceUvs(screen);
       screen.material = this.surface.material;
+      /*
+       * Kept, because the pixel grid has to know where this face is on the frame.
+       *
+       * It is the one surface in the game that is already a raster display, and a second
+       * unaligned grid over it double-quantises - see the note in retroShader. The mask
+       * needs the mesh every frame, and the mesh only exists once the model has loaded and
+       * been walked, which is here.
+       */
+      this.screenMesh = screen;
     }
 
     const glass = model.glass.get('screen');
@@ -2878,6 +2888,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private menuLabel: string | null = null;
 
   /**
+   * The CRT's face, once the terminal model has been dressed.
+   *
+   * Held so the retro pass can be told where it lands on screen each frame. See dressTerminal
+   * and art/screenQuad.
+   */
+  private screenMesh: THREE.Mesh | null = null;
+
+  /**
    * Mount a diorama and look at it, with none of the game in front of it.
    *
    * Deliberately not a session: no mission advances, no trust moves, nothing is marked
@@ -3436,6 +3454,20 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // has moved is most of what the boat is for.
     this.seaLife?.update(deltaTime);
     if (this.picker) this.menu?.update(deltaTime, this.picker);
+
+    /*
+     * Hand the pixel grid the tube's outline, every frame.
+     *
+     * Per frame and not once, because the tube is an object in a room and the camera moves
+     * around it constantly - the boot reveal pulls back from inside it, the globe pushes into
+     * it, and every call ends by flying home past it. A quad computed once would be right for
+     * one shot and wrong for the rest.
+     *
+     * Null is a perfectly good answer and happens often: no terminal in a contact scene, and
+     * any frame where a corner of the screen is behind the lens. `projectScreenQuad` explains
+     * why the second of those has to refuse rather than guess.
+     */
+    setRetroScreenQuad(projectScreenQuad(this.screenMesh, this.camera?.getCamera()));
 
 
     this.globeScreen?.update(deltaTime);

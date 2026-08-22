@@ -360,6 +360,24 @@ pixelation" because the `machine` preset's grille modulates every column and des
 statistic. Diffing the wire city before and after showed 46.3% of pixels moved — more than the
 repair shop's 25.2%.
 
+**And the CRT's own face is exempt from the grid.** It is the one surface in the game that is
+already a raster display: content authored at 192x144 and drawn in a 3x5 pixel font. A second,
+unaligned grid over it double-quantises, and what two grids beating against each other destroy
+first is exactly the small text the tube exists to show. Letting the screen keep its own pixels
+is more honest than imposing the camera's on top of them.
+
+The mask is the screen's four corners projected to NDC every frame and tested per fragment -
+four corners rather than a rectangle, because the tube is seen at an angle and its face is a
+trapezium, so a bounding rectangle would exempt a wedge of desk and a wedge of wall. It refuses
+outright when any corner is behind the lens: a point behind the camera projects mirrored, so
+the quad turns inside out and a point-in-quad test would then exempt the room and grid the
+screen. Measured after: the repair shop is unchanged at 33.9% against 33.1%, and the menu drops
+to 21.9% because the tube's rectangle has left the sample.
+
+It follows that the globe view - the same screen filling the frame - comes out unpixelated.
+That is the correct consequence rather than an oversight: when the picture IS the screen, the
+screen's resolution is the picture's.
+
 `retro.ts` also gained a compile check, which it had never had: `scripts/dev/shader/` covered
 the material injection and the unmounted painterly pass but not the one pass that is actually
 mounted, and therefore the only one whose failure is a black screen. The GLSL moved to

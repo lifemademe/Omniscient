@@ -164,6 +164,18 @@ uniform sampler2D tDiffuse;
 uniform vec2 uResolution;
 uniform float uTime;
 uniform float uPixel;
+/*
+ * The tube's own face, as a quad in NDC, and a switch for when there is not one.
+ *
+ * Four corners rather than a rectangle because the CRT is a physical object seen at an
+ * angle: its screen is a trapezium on the frame, and a bounding rectangle would exempt a
+ * band of desk and wall along two of its edges.
+ */
+uniform vec2 uScreenA;
+uniform vec2 uScreenB;
+uniform vec2 uScreenC;
+uniform vec2 uScreenD;
+uniform float uScreenOn;
 uniform float uCurve;
 uniform float uAberration;
 uniform float uScanline;
@@ -181,6 +193,27 @@ varying vec2 vUv;
 vec3 linearToSRGB(vec3 c) {
   c = max(c, vec3(0.0));
   return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
+}
+
+/** Signed area of the triangle abp - positive on one side of ab, negative on the other. */
+float sideOf(vec2 a, vec2 b, vec2 p) {
+  return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+}
+
+/**
+ * Is this fragment on the tube's face?
+ *
+ * Consistent sign against all four edges. Accepts either winding, because the quad's corner
+ * order flips as the camera crosses the plane of the screen and a test that only handled one
+ * would silently invert - exempting the whole room and sparing the screen.
+ */
+bool onScreen(vec2 p) {
+  float s0 = sideOf(uScreenA, uScreenB, p);
+  float s1 = sideOf(uScreenB, uScreenC, p);
+  float s2 = sideOf(uScreenC, uScreenD, p);
+  float s3 = sideOf(uScreenD, uScreenA, p);
+  return (s0 >= 0.0 && s1 >= 0.0 && s2 >= 0.0 && s3 >= 0.0)
+      || (s0 <= 0.0 && s1 <= 0.0 && s2 <= 0.0 && s3 <= 0.0);
 }
 
 void main() {
@@ -207,8 +240,22 @@ void main() {
    * here closes it. Second time this trap has been sprung today - the boot stylesheet was
    * the first.)
    */
+  /*
+   * The one thing the grid does not touch: the CRT's own face.
+   *
+   * Not an exemption for looking nicer - it is the only surface in this game that is ALREADY
+   * a raster display. Its content is authored at 192x144 and drawn in a 3x5 pixel font, so
+   * putting a second, unaligned grid over it double-quantises: two grids at different pitches
+   * and angles beat against each other, and what that destroys first is exactly the small text
+   * the tube exists to show. Letting the screen keep its own pixels is more honest than
+   * imposing the camera's on top of them, not less.
+   *
+   * It follows that the globe view - which is this same screen filling the frame - comes out
+   * unpixelated too. That is the correct consequence rather than a side effect: when the
+   * picture IS the screen, the screen's resolution is the picture's.
+   */
   vec2 pv = vUv;
-  if (uPixel > 1.0) {
+  if (uPixel > 1.0 && !(uScreenOn > 0.5 && onScreen(vUv * 2.0 - 1.0))) {
     vec2 grid = uResolution / uPixel;
     pv = (floor(vUv * grid) + 0.5) / grid;
   }

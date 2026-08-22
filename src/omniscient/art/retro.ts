@@ -131,6 +131,11 @@ class RetroPass implements ComposerPass {
         uResolution: { value: new THREE.Vector2(1920, 1080) },
         uTime: { value: 0 },
         uPixel: { value: this.target.pixel },
+        uScreenA: { value: new THREE.Vector2() },
+        uScreenB: { value: new THREE.Vector2() },
+        uScreenC: { value: new THREE.Vector2() },
+        uScreenD: { value: new THREE.Vector2() },
+        uScreenOn: { value: 0 },
         uCurve: { value: this.target.curve },
         uAberration: { value: this.target.aberration },
         uScanline: { value: this.target.scanline },
@@ -245,6 +250,20 @@ class RetroPass implements ComposerPass {
     return null;
   }
 
+  /** Four NDC corners in order, or null to grid the whole frame. */
+  public setScreenQuad(corners: readonly THREE.Vector2[] | null): void {
+    const u = this.material.uniforms;
+    if (!corners || corners.length !== 4) {
+      u.uScreenOn.value = 0;
+      return;
+    }
+    (u.uScreenA.value as THREE.Vector2).copy(corners[0]);
+    (u.uScreenB.value as THREE.Vector2).copy(corners[1]);
+    (u.uScreenC.value as THREE.Vector2).copy(corners[2]);
+    (u.uScreenD.value as THREE.Vector2).copy(corners[3]);
+    u.uScreenOn.value = 1;
+  }
+
   public setSize(width: number, height: number): void {
     (this.material.uniforms.uResolution.value as THREE.Vector2).set(width, height);
   }
@@ -353,4 +372,18 @@ export function installRetro(post: RetroHost): boolean {
  */
 export function setRetroLook(name: RetroLookName, immediate = false): void {
   effect?.pass.setLook(RETRO_LOOKS[name], immediate);
+}
+
+/**
+ * Tell the pass where the CRT's face is on screen, so the pixel grid can skip it.
+ *
+ * Four corners in NDC, in order round the quad, or null when there is no screen in frame.
+ * Called every frame from the rig - the tube is a physical object and the camera moves, so
+ * this is a per-frame fact rather than a setting.
+ *
+ * See the note in the shader for why the screen is exempt at all: it is the one surface in
+ * the game that is already a raster display, and a second grid over it double-quantises.
+ */
+export function setRetroScreenQuad(corners: readonly THREE.Vector2[] | null): void {
+  effect?.pass.setScreenQuad(corners);
 }

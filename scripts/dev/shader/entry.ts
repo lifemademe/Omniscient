@@ -109,6 +109,15 @@ const retro = new THREE.ShaderMaterial({
     uResolution: { value: new THREE.Vector2(320, 240) },
     uTime: { value: 1.5 },
     uPixel: { value: look.pixel },
+    /*
+     * The screen mask, switched ON with a real quad. Off would compile the branch without
+     * ever running its body, which is the same trap the machine preset was chosen to avoid.
+     */
+    uScreenA: { value: new THREE.Vector2(-0.4, -0.4) },
+    uScreenB: { value: new THREE.Vector2(0.4, -0.35) },
+    uScreenC: { value: new THREE.Vector2(0.4, 0.35) },
+    uScreenD: { value: new THREE.Vector2(-0.4, 0.4) },
+    uScreenOn: { value: 1 },
     uCurve: { value: look.curve },
     uAberration: { value: look.aberration },
     uScanline: { value: look.scanline },

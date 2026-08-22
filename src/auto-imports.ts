@@ -30,6 +30,7 @@ import './omniscient/art/retro.js';
 import './omniscient/art/retroShader.js';
 import './omniscient/art/ripples.js';
 import './omniscient/art/saltrust.js';
+import './omniscient/art/screenQuad.js';
 import './omniscient/art/shadows.js';
 import './omniscient/art/sky.js';
 import './omniscient/art/starfield.js';
