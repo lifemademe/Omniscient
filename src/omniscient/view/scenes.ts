@@ -329,6 +329,23 @@ function plankSeams(
  * "show me the back" is an actual reveal rather than a line of dialogue (§131).
  */
 function buildRepairShop(scene: ContactScene): void {
+
+  /*
+   * How much of the rig's afternoon reaches this room.
+   *
+   * Six of the eight scenes were sitting at the default 1, which means the workstation's
+   * global key AND its sky fill landed on top of whatever practicals the room had lit
+   * itself with. The sky term is the problem: it is an ambient, it has no direction, and at
+   * full strength it raises every shadow in the room to roughly the value of every lit
+   * surface. Reported as the contact rooms looking flat next to the menu room, and that is
+   * exactly what it is - the menu room is lit by three practicals and nothing else.
+   *
+   * Lowering this does not make a room dark; it hands the room back to the lights that were
+   * already in it and lets the corners go. Each value below is what the fiction says about
+   * the place rather than a level: a workshop in the afternoon with a window and a work lamp over the bench, which is where
+   * the light in that frame should be coming from
+   */
+  scene.daylight = 0.55;
   const rng = createRng(seedFrom('mirela-shop'));
 
   // Floor and back wall - background mass, not detail (§186).
@@ -2404,6 +2421,22 @@ function buildBeaconMast(scene: ContactScene): void {
 const SUNLIGHT_AT = new THREE.Vector3(-9, 16, -10);
 
 function buildSeedlingTunnel(scene: ContactScene): void {
+
+  /*
+   * How much of the rig's afternoon reaches this room.
+   *
+   * Six of the eight scenes were sitting at the default 1, which means the workstation's
+   * global key AND its sky fill landed on top of whatever practicals the room had lit
+   * itself with. The sky term is the problem: it is an ambient, it has no direction, and at
+   * full strength it raises every shadow in the room to roughly the value of every lit
+   * surface. Reported as the contact rooms looking flat next to the menu room, and that is
+   * exactly what it is - the menu room is lit by three practicals and nothing else.
+   *
+   * Lowering this does not make a room dark; it hands the room back to the lights that were
+   * already in it and lets the corners go. Each value below is what the fiction says about
+   * the place rather than a level: underground, where the only honest sources are the torch and whatever leaks in behind
+   */
+  scene.daylight = 0.22;
   const rng = createRng(seedFrom('adaeze-tunnel'));
 
   /**
@@ -4655,6 +4688,22 @@ function dressClearedHouse(scene: ContactScene, rng: ReturnType<typeof createRng
  * to say that is empty wall and stacked chairs rather than more props.
  */
 function buildClearedHouse(scene: ContactScene): void {
+
+  /*
+   * How much of the rig's afternoon reaches this room.
+   *
+   * Six of the eight scenes were sitting at the default 1, which means the workstation's
+   * global key AND its sky fill landed on top of whatever practicals the room had lit
+   * itself with. The sky term is the problem: it is an ambient, it has no direction, and at
+   * full strength it raises every shadow in the room to roughly the value of every lit
+   * surface. Reported as the contact rooms looking flat next to the menu room, and that is
+   * exactly what it is - the menu room is lit by three practicals and nothing else.
+   *
+   * Lowering this does not make a room dark; it hands the room back to the lights that were
+   * already in it and lets the corners go. Each value below is what the fiction says about
+   * the place rather than a level: a house with the furniture gone, so nothing left in it to bounce light around
+   */
+  scene.daylight = 0.5;
   const rng = createRng(seedFrom('ileana-house'));
 
   const floor = new THREE.BoxGeometry(7, 0.1, 6);
@@ -6729,6 +6778,22 @@ function buildFloodedCellar(scene: ContactScene): void {
  * layer is simply night.
  */
 function buildNightDoor(scene: ContactScene): void {
+
+  /*
+   * How much of the rig's afternoon reaches this room.
+   *
+   * Six of the eight scenes were sitting at the default 1, which means the workstation's
+   * global key AND its sky fill landed on top of whatever practicals the room had lit
+   * itself with. The sky term is the problem: it is an ambient, it has no direction, and at
+   * full strength it raises every shadow in the room to roughly the value of every lit
+   * surface. Reported as the contact rooms looking flat next to the menu room, and that is
+   * exactly what it is - the menu room is lit by three practicals and nothing else.
+   *
+   * Lowering this does not make a room dark; it hands the room back to the lights that were
+   * already in it and lets the corners go. Each value below is what the fiction says about
+   * the place rather than a level: night, at a door - the clue is in the name, and it was taking a full afternoon of sky
+   */
+  scene.daylight = 0.14;
   const rng = createRng(seedFrom('dorin-door'));
 
   const WALL_TOP = 5.2;
@@ -8387,6 +8452,22 @@ function buildNightDoor(scene: ContactScene): void {
  * himself.
  */
 function buildMillRoad(scene: ContactScene): void {
+
+  /*
+   * How much of the rig's afternoon reaches this room.
+   *
+   * Six of the eight scenes were sitting at the default 1, which means the workstation's
+   * global key AND its sky fill landed on top of whatever practicals the room had lit
+   * itself with. The sky term is the problem: it is an ambient, it has no direction, and at
+   * full strength it raises every shadow in the room to roughly the value of every lit
+   * surface. Reported as the contact rooms looking flat next to the menu room, and that is
+   * exactly what it is - the menu room is lit by three practicals and nothing else.
+   *
+   * Lowering this does not make a room dark; it hands the room back to the lights that were
+   * already in it and lets the corners go. Each value below is what the fiction says about
+   * the place rather than a level: outdoors and open, which is the one interior-lighting argument that does not apply
+   */
+  scene.daylight = 0.85;
   const rng = createRng(seedFrom('sanda-mill-road'));
 
   /** The road runs down -Z, away from the camera. Everything here is in metres. */
