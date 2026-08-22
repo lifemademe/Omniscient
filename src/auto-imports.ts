@@ -52,6 +52,7 @@ import './omniscient/content/mission-07-torch.js';
 import './omniscient/content/mission-08-district.js';
 import './omniscient/content/mission-09-specimen.js';
 import './omniscient/content/signals.js';
+import './omniscient/core/devLog.js';
 import './omniscient/core/rng.js';
 import './omniscient/core/tween.js';
 import './omniscient/crt/coastlines.js';

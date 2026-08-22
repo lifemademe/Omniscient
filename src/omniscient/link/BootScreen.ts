@@ -76,8 +76,31 @@ const CSS = `
   color: #7fe08a;
   cursor: default;
 }
-/* One width for every row, so the column has an edge rather than a ragged left margin. */
-.omni-boot > * { width: min(46ch, 84vw); }
+/*
+ * ONE box holding everything, sized to its own contents.
+ *
+ * This was min(46ch, 84vw) on each child, and that is a trap rather than a typo. The ch
+ * unit is the width of a zero in the element's OWN font, so the title - which is more than
+ * twice the size of the self-test - got a box more than twice as wide. Centring three boxes
+ * of three different widths splays their left edges apart by exactly half the difference,
+ * which is what put OMNISCIENT_ a quarter of the way out into the margin while the rows
+ * stayed put. Everything was correctly centred; the rule was simply measuring three
+ * different things.
+ *
+ * fit-content on one wrapper cannot have that fault, because there is now one box and it
+ * hugs whatever the widest line happens to be. Change any font size in this file and the
+ * column follows it. Children are block level and fill the wrapper, so every line - the
+ * header, the dotted rows, the title and the prompt - starts at one edge.
+ *
+ * (No backticks in this comment on purpose - the whole stylesheet is a template literal,
+ * and one of them here closes it. Cost a build.)
+ */
+.omni-boot__column {
+  display: flex;
+  flex-direction: column;
+  width: fit-content;
+  max-width: 84vw;
+}
 .omni-boot__line {
   font-size: clamp(11px, 1.15vw, 17px);
   letter-spacing: 0.09em;
@@ -87,7 +110,7 @@ const CSS = `
 /* The two lines that are the game, in the colour the console gives to knowledge. */
 .omni-boot__line--told { color: #d8ffb0; }
 .omni-boot__title {
-  margin-top: 2.2vh;
+  margin-top: 3vh;
   /*
    * Quieter than it was. At 3.4vw against the self-test's 1.15 the title was three times
    * the body on a wide window and shouted over the two lines that actually say something.
@@ -97,6 +120,13 @@ const CSS = `
   font-size: clamp(20px, 2.2vw, 38px);
   letter-spacing: 0.24em;
   color: #d8ffb0;
+  /*
+   * The trailing letter-space is real width, and at 0.24em it is nearly a third of a
+   * character. Left unclaimed it makes the title look shifted a few pixels left of the
+   * column it is supposed to be flush with - visible precisely because everything else on
+   * this screen now agrees.
+   */
+  margin-right: -0.24em;
 }
 .omni-boot__prompt {
   margin-top: 3.2vh;
@@ -135,7 +165,17 @@ const LINES: Array<[string, string, boolean]> = [
   ['KNOWLEDGE BASE', 'EMPTY', true],
 ];
 
+/**
+ * The dot-leader field width: label, dots and result together.
+ *
+ * A row is `label + ' ' + dots + ' ' + result` and `dots` is WIDTH minus the two ends, so a
+ * finished row is WIDTH + 2 characters wide. The rule above them was drawn at WIDTH and
+ * therefore stopped two characters short of the column it was ruling - small, and the exact
+ * kind of small that reads as "somebody typed this" rather than "a machine printed it",
+ * which is the one thing this screen has to be.
+ */
 const WIDTH = 34;
+const RULE = WIDTH + 2;
 
 export interface BootScreen {
   /** Take it down early - endPlay, or a scene change nobody expected. */
@@ -161,33 +201,38 @@ export function showBoot(container: HTMLElement, onBegin: () => void): BootScree
   const root = document.createElement('div');
   root.className = 'omni-boot';
 
+  // Every line goes in here, not on the root - see the note on .omni-boot__column.
+  const column = document.createElement('div');
+  column.className = 'omni-boot__column';
+  root.appendChild(column);
+
   const head = document.createElement('div');
   head.className = 'omni-boot__line';
   head.textContent = 'OMNISCIENT OS';
-  root.appendChild(head);
+  column.appendChild(head);
 
   const rule = document.createElement('div');
   rule.className = 'omni-boot__line';
-  rule.textContent = '─'.repeat(WIDTH);
-  root.appendChild(rule);
+  rule.textContent = '─'.repeat(RULE);
+  column.appendChild(rule);
 
   const rows = LINES.map(([label, , told]) => {
     const row = document.createElement('div');
     row.className = `omni-boot__line${told ? ' omni-boot__line--told' : ''}`;
     row.textContent = '';
-    root.appendChild(row);
+    column.appendChild(row);
     return row;
   });
 
   const title = document.createElement('div');
   title.className = 'omni-boot__title';
   title.textContent = '';
-  root.appendChild(title);
+  column.appendChild(title);
 
   const prompt = document.createElement('div');
   prompt.className = 'omni-boot__prompt';
   prompt.textContent = '';
-  root.appendChild(prompt);
+  column.appendChild(prompt);
 
   container.appendChild(root);
 

@@ -601,8 +601,21 @@ export class OmniscientRig extends ENGINE.SceneNode {
     /*
      * The way in to every room. See dev/SceneJump - this replaces the practice of editing
      * the game to reach a scene, which has twice shipped a debug hook by accident.
+     *
+     * And it was about to be the third time. This mounted unconditionally: a hover strip of
+     * eight numbered tabs at the left edge of the game container, in every build, one
+     * mouse-move away from a judge who happens to bring the pointer to the side of the
+     * window. POLISH-REVIEW §8 has "strip debug overlay from the build" as item 1 - ten
+     * minutes, free, and fatal if missed - and it was still item 1 three weeks later,
+     * because the tool that replaced the bad practice quietly became an instance of it.
+     *
+     * `isPublishedGame` is the engine's own flag rather than a constant in this file, and
+     * that is the entire point. A DEV boolean has to be remembered on the day of the freeze,
+     * by somebody who has spent that day doing something else; this cannot be forgotten,
+     * because nobody has to do anything. It stays on in the editor, so verification loops
+     * are unaffected.
      */
-    const jumpContainer = this.getWorld()?.gameContainer;
+    const jumpContainer = ENGINE.isPublishedGame() ? null : this.getWorld()?.gameContainer;
     if (jumpContainer) this.disposeSceneJump = installSceneJump(this, jumpContainer);
 
     void this.startSession();
@@ -1652,8 +1665,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
       onLeave: () => this.leaveContact(),
     });
 
-    this.tune = new TunePanel(container);
-    this.registerTuning();
+    /*
+     * The F8 tuning panel, on the same gate and for the same reason as SceneJump above.
+     *
+     * Less exposed - it needs a keypress rather than a mouse-move - but a jam judge pressing
+     * function keys is not a strange thing to imagine, and a live slider panel over a game
+     * says prototype louder than anything else on screen.
+     */
+    if (!ENGINE.isPublishedGame()) {
+      this.tune = new TunePanel(container);
+      this.registerTuning();
+    }
 
     this.globeScreen = new GlobeScreen(
       container,

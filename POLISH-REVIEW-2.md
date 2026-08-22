@@ -154,10 +154,12 @@ Eleven days. This is about two and a half days of work.
 | 2 | **play it with sound on** | 20 min | **STILL OPEN — the only item here I cannot do** |
 | 3 | END CALL sequence | 3h | **DONE** |
 | 4 | tree lean during the home dwell | 2h | **DONE** — was a refinement, not a new beat |
-| 5 | mission ending beat | 2h | lets a finish feel finished |
-| 6 | globe readouts flash on change | 1h | |
-| 7 | objective cursor | 20 min | |
-| 8 | room activity sound | 2h | |
+| 5 | mission ending beat | 2h | **ALREADY BUILT** — `RESOLVE_HOLD = 4.6`, see §2.2 |
+| 6 | globe readouts flash on change | 1h | **DONE** |
+| 7 | objective cursor | 20 min | **DONE** |
+| 8 | room activity sound | 2h | **DONE** — the `work` field on every bed |
+
+Everything here is closed except item 2, which is not a coding task.
 
 **Item 2 is not a formality.** Room tone, the motif and the hover cue are all written, none
 has been heard, and synthesised audio tuned by arithmetic is either lovely or a fridge hum.
@@ -175,3 +177,71 @@ Neither has moved and both remain true:
 - **Publish once and look at the result** before the freeze, to settle whether the editor's
   FPS overlay appears in a built game. It is not in this project's source, so it probably
   does not — and "probably" is the wrong confidence for the first thing a judge sees.
+
+
+---
+
+## 6. A third pass, 2026-08-22 — three faults that had been on screen the whole time
+
+Not a new review. Three things found while acting on the two above, all of which had been
+rendering for weeks and none of which any capture-and-look had caught, because each one
+looked deliberate.
+
+### 6.1 The boot screen's title was a quarter of the way into the margin
+
+`.omni-boot > * { width: min(46ch, 84vw) }` on every child. `ch` is the width of a zero in
+the element's OWN font, so the title - more than twice the size of the self-test - got a box
+more than twice as wide, and centring three boxes of three different widths splays their left
+edges apart by half the difference. Everything was correctly centred. The rule was measuring
+three different things.
+
+One `fit-content` wrapper cannot have that fault: one box, hugging the widest line, and every
+row flush to one edge. Change any font size in the file and the column follows.
+
+While there: the dotted rows are `WIDTH + 2` characters wide and the rule above them was
+drawn at `WIDTH`, so it stopped two characters short of the column it was ruling. Small, and
+exactly the kind of small that reads as somebody typing rather than a machine printing -
+which is the one thing that screen has to be.
+
+### 6.2 The SUSPECTED tier was drawing one box per SHELF, not one per crate
+
+The largest object in the left half of Mirela's frame was a translucent pane 1.6m wide and
+1.1m tall standing in front of the shelf, with a ragged lit edge along the top. It reads as
+broken glass or a failed decal. It is the certainty tier, and it has looked like that since
+the tier was built.
+
+`localBounds` unioned every mesh in the subtree into one box, and `shelf-crates` is six
+crates on three levels merged into one buffer. So the guess swallowed the shelf. That
+destroys the tier's own argument - "the unresolved sits inside the resolved" needs the
+resolved thing to be VISIBLE - and the file's header has always described the result it was
+meant to produce: "the shelf reads as four separate volumes".
+
+Now it does: `localIslands` splits the geometry into connected shells, merges any that
+overlap, and builds one breathing volume per island with its own phases, so six crates sit on
+a shelf you can see, each drifting on its own. Above ten islands it falls back to the single
+hull, which is coarse but never wrong.
+
+This affects all fourteen SUSPECTED props in the game, so it is measured rather than watched
+- `scripts/suspected-split.ts` drives the real generators: the shelf gives six crate-sized
+boxes across four heights, the bench gives four legs, the compressor stays one machine.
+
+### 6.3 Mirela's tools were five rectangles
+
+§131 puts the evidence on the environment and the pegboard's own note calls this the wall the
+player READS - the only statement in the game about what she does with her hands, directly
+behind her head in the shot every player sees first. It was five dark bars with a hook on
+top. Not bad tools: not tools.
+
+Each is now one nameable outline - a ring and a fork, a closed rectangle with the board
+showing through it, splayed handles pinching to a point, a stubby grip on a long blade, a T.
+Nothing else: at the shot's distance, through the pixel pass, hatching and grips are
+invisible and shape is all that survives.
+
+Which five got the work was decided by projection, not by eye. The console panel cuts the
+frame at 0.645, which lands at about x -0.1 on that wall, so everything from x 0.2 rightward
+is behind the panel in every call. The five that share frame with her face got the distinct
+silhouettes; the rest got plain kinds.
+
+Three of them needed a second pass after looking: the spanner's fork had no visible gap and
+read as a lollipop, the screwdriver's handle was long enough to read as a bottle, and the
+hammer's head was too narrow so the claw took over and it read as a hook.

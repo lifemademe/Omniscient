@@ -44,17 +44,16 @@ function project(shot: string, p: THREE.Vector3, aspect: number): { x: number; y
 
 /** What is actually in the room, as shipped. */
 const POINTS: Array<[string, THREE.Vector3]> = [
-  ['tube far end', new THREE.Vector3(-2.93, 2.2, -1.76)],
-  ['tube near end', new THREE.Vector3(-2.93, 2.2, -0.46)],
-  ['coil nail', new THREE.Vector3(-2.98, 1.62, -0.95)],
-  ['coil bottom', new THREE.Vector3(-2.98, 1.22, -0.95)],
-  ['compressor motor', new THREE.Vector3(-2.72, 0.49, -0.43)],
-  ['compressor tank', new THREE.Vector3(-2.72, 0.2, -0.35)],
-  ['tins', new THREE.Vector3(-2.46, 0.07, -0.6)],
-  ['tin in the water', new THREE.Vector3(-2.3, 0.06, -1.02)],
-  ['puddle centre', new THREE.Vector3(-2.42, 0.006, -1.17)],
+  ['peg x-1.4', new THREE.Vector3(-1.4, 1.9, -1.8)],
+  ['peg x-1.0', new THREE.Vector3(-1.0, 1.9, -1.8)],
+  ['peg x-0.6', new THREE.Vector3(-0.6, 1.9, -1.8)],
+  ['peg x-0.2', new THREE.Vector3(-0.2, 1.9, -1.8)],
+  ['peg x 0.2', new THREE.Vector3(0.2, 1.9, -1.8)],
+  ['peg x 0.6', new THREE.Vector3(0.6, 1.9, -1.8)],
+  ['peg x 1.0', new THREE.Vector3(1.0, 1.9, -1.8)],
+  ['peg x 1.4', new THREE.Vector3(1.4, 1.9, -1.8)],
+  ['peg y1.3 x-1.3', new THREE.Vector3(-1.3, 1.3, -1.8)],
   ['mirela head', new THREE.Vector3(-0.72, 1.55, -1.14)],
-  ['the radio', new THREE.Vector3(-0.1, 0.92, -0.55)],
 ];
 
 for (const shot of Object.keys(SHOTS)) {

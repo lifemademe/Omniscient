@@ -37,6 +37,8 @@ import * as THREE from 'three';
 import { debakeHighlights } from '../art/debake.js';
 import { HIPS, loadGesture, type GestureName } from './gestures.js';
 
+import { devLog } from '../core/devLog.js';
+
 /**
  * Mixamo names its bones consistently. three.js then renames them.
  *
@@ -1177,7 +1179,7 @@ const ARRIVE = 0.06;
         baseAction = mixer.clipAction(wanted);
         baseAction.play();
       }
-      console.log(`[rigged] ${name} clips: ${clips.map((c) => c.name).join(', ') || 'none'}`);
+      devLog(`[rigged] ${name} clips: ${clips.map((c) => c.name).join(', ') || 'none'}`);
     }
 
     /**
@@ -1264,8 +1266,10 @@ const ARRIVE = 0.06;
     }
     if (reached.length) {
       // Printed on purpose: the result of this experiment is a number, and a number that
-      // only exists inside the running game is a number nobody can act on.
-      console.log(
+      // only exists inside the running game is a number nobody can act on. Through devLog
+      // rather than console, so it is a number for whoever is BUILDING this and silence for
+      // whoever is playing it - see the note on that module.
+      devLog(
         `[rigged] ${name} bones=${Object.keys(contact.bones).length} ` +
           `stepped=${shortfall > 0.01 ? Math.min(shortfall + 0.02, STEP_LIMIT).toFixed(2) : '0'} ` +
           reached.join(', ')

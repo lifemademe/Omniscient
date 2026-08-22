@@ -35,6 +35,8 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
+import { devLog } from '../core/devLog.js';
+
 /**
  * The gestures, and what each one is FOR.
  *
@@ -210,7 +212,7 @@ export function loadGesture(name: GestureName): Promise<THREE.AnimationClip | nu
               resolve(null);
               return;
             }
-            console.log(`[gesture] ${name}: ${clip.duration.toFixed(2)}s, ${clip.tracks.length} tracks`);
+            devLog(`[gesture] ${name}: ${clip.duration.toFixed(2)}s, ${clip.tracks.length} tracks`);
             resolve(retarget(clip));
           },
           undefined,

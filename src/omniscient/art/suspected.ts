@@ -104,21 +104,70 @@ export interface Suspicion {
 }
 
 /**
- * The subtree's extent, in the root's own space.
+ * How many separate volumes one prop is allowed to become.
  *
- * `Box3.setFromObject` is the obvious call and returns an empty box here: it looks for
- * `geometry` on each object it traverses, and the geometry of a collapsed MeshNode lives
- * behind a getter on a mesh that is not in the graph. Same failure as everything else in
- * this project that reached for a node and got the wrong object - see the note on
- * `renderTargetOf`.
+ * A guard rather than a design number. The splitter below is exact for the geometry this
+ * game actually builds - merged axis-aligned boxes - but a prop is free to be anything, and
+ * a mesh that happens to arrive as three hundred disconnected shells would turn one guess
+ * into three hundred breathing wireframes and cost more than the room it is decorating.
+ * Above the cap the old behaviour returns: one box round the lot, which is never wrong, only
+ * coarse.
  */
-function localBounds(root: THREE.Object3D): THREE.Box3 | null {
+const MAX_VOLUMES = 10;
+
+/**
+ * Boxes closer than this are treated as one thing.
+ *
+ * Two crates pushed against each other are one region of doubt, not two, and a hairline of
+ * cyan between them is a detail the machine has no business asserting.
+ */
+const MERGE_SLACK = 0.015;
+
+/**
+ * The subtree's extent, in the root's own space - as a LIST of disjoint regions.
+ *
+ * ## Why this is not one box any more
+ *
+ * It was, and the header of this file has always described the result it was supposed to
+ * produce: "the shelf reads as ... four separate volumes". It did not. `localBounds` unioned
+ * every mesh in the subtree, so `shelf-crates` - six crates on three levels, merged into one
+ * buffer by `createShelfStack` - came out as a single slab 1.6m wide and 1.1m tall, drawn in
+ * front of the shelf it was supposed to be sitting ON.
+ *
+ * That destroys the whole argument for the tier. "The unresolved sits inside the resolved"
+ * requires the resolved thing to be visible, and a hull over the entire unit hides the
+ * shelf, its uprights and its planks behind one translucent panel with a ragged lit edge -
+ * which does not read as a machine marking a region it cannot resolve. It reads as a broken
+ * pane of glass, and it was the largest object in the left half of the most-seen frame in
+ * the game.
+ *
+ * ## How the split works
+ *
+ * Union-find over vertices, joined a triangle at a time, with positions quantised first so
+ * that a non-indexed buffer does not come apart into loose triangles. Everything this game
+ * builds for the tier is merged axis-aligned boxes, and boxes that do not touch share no
+ * vertices, so the components come out exactly one per crate.
+ *
+ * Then overlapping results are merged back together, because a prop assembled from two
+ * intersecting boxes is one object with two shells and should be one volume.
+ *
+ * `Box3.setFromObject` is still the wrong call for the traversal, for the reason the old
+ * note gave: it looks for `geometry` on each object it visits, and the geometry of a
+ * collapsed MeshNode lives behind a getter on a mesh that is not in the graph. See the note
+ * on `renderTargetOf`.
+ *
+ * Exported for `scripts/suspected-split.ts`, which drives it against the real generators.
+ * This is the one function in the tier whose output nobody can see - a wrong split does not
+ * throw, it just draws the wrong number of boxes - so it gets measured rather than watched.
+ */
+export function localIslands(root: THREE.Object3D): THREE.Box3[] {
   root.updateWorldMatrix(true, true);
 
   const toLocal = new THREE.Matrix4().copy(root.matrixWorld).invert();
-  const box = new THREE.Box3();
-  const scratch = new THREE.Box3();
   const transform = new THREE.Matrix4();
+  const boxes: THREE.Box3[] = [];
+  const whole = new THREE.Box3();
+  const scratch = new THREE.Box3();
   let found = false;
 
   root.traverse((object) => {
@@ -128,11 +177,121 @@ function localBounds(root: THREE.Object3D): THREE.Box3 | null {
     if (!geometry.boundingBox) return;
 
     transform.multiplyMatrices(toLocal, object.matrixWorld);
-    box.union(scratch.copy(geometry.boundingBox).applyMatrix4(transform));
+    whole.union(scratch.copy(geometry.boundingBox).applyMatrix4(transform));
     found = true;
+
+    for (const box of shellsOf(geometry)) boxes.push(box.applyMatrix4(transform));
   });
 
-  return found && !box.isEmpty() ? box : null;
+  if (!found || whole.isEmpty()) return [];
+
+  const merged = mergeTouching(boxes);
+  // Too many, or the splitter found nothing useful: one box round everything, as before.
+  return merged.length === 0 || merged.length > MAX_VOLUMES ? [whole] : merged;
+}
+
+/** The bounding box of each connected shell in a geometry, in the geometry's own space. */
+function shellsOf(geometry: THREE.BufferGeometry): THREE.Box3[] {
+  const position = geometry.getAttribute('position');
+  if (!position) return [];
+
+  const index = geometry.getIndex();
+  const corners = index ? index.count : position.count;
+  if (corners < 3) return [];
+
+  /*
+   * Quantise to a tenth of a millimetre before joining.
+   *
+   * Two purposes. It makes a non-indexed buffer behave like an indexed one, so a geometry
+   * that arrived without an index does not come apart into individual triangles. And it
+   * absorbs the float drift that `mergeGeometries` leaves on shared corners, which would
+   * otherwise split one box into two halves along a seam nobody can see.
+   */
+  const canonical = new Map<string, number>();
+  const idOf = new Int32Array(position.count);
+  for (let v = 0; v < position.count; v++) {
+    const key = `${Math.round(position.getX(v) * 1e4)},${Math.round(position.getY(v) * 1e4)},${Math.round(position.getZ(v) * 1e4)}`;
+    const existing = canonical.get(key);
+    if (existing === undefined) {
+      canonical.set(key, v);
+      idOf[v] = v;
+    } else {
+      idOf[v] = existing;
+    }
+  }
+
+  const parent = new Int32Array(position.count);
+  for (let v = 0; v < position.count; v++) parent[v] = idOf[v];
+
+  const find = (v: number): number => {
+    let r = v;
+    while (parent[r] !== r) r = parent[r];
+    // Path compression, because a merged buffer can be tens of thousands of corners deep.
+    let walk = v;
+    while (parent[walk] !== r) {
+      const next = parent[walk];
+      parent[walk] = r;
+      walk = next;
+    }
+    return r;
+  };
+  const union = (a: number, b: number): void => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  };
+
+  const corner = (i: number): number => (index ? index.getX(i) : i);
+  for (let i = 0; i + 2 < corners; i += 3) {
+    const a = corner(i);
+    const b = corner(i + 1);
+    const c = corner(i + 2);
+    union(a, b);
+    union(a, c);
+  }
+
+  const byRoot = new Map<number, THREE.Box3>();
+  const point = new THREE.Vector3();
+  for (let i = 0; i < corners; i++) {
+    const v = corner(i);
+    const root = find(v);
+    let box = byRoot.get(root);
+    if (!box) {
+      box = new THREE.Box3();
+      byRoot.set(root, box);
+    }
+    box.expandByPoint(point.fromBufferAttribute(position, v));
+  }
+
+  return [...byRoot.values()];
+}
+
+/**
+ * Fold overlapping boxes into each other until nothing overlaps.
+ *
+ * Naive and quadratic on purpose. It runs once per prop on a list that is single digits
+ * long in every real case, and the cap above stops it ever being asked to do more.
+ */
+function mergeTouching(boxes: THREE.Box3[]): THREE.Box3[] {
+  const out: THREE.Box3[] = boxes.map((b) => b.clone());
+  const slack = new THREE.Vector3(MERGE_SLACK, MERGE_SLACK, MERGE_SLACK);
+  const grown = new THREE.Box3();
+
+  let changed = true;
+  while (changed && out.length > 1) {
+    changed = false;
+    outer: for (let i = 0; i < out.length; i++) {
+      grown.copy(out[i]).expandByVector(slack);
+      for (let j = i + 1; j < out.length; j++) {
+        if (!grown.intersectsBox(out[j])) continue;
+        out[i].union(out[j]);
+        out.splice(j, 1);
+        changed = true;
+        break outer;
+      }
+    }
+  }
+  return out;
 }
 
 /** The bottom rectangle alone, in the box's local space. The sweep rides this. */
@@ -187,6 +346,22 @@ function boxEdges(size: THREE.Vector3): THREE.BufferGeometry {
   return geometry;
 }
 
+/** One region of doubt: its own box, its own materials, its own drift. */
+interface Volume {
+  node: ENGINE.SceneNode;
+  centre: THREE.Vector3;
+  size: THREE.Vector3;
+  fill: THREE.MeshBasicMaterial;
+  wire: THREE.LineBasicMaterial;
+  ruleMaterial: THREE.LineBasicMaterial;
+  rule: THREE.LineSegments;
+  /* A MeshNode, not a THREE.Mesh - decorMesh hands back the engine's wrapper. */
+  volume: ENGINE.MeshNode;
+  edges: THREE.LineSegments;
+  /** Three unrelated phases, so no two volumes in a prop move together. */
+  phase: [number, number, number];
+}
+
 /**
  * Replace a prop with the machine's guess at it.
  *
@@ -196,17 +371,8 @@ function boxEdges(size: THREE.Vector3): THREE.BufferGeometry {
  * object the room does not contain.
  */
 export function createSuspicion(root: THREE.Object3D, seed: number): Suspicion | null {
-  const bounds = localBounds(root);
-  if (!bounds) return null;
-
-  const size = bounds.getSize(new THREE.Vector3());
-  const centre = bounds.getCenter(new THREE.Vector3());
-  /*
-   * A minimum, because a flat prop - a rag, a paper, a floor seam - bounds to a plane, and
-   * a plane has no volume to suggest. Two centimetres is enough for the wireframe to read
-   * as a box seen edge-on rather than as a single line lying on the bench.
-   */
-  size.set(Math.max(size.x, 0.02), Math.max(size.y, 0.02), Math.max(size.z, 0.02));
+  const islands = localIslands(root);
+  if (islands.length === 0) return null;
 
   /*
    * Silence the real prop.
@@ -232,71 +398,94 @@ export function createSuspicion(root: THREE.Object3D, seed: number): Suspicion |
   });
 
   const rng: Rng = createRng(seed);
-  const phase = rng() * Math.PI * 2;
-  const phaseB = rng() * Math.PI * 2;
-  const phaseC = rng() * Math.PI * 2;
+  const container = ENGINE.SceneNode.create({ name: 'Suspected', position: new THREE.Vector3() });
 
-  const container = ENGINE.SceneNode.create({
-    name: 'Suspected',
-    position: centre.clone(),
-  });
-
-  const fill = new THREE.MeshBasicMaterial({
-    color: new THREE.Color(FILL_COLOUR),
-    transparent: true,
-    opacity: BREATHE_LOW,
+  const volumes: Volume[] = islands.map((bounds, index) => {
+    const size = bounds.getSize(new THREE.Vector3());
+    const centre = bounds.getCenter(new THREE.Vector3());
     /*
-     * Depth still written, so the wireframe of a box behind this one is occluded. Guesses
-     * stack up in a room and without it the shelf reads as a heap of overlapping outlines
-     * rather than as four separate volumes.
+     * A minimum, because a flat prop - a rag, a paper, a floor seam - bounds to a plane, and
+     * a plane has no volume to suggest. Two centimetres is enough for the wireframe to read
+     * as a box seen edge-on rather than as a single line lying on the bench.
      */
-    depthWrite: true,
-  });
+    size.set(Math.max(size.x, 0.02), Math.max(size.y, 0.02), Math.max(size.z, 0.02));
 
-  const volume = decorMesh('SuspectedVolume', new THREE.BoxGeometry(size.x, size.y, size.z), fill);
-  volume.castShadow = false;
-  volume.receiveShadow = false;
-  container.add(volume);
+    const node = ENGINE.SceneNode.create({
+      name: `SuspectedVolume${index}`,
+      position: centre.clone(),
+    });
 
-  /*
-   * The edges, in the machine's own colour and outside its own tone mapping.
-   *
-   * ACCENT.data is the cold cyan §9 assigns to data and scanning - the same colour as the
-   * scan reticles and the console globe, because this is the same instrument saying the
-   * same thing. `toneMapped: false` is what makes it read as emissive without a bloom pass:
-   * the fill goes through the tone curve with the rest of the room and the line does not,
-   * so the edge stays bright against a volume that is nearly black.
-   */
-  const wire = new THREE.LineBasicMaterial({
-    color: new THREE.Color(ACCENT.data),
-    transparent: true,
-    opacity: BREATHE_HIGH,
-    toneMapped: false,
-  });
-  const edges = new THREE.LineSegments(boxEdges(size), wire);
-  container.add(edges);
+    const fill = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(FILL_COLOUR),
+      transparent: true,
+      opacity: BREATHE_LOW,
+      /*
+       * Depth still written, so the wireframe of a box behind this one is occluded. Guesses
+       * stack up in a room and without it the shelf reads as a heap of overlapping outlines
+       * rather than as four separate volumes.
+       */
+      depthWrite: true,
+    });
 
-  /*
-   * The rule that crosses the volume when it resolves. ART_DIRECTION §3.
-   *
-   * Just the bottom rectangle, at full brightness, and it rides the volume's lower edge -
-   * so shrinking the box upward drags the line up through the space the prop occupies.
-   * That is the whole sweep: no clipping planes, no second shader, no discard. The line is
-   * where the change is happening and the eye follows it because it is the brightest thing
-   * in the frame for six tenths of a second.
-   *
-   * Hidden until then. A permanent bright edge along the bottom of every guess would read
-   * as a design element rather than as an event.
-   */
-  const ruleMaterial = new THREE.LineBasicMaterial({
-    color: new THREE.Color(ACCENT.knowledge),
-    transparent: true,
-    opacity: 1,
-    toneMapped: false,
+    const volume = decorMesh('Volume', new THREE.BoxGeometry(size.x, size.y, size.z), fill);
+    volume.castShadow = false;
+    volume.receiveShadow = false;
+    node.add(volume);
+
+    /*
+     * The edges, in the machine's own colour and outside its own tone mapping.
+     *
+     * ACCENT.data is the cold cyan §9 assigns to data and scanning - the same colour as the
+     * scan reticles and the console globe, because this is the same instrument saying the
+     * same thing. `toneMapped: false` is what makes it read as emissive without a bloom
+     * pass: the fill goes through the tone curve with the rest of the room and the line does
+     * not, so the edge stays bright against a volume that is nearly black.
+     */
+    const wire = new THREE.LineBasicMaterial({
+      color: new THREE.Color(ACCENT.data),
+      transparent: true,
+      opacity: BREATHE_HIGH,
+      toneMapped: false,
+    });
+    const edges = new THREE.LineSegments(boxEdges(size), wire);
+    node.add(edges);
+
+    /*
+     * The rule that crosses the volume when it resolves. ART_DIRECTION §3.
+     *
+     * Just the bottom rectangle, at full brightness, and it rides the volume's lower edge -
+     * so shrinking the box upward drags the line up through the space the prop occupies.
+     * That is the whole sweep: no clipping planes, no second shader, no discard. The line is
+     * where the change is happening and the eye follows it because it is the brightest thing
+     * in the frame for six tenths of a second.
+     *
+     * Hidden until then. A permanent bright edge along the bottom of every guess would read
+     * as a design element rather than as an event.
+     */
+    const ruleMaterial = new THREE.LineBasicMaterial({
+      color: new THREE.Color(ACCENT.knowledge),
+      transparent: true,
+      opacity: 1,
+      toneMapped: false,
+    });
+    const rule = new THREE.LineSegments(baseEdges(size), ruleMaterial);
+    rule.visible = false;
+    node.add(rule);
+
+    container.add(node);
+    return {
+      node,
+      centre,
+      size,
+      fill,
+      wire,
+      ruleMaterial,
+      rule,
+      volume,
+      edges,
+      phase: [rng() * Math.PI * 2, rng() * Math.PI * 2, rng() * Math.PI * 2],
+    };
   });
-  const rule = new THREE.LineSegments(baseEdges(size), ruleMaterial);
-  rule.visible = false;
-  container.add(rule);
 
   root.add(container);
 
@@ -327,7 +516,7 @@ export function createSuspicion(root: THREE.Object3D, seed: number): Suspicion |
        * image was always underneath.
        */
       for (const mesh of hidden) mesh.visible = true;
-      rule.visible = true;
+      for (const v of volumes) v.rule.visible = true;
     },
 
     update(deltaTime: number): boolean {
@@ -357,22 +546,29 @@ export function createSuspicion(root: THREE.Object3D, seed: number): Suspicion |
          */
         const eased = 1 - Math.pow(1 - t, 3);
 
-        /*
-         * Shrink upward, anchored at the top. The box's ceiling stays put and its floor
-         * climbs, so the bottom rectangle - the rule - travels the full height of the
-         * volume exactly once.
-         */
-        container.scale.y = Math.max(0.0001, 1 - eased);
-        container.position.set(centre.x, centre.y + (size.y * eased) / 2, centre.z);
+        for (const v of volumes) {
+          /*
+           * Shrink upward, anchored at the top. The box's ceiling stays put and its floor
+           * climbs, so the bottom rectangle - the rule - travels the full height of the
+           * volume exactly once.
+           *
+           * Per volume rather than on the container, and that is the whole reason the drift
+           * moved down here too: scaling a shared parent would anchor every box in a prop to
+           * ONE ceiling, so the crates on a low shelf would slide up to the height of the
+           * crates on the top one on their way out.
+           */
+          v.node.scale.y = Math.max(0.0001, 1 - eased);
+          v.node.position.set(v.centre.x, v.centre.y + (v.size.y * eased) / 2, v.centre.z);
 
-        fill.opacity = BREATHE_LOW * (1 - eased);
-        wire.opacity = BREATHE_HIGH * (1 - eased);
-        /*
-         * The rule holds full brightness until the very end and then goes in a hurry. A
-         * line that fades out evenly with everything else is not an event, it is a
-         * dissolve - the spike has to survive to the top and stop.
-         */
-        ruleMaterial.opacity = t < 0.82 ? 1 : 1 - (t - 0.82) / 0.18;
+          v.fill.opacity = BREATHE_LOW * (1 - eased);
+          v.wire.opacity = BREATHE_HIGH * (1 - eased);
+          /*
+           * The rule holds full brightness until the very end and then goes in a hurry. A
+           * line that fades out evenly with everything else is not an event, it is a
+           * dissolve - the spike has to survive to the top and stop.
+           */
+          v.ruleMaterial.opacity = t < 0.82 ? 1 : 1 - (t - 0.82) / 0.18;
+        }
 
         if (t >= 1) {
           this.dispose();
@@ -384,19 +580,25 @@ export function createSuspicion(root: THREE.Object3D, seed: number): Suspicion |
       /*
        * Three unrelated rates on three axes. One sine on one axis is a bob, and a bob is a
        * mechanism; three that never line up is something the machine has not pinned down.
+       *
+       * And per volume, with its own three phases. When one prop is several boxes, moving
+       * them in lockstep would say they are one rigid object the machine is unsure about,
+       * which is precisely the wrong claim - each box is a separate thing nobody described.
        */
       const spin = time * Math.PI * 2 * DRIFT_RATE;
-      container.position.set(
-        centre.x + Math.sin(spin + phase) * DRIFT,
-        centre.y + Math.sin(spin * 0.77 + phaseB) * DRIFT * 0.6,
-        centre.z + Math.cos(spin * 1.31 + phaseC) * DRIFT
-      );
+      for (const v of volumes) {
+        v.node.position.set(
+          v.centre.x + Math.sin(spin + v.phase[0]) * DRIFT,
+          v.centre.y + Math.sin(spin * 0.77 + v.phase[1]) * DRIFT * 0.6,
+          v.centre.z + Math.cos(spin * 1.31 + v.phase[2]) * DRIFT
+        );
 
-      const breath = (Math.sin(time * Math.PI * 2 * BREATHE_RATE + phase) + 1) / 2;
-      fill.opacity = BREATHE_LOW + (BREATHE_HIGH - BREATHE_LOW) * breath;
-      // The edge runs opposite the fill, so the object never dims as a whole - it resolves
-      // and unresolves, which is what it is meant to be doing.
-      wire.opacity = BREATHE_HIGH - (BREATHE_HIGH - BREATHE_LOW) * breath * 0.5;
+        const breath = (Math.sin(time * Math.PI * 2 * BREATHE_RATE + v.phase[0]) + 1) / 2;
+        v.fill.opacity = BREATHE_LOW + (BREATHE_HIGH - BREATHE_LOW) * breath;
+        // The edge runs opposite the fill, so the object never dims as a whole - it resolves
+        // and unresolves, which is what it is meant to be doing.
+        v.wire.opacity = BREATHE_HIGH - (BREATHE_HIGH - BREATHE_LOW) * breath * 0.5;
+      }
       return true;
     },
 
@@ -405,12 +607,14 @@ export function createSuspicion(root: THREE.Object3D, seed: number): Suspicion |
       disposed = true;
       for (const mesh of hidden) mesh.visible = true;
       container.removeFromParent();
-      volume.geometry.dispose();
-      edges.geometry.dispose();
-      rule.geometry.dispose();
-      fill.dispose();
-      wire.dispose();
-      ruleMaterial.dispose();
+      for (const v of volumes) {
+        v.volume.geometry.dispose();
+        v.edges.geometry.dispose();
+        v.rule.geometry.dispose();
+        v.fill.dispose();
+        v.wire.dispose();
+        v.ruleMaterial.dispose();
+      }
     },
   };
 }

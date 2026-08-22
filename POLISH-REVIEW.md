@@ -275,21 +275,44 @@ Recorded so a later pass does not "improve" these:
 
 Sept 2 freeze, ~11 working days. In order:
 
-| # | item | cost | why first |
+| # | item | cost | state |
 |---|---|---|---|
-| 1 | strip debug overlay from the build | 10 min | free, and fatal if missed |
-| 2 | per-scene room tone | 0.5d | biggest atmosphere return per hour in the project |
-| 3 | contact entrance sequence | 0.5d | the core verb, currently a cut |
-| 4 | contact room lighting pass | 0.5d | where the player spends their time |
-| 5 | stagger every list in the console | 0.5d | cheapest juice, touches everything |
-| 6 | boot/splash sequence | 0.5d | first ten seconds |
-| 7 | two-note motif on three moments | 2h | ties the audio together |
-| 8 | globe idle rotation + hover states | 2h | makes the map feel live |
-| 9 | request bar types on | 1h | |
-| 10 | fill silent interactions | 2h | |
+| 1 | strip debug overlay from the build | 10 min | **DONE 2026-08-22** — see below |
+| 2 | per-scene room tone | 0.5d | **DONE** — `audio/RoomTone.ts`, eight beds |
+| 3 | contact entrance sequence | 0.5d | **DONE** — push-in, nod, staggered chrome |
+| 4 | contact room lighting pass | 0.5d | **DONE** — per-scene `daylight`, practicals |
+| 5 | stagger every list in the console | 0.5d | **DONE** — see `link/console-chrome.ts` |
+| 6 | boot/splash sequence | 0.5d | **DONE** — `link/BootScreen.ts` |
+| 7 | two-note motif on three moments | 2h | **DONE** — the `motif` cue |
+| 8 | globe idle rotation + hover states | 2h | **DONE** — was already built when written |
+| 9 | request bar types on | 1h | **DONE**, with a cursor |
+| 10 | fill silent interactions | 2h | **DONE** — 13 cues across 38 call sites |
 
-That is about 4 days of work for items 1–10, inside the freeze with room for the M4SS
-ending verification that is still outstanding.
+### Item 1, and why it took three weeks to notice
+
+Ten minutes of work, correctly ranked first, and still open weeks later - because it was
+looked for in the wrong place. There is no FPS counter in this project's source; the one in
+every capture is the editor's, and every time somebody checked, that is what they found and
+dismissed.
+
+The actual debug surface was `dev/SceneJump`, mounted unconditionally in `beginPlay`: a
+hover strip of eight numbered tabs at the left edge of the game container, in every build,
+one mouse-move away from a judge who brings the pointer to the side of the window. Plus the
+F8 `TunePanel`. The irony is on the record - SceneJump's own comment says it exists so that
+nobody has to edit the game to reach a scene, "which has twice shipped a debug hook by
+accident", and it had quietly become the third.
+
+Both are now behind `ENGINE.isPublishedGame()`, which is the engine's own flag rather than a
+constant in this repository. A constant has to be remembered on the day of the freeze by
+somebody who is busy; this cannot be forgotten because nobody has to do anything. Editor
+verification loops are unaffected.
+
+And `scripts/ship-clean.ts` asserts it, along with no `TEMP-VERIFY` markers, no bare
+`console.log` in `src/` (there were four, three of them firing on every contact load - they
+go through `core/devLog.ts` now), and no credentials anywhere tracked.
+
+**Everything on this list is closed.** What is not is item 2 of the second review, which is
+not a coding task: this game's audio has never been heard.
 
 **Explicitly deprioritised:** the painterly post-process (built, unmounted, rejected twice —
 it fights the pixel art and no slider position reconciles them) and any further M4SS swing

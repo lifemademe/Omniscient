@@ -186,6 +186,229 @@ export function createFluorescentBatten(params: BattenParams = {}): PropParts {
   };
 }
 
+/** What a thing on a pegboard is. Each one is a different SILHOUETTE, which is the point. */
+export type ToolKind =
+  | 'spanner'
+  | 'screwdriver'
+  | 'pliers'
+  | 'hacksaw'
+  | 'hammer'
+  | 'file'
+  | 'coil';
+
+export interface ToolSpec {
+  /** The peg, in the board's plane. The tool hangs down from here. */
+  x: number;
+  y: number;
+  kind: ToolKind;
+  /** Overall length. Left off, each kind takes a sensible one. */
+  length?: number;
+  /** Bar thickness. Drives every other dimension of the tool. */
+  width?: number;
+  /** Radians off vertical. Nothing on a pegboard hangs straight. */
+  lean?: number;
+}
+
+/**
+ * The tools on Mirela's wall.
+ *
+ * ## Why these are worth building properly
+ *
+ * §131 puts the burden of evidence on the environment, and the note on the pegboard calls
+ * this wall the thing the player READS - it is the only statement in the game about what
+ * Mirela does with her hands, and it sits directly behind her head in the shot every player
+ * sees first. What was there was five rectangles with a small hook on top. Not bad tools:
+ * not tools. Five identical dark bars say "there is stuff on that wall" and stop.
+ *
+ * ## The rule every one of these is built to
+ *
+ * ONE distinguishing feature, carried by the outline, and nothing else. Projected through
+ * the shop's registered shot these are 15 to 25 pixels tall, behind a pixelating
+ * post-process. Hatching, jaw serrations and handle grips are all invisible at that size and
+ * all cost triangles, so none of them are here. What survives is shape:
+ *
+ *   spanner      a RING at the top and a fork at the bottom
+ *   screwdriver  fat for its top third, thin for the rest
+ *   pliers       splayed at the top, pinched in the middle, a point at the bottom
+ *   hacksaw      a closed rectangle - the only outline on the wall with a hole in it
+ *   hammer       a T
+ *   file         a taper, and the only tool with no features at all
+ *
+ * They are readable apart at a squint, which five bars were not, and that is the whole
+ * upgrade. A player never names them; they come away knowing the wall has TOOLS on it rather
+ * than shapes, and that is the difference between a workshop and a set dressed like one.
+ *
+ * ## Local space
+ *
+ * Built in the XY plane facing +Z, origin AT THE PEG with the tool hanging below it - so a
+ * caller places pegs and the tools follow, which is how the wall is actually laid out.
+ */
+export function createHandTools(specs: readonly ToolSpec[], seedKey = 'tools'): PropParts {
+  const rng = createRng(seedFrom(seedKey));
+  const body: THREE.BufferGeometry[] = [];
+  const fittings: THREE.BufferGeometry[] = [];
+
+  for (const spec of specs) {
+    const w = spec.width ?? 0.032;
+    const L = spec.length ?? 0.32;
+    const d = w * 0.7;
+    const lean = spec.lean ?? jitter(rng, 0.08);
+    const parts: THREE.BufferGeometry[] = [];
+
+    /** A box hanging in the tool's own space: centre at (x, y), y measured DOWN from the peg. */
+    const bar = (bx: number, down: number, bw: number, bh: number, bd = d): THREE.BufferGeometry => {
+      const g = new THREE.BoxGeometry(bw, bh, bd);
+      g.translate(bx, -down, 0);
+      return g;
+    };
+
+    switch (spec.kind) {
+      case 'spanner': {
+        /*
+         * Hung by its ring, which is both how a combination spanner lives on a board and the
+         * only reason this shape survives being twenty pixels tall: a circle at the top of a
+         * stick is unmistakable, and nothing else on this wall has one.
+         */
+        const ring = new THREE.TorusGeometry(w * 0.92, w * 0.3, 4, 12);
+        ring.translate(0, -w * 0.92, 0);
+        parts.push(ring);
+        parts.push(bar(0, L * 0.55, w * 0.6, L - w * 2.6));
+        /*
+         * The open end. The GAP is the feature, and the first version did not have one: a
+         * stub w*1.9 wide with prongs at ±w*0.62 left about a third of a prong of daylight
+         * between them, which at this size is no daylight at all - it rendered as a solid
+         * rectangle and the tool read as a lollipop. Prongs further out and a shallower stub
+         * open a slot as wide as a prong, which is what survives the distance.
+         */
+        parts.push(bar(0, L - w * 0.55, w * 2.1, w * 0.5));
+        for (const sx of [-1, 1]) parts.push(bar(sx * w * 0.8, L - w * 1.55, w * 0.5, w * 1.4));
+        break;
+      }
+
+      case 'screwdriver': {
+        // Fat top third, thin below. The proportion IS the tool.
+        const handle = new THREE.CylinderGeometry(w * 1.05, w * 0.82, L * 0.28, 8);
+        handle.translate(0, -L * 0.14, 0);
+        parts.push(handle);
+        /*
+         * A third of the length rather than a third and a bit, and fatter for it. At L*0.34
+         * the handle was long enough to read as a bottle; the proportion that says
+         * screwdriver is a stubby grip and a long thin blade, and the ratio matters more
+         * than either number.
+         */
+        const shaft = new THREE.CylinderGeometry(w * 0.19, w * 0.19, L * 0.62, 6);
+        shaft.translate(0, -L * 0.6, 0);
+        parts.push(shaft);
+        parts.push(bar(0, L * 0.94, w * 0.55, L * 0.09, d * 0.5));
+        break;
+      }
+
+      case 'pliers': {
+        /*
+         * Splayed handles, a pivot, converging jaws. Hung by one handle, so the pair is a
+         * little off vertical on its own before the lean is applied - which is exactly what
+         * a pair of pliers on a peg looks like.
+         */
+        for (const sx of [-1, 1]) {
+          const handle = new THREE.BoxGeometry(w * 0.5, L * 0.5, d);
+          handle.rotateZ(sx * 0.13);
+          handle.translate(sx * w * 0.5, -L * 0.25, 0);
+          parts.push(handle);
+        }
+        const pivot = new THREE.CylinderGeometry(w * 0.62, w * 0.62, d * 1.3, 8);
+        pivot.rotateX(Math.PI / 2);
+        pivot.translate(0, -L * 0.53, 0);
+        parts.push(pivot);
+        for (const sx of [-1, 1]) {
+          const jaw = new THREE.BoxGeometry(w * 0.42, L * 0.42, d * 0.8);
+          jaw.rotateZ(-sx * 0.16);
+          jaw.translate(sx * w * 0.22, -L * 0.77, 0);
+          parts.push(jaw);
+        }
+        break;
+      }
+
+      case 'hacksaw': {
+        /*
+         * The only closed outline on the wall. A shape with a hole through it reads at any
+         * size, because the pegboard behind shows through it and nothing else here does that.
+         */
+        parts.push(bar(0, w * 0.4, w * 3.4, w * 0.55));
+        for (const sx of [-1, 1]) parts.push(bar(sx * w * 1.5, L * 0.5, w * 0.45, L * 0.9));
+        // The blade, thinner than the frame so the two do not read as one slab.
+        parts.push(bar(0, L * 0.94, w * 3.4, w * 0.3, d * 0.45));
+        break;
+      }
+
+      case 'hammer': {
+        /*
+         * Head across the top, claw curving DOWN off one end, shaft below. A T.
+         *
+         * The first version had a narrow head and a claw angled up-and-left, and the two
+         * together read as a hook rather than a hammer - the eye takes the widest horizontal
+         * as the head, and there was not enough of one. Wider, thicker, and the claw turned
+         * over so it hangs below the head line, which is the way a claw actually sits and
+         * also stops it competing with the head for the top edge.
+         */
+        parts.push(bar(0, w * 0.6, w * 3.0, w * 1.2, d * 1.6));
+        const claw = new THREE.BoxGeometry(w * 1.1, w * 0.5, d * 1.3);
+        claw.rotateZ(-0.55);
+        claw.translate(-w * 1.6, -w * 1.35, 0);
+        parts.push(claw);
+        // Offset toward the face end, because a claw hammer's shaft is not on its centre.
+        parts.push(bar(w * 0.3, L * 0.6, w * 0.55, L * 0.82));
+        break;
+      }
+
+      case 'file': {
+        /*
+         * A taper and a tang, and deliberately the plainest thing on the board. A wall where
+         * every object has a feature is a display case; one plain shape among five is what
+         * makes the other five read as chosen.
+         */
+        parts.push(bar(0, L * 0.11, w * 0.95, L * 0.22));
+        /*
+         * FLAT, not diamond. A four-sided cylinder turned 45 degrees points a corner at the
+         * camera, and a long tapering diamond is a spearhead - which is what this looked
+         * like on the wall. Left square-on and squashed in Z it is a flat bar that narrows,
+         * which is a file and nothing else.
+         */
+        const blade = new THREE.CylinderGeometry(w * 0.66, w * 0.22, L * 0.78, 4);
+        blade.scale(1, 1, 0.42);
+        blade.translate(0, -L * 0.6, 0);
+        parts.push(blade);
+        break;
+      }
+
+      case 'coil': {
+        // Cable or tape on a peg. Kept from the original wall - it was the one that worked.
+        const ring = new THREE.TorusGeometry(L * 0.5, w * 0.5, 5, 12);
+        ring.translate(0, -L * 0.5, 0);
+        parts.push(ring);
+        break;
+      }
+    }
+
+    for (const part of parts) {
+      part.rotateZ(lean);
+      part.translate(spec.x, spec.y, 0);
+      body.push(part);
+    }
+
+    // The peg it hangs on, standing proud of the board.
+    const peg = new THREE.CylinderGeometry(0.008, 0.008, 0.055, 5);
+    peg.rotateX(Math.PI / 2);
+    peg.translate(spec.x, spec.y + 0.008, -0.03);
+    fittings.push(peg);
+  }
+
+  return {
+    body: merged(body),
+    fittings: merged(fittings),
+    anchors: { origin: new THREE.Vector3() },
+  };
+}
+
 export interface TinSpec {
   /** Base centre, in the cluster's local space. */
   at: THREE.Vector3;

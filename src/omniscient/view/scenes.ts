@@ -93,8 +93,11 @@ import {
   createCableCoil,
   createCompressor,
   createFluorescentBatten,
+  createHandTools,
   createTins,
 } from '../geometry/workshop.js';
+
+import type { ToolSpec } from '../geometry/workshop.js';
 
 /*
  * The fact ids, imported rather than typed out as strings.
@@ -445,54 +448,54 @@ function buildRepairShop(scene: ContactScene): void {
    * attempt at the same geometry.
    */
 
-  const hanging: THREE.BufferGeometry[] = [];
-  const pegRng = createRng(seedFrom('mirela-pegboard'));
-  // [x, y, length, width, kind] - kind 0 straight, 1 forked at the bottom, 2 a coil.
-  const hung: ReadonlyArray<readonly [number, number, number, number, number]> = [
-    [-1.42, 2.02, 0.3, 0.032, 0],
-    [-1.22, 2.06, 0.36, 0.038, 0],
-    [-1.02, 2.0, 0.26, 0.03, 1],
-    [-0.78, 2.08, 0.42, 0.026, 0],
-    [-0.58, 2.02, 0.32, 0.034, 1],
-    [1.02, 2.05, 0.34, 0.03, 0],
-    [1.22, 2.0, 0.28, 0.042, 1],
-    [1.44, 2.08, 0.44, 0.028, 0],
-    [-1.3, 1.3, 0.22, 0.05, 2],
-    [1.15, 1.28, 0.26, 0.056, 2],
-    [0.86, 1.98, 0.5, 0.022, 0],
+  /**
+   * The tools, and the only statement in this game about what Mirela does with her hands.
+   *
+   * ## What was here
+   *
+   * Eleven entries of `[x, y, length, width, kind]` with three kinds: a bar, a bar with a
+   * lump on the bottom, and a ring. On screen that is five dark rectangles in a row directly
+   * behind her head - which is not a bad set of tools, it is not a set of tools. §131 asks
+   * the environment to carry the evidence and the note on the pegboard calls this the wall
+   * the player READS; five identical sticks say "there is stuff on that wall" and stop.
+   *
+   * Now each one is a shape somebody can name at a glance: a ring at the top, a fork at the
+   * bottom, a closed rectangle with the board showing through it, a T. See
+   * `createHandTools` for why silhouette is the only thing being spent on.
+   *
+   * ## Which of them are actually seen
+   *
+   * Projected: the console panel's left edge cuts the frame at 0.645, and on this wall that
+   * lands at about x -0.1. Everything from x 0.2 rightward is BEHIND THE PANEL in every call
+   * - so the right-hand cluster gets three plain kinds and no thought, and the five between
+   * x -1.42 and -0.58 get the distinct ones. That is not laziness, it is where the triangles
+   * do something: the left five are the ones sharing frame with her face.
+   */
+  const TOOLS: readonly ToolSpec[] = [
+    // The seen five. Deliberately five DIFFERENT outlines, left to right.
+    { x: -1.42, y: 2.02, kind: 'spanner', length: 0.3, width: 0.034 },
+    { x: -1.22, y: 2.06, kind: 'hacksaw', length: 0.34, width: 0.03 },
+    { x: -1.02, y: 2.0, kind: 'pliers', length: 0.26, width: 0.032 },
+    { x: -0.78, y: 2.08, kind: 'screwdriver', length: 0.4, width: 0.03 },
+    { x: -0.58, y: 2.02, kind: 'hammer', length: 0.32, width: 0.032 },
+    // Behind the panel in a call, and worth having for the editor and any future framing.
+    { x: 0.86, y: 1.98, kind: 'file', length: 0.44, width: 0.028 },
+    { x: 1.02, y: 2.05, kind: 'spanner', length: 0.34, width: 0.03 },
+    { x: 1.22, y: 2.0, kind: 'pliers', length: 0.28, width: 0.034 },
+    { x: 1.44, y: 2.08, kind: 'hacksaw', length: 0.4, width: 0.028 },
+    // The two rings, kept from the old wall - they were the entries that already worked.
+    { x: -1.3, y: 1.3, kind: 'coil', length: 0.22, width: 0.05 },
+    { x: 1.15, y: 1.28, kind: 'coil', length: 0.26, width: 0.056 },
   ];
-  for (const [x, y, length, width, kind] of hung) {
-    const lean = jitter(pegRng, 0.07);
-    if (kind === 2) {
-      // A coil of cable or a roll of tape: a ring on a peg.
-      const coil = new THREE.TorusGeometry(length * 0.55, width * 0.5, 5, 12);
-      coil.rotateZ(lean);
-      coil.translate(x, y - length * 0.55, -1.72);
-      hanging.push(coil);
-      continue;
-    }
-    const shaft = new THREE.BoxGeometry(width, length, width * 0.7);
-    shaft.rotateZ(lean);
-    shaft.translate(x, y - length / 2, -1.73);
-    hanging.push(shaft);
-    if (kind === 1) {
-      const jaw = new THREE.BoxGeometry(width * 2.1, width * 1.6, width * 0.7);
-      jaw.rotateZ(lean);
-      jaw.translate(x + Math.sin(lean) * length * 0.5, y - length, -1.73);
-      hanging.push(jaw);
-    }
-  }
-  // Pegs, so the tools are on something.
-  for (const [x, y] of hung.map(([x, y]) => [x, y] as const)) {
-    const peg = new THREE.CylinderGeometry(0.008, 0.008, 0.055, 5);
-    peg.rotateX(Math.PI / 2);
-    peg.translate(x, y + 0.01, -1.76);
-    hanging.push(peg);
-  }
-  scene.registerProp(
-    'pegboard-tools',
-    meshOf('PegboardTools', mergeGeometries(hanging, false) ?? hanging[0], MAT.dark)
-  );
+  const tools = createHandTools(TOOLS, 'mirela-pegboard');
+  const toolRoot = ENGINE.SceneNode.create({
+    name: 'PegboardTools',
+    // The board's face is at -1.805; the tools stand a hair off it and the pegs go in.
+    position: new THREE.Vector3(0, 0, -1.73),
+  });
+  toolRoot.add(meshOf('Tools', tools.body, MAT.dark));
+  toolRoot.add(meshOf('ToolPegs', tools.fittings, MAT.metal));
+  scene.registerProp('pegboard-tools', toolRoot);
 
   /**
    * The tide line, and the point of §131.
