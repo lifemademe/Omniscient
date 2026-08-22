@@ -80,6 +80,39 @@ import { VFX_LIBRARY } from './vfx/library.js';
  * a stray particle drifting up from it would die of distance before it arrived.
  */
 const VFX_PARKED = new THREE.Vector3(0, -1000, 0);
+
+/**
+ * How cleanly the ambient occlusion is sampled - and it is the answer to "why are the
+ * shadows grainy".
+ *
+ * There are no shadow maps in this project. Nothing sets `castShadow` on any light, in any
+ * room, so every dark patch under a bench or behind a leaning panel is SSAO. That is a
+ * stochastic technique: it fires N rays per pixel through a rotated kernel, and if N is
+ * small the result is noise shaped exactly like the occlusion that produced it - dense
+ * where a surface is buried, absent in the open. Which is why it looked like grain in the
+ * shadows and nowhere else, and why softening the paint banding did nothing for it.
+ *
+ * It was 12 samples into a HALF-RESOLUTION buffer. Both halves of that mattered: twelve is
+ * a low count for SSAO at strength 2.4, and a half-res AO buffer upsampled to the frame
+ * turns per-pixel noise into 2x2 blocks - which is the blocky speckle rather than the fine
+ * grain, and the reason it survives being looked at closely.
+ *
+ * 32 is the maximum the engine's config accepts and full resolution removes the upsample
+ * entirely. `depthAwareUpsampling` stays on because it costs nothing once the buffer is
+ * full-res and still helps at the silhouettes.
+ *
+ * The cost is real - the AO buffer goes from a quarter of the frame's pixels to all of
+ * them, and each pixel does two and a half times the work. This scene renders at 240fps
+ * with headroom, but that is a developer machine, and if a judge's laptop struggles the
+ * first thing to trade is `resolutionScale` back to 0.75, not the sample count: the blocky
+ * upsample was the uglier half of the fault.
+ */
+const AO_QUALITY = {
+  ssaoSamples: 32,
+  resolutionScale: 1,
+  depthAwareUpsampling: true,
+  luminanceInfluence: 0.6,
+} as const;
 import { buildContactScene } from './view/scenes.js';
 
 import type { RemoteUnit } from './view/ContactScene.js';
@@ -881,13 +914,19 @@ export class OmniscientRig extends ENGINE.SceneNode {
         },
       });
 
+      /*
+       * The quality numbers come from AO_QUALITY rather than being written again here.
+       *
+       * They were written twice, with the same values, and that is a bug with a delay on
+       * it: this panel re-pushes the whole effect config on every slider move, so a fix
+       * applied to the real configuration would be silently undone the first time anybody
+       * touched the occlusion strength. Only the two values the sliders own live here.
+       */
       const ao = { ssaoStrength: 2.4, ssaoRadius: 0.11 };
       const pushAo = (): void =>
         post.configureEffect(ENGINE.PostProcessPass.AO, {
           enabled: true,
-          ssaoSamples: 12,
-          luminanceInfluence: 0.6,
-          resolutionScale: 0.5,
+          ...AO_QUALITY,
           ...ao,
         });
 
@@ -1494,9 +1533,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       // grounds everything and starts reading as grime in the wall corners.
       ssaoStrength: 2.4,
       ssaoRadius: 0.11,
-      ssaoSamples: 12,
-      luminanceInfluence: 0.6,
-      resolutionScale: 0.5,
+      ...AO_QUALITY,
     });
   }
 

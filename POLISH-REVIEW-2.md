@@ -276,3 +276,40 @@ the frame was sampled rather than admired. Crates at luma 58-69, wall behind the
 an invisible one. `MAT.dark` bodies with lighter lids give the two values that read at four
 metres. One under-bench lid then measured 127 against the Kestrel-3 at 112 and had to come
 down again — §187 gives the eye to the brightest thing in frame, and that is the radio.
+
+
+### 6.5 "Are the shadows grainy? Is that the pixel post-processing?" — no, and no
+
+There are no shadow maps in this project. Nothing sets `castShadow` on any light in any
+room. Every dark patch under a bench or behind a leaning panel is **screen-space ambient
+occlusion**, and SSAO is stochastic: it fires N rays per pixel through a rotated kernel, so
+if N is small the result is noise shaped exactly like the occlusion that made it — dense
+where a surface is buried, absent in the open. That is why it read as grain *in the shadows
+and nowhere else*.
+
+It was `ssaoSamples: 12` into a **half-resolution** buffer, at strength 2.4. Both halves
+mattered. Twelve is a low count for that strength, and a half-res AO buffer upsampled to the
+frame turns per-pixel noise into 2×2 blocks — which is why it survived being looked at
+closely and read as blotching rather than as film grain. Now 32 samples at full resolution
+with depth-aware upsampling: the leaning back panel's lower half goes from heavy blotching to
+a smooth gradient, and the plank under the bench crates from a grainy smear to a tight
+contact line.
+
+The quality numbers were also written **twice** — once in `configureLook` and once inside the
+F8 panel's `pushAo`, which re-pushes the whole effect config on every slider move. A fix to
+one would have been silently undone the first time anyone touched the occlusion strength.
+One `AO_QUALITY` constant now, and the panel keeps only the two values its sliders own.
+
+Three wrong instruments were used before the right one, and the pattern is worth recording:
+
+1. **Laplacian edge energy on flat patches** said the paint-banding softness change did
+   nothing. It cannot see a band transition, which is a low-frequency shelf, not an edge.
+2. The same metric then said the AO fix made things *worse* (+12% to +36%). Full-resolution
+   AO is **sharper**, and sharpness raises edge energy whether or not the noise is gone.
+3. Ruling things out by reading source found "no `castShadows` in the shop builder" and
+   concluded there were no shadows — while the AO pass sat in `configureLook` two thousand
+   lines away.
+
+What actually settled each one: **diff whole frames** for a global shader change, and **crop
+and look** for a local artefact. The user's two crops did in one message what three
+measurement passes had failed to do.
