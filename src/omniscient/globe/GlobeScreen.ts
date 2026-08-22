@@ -167,6 +167,53 @@ const GLOBE_CSS = `
 .omni-cv--globe { pointer-events: none; }
 .omni-cv__body--globe { grid-template-columns: min(23vw, 260px) 1fr; }
 .omni-cv__readouts--globe { width: 100%; }
+/*
+ * The record shelf: what the machine has already done, in the order it did it.
+ *
+ * The globe says "1 answered - the world remembers" and then shows nothing, because a
+ * resolved contact loses its point and its name the moment it resolves. So the one place
+ * evidence of a whole evening's work could live was a number that said 1.
+ *
+ * Deliberately NOT replayable, and deliberately not a menu. These requests changed the
+ * world and the knowledge tree; re-entering one would either have to not count, which is
+ * deflating, or rewind state, which is a save-slot system this game does not have. It is a
+ * shelf rather than a rack - a record of what was learned, which is the thing the machine
+ * actually keeps.
+ */
+.omni-record {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 14px 0 0 13px;
+  width: min(23vw, 260px);
+}
+.omni-record__tag {
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(159, 216, 168, 0.55);
+}
+.omni-record__row {
+  display: flex;
+  gap: 9px;
+  align-items: baseline;
+  padding: 4px 8px;
+  border-left: 2px solid rgba(127, 224, 138, 0.4);
+  background: rgba(10, 24, 15, 0.55);
+  font-size: 11px;
+  color: rgba(159, 216, 168, 0.8);
+}
+.omni-record__n {
+  letter-spacing: 0.14em;
+  color: #7fe08a;
+}
+.omni-record__where {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: rgba(159, 216, 168, 0.45);
+}
 .omni-globe__hintline { color: #35603f; }
 .omni-globe__canvas {
   display: block;
@@ -414,6 +461,11 @@ export class GlobeScreen {
   private waitingCard: GlobeCard | null = null;
   private blockedCard: GlobeCard | null = null;
   private answeredCard: GlobeCard | null = null;
+  private recordStrip: HTMLElement | null = null;
+  /** Last shelf drawn, so it is not rebuilt every frame. */
+  private renderedRecordKey = '';
+  /** Contact ids in completion order, from the save. See OmniscientRig.answered. */
+  private answeredOrder: readonly string[] = [];
   /** Where each visible label ended up after de-collision. Also the hit-test targets. */
   private readonly layout = new Map<string, { x: number; y: number }>();
   /** The countdown line inside the open tip, rewritten in place each frame. */
@@ -443,7 +495,12 @@ export class GlobeScreen {
     return this.selectedId !== null;
   }
 
-  public attach(signals: Signal[], openable: ReadonlySet<string>): void {
+  public attach(
+    signals: Signal[],
+    openable: ReadonlySet<string>,
+    answeredOrder: readonly string[] = []
+  ): void {
+    this.answeredOrder = answeredOrder;
     this.signals = signals;
     this.openable = openable;
     this.globe.setSignals(signals);
@@ -536,9 +593,13 @@ export class GlobeScreen {
       this.buildAction('⌂', 'The machine', () => this.onBack())
     );
 
+    const record = document.createElement('div');
+    record.className = 'omni-record';
+    this.recordStrip = record;
+
     const column = document.createElement('div');
     column.className = 'omni-cv__stage';
-    column.append(readouts, actions);
+    column.append(readouts, record, actions);
 
     body.append(column, stage);
 
@@ -652,8 +713,60 @@ export class GlobeScreen {
     this.globe.draw(this.pulse, this.selectedId);
     this.renderMarks();
     this.renderReadouts();
+    this.renderRecord();
   }
 
+
+  /**
+   * The shelf, rebuilt only when it changes.
+   *
+   * Keyed on the id list rather than diffed, because this list only ever grows by one and
+   * only at the moment a request resolves - and rebuilding four rows is cheaper than
+   * working out which of them is new.
+   */
+  private renderRecord(): void {
+    const strip = this.recordStrip;
+    if (!strip) return;
+    const key = this.answeredOrder.join('|');
+    if (key === this.renderedRecordKey) return;
+    this.renderedRecordKey = key;
+
+    strip.replaceChildren();
+    if (this.answeredOrder.length === 0) return;
+
+    const tag = document.createElement('span');
+    tag.className = 'omni-record__tag';
+    tag.textContent = 'Answered';
+    strip.appendChild(tag);
+
+    this.answeredOrder.forEach((id, index) => {
+      const signal = this.signals.find((s) => s.id === id);
+      if (!signal) return;
+      const row = document.createElement('div');
+      row.className = 'omni-record__row';
+
+      const n = document.createElement('b');
+      n.className = 'omni-record__n';
+      n.textContent = String(index + 1).padStart(2, '0');
+
+      const name = document.createElement('span');
+      name.textContent = signal.name;
+
+      /*
+       * The place, from the signal's own label.
+       *
+       * `label` is authored as "PORTU VECH - it worked yesterday", and the half after the
+       * dash is what they said when they called - which is the wrong half here. A finished
+       * request is remembered by where it was, not by the complaint that opened it.
+       */
+      const where = document.createElement('span');
+      where.className = 'omni-record__where';
+      where.textContent = signal.label.split(' - ')[0] ?? '';
+
+      row.append(n, name, where);
+      strip.appendChild(row);
+    });
+  }
 
   /** One margin readout, matching the Contact View's. */
   private buildCard(label: string): GlobeCard {

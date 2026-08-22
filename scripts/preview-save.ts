@@ -206,5 +206,37 @@ check('a saved stage loads', loadM4ssStage() === 1);
 backing.set('omniscient.m4ss.stage', 'NaN');
 check('a corrupt stage reads as stage 0', loadM4ssStage() === 0);
 
+/*
+ * The record shelf's order has to survive the tape.
+ *
+ * It is the only thing in the save that cannot be reconstructed from the rest: signal
+ * states say WHICH requests were answered and nothing says in what sequence. If this field
+ * is dropped or reordered by a round trip, the shelf silently tells the player a different
+ * story about their own evening.
+ */
+saveGame({
+  ...snapshot,
+  signals: [{ id: 'mirela', state: SignalState.Resolved, hidden: false }],
+  offered: 2,
+  openable: [],
+  m4ssStage: 0,
+  answered: ['tomas', 'mirela', 'adaeze'],
+});
+const ordered = loadGame();
+check(
+  'the answered order survives a round trip, in order',
+  ordered?.answered?.join(',') === 'tomas,mirela,adaeze',
+  ordered?.answered?.join(',') ?? 'missing'
+);
+
+saveGame({
+  ...snapshot,
+  signals: [],
+  offered: 0,
+  openable: [],
+  m4ssStage: 0,
+});
+check('a save written without one still loads', loadGame() !== null);
+
 console.log(failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);

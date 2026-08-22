@@ -69,6 +69,19 @@ export interface SaveData {
    * finished - a finished story has no "where was I".
    */
   lastPlayedContactId?: string | null;
+  /**
+   * Contact ids in the order their requests were answered.
+   *
+   * Nothing recorded this before, because nothing needed it: the signals carry a state and
+   * the globe only ever asked "is this one resolved". The record strip asks a different
+   * question - "what did I do, and when" - and completion order cannot be recovered from a
+   * set of flags afterwards.
+   *
+   * OPTIONAL, and read with a default, so a save written before this existed still loads.
+   * Bumping SAVE_VERSION for an additive field would throw away every save in existence to
+   * gain a list that starts empty anyway.
+   */
+  answered?: string[];
 }
 
 /**

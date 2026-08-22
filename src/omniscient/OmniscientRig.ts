@@ -311,6 +311,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private phase: Phase = Phase.Menu;
   /** Up until the first keypress. Held so endPlay can take it down. */
   private boot: BootScreen | null = null;
+  /** Contact ids in the order their requests were answered. Drives the record strip. */
+  private answered: string[] = [];
   private screen: Screen = Screen.Tree;
   private menu: MainMenu | null = null;
   private picker: Picker | null = null;
@@ -1907,6 +1909,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       openable: [...this.openable],
       m4ssStage: loadM4ssStage(),
       lastPlayedContactId: last,
+      answered: [...this.answered],
     });
   }
 
@@ -1940,6 +1943,19 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.offered = save.offered;
     this.openable = new Set(save.openable);
+    /*
+     * Rebuilt from the save where it has one, and DERIVED where it does not.
+     *
+     * A save written before this field existed still knows which signals are resolved; it
+     * just does not know what order they happened in. Falling back to the queue's authored
+     * order is not the truth, but it is the same set in a defensible sequence, and an empty
+     * shelf for somebody six missions in would be a worse lie than an approximate one.
+     */
+    this.answered =
+      save.answered ??
+      this.queue
+        .map((request) => request.mission.contactId)
+        .filter((id) => this.signals.find((s) => s.id === id)?.state === SignalState.Resolved);
     /*
      * Every coercion to Waiting must also restore answerability. Answerable is two
      * conditions - state AND membership in `openable` - and the save was written at a
@@ -2568,7 +2584,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // Resolving Mirela's request is what puts Tomas on the globe - §163's consequence
     // chain, visible before the player knows why.
     const resolvedId = this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
-    if (resolvedId) this.setSignalState(resolvedId, SignalState.Resolved);
+    if (resolvedId) {
+      this.setSignalState(resolvedId, SignalState.Resolved);
+      // Appended rather than sorted: this list IS the order, and it is the only place the
+      // order exists.
+      if (!this.answered.includes(resolvedId)) this.answered.push(resolvedId);
+    }
     this.activeIndex = null;
 
     this.topUpGlobe();
@@ -3242,7 +3263,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (this.globeHandoff > 0) {
       this.globeHandoff -= deltaTime;
       if (this.globeHandoff <= 0) {
-        this.globeScreen?.attach(this.signals, this.openable);
+        this.globeScreen?.attach(this.signals, this.openable, this.answered);
       }
     }
 
