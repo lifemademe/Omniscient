@@ -149,12 +149,32 @@ const CABLE_CLEARANCE = 0.16;
 /** How far a hovered plate pushes out toward the player. */
 const HOVER_PUSH = 0.045;
 
+/**
+ * A disabled socket is still physically present, but it must read as a refusal rather
+ * than an idle connection. The small hot core survives the CRT downsample; the larger
+ * additive disc supplies a controlled red halo even when post-process bloom is reduced.
+ */
+const UNAVAILABLE_SOCKET_CORE = new THREE.MeshBasicMaterial({
+  color: new THREE.Color('#ff382e').multiplyScalar(1.35),
+  toneMapped: false,
+});
+const UNAVAILABLE_SOCKET_GLOW = new THREE.MeshBasicMaterial({
+  color: '#e32620',
+  transparent: true,
+  opacity: 0.3,
+  blending: THREE.AdditiveBlending,
+  depthWrite: false,
+  toneMapped: false,
+});
+
 interface MenuModule {
   spec: ModuleSpec;
   node: ENGINE.SceneNode;
   labelLit: THREE.MeshBasicMaterial;
   labelIdle: THREE.MeshBasicMaterial;
   labelMesh: ENGINE.MeshNode;
+  socketUnavailableCore: ENGINE.MeshNode;
+  socketUnavailableGlow: ENGINE.MeshNode;
   /** Where the socket sits ON the plate. Add the plate's position to place it. */
   socket: THREE.Vector3;
   baseZ: number;
@@ -224,6 +244,24 @@ export class MainMenu {
       node.add(decorMesh('Detail', part.geometry, MAT[part.material]));
     }
 
+    const socketUnavailableGlow = decorMesh(
+      'SocketUnavailableGlow',
+      new THREE.CircleGeometry(0.038, 20),
+      UNAVAILABLE_SOCKET_GLOW
+    );
+    socketUnavailableGlow.position.copy(build.socket).add(new THREE.Vector3(0, 0, 0.001));
+    socketUnavailableGlow.renderOrder = 3;
+    const socketUnavailableCore = decorMesh(
+      'SocketUnavailableCore',
+      new THREE.CircleGeometry(0.015, 16),
+      UNAVAILABLE_SOCKET_CORE
+    );
+    socketUnavailableCore.position.copy(build.socket).add(new THREE.Vector3(0, 0, 0.002));
+    socketUnavailableCore.renderOrder = 4;
+    socketUnavailableGlow.visible = spec.disabled === true;
+    socketUnavailableCore.visible = spec.disabled === true;
+    node.add(socketUnavailableGlow, socketUnavailableCore);
+
     // Label painted on the plate face.
     const labelIdle = createLabelMaterial({ ...spec, lit: false });
     const labelLit = createLabelMaterial({ ...spec, lit: true, accent: spec.accent });
@@ -242,6 +280,8 @@ export class MainMenu {
       labelIdle,
       labelLit,
       labelMesh,
+      socketUnavailableCore,
+      socketUnavailableGlow,
       /**
        * The socket's offset ON the plate, not its position in the room.
        *
@@ -302,7 +342,10 @@ export class MainMenu {
    */
   public setModuleEnabled(id: MenuAction, enabled: boolean): void {
     const module = this.modules.get(id);
-    if (module) module.spec.disabled = !enabled;
+    if (!module) return;
+    module.spec.disabled = !enabled;
+    module.socketUnavailableCore.visible = !enabled;
+    module.socketUnavailableGlow.visible = !enabled;
   }
 
   public onAction(handler: (action: MenuAction) => void): () => void {

@@ -1,13 +1,13 @@
 import type { WarehouseCaseDefinition, WarehouseMovementDefinition, WarehouseTool } from './types.js';
 
 export const WAREHOUSE_COORDINATES = { latitude: -11.5, longitude: -57.0 } as const;
-export const WAREHOUSE_DECK_VERSION = 1;
+export const WAREHOUSE_DECK_VERSION = 4;
 
 export const STORY_MOVEMENTS: readonly WarehouseMovementDefinition[] = [
   {
     id: 'orientation',
     title: 'MOVEMENT 01 // COLLECTION',
-    objective: 'Verify a visitor, retrieve package 2034, and release it through the cargo lock.',
+    objective: 'Locate the visitor, verify both records, and route package 2034 to the authorized cargo handoff.',
     caseIds: ['valid-collection'],
     tutorial: true,
   },
@@ -27,15 +27,22 @@ export const STORY_MOVEMENTS: readonly WarehouseMovementDefinition[] = [
   {
     id: 'overlap',
     title: 'MOVEMENT 04 // OVERLAP',
-    objective: 'Maintain collections while freight and personnel verification overlap.',
-    caseIds: ['valid-collection', 'temporary-worker', 'wrong-route'],
+    objective: 'Maintain collections, verify personnel, and contain an unauthorized door attempt.',
+    caseIds: ['valid-collection', 'temporary-worker', 'wrong-route', 'door-tamper'],
     inboundIn: 9,
   },
   {
-    id: 'package-7018',
-    title: 'MOVEMENT 05 // 7018',
-    objective: 'Find package 7018. Preserve the record. Do not release it.',
-    caseIds: ['package-7018'],
+    id: 'breach',
+    title: 'MOVEMENT 05 // BREACH',
+    objective: 'Reconstruct the rear entry, locate the unlisted person, and contain the correct security sector.',
+    caseIds: ['internal-breach'],
+    inboundIn: 3,
+  },
+  {
+    id: 'package-5018',
+    title: 'MOVEMENT 06 // 5018',
+    objective: 'Trace the Service C request for package 5018. Preserve both records. Do not release either package.',
+    caseIds: ['package-5018'],
     finale: true,
   },
 ] as const;
@@ -92,6 +99,28 @@ export const CASE_DECK: readonly WarehouseCaseDefinition[] = [
     baseSeconds: 42,
   },
   {
+    id: 'door-tamper',
+    title: 'Unauthorized service-door attempt',
+    briefing: 'The visitor acted before authorization, the credential route disagrees, and the door recorded a forced-handle event.',
+    subjectType: 'visitor',
+    requiredTools: ['optical'],
+    correctDecision: 'deny-lockdown',
+    anomaly: 'tamper',
+    baseSeconds: 48,
+    critical: true,
+  },
+  {
+    id: 'internal-breach',
+    title: 'Internal personnel breach',
+    briefing: 'Rear-camera history, personnel beam count, and a live optical tag must agree before a security sector can be sealed.',
+    subjectType: 'intruder',
+    requiredTools: ['optical', 'history'],
+    correctDecision: 'sector-lockdown',
+    anomaly: 'breach',
+    baseSeconds: 82,
+    critical: true,
+  },
+  {
     id: 'historical-gap',
     title: 'Historical discontinuity',
     briefing: 'The current package has no arrival event in historical CCTV.',
@@ -142,7 +171,7 @@ export const CASE_DECK: readonly WarehouseCaseDefinition[] = [
     baseSeconds: 55,
   },
   {
-    id: 'package-7018',
+    id: 'package-5018',
     title: 'Duplicate identity',
     briefing: 'Two locations report one identifier. Their combined mass is conserved.',
     subjectType: 'mixed',

@@ -272,8 +272,10 @@ export function createSignals(): Signal[] {
       longitude: -57.0,
       name: 'WAREHOUSE 07',
       label: 'Remote logistics annex. Status: operating.',
-      state: SignalState.Dormant,
-      hidden: true,
+      // Temporary early-access path: keep the bonus mission beside Mirela while it is
+      // being playtested. The archive gate still controls the anomaly/finale reveal.
+      state: SignalState.Waiting,
+      hidden: false,
       interaction: 'enter',
       actionLabel: 'Enter',
     },

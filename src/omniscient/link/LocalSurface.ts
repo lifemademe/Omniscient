@@ -674,6 +674,16 @@ export const TERMINAL_CSS = `
 }
 `;
 
+/** Install the shipping terminal language for any OMNISCIENT_ operator surface. */
+export function injectTerminalStyles(): void {
+  injectConsoleChrome();
+  if (document.getElementById(STYLE_ID)) return;
+  const style = document.createElement('style');
+  style.id = STYLE_ID;
+  style.textContent = TERMINAL_CSS;
+  document.head.appendChild(style);
+}
+
 /**
  * CHAT, CONSOLE, RECORDS.
  *
@@ -2130,11 +2140,6 @@ export class LocalSurface implements InterventionSurface {
   }
 
   private injectStyles(): void {
-    injectConsoleChrome();
-    if (document.getElementById(STYLE_ID)) return;
-    const style = document.createElement('style');
-    style.id = STYLE_ID;
-    style.textContent = TERMINAL_CSS;
-    document.head.appendChild(style);
+    injectTerminalStyles();
   }
 }

@@ -72,6 +72,10 @@ const GESTURES = {
    * it is the number that decides whether the feet grip the ground or skate over it.
    */
   walk: '@project/assets/animations/Walking.fbx',
+  /** Opening a secured hatch, either after authorization or as a recorded tamper attempt. */
+  open: '@project/assets/animations/Opening.fbx',
+  /** A pursuit loop. Root travel remains authored by riggedContact so paths stay deterministic. */
+  run: '@project/assets/animations/Slow Run.fbx',
 } as const;
 
 export type GestureName = keyof typeof GESTURES;

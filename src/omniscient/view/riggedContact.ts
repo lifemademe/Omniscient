@@ -392,6 +392,8 @@ export interface WalkOptions {
    * arm swing gives it away before the legs do.
    */
   pace?: number;
+  /** Locomotion cycle. Pursuit actors use the faster in-place run clip. */
+  locomotion?: 'walk' | 'run';
   /**
    * Abandon a walk already in progress rather than being ignored.
    *
@@ -506,6 +508,8 @@ const RELEASE = 0.5;
  * steps out of the same clip and would skate at a taller one's speed.
  */
 const WALK_PACE = 0.971;
+/** Tuned world travel for the in-place Slow Run clip, in statures per second. */
+const RUN_PACE = 2.05;
 
 /**
  * Radians per second the body comes round onto a new heading.
@@ -555,6 +559,7 @@ const ARRIVE = 0.06;
   let walkAction: THREE.AnimationAction | null = null;
   /** Current walk's speed multiplier. One walk runs at a time, so one value is enough. */
   let pace = 1;
+  let locomotion: 'walk' | 'run' = 'walk';
   /** Seconds since this leg began, for easing the root up to speed. See WALK_TAKE. */
   let legAge = 0;
   let leg: Leg | null = null;
@@ -724,7 +729,7 @@ const ARRIVE = 0.06;
   const beginLeg = (): void => {
     const next = route.shift();
     if (!next) return;
-    void loadGesture('walk').then((clip) => {
+    void loadGesture(locomotion).then((clip) => {
       if (!clip || !mixer) return;
 
       const action = mixer.clipAction(fitHips(clip));
@@ -815,7 +820,8 @@ const ARRIVE = 0.06;
      */
     const closing = Math.min(1, distance / 0.34);
     const settle = closing * closing * (3 - 2 * closing);
-    const speed = WALK_PACE * options.height * pace * eased * Math.max(0.25, settle);
+    const basePace = locomotion === 'run' ? RUN_PACE : WALK_PACE;
+    const speed = basePace * options.height * pace * eased * Math.max(0.25, settle);
     if (distance > ARRIVE) {
       const error = turnToward(Math.atan2(dx, dz), deltaTime);
       /*
@@ -926,6 +932,7 @@ const ARRIVE = 0.06;
       if (walkOptions.back) route.push({ to: home, facing: homeFacing });
       dwell = walkOptions.dwell ?? 1.8;
       pace = walkOptions.pace ?? 1;
+      locomotion = walkOptions.locomotion ?? 'walk';
       beginLeg();
     },
 

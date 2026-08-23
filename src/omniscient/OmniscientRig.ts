@@ -394,7 +394,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private globe: GlobeView | null = null;
   private signals: Signal[] = createSignals();
   /** Signals that map to a mission still in the queue. */
-  private openable = new Set<string>([MIRELA_SIGNAL]);
+  private openable = new Set<string>([MIRELA_SIGNAL, WAREHOUSE_SIGNAL]);
   /**
    * The ending, armed and delivered.
    *
@@ -2262,18 +2262,21 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const archive = loadWarehouseSave();
     const anomaly = this.signals.find((signal) => signal.id === ANOMALY_SIGNAL);
     const warehouse = this.signals.find((signal) => signal.id === WAREHOUSE_SIGNAL);
+    // Temporary playtest access: expose Warehouse 07 from the opening globe even when an
+    // older save still remembers it as hidden. Remove this block when the post-game gate
+    // is restored; the trace-resolved branch below remains the canonical release path.
+    if (warehouse) {
+      warehouse.hidden = false;
+      warehouse.state = SignalState.Waiting;
+      warehouse.actionLabel = archive.storyCompleted ? 'Select shift' : 'Enter';
+      this.openable.add(WAREHOUSE_SIGNAL);
+    }
     if (archive.traceResolved) {
       if (anomaly) {
         anomaly.hidden = true;
         anomaly.state = SignalState.Resolved;
       }
-      if (warehouse) {
-        warehouse.hidden = false;
-        warehouse.state = SignalState.Waiting;
-        warehouse.actionLabel = archive.storyCompleted ? 'Select shift' : 'Enter';
-      }
       this.openable.delete(ANOMALY_SIGNAL);
-      this.openable.add(WAREHOUSE_SIGNAL);
       return;
     }
     if (anomaly && !anomaly.hidden) this.openable.add(ANOMALY_SIGNAL);

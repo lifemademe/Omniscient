@@ -1,6 +1,8 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { createWarehouseLabelGeometry } from './labelGeometry.js';
+import { WAREHOUSE_AISLE_COUNT } from './WarehouseLayout.js';
 import type { WarehouseSaveData } from './persistence.js';
 
 function archivalPrint(save: WarehouseSaveData): THREE.MeshBasicMaterial {
@@ -15,8 +17,8 @@ function archivalPrint(save: WarehouseSaveData): THREE.MeshBasicMaterial {
     context.fillRect(24, 24, 464, 205);
     context.strokeStyle = '#66877e';
     context.lineWidth = 9;
-    for (let aisle = 0; aisle < 8; aisle++) {
-      const x = 58 + aisle * 52;
+    for (let aisle = 0; aisle < WAREHOUSE_AISLE_COUNT; aisle++) {
+      const x = 70 + aisle * (372 / Math.max(1, WAREHOUSE_AISLE_COUNT - 1));
       context.beginPath();
       context.moveTo(x, 205);
       context.lineTo(246 + (x - 246) * 0.36, 61);
@@ -42,7 +44,7 @@ export function createWarehouseArchiveDisplay(save: WarehouseSaveData): ENGINE.S
   const root = ENGINE.SceneNode.create({ name: 'Warehouse07ArchiveDisplay' });
   const photograph = ENGINE.MeshNode.create({
     name: 'Warehouse07Photograph',
-    geometry: new THREE.PlaneGeometry(0.42, 0.26),
+    geometry: createWarehouseLabelGeometry(0.42, 0.26),
     material: archivalPrint(save),
   });
   photograph.position.set(0.52, 0.65, -0.81);

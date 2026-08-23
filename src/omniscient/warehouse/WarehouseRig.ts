@@ -3,6 +3,7 @@ import * as THREE from 'three';
 
 import { adaptiveScore } from '../audio/AdaptiveScore.js';
 import { getAccessibilityPreferences } from '../accessibility/preferences.js';
+import { setCursorVisible, setPointerLockAllowed } from '../art/cursor.js';
 import { setRoomTone } from '../audio/RoomTone.js';
 import { seedFrom } from '../core/rng.js';
 
@@ -13,17 +14,37 @@ import { WarehouseDirector } from './director.js';
 import { createWarehouseVisitor, WarehouseCargoNode, WarehouseWorkerNode } from './entities.js';
 import { loadWarehouseSave, updateWarehouseSave } from './persistence.js';
 import { WarehouseAudio } from './WarehouseAudio.js';
+import { DroneCargoRope } from './DroneCargoRope.js';
 import { WarehouseHUD } from './WarehouseHUD.js';
+import { WarehousePursuit } from './WarehousePursuit.js';
+import { WAREHOUSE_DOORS, WAREHOUSE_DOOR_IDS } from './WarehouseServiceDoors.js';
+import { WarehouseContainmentResponse } from './WarehouseContainmentResponse.js';
+import { WarehouseIntruderNode } from './WarehouseIntruder.js';
+import {
+  WAREHOUSE_LAYOUT,
+  WAREHOUSE_SECURITY_ZONE_IDS,
+  WAREHOUSE_SECURITY_ZONES,
+  warehouseZoneLabel,
+} from './WarehouseLayout.js';
 
 import type { MouseButton } from '@gnsx/genesys.js';
 import type { WarehouseVisitor } from './entities.js';
+import type { WarehouseChatReply } from './WarehouseOpsPanel.js';
 import type {
   GeneratedWarehouseCase,
   WarehouseDecision,
+  WarehouseDoorId,
+  WarehouseDoorSnapshot,
+  WarehouseDoorStatus,
+  WarehouseEvidenceState,
+  WarehouseIntrusionSnapshot,
   WarehouseMode,
   WarehouseRunConfig,
   WarehouseRunResult,
   WarehouseTool,
+  WarehouseSecurityZoneId,
+  WarehouseSecurityZoneSnapshot,
+  WarehouseSecurityZoneStatus,
 } from './types.js';
 
 export interface WarehouseRigOptions extends ENGINE.SceneNodeOptions {
@@ -32,12 +53,48 @@ export interface WarehouseRigOptions extends ENGINE.SceneNodeOptions {
 }
 
 type WarehouseView = 'drone' | 'cctv' | 'console';
+type DronePerspective = 'first' | 'third';
 
 const CAMERA_MATRIX = new THREE.Matrix4();
-const DRONE_START = new THREE.Vector3(0, 3.2, 12.2);
-const ALTITUDES = [1.8, 3.2, 5.4] as const;
+const DRONE_START = WAREHOUSE_LAYOUT.drone.start;
+const ALTITUDES = [1.8, 3.2, 6.8] as const;
+const THIRD_PERSON_ARM = 2.8;
+const THIRD_PERSON_HEIGHT = 1.25;
+const THIRD_PERSON_DISTANCE = Math.hypot(THIRD_PERSON_ARM, THIRD_PERSON_HEIGHT);
+const TIGHT_CAMERA_THRESHOLD = 0.7;
+const CAMERA_PROBE_OFFSETS = [
+  [0, 0],
+  [-0.26, 0],
+  [0.26, 0],
+  [0, -0.22],
+  [0, 0.22],
+  [-0.2, -0.18],
+  [0.2, -0.18],
+  [-0.2, 0.18],
+  [0.2, 0.18],
+] as const;
+const DRONE_ROTOR_POSITIONS = [
+  [-0.55, -0.42],
+  [0.55, -0.42],
+  [-0.55, 0.42],
+  [0.55, 0.42],
+] as const;
 const WORKER_VESTS = ['#c9a934', '#d66f2f', '#7b9d3c', '#d6bd45', '#c05f32', '#9bb23c'] as const;
 const RANK_ORDER = ['TRAINEE', 'OPERATOR', 'INSPECTOR', 'CONTROLLER', 'OVERSEER', 'OMNISCIENT'] as const;
+
+function emptyEvidence(): WarehouseEvidenceState {
+  return { located: false, visitor: false, cargo: false, action: false, authorization: false, tamper: false };
+}
+
+function isTextEntry(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && (
+    target.matches('input, textarea, select') || target.isContentEditable
+  );
+}
+
+function isUIControl(target: EventTarget | null): boolean {
+  return target instanceof HTMLElement && target.closest('button, input, textarea, select, [contenteditable=true]') !== null;
+}
 
 class WarehouseInput extends ENGINE.BaseInputHandler {
   private readonly held = new Set<string>();
@@ -51,45 +108,61 @@ class WarehouseInput extends ENGINE.BaseInputHandler {
   }
 
   public override handleKeyDown(event: KeyboardEvent): boolean {
+    if (isTextEntry(event.target)) return false;
     if (event.repeat && !['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) return false;
     this.held.add(event.code);
     switch (event.code) {
       case 'Escape': this.rig.requestExit(); return true;
       case 'Tab': event.preventDefault(); this.rig.cycleView(); return true;
+      case 'KeyC': this.rig.cycleDoor(1); return true;
+      case 'KeyM': this.rig.toggleInputMode(); return true;
       case 'KeyF': this.rig.toggleGrip(); return true;
       case 'KeyR': this.rig.recover(); return true;
       case 'KeyQ': this.rig.changeAltitude(-1); return true;
       case 'KeyE': this.rig.changeAltitude(1); return true;
-      case 'Digit1': this.rig.tryDecision('release'); return true;
-      case 'Digit2': this.rig.tryDecision('quarantine'); return true;
-      case 'Digit3': this.rig.tryDecision('return'); return true;
-      case 'Digit4': this.rig.tryDecision('clear'); return true;
+      case 'Digit1': this.rig.activateNumber(0); return true;
+      case 'Digit2': this.rig.activateNumber(1); return true;
+      case 'Digit3': this.rig.activateNumber(2); return true;
+      case 'Digit4': this.rig.activateNumber(3); return true;
       case 'Digit5': this.rig.tryDecision('hold'); return true;
       case 'Digit6': this.rig.tryDecision('verify'); return true;
-      case 'Space': this.rig.scan(); return true;
+      case 'Space': this.rig.scanFromOpticalInput(); return true;
       default: return ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code);
     }
   }
 
   public override handleKeyUp(event: KeyboardEvent): boolean {
+    if (isTextEntry(event.target)) return false;
     this.held.delete(event.code);
     return ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code);
   }
 
   public override handleMouseMove(event: MouseEvent): boolean {
-    if (document.pointerLockElement) {
+    if (this.inputManager?.isPointerLocked()) {
       this.rig.look(event.movementX, event.movementY);
       return true;
     }
     return false;
   }
 
-  public override handleMouseDown(_button: MouseButton, event: MouseEvent): boolean {
-    if (!document.pointerLockElement) {
-      const canvas = this.rig.getWorld()?.gameContainer?.querySelector('canvas');
-      if (canvas && event.target === canvas) void canvas.requestPointerLock?.();
+  public override handleMouseDown(button: MouseButton, event: MouseEvent): boolean {
+    if (isUIControl(event.target)) return false;
+    if (button === ENGINE.MouseButton.Right) {
+      event.preventDefault();
+      if (!this.rig.setOpticalAim(true)) return false;
+      if (this.rig.shouldCapturePointer()) this.inputManager?.requestPointerLock({ unadjustedMovement: true });
+      return true;
     }
-    this.rig.scan();
+    if (button !== ENGINE.MouseButton.Left) return false;
+    if (this.rig.shouldCapturePointer()) this.inputManager?.requestPointerLock({ unadjustedMovement: true });
+    this.rig.scanFromOpticalInput();
+    return true;
+  }
+
+  public override handleMouseUp(button: MouseButton, event: MouseEvent): boolean {
+    if (button !== ENGINE.MouseButton.Right) return false;
+    event.preventDefault();
+    this.rig.setOpticalAim(false);
     return true;
   }
 
@@ -152,14 +225,35 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private environment = new WarehouseEnvironment();
   private camera: ENGINE.ViewTargetCameraNode | null = null;
   private drone = ENGINE.SceneNode.create({ name: 'WarehouseDrone', position: DRONE_START.clone() });
+  private droneVisual = ENGINE.SceneNode.create({ name: 'WarehouseDroneVisual' });
+  private droneRotorBlades: THREE.InstancedMesh | null = null;
+  private readonly droneRotorTransform = new THREE.Object3D();
+  private droneRotorSpin = 0;
+  private droneStatusMaterial: THREE.MeshStandardMaterial | null = null;
+  private readonly cargoRope = new DroneCargoRope();
+  private readonly ropeAnchor = new THREE.Vector3();
+  private readonly desiredCameraPosition = new THREE.Vector3();
+  private readonly desiredCameraTarget = new THREE.Vector3();
+  private readonly cameraAnchor = new THREE.Vector3();
+  private readonly cameraDirection = new THREE.Vector3();
+  private readonly cameraProbeOrigin = new THREE.Vector3();
+  private readonly cameraProbeRight = new THREE.Vector3();
+  private readonly cameraProbeUp = new THREE.Vector3();
+  private readonly cameraRaycaster = new THREE.Raycaster();
+  private cameraArmDistance = THIRD_PERSON_DISTANCE;
+  private readonly previousDroneAudioPosition = DRONE_START.clone();
   private cameraPosition = DRONE_START.clone();
   private cameraTarget = new THREE.Vector3(0, 2.8, 0);
   private yaw = Math.PI;
   private pitch = -0.04;
   private altitudeIndex = 1;
   private view: WarehouseView = 'cctv';
+  private perspective: DronePerspective = 'third';
+  private opticalAimHeld = false;
+  private cursorControl = false;
   private mounted = false;
   private input: WarehouseInput | null = null;
+  private suspendedPlayerController: ENGINE.PlayerController | null = null;
   private hud: WarehouseHUD | null = null;
   private readonly sound = new WarehouseAudio();
   private workers: WarehouseWorkerNode[] = [];
@@ -167,8 +261,38 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private cargo: WarehouseCargoNode | null = null;
   private duplicateCargo: WarehouseCargoNode | null = null;
   private carried: WarehouseCargoNode | null = null;
+  private deliveredCargo: {
+    node: WarehouseCargoNode;
+    from: THREE.Vector3;
+    to: THREE.Vector3;
+    elapsed: number;
+    duration: number;
+  } | null = null;
   private activeCase: GeneratedWarehouseCase | null = null;
-  private scanned = false;
+  private evidence = emptyEvidence();
+  private selectedDoor: WarehouseDoorId = 'service-a';
+  private doorStatuses: Record<WarehouseDoorId, WarehouseDoorStatus> = {
+    'service-a': 'unseen',
+    'service-b': 'unseen',
+    'service-c': 'unseen',
+  };
+  private doorEventAvailable = false;
+  private pursuit: WarehousePursuit | null = null;
+  private containmentResponse: WarehouseContainmentResponse | null = null;
+  private intruder: WarehouseIntruderNode | null = null;
+  private pursuitPhase = '';
+  private selectedZone: WarehouseSecurityZoneId = 'receiving';
+  private zoneStatuses: Record<WarehouseSecurityZoneId, WarehouseSecurityZoneStatus> = {
+    receiving: 'unseen',
+    'storage-west': 'unseen',
+    'storage-east': 'unseen',
+    sortation: 'unseen',
+  };
+  private intrusion: WarehouseIntrusionSnapshot | null = null;
+  private breachEntryTimer = -1;
+  private breachStarted = false;
+  private intrusionHudAccumulator = 0;
+  private decisionCommitted = false;
   private visitorVerified = false;
   private freightVerified = false;
   private workerVerificationRequested = false;
@@ -188,6 +312,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private handoff = 4.8;
   private finished = false;
   private savedPost: { tone: unknown; bloom: unknown } | null = null;
+  private readonly blockContextMenu = (event: MouseEvent): void => {
+    event.preventDefault();
+  };
 
   public constructor() {
     super();
@@ -199,8 +326,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.mode = options?.mode ?? 'story';
     this.seed = options?.seed ?? (this.mode === 'daily' ? WarehouseDirector.utcDailySeed() : `${this.mode}-${Date.now()}`);
     const save = loadWarehouseSave();
+    const savedMovement = STORY_MOVEMENTS.findIndex((movement) => movement.id === save.storyMovementId);
     this.storyMovement = this.mode === 'story' && !save.storyCompleted
-      ? Math.max(0, Math.min(STORY_MOVEMENTS.length - 1, save.storyMovement))
+      ? Math.max(0, Math.min(STORY_MOVEMENTS.length - 1, savedMovement >= 0 ? savedMovement : save.storyMovement))
       : 0;
     this.tools = [...new Set<WarehouseTool>(['optical', ...save.unlockedTools])];
     if (this.mode === 'daily') this.tools = ['optical', 'history', 'thermal', 'uv', 'xray', 'acoustic'];
@@ -209,6 +337,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.environment.build();
     this.add(this.environment.root);
     this.buildDrone();
+    this.add(this.cargoRope.root);
     this.buildCamera();
     this.buildWorkers();
     this.setTickEnabled(true);
@@ -227,18 +356,46 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const container = world?.gameContainer;
     if (!world || !container) return;
     this.input = new WarehouseInput(this);
+    /*
+     * The engine's default controller owns WASD, Q and pointer-lock mouse movement before
+     * this bespoke rig can see them. OMNISCIENT_ has no movement pawn, so that ownership
+     * produces no gameplay; it only starves the drone. Suspend it for this isolated mode
+     * and restore it when the facility hands control back.
+     */
+    this.suspendedPlayerController = world.getPlayerControllerAt(0) ?? null;
+    if (this.suspendedPlayerController) {
+      world.inputManager?.removeInputHandler(this.suspendedPlayerController);
+    }
     world.inputManager?.addInputHandler(this.input);
-    this.hud = new WarehouseHUD(container, this.mode, () => this.requestExit(), () => this.recover());
+    container.addEventListener('contextmenu', this.blockContextMenu);
+    setPointerLockAllowed(true);
+    this.hud = new WarehouseHUD(
+      container,
+      this.mode,
+      () => this.requestExit(),
+      () => this.recover(),
+      () => this.toggleInputMode()
+    );
     this.hud.onDecision((decision) => this.tryDecision(decision));
     this.hud.onTool((tool) => {
       this.activeTool = tool;
       this.hud?.setTools(this.tools, this.activeTool);
       this.hud?.flash(`${tool.toUpperCase()} CHANNEL ACTIVE`, 1.2);
     });
+    this.hud.onTransmit((text) => this.replyToOperator(text));
+    this.hud.onDoorSelect((door) => this.selectDoor(door));
+    this.hud.onDoorCycle(() => this.cycleDoor(1));
+    this.hud.onReplay(() => this.replayDoorEvent());
+    this.hud.onSkip(() => this.skipPursuit());
+    this.hud.onZoneSelect((zone) => this.selectZone(zone));
+    this.hud.onZoneContain((zone) => this.tryContainZone(zone));
     this.hud.setTools(this.tools, this.activeTool);
+    this.hud.setRecords(loadWarehouseSave().archiveRecords);
     this.hud.setControlsVisible(!loadWarehouseSave().tutorialComplete);
     this.handoff = getAccessibilityPreferences().reducedMotion ? 0.2 : 4.8;
     this.hud.setView(this.view);
+    this.hud.setOpticalAim(false);
+    this.syncPointerMode();
     this.sound.start();
     setRoomTone(null);
     adaptiveScore.setState('warehouse', 0);
@@ -254,18 +411,28 @@ export class WarehouseRig extends ENGINE.SceneNode {
       tone: post.getEffectConfig(ENGINE.PostProcessPass.ToneMapping),
       bloom: post.getEffectConfig(ENGINE.PostProcessPass.Bloom),
     };
-    post.configureEffect(ENGINE.PostProcessPass.ToneMapping, { enabled: true, mode: THREE.ACESFilmicToneMapping, exposure: 0.9 });
-    post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: true, strength: 0.22, threshold: 0.82, radius: 0.42 });
+    post.configureEffect(ENGINE.PostProcessPass.ToneMapping, { enabled: true, mode: THREE.ACESFilmicToneMapping, exposure: 1.08 });
+    post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: true, strength: 0.2, threshold: 0.86, radius: 0.4 });
   }
 
   private buildDrone(): void {
+    const hull = new THREE.MeshStandardMaterial({ color: '#263d39', roughness: 0.42, metalness: 0.62 });
+    const dark = new THREE.MeshStandardMaterial({ color: '#09110f', roughness: 0.68, metalness: 0.38 });
+    const brass = new THREE.MeshStandardMaterial({ color: '#b08a3f', roughness: 0.52, metalness: 0.58 });
     const shell = ENGINE.MeshNode.create({
       name: 'DroneShell',
       geometry: new THREE.CylinderGeometry(0.36, 0.48, 0.24, 12),
-      material: new THREE.MeshStandardMaterial({ color: '#273d3a', roughness: 0.48, metalness: 0.56 }),
+      material: hull,
       castShadow: true,
     });
     shell.rotation.z = Math.PI / 2;
+    const dome = ENGINE.MeshNode.create({
+      name: 'DroneAvionicsDome',
+      geometry: new THREE.SphereGeometry(0.32, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.56),
+      material: hull,
+      castShadow: true,
+    });
+    dome.position.y = 0.08;
     const eye = ENGINE.MeshNode.create({
       name: 'DroneEye',
       geometry: new THREE.SphereGeometry(0.16, 16, 10),
@@ -275,10 +442,61 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const grip = ENGINE.MeshNode.create({
       name: 'MagneticGripper',
       geometry: new THREE.CylinderGeometry(0.18, 0.24, 0.12, 12),
-      material: new THREE.MeshStandardMaterial({ color: '#b08a3f', roughness: 0.55, metalness: 0.5 }),
+      material: brass,
     });
     grip.position.set(0, -0.42, 0);
-    this.drone.add(shell, eye, grip);
+    this.droneVisual.add(shell, dome, eye, grip);
+
+    const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(0.52, 0.07, 0.08), dark, 4);
+    arms.name = 'DroneRotorArms';
+    arms.castShadow = true;
+    const guards = new THREE.InstancedMesh(new THREE.TorusGeometry(0.25, 0.025, 8, 22), hull, 4);
+    guards.name = 'DroneRotorGuards';
+    guards.castShadow = true;
+    const blades = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 0.018, 0.055), dark, 4);
+    blades.name = 'DroneRotorBlades';
+    blades.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    for (const [index, [x, z]] of DRONE_ROTOR_POSITIONS.entries()) {
+      this.droneRotorTransform.position.set(x + (x > 0 ? -0.25 : 0.25), 0.02, z);
+      this.droneRotorTransform.rotation.set(0, 0, 0);
+      this.droneRotorTransform.updateMatrix();
+      arms.setMatrixAt(index, this.droneRotorTransform.matrix);
+      this.droneRotorTransform.position.set(x, 0.02, z);
+      this.droneRotorTransform.rotation.set(Math.PI / 2, 0, 0);
+      this.droneRotorTransform.updateMatrix();
+      guards.setMatrixAt(index, this.droneRotorTransform.matrix);
+      this.droneRotorTransform.rotation.set(0, 0, 0);
+      this.droneRotorTransform.updateMatrix();
+      blades.setMatrixAt(index, this.droneRotorTransform.matrix);
+    }
+    this.droneRotorBlades = blades;
+    this.droneVisual.add(arms, guards, blades);
+
+    this.droneStatusMaterial = new THREE.MeshStandardMaterial({
+      color: '#8fe7c8',
+      emissive: '#4fbf99',
+      emissiveIntensity: 2.1,
+      roughness: 0.2,
+    });
+    const statusLamps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.035, 10, 6), this.droneStatusMaterial, 2);
+    statusLamps.name = 'DroneStatusLamps';
+    for (const [index, x] of [-0.3, 0.3].entries()) {
+      this.droneRotorTransform.position.set(x, 0.14, 0.26);
+      this.droneRotorTransform.rotation.set(0, 0, 0);
+      this.droneRotorTransform.updateMatrix();
+      statusLamps.setMatrixAt(index, this.droneRotorTransform.matrix);
+    }
+    this.droneVisual.add(statusLamps);
+    const inspectionFill = ENGINE.PointLightNode.create({
+      name: 'DroneInspectionFill',
+      color: '#a8d9c8',
+      intensity: 8,
+      distance: 6.5,
+      decay: 1.85,
+      position: new THREE.Vector3(0, 0.05, 0.34),
+    });
+    this.drone.add(this.droneVisual);
+    this.drone.add(inspectionFill);
     this.add(this.drone);
   }
 
@@ -290,13 +508,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
 
   private buildWorkers(): void {
-    const routes = [
-      [new THREE.Vector3(-9, 0, -15), new THREE.Vector3(-8, 0, -10), new THREE.Vector3(-3, 0, -12)],
-      [new THREE.Vector3(-3, 0, -15), new THREE.Vector3(0, 0, -10), new THREE.Vector3(2, 0, -13)],
-      [new THREE.Vector3(3, 0, -15), new THREE.Vector3(5, 0, -10), new THREE.Vector3(8, 0, -13)],
-      [new THREE.Vector3(9, 0, -15), new THREE.Vector3(10, 0, -9), new THREE.Vector3(4, 0, -11)],
-      [new THREE.Vector3(0, 0, -16), new THREE.Vector3(12, 0, -7), new THREE.Vector3(14, 0, 8.5)],
-    ];
+    const routes = WAREHOUSE_LAYOUT.workerRoutes;
     for (let i = 0; i < routes.length; i++) {
       const worker = WarehouseWorkerNode.create({ name: `WarehouseWorker-${i + 1}` });
       worker.configure(`W-${4839 + i * 941}`, routes[i][0], routes[i], WORKER_VESTS[i], i < 4);
@@ -310,6 +522,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (this.mode === 'story') this.beginStoryMovement();
     else {
       this.stage = Math.max(1, this.stage || 1);
+      this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
       this.spawnCase(this.director?.caseForStage(this.stage, this.tools) ?? null);
       this.hud?.setCase(`STAGE ${String(this.stage).padStart(2, '0')}`, this.activeCase?.definition.briefing ?? 'Await case.');
     }
@@ -319,13 +532,14 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const movement = STORY_MOVEMENTS[this.storyMovement];
     // The finale teaches historical comparison before the channel becomes a permanent
     // Night Shift unlock, so the incident loans it for this movement.
-    if (movement.finale && !this.tools.includes('history')) {
+    if ((movement.id === 'breach' || movement.finale) && !this.tools.includes('history')) {
       this.tools.push('history');
       this.hud?.setTools(this.tools, this.activeTool);
       this.hud?.flash('HISTORICAL CCTV CHANNEL LOANED // INCIDENT COMPARISON REQUIRED', 3.2);
     }
     this.stage = this.storyMovement + 1;
-    adaptiveScore.setState('warehouse', movement.finale ? 3 : this.storyMovement >= 2 ? 1 : 0);
+    this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
+    adaptiveScore.setState('warehouse', movement.finale ? 3 : movement.id === 'breach' ? 2 : this.storyMovement >= 2 ? 1 : 0);
     this.storyCase = 0;
     this.hud?.setCase(movement.title, movement.objective);
     this.hud?.flash(movement.objective, 3.6);
@@ -333,6 +547,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.inboundOpened = this.inboundTimer < 0;
     this.hud?.setInbound(this.inboundTimer >= 0 ? this.inboundTimer : null);
     this.setWorkersVisible(false);
+    if (this.inboundTimer >= 0) {
+      for (const worker of this.workers) worker.resetToInbound();
+    }
     this.spawnStoryCase();
   }
 
@@ -345,9 +562,22 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const data: GeneratedWarehouseCase = { ...base, definition };
     if (definition.id === 'valid-collection' && this.storyMovement === 0) {
       data.packageId = '2034'; data.aisle = 2; data.bay = 34; data.expectedWeight = 8.4; data.measuredWeight = 8.4;
+      data.visitorDoorId = 'service-b'; data.authorizedDoorId = 'service-b';
+      data.visitorIntent = 'collection'; data.doorTamper = false;
     }
-    if (definition.id === 'package-7018') {
-      data.packageId = '7018'; data.aisle = 7; data.bay = 18; data.expectedWeight = 40; data.measuredWeight = 30;
+    if (definition.id === 'door-tamper') {
+      data.visitorDoorId = 'service-a'; data.authorizedDoorId = 'service-c';
+      data.visitorIntent = 'intrusion'; data.doorTamper = true;
+    }
+    if (definition.id === 'package-5018') {
+      data.packageId = '5018'; data.aisle = 5; data.bay = 18; data.expectedWeight = 40; data.measuredWeight = 30;
+      data.visitorDoorId = 'service-c'; data.authorizedDoorId = 'service-c';
+      data.visitorIntent = 'collection'; data.doorTamper = false;
+    }
+    if (definition.id === 'internal-breach') {
+      data.packageId = 'UNLISTED'; data.aisle = 1; data.bay = 0; data.expectedWeight = 0; data.measuredWeight = 0;
+      data.visitorName = 'UNLISTED PERSON'; data.visitorIntent = 'intrusion'; data.doorTamper = false;
+      data.visitorDoorId = 'service-c'; data.authorizedDoorId = 'service-c';
     }
     this.spawnCase(data);
   }
@@ -356,44 +586,93 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (!data) return;
     this.clearCaseEntities();
     this.activeCase = data;
-    this.scanned = false;
+    this.evidence = emptyEvidence();
+    this.decisionCommitted = false;
     this.visitorVerified = false;
     this.freightVerified = false;
     this.workerVerificationRequested = false;
-    const cargo = WarehouseCargoNode.create({ name: `Cargo-${data.packageId}` });
-    cargo.configure(data);
-    cargo.position.copy(this.environment.packagePosition(data.aisle, data.bay));
-    this.add(cargo);
-    this.cargo = cargo;
-    if (data.definition.id === 'package-7018') {
+    const internalBreach = data.definition.id === 'internal-breach';
+    if (!internalBreach) {
+      const cargo = WarehouseCargoNode.create({ name: `Cargo-${data.packageId}` });
+      cargo.configure(data);
+      cargo.position.copy(this.environment.packagePosition(data.aisle, data.bay));
+      this.add(cargo);
+      this.cargo = cargo;
+    }
+    if (data.definition.id === 'package-5018') {
       const duplicateData: GeneratedWarehouseCase = { ...data, measuredWeight: 50 };
-      const duplicate = WarehouseCargoNode.create({ name: 'Cargo-7018-Duplicate' });
+      const duplicate = WarehouseCargoNode.create({ name: 'Cargo-5018-Duplicate' });
       duplicate.configure(duplicateData);
-      duplicate.position.copy(this.environment.packagePosition(8, data.bay));
+      duplicate.position.copy(this.environment.packagePosition(4, data.bay));
       this.add(duplicate);
       this.duplicateCargo = duplicate;
       this.environment.setDuplicateAisle(true);
     }
-    this.visitor = createWarehouseVisitor(seedFrom(data.visitorName), data.visitorName);
-    this.add(this.visitor.root);
-    this.hud?.showCase(data, false);
-    const hasVisitor = data.definition.subjectType !== 'worker' && data.definition.id !== 'freight-sort';
+    const hasVisitor = data.definition.subjectType !== 'worker'
+      && data.definition.id !== 'freight-sort'
+      && !internalBreach;
+    if (hasVisitor) {
+      this.visitor = createWarehouseVisitor(seedFrom(data.visitorName), data.visitorName, data.visitorDoorId);
+      this.add(this.visitor.root);
+    }
+    const occupiedIndex = WAREHOUSE_DOOR_IDS.indexOf(data.visitorDoorId);
+    this.selectedDoor = WAREHOUSE_DOOR_IDS[(occupiedIndex + 1) % WAREHOUSE_DOOR_IDS.length];
+    this.doorStatuses = { 'service-a': 'unseen', 'service-b': 'unseen', 'service-c': 'unseen' };
+    this.doorEventAvailable = false;
+    this.environment.resetServiceDoors();
+    this.hud?.setReplayAvailable(false);
+    this.hud?.setPursuit(false);
+    this.hud?.setCctvTimestampOffset(0);
+    if (internalBreach) {
+      if (this.mode !== 'story') {
+        this.inboundTimer = 3;
+        this.inboundOpened = false;
+        this.hud?.setInbound(this.inboundTimer);
+      }
+      this.prepareBreach();
+    }
+    else this.hud?.setIntrusion(null);
+    this.hud?.showCase(data, this.evidence, this.intrusion);
+    this.syncDoorHud();
     this.hud?.setBell(hasVisitor, hasVisitor ? 1 : 0);
     this.bellReminder = hasVisitor ? 20 : -1;
     if (hasVisitor) this.sound.play('bell');
-    if (data.definition.id === 'package-7018') {
+    if (data.definition.id === 'package-5018') {
       this.sound.play('anomaly');
       adaptiveScore.setState('warehouse', 3);
     }
   }
 
   private clearCaseEntities(): void {
+    if (this.pursuit) {
+      this.pursuit.destroy();
+      this.pursuit = null;
+    }
+    if (this.containmentResponse) {
+      this.containmentResponse.destroy();
+      this.containmentResponse = null;
+    }
+    this.intruder?.removeFromParent();
+    this.intruder = null;
+    this.intrusion = null;
+    this.breachEntryTimer = -1;
+    this.breachStarted = false;
+    this.environment.resetSecurityZones();
+    this.environment.setLightingMode('normal');
+    this.environment.setRearDoorOpen(0);
+    this.sound.setEmergency(false);
+    for (const worker of this.workers) worker.resumeRoute();
+    this.hud?.setIntrusion(null);
+    this.environment.setPursuitLights(this.activeCase?.visitorDoorId ?? 'service-a', false);
+    this.pursuitPhase = '';
     if (this.carried) {
+      this.cargoRope.detach();
       this.carried.removeFromParent();
       this.carried = null;
     }
     this.cargo?.removeFromParent();
     this.cargo = null;
+    this.deliveredCargo = null;
     this.duplicateCargo?.removeFromParent();
     this.duplicateCargo = null;
     this.environment.setDuplicateAisle(false);
@@ -401,42 +680,98 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.visitor = null;
   }
 
+  private prepareBreach(): void {
+    this.setWorkersVisible(false);
+    for (const worker of this.workers) worker.resetToInbound();
+    const intruder = WarehouseIntruderNode.create({ name: 'WarehouseInternalBreachSubject' });
+    intruder.configure({
+      onZoneChanged: (zone) => {
+        if (this.zoneStatuses[zone] === 'unseen') this.zoneStatuses[zone] = 'motion';
+        this.sound.play('footsteps');
+        this.syncIntrusionHud();
+      },
+      onEscapeWarning: () => {
+        this.sound.play('tamper');
+        this.hud?.flash('SERVICE C EXIT TAMPER // 8 SECONDS TO CONTAIN', 3);
+        this.syncIntrusionHud();
+      },
+      onEscaped: () => this.failBreach('CRITICAL BREACH // INTRUDER EXITED THROUGH SERVICE C'),
+      onTagExpired: () => {
+        this.hud?.flash('LIVE OPTICAL TAG EXPIRED // REACQUIRE SUBJECT', 2.2);
+        this.syncIntrusionHud();
+      },
+    });
+    this.add(intruder);
+    this.intruder = intruder;
+    this.selectedZone = 'receiving';
+    this.zoneStatuses = {
+      receiving: 'unseen',
+      'storage-west': 'unseen',
+      'storage-east': 'unseen',
+      sortation: 'unseen',
+    };
+    this.intrusion = {
+      phase: 'entry',
+      currentZone: 'receiving',
+      lastSeenZone: null,
+      selectedZone: this.selectedZone,
+      tagSeconds: 0,
+      routeStep: 0,
+      escapeSeconds: null,
+      evidence: { rearHistory: false, headcount: false, liveTag: false },
+      containedZone: null,
+    };
+    this.syncIntrusionHud();
+    this.hud?.setBell(false, 0);
+  }
+
   public drive(x: number, y: number, deltaTime: number): void {
-    if (this.view !== 'drone' || this.handoff > 0 || this.finished) return;
+    if (this.view !== 'drone' || this.handoff > 0 || this.finished || this.isCinematicActive()) return;
     const forward = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    const right = new THREE.Vector3(forward.z, 0, -forward.x);
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
     const desired = forward.multiplyScalar(-y).addScaledVector(right, x);
     if (desired.lengthSq() > 1) desired.normalize();
     const nearWorker = this.workers.some((worker) => worker.visible && worker.position.distanceTo(this.drone.position) < 2.2);
     const speed = nearWorker ? 2.4 : 5.2;
     const previous = this.drone.position.clone();
     this.drone.position.addScaledVector(desired, deltaTime * speed);
-    this.drone.position.x = THREE.MathUtils.clamp(this.drone.position.x, -14.8, 14.8);
-    this.drone.position.z = THREE.MathUtils.clamp(this.drone.position.z, -16.2, 16.7);
+    this.drone.position.x = THREE.MathUtils.clamp(this.drone.position.x, WAREHOUSE_LAYOUT.drone.minX, WAREHOUSE_LAYOUT.drone.maxX);
+    this.drone.position.z = THREE.MathUtils.clamp(this.drone.position.z, WAREHOUSE_LAYOUT.drone.minZ, WAREHOUSE_LAYOUT.drone.maxZ);
     this.environment.constrainDrone(this.drone.position, previous);
     this.drone.position.y = THREE.MathUtils.damp(this.drone.position.y, ALTITUDES[this.altitudeIndex], 5.5, deltaTime);
     this.drone.rotation.y = this.yaw;
+    this.droneVisual.rotation.z = THREE.MathUtils.damp(this.droneVisual.rotation.z, -x * 0.18, 8, deltaTime);
+    this.droneVisual.rotation.x = THREE.MathUtils.damp(this.droneVisual.rotation.x, y * 0.11, 8, deltaTime);
   }
 
   public look(dx: number, dy: number): void {
-    if (this.view !== 'drone' || this.handoff > 0) return;
+    if (this.view !== 'drone' || this.handoff > 0 || this.isCinematicActive()) return;
     this.yaw -= dx * 0.0022;
     this.pitch = THREE.MathUtils.clamp(this.pitch - dy * 0.0018, -0.72, 0.5);
   }
 
   public changeAltitude(direction: number): void {
+    if (this.isCinematicActive()) return;
     this.altitudeIndex = THREE.MathUtils.clamp(this.altitudeIndex + Math.sign(direction), 0, ALTITUDES.length - 1);
     this.hud?.flash(`ALTITUDE ${this.altitudeIndex === 0 ? 'LOW' : this.altitudeIndex === 1 ? 'WORK' : 'INSPECTION'}`, 1);
   }
 
+  public isDroneView(): boolean {
+    return this.view === 'drone';
+  }
+
+  public shouldCapturePointer(): boolean {
+    return this.view === 'drone' && !this.cursorControl;
+  }
+
   /** Soft reset for a wedged approach; it costs service time, never integrity. */
   public recover(): void {
-    if (this.finished) return;
+    if (this.finished || this.isCinematicActive()) return;
     if (this.carried) {
       const cargo = this.carried;
-      cargo.removeFromParent();
-      this.add(cargo);
+      this.cargoRope.detach();
       cargo.position.copy(this.environment.stationPositions.return).add(new THREE.Vector3(0, 0, -2));
+      cargo.quaternion.identity();
       cargo.carried = false;
       this.carried = null;
     }
@@ -444,16 +779,220 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.yaw = Math.PI;
     this.pitch = -0.04;
     this.altitudeIndex = 1;
+    this.setOpticalAim(false);
+    this.perspective = 'third';
+    this.cameraArmDistance = THIRD_PERSON_DISTANCE;
     this.elapsed += 12;
     this.sound.play('warning');
     this.hud?.flash('SERVICE RECOVERY COMPLETE // +12 SECONDS', 2.2);
   }
 
   public cycleView(): void {
+    if (this.isCinematicActive()) return;
+    this.setOpticalAim(false);
     this.view = this.view === 'drone' ? 'cctv' : this.view === 'cctv' ? 'console' : 'drone';
     this.hud?.setView(this.view);
     this.hud?.flash(`${this.view.toUpperCase()} VIEW`, 1.1);
-    if (this.view !== 'drone' && document.pointerLockElement) void document.exitPointerLock?.();
+    this.syncPointerMode();
+    if (this.view === 'cctv') {
+      if (this.isBreachCase()) this.inspectSelectedZone();
+      else this.inspectSelectedDoor();
+    }
+  }
+
+  public cycleDoor(direction: number): void {
+    if (this.isCinematicActive() || this.finished) return;
+    if (this.isBreachCase()) {
+      const current = Math.max(0, WAREHOUSE_SECURITY_ZONE_IDS.indexOf(this.selectedZone));
+      const step = Math.sign(direction) || 1;
+      this.selectZone(
+        WAREHOUSE_SECURITY_ZONE_IDS[(current + WAREHOUSE_SECURITY_ZONE_IDS.length + step) % WAREHOUSE_SECURITY_ZONE_IDS.length]
+      );
+      return;
+    }
+    if (this.view !== 'cctv') {
+      this.view = 'cctv';
+      this.hud?.setView(this.view);
+      this.syncPointerMode();
+    }
+    const current = Math.max(0, WAREHOUSE_DOOR_IDS.indexOf(this.selectedDoor));
+    const step = Math.sign(direction) || 1;
+    this.selectedDoor = WAREHOUSE_DOOR_IDS[(current + WAREHOUSE_DOOR_IDS.length + step) % WAREHOUSE_DOOR_IDS.length];
+    this.sound.play('camera');
+    this.inspectSelectedDoor();
+  }
+
+  public selectDoor(door: WarehouseDoorId): void {
+    if (this.isCinematicActive() || this.finished || this.isBreachCase()) return;
+    this.selectedDoor = door;
+    if (this.view !== 'cctv') {
+      this.view = 'cctv';
+      this.hud?.setView(this.view);
+      this.syncPointerMode();
+    }
+    this.sound.play('camera');
+    this.inspectSelectedDoor();
+  }
+
+  public selectZone(zone: WarehouseSecurityZoneId): void {
+    if (!this.isBreachCase() || this.isCinematicActive() || this.finished) return;
+    this.selectedZone = zone;
+    if (this.intrusion) this.intrusion.selectedZone = zone;
+    if (this.view !== 'cctv') {
+      this.view = 'cctv';
+      this.hud?.setView(this.view);
+      this.syncPointerMode();
+    }
+    this.sound.play('camera');
+    this.inspectSelectedZone();
+  }
+
+  private inspectSelectedZone(): void {
+    const intruder = this.intruder;
+    if (!intruder || !this.intrusion || !this.breachStarted) {
+      this.hud?.flash(`${warehouseZoneLabel(this.selectedZone)} FEED // STANDBY`);
+      return;
+    }
+    if (intruder.currentZone === this.selectedZone && intruder.phase !== 'contained') {
+      intruder.observe();
+      intruder.lastSeenZone = this.selectedZone;
+      this.zoneStatuses[this.selectedZone] = 'contact';
+      this.hud?.flash(`${warehouseZoneLabel(this.selectedZone)} // UNLISTED PERSON IN FRAME`, 1.6);
+    } else if (this.zoneStatuses[this.selectedZone] === 'unseen' || this.zoneStatuses[this.selectedZone] === 'motion') {
+      this.zoneStatuses[this.selectedZone] = 'clear';
+      this.hud?.flash(`${warehouseZoneLabel(this.selectedZone)} // CLEAR`, 1.1);
+    }
+    this.syncIntrusionHud();
+  }
+
+  private inspectSelectedDoor(): void {
+    const active = this.activeCase;
+    if (!active) return;
+    const hasVisitor = active.definition.subjectType !== 'worker' && active.definition.id !== 'freight-sort';
+    if (!hasVisitor || this.selectedDoor !== active.visitorDoorId) {
+      if (this.doorStatuses[this.selectedDoor] === 'unseen') {
+        this.doorStatuses[this.selectedDoor] = 'clear';
+        this.environment.setServiceDoorStatus(this.selectedDoor, 'clear');
+      }
+      this.syncDoorHud();
+      this.hud?.flash(`${this.doorLabel(this.selectedDoor)} // CLEAR`, 1.1);
+      return;
+    }
+    this.evidence.located = true;
+    const status: WarehouseDoorStatus = active.doorTamper ? 'tamper' : 'contact';
+    this.doorStatuses[this.selectedDoor] = status;
+    this.environment.setServiceDoorStatus(this.selectedDoor, status);
+    this.hud?.setBell(true, 1, this.doorLabel(this.selectedDoor));
+    this.bellReminder = -1;
+    if (active.doorTamper && !this.doorEventAvailable) {
+      // Evidence is authored before animation playback so a missing or incompatible clip
+      // can never make the case unwinnable.
+      this.evidence.action = true;
+      this.doorEventAvailable = true;
+      this.visitor?.rig.gesture('open');
+      this.sound.play('tamper');
+      this.hud?.setReplayAvailable(true);
+      this.hud?.flash('PRE-AUTHORIZATION HATCH INTERACTION RECORDED // REPLAY AVAILABLE', 2.6);
+    } else {
+      this.hud?.flash(`${this.doorLabel(this.selectedDoor)} // CONTACT LOCATED`, 1.4);
+    }
+    this.syncDoorHud();
+    this.hud?.showCase(active, this.evidence);
+  }
+
+  private replayDoorEvent(): void {
+    if (!this.doorEventAvailable || !this.visitor || this.isCinematicActive()) return;
+    this.selectedDoor = this.activeCase?.visitorDoorId ?? this.selectedDoor;
+    this.view = 'cctv';
+    this.visitor.rig.gesture('open');
+    this.sound.play('tamper');
+    this.syncDoorHud();
+    this.hud?.setView(this.view);
+    this.hud?.flash('RECORDED EVENT // PRE-AUTHORIZATION HATCH TEST', 2.1);
+    this.syncPointerMode();
+  }
+
+  private syncDoorHud(): void {
+    const states: WarehouseDoorSnapshot[] = WAREHOUSE_DOOR_IDS.map((id) => ({
+      id,
+      status: this.doorStatuses[id],
+      selected: id === this.selectedDoor,
+    }));
+    this.hud?.setDoorStates(states);
+  }
+
+  private syncIntrusionHud(): void {
+    const intruder = this.intruder;
+    const intrusion = this.intrusion;
+    const active = this.activeCase;
+    if (!intruder || !intrusion || !active) return;
+    intrusion.phase = this.containmentResponse ? 'response' : intruder.phase;
+    intrusion.currentZone = intruder.currentZone;
+    intrusion.lastSeenZone = intruder.lastSeenZone;
+    intrusion.selectedZone = this.selectedZone;
+    intrusion.tagSeconds = intruder.tagSeconds;
+    intrusion.routeStep = intruder.routeStep;
+    intrusion.escapeSeconds = intruder.escapeSeconds;
+    const states: WarehouseSecurityZoneSnapshot[] = WAREHOUSE_SECURITY_ZONE_IDS.map((id) => ({
+      id,
+      status: this.zoneStatuses[id],
+      selected: id === this.selectedZone,
+    }));
+    this.hud?.setIntrusion(intrusion, states);
+    this.hud?.showCase(active, this.evidence, intrusion);
+  }
+
+  private isBreachCase(): boolean {
+    return this.activeCase?.definition.id === 'internal-breach';
+  }
+
+  private isCinematicActive(): boolean {
+    return this.pursuit !== null || this.containmentResponse !== null;
+  }
+
+  private doorLabel(id: WarehouseDoorId): string {
+    const door = WAREHOUSE_DOORS[id];
+    return `SERVICE ${door.letter} // ${door.place}`;
+  }
+
+  public setOpticalAim(active: boolean): boolean {
+    if (active && (
+      this.finished
+      || this.isCinematicActive()
+      || this.view !== 'drone'
+      || this.cursorControl
+    )) return false;
+    if (this.opticalAimHeld === active) return true;
+    this.opticalAimHeld = active;
+    this.perspective = active ? 'first' : 'third';
+    if (!active) this.cameraArmDistance = THIRD_PERSON_DISTANCE;
+    this.hud?.setOpticalAim(active);
+    if (active) this.sound.play('camera');
+    return true;
+  }
+
+  public scanFromOpticalInput(): void {
+    if (!this.opticalAimHeld || this.view !== 'drone') {
+      this.hud?.flash('HOLD RIGHT MOUSE FOR OPTICAL VIEW // LEFT CLICK TO SCAN', 1.5);
+      return;
+    }
+    this.scan();
+  }
+
+  public toggleInputMode(): void {
+    if (this.finished || this.isCinematicActive()) return;
+    this.setOpticalAim(false);
+    if (this.view !== 'drone') {
+      this.view = 'drone';
+      this.cursorControl = false;
+      this.hud?.setView(this.view);
+    } else {
+      this.cursorControl = !this.cursorControl;
+    }
+    this.syncPointerMode();
+    this.hud?.flash(this.cursorControl
+      ? 'CURSOR RELEASED // CONSOLE CONTROLS AVAILABLE'
+      : 'DRONE LOOK CONTROL ACTIVE // M RELEASES CURSOR', 1.8);
   }
 
   public cycleTool(direction: number): void {
@@ -464,10 +1003,172 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.hud?.flash(`${this.activeTool.toUpperCase()} CHANNEL ACTIVE`, 1.2);
   }
 
+  private replyToOperator(text: string): WarehouseChatReply {
+    const active = this.activeCase;
+    if (!active) {
+      return { name: 'WAREHOUSE 07', body: 'No active manifest is linked.', source: 'system' };
+    }
+    const query = text.toLowerCase();
+    if (active.definition.id === 'internal-breach' && this.intrusion) {
+      if (query.includes('history') || query.includes('rear') || query.includes('entry')) {
+        this.intrusion.evidence.rearHistory = true;
+        this.evidence.action = true;
+        this.syncIntrusionHud();
+        return {
+          name: 'REAR CAMERA ARCHIVE',
+          body: 'Inbound replay confirms one unlisted person entering behind the final pallet worker before shutter closure.',
+          source: 'system',
+        };
+      }
+      if (query.includes('count') || query.includes('manifest') || query.includes('personnel') || query.includes('beam')) {
+        this.intrusion.evidence.headcount = true;
+        this.evidence.authorization = true;
+        this.syncIntrusionHud();
+        return {
+          name: 'PERSONNEL CONTROL',
+          body: 'Rear beam count: 6 bodies. Authorized inbound roster: 5. MANIFEST MISMATCH // +1 UNLISTED.',
+          source: 'system',
+        };
+      }
+      if (query.includes('tag') || query.includes('optical') || query.includes('identity')) {
+        return {
+          name: 'OPTICAL CONTROL',
+          body: this.intruder?.tagSeconds
+            ? `Live tag active. Last sector: ${warehouseZoneLabel(this.intruder.lastSeenZone ?? this.intruder.currentZone)}. ${this.intruder.tagSeconds.toFixed(1)} seconds remain.`
+            : 'Select the interior feed containing the unlisted person, or acquire them directly with the drone, then scan to create a ten-second live tag.',
+          source: 'system',
+        };
+      }
+      if (query.includes('sector') || query.includes('telemetry') || query.includes('zone') || query.includes('door')) {
+        return {
+          name: 'SECURITY CONTROL',
+          body: this.intruder?.lastSeenZone
+            ? `Last optical contact: ${warehouseZoneLabel(this.intruder.lastSeenZone)}. Containment requires a currently live tag and all three evidence records.`
+            : 'Interior feeds available: Receiving, Storage West, Storage East, and Sortation. Cycle with C.',
+          source: 'system',
+        };
+      }
+      return {
+        name: 'WAREHOUSE 07',
+        body: 'Query rear camera history, personnel count, optical tag, or sector telemetry. Intruder movement pauses while this console is open.',
+        source: 'system',
+      };
+    }
+    if (query.includes('help') || query.includes('command')) {
+      return {
+        name: 'WAREHOUSE 07',
+        body: 'Query package, visitor identity, manifest, weight, security seal, or door telemetry. Physical decisions remain on the Console tab.',
+        source: 'system',
+      };
+    }
+    if (query.includes('door') || query.includes('camera') || query.includes('entrance') || query.includes('telemetry')) {
+      if (!this.evidence.located) {
+        return { name: 'PERIMETER CONTROL', body: 'Source unresolved. Inspect Service A, B, and C camera feeds.', source: 'system' };
+      }
+      if (!this.evidence.visitor) {
+        return {
+          name: 'PERIMETER CONTROL',
+          body: `${this.doorLabel(active.visitorDoorId)} is occupied. Acquire the visitor credential and entrance telemetry before comparing authorization.`,
+          source: 'system',
+        };
+      }
+      return {
+        name: 'PERIMETER CONTROL',
+        body: active.doorTamper && this.evidence.tamper
+          ? `${this.doorLabel(active.visitorDoorId)} recorded a credential-reader bypass and cargo-hatch force event.`
+          : `${this.doorLabel(active.visitorDoorId)} is occupied. Authorized destination: ${this.doorLabel(active.authorizedDoorId)}.`,
+        source: 'system',
+      };
+    }
+    if (query.includes('visitor') || query.includes('identity') || query.includes('name') || query.includes('id')) {
+      if (active.definition.subjectType !== 'worker' && !this.evidence.located) {
+        return { name: 'WAREHOUSE 07', body: 'Visitor identity withheld until the perimeter source is located.', source: 'system' };
+      }
+      if (active.definition.subjectType === 'worker') {
+        return { name: 'PERSONNEL CONTROL', body: `Active temporary worker: ${active.workerName}. Scan their badge for roster comparison.`, source: 'system' };
+      }
+      return {
+        name: active.visitorName,
+        body: active.visitorIntent === 'intrusion'
+          ? 'The outside subject does not answer the secure channel.'
+          : active.definition.id === 'package-5018'
+          ? 'My collection reference is 5018. I will remain outside while you request human verification.'
+          : `I am ${active.visitorName}. My collection reference is ${active.packageId}.`,
+        source: active.visitorIntent === 'intrusion' ? 'system' : 'visitor',
+      };
+    }
+    if (query.includes('weight') || query.includes('mass')) {
+      return {
+        name: 'MANIFEST CONTROL',
+        body: this.evidence.cargo
+          ? `Expected ${active.expectedWeight.toFixed(1)} kilograms. Optical station reports ${active.measuredWeight.toFixed(1)} kilograms.`
+          : `Expected mass is ${active.expectedWeight.toFixed(1)} kilograms. Acquire a scan for measured mass.`,
+        source: 'system',
+      };
+    }
+    if (query.includes('seal') || query.includes('security')) {
+      return {
+        name: 'SECURITY CONTROL',
+        body: !this.evidence.cargo
+          ? 'No current security reading. Acquire an optical scan.'
+          : active.definition.anomaly === 'seal'
+            ? 'Seal discontinuity detected. Preserve the package and compare the record.'
+            : 'Seal record is valid on the active scan.',
+        source: 'system',
+      };
+    }
+    if (query.includes('package') || query.includes('manifest') || query.includes('aisle') || query.includes('bay')) {
+      return {
+        name: 'MANIFEST CONTROL',
+        body: `Package ${active.packageId} is listed at aisle ${active.aisle}, bay ${String(active.bay).padStart(2, '0')}. Expected mass ${active.expectedWeight.toFixed(1)} kilograms.`,
+        source: 'system',
+      };
+    }
+    return {
+      name: 'WAREHOUSE 07',
+      body: 'No matching record. Query package, visitor identity, manifest, weight, security seal, door telemetry, or help.',
+      source: 'system',
+    };
+  }
+
+  private syncPointerMode(): void {
+    const manager = this.getWorld()?.inputManager;
+    const capture = this.shouldCapturePointer();
+    if (!capture && this.opticalAimHeld) this.setOpticalAim(false);
+    this.hud?.setCursorMode(!capture);
+    if (capture) {
+      setCursorVisible(false);
+      manager?.requestPointerLock({ unadjustedMovement: true });
+      return;
+    }
+    manager?.exitPointerLock();
+    setCursorVisible(true);
+  }
+
   public controllerDecision(direction: 'up' | 'down' | 'left' | 'right'): void {
+    if (this.view === 'cctv' && (direction === 'left' || direction === 'right')) {
+      this.cycleDoor(direction === 'right' ? 1 : -1);
+      return;
+    }
     const active = this.activeCase;
     if (!active) return;
-    if (active.definition.id === 'package-7018') {
+    if (active.definition.id === 'internal-breach') {
+      const zones = {
+        up: 'receiving',
+        left: 'storage-west',
+        right: 'storage-east',
+        down: 'sortation',
+      } as const;
+      if (this.view === 'console') this.tryContainZone(zones[direction]);
+      else this.selectZone(zones[direction]);
+      return;
+    }
+    if (active.definition.id === 'door-tamper') {
+      if (direction === 'left' || direction === 'down') this.tryDecision('deny-lockdown');
+      else this.tryDecision('release');
+      return;
+    }
+    if (active.definition.id === 'package-5018') {
       const decisions = { left: 'verify', up: 'release', right: 'quarantine', down: 'return' } as const;
       this.tryDecision(decisions[direction]);
       return;
@@ -481,10 +1182,26 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.tryDecision(decisions[direction]);
   }
 
+  public activateNumber(index: number): void {
+    if (this.isBreachCase()) {
+      const zone = WAREHOUSE_SECURITY_ZONE_IDS[Math.max(0, Math.min(3, index))];
+      if (this.view === 'console') this.tryContainZone(zone);
+      else this.selectZone(zone);
+      return;
+    }
+    const decisions: readonly WarehouseDecision[] = ['release', 'quarantine', 'return', 'clear', 'hold', 'verify'];
+    const decision = decisions[index];
+    if (decision) this.tryDecision(decision);
+  }
+
   public scan(): void {
-    if (!this.activeCase || this.handoff > 0 || this.finished) return;
+    if (!this.activeCase || this.handoff > 0 || this.finished || this.isCinematicActive()) return;
     if (this.view === 'console') {
       this.hud?.flash('CONSOLE HOLDS RECORDS // ACQUIRE SUBJECT THROUGH DRONE OR CCTV');
+      return;
+    }
+    if (this.activeCase.definition.id === 'internal-breach') {
+      this.scanIntruder();
       return;
     }
     if (this.activeCase.definition.subjectType === 'worker') {
@@ -493,11 +1210,29 @@ export class WarehouseRig extends ENGINE.SceneNode {
         this.hud?.flash('NO PERSONNEL TARGET IN FRAME');
         return;
       }
-    } else if (this.view === 'drone' && this.nearestCargoDistance() > 10) {
-      this.hud?.flash(`TARGET DISTANT // AISLE ${this.activeCase.aisle} BAY ${String(this.activeCase.bay).padStart(2, '0')}`);
-      return;
+      this.evidence.visitor = true;
+    } else if (this.activeCase.definition.id === 'freight-sort') {
+      if (!this.inboundOpened) {
+        this.hud?.flash('REAR FREIGHT LOAD HAS NOT ARRIVED');
+        return;
+      }
+      this.evidence.cargo = true;
+    } else if (this.view === 'cctv') {
+      this.inspectSelectedDoor();
+      if (this.selectedDoor !== this.activeCase.visitorDoorId || !this.evidence.located) {
+        this.hud?.flash(`${this.doorLabel(this.selectedDoor)} // NO VISITOR TARGET`);
+        return;
+      }
+      this.evidence.visitor = true;
+      this.evidence.authorization = true;
+      if (this.activeCase.doorTamper) this.evidence.tamper = true;
+    } else {
+      if (this.nearestCargoDistance() > 10) {
+        this.hud?.flash(`TARGET DISTANT // AISLE ${this.activeCase.aisle} BAY ${String(this.activeCase.bay).padStart(2, '0')}`);
+        return;
+      }
+      this.evidence.cargo = true;
     }
-    this.scanned = true;
     this.sound.play('scan');
     this.hud?.pulseScan();
     const container = this.getWorld()?.gameContainer;
@@ -510,12 +1245,13 @@ export class WarehouseRig extends ENGINE.SceneNode {
         channel: this.activeTool,
       }).then((record) => {
         if (!record) return;
-        updateWarehouseSave((save) => {
+        const updated = updateWarehouseSave((save) => {
           save.archiveRecords = [...save.archiveRecords.filter((entry) => entry.id !== record.id), record].slice(-32);
         });
+        this.hud?.setRecords(updated.archiveRecords);
       });
     }
-    if (this.activeCase.definition.id === 'package-7018') {
+    if (this.activeCase.definition.id === 'package-5018') {
       const primaryDistance = this.cargo
         ? this.drone.position.distanceTo(this.cargo.position)
         : Number.POSITIVE_INFINITY;
@@ -528,24 +1264,81 @@ export class WarehouseRig extends ENGINE.SceneNode {
           ...this.activeCase,
           measuredWeight: duplicateDistance < primaryDistance ? 40 - migration : 40 + migration,
         },
-        true
+        this.evidence
       );
     } else {
-      this.hud?.showCase(this.activeCase, true);
+      this.hud?.showCase(this.activeCase, this.evidence);
     }
     const toolRequired = this.activeCase.definition.requiredTools.find((tool) => !['optical', this.activeTool].includes(tool));
     if (toolRequired && this.activeTool !== toolRequired) this.hud?.flash(`${toolRequired.toUpperCase()} CHANNEL REQUIRED TO COMPLETE COMPARISON`);
-    else this.hud?.flash('EVIDENCE RECORDED // COMPARE BEFORE DECISION', 1.6);
+    else if (this.activeCase.definition.id === 'door-tamper') {
+      const count = Number(this.evidence.action) + Number(this.evidence.authorization) + Number(this.evidence.tamper);
+      this.hud?.flash(`EVIDENCE STACK ${count} / 3 // ${count === 3 ? 'DENY + LOCKDOWN ENABLED' : 'CONTINUE COMPARISON'}`, 2.2);
+    } else if (this.evidence.visitor && this.evidence.cargo) {
+      this.hud?.flash(`VISITOR + PACKAGE VERIFIED // ROUTE TO ${this.doorLabel(this.activeCase.authorizedDoorId)}`, 2.1);
+    } else {
+      this.hud?.flash('EVIDENCE RECORDED // ACQUIRE THE SECOND SUBJECT RECORD', 1.8);
+    }
+  }
+
+  private scanIntruder(): void {
+    const intruder = this.intruder;
+    const intrusion = this.intrusion;
+    if (!intruder || !intrusion || !this.breachStarted) {
+      this.hud?.flash('SECURITY SEARCH HAS NOT STARTED');
+      return;
+    }
+    if (this.activeTool === 'history') {
+      if (this.view !== 'cctv' || this.selectedZone !== 'receiving') {
+        this.hud?.flash('REAR CAMERA HISTORY IS AVAILABLE ON THE RECEIVING FEED');
+        return;
+      }
+      intrusion.evidence.rearHistory = true;
+      this.evidence.action = true;
+      this.sound.play('scan');
+      this.hud?.pulseScan();
+      this.hud?.flash('REAR ENTRY HISTORY // UNLISTED PERSON RECORDED', 2.3);
+      this.syncIntrusionHud();
+      return;
+    }
+    let acquired = false;
+    if (this.view === 'cctv') {
+      acquired = intruder.currentZone === this.selectedZone;
+    } else {
+      const position = intruder.getWorldPosition(new THREE.Vector3());
+      const toTarget = position.sub(this.cameraPosition);
+      const distance = toTarget.length();
+      const forward = this.cameraTarget.clone().sub(this.cameraPosition).normalize();
+      const direction = toTarget.normalize();
+      this.cameraRaycaster.set(this.cameraPosition, direction);
+      this.cameraRaycaster.near = 0.05;
+      this.cameraRaycaster.far = distance;
+      const blocked = this.cameraRaycaster.intersectObject(this.environment.root, true)
+        .some((entry) => entry.distance < distance - 0.3 && this.isCameraBlocker(entry.object));
+      acquired = distance <= 16 && direction.dot(forward) >= 0.94 && !blocked;
+    }
+    if (!acquired) {
+      this.hud?.flash(`${warehouseZoneLabel(this.selectedZone)} // NO OPTICAL TARGET`);
+      return;
+    }
+    intruder.observe();
+    intruder.tag();
+    intrusion.evidence.liveTag = true;
+    this.evidence.visitor = true;
+    this.zoneStatuses[intruder.currentZone] = 'contact';
+    this.sound.play('tracking');
+    this.hud?.pulseScan();
+    this.hud?.flash(`OPTICAL TAG CONFIRMED // ${warehouseZoneLabel(intruder.currentZone)} // 10 SEC`, 2.2);
+    this.syncIntrusionHud();
   }
 
   public toggleGrip(): void {
-    if (this.view !== 'drone' || this.finished) return;
+    if (this.view !== 'drone' || this.finished || this.isCinematicActive() || this.isBreachCase()) return;
     if (this.carried) {
-      const worldPosition = this.carried.getWorldPosition(new THREE.Vector3()).sub(this.position);
-      this.carried.removeFromParent();
-      this.add(this.carried);
-      this.carried.position.copy(worldPosition).setY(0);
-      this.carried.carried = false;
+      const cargo = this.cargoRope.detach() ?? this.carried;
+      cargo.position.y = 0;
+      cargo.quaternion.identity();
+      cargo.carried = false;
       this.carried = null;
       this.sound.play('grip');
       this.hud?.flash('LOAD RELEASED');
@@ -561,22 +1354,170 @@ export class WarehouseRig extends ENGINE.SceneNode {
       )[0];
     if (!cargo) return;
     const cargoAt = cargo.getWorldPosition(new THREE.Vector3());
-    if (cargoAt.distanceTo(droneAt) > 4.2) {
+    if (cargoAt.distanceTo(droneAt) > 3.65) {
       this.hud?.flash('GRIP TARGET OUT OF RANGE');
       return;
     }
-    cargo.removeFromParent();
-    this.drone.add(cargo);
-    cargo.position.set(0, -0.86, -0.2);
+    this.ropeAnchor.copy(this.drone.position).add(new THREE.Vector3(0, -0.48, 0));
+    this.cargoRope.attach(cargo, this, this.ropeAnchor);
     cargo.carried = true;
     this.carried = cargo;
     this.sound.play('grip');
     this.hud?.flash(`LOAD ${this.activeCase?.packageId ?? ''} SECURED`);
   }
 
+  public tryContainZone(zone: WarehouseSecurityZoneId): void {
+    const intruder = this.intruder;
+    const intrusion = this.intrusion;
+    const active = this.activeCase;
+    if (!intruder || !intrusion || !active || active.definition.id !== 'internal-breach' || this.decisionCommitted) return;
+    const ready = intrusion.evidence.rearHistory
+      && intrusion.evidence.headcount
+      && intrusion.evidence.liveTag
+      && intruder.tagSeconds > 0;
+    if (!ready) {
+      this.hud?.flash('CONTAINMENT LOCKED // COMPLETE 3-CLUE STACK + LIVE TAG', 2.2);
+      return;
+    }
+    this.decisions += 1;
+    this.decisionCommitted = true;
+    updateWarehouseSave((save) => { save.totalDecisions += 1; });
+    if (zone !== intruder.currentZone) {
+      this.integrity = Math.max(0, this.integrity - 1);
+      this.cleanChain = 0;
+      this.sound.play('reject');
+      this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
+      this.hud?.flash(`WRONG SECTOR // TAG REPORTS ${warehouseZoneLabel(intruder.currentZone)} // RESTORING EMERGENCY CHECKPOINT`, 3);
+      updateWarehouseSave((save) => { save.storyMistakes += this.mode === 'story' ? 1 : 0; });
+      window.setTimeout(() => this.restartBreachCheckpoint(), 1600);
+      return;
+    }
+
+    this.correct += 1;
+    this.cleanChain += 1;
+    intrusion.containedZone = zone;
+    intruder.contain();
+    this.zoneStatuses[zone] = 'locked';
+    this.environment.setSecurityZoneLocked(zone, true);
+    this.environment.setLightingMode('contained');
+    this.sound.setEmergency(true, true);
+    this.sound.play('security-gate');
+    this.hud?.setSecurityAlert(`CONTAINED // ${warehouseZoneLabel(zone)} LOCKED // RESPONSE EN ROUTE`);
+    this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
+    this.hud?.flash(`${warehouseZoneLabel(zone)} CONTAINED // EVIDENCE PRESERVED // NO CONTACT`, 3.2);
+    updateWarehouseSave((save) => {
+      save.correctDecisions += 1;
+      save.bestCleanChain = Math.max(save.bestCleanChain, this.cleanChain);
+      if (!save.discoveredCases.includes(active.definition.id)) save.discoveredCases.push(active.definition.id);
+    });
+    this.syncIntrusionHud();
+    window.setTimeout(() => {
+      if (this.activeCase === active && this.decisionCommitted) this.beginContainmentResponse(zone);
+    }, getAccessibilityPreferences().reducedMotion ? 250 : 1200);
+  }
+
+  private restartBreachCheckpoint(): void {
+    if (!this.intruder || !this.intrusion || !this.isBreachCase() || this.finished) return;
+    this.decisionCommitted = false;
+    this.environment.resetSecurityZones();
+    this.environment.setLightingMode('emergency');
+    this.sound.setEmergency(true);
+    this.intruder.resetAtCheckpoint();
+    this.intrusion.evidence.liveTag = false;
+    this.evidence.visitor = false;
+    this.intrusion.containedZone = null;
+    this.zoneStatuses = {
+      receiving: 'motion',
+      'storage-west': 'unseen',
+      'storage-east': 'unseen',
+      sortation: 'unseen',
+    };
+    this.selectedZone = 'receiving';
+    this.view = 'cctv';
+    this.hud?.setView(this.view);
+    this.syncPointerMode();
+    this.syncIntrusionHud();
+  }
+
+  private failBreach(message: string): void {
+    if (!this.isBreachCase() || this.decisionCommitted || this.finished) return;
+    this.decisionCommitted = true;
+    this.decisions += 1;
+    this.integrity = Math.max(0, this.integrity - 1);
+    this.cleanChain = 0;
+    this.sound.play('reject');
+    this.sound.setEmergency(false);
+    this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
+    this.hud?.flash(`${message} // RESTORING EMERGENCY CHECKPOINT`, 3.2);
+    updateWarehouseSave((save) => {
+      save.totalDecisions += 1;
+      save.criticalBreaches += 1;
+      save.storyMistakes += this.mode === 'story' ? 1 : 0;
+    });
+    if (this.mode === 'story') window.setTimeout(() => this.restartBreachCheckpoint(), 1800);
+    else this.finish(false);
+  }
+
+  private beginContainmentResponse(zone: WarehouseSecurityZoneId): void {
+    if (this.containmentResponse || !this.intruder) return;
+    const response = new WarehouseContainmentResponse(zone);
+    this.containmentResponse = response;
+    this.add(response.officer.root);
+    this.view = 'cctv';
+    this.selectedZone = zone;
+    this.hud?.setView(this.view);
+    this.hud?.setPursuit(true);
+    this.hud?.appendSystem(
+      'LUCIAN BARBU // REMOTE LIAISON',
+      'Evidence integrity confirmed. Forwarding the secured sector to the correct local jurisdiction. Local response ETA 04:28.'
+    );
+    this.syncIntrusionHud();
+    this.syncPointerMode();
+  }
+
+  private updateContainmentResponse(deltaTime: number): void {
+    const response = this.containmentResponse;
+    if (!response) return;
+    const frame = response.tick(deltaTime);
+    this.hud?.setCctvTimestampOffset(frame.timestampOffsetSeconds);
+    if (frame.phaseChanged && frame.phase === 'response') {
+      this.sound.play('siren');
+      this.hud?.flash('LOCAL UNIT VISUAL // SECURED SECTOR CAMERA', 2.3);
+    }
+    if (!frame.complete) return;
+    this.finishContainmentResponse();
+  }
+
+  private finishContainmentResponse(): void {
+    if (!this.containmentResponse) return;
+    this.containmentResponse.destroy();
+    this.containmentResponse = null;
+    this.hud?.setPursuit(false);
+    this.hud?.setCctvTimestampOffset(0);
+    this.hud?.appendSystem('LOCAL RESPONSE', 'SECURED SECTOR ENTERED // EVIDENCE TRANSFER COMPLETE // FEED CLOSED BEFORE CONTACT');
+    this.hud?.flash('LOCAL RESPONSE COMPLETE // NORMAL POWER RECOVERING', 3);
+    this.environment.setLightingMode('recovery');
+    this.sound.setEmergency(false);
+    this.sound.play('recovery');
+    this.hud?.setSecurityAlert('SECURED // LOCAL RESPONSE COMPLETE // POWER RECOVERY');
+    window.setTimeout(() => this.advance(), getAccessibilityPreferences().reducedMotion ? 300 : 1100);
+  }
+
   public tryDecision(decision: WarehouseDecision): void {
     const active = this.activeCase;
-    if (!active || !this.scanned || this.finished) {
+    if (!active || this.finished || this.isCinematicActive() || this.decisionCommitted || active.definition.id === 'internal-breach') return;
+    const evidenceReady = decision === 'deny-lockdown'
+      ? active.definition.id === 'door-tamper'
+        ? this.evidence.visitor && this.evidence.action && this.evidence.authorization && this.evidence.tamper
+        : this.evidence.visitor && this.evidence.cargo
+      : active.definition.subjectType === 'worker'
+        ? this.evidence.visitor
+        : active.definition.id === 'freight-sort'
+          ? this.evidence.cargo
+          : decision === 'verify'
+            ? this.evidence.visitor && this.evidence.cargo
+            : this.evidence.visitor && this.evidence.cargo;
+    if (!evidenceReady) {
       this.hud?.flash('SCAN AND CROSS-CHECK BEFORE DECISION');
       return;
     }
@@ -589,10 +1530,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.hud?.flash(`COMPLETE THE ${comparisonTool.toUpperCase()} COMPARISON BEFORE COMMITTING`);
       return;
     }
-    if (active.definition.id === 'package-7018' && decision === 'verify') {
+    if (active.definition.id === 'package-5018' && decision === 'verify') {
       this.visitorVerified = true;
       this.sound.play('resolved');
-      this.hud?.flash('HUMAN VERIFICATION REQUESTED // FRONT SUBJECT HELD OUTSIDE', 2.8);
+      this.hud?.flash(`HUMAN VERIFICATION REQUESTED // ${this.doorLabel(active.visitorDoorId)} HELD`, 2.8);
       return;
     }
     if (active.definition.id === 'freight-sort' && !this.inboundOpened) {
@@ -619,7 +1560,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.hud?.flash('REQUEST HUMAN VERIFICATION BEFORE ASSIGNING THE HOLD BAY');
       return;
     }
-    if (active.definition.id === 'package-7018' && decision === 'quarantine' && !this.visitorVerified) {
+    if (active.definition.id === 'package-5018' && decision === 'quarantine' && !this.visitorVerified) {
       this.hud?.flash('PRESERVE BOTH RECORDS // REQUEST HUMAN VERIFICATION FOR THE VISITOR');
       return;
     }
@@ -629,10 +1570,25 @@ export class WarehouseRig extends ENGINE.SceneNode {
         this.hud?.flash('SECURE THE PACKAGE WITH THE GRIPPER');
         return;
       }
-      const station = this.environment.stationPositions[decision as 'release' | 'quarantine' | 'return'];
-      if (this.drone.position.distanceTo(station) > 4.4) {
-        this.hud?.flash(`MOVE LOAD TO ${decision.toUpperCase()} STATION`);
-        return;
+      if (decision === 'release') {
+        const nearest = this.environment.nearestDoorHandoff(this.drone.position);
+        const requiredDoor = active.visitorIntent === 'intrusion' ? active.visitorDoorId : active.authorizedDoorId;
+        if (nearest.distance > 4.4) {
+          this.hud?.flash(`MOVE LOAD TO ${this.doorLabel(requiredDoor)} CARGO HANDOFF`);
+          return;
+        }
+        if (nearest.id !== requiredDoor) {
+          this.sound.play('reject');
+          this.elapsed += 3;
+          this.hud?.flash(`DESTINATION LOCK MISMATCH // AUTHORIZED ${this.doorLabel(requiredDoor)} // LOAD RETAINED`, 2.7);
+          return;
+        }
+      } else {
+        const station = this.environment.stationPositions[decision as 'quarantine' | 'return'];
+        if (this.drone.position.distanceTo(station) > 4.4) {
+          this.hud?.flash(`MOVE LOAD TO ${decision.toUpperCase()} STATION`);
+          return;
+        }
       }
     }
     this.resolveDecision(decision);
@@ -641,8 +1597,16 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private resolveDecision(decision: WarehouseDecision): void {
     const active = this.activeCase;
     if (!active) return;
+    this.decisionCommitted = true;
     this.decisions += 1;
     const correct = decision === active.definition.correctDecision;
+    if (decision === 'release') this.performCargoHandoff();
+    if (decision === 'deny-lockdown') {
+      this.environment.lockdownServiceDoor(active.visitorDoorId);
+      this.doorStatuses[active.visitorDoorId] = 'locked';
+      this.syncDoorHud();
+      this.sound.play('lockdown');
+    }
     updateWarehouseSave((save) => {
       save.totalDecisions += 1;
       if (correct) save.correctDecisions += 1;
@@ -680,10 +1644,142 @@ export class WarehouseRig extends ENGINE.SceneNode {
       if (this.mode === 'story' && this.storyMovement === 0) save.tutorialComplete = true;
     });
     if (this.mode === 'story' && this.storyMovement === 0) this.hud?.setControlsVisible(false);
-    this.hud?.flash(active.definition.critical ? '7018 QUARANTINED // OUTBOUND LOCK CYCLING EMPTY' : 'CASE RESOLVED', active.definition.critical ? 4 : 1.5);
-    if (active.definition.critical) this.sound.play('anomaly');
-    if (active.definition.critical) this.environment.sealQuarantine();
-    window.setTimeout(() => this.advance(), active.definition.critical ? 3500 : 850);
+    if (decision === 'deny-lockdown') {
+      this.hud?.flash('DENIAL CONFIRMED // SERVICE ROUTE LOCKED // EVIDENCE PRESERVED', 3.2);
+      this.beginPoliceResponse();
+      return;
+    }
+    const is5018 = active.definition.id === 'package-5018';
+    this.hud?.flash(is5018 ? '5018 QUARANTINED // OUTBOUND LOCK CYCLING EMPTY' : 'CASE RESOLVED', is5018 ? 4 : 1.5);
+    if (is5018) this.sound.play('anomaly');
+    if (decision === 'quarantine') this.environment.sealQuarantine();
+    const deliveryDelay = decision === 'release'
+      ? getAccessibilityPreferences().reducedMotion ? 900 : 5200
+      : is5018 ? 3500 : 850;
+    window.setTimeout(() => this.advance(), deliveryDelay);
+  }
+
+  private performCargoHandoff(): void {
+    const active = this.activeCase;
+    const cargo = this.cargoRope.detach() ?? this.carried;
+    if (!active || !cargo) return;
+    const nearest = this.environment.nearestDoorHandoff(this.drone.position);
+    cargo.carried = false;
+    cargo.position.copy(WAREHOUSE_DOORS[nearest.id].handoffPosition);
+    cargo.position.y = 0;
+    cargo.quaternion.identity();
+    const reducedMotion = getAccessibilityPreferences().reducedMotion;
+    this.deliveredCargo = {
+      node: cargo,
+      from: cargo.position.clone(),
+      to: WAREHOUSE_DOORS[nearest.id].visitorPosition.clone().add(new THREE.Vector3(0, 0.08, 0)),
+      elapsed: 0,
+      duration: reducedMotion ? 0.08 : 3.2,
+    };
+    this.carried = null;
+    this.environment.cycleServiceDoor(nearest.id);
+    this.hud?.setBell(false, 0);
+    this.selectedDoor = nearest.id;
+    this.view = 'cctv';
+    if (nearest.id === active.visitorDoorId) {
+      const receiver = this.visitor;
+      receiver?.rig.gesture('open');
+      if (receiver && active.visitorIntent === 'collection') {
+        const exit = WAREHOUSE_DOORS[nearest.id].pursuit.officerStart.clone();
+        window.setTimeout(() => {
+          if (this.activeCase !== active || this.visitor !== receiver || this.pursuit) return;
+          receiver.rig.walk(exit, { interrupt: true, locomotion: 'walk', pace: 1.1 });
+          cargo.visible = false;
+        }, reducedMotion ? 160 : 3400);
+      }
+    }
+    this.syncDoorHud();
+    this.hud?.setView(this.view);
+    this.syncPointerMode();
+  }
+
+  private beginPoliceResponse(): void {
+    const active = this.activeCase;
+    if (!active || !this.visitor) {
+      window.setTimeout(() => this.advance(), 900);
+      return;
+    }
+    const authored = this.mode === 'story';
+    const shortened = seedFrom(`${this.seed}:response:${this.stage}`) % 100 < 15;
+    if (!authored && !shortened) {
+      this.hud?.appendSystem('LUCIAN BARBU // REMOTE LIAISON', 'Evidence packet verified and forwarded to the correct local jurisdiction. Local response is active.');
+      window.setTimeout(() => this.advance(), 1500);
+      return;
+    }
+    this.pursuit = new WarehousePursuit(active.visitorDoorId, this.visitor, authored);
+    this.add(this.pursuit.officer.root);
+    this.pursuitPhase = 'lockdown';
+    this.selectedDoor = active.visitorDoorId;
+    this.view = 'cctv';
+    this.syncDoorHud();
+    this.hud?.setView(this.view);
+    this.hud?.setReplayAvailable(false);
+    this.hud?.setPursuit(true);
+    this.hud?.appendSystem(
+      'LUCIAN BARBU // REMOTE LIAISON',
+      'Evidence integrity confirmed. Forwarding the event to the correct local jurisdiction. Local response ETA 04:12.'
+    );
+    this.syncPointerMode();
+  }
+
+  private updatePursuit(deltaTime: number): void {
+    const pursuit = this.pursuit;
+    const active = this.activeCase;
+    if (!pursuit || !active) return;
+    const frame = pursuit.tick(deltaTime);
+    this.hud?.setCctvTimestampOffset(frame.timestampOffsetSeconds);
+    if (frame.phaseChanged) {
+      this.pursuitPhase = frame.phase;
+      if (frame.phase === 'suspect') {
+        this.hud?.flash('SURVEILLANCE TIMESTAMP +04:07 // SUBJECT FLEEING', 2.1);
+      } else if (frame.phase === 'response') {
+        if (!getAccessibilityPreferences().reducedMotion) this.environment.setPursuitLights(active.visitorDoorId, true);
+        this.sound.play('siren');
+        this.hud?.flash('LOCAL UNIT VISUAL // EXTERIOR CORNER CAMERA', 2.2);
+      }
+    }
+    if (frame.complete) this.finishPoliceResponse();
+  }
+
+  private updateDeliveredCargo(deltaTime: number): void {
+    const delivery = this.deliveredCargo;
+    if (!delivery) return;
+    delivery.elapsed += deltaTime;
+    const progress = Math.min(1, delivery.elapsed / Math.max(0.01, delivery.duration));
+    const eased = progress * progress * (3 - 2 * progress);
+    delivery.node.position.lerpVectors(delivery.from, delivery.to, eased);
+    delivery.node.position.y += Math.sin(progress * Math.PI) * 0.09;
+    if (progress >= 1) this.deliveredCargo = null;
+  }
+
+  private finishPoliceResponse(): void {
+    const active = this.activeCase;
+    if (!this.pursuit || !active) return;
+    this.environment.setPursuitLights(active.visitorDoorId, false);
+    this.pursuit.destroy();
+    this.pursuit = null;
+    this.pursuitPhase = '';
+    this.hud?.setPursuit(false);
+    this.hud?.setCctvTimestampOffset(0);
+    this.hud?.appendSystem('LOCAL RESPONSE', 'LOCAL UNIT IN PURSUIT // EVIDENCE TRANSFER COMPLETE');
+    this.hud?.flash('LOCAL UNIT IN PURSUIT // EVIDENCE TRANSFER COMPLETE', 3);
+    window.setTimeout(() => this.advance(), 900);
+  }
+
+  private skipPursuit(): void {
+    if (this.containmentResponse) {
+      this.containmentResponse.skip();
+      this.finishContainmentResponse();
+      return;
+    }
+    if (!this.pursuit) return;
+    this.pursuit.skip();
+    this.finishPoliceResponse();
   }
 
   private advance(): void {
@@ -699,7 +1795,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
         this.finish(true);
         return;
       }
-      updateWarehouseSave((save) => { save.storyMovement = this.storyMovement; });
+      updateWarehouseSave((save) => {
+        save.storyMovement = this.storyMovement;
+        save.storyMovementId = STORY_MOVEMENTS[this.storyMovement].id;
+      });
       this.beginStoryMovement();
       return;
     }
@@ -751,6 +1850,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       if (this.mode === 'story' && completed) {
         save.storyCompleted = true;
         save.storyMovement = STORY_MOVEMENTS.length - 1;
+        save.storyMovementId = STORY_MOVEMENTS[STORY_MOVEMENTS.length - 1].id;
         if (!save.unlockedTools.includes('history')) save.unlockedTools.push('history');
       }
       if (this.mode === 'daily') save.dailyHistory[this.seed] = result;
@@ -766,6 +1866,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
 
   public requestExit(): void {
+    if (this.isCinematicActive()) {
+      this.skipPursuit();
+      return;
+    }
     const accuracy = this.decisions > 0 ? this.correct / this.decisions : 0;
     const base = { mode: this.mode, seed: this.seed, stage: this.stage, accuracy, cleanChain: this.cleanChain, integrity: this.integrity, elapsedSeconds: this.elapsed, completed: this.finished } as const;
     const result: WarehouseRunResult = { ...base, rank: WarehouseDirector.rank(base) };
@@ -781,33 +1885,193 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.hud?.setInbound(0);
     this.setWorkersVisible(true);
     this.environment.spawnInboundFreight();
+    this.environment.setRearDoorOpen(1);
     this.sound.play('warning');
     this.sound.play('shutter');
     this.hud?.flash('INBOUND FREIGHT // REAR DOOR OPENING', 2.4);
+    if (this.isBreachCase() && this.intruder) {
+      this.intruder.startEntry();
+      this.breachEntryTimer = getAccessibilityPreferences().reducedMotion ? 1.2 : 4.2;
+      this.hud?.appendSystem('INBOUND CONTROL', 'Five authorized workers and incoming pallets recorded. Rear personnel beam remains active.');
+    }
   }
 
-  private applyCamera(): void {
+  private updateBreach(deltaTime: number): void {
+    const intruder = this.intruder;
+    if (!intruder || !this.intrusion) return;
+    if (this.breachEntryTimer > 0) {
+      this.breachEntryTimer -= deltaTime;
+      if (this.breachEntryTimer <= 0) this.beginEmergencySearch();
+      return;
+    }
+    if (!this.breachStarted) return;
+    intruder.setPaused(this.view === 'console');
+    this.intrusionHudAccumulator += deltaTime;
+    if (this.intrusionHudAccumulator >= 0.12) {
+      this.intrusionHudAccumulator = 0;
+      this.syncIntrusionHud();
+    }
+  }
+
+  private beginEmergencySearch(): void {
+    if (!this.intruder || !this.intrusion || this.breachStarted) return;
+    this.breachStarted = true;
+    this.environment.setRearDoorOpen(0);
+    this.environment.setLightingMode('emergency');
+    this.sound.play('power-loss');
+    this.sound.setEmergency(true);
+    this.sound.play('metal-impact');
+    for (const [index, worker] of this.workers.entries()) {
+      worker.moveToMuster(WAREHOUSE_LAYOUT.muster[index % WAREHOUSE_LAYOUT.muster.length]);
+    }
+    this.intruder.activateSearch();
+    this.zoneStatuses.receiving = 'motion';
+    this.hud?.setInbound(null);
+    this.hud?.setSecurityAlert('EMERGENCY // PERSONNEL COUNT +1 // CONTAINMENT ACTIVE');
+    this.hud?.appendSystem(
+      'SECURITY CONTROL',
+      'PERSONNEL COUNT +1 // WORKERS VERIFIED AT MUSTER // Four interior feeds unlocked. Gather rear history, headcount mismatch, and a live optical tag.'
+    );
+    this.hud?.flash('EMERGENCY MODE // UNLISTED PERSON INSIDE // NON-COMBAT CONTAINMENT', 3.8);
+    this.view = 'cctv';
+    this.selectedZone = 'receiving';
+    this.hud?.setView(this.view);
+    this.syncPointerMode();
+    this.syncIntrusionHud();
+  }
+
+  private applyCamera(deltaTime = 0): void {
     if (!this.camera) return;
-    if (this.view === 'drone') {
+    if (this.containmentResponse) {
+      const pose = WAREHOUSE_SECURITY_ZONES[this.containmentResponse.zone].camera;
+      this.droneVisual.visible = true;
+      this.cameraPosition.copy(pose.position);
+      this.cameraTarget.copy(pose.target);
+      if (this.camera.getFOV() !== pose.fov) this.camera.setFOV(pose.fov);
+    } else if (this.pursuit) {
+      const pose = this.pursuit.currentCamera();
+      this.droneVisual.visible = true;
+      this.cameraPosition.copy(pose.position);
+      this.cameraTarget.copy(pose.target);
+      if (this.camera.getFOV() !== pose.fov) this.camera.setFOV(pose.fov);
+    } else if (this.view === 'drone') {
+      if (this.camera.getFOV() !== 68) this.camera.setFOV(68);
       const forward = new THREE.Vector3(Math.sin(this.yaw), Math.sin(this.pitch), Math.cos(this.yaw)).normalize();
-      // The first-person lens sits just beyond the opaque procedural hull.
-      this.cameraPosition.copy(this.drone.position).addScaledVector(forward, 0.58).add(new THREE.Vector3(0, 0.1, 0));
-      this.cameraTarget.copy(this.cameraPosition).addScaledVector(forward, 10);
+      if (this.perspective === 'first') {
+        // Hide the body and keep the lens inside the drone's collision envelope. Pushing
+        // the lens forward made it enter a rack when the player turned beside shelving.
+        this.droneVisual.visible = false;
+        this.cameraPosition.copy(this.drone.position).add(new THREE.Vector3(0, 0.1, 0));
+        this.cameraTarget.copy(this.cameraPosition).addScaledVector(forward, 10);
+      } else {
+        this.droneVisual.visible = true;
+        const chaseForward = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+        this.cameraAnchor.copy(this.drone.position).add(new THREE.Vector3(0, 0.22, 0));
+        this.desiredCameraPosition.copy(this.cameraAnchor)
+          .addScaledVector(chaseForward, -THIRD_PERSON_ARM)
+          .add(new THREE.Vector3(0, THIRD_PERSON_HEIGHT, 0));
+        const availableDistance = this.cameraClearanceDistance(this.cameraAnchor, this.desiredCameraPosition);
+        if (!Number.isFinite(this.cameraArmDistance) || deltaTime <= 0) {
+          this.cameraArmDistance = availableDistance;
+        } else if (this.cameraArmDistance > availableDistance) {
+          // Retract immediately; letting interpolation cross a rack is what caused black frames.
+          this.cameraArmDistance = availableDistance;
+        } else {
+          this.cameraArmDistance = THREE.MathUtils.damp(
+            this.cameraArmDistance,
+            availableDistance,
+            5.5,
+            Math.min(deltaTime, 1 / 30)
+          );
+        }
+        this.cameraDirection.copy(this.desiredCameraPosition).sub(this.cameraAnchor).normalize();
+        this.desiredCameraPosition.copy(this.cameraAnchor).addScaledVector(this.cameraDirection, this.cameraArmDistance);
+        this.desiredCameraTarget.copy(this.drone.position).addScaledVector(forward, 2.4).add(new THREE.Vector3(0, -0.15, 0));
+        const blend = deltaTime > 0 ? 1 - Math.exp(-7.5 * deltaTime) : 1;
+        this.cameraPosition.lerp(this.desiredCameraPosition, blend);
+        // The lerp path can cross a rack even when both endpoints are clear, so clamp the
+        // actual rendered position as well as the destination.
+        const renderedDistance = this.resolveCameraOcclusion(this.cameraAnchor, this.cameraPosition, this.cameraPosition);
+        this.cameraTarget.lerp(this.desiredCameraTarget, blend);
+        if (Math.min(this.cameraArmDistance, renderedDistance) < TIGHT_CAMERA_THRESHOLD) {
+          // Fall back to the collision-safe drone lens instead of rendering from inside a
+          // shelf or filling the view with the drone body.
+          this.droneVisual.visible = false;
+          this.cameraPosition.set(this.drone.position.x, this.drone.position.y + 0.1, this.drone.position.z);
+          this.cameraTarget.copy(this.cameraPosition).addScaledVector(forward, 10);
+        }
+      }
     } else if (this.view === 'cctv') {
+      this.droneVisual.visible = true;
       if (this.handoff > 2.4 && this.handoff <= 3.5) {
         this.cameraPosition.set(0, 5.2, -14.2);
         this.cameraTarget.set(0, 1.8, -23.2);
+      } else if (this.isBreachCase()) {
+        const pose = WAREHOUSE_SECURITY_ZONES[this.selectedZone].camera;
+        this.cameraPosition.copy(pose.position);
+        this.cameraTarget.copy(pose.target);
+        if (this.camera.getFOV() !== pose.fov) this.camera.setFOV(pose.fov);
       } else {
-        this.cameraPosition.set(0, 3.25, 15.7);
-        this.cameraTarget.set(0, 1.45, 22.8);
+        const pose = WAREHOUSE_DOORS[this.selectedDoor].camera;
+        this.cameraPosition.copy(pose.position);
+        this.cameraTarget.copy(pose.target);
+        if (this.camera.getFOV() !== pose.fov) this.camera.setFOV(pose.fov);
       }
     } else {
-      this.cameraPosition.set(0, 17.8, 11.5);
-      this.cameraTarget.set(0, 0.2, -1.5);
+      if (this.camera.getFOV() !== 60) this.camera.setFOV(60);
+      this.cameraPosition.set(-20.5, 8.85, 24.2);
+      this.cameraTarget.set(0, 2.25, -2.5);
     }
     this.camera.position.copy(this.cameraPosition);
     CAMERA_MATRIX.lookAt(this.cameraPosition, this.cameraTarget, this.camera.up);
     this.camera.quaternion.setFromRotationMatrix(CAMERA_MATRIX);
+  }
+
+  private cameraClearanceDistance(anchor: THREE.Vector3, desired: THREE.Vector3): number {
+    this.cameraDirection.copy(desired).sub(anchor);
+    const distance = this.cameraDirection.length();
+    if (distance < 0.001 || !Number.isFinite(distance)) {
+      return 0;
+    }
+    this.cameraDirection.multiplyScalar(1 / distance);
+    this.cameraProbeRight.crossVectors(this.cameraDirection, THREE.Object3D.DEFAULT_UP);
+    if (this.cameraProbeRight.lengthSq() < 0.001) this.cameraProbeRight.set(1, 0, 0);
+    else this.cameraProbeRight.normalize();
+    this.cameraProbeUp.crossVectors(this.cameraProbeRight, this.cameraDirection).normalize();
+    let safeDistance = distance;
+    for (const [right, up] of CAMERA_PROBE_OFFSETS) {
+      this.cameraProbeOrigin.copy(anchor)
+        .addScaledVector(this.cameraProbeRight, right)
+        .addScaledVector(this.cameraProbeUp, up);
+      this.cameraRaycaster.set(this.cameraProbeOrigin, this.cameraDirection);
+      this.cameraRaycaster.near = 0.04;
+      this.cameraRaycaster.far = distance;
+      const hit = this.cameraRaycaster.intersectObject(this.environment.root, true)
+        .find((entry) => this.isCameraBlocker(entry.object));
+      if (hit) safeDistance = Math.min(safeDistance, Math.max(0.18, hit.distance - 0.28));
+    }
+    return safeDistance;
+  }
+
+  private resolveCameraOcclusion(anchor: THREE.Vector3, desired: THREE.Vector3, result: THREE.Vector3): number {
+    const safeDistance = this.cameraClearanceDistance(anchor, desired);
+    this.cameraDirection.copy(desired).sub(anchor);
+    const distance = this.cameraDirection.length();
+    if (distance < 0.001 || !Number.isFinite(distance)) {
+      result.copy(anchor);
+      return 0;
+    }
+    this.cameraDirection.multiplyScalar(1 / distance);
+    result.copy(anchor).addScaledVector(this.cameraDirection, safeDistance);
+    return safeDistance;
+  }
+
+  private isCameraBlocker(object: THREE.Object3D): boolean {
+    if (!(object instanceof THREE.Mesh)) return false;
+    if (object.geometry instanceof THREE.PlaneGeometry || object.geometry instanceof THREE.CircleGeometry) return false;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    if (materials.every((material) => material.transparent && material.opacity < 0.45)) return false;
+    return !/(Lens|Lamp|Status|Beacon|Rain|Dust|Tape|ShrinkWrap)/i.test(object.name);
   }
 
   private nearestCargoDistance(): number {
@@ -830,14 +2094,37 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (!this.mounted) return;
     this.elapsed += deltaTime;
     this.input?.tick(deltaTime);
+    const droneSpeed = deltaTime > 0
+      ? this.drone.position.distanceTo(this.previousDroneAudioPosition) / deltaTime
+      : 0;
+    this.sound.setDroneLoad(Math.min(1, droneSpeed / 5.2), this.view === 'drone' && this.handoff <= 0);
+    this.previousDroneAudioPosition.copy(this.drone.position);
+    this.droneRotorSpin += deltaTime * 27;
+    if (this.droneRotorBlades) {
+      for (const [index, [x, z]] of DRONE_ROTOR_POSITIONS.entries()) {
+        this.droneRotorTransform.position.set(x, 0.02, z);
+        this.droneRotorTransform.rotation.set(0, this.droneRotorSpin * (index % 2 ? -1 : 1), 0);
+        this.droneRotorTransform.updateMatrix();
+        this.droneRotorBlades.setMatrixAt(index, this.droneRotorTransform.matrix);
+      }
+      this.droneRotorBlades.instanceMatrix.needsUpdate = true;
+    }
+    if (this.droneStatusMaterial) {
+      this.droneStatusMaterial.emissiveIntensity = 1.7 + Math.sin(this.elapsed * 4.2) * 0.45;
+    }
+    this.ropeAnchor.copy(this.drone.position).add(new THREE.Vector3(0, -0.48, 0));
+    this.cargoRope.tick(deltaTime, this.ropeAnchor);
+    this.updateDeliveredCargo(deltaTime);
     this.hud?.tick(deltaTime);
     this.environment.tick(deltaTime);
     this.visitor?.rig.idle(deltaTime);
+    this.updatePursuit(deltaTime);
+    this.updateContainmentResponse(deltaTime);
     this.updateInbound(deltaTime);
-    if (this.inboundOpened) this.environment.setRearDoorOpen(THREE.MathUtils.damp((this.environment.rearDoor?.position.y ?? 3) / 9.2, 1, 2.2, deltaTime));
+    this.updateBreach(deltaTime);
     if (this.bellReminder > 0) {
       this.bellReminder -= deltaTime;
-      if (this.bellReminder <= 0) this.hud?.flash('FRONT ENTRY REMAINS WAITING // NO REPEATED BELL', 2.4);
+      if (this.bellReminder <= 0) this.hud?.flash('PERIMETER CONTACT REMAINS UNRESOLVED // CHECK SERVICE CAMERAS', 2.4);
     }
     if (this.handoff > 0) {
       this.handoff -= deltaTime;
@@ -847,15 +2134,17 @@ export class WarehouseRig extends ENGINE.SceneNode {
       if (this.handoff <= 2.4 && this.handoff + deltaTime > 2.4) {
         this.view = 'console';
         this.hud?.setView(this.view);
+        this.syncPointerMode();
         this.hud?.flash('MANIFESTS SYNCHRONIZED // AISLES MAPPED', 1.2);
       }
       if (this.handoff <= 1.2 && this.handoff + deltaTime > 1.2) this.hud?.flash('DRONE CONTROL PASSED', 1.4);
       if (this.handoff <= 0) {
         this.view = 'drone';
         this.hud?.setView(this.view);
+        this.syncPointerMode();
       }
     }
-    this.applyCamera();
+    this.applyCamera(deltaTime);
     this.keepActive();
   }
 
@@ -865,11 +2154,18 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const world = this.getWorld();
     if (this.input) world?.inputManager?.removeInputHandler(this.input);
     this.input = null;
+    world?.gameContainer?.removeEventListener('contextmenu', this.blockContextMenu);
+    if (this.suspendedPlayerController) {
+      world?.inputManager?.addInputHandler(this.suspendedPlayerController);
+      this.suspendedPlayerController = null;
+    }
     this.hud?.destroy();
     this.hud = null;
     this.sound.dispose();
     this.camera?.setActive(false);
-    if (document.pointerLockElement) void document.exitPointerLock?.();
+    world?.inputManager?.exitPointerLock();
+    setPointerLockAllowed(false);
+    setCursorVisible(true);
     const post = world?.postProcessManager;
     if (post && this.savedPost) {
       if (this.savedPost.tone) post.configureEffect(ENGINE.PostProcessPass.ToneMapping, this.savedPost.tone as Record<string, unknown>);

@@ -30,6 +30,7 @@ import { ACCENT } from './palette.js';
 const STYLE_ID = 'omniscient-cursor';
 const HIDDEN_CLASS = 'omni-cursor-hidden';
 let telemetrySuppressed = false;
+let pointerLockAllowed = false;
 
 /** Where the point of the arrow actually is, in the SVG's own pixels. */
 const ARROW_HOTSPOT = '3 2';
@@ -113,21 +114,11 @@ body > div[style*='position: fixed'][style*='z-index: 10000'][style*='cursor: po
   setCursorVisible(false);
 
   /**
-   * Refuse pointer lock, whoever asks for it.
-   *
-   * "The cursor goes away when I click inside the game" is the exact symptom of pointer
-   * lock, which hides the pointer and feeds raw deltas instead - the right behaviour for a
-   * first-person camera and completely wrong for a game whose only verb is clicking a name
-   * on a globe. Nothing in this project requests it and the engine's only request lives in
-   * PlayerController, which this game does not use, so the caller is something in the host
-   * or a default this rig never opted out of.
-   *
-   * Rather than hunt it, refuse it: if anything ever takes the lock, give it straight back.
-   * Three lines, and it cannot regress - a future engine version that starts locking on
-   * click will be undone on the same frame.
+   * Refuse accidental pointer lock on the game's click-driven screens. Dedicated direct-
+   * control spaces can opt in while mounted, then hand this protection back on exit.
    */
   document.addEventListener('pointerlockchange', () => {
-    if (document.pointerLockElement) void document.exitPointerLock();
+    if (document.pointerLockElement && !pointerLockAllowed) void document.exitPointerLock();
   });
 }
 
@@ -182,4 +173,10 @@ function suppressEditorTelemetry(): void {
  */
 export function setCursorVisible(visible: boolean): void {
   document.documentElement.classList.toggle(HIDDEN_CLASS, !visible);
+}
+
+/** Allow raw mouse capture only for a mounted direct-control gameplay space. */
+export function setPointerLockAllowed(allowed: boolean): void {
+  pointerLockAllowed = allowed;
+  if (!allowed && document.pointerLockElement) void document.exitPointerLock();
 }

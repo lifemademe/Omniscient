@@ -3,7 +3,16 @@ import { WAREHOUSE_DECK_VERSION } from './content.js';
 import type { WarehouseArchiveRecord, WarehouseRank, WarehouseRunResult, WarehouseTool } from './types.js';
 
 const KEY = 'omniscient.warehouse.v1';
-const VERSION = 1;
+const VERSION = 3;
+const LEGACY_MOVEMENT_IDS = ['orientation', 'judgement', 'freight', 'overlap', 'package-5018'] as const;
+
+function currentCaseId(id: string): string {
+  return id === 'package-7018' ? 'package-5018' : id;
+}
+
+function currentPackageId(id: string): string {
+  return id === '7018' ? '5018' : id;
+}
 
 export interface WarehouseSaveData {
   version: number;
@@ -11,6 +20,7 @@ export interface WarehouseSaveData {
   storyUnlocked: boolean;
   storyCompleted: boolean;
   storyMovement: number;
+  storyMovementId: string;
   storyMistakes: number;
   tutorialComplete: boolean;
   highestStage: number;
@@ -33,6 +43,7 @@ export function defaultWarehouseSave(): WarehouseSaveData {
     storyUnlocked: false,
     storyCompleted: false,
     storyMovement: 0,
+    storyMovementId: 'orientation',
     storyMistakes: 0,
     tutorialComplete: false,
     highestStage: 0,
@@ -54,16 +65,46 @@ export function loadWarehouseSave(): WarehouseSaveData {
   try {
     const raw = window.localStorage?.getItem(KEY);
     if (!raw) return fallback;
-    const data = JSON.parse(raw) as Partial<WarehouseSaveData>;
-    if (data.version !== VERSION) return fallback;
-    return {
+    const parsed = JSON.parse(raw) as Partial<WarehouseSaveData>;
+    if (parsed.version !== VERSION && parsed.version !== 2 && parsed.version !== 1) return fallback;
+    const legacyIndex = typeof parsed.storyMovement === 'number'
+      ? Math.max(0, Math.min(LEGACY_MOVEMENT_IDS.length - 1, Math.floor(parsed.storyMovement)))
+      : 0;
+    const savedMovementId = parsed.version === 1
+      ? LEGACY_MOVEMENT_IDS[legacyIndex]
+      : typeof parsed.storyMovementId === 'string'
+        ? parsed.storyMovementId
+        : fallback.storyMovementId;
+    const storyMovementId = currentCaseId(savedMovementId);
+    const discoveredCases = Array.isArray(parsed.discoveredCases)
+      ? [...new Set(parsed.discoveredCases.map(currentCaseId))]
+      : [];
+    const archiveRecords = Array.isArray(parsed.archiveRecords)
+      ? parsed.archiveRecords.map((record) => ({
+        ...record,
+        caseId: currentCaseId(record.caseId),
+        packageId: currentPackageId(record.packageId),
+      }))
+      : [];
+    const data: WarehouseSaveData = {
       ...fallback,
-      ...data,
-      unlockedTools: Array.isArray(data.unlockedTools) ? data.unlockedTools : fallback.unlockedTools,
-      discoveredCases: Array.isArray(data.discoveredCases) ? data.discoveredCases : [],
-      dailyHistory: data.dailyHistory && typeof data.dailyHistory === 'object' ? data.dailyHistory : {},
-      archiveRecords: Array.isArray(data.archiveRecords) ? data.archiveRecords : [],
+      ...parsed,
+      version: VERSION,
+      storyMovementId,
+      deckVersion: WAREHOUSE_DECK_VERSION,
+      unlockedTools: Array.isArray(parsed.unlockedTools) ? parsed.unlockedTools : fallback.unlockedTools,
+      discoveredCases,
+      dailyHistory: parsed.dailyHistory && typeof parsed.dailyHistory === 'object' ? parsed.dailyHistory : {},
+      archiveRecords,
     };
+    if (parsed.version !== VERSION
+      || savedMovementId !== storyMovementId
+      || discoveredCases.some((id, index) => id !== parsed.discoveredCases?.[index])
+      || archiveRecords.some((record, index) => (
+        record.caseId !== parsed.archiveRecords?.[index]?.caseId
+        || record.packageId !== parsed.archiveRecords?.[index]?.packageId
+      ))) saveWarehouseSave(data);
+    return data;
   } catch {
     return fallback;
   }

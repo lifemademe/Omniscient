@@ -4,9 +4,67 @@ export type WarehouseTool = 'optical' | 'history' | 'thermal' | 'uv' | 'xray' | 
 
 export type CargoDecision = 'release' | 'quarantine' | 'return';
 export type WorkerDecision = 'clear' | 'hold' | 'verify';
-export type WarehouseDecision = CargoDecision | WorkerDecision;
+export type VisitorDecision = 'deny-lockdown';
+export type SecurityDecision = 'sector-lockdown';
+export type WarehouseDecision = CargoDecision | WorkerDecision | VisitorDecision | SecurityDecision;
 
-export type SensorChannel = WarehouseTool | 'weight' | 'seal' | 'identity' | 'manifest';
+export type WarehouseDoorId = 'service-a' | 'service-b' | 'service-c';
+export type WarehouseDoorStatus = 'unseen' | 'clear' | 'contact' | 'tamper' | 'locked';
+export type WarehouseVisitorIntent = 'collection' | 'intrusion';
+
+export type WarehouseSecurityZoneId = 'receiving' | 'storage-west' | 'storage-east' | 'sortation';
+export type WarehouseSecurityZoneStatus = 'unseen' | 'clear' | 'motion' | 'contact' | 'locked';
+export type WarehouseLightingMode = 'normal' | 'emergency' | 'contained' | 'recovery';
+export type WarehouseIntrusionPhase =
+  | 'inactive'
+  | 'entry'
+  | 'search'
+  | 'tagged'
+  | 'escape-warning'
+  | 'contained'
+  | 'escaped'
+  | 'response';
+
+export interface WarehouseDoorSnapshot {
+  id: WarehouseDoorId;
+  status: WarehouseDoorStatus;
+  selected: boolean;
+}
+
+export interface WarehouseSecurityZoneSnapshot {
+  id: WarehouseSecurityZoneId;
+  status: WarehouseSecurityZoneStatus;
+  selected: boolean;
+}
+
+export interface WarehouseIntrusionEvidenceState {
+  rearHistory: boolean;
+  headcount: boolean;
+  liveTag: boolean;
+}
+
+export interface WarehouseIntrusionSnapshot {
+  phase: WarehouseIntrusionPhase;
+  currentZone: WarehouseSecurityZoneId;
+  lastSeenZone: WarehouseSecurityZoneId | null;
+  selectedZone: WarehouseSecurityZoneId;
+  tagSeconds: number;
+  routeStep: number;
+  escapeSeconds: number | null;
+  evidence: WarehouseIntrusionEvidenceState;
+  containedZone: WarehouseSecurityZoneId | null;
+}
+
+export interface WarehouseEvidenceState {
+  located: boolean;
+  visitor: boolean;
+  cargo: boolean;
+  action: boolean;
+  authorization: boolean;
+  tamper: boolean;
+}
+
+export type SensorChannel = WarehouseTool | 'weight' | 'seal' | 'identity' | 'manifest' | 'personnel-count';
 
 export interface SensorReading {
   channel: SensorChannel;
@@ -18,7 +76,7 @@ export interface SensorReading {
 
 export interface ManifestRecord {
   subjectId: string;
-  subjectType: 'cargo' | 'worker' | 'visitor';
+  subjectType: 'cargo' | 'worker' | 'visitor' | 'intruder';
   displayName: string;
   destination?: string;
   expectedWeight?: number;
@@ -29,11 +87,11 @@ export interface WarehouseCaseDefinition {
   id: string;
   title: string;
   briefing: string;
-  subjectType: 'cargo' | 'worker' | 'visitor' | 'mixed';
+  subjectType: 'cargo' | 'worker' | 'visitor' | 'intruder' | 'mixed';
   requiredTools: readonly WarehouseTool[];
   correctDecision: WarehouseDecision;
   critical?: boolean;
-  anomaly?: 'none' | 'identity' | 'mass' | 'camera' | 'thermal' | 'seal' | 'internal' | 'resonance';
+  anomaly?: 'none' | 'identity' | 'mass' | 'camera' | 'thermal' | 'seal' | 'internal' | 'resonance' | 'tamper' | 'breach';
   baseSeconds: number;
 }
 
@@ -63,6 +121,10 @@ export interface GeneratedWarehouseCase {
   workerName: string;
   expectedWeight: number;
   measuredWeight: number;
+  visitorDoorId: WarehouseDoorId;
+  authorizedDoorId: WarehouseDoorId;
+  visitorIntent: WarehouseVisitorIntent;
+  doorTamper: boolean;
 }
 
 export interface WarehouseRunResult {
