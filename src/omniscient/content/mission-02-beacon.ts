@@ -581,9 +581,26 @@ export const MISSION_02: MissionDefinition = {
         onSolved: {
           to: 'isolator-fitted',
           learn: [FACT_FEED_NEEDS_ISOLATOR],
-          // The beacon holds. It follows the isolator going in, so it belongs here
-          // rather than on the sentence that proposes one.
-          environment: 'prop.steady:beacon',
+          /**
+           * The beacon holds - two point eight seconds from now.
+           *
+           * It follows the isolator going in, so it belongs on this transition and not on the
+           * sentence that proposes one. What it did NOT do was wait for anybody to be looking
+           * at it. The beat this leads to carries `camera.push-in:beacon`, both cues fire on
+           * the same tick, and the shot takes 2.2 seconds to arrive - so measured off a
+           * capture the lamp was at full brightness by t=42.3 and the camera did not settle
+           * until 42.8. Half a second early is enough: the light is already on when it comes
+           * into view, and the moment the entire mission is about happens behind a camera
+           * move.
+           *
+           * 2.8 is the shot's 2.2 plus a beat. The extra six tenths are not slack - they are
+           * the pause where the player is looking at a dead lamp having just been told it is
+           * fixed, and that pause is what makes the light coming on an EVENT rather than a
+           * state the picture arrived in.
+           *
+           * The `@` suffix is general; see applyEnvironmentCue.
+           */
+          environment: 'prop.steady:beacon@2.8',
         },
         // A wrong part is fitted and the request is lost with it. See `fitted-wrong`.
         onWrong: { to: 'fitted-wrong' },

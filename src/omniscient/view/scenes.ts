@@ -2306,6 +2306,30 @@ const MOONLIGHT_AT = new THREE.Vector3(-3.4, 5.5, -4.2);
  * mast and its cable run carry the composition, not clutter.
  */
 function buildBeaconMast(scene: ContactScene): void {
+  /**
+   * How much of the workstation's afternoon reaches a clifftop at night.
+   *
+   * This was the only room in the game that never set it, and the default is 1 - so on top
+   * of a moon, a night sky, a sea glow, a face fill and the beacon itself, the mast was also
+   * taking the rig's full directional key and its full hemisphere. Every other scene has a
+   * considered value: the shop 0.55, the mill road 0.85, the cellar 0.3, the tunnel 0.22,
+   * Dorin's door 0.14. The note at the top of `buildNightDoor` describes this exact fault and
+   * names six scenes that had it. Five were fixed. This is the sixth.
+   *
+   * What it costs is not brightness, it is CONTRAST. The sky term is an ambient with no
+   * direction, and at 1.35 it lifts every shadow to about the value of every lit surface.
+   * Measured off a capture, the diorama half of the puzzle shot used 46 of 255 values -
+   * quartiles at 7.5 and 20, and a 98th percentile of 47, so there was no highlight anywhere
+   * in the frame. The workstation the player returns to uses 175.
+   *
+   * 0.2 rather than the door's 0.14 because there IS a moon here and a lit beacon, and
+   * because the headland's own hemisphere is already doing the job the rig's would do badly.
+   * The beacon and moon below are raised to take back the light this removes, so the change
+   * is a redistribution rather than a dimming: the same amount of light, arriving from
+   * somewhere, instead of from everywhere.
+   */
+  scene.daylight = 0.2;
+
   // Seeded like every other diorama (§123), so the turf is in the same place every run.
   const rng = createRng(seedFrom('tomas-headland'));
 
@@ -2522,15 +2546,64 @@ function buildBeaconMast(scene: ContactScene): void {
   const lens = meshOf('BeaconLens', lensGeo, MAT.beaconLit);
   beaconRoot.add(lens);
 
+  /**
+   * Brighter, and reaching further, because the fault was two luminance values deep.
+   *
+   * Measured off a capture: during the puzzle the diorama's mean swings 15.7 to 13.6 on an
+   * eleven second period, autocorrelation r = 0.664 with the peak exactly on 11.0s. So the
+   * drop was working perfectly and was 2.2 values deep on a 255 scale, which nobody notices.
+   *
+   * At intensity 9 over a 9m range the lamp is one of five sources in the scene and owns
+   * about a seventh of what is in frame at the platform. The other four do not go out, so
+   * what the player was being shown when the light failed was a fourteen per cent dip.
+   *
+   * Raised rather than the others lowered, and the direction matters. Trimming the moon, the
+   * sea glow or the face fill would deepen the dark phase - and those three exist because the
+   * dark phase was once genuinely unreadable, which is a worse fault than an undersold one.
+   * Raising the lamp widens the same gap from the top: the lit phase gets brighter, the dark
+   * phase is untouched, and the difference between them is what the mission is about.
+   *
+   * 15 over 14 metres puts the beacon clearly in charge of the structure it stands on, which
+   * is also just true of a harbour light.
+   */
   const glow = ENGINE.PointLightNode.create({
     name: 'BeaconGlow',
     position: new THREE.Vector3(0, beaconY + 0.08, 0),
-    intensity: 9,
+    intensity: 15,
     color: new THREE.Color(ACCENT.amber),
-    distance: 9,
+    distance: 14,
     decay: 1.3,
   });
   beaconRoot.add(glow);
+
+  /**
+   * The bloom around the lens.
+   *
+   * A harbour light at night is not a lit cylinder, it is a lit cylinder inside visible air,
+   * and the difference between those two pictures is most of why the payoff shot read as a
+   * yellow bucket on a stool. This is the cheapest available fix by a distance: two
+   * transparent shells, no texture, no billboarding, no per-frame work.
+   *
+   * Spheres rather than a camera-facing quad on purpose. A sprite would be sharper and would
+   * need either `THREE.Sprite` - which nothing else in this project uses, so nothing proves
+   * the pixel pass and the post chain handle it - or per-frame orientation code that the prop
+   * idle has no camera reference to do. A sphere looks the same from every angle by
+   * construction, which is exactly what a bloom should do.
+   *
+   * Two of them, at 1.6x and 2.7x the lens, because a single shell has an edge and a bloom
+   * must not. Additive so they sum where they overlap and the middle is brightest, and
+   * `depthWrite: false` so they never occlude each other or the lens inside them.
+   */
+  const halo: ENGINE.MeshNode[] = [];
+  for (const [radius, material] of [
+    [0.45, MAT.beaconHaloInner],
+    [0.76, MAT.beaconHaloOuter],
+  ] as const) {
+    const shell = new THREE.SphereGeometry(radius, 12, 9);
+    shell.translate(0, beaconY + 0.08, 0);
+    halo.push(meshOf('BeaconHalo', shell, material));
+  }
+  for (const shell of halo) beaconRoot.add(shell);
 
   /**
    * The fault, running on its own.
@@ -2552,14 +2625,18 @@ function buildBeaconMast(scene: ContactScene): void {
       // being pulled down collapses, it does not fade.
       const dark = beaconClock > 7.5;
       lens.material = dark ? MAT.beaconDark : MAT.beaconLit;
-      glow.intensity = dark ? 0 : 9;
+      glow.intensity = dark ? 0 : 15;
+      // The bloom goes with it. A glow left hanging round a dead lens is the single most
+      // obvious way for this whole effect to look like a bug.
+      for (const shell of halo) shell.visible = !dark;
     },
     actions: {
       /** Steady again, once the two sets are separated. */
       steady: () => {
         beaconClock = 0;
         lens.material = MAT.beaconLit;
-        glow.intensity = 11;
+        glow.intensity = 18;
+        for (const shell of halo) shell.visible = true;
       },
     },
   });
@@ -2853,42 +2930,110 @@ function buildBeaconMast(scene: ContactScene): void {
     if (!weathered) console.warn('[scene] salt and rust touched nothing on the mast');
   });
 
+  /**
+   * The establishing shot. Round to the landward side, and up.
+   *
+   * The old one held everything and arranged nothing. Projected through the 46 degree lens,
+   * Tomas landed at screen x 0.506, the beacon at 0.500 and the splice box at 0.495 - three
+   * subjects stacked on one vertical line inside thirteen thousandths of the frame's width,
+   * which is a totem pole. His perpendicular distance from the camera axis was 0.42m, three
+   * centimetres under the 0.45-0.90 band the rule at the top of this file exists to enforce,
+   * and that rule exists precisely to stop a person standing on top of the evidence.
+   *
+   * The beacon was worse. It landed at y 0.119 and the REQUEST banner runs 0.072 to 0.115,
+   * so the object the entire mission is about sat four thousandths of frame height under the
+   * interface and read as clipped.
+   *
+   * ## What this one holds, and why it is worth the move
+   *
+   * From (0, 4.95, 6.0) looking at (0.5, 4.0, -0.2), 6.29m:
+   *
+   *     the beacon lens   x 0.427  y 0.170     top third, clear of the banner
+   *     Tomas's chest     x 0.528  y 0.667     lower right, whole figure in frame
+   *     the splice box    x 0.477  y 0.792     between them, at the foot of the mast
+   *     the harbour       x 0.025  y 0.762     the town the light is for
+   *     perpendicular 0.82m, inside the band
+   *
+   * Three subjects at three heights on three slightly different verticals, which is a
+   * composition rather than a stack. And THE HARBOUR IS IN IT - the old framing looked out
+   * over open sea, so the mission never once showed the thing the light exists for.
+   *
+   * Checked by `scripts/dev/probe-mast.ts`, which fails the build of this shot if any of the
+   * above stops being true.
+   */
   scene.registerShot('default', {
-    // Holds Tomas, the bracket and the light above him, at his own eye level rather than
-    // hanging in space beside the mast looking at nothing.
-    // Wide enough to hold the whole structure: Tomas on his platform, the bracket beside
-    // him and the light above. At 2.5 units out the camera was inside his coat - he
-    // filled the frame and the mast, the cables and the beacon were all off it, which
-    // for a mission about a light going out is the one thing that cannot happen.
-    position: new THREE.Vector3(4.4, 3.9, 4.4),
-    target: new THREE.Vector3(0.25, 3.7, 0.25),
+    position: new THREE.Vector3(0, 4.95, 6),
+    target: new THREE.Vector3(0.5, 4, -0.2),
   });
-  /*
-   * The join on the bracket, from the one side of it that is not blocked.
+  /**
+   * The join on the bracket - and the shot the mission actually lives in.
    *
-   * The aim was never wrong - it has always pointed at the splice box, which sits at
-   * (0.3, 2.6, 0.36). The camera was in the wrong place, and reported as the shot
-   * showing nothing recognisable, which is exactly what it showed: Tomas.
+   * ## What was wrong, and it was not the aim
    *
-   * Measured against the two things that can stand in the way. From (1.35, 2.95,
-   * 1.35) the sightline passed 0.18m from his centre of mass - through him, since a
-   * torso is wider than that - and crossed the platform railing 0.016m from an
-   * upright, which is 35mm square, so through that as well. Two occluders on one
-   * 1.44m line.
+   * The aim was never wrong; it has always pointed at the splice box at (0.3, 2.6, 0.36).
+   * The note this replaces is a careful piece of work about clearing the guardrail and
+   * clearing Tomas's torso, and every measurement in it was right. It solved the wrong
+   * problem, because clearing Tomas is not the same as INCLUDING him, and at 1.07m out he
+   * was not merely behind the console panel - he was outside the frustum entirely:
    *
-   * From here it clears him by 0.44m and the nearest upright by 0.106m, and passes
-   * between the handrail and the mid rail rather than through either. 1.07m out,
-   * which puts a 24cm box across about a quarter of the frame with the second cable
-   * leaving the bottom of it - the join and the thing the join does, in one read.
+   *     Tomas head    x 0.864  y -1.296     1.3 frame-heights above the top edge
+   *     Tomas feet    x 0.709  y  1.078     below the bottom edge
+   *     camera 0.65m from his face
+   *
+   * A capture cannot show you that, which is how it survived: there is nothing in the
+   * picture to notice the absence of. `scripts/dev/probe-mast.ts` settles it in one run, and
+   * it matters more here than anywhere else in the game because the mission holds this shot
+   * for 34 of its 44 seconds. Three quarters of a conversation with a man who was not there.
+   *
+   * ## What replaces it
+   *
+   * From (-1.10, 2.65, 2.0) looking at (0.45, 2.95, 0.3), 2.32m:
+   *
+   *     Tomas head     x 0.611  y 0.137     whole head, clear of the REQUEST banner
+   *     Tomas chest    x 0.613  y 0.317
+   *     Tomas feet     x 0.622  y 0.988     the full figure, right of frame
+   *     the splice box x 0.471  y 0.681     2.13m out - a 24cm box across a ninth of the width
+   *     perpendicular 0.46m, inside the 0.45-0.90 band
+   *
+   * A two-shot: the man on the right, the thing he is working on at lower left, both legible,
+   * neither in front of the other. The camera sits at 2.65 against his eyeline at 3.67, so it
+   * looks UP at him, which is the correct angle for somebody two metres up a lattice and the
+   * one the old shot could not have because it was level with his chest.
+   *
+   * The old note's occlusion work is preserved rather than discarded - the sightline to the
+   * box crosses the guardrail plane at z 0.94 at y 2.70, between the mid rail at 2.56 and the
+   * handrail at 3.07, and 0.18m from the nearest upright. That check is now in the probe, so
+   * it cannot be lost again by somebody moving the camera for a different reason.
    */
   scene.registerShot('mast-cable', {
-    position: new THREE.Vector3(0.05, 2.92, 1.35),
-    target: new THREE.Vector3(0.3, 2.6, 0.36),
+    position: new THREE.Vector3(-1.1, 2.65, 2),
+    target: new THREE.Vector3(0.45, 2.95, 0.3),
     duration: 2.4,
   });
+  /**
+   * The payoff, and the man it is for.
+   *
+   * The old framing was a light on a stick against a black sky. Tomas projected to y 1.430 -
+   * a frame and a half below the bottom edge - and the harbour was not in it either, so at
+   * the moment his problem is solved the shot contained neither the person nor the town.
+   * It was also, measurably, a weaker picture than the establishing shot it followed: that
+   * one has a coastline and a scatter of harbour lights, this one had four white cloud slabs.
+   *
+   * From (0.2, 5.6, 4.4) looking at (0.2, 4.6, -0.2), 4.71m:
+   *
+   *     the beacon lens   x 0.459  y 0.221
+   *     Tomas's head      x 0.589  y 0.802     watching it, bottom right
+   *     the harbour       x 0.055  y 0.783     bottom left, the same height as him
+   *
+   * A light, the man who fixed it, and the town it is for, in one frame. That is the mission
+   * in a picture, and it is the last thing the player sees before the call ends.
+   *
+   * Held on the same side of the mast as the other two shots, so none of the three cuts
+   * crosses the line.
+   */
   scene.registerShot('beacon', {
-    position: new THREE.Vector3(2.2, 4.6, 2.2),
-    target: new THREE.Vector3(0, 5.5, 0),
+    position: new THREE.Vector3(0.2, 5.6, 4.4),
+    target: new THREE.Vector3(0.2, 4.6, -0.2),
     duration: 2.2,
   });
 

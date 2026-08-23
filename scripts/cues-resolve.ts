@@ -102,9 +102,24 @@ for (const name of readdirSync(CONTENT).filter((f) => f.endsWith('.ts'))) {
    * concatenation across lines. Pulling every single-quoted string that looks like a cue
    * catches them all without having to know which field it came from.
    */
-  for (const match of source.matchAll(/'((?:camera|prop)\.[a-z-]+:[a-z0-9-]+(?:\s*,\s*[a-z]+\.[a-z-]+:[a-z0-9-]+)*)'/g)) {
-    for (const cue of match[1].split(',').map((c) => c.trim())) {
+  for (const match of source.matchAll(
+    /'((?:camera|prop)\.[a-z-]+:[a-z0-9-]+(?:@[\d.]+)?(?:\s*,\s*[a-z]+\.[a-z-]+:[a-z0-9-]+(?:@[\d.]+)?)*)'/g
+  )) {
+    for (const raw of match[1].split(',').map((c) => c.trim())) {
       checked += 1;
+      /*
+       * `prop.steady:beacon@2.8` - the delay suffix, stripped before resolution.
+       *
+       * Worth more than a line of code. The pattern above used to end at `[a-z0-9-]+`, and a
+       * quoted string is matched WHOLE - so the first cue in the game to carry a delay did
+       * not fail this check, it vanished from it. The harness went on reporting 191 cues
+       * checked and green, having quietly stopped looking at the one that had just changed.
+       *
+       * A validator that skips what it does not understand is worse than one that rejects
+       * it, because the output looks identical to success. Any future addition to the cue
+       * grammar has to be added here at the same time.
+       */
+      const cue = raw.replace(/@[\d.]+$/, '');
       const [head, target] = cue.split(':');
       const [domain, action] = head.split('.');
 
@@ -112,6 +127,21 @@ for (const name of readdirSync(CONTENT).filter((f) => f.endsWith('.ts'))) {
         if (!shots.has(target)) problems.push({ file: name, cue, why: `no shot '${target}'` });
         continue;
       }
+
+      /*
+       * Cues the RIG answers, which never reach a scene and therefore have no prop.
+       *
+       * `applyEnvironmentCue` intercepts these by prefix before handing the remainder over -
+       * `unit.take` hands the player a vehicle, `game.launch` hands the screen to M4SS - and
+       * its own comment explains why the interception has to happen before the scene sees
+       * anything. This check knew none of that and had been reporting `game.launch:m4ss` as
+       * "no prop 'm4ss'" for as long as mission 09 has existed.
+       *
+       * A standing failure on a green-or-red harness is the same disease as a skipped cue:
+       * everybody learns the output is noisy and stops reading it. Either the harness knows
+       * about a thing or it should not be checking it.
+       */
+      if (domain === 'unit' || domain === 'game') continue;
 
       /*
        * Props are addressed as `propId` or `propId-actionSuffix` - `runPropAction` falls

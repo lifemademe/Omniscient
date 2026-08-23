@@ -176,9 +176,12 @@ bottom edge. The shot is a light on a stick against a sky. Fix in §4.
 
 ---
 
-## 3. The one animated thing in the mission is off screen for 39 of its 44 seconds
+## 3. The beacon's fault was never invisible — CORRECTED, and it was two luminance values deep
 
-`buildBeaconMast` does something genuinely good and almost nobody will see it:
+**This section originally said the fault was off screen for 39 of its 44 seconds. That was
+wrong, and the way it was wrong is the useful part.**
+
+`buildBeaconMast` does something genuinely good:
 
 ```ts
 beaconClock = (beaconClock + deltaTime) % 11;
@@ -187,26 +190,51 @@ lens.material = dark ? MAT.beaconDark : MAT.beaconLit;
 glow.intensity = dark ? 0 : 9;
 ```
 
-The fault Tomas describes — "gone, three or four seconds, then back" — is modelled and runs
-live. Measured off the capture, sampling the lantern region of the wide shot:
+The original finding projected the beacon through `mast-cable`, found it at screen y −8.14 —
+eight frame-heights above the top edge — and concluded the player could not see the fault
+during the puzzle. The projection was right and the conclusion did not follow, because **a
+point light does not have to be in frame to light what is**.
+
+Measured instead of reasoned. Sampling the mean luminance of the diorama half across t=8 to
+t=41 and autocorrelating gives a peak at **exactly 11.0 seconds, r = 0.664**:
 
 ```
-t=2.50 … 3.50    mean 19.6 → 28.7      out
-t=3.67 … 6.33    mean 73.6             on
-t=6.50 …         mean 34.2 → 22.0      out again
+t=11  15.65     t=22  15.61     t=33  15.60      lit
+t=12  13.75     t=23  13.52     t=34  13.74      dark
+t=15  15.58     t=26  15.70     t=37  15.62      lit
 ```
 
-It works. The player sees **exactly one cycle**, between t=3.6 and t=6.5, and then the camera
-cuts to `mast-cable` where the beacon projects to y −8.14 — eight frame-heights above the top
-of the picture — and stays there for 34 seconds.
+Three clean cycles in thirty seconds, on the beacon's own period. The fault was working
+perfectly and the player was seeing it.
 
-The single best-value change in this document is **putting the beacon back in frame during the
-puzzle**, because the asset already exists and already animates. The `mast-cable` reframe in
-§2 should be chosen to include it, or the lantern's glow on the underside of something, or its
-light on the platform — anything that goes dark for 3.5 seconds every 11 while the player is
-choosing a part. That turns a static screen into a timer nobody had to build.
+### 3.1 What it actually is, and the fix that follows
 
----
+**2.2 luminance values out of 255.** A 14% relative dip, well under the threshold at which
+anybody registers a change in a dark image.
+
+The cause is share, not visibility. The beacon was one of five sources — moon, night sky, sea
+glow, face fill, beacon — at intensity 9 over a 9m range, three metres above the platform.
+The other four do not go out. So the mission's central event was a fourteen per cent dip.
+
+**FIXED, by raising the lamp rather than lowering the others**, and the direction is the whole
+of it. Trimming the moon, the sea glow or the face fill deepens the dark phase — and those
+three exist because the dark phase was once genuinely unreadable, which is a worse fault than
+an undersold one. Raising the lamp widens the same gap from the top: the lit phase gets
+brighter, the dark phase is untouched. Intensity 9 → 15, range 9 → 14.
+
+`scene.daylight` (§1) compounds it: with the rig's ambient no longer lifting the floor, the
+beacon's share of what is in frame rises again.
+
+### 3.2 The check that was nearly written
+
+A check demanding the beacon be inside the `mast-cable` frame was added to `probe-mast.ts` and
+then withdrawn — it encoded the wrong diagnosis, and it would have forced a camera 3.6m back
+to satisfy a constraint that was never real. It is left in the file as a comment, because the
+wrong version looks perfectly reasonable to whoever writes it next.
+
+**The general lesson, and it is the second time this project has paid for it:** a projection
+answers "is this object in the frustum". It does not answer "can the player perceive this
+event". Those are different questions and only the second one matters.
 
 ## 4. The payoff happens off-camera
 
@@ -409,11 +437,27 @@ Two faults:
    `moveTo(HOME_SHOT)` starts, so the room is gone before the camera has left it.
    **Fix:** hold the outgoing scene for the first 0.5s of the move, or fade the world out over
    0.35s before deactivating.
-2. **The green wash is not edge-only.** The code describes the warp overlay as masked clear in
-   the middle. Measured at t=47.8 the *entire* frame carries a green cast, strongest at the
-   edges but present at centre — the workstation renders visibly green-tinted and reads as a
-   colour-grading bug rather than an effect. Compare t=47.8 against t=51.0 to see it.
-   **Fix:** check the mask's falloff. It should reach zero by ~0.45 of the radius, not 0.95.
+2. **The green wash IS edge-only — this claim was wrong and is withdrawn.**
+   The original text here said the entire frame carried a green cast and read as a
+   colour-grading bug. Measured instead of looked at, sampling green-minus-red across the
+   transition:
+
+   ```
+                    centre (12%)    mid-ring (40%)    corner
+     t=46.0            -7.9             +6.4          +67
+     t=47.0             0.0              0.0          +83     <- the frame is black here
+     t=48.2            -1.0             -1.3          +80
+     t=49.5            -1.5             -2.4          +60
+   ```
+
+   The centre never goes green at any point. `art/warp.ts` masks the streaks off the middle
+   and starts the vignette's first stop at 30% of the radius, and both do exactly what their
+   comments say. What I read as a green room was a +83 corner surrounding a genuinely dark
+   centre — the eye assigning the surround's colour to the whole picture.
+
+   Second eyeball error in this document, and §0 exists because of the first one. Colour casts
+   are a bad thing to judge by eye in a dark frame, and green-minus-red over three named boxes
+   costs four lines.
 
 And 1.3 seconds of pure black with a corner toast is a dead beat at the emotional peak. Fill
 it: this is where the `motif` cue belongs, and where a single line — *the harbour light is
@@ -447,32 +491,57 @@ that is correct — but the hard cut in §6 is what a player will read as one.
 
 ---
 
-## 8. Ordered plan
+## 8. Ordered plan — status
 
-Cheapest and highest-value first. Each has a stated test.
+| # | change | state |
+|---|---|---|
+| 1 | `scene.daylight` for the mast | **DONE** — 0.2, and it was the only night scene without one |
+| 2 | reframe `mast-cable` | **DONE and measured** — Tomas x 0.613, perpendicular 0.46 |
+| 3 | fire `steady` after the shot settles | **DONE** — `@2.8` delay suffix, new to the cue grammar |
+| 4 | reframe `beacon` to include the harbour | **DONE** — harbour at y 0.481, Tomas at 0.802 |
+| 5 | halo on the lantern | **DONE** — two additive shells; a beam was not attempted, see below |
+| 6 | compress the UI cue range | **DONE** — `connect` 0.5→0.34, `tap` 0.07→0.10, `receive`/`key` up |
+| 7 | fix `default` | **DONE** — lens clears the banner at 0.170, spread 0.101 |
+| 8 | rebalance the mast bed into the low-mids | **DONE** — guy wire 0.006→0.016, air 700/1.4→380/0.9, a 118Hz swell added |
+| 9 | 15.7kHz down | **DONE** — 0.0022 → 0.0008 |
+| 10 | symmetric exit | **DONE** — the scene is held 0.45s into the move home |
+| 11 | warp mask falloff | **WITHDRAWN** — the claim was wrong, see §6 |
+| 12 | the scene-resolve entrance | **NOT DONE** — the biggest remaining item, see below |
+| 13 | camera drift on long shots | **NOT DONE** — needs a `drift` field on `registerShot` |
+| 14 | stereo on the room tone | **NOT DONE** |
+| 15 | trust-linked mix envelope | **NOT DONE** |
 
-| # | change | files | test |
-|---|---|---|---|
-| 1 | `scene.daylight` for the mast (start 0.18), then raise the moon and beacon | `scenes.ts` §1.1 | puzzle-shot p2–p98 range > 110 |
-| 2 | Reframe `mast-cable` so it holds the box, Tomas's shoulder and the beacon | `scenes.ts` §2 | projection: Tomas 0.55–0.62, perpendicular 0.45–0.90 |
-| 3 | Fire `prop.steady:beacon` *after* the beacon shot settles, with a dark beat | mission content §4.1 | frame diff spikes after the move ends, not during |
-| 4 | Reframe `beacon` to include the harbour | `scenes.ts` §4.1 | coast visible in the bottom third |
-| 5 | Halo billboard on the lantern | `scenes.ts` §4.1 | payoff-shot p98 > 200 |
-| 6 | Compress the UI cue range; raise `tap`/`receive`/`key` | `ConsoleAudio.ts` §5.5 | the ×3.0 detector finds one event per click |
-| 7 | Fix `default` — off the totem line, beacon clear of the banner | `scenes.ts` §2 | beacon y > 0.16, perpendicular 0.6–0.7 |
-| 8 | Rebalance the mast bed into the low-mids | `RoomTone.ts` §5.2 | A-weighted 160–640 Hz at 30–40% |
-| 9 | 15.7 kHz down to 0.0008 | `RoomTone.ts` §5.6 | under 6% of the workstation's A-weighted loudness |
-| 10 | Symmetric exit — hold the scene 0.5s into the move | `OmniscientRig.returnHome` §6 | no single-frame drop to mean luma 1 |
-| 11 | Warp mask falloff to 0.45 radius | vfx §6 | centre pixels at t+1.5s within 5% of the untinted frame |
-| 12 | The scene-resolve entrance (suspicion volumes + pixel/curve ease) | §6 | — |
-| 13 | Camera drift on long shots (`registerShot` needs a `drift` field) | `ContactScene.ts` §1.3 | frame diff never below 1% for more than 3s |
-| 14 | Stereo on the room tone | `ConsoleAudio.ts` §5.4 | L/R correlation under 0.85 |
-| 15 | Trust-linked mix envelope | `RoomTone.ts` §5.3 | A-weighted range across a call > 8 dB |
+### None of it has been seen on screen
 
-Items 1–5 are one working session and they fix the mission. 6–11 are the polish that makes it
-feel shipped. 12–15 are the ones that would make a judge remember it.
+The Genesys MCP server disconnected during this session, so there was no way to rebuild into
+the editor, enter play mode, or capture a frame. Everything above typechecks, lints, builds
+and passes its harnesses — and no human eye has been near it.
 
----
+What stands in for looking:
+
+- `scripts/dev/probe-mast.ts` — seven assertions about where every subject lands in all three
+  shots, at both aspect ratios, plus the guardrail occlusion test the old `mast-cable` note
+  worked out by hand. Green.
+- `scripts/room-tone.ts` — new; enforces the invariant RoomTone's header states and nothing
+  checked. It caught a 5Hz beat between the mast's new swell and the repair shop's 100Hz tone
+  on its first run.
+- `scripts/cues-resolve.ts` — was **silently skipping** the delayed cue, because a quoted
+  string is matched whole and the pattern did not know about `@`. Taught the grammar; the
+  count went 191 → 192.
+
+**The three things to look at first when the editor is back**, because they are the ones a
+harness cannot judge:
+
+1. **Is the mast too dark now?** `daylight` went from 1 to 0.2 and the beacon from 9 to 15.
+   The intent is more contrast at the same overall level; the risk is a scene that has gone
+   flat-dark instead of flat-bright. Measure the p2–p98 range of the puzzle shot: it was 46
+   and should now clear 110.
+2. **Does the halo read as a bloom or as a ball?** Two additive spheres at 1.6x and 2.7x the
+   lens. A beam was deliberately not attempted — a rotating cone through no visible atmosphere
+   is a cheap-looking effect and there was no way to check.
+3. **Does the light coming on land as an event?** The whole point of the 2.8s delay is a beat
+   of dark after the camera settles. If it reads as a hitch rather than a pause, the number is
+   the thing to move.
 
 ## 9. What is working — do not break these
 

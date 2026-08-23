@@ -35,7 +35,7 @@ import { audio } from './ConsoleAudio.js';
 /** How long a room takes to become another room. Slow - a cut in tone is a cut in place. */
 const CROSSFADE = 1.6;
 
-interface Bed {
+export interface Bed {
   /** Steady tones, as [frequency, gain, type]. */
   tones: Array<[number, number, OscillatorType]>;
   /** Filtered noise: [cutoff Hz, Q, gain]. */
@@ -73,7 +73,7 @@ interface Bed {
  * tones beat against each other would be audible as a fault during the crossfade between
  * them.
  */
-const BEDS: Record<string, Bed> = {
+export const BEDS: Record<string, Bed> = {
   /**
    * The workshop. Mains hum and the sea outside.
    *
@@ -100,19 +100,51 @@ const BEDS: Record<string, Bed> = {
   },
 
   /**
-   * The mast. Wind with something metal in it.
+   * The mast. Wind with something metal in it - and now with the metal audible.
    *
-   * The 190Hz triangle is the guy wire. It is the only bed with a tone above the bass range,
-   * because it is the only place where the structure itself is singing.
+   * The 190Hz triangle is the guy wire, and it is the only tone in any bed above the bass
+   * range because this is the only place where the structure itself is singing.
+   *
+   * ## Re-measured, A-weighted, and rebalanced
+   *
+   * The design was right and the gains were not. Analysed off a capture, 81% of this bed's
+   * PERCEIVED loudness sat between 1kHz and 5kHz and the 160-640Hz band carried 6-9%. That
+   * band is where a large steel structure in weather actually lives, so the bed was hissing
+   * where it should have been roaring: the two elements with no character - a 44Hz sine you
+   * feel rather than hear, and noise centred well above the structure - were 10dB over the
+   * one element that says "mast".
+   *
+   * It also crowded the interface. Every UI cue in ConsoleAudio lives in the same 1-3kHz
+   * region, and measured against this bed a chip click came out 2-6dB over it while the
+   * `connect` sting came out 23dB over. Half the player's clicks produced nothing detectable
+   * at all. Moving the bed DOWN is a better fix than turning every cue up, because it solves
+   * both faults with the same edit and leaves the cue table's own reasoning intact.
+   *
+   * Three changes:
+   *
+   *  - the guy wire from 0.006 to 0.016, so the thing with an identity is the loudest thing
+   *    in the bed instead of the quietest;
+   *  - the air from 700Hz Q1.4 down to 380Hz Q0.9 - lower and BROADER, which fills the
+   *    low-mids rather than picking a frequency above them;
+   *  - a swell at 105Hz, which is the sea. There was no sea at all in a bed for a clifftop.
+   *
+   * The first attempt at this measurement used raw spectral energy and said the opposite -
+   * 89% below 120Hz, "a bass rumble with nothing else". Both numbers are true of the same
+   * signal. A 44Hz sine carries enormous energy and almost no loudness. Any claim about how
+   * a mix SOUNDS has to be A-weighted or it will be confidently backwards.
    */
   'scene-beacon-mast': {
     work: [320, 0.13, 0.045, 15],
     tones: [
       [44, 0.02, 'sine'],
-      [190, 0.006, 'triangle'],
+      // 118 rather than the 105 this was first written at. The repair shop has a tone at
+      // 100Hz and five hertz apart is a five-per-second wobble - see scripts/room-tone.ts,
+      // which exists because of exactly this and caught it on the first run.
+      [118, 0.013, 'sine'],
+      [190, 0.016, 'triangle'],
     ],
-    air: [700, 1.4, 0.026],
-    drift: [480, 9],
+    air: [380, 0.9, 0.03],
+    drift: [260, 9],
   },
 
   /**
@@ -198,7 +230,27 @@ const BEDS: Record<string, Bed> = {
     work: [240, 0.11, 0.032, 22],
     tones: [
       [50, 0.02, 'sine'],
-      [15700, 0.0022, 'sine'],
+      /*
+       * The flyback whine, at a third of what it was.
+       *
+       * 15,700Hz is the PAL line frequency and putting it here is the right idea - anybody
+       * who grew up with a CRT feels it before they identify it, which is the note above.
+       *
+       * At 0.0022 it was not subliminal. A-weighted it carried 19.7% of the workstation's
+       * perceived loudness and 32% of the globe's, and it was the single loudest band in both
+       * - because A-weighting peaks near 3kHz and stays high through the top octave, so a
+       * tone that looks negligible on a linear meter is anything but. That is a third of the
+       * room's sound coming from one sine at the edge of hearing.
+       *
+       * Three consequences, all bad. Anybody young enough to hear 15.7kHz well gets a
+       * fatiguing tone for the length of the game. Anybody old enough not to hear it gets a
+       * detail that is silently absent while still eating headroom. And on cheap converters
+       * it aliases, which turns a period detail into a fault.
+       *
+       * 0.0008 puts it at about 6% - present, felt, and not the loudest thing in a room whose
+       * whole character is meant to be a desk lamp and a tape drive.
+       */
+      [15700, 0.0008, 'sine'],
     ],
     air: [380, 0.7, 0.017],
     drift: [220, 19],

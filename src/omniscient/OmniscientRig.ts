@@ -398,6 +398,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
    */
   private camera: ENGINE.ViewTargetCameraNode | null = null;
   private readonly cameraTweener = new Tweener();
+  /**
+   * Its own clock for delayed environment cues, and it is separate from the camera's on
+   * purpose.
+   *
+   * `cameraTweener.clear()` is called whenever the player takes a unit, because a glide from
+   * a composed shot into the back of a mower is wrong. A cue waiting to fire is a different
+   * kind of thing and must not be collected by that; it should die when the SCENE goes, which
+   * is what `mountScene` and `returnHome` clear it on.
+   */
+  private readonly cueTweener = new Tweener();
 
   /**
    * M4SS, while it is running.
@@ -2190,6 +2200,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
         this.phone?.setLeaving(false);
         this.releaseUnit(false);
         this.session?.end();
+        this.cueTweener.clear();
         this.scene?.deactivate();
         this.scene = null;
         this.showGlobe();
@@ -2636,6 +2647,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.releaseUnit(false);
     this.session?.end();
+    this.cueTweener.clear();
     this.scene?.deactivate();
     this.scene = null;
     this.showGlobe();
@@ -2715,8 +2727,39 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     this.releaseUnit(false);
     this.post?.clearOutlineSelection();
-    this.scene?.deactivate();
+    // Anything a beat asked the world to do later is not going to happen now.
+    this.cueTweener.clear();
+
+    /**
+     * The room is held for the first half second of the move home, and this is a two-frame
+     * change that fixes the hardest edit in the game.
+     *
+     * It used to run here, on the same tick `moveTo(HOME_SHOT)` starts. Frame-stepped at
+     * 30fps that reads as: one frame of the porch at mean luminance 28.6, the next at 1.4,
+     * and then a 2.2 second fade up into the workstation. A hard cut out and a slow fade in.
+     *
+     * An asymmetric transition is the shape of a LEVEL LOAD. A symmetric one is the shape of
+     * a move, and the whole fiction here is that the machine is pulling back through its own
+     * link rather than that the game is changing scene. The warp overlay cannot cover for it:
+     * it is deliberately edge-weighted, so during the cut the middle of the frame - which is
+     * where the room was - has nothing in it at all.
+     *
+     * 0.45s, which is a fifth of the home move. Long enough that the camera has visibly left
+     * before the room goes, short enough that a scene with a sun in it is not lighting the
+     * workstation for any length of time - the leak this deactivate was added to fix.
+     *
+     * Guarded on identity rather than on a flag: if anything mounts another scene inside that
+     * half second, the one this closure is holding is already gone and deactivating it twice
+     * would be the fault in the other direction.
+     */
+    const leaving = this.scene;
     this.scene = null;
+    this.cameraTweener.add(() => undefined, {
+      duration: 0.01,
+      delay: 0.45,
+      channel: 'scene-teardown',
+      onComplete: () => leaving?.deactivate(),
+    });
 
     this.setPhase(Phase.Home);
     this.screen = Screen.Tree;
@@ -2930,6 +2973,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
   /** Swap the diorama. One scene is live at a time - §133 foregrounds a single contact. */
   private mountScene(sceneId: string): void {
     this.releaseUnit(false);
+    // A delayed cue belongs to the room that asked for it. Nothing here should fire into
+    // the next one, and a `prop.` cue naming a prop the new scene does not have is silent.
+    this.cueTweener.clear();
     this.scene?.deactivate();
 
     const next = this.scenes.get(sceneId) ?? null;
@@ -3320,7 +3366,44 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     const parts = cue.split(',').map((part) => part.trim()).filter(Boolean);
     const forScene: string[] = [];
-    for (const part of parts) {
+    for (const raw of parts) {
+      /**
+       * `prop.steady:beacon@2.8` - the same cue, two point eight seconds later.
+       *
+       * Added for one beat and it is general because the problem is. Mission 03's climax is
+       * the harbour light coming back on, and it was firing on the transition that ALSO
+       * starts a 2.2 second camera move to look at it - so the light came on while the
+       * camera was still travelling, and arrived already lit. Measured off a capture: the
+       * beacon is at full brightness by t=42.3 and the shot does not settle until 42.8. The
+       * player never sees the moment the mission is about.
+       *
+       * A transition can only carry one `environment` string and it fires all at once, so
+       * there was no way to say "and then this". The alternative was a new field on Beat,
+       * which is a bigger change to the content contract than a suffix on a cue - and
+       * "camera first, world second" is a thing every mission will want eventually.
+       *
+       * It rides the tweener rather than `setTimeout` for two reasons: it runs on the game's
+       * own clock, so a paused or slow frame does not desynchronise it from the camera move
+       * it is waiting for; and it is cancellable by channel, so a second delayed cue on the
+       * same prop replaces the first instead of both landing.
+       */
+      const timed = /^(.*)@([\d.]+)$/.exec(raw);
+      if (timed) {
+        const [, inner, seconds] = timed;
+        const scene = this.scene;
+        this.cueTweener.add(() => undefined, {
+          duration: 0.01,
+          delay: Number(seconds),
+          channel: `cue:${inner}`,
+          onComplete: () => {
+            // The room may have gone in the meantime - a hang-up, a failure, an ending.
+            if (this.scene !== scene || !scene) return;
+            this.applyEnvironmentCue(inner);
+          },
+        });
+        continue;
+      }
+      const part = raw;
       if (part.startsWith('unit.take')) {
         this.takeUnit();
         continue;
@@ -3432,6 +3515,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
 
     this.cameraTweener.update(deltaTime);
+    this.cueTweener.update(deltaTime);
 
     // The ending: armed by the last resolve, delivered after the reveal has landed.
     if (this.endingDelay > 0) {

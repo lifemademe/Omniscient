@@ -148,24 +148,48 @@ const CUES: Record<Cue, Voice[]> = {
     // frequency.
     { hz: 196, length: 1.1, level: 0.022, type: 'sine', delay: 0.62 },
   ],
+  /**
+   * 0.34, not 0.5, and the reason is the SPREAD rather than this cue.
+   *
+   * Measured against the room tone in a capture, `connect` landed 23dB over the bed while
+   * `tap` and `receive` - the two the player hears hundreds of times an hour - landed 2-6dB
+   * over it, and half the clicks in a 58 second session produced nothing detectable at all.
+   * A 17dB gap between the loudest cue and the most frequent one is not a mix, it is two
+   * mixes.
+   *
+   * Closing it from both ends: the bed moves down out of the click band (see RoomTone), the
+   * quiet cues come up a little below, and the one sting that was shouting comes down. The
+   * target is every UI cue 10-14dB over its room - loud enough that a click is unambiguous
+   * feedback, quiet enough that a thousand of them are not an assault.
+   */
   connect: [
-    { hz: null, band: 1800, length: 0.09, level: 0.5 },
-    { hz: 520, to: 660, length: 0.16, level: 0.16, type: 'sine', delay: 0.05 },
+    { hz: null, band: 1800, length: 0.09, level: 0.34 },
+    { hz: 520, to: 660, length: 0.16, level: 0.13, type: 'sine', delay: 0.05 },
   ],
   disconnect: [
     { hz: 660, to: 380, length: 0.14, level: 0.14, type: 'sine' },
     { hz: null, band: 1200, length: 0.07, level: 0.3, delay: 0.08 },
   ],
-  // Soft, low and short. It fires once per line of speech and must survive being heard a
-  // few hundred times an hour, which rules out anything with a character of its own.
-  receive: [{ hz: 430, to: 468, length: 0.075, level: 0.075, type: 'sine' }],
+  /*
+   * Soft, low and short. It fires once per line of speech and must survive being heard a few
+   * hundred times an hour, which rules out anything with a character of its own.
+   *
+   * 0.10 rather than 0.075 - a third up, not doubled. The note above is right and the fix for
+   * "the player cannot tell their click registered" is mostly the bed getting out of the way,
+   * not this getting louder. A cue that has to shout over its own room is the wrong cue.
+   */
+  receive: [{ hz: 430, to: 468, length: 0.075, level: 0.1, type: 'sine' }],
   transmit: [
     { hz: 700, length: 0.045, level: 0.1, type: 'square' },
     { hz: 940, length: 0.06, level: 0.085, type: 'square', delay: 0.045 },
   ],
-  // Barely there. A keyer you can hear properly is a keyer you will mute.
-  key: [{ hz: null, band: 2600, length: 0.014, level: 0.11 }],
-  tap: [{ hz: 880, length: 0.028, level: 0.07, type: 'triangle' }],
+  // Barely there. A keyer you can hear properly is a keyer you will mute. Still barely
+  // there at 0.14: it is 14 milliseconds of narrow noise, and the reason it needed any lift
+  // is that it was competing with a room tone centred on the same band.
+  key: [{ hz: null, band: 2600, length: 0.014, level: 0.14 }],
+  // The click under a pointer. Of every cue in this table it is the one the player is most
+  // likely to be waiting on, and it measured 6dB over the bed - which is not feedback.
+  tap: [{ hz: 880, length: 0.028, level: 0.1, type: 'triangle' }],
   // The one warm sound. Rising, because it is the only moment in the game where the
   // machine gains something.
   learn: [
