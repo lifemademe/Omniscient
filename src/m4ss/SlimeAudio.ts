@@ -35,6 +35,9 @@
  */
 
 import { audio } from '../omniscient/audio/ConsoleAudio.js';
+import { emitSoundCaption } from '../omniscient/accessibility/SoundCaptions.js';
+
+import type { SoundCaptionEvent } from '../omniscient/accessibility/SoundCaptions.js';
 
 export type SlimeCue =
   /** The tendril takes hold. The octopus grabs. */
@@ -148,6 +151,38 @@ const CUES: Record<SlimeCue, Voice[]> = {
   land: [{ hz: null, band: 540, q: 0.9, length: 0.06, level: 0.4 }],
 };
 
+const CAPTIONS: Readonly<Record<SlimeCue, SoundCaptionEvent>> = {
+  latch: { text: 'tendril grips anchor', tier: 'all', kind: 'world', key: 'slime-latch' },
+  release: { text: 'tendril releases', tier: 'all', kind: 'world', key: 'slime-release' },
+  snap: {
+    text: 'tendril tears; mass lost',
+    tier: 'gameplay',
+    kind: 'warning',
+    key: 'slime-snap',
+  },
+  split: { text: 'body mass separates', tier: 'gameplay', kind: 'world' },
+  recall: { text: 'loose mass answers recall', tier: 'gameplay', kind: 'world' },
+  absorb: { text: 'loose mass rejoins body', tier: 'all', kind: 'world', key: 'slime-absorb' },
+  button: { text: 'floor switch clicks down', tier: 'gameplay', kind: 'world' },
+  heavy: { text: 'heavy plate slams down', tier: 'gameplay', kind: 'world' },
+  gate: { text: 'lift gate grinds upward', tier: 'gameplay', kind: 'world' },
+  bridge: {
+    text: 'drawbridge creaks, then lands',
+    tier: 'gameplay',
+    kind: 'world',
+    durationMs: 3000,
+  },
+  crush: { text: 'press crushes body mass', tier: 'gameplay', kind: 'warning' },
+  portal: { text: 'portal takes the specimen', tier: 'gameplay', kind: 'success' },
+  contained: {
+    text: 'containment chamber seals',
+    tier: 'gameplay',
+    kind: 'success',
+    durationMs: 3200,
+  },
+  land: { text: 'body mass lands', tier: 'all', kind: 'world', key: 'slime-land' },
+};
+
 /** Cutoff fully open. Just under Nyquist-for-anything-audible; effectively bypass. */
 const FILTER_OPEN = 16000;
 /** Cutoff at full slow motion. Underwater, but the cues stay audible. */
@@ -190,6 +225,7 @@ export class SlimeAudio {
   }
 
   public play(cue: SlimeCue): void {
+    emitSoundCaption(CAPTIONS[cue]);
     const route = this.route();
     if (!route) return;
     for (const voice of CUES[cue]) {

@@ -186,6 +186,173 @@ export function createFluorescentBatten(params: BattenParams = {}): PropParts {
   };
 }
 
+/**
+ * A weighted-base articulated bench lamp for Mirela's repair table.
+ *
+ * ## Why this shape
+ *
+ * The repair shop already has boxes, cylinders and flat panels. Another compact appliance
+ * would disappear into that vocabulary, while the long broken line of an anglepoise arm
+ * reads as a task lamp at the room camera before its shade resolves. Two parallel struts,
+ * three round pivots and a broad open shade are the identifying features; everything else
+ * is there to make it feel used rather than staged.
+ *
+ * ## No light belongs to this asset
+ *
+ * This builds geometry only. The scene may use an existing practical to light the bench,
+ * but the prop owns no LightNode, emissive surface or exposure change. That keeps a dressing
+ * request from silently rewriting the room's carefully measured value structure.
+ *
+ * Local origin is the centre of the weighted base on the table surface. The arm reaches
+ * toward -X and +Z so a caller can park it at the rear-right corner of a bench and let the
+ * shade lean inward over the work without rotating the whole prop.
+ */
+export function createBenchLamp(): PropParts {
+  const body: THREE.BufferGeometry[] = [];
+  const fittings: THREE.BufferGeometry[] = [];
+  const recesses: THREE.BufferGeometry[] = [];
+
+  const UP = new THREE.Vector3(0, 1, 0);
+  const DOWN = new THREE.Vector3(0, -1, 0);
+  const FORWARD = new THREE.Vector3(0, 0, 1);
+
+  const rodBetween = (
+    from: THREE.Vector3,
+    to: THREE.Vector3,
+    radius: number,
+    sides = 7
+  ): THREE.BufferGeometry => {
+    const direction = to.clone().sub(from);
+    const length = direction.length();
+    direction.normalize();
+    const rod = new THREE.CylinderGeometry(radius, radius, length, sides, 1);
+    rod.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, direction));
+    rod.translate(
+      (from.x + to.x) / 2,
+      (from.y + to.y) / 2,
+      (from.z + to.z) / 2
+    );
+    return rod;
+  };
+
+  // A low two-step casting: heavy enough to counter the reach, small enough to leave a
+  // useful patch of bench around it. The dark rubber pad is proud by 2mm so it does not
+  // z-fight the enamel above it.
+  const rubberPad = new THREE.CylinderGeometry(0.122, 0.122, 0.008, 14, 1);
+  rubberPad.translate(0, 0.004, 0);
+  recesses.push(rubberPad);
+
+  const base = new THREE.CylinderGeometry(0.115, 0.128, 0.03, 14, 1);
+  base.translate(0, 0.022, 0);
+  body.push(base);
+  const baseCap = new THREE.CylinderGeometry(0.095, 0.112, 0.025, 14, 1);
+  baseCap.translate(0, 0.048, 0);
+  body.push(baseCap);
+
+  // A real switch, not a glowing status jewel. It sits where a hand can find it without
+  // reaching beneath the shade and stays in the dark material even under the warm key.
+  const toggle = new THREE.CylinderGeometry(0.012, 0.012, 0.024, 7, 1);
+  toggle.rotateZ(0.24);
+  toggle.translate(0.055, 0.071, 0.018);
+  recesses.push(toggle);
+
+  const shoulder = new THREE.Vector3(0, 0.095, 0);
+  const elbow = new THREE.Vector3(-0.14, 0.36, 0.045);
+  const wrist = new THREE.Vector3(-0.45, 0.58, 0.18);
+  const neck = new THREE.Vector3(-0.49, 0.6, 0.22);
+
+  // Two struts per section are what makes this an articulated counterbalanced lamp rather
+  // than a bent pipe. Their separation survives the pixel pass as a sliver of daylight.
+  for (const zOffset of [-0.022, 0.022]) {
+    const offset = new THREE.Vector3(0, 0, zOffset);
+    fittings.push(
+      rodBetween(shoulder.clone().add(offset), elbow.clone().add(offset), 0.009)
+    );
+    fittings.push(rodBetween(elbow.clone().add(offset), wrist.clone().add(offset), 0.009));
+  }
+  fittings.push(rodBetween(wrist, neck, 0.014, 8));
+
+  // Circular knuckles hold the arm together and break the four thin bars into a machine.
+  for (const [point, radius] of [
+    [shoulder, 0.032],
+    [elbow, 0.037],
+    [wrist, 0.032],
+  ] as const) {
+    const joint = new THREE.CylinderGeometry(radius, radius, 0.058, 12, 1);
+    joint.rotateX(Math.PI / 2);
+    joint.translate(point.x, point.y, point.z);
+    fittings.push(joint);
+  }
+  fittings.push(rodBetween(new THREE.Vector3(0, 0.055, 0), shoulder, 0.018, 9));
+
+  // A short exposed tension link follows the lower arm. It is deliberately straight—not
+  // a tiny helix whose only result at gameplay distance would be shimmering line noise.
+  fittings.push(
+    rodBetween(
+      shoulder.clone().add(new THREE.Vector3(-0.025, 0.035, 0.034)),
+      elbow.clone().add(new THREE.Vector3(0.025, -0.035, 0.034)),
+      0.004,
+      6
+    )
+  );
+
+  // The shade is a truncated enamel cone, not a pointed cone. Its axis aims toward the
+  // centre of the repair job. A dark inset disc provides readable depth without an emissive
+  // bulb or a double-sided bespoke material.
+  const shadeDirection = new THREE.Vector3(-0.73, -0.67, 0.09).normalize();
+  const shadeLength = 0.155;
+  const shadeOpening = neck.clone().add(shadeDirection.clone().multiplyScalar(shadeLength));
+  const shadeCentre = neck.clone().add(shadeDirection.clone().multiplyScalar(shadeLength / 2));
+  const shadeRotation = new THREE.Quaternion().setFromUnitVectors(DOWN, shadeDirection);
+
+  const shade = new THREE.CylinderGeometry(0.04, 0.108, shadeLength, 14, 1, true);
+  shade.applyQuaternion(shadeRotation);
+  shade.translate(shadeCentre.x, shadeCentre.y, shadeCentre.z);
+  body.push(shade);
+
+  const rearCap = new THREE.CylinderGeometry(0.043, 0.043, 0.03, 12, 1);
+  rearCap.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, shadeDirection));
+  rearCap.translate(
+    neck.x + shadeDirection.x * 0.012,
+    neck.y + shadeDirection.y * 0.012,
+    neck.z + shadeDirection.z * 0.012
+  );
+  body.push(rearCap);
+
+  const rim = new THREE.TorusGeometry(0.108, 0.007, 5, 16);
+  rim.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(FORWARD, shadeDirection));
+  rim.translate(shadeOpening.x, shadeOpening.y, shadeOpening.z);
+  fittings.push(rim);
+
+  const interior = new THREE.CircleGeometry(0.092, 14);
+  interior.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(FORWARD, shadeDirection));
+  const inset = shadeOpening.clone().addScaledVector(shadeDirection, -0.012);
+  interior.translate(inset.x, inset.y, inset.z);
+  recesses.push(interior);
+
+  // The cloth lead exits behind the base, crosses the last centimetres of the top, then
+  // drops out of sight beyond the rear edge. A fixture with no visible feed looks placed;
+  // this one belongs to the same compromised electrical shop as the rest of the scene.
+  const lead = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0.065, 0.018, -0.015),
+    new THREE.Vector3(0.11, 0.012, -0.07),
+    new THREE.Vector3(0.08, 0.005, -0.145),
+    new THREE.Vector3(0.035, -0.11, -0.19),
+  ]);
+  recesses.push(new THREE.TubeGeometry(lead, 9, 0.006, 5, false));
+
+  return {
+    body: merged(body),
+    fittings: merged(fittings),
+    recesses: merged(recesses),
+    anchors: {
+      base: new THREE.Vector3(),
+      shade: neck.clone(),
+      opening: shadeOpening,
+    },
+  };
+}
+
 /** What a thing on a pegboard is. Each one is a different SILHOUETTE, which is the point. */
 export type ToolKind =
   | 'spanner'

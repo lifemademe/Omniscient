@@ -39,6 +39,7 @@ const MODIFIERS = (event: KeyboardEvent): boolean => event.ctrlKey && event.shif
 
 export interface SceneJumpHost {
   jumpToScene(sceneId: string): void;
+  jumpToWarehouse?(): void;
 }
 
 const BADGE_ID = 'omniscient-scenejump-badge';
@@ -128,6 +129,25 @@ function buildStrip(host: SceneJumpHost, container: HTMLElement): HTMLElement {
       host.jumpToScene(sceneId);
       showBadge(container, index, sceneId);
     });
+    strip.appendChild(tab);
+  }
+
+  if (host.jumpToWarehouse) {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.textContent = 'W';
+    tab.title = 'warehouse-07-runtime';
+    tab.style.cssText = [
+      'width:20px',
+      'height:20px',
+      'font:10px/1 "Courier New",monospace',
+      'color:#e0a24c',
+      'background:rgba(16,8,7,0.92)',
+      'border:0',
+      'box-shadow:inset 1px 1px 0 #8f3f4a,inset -1px -1px 0 #040906',
+      'cursor:pointer',
+    ].join(';');
+    tab.addEventListener('click', () => host.jumpToWarehouse?.());
     strip.appendChild(tab);
   }
 

@@ -25,7 +25,7 @@ import { createLabelMaterial } from './labels.js';
 import type { Picker } from '../input/Picker.js';
 import type { ModuleKind } from '../geometry/modules.js';
 
-export type MenuAction = 'new-game' | 'continue' | 'settings' | 'credits' | 'shutdown';
+export type MenuAction = 'new-game' | 'continue' | 'night-shift' | 'settings' | 'credits' | 'shutdown';
 
 interface ModuleSpec {
   id: MenuAction;
@@ -64,6 +64,14 @@ const MODULES: ModuleSpec[] = [
      * machine with nothing on the tape should not offer to play the tape - the rig calls
      * setModuleEnabled('continue', true) at boot if persistence has something to restore.
      */
+    disabled: true,
+  },
+  {
+    id: 'night-shift',
+    kind: 'card',
+    title: 'Night shift',
+    subtitle: 'Warehouse 07 archive.',
+    accent: ACCENT.warning,
     disabled: true,
   },
   {
@@ -452,7 +460,7 @@ export class MainMenu {
         const local = point.sub(this.root.position);
         const nearPlates =
           local.x < STACK_ORIGIN.x + MODULE_PLATE.width * 0.9 &&
-          local.y > STACK_ORIGIN.y - PITCH * 4 - MODULE_PLATE.height &&
+          local.y > STACK_ORIGIN.y - PITCH * (MODULES.length - 1) - MODULE_PLATE.height &&
           local.y < STACK_ORIGIN.y + MODULE_PLATE.height;
         this.cable.setTarget(nearPlates ? local : this.cable.restingTip);
       }

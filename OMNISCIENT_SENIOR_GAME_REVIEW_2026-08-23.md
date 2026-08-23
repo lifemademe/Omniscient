@@ -7,7 +7,7 @@ Original review scope: analysis and future-work instructions. Implementation beg
 
 ## Implementation status — 2026-08-23
 
-Seven production passes have now been applied to the runtime TypeScript systems. No editor-authored scene assets were changed.
+Nine production passes have now been applied to the runtime TypeScript systems. No editor-authored scene assets were changed.
 
 Completed in pass one:
 
@@ -81,6 +81,31 @@ Completed in pass seven (independent comfort-controls pass):
 - Finale typing now carries fractional frame time and can reveal multiple characters on a slow frame. This removes frame-rate-dependent pacing while preserving receive cues, line dwells, movement boundaries, and manual fast-forward.
 
 Verification completed after pass seven: `pnpm lint`, `pnpm build`, Sandbox Studio `buildProject`, and the authoritative editor error store all completed with zero errors or warnings. A live 1280×720 Sandbox Studio pass verified the complete eight-row layout, focus rail, live `STANDARD`→`FAST`, `FULL`→`REDUCED` shake, and `FULL`→`OFF` flash changes. Test values were restored to `STANDARD / FULL / FULL`, the modal closed cleanly, and Sandbox Studio returned to edit mode. Release QA still needs physical controller testing, packaged-build Back/Escape behavior, direct photosensitivity review of every mission route, 720p/ultrawide safe-area sweeps, and minimum-spec profiling.
+
+Completed in pass eight (non-dialogue sound-caption pass):
+
+- The persistent accessibility model now includes `SOUND CAPTIONS` with `OFF`, `GAMEPLAY`, and `ALL` levels. Existing saves migrate without losing any prior comfort choices. `GAMEPLAY` carries information needed to read outcomes and mechanics; `ALL` adds expressive Foley such as tendril latches, landings, mower cutting load, transmissions, and the machine motif without turning visible dialogue or every keypress into duplicate text.
+- A restrained two-line caption rail now lives under the Genesys game UI container. It uses safe `textContent`, `role=status`, polite `aria-live` output, bounded top-centre placement that does not cover Contact View input, strong machine/world/warning/success treatment, repeated-event de-duplication, and authored duration/delay support. Turning captions off clears active and delayed cues immediately; editor teardown removes the rail, listeners, and pending timers.
+- Captions publish before any WebAudio availability, mute, or output checks. A player at zero volume or before the browser audio context unlocks receives the same critical state information as a player hearing the mix.
+- Console carrier changes, knowledge/scan feedback, mechanism acceptance/rejection, request verdicts, and the optional machine motif now use a closed caption vocabulary. Incoming dialogue, suggestion taps, and per-keystroke keyer sounds remain uncaptured because their information is already visible and would flood the rail.
+- All eight contact material payoffs have authored descriptions. Long beacon, door, cellar, and municipal-relay captions use the same delays as their procedural sound voices, so text lands with the physical event instead of forecasting it.
+- The mower captions engine start/stop, the first blade-load transition, material-specific bumper collisions, the person safety interlock, and clean-sweep completion. Collision captions have their own real-time cooldown, so they remain available when sound is unavailable without repeating every simulation frame.
+- M4SS now captions meaningful specimen and facility events across latch/release, tear, split/recall/absorb, switches, heavy plate, gate, drawbridge, crush, portal, containment, and landing. Failure and containment use warning/success priority; common expressive movement stays in `ALL`.
+- SETTINGS now fits nine keyboard/controller-accessible rows at 1280×720. Row spacing was tightened slightly rather than hiding the new option behind an unnecessary scroll at the minimum presentation height.
+
+Verification completed after pass eight: `pnpm lint`, `pnpm build`, Sandbox Studio `buildProject`, and the authoritative editor error store all completed with zero errors or warnings. A live 1280×720 Sandbox Studio pass verified all nine rows without clipping, `OFF`→`GAMEPLAY`, the immediate mode sample, and a real `negative acknowledgement` warning emitted by the procedural reject cue. The caption was both visually legible and present in the accessibility tree. `SOUND CAPTIONS` was restored to `OFF`; the reset row was armed once only as a transient cue test and no save data was erased. Sandbox Studio was returned to edit mode. Release QA still needs a full muted campaign pass to validate every authored description/timing in context, physical controller testing, packaged-build Back/Escape behavior, direct photosensitivity review, 720p/ultrawide safe-area sweeps, minimum-spec profiling, and final full-session mix/loudness capture.
+
+Completed in pass nine (adaptive procedural-score pass):
+
+- A dedicated adaptive-score instrument now shares the existing music bus, master volume, mute path, and limiter. It creates no second `AudioContext`, imports no track assets, uses deterministic oscillator/LFO graphs, crossfades every state change, and tears its live graph down cleanly when editor play ends.
+- The score now follows dramatic ownership instead of covering the game continuously. Home has a very slow G/C/D machine breath; the globe carries a low pulse that gains restrained harmonic voices at one, three, five, and seven resolved contacts; conversations crossfade to scoreless room tone; and resolution supplies only a quiet harmonic floor beneath the already-authored physical payoff and rare machine motif.
+- Each recorded fact receives one short timbral answer derived from its source room after the console's `learn` transient. This gives knowledge transfer a place-specific colour without putting a melody under dialogue or duplicating the visible record notification.
+- Remote mowing adds at most two progress stems in five broad completion bands, avoiding per-percentage pitch counters and rebuild chatter. M4SS receives a filtered, pitch-drifting organic sub-pulse while its existing wet latch, release, pressure, slow-motion, portal, and containment instrument remains responsible for moment-to-moment rhythm.
+- The finale gradually recombines contact-coloured G/C/D voices around the machine identity. Closing the transmission removes that pulse before the final acquisition; the anomaly enters on two beating, slowly drifting carriers plus an almost subliminal out-of-family high tone while the normal workstation bed remains absent.
+- `ALL` sound captions describe each major musical-state entrance once per play. `GAMEPLAY` remains free of score prose because none of these beds carries exclusive mechanical information.
+- The fresh-boot audio order was corrected. The first boot gesture now unlocks WebAudio before requesting room tone and the three-note motif, and RoomTone retries a remembered bed that could not build before unlock instead of treating its name alone as proof that it is already sounding.
+
+Verification completed after pass nine: `pnpm lint`, `pnpm build`, Sandbox Studio `buildProject`, and the authoritative editor error store completed with zero errors or warnings. A live game-window pass exercised the actual pointer boot gesture that owns WebAudio unlock, held through the workstation reveal, and mounted the repair-shop Contact View; both states rendered cleanly, Mirela's new table lamp remained correctly composed, and runtime diagnostics stayed empty. Sandbox Studio was returned to edit mode. The remote verification path cannot judge speaker/headphone balance, so a natural full-campaign listen, representative loudness capture, laptop/headphone comparison, and final per-state gain/crossfade tuning remain mandatory release QA rather than claimed complete.
 
 ## Executive verdict
 
@@ -793,7 +818,7 @@ Exit criteria: full campaign pacing works for first-time players; final 15 secon
 - Only two or three requests are concurrently answerable, and Keller/Lucian arrive at their intended dramatic point.
 - Every resolve holds on a human/material payoff for at least three seconds.
 - Finale anomaly is unmistakable and survives a short capture.
-- Keyboard, controller, mouse, reduced-motion, CRT, font-scale, flash, and shake settings are verified.
+- Keyboard, controller, mouse, reduced-motion, CRT, font-scale, text-speed, flash, shake, and sound-caption settings are verified.
 - 60 fps minimum-spec target and transition frame-time targets are met.
 
 ## Things not to do

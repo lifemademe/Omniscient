@@ -11,6 +11,7 @@ export type DisplayFilter = 'full' | 'soft' | 'off';
 export type ScreenShake = 'full' | 'reduced' | 'off';
 export type FlashIntensity = 'full' | 'reduced' | 'off';
 export type TextSpeed = 'standard' | 'fast' | 'instant';
+export type SoundCaptions = 'off' | 'gameplay' | 'all';
 
 export interface AccessibilityPreferences {
   textSize: TextSize;
@@ -19,6 +20,7 @@ export interface AccessibilityPreferences {
   screenShake: ScreenShake;
   flashIntensity: FlashIntensity;
   textSpeed: TextSpeed;
+  soundCaptions: SoundCaptions;
 }
 
 const STORAGE_KEY = 'omniscient.accessibility.v1';
@@ -29,6 +31,7 @@ export const DISPLAY_FILTERS: readonly DisplayFilter[] = ['full', 'soft', 'off']
 export const SCREEN_SHAKES: readonly ScreenShake[] = ['full', 'reduced', 'off'];
 export const FLASH_INTENSITIES: readonly FlashIntensity[] = ['full', 'reduced', 'off'];
 export const TEXT_SPEEDS: readonly TextSpeed[] = ['standard', 'fast', 'instant'];
+export const SOUND_CAPTIONS: readonly SoundCaptions[] = ['off', 'gameplay', 'all'];
 
 const TEXT_BOOST: Readonly<Record<TextSize, number>> = {
   standard: 0,
@@ -66,6 +69,7 @@ function defaults(): AccessibilityPreferences {
     screenShake: systemReducedMotion() ? 'off' : 'full',
     flashIntensity: 'full',
     textSpeed: 'standard',
+    soundCaptions: 'off',
   };
 }
 
@@ -101,6 +105,9 @@ function load(): AccessibilityPreferences {
       textSpeed: TEXT_SPEEDS.includes(stored.textSpeed as TextSpeed)
         ? (stored.textSpeed as TextSpeed)
         : fallback.textSpeed,
+      soundCaptions: SOUND_CAPTIONS.includes(stored.soundCaptions as SoundCaptions)
+        ? (stored.soundCaptions as SoundCaptions)
+        : fallback.soundCaptions,
     };
   } catch {
     // Storage can be unavailable in embedded/private contexts. Comfort options should
@@ -195,6 +202,7 @@ export function installAccessibilityPreferences(container: HTMLElement): () => v
     container.dataset.omniScreenShake = preferences.screenShake;
     container.dataset.omniFlashIntensity = preferences.flashIntensity;
     container.dataset.omniTextSpeed = preferences.textSpeed;
+    container.dataset.omniSoundCaptions = preferences.soundCaptions;
   };
 
   apply(current);
@@ -209,6 +217,7 @@ export function installAccessibilityPreferences(container: HTMLElement): () => v
     delete container.dataset.omniScreenShake;
     delete container.dataset.omniFlashIntensity;
     delete container.dataset.omniTextSpeed;
+    delete container.dataset.omniSoundCaptions;
   };
 }
 

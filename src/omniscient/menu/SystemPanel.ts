@@ -13,6 +13,7 @@ import {
   DISPLAY_FILTERS,
   FLASH_INTENSITIES,
   SCREEN_SHAKES,
+  SOUND_CAPTIONS,
   TEXT_SIZES,
   TEXT_SPEEDS,
   getAccessibilityPreferences,
@@ -24,6 +25,7 @@ import type {
   DisplayFilter,
   FlashIntensity,
   ScreenShake,
+  SoundCaptions,
   TextSize,
   TextSpeed,
 } from '../accessibility/preferences.js';
@@ -68,8 +70,8 @@ const CSS = `
   align-items: center;
   gap: 16px;
   width: 100%;
-  min-height: 48px;
-  padding: 10px;
+  min-height: 44px;
+  padding: 7px 10px;
   border: 1px solid transparent;
   color: inherit;
   background: transparent;
@@ -163,6 +165,12 @@ const FLASH_LABELS: Readonly<Record<FlashIntensity, string>> = {
   full: 'Full',
   reduced: 'Reduced',
   off: 'Off',
+};
+
+const SOUND_CAPTION_LABELS: Readonly<Record<SoundCaptions, string>> = {
+  off: 'Off',
+  gameplay: 'Gameplay',
+  all: 'All',
 };
 
 /** A modal over the menu. Escape always returns focus to wherever the player came from. */
@@ -351,6 +359,14 @@ export class SystemPanel {
       () => getAccessibilityPreferences().flashIntensity,
       (value) => setAccessibilityPreference('flashIntensity', value),
       (value) => FLASH_LABELS[value]
+    );
+    this.addChoiceRow(
+      frame,
+      'SOUND CAPTIONS',
+      SOUND_CAPTIONS,
+      () => getAccessibilityPreferences().soundCaptions,
+      (value) => setAccessibilityPreference('soundCaptions', value),
+      (value) => SOUND_CAPTION_LABELS[value]
     );
     this.addResetRow(frame);
   }

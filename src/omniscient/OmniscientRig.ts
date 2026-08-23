@@ -27,6 +27,7 @@ import { PAINT_UNIFORMS } from './art/painterly.js';
 import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { audio, MowerAudio } from './audio/ConsoleAudio.js';
+import { adaptiveScore } from './audio/AdaptiveScore.js';
 import {
   clearM4ssStage,
   clearSave,
@@ -38,7 +39,7 @@ import {
 import { installCursor, setCursorVisible } from './art/cursor.js';
 import { installRetro, setRetroLook, setRetroScreenQuad } from './art/retro.js';
 import { projectScreenQuad } from './art/screenQuad.js';
-import { setRoomTone } from './audio/RoomTone.js';
+import { setRoomTone, stopRoomTone } from './audio/RoomTone.js';
 import { showBoot } from './link/BootScreen.js';
 
 import type { BootScreen } from './link/BootScreen.js';
@@ -53,7 +54,13 @@ import { applyShadowPolicy } from './art/shadows.js';
 import { SystemPanel } from './menu/SystemPanel.js';
 import { createSeaLife } from './geometry/seaLife.js';
 import { WINDOW_VIEW } from './geometry/room.js';
-import { ANOMALY_SIGNAL, createSignals, M4SS_SIGNAL, MIRELA_SIGNAL } from './content/signals.js';
+import {
+  ANOMALY_SIGNAL,
+  createSignals,
+  M4SS_SIGNAL,
+  MIRELA_SIGNAL,
+  WAREHOUSE_SIGNAL,
+} from './content/signals.js';
 import { Ease, Tweener } from './core/tween.js';
 import { CRTSurface } from './crt/CRTSurface.js';
 import { TunePanel } from './dev/TunePanel.js';
@@ -79,7 +86,16 @@ import {
   accessibleCameraDuration,
   installAccessibilityPreferences,
 } from './accessibility/preferences.js';
+import { installSoundCaptions } from './accessibility/SoundCaptions.js';
 import { VFX_LIBRARY } from './vfx/library.js';
+import { TracePanel } from './warehouse/TracePanel.js';
+import { WarehouseLaunchPanel } from './warehouse/WarehouseLaunchPanel.js';
+import { loadWarehouseSave, updateWarehouseSave } from './warehouse/persistence.js';
+import { WarehouseDirector } from './warehouse/director.js';
+import { WarehouseRig } from './warehouse/WarehouseRig.js';
+import { createWarehouseArchiveDisplay } from './warehouse/archiveDisplay.js';
+
+import type { WarehouseMode, WarehouseRunResult } from './warehouse/types.js';
 
 /**
  * Where effects wait.
@@ -178,6 +194,8 @@ const WORKSTATION_ORIGIN = new THREE.Vector3(0, 0, -60);
 
 /** M4SS's own patch of empty world - see enterM4SS. Well clear of every diorama. */
 const M4SS_ORIGIN = new THREE.Vector3(0, 400, 0);
+/** The bonus facility is a separate runtime world, well outside every authored diorama. */
+const WAREHOUSE_ORIGIN = new THREE.Vector3(0, 800, 0);
 
 /**
  * The machine, three-quarter on. §129 wants this to be the shot a player screenshots at
@@ -299,8 +317,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private post: ENGINE.PostProcessManager | null = null;
   /** Settings and credits, over the menu. Built on first use. */
   private systemPanel: SystemPanel | null = null;
+  /** Modal trace and shift selector presented over the globe. */
+  private tracePanel: TracePanel | null = null;
+  private warehouseLaunchPanel: WarehouseLaunchPanel | null = null;
   /** Removes the preference listener and container attributes when editor play stops. */
   private disposeAccessibility: (() => void) | null = null;
+  /** Removes the live non-dialogue caption rail and its pending authored cues. */
+  private disposeSoundCaptions: (() => void) | null = null;
   /** Gulls and a boat in the window. Driven from the tick; see createSeaLife. */
   private seaLife: ReturnType<typeof createSeaLife> | null = null;
   /** The workstation lights, kept so the panel can reach them. */
@@ -432,6 +455,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private onM4SSKey: ((event: KeyboardEvent) => void) | null = null;
   /** The fog range to put back when M4SS closes - see enterM4SS. */
   private m4ssFog: { near: number; far: number } | null = null;
+  private warehouse: WarehouseRig | null = null;
+  private warehouseFog: { near: number; far: number } | null = null;
+  private warehouseArchiveDisplay: ENGINE.SceneNode | null = null;
   private readonly cameraPosition = new THREE.Vector3(0.5, 1.35, 1.5);
   private readonly cameraTarget = new THREE.Vector3(0, 0.85, -0.5);
 
@@ -450,6 +476,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.setTickEnabled(true);
 
     this.buildWorkstation();
+    this.refreshWarehouseArchiveDisplay();
     this.buildVfx();
     this.buildLighting();
 
@@ -657,6 +684,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (accessibilityContainer) {
       this.disposeAccessibility?.();
       this.disposeAccessibility = installAccessibilityPreferences(accessibilityContainer);
+      this.disposeSoundCaptions?.();
+      this.disposeSoundCaptions = installSoundCaptions(accessibilityContainer);
     }
 
     this.configureLook();
@@ -680,6 +709,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     const jumpContainer = ENGINE.isPublishedGame() ? null : this.getWorld()?.gameContainer;
     if (jumpContainer) this.disposeSceneJump = installSceneJump(this, jumpContainer);
+    if (!ENGINE.isPublishedGame()) {
+      const openWarehouse = (event: KeyboardEvent): void => {
+        if (event.code !== 'F9' || this.warehouse) return;
+        event.preventDefault();
+        this.boot?.dispose();
+        this.boot = null;
+        this.enterWarehouse('story');
+      };
+      window.addEventListener('keydown', openWarehouse);
+      this.onWarehouseDevKey = openWarehouse;
+    }
 
     void this.startSession();
 
@@ -822,6 +862,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
     station.add(monitor);
 
     this.add(station);
+  }
+
+  private refreshWarehouseArchiveDisplay(): void {
+    this.warehouseArchiveDisplay?.removeFromParent();
+    this.warehouseArchiveDisplay = null;
+    const archive = loadWarehouseSave();
+    if (!archive.storyCompleted) return;
+    const display = createWarehouseArchiveDisplay(archive);
+    display.position.copy(WORKSTATION_ORIGIN);
+    this.add(display);
+    this.warehouseArchiveDisplay = display;
   }
 
   /**
@@ -1721,6 +1772,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       onAim: (to) => this.scene?.aim(to),
       onKnowledgeGained: (factIds) => {
         audio.play('learn');
+        adaptiveScore.accentKnowledge(this.scene?.sceneId ?? '');
         this.revealGrowth();
         /*
          * And the room hears it too.
@@ -1733,6 +1785,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
         this.scene?.learn(factIds);
       },
       onResolved: () => {
+        adaptiveScore.setState('resolution');
         const acknowledgementDelay = audio.playContactPayoff(this.scene?.sceneId ?? '') ?? 0;
         window.setTimeout(() => audio.play('solved'), acknowledgementDelay);
         /*
@@ -1746,6 +1799,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
         this.holdThenReturnHome(acknowledgementDelay);
       },
       onFailed: (failure) => {
+        adaptiveScore.setState('contact');
         audio.play('failed');
         this.onRequestLost(failure);
       },
@@ -1813,7 +1867,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
          * literally what gives the machine its voice. Room tone first so the hum is already
          * under the motif rather than arriving after it.
          */
+        audio.unlock();
         setRoomTone('home');
+        adaptiveScore.setState('home');
         audio.play('motif');
         // 2.6s rather than SCREEN_SHOT's own 1.6 - this is the reveal, and it is the only
         // time this move is the point rather than a way of getting somewhere.
@@ -1856,7 +1912,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (this.boot) return 'boot';
     if (this.systemPanel?.isOpen) return 'system';
     if (this.endingPanel) return 'ending';
-    if (this.m4ss || this.driving || this.leaving) return 'disabled';
+    if (
+      this.m4ss ||
+      this.warehouse ||
+      this.tracePanel ||
+      this.warehouseLaunchPanel ||
+      this.driving ||
+      this.leaving
+    ) {
+      return 'disabled';
+    }
     if (this.phase === Phase.Menu) return this.menu?.canNavigate ? 'menu' : 'disabled';
     if (this.phase === Phase.Choosing) {
       return this.globeScreen?.canNavigate ? 'globe' : 'disabled';
@@ -1950,6 +2015,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
       return;
     }
 
+    if (action === 'night-shift') {
+      audio.unlock();
+      this.openWarehouseLaunch();
+      return;
+    }
+
     if (action !== 'new-game' && action !== 'continue') return;
 
     /*
@@ -1962,6 +2033,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (action === 'new-game') {
       clearSave();
       clearM4ssStage();
+      this.refreshWarehouseArchiveDisplay();
     } else {
       resume = this.restoreSave();
     }
@@ -2174,6 +2246,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
       if (coerced && signal.state === SignalState.Waiting) this.openable.add(signal.id);
     }
 
+    this.synchronizeWarehouseSignals();
+
     // The menu screen is the tree, and it is already on. Redraw it as the restored
     // knowledge, the same derive-from-state path a fresh boot takes.
     this.tree?.setState(this.knowledge.toTreeState());
@@ -2181,6 +2255,28 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.lastPlayedContactId = save.lastPlayedContactId ?? null;
     return this.lastPlayedContactId;
+  }
+
+  /** Rebuild the post-game trace/warehouse door from its separately versioned archive. */
+  private synchronizeWarehouseSignals(): void {
+    const archive = loadWarehouseSave();
+    const anomaly = this.signals.find((signal) => signal.id === ANOMALY_SIGNAL);
+    const warehouse = this.signals.find((signal) => signal.id === WAREHOUSE_SIGNAL);
+    if (archive.traceResolved) {
+      if (anomaly) {
+        anomaly.hidden = true;
+        anomaly.state = SignalState.Resolved;
+      }
+      if (warehouse) {
+        warehouse.hidden = false;
+        warehouse.state = SignalState.Waiting;
+        warehouse.actionLabel = archive.storyCompleted ? 'Select shift' : 'Enter';
+      }
+      this.openable.delete(ANOMALY_SIGNAL);
+      this.openable.add(WAREHOUSE_SIGNAL);
+      return;
+    }
+    if (anomaly && !anomaly.hidden) this.openable.add(ANOMALY_SIGNAL);
   }
 
   /**
@@ -2314,6 +2410,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const saved = hasSave();
     this.menu.setModuleEnabled('continue', saved);
     this.menu.setModuleEnabled('new-game', !saved);
+    this.menu.setModuleEnabled('night-shift', loadWarehouseSave().storyCompleted);
   }
 
   private returnToMenu(): void {
@@ -2323,6 +2420,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.setPhase(Phase.Menu);
     setCursorVisible(false);
     this.screen = Screen.Tree;
+    adaptiveScore.setState('home');
     this.menu?.setEnabled(true);
     this.refreshFrontDoor();
     this.moveTo(HOME_SHOT, 1.4);
@@ -2368,6 +2466,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // Home. The desk lamp's hum, the CRT's line whistle and the sea through the window -
     // the only room the player hears for minutes at a time.
     setRoomTone('home');
+
+    const anomaly = this.signals.find((signal) => signal.id === ANOMALY_SIGNAL);
+    if (this.endingShown && anomaly?.hidden) adaptiveScore.setState('silent');
+    else if (anomaly && !anomaly.hidden) adaptiveScore.setState('anomaly');
+    else adaptiveScore.setState('globe', this.answered.length);
 
     this.setPhase(Phase.Choosing);
     setCursorVisible(false);
@@ -2429,6 +2532,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   private openSignal(signalId: string): void {
+    if (signalId === ANOMALY_SIGNAL) {
+      this.openWarehouseTrace();
+      return;
+    }
+    if (signalId === WAREHOUSE_SIGNAL) {
+      const archive = loadWarehouseSave();
+      if (archive.storyCompleted) this.openWarehouseLaunch();
+      else this.enterWarehouse('story');
+      return;
+    }
+
     /*
      * The station used to be intercepted here and dropped the player straight into M4SS.
      * It is a proper request now - Keller, a scene, and a conversation that ends at an icon
@@ -2442,6 +2556,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // a connection to somewhere.
     audio.play('connect');
     audio.setOnAir(true);
+    adaptiveScore.setState('contact');
     setCursorVisible(false);
 
     this.setSignalState(signalId, SignalState.Active);
@@ -2487,6 +2602,128 @@ export class OmniscientRig extends ENGINE.SceneNode {
     });
   }
 
+  /** Turn the finale's impossible carrier into a terrestrial place through evidence. */
+  private openWarehouseTrace(): void {
+    if (this.tracePanel || loadWarehouseSave().traceResolved) return;
+    const container = this.getWorld()?.gameContainer;
+    if (!container) return;
+    this.globeScreen?.setInputEnabled(false);
+    setCursorVisible(true);
+    const close = (): void => {
+      this.tracePanel = null;
+      if (this.phase === Phase.Choosing) this.globeScreen?.setInputEnabled(true);
+    };
+    this.tracePanel = new TracePanel(
+      container,
+      () => {
+        updateWarehouseSave((save) => {
+          save.traceResolved = true;
+          save.storyUnlocked = true;
+        });
+        this.synchronizeWarehouseSignals();
+        this.persist();
+        audio.play('connect');
+        this.globeScreen?.focusSignal(WAREHOUSE_SIGNAL);
+        close();
+      },
+      close
+    );
+    this.tracePanel.open();
+  }
+
+  /** Offer deterministic post-story variants without hiding them behind a key chord. */
+  private openWarehouseLaunch(): void {
+    if (this.warehouseLaunchPanel || this.warehouse) return;
+    const container = this.getWorld()?.gameContainer;
+    if (!container) return;
+    const archive = loadWarehouseSave();
+    if (!archive.storyCompleted) {
+      this.enterWarehouse('story');
+      return;
+    }
+    this.synchronizeWarehouseSignals();
+    this.globeScreen?.setInputEnabled(false);
+    this.menu?.setEnabled(false);
+    setCursorVisible(true);
+    const close = (): void => {
+      this.warehouseLaunchPanel = null;
+      if (this.phase === Phase.Menu) {
+        this.menu?.setEnabled(true);
+        this.refreshFrontDoor();
+      } else if (this.phase === Phase.Choosing) {
+        this.globeScreen?.setInputEnabled(true);
+      }
+    };
+    this.warehouseLaunchPanel = new WarehouseLaunchPanel(
+      container,
+      archive,
+      (mode) => {
+        this.warehouseLaunchPanel = null;
+        this.enterWarehouse(mode);
+      },
+      close
+    );
+    this.warehouseLaunchPanel.open();
+  }
+
+  /** Hand the active camera, input, atmosphere, and score to the runtime facility. */
+  private enterWarehouse(mode: WarehouseMode): void {
+    if (this.warehouse) return;
+    this.tracePanel?.destroy();
+    this.tracePanel = null;
+    this.warehouseLaunchPanel?.destroy();
+    this.warehouseLaunchPanel = null;
+    this.globeScreen?.detach();
+    this.phone?.setVisible(false);
+    this.menu?.setEnabled(false);
+    setCursorVisible(false);
+    audio.play('connect');
+    audio.setOnAir(true);
+
+    this.warehouseFog = this.fog
+      ? { near: this.fog.getFogNear(), far: this.fog.getFogFar() }
+      : null;
+    this.fog?.setFogNear(1e6);
+    this.fog?.setFogFar(1e7);
+
+    const seed = mode === 'daily' ? WarehouseDirector.utcDailySeed() : undefined;
+    const rig = WarehouseRig.create({
+      name: 'Warehouse07Runtime',
+      position: WAREHOUSE_ORIGIN,
+      mode,
+      seed,
+    });
+    rig.onStoryCompleted = () => {
+      this.synchronizeWarehouseSignals();
+      this.persist();
+      this.refreshFrontDoor();
+      this.refreshWarehouseArchiveDisplay();
+    };
+    rig.onExit = (result) => this.exitWarehouse(result);
+    this.add(rig);
+    this.warehouse = rig;
+    rig.mount();
+  }
+
+  /** Return from the bonus world and reconstitute the globe's post-game state. */
+  private exitWarehouse(_result: WarehouseRunResult | null): void {
+    if (!this.warehouse) return;
+    this.warehouse.unmount();
+    this.warehouse.removeFromParent();
+    this.warehouse = null;
+    if (this.warehouseFog && this.fog) {
+      this.fog.setFogNear(this.warehouseFog.near);
+      this.fog.setFogFar(this.warehouseFog.far);
+    }
+    this.warehouseFog = null;
+    this.camera?.setActive(true);
+    audio.setOnAir(false);
+    this.synchronizeWarehouseSignals();
+    this.persist();
+    this.refreshWarehouseArchiveDisplay();
+    this.showGlobe();
+  }
+
   /**
    * Open the station: hand the whole screen to M4SS.
    *
@@ -2508,6 +2745,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     audio.play('connect');
     audio.setOnAir(true);
+    adaptiveScore.setState('m4ss');
     this.setSignalState(M4SS_SIGNAL, SignalState.Active);
 
     this.globeScreen?.detach();
@@ -2597,6 +2835,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.camera?.setActive(true);
     audio.setOnAir(false);
+    adaptiveScore.setState('contact');
 
     /*
      * Back to Keller, not to the globe.
@@ -2844,6 +3083,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     setRetroLook('console');
     // The room's air comes home with the picture. Both halves of "a change of medium".
     setRoomTone('home');
+    adaptiveScore.setState('home');
 
     /**
      * And the room goes with you.
@@ -3004,10 +3244,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (!anomaly || !anomaly.hidden) return;
     anomaly.hidden = false;
     anomaly.pace = 3;
+    // The finale used to be view-only. It is now the traceable door to the bonus mission.
+    this.openable.add(ANOMALY_SIGNAL);
     // The workstation bed disappearing is the negative space around the new caller. The
     // connect squelch is the only sound left, so a compressed capture cannot mistake the
     // flare for an ordinary globe pulse.
     setRoomTone(null);
+    adaptiveScore.setState('anomaly');
     audio.play('connect');
     this.globeScreen?.focusSignal(ANOMALY_SIGNAL);
     this.persist();
@@ -3025,6 +3268,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private openEnding(): void {
     if (this.endingShown) return;
     this.endingShown = true;
+    adaptiveScore.setState('ending');
     // The third and last time the motif plays. Nothing follows it.
     audio.play('motif');
 
@@ -3098,6 +3342,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private paintMounted = false;
 
   private disposeSceneJump: (() => void) | null = null;
+  /** Editor-only F9 route to the runtime bonus world; never registered in published builds. */
+  private onWarehouseDevKey: ((event: KeyboardEvent) => void) | null = null;
 
   /**
    * The menu plate under the pointer, drawn on the CRT because the plates cannot name
@@ -3130,6 +3376,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.phone?.setVisible(false);
     this.menu?.setEnabled(false);
     this.mountScene(sceneId);
+  }
+
+  /** Editor art-direction route for the runtime facility, paired with the scene strip. */
+  public jumpToWarehouse(): void {
+    this.boot?.dispose();
+    this.boot = null;
+    this.enterWarehouse('story');
   }
 
   /** The machine's own annotations over the diorama. Built on the first request. */
@@ -3180,6 +3433,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * machine has no recording of what a street sounds like.
      */
     setRoomTone(sceneId);
+    adaptiveScore.setState('contact');
 
     /**
      * Air, or the absence of it.
@@ -3365,6 +3619,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     unit.drive.engage(true);
     this.driveKeys.attach();
     this.mowerAudio.start();
+    adaptiveScore.setState('action', 0);
 
     /*
      * The console goes away, because for the next minute it is not what the player is
@@ -3419,6 +3674,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (returnCamera) {
       this.phone?.setVisible(true);
       setCursorVisible(true);
+      adaptiveScore.setState('contact');
     }
 
     // Back to the room, eased this time - the machine is letting go rather than taking
@@ -3448,6 +3704,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     const progress = unit.field.progress();
     const done = progress / unit.target;
+    adaptiveScore.setActionProgress(done);
     this.plot?.draw({
       x: unit.drive.position.x,
       z: unit.drive.position.z,
@@ -3628,6 +3885,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
   public override tickPrePhysics(deltaTime: number): void {
     super.tickPrePhysics(deltaTime);
     this.navigator?.update(deltaTime);
+    adaptiveScore.update();
 
     /*
      * The post-process pipeline is built lazily on the first render, so the retro pass
@@ -3800,6 +4058,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
     if (this.onOverviewKey) window.removeEventListener('keydown', this.onOverviewKey);
     this.onOverviewKey = null;
+    if (this.onM4SSKey) window.removeEventListener('keydown', this.onM4SSKey);
+    this.onM4SSKey = null;
+    if (this.onWarehouseDevKey) window.removeEventListener('keydown', this.onWarehouseDevKey);
+    this.onWarehouseDevKey = null;
     /*
      * The boot screen owns two window listeners and a fistful of timers.
      *
@@ -3809,12 +4071,26 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     this.boot?.dispose();
     this.boot = null;
+    this.tracePanel?.destroy();
+    this.tracePanel = null;
+    this.warehouseLaunchPanel?.destroy();
+    this.warehouseLaunchPanel = null;
     this.systemPanel?.close();
     this.systemPanel = null;
+    this.disposeSoundCaptions?.();
+    this.disposeSoundCaptions = null;
     this.disposeAccessibility?.();
     this.disposeAccessibility = null;
     this.tune?.dispose();
     this.tune = null;
+    this.releaseUnit(false);
+    this.m4ss?.unmount();
+    this.m4ss = null;
+    this.warehouse?.unmount();
+    this.warehouse = null;
+    adaptiveScore.dispose();
+    stopRoomTone();
+    audio.setOnAir(false);
     this.session?.end();
     this.phone?.detach();
     this.surface?.dispose();

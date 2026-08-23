@@ -1147,6 +1147,13 @@ export class GlobeScreen {
 
     tip.append(name, label);
 
+    if (signal.projectionLabel) {
+      const projection = document.createElement('span');
+      projection.className = 'omni-globe__wait';
+      projection.textContent = signal.projectionLabel;
+      tip.appendChild(projection);
+    }
+
     this.waitEl = null;
 
     if (signal.state === SignalState.Cooldown && signal.cooldown !== undefined) {
@@ -1160,7 +1167,7 @@ export class GlobeScreen {
       const button = document.createElement('button');
       button.className = 'omni-globe__answer';
       button.type = 'button';
-      button.textContent = 'Answer';
+      button.textContent = signal.actionLabel ?? 'Answer';
       button.addEventListener('click', (event) => {
         event.stopPropagation();
         this.onAnswer(signal.id);

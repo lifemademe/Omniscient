@@ -376,7 +376,12 @@ function build(bed: Bed): Live | null {
  * not restart its own air.
  */
 export function setRoomTone(name: RoomToneName | null): void {
-  if (name === currentName) return;
+  /*
+   * A requested bed may predate WebAudio unlock. In that case the name is remembered but
+   * there is no live graph; asking for the same room after the first user gesture must get
+   * a second chance to build it. A name alone is not an idempotency proof.
+   */
+  if (name === currentName && (name === null || current !== null)) return;
   currentName = name;
 
   const bus = audio.bus();

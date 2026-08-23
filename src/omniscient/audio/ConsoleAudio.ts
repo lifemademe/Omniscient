@@ -34,6 +34,10 @@
  * applies to audio too, and a cue that sounds different every time reads as a glitch.
  */
 
+import { emitSoundCaption } from '../accessibility/SoundCaptions.js';
+
+import type { SoundCaptionEvent } from '../accessibility/SoundCaptions.js';
+
 /** Master ceiling. Everything is mixed under this and nothing may bypass it. */
 const MASTER = 0.68;
 const AMBIENCE_LEVEL = 0.72;
@@ -111,6 +115,88 @@ export type Cue =
    * notes a motif; a fourth would make it a sound effect.
    */
   | 'motif';
+
+/** Caption only information carried by sound; visible dialogue and keystrokes stay quiet. */
+const CUE_CAPTIONS: Partial<Record<Cue, SoundCaptionEvent>> = {
+  connect: {
+    text: 'carrier opens',
+    tier: 'gameplay',
+    kind: 'machine',
+    key: 'carrier-open',
+  },
+  disconnect: {
+    text: 'carrier drops',
+    tier: 'gameplay',
+    kind: 'machine',
+    key: 'carrier-drop',
+  },
+  transmit: { text: 'transmission sent', tier: 'all', kind: 'machine' },
+  learn: { text: 'record added', tier: 'gameplay', kind: 'success' },
+  resolve: { text: 'scan target resolves', tier: 'gameplay', kind: 'success' },
+  seat: {
+    text: 'mechanism locks into place',
+    tier: 'gameplay',
+    kind: 'world',
+    key: 'mechanism-seat',
+  },
+  reject: {
+    text: 'negative acknowledgement',
+    tier: 'gameplay',
+    kind: 'warning',
+    key: 'mechanism-reject',
+  },
+  solved: { text: 'request resolved', tier: 'gameplay', kind: 'success' },
+  failed: { text: 'request failed', tier: 'gameplay', kind: 'warning' },
+  motif: { text: 'low machine motif rises', tier: 'all', kind: 'machine' },
+};
+
+const CONTACT_CAPTIONS: Readonly<Record<string, SoundCaptionEvent>> = {
+  'scene-repair-shop': {
+    text: 'relay closes; transmitter stabilises',
+    tier: 'gameplay',
+    kind: 'world',
+  },
+  'scene-cleared-house': {
+    text: 'envelopes slide; box lid settles',
+    tier: 'gameplay',
+    kind: 'world',
+  },
+  'scene-seedling-tunnel': {
+    text: 'air moves through the cleared row',
+    tier: 'gameplay',
+    kind: 'world',
+  },
+  'scene-station-desk': {
+    text: 'station printer records the result',
+    tier: 'gameplay',
+    kind: 'world',
+  },
+  'scene-beacon-mast': {
+    text: 'relay closes; beacon motor steadies',
+    tier: 'gameplay',
+    kind: 'world',
+    delayMs: 2720,
+  },
+  'scene-flooded-cellar': {
+    text: 'pressure builds; water releases through pipe',
+    tier: 'gameplay',
+    kind: 'world',
+    delayMs: 160,
+  },
+  'scene-night-door': {
+    text: 'lock pins set; latch withdraws; door opens',
+    tier: 'gameplay',
+    kind: 'world',
+    delayMs: 200,
+    durationMs: 3200,
+  },
+  'scene-wire-city': {
+    text: 'municipal relay sequence completes',
+    tier: 'gameplay',
+    kind: 'world',
+    delayMs: 2900,
+  },
+};
 
 interface Voice {
   /** Oscillator frequency in Hz, or null for a noise burst. */
@@ -399,6 +485,9 @@ export class ConsoleAudio {
   }
 
   public play(cue: Cue): void {
+    const caption = CUE_CAPTIONS[cue];
+    if (caption) emitSoundCaption(caption);
+
     const ctx = this.ctx;
     const out = cue === 'motif' ? this.music : this.isCritical(cue) ? this.critical : this.ui;
     if (!ctx || !out || !this.enabled) return;
@@ -503,6 +592,9 @@ export class ConsoleAudio {
         break;
     }
     if (!voices) return null;
+
+    const caption = CONTACT_CAPTIONS[sceneId];
+    if (caption) emitSoundCaption(caption);
 
     /* Visual timing is authored even when audio is muted or not yet available. */
     if (!this.enabled) return acknowledgementDelayMs;
@@ -673,8 +765,20 @@ export class MowerAudio {
   private bladeGain: GainNode | null = null;
   private bladeFilter: BiquadFilterNode | null = null;
   private lastImpactAt = -Infinity;
+  private lastImpactCaptionAt = -Infinity;
+  private active = false;
+  private cutting = false;
 
   public start(): void {
+    if (!this.active) {
+      this.active = true;
+      emitSoundCaption({
+        text: 'mower motor turns over',
+        tier: 'gameplay',
+        kind: 'world',
+        key: 'mower-motor',
+      });
+    }
     if (this.engine) return;
     const bus = audio.bus();
     if (!bus) return;
@@ -726,6 +830,16 @@ export class MowerAudio {
 
   /** Drive pitch follows throttle; grass contact opens and raises the blade noise. */
   public update(throttle: number, cutting: boolean): void {
+    if (cutting && !this.cutting) {
+      emitSoundCaption({
+        text: 'blades meet tall grass',
+        tier: 'all',
+        kind: 'world',
+        key: 'mower-cutting',
+      });
+    }
+    this.cutting = cutting;
+
     const bus = audio.bus();
     if (!bus || !this.engine || !this.harmonic || !this.engineGain || !this.bladeGain) return;
     const load = Math.min(1, Math.abs(throttle));
@@ -748,6 +862,25 @@ export class MowerAudio {
     kind: 'boundary' | 'bed' | 'trunk' | 'person',
     strength: number
   ): void {
+    const captionNow = performance.now();
+    if (captionNow - this.lastImpactCaptionAt >= 720) {
+      const text =
+        kind === 'person'
+          ? 'safety interlock: person ahead'
+          : kind === 'trunk'
+            ? 'mower bumper strikes tree trunk'
+            : kind === 'bed'
+              ? 'mower bumper strikes garden bed'
+              : 'mower bumper strikes boundary rail';
+      emitSoundCaption({
+        text,
+        tier: 'gameplay',
+        kind: kind === 'person' ? 'warning' : 'world',
+        key: `mower-impact-${kind}`,
+      });
+      this.lastImpactCaptionAt = captionNow;
+    }
+
     const bus = audio.bus();
     if (!bus || bus.ctx.currentTime - this.lastImpactAt < 0.24) return;
     this.lastImpactAt = bus.ctx.currentTime;
@@ -794,6 +927,13 @@ export class MowerAudio {
 
   /** Blades unload, the motor falls to idle, and the unit reports a clean sweep. */
   public complete(): void {
+    emitSoundCaption({
+      text: 'cutting deck reports clean sweep',
+      tier: 'gameplay',
+      kind: 'success',
+      key: 'mower-complete',
+      durationMs: 3200,
+    });
     const bus = audio.bus();
     if (!bus) return;
     const at = bus.ctx.currentTime;
@@ -815,6 +955,16 @@ export class MowerAudio {
   }
 
   public stop(): void {
+    if (this.active) {
+      emitSoundCaption({
+        text: 'mower motor winds down',
+        tier: 'all',
+        kind: 'world',
+        key: 'mower-motor',
+      });
+    }
+    this.active = false;
+    this.cutting = false;
     const bus = audio.bus();
     const at = bus?.ctx.currentTime ?? 0;
     this.engineGain?.gain.setTargetAtTime(0.0001, at, 0.06);
@@ -834,6 +984,7 @@ export class MowerAudio {
     this.bladeGain = null;
     this.bladeFilter = null;
     this.lastImpactAt = -Infinity;
+    this.lastImpactCaptionAt = -Infinity;
   }
 }
 

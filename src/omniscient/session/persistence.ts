@@ -42,6 +42,7 @@ import { Certainty, KnowledgeDomain } from '../knowledge/KnowledgeStore.js';
 
 import type { Connection, ContactStanding, Fact } from '../knowledge/KnowledgeStore.js';
 import type { SignalState } from '../crt/GlobeView.js';
+import { clearWarehouseSave } from '../warehouse/persistence.js';
 
 const SAVE_KEY = 'omniscient.save';
 /** Bump when the shape changes. A save from another version is ignored, not migrated. */
@@ -139,6 +140,7 @@ export function clearSave(): void {
   } catch {
     // Nothing to do - if storage is unreadable the save is unreachable anyway.
   }
+  clearWarehouseSave();
 }
 
 // -- The M4SS stage, from the other side ---------------------------------------------------

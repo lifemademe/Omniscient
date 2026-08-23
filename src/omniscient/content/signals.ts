@@ -24,6 +24,7 @@ import type { Signal } from '../crt/GlobeView.js';
  * The anomaly earns its slot by being the only point that is not answerable.)
  */
 export const ANOMALY_SIGNAL = 'anomaly';
+export const WAREHOUSE_SIGNAL = 'warehouse-07';
 
 /** Signal ids that map to authored missions, in queue order. */
 export const MIRELA_SIGNAL = 'mirela';
@@ -261,6 +262,20 @@ export function createSignals(): Signal[] {
       label: 'Origin does not resolve.',
       state: SignalState.Unknown,
       hidden: true,
+      interaction: 'trace',
+      actionLabel: 'Trace',
+      projectionLabel: 'PROJECTION −11.5 / −57.0',
+    },
+    {
+      id: WAREHOUSE_SIGNAL,
+      latitude: -11.5,
+      longitude: -57.0,
+      name: 'WAREHOUSE 07',
+      label: 'Remote logistics annex. Status: operating.',
+      state: SignalState.Dormant,
+      hidden: true,
+      interaction: 'enter',
+      actionLabel: 'Enter',
     },
   ];
 }

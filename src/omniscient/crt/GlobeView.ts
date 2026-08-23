@@ -67,6 +67,12 @@ export interface Signal {
    * silently.
    */
   pace?: number;
+  /** What selecting this signal does. Defaults to answering a contact. */
+  interaction?: 'answer' | 'trace' | 'enter';
+  /** Optional diegetic verb shown in place of Answer. */
+  actionLabel?: string;
+  /** Extra coordinate/telemetry line for non-contact signals. */
+  projectionLabel?: string;
 }
 
 export enum SignalState {

@@ -93,6 +93,7 @@ import {
   createWorkbench,
 } from '../geometry/props.js';
 import {
+  createBenchLamp,
   createCableCoil,
   createCompressor,
   createFluorescentBatten,
@@ -938,6 +939,34 @@ function buildRepairShop(scene: ContactScene): void {
   benchRoot.add(meshOf('BenchTop', bench.body, MAT.worktop));
   benchRoot.add(meshOf('BenchLegs', bench.fittings, MAT.metal));
   scene.registerProp('bench', benchRoot);
+
+  /**
+   * Mirela's task lamp, geometry rather than another unmotivated light.
+   *
+   * Rear-right is the only honest pocket on this top: the transmitter owns the centre,
+   * Mirela's hands own the left, the screw tin owns the near-right and the removed panel
+   * owns the rear-right inside edge. The weighted base sits beyond that panel with a clean
+   * gap; the arm reaches back inward so the shade frames and points at the Kestrel-3 instead
+   * of standing beside it like a second exhibit.
+   *
+   * No LightNode or emissive mesh is attached. The room already has a measured warm
+   * practical; this fixture gives that source a visible cause without changing its gain,
+   * colour, falloff or the hero hierarchy.
+   */
+  const benchLamp = createBenchLamp();
+  const benchLampRoot = ENGINE.SceneNode.create({
+    name: 'BenchLamp',
+    position: new THREE.Vector3(0.98, 0.81, -0.78),
+  });
+  // Near-black enamel keeps the shade a framing silhouette under the strong practical.
+  // equipmentBack was measured live and climbed almost to white on this exact normal,
+  // competing with the Kestrel-3; MAT.dark retains just enough response to show the cone.
+  benchLampRoot.add(meshOf('BenchLampEnamel', benchLamp.body, MAT.dark));
+  benchLampRoot.add(meshOf('BenchLampHardware', benchLamp.fittings, MAT.metal));
+  if (benchLamp.recesses) {
+    benchLampRoot.add(meshOf('BenchLampDark', benchLamp.recesses, MAT.slot));
+  }
+  scene.registerProp('bench-lamp', benchLampRoot, { anchors: benchLamp.anchors });
 
   /**
    * The evidence that this is somebody's job.
@@ -2313,6 +2342,7 @@ function buildRepairShop(scene: ContactScene): void {
     // She never described her bench. She described what is standing on it, and the bench
     // being the brightest mass in frame was the reason the radio lost the eye to it.
     ['bench', CERTAINTY.SHAPED],
+    ['bench-lamp', CERTAINTY.SHAPED],
     ['bench-tools', CERTAINTY.SHAPED],
     // The tin and its screws are SHAPED, not SUSPECTED. A lid of loose screws on a bench
     // somebody is working at is a shape the machine can infer from the bench; it is not a
