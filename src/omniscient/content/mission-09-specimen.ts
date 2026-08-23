@@ -315,6 +315,7 @@ export const MISSION_09: MissionDefinition = {
      */
     {
       id: 'contained',
+      gesture: 'prop.contained:desktop',
       tempo: Tempo.Respond,
       framing: 'camera.pan:default',
       say:
@@ -333,6 +334,7 @@ export const MISSION_09: MissionDefinition = {
 
     {
       id: 'verdict',
+      gesture: 'prop.log:desktop',
       tempo: Tempo.Respond,
       framing: 'camera.pan:default',
       say:

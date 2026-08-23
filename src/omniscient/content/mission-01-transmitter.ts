@@ -602,7 +602,7 @@ export const MISSION_01: MissionDefinition = {
          */
         TEST_TRANSMIT: {
           to: 'solved',
-          environment: 'camera.pan:default,prop.toggle:mains-switch',
+          environment: 'prop.toggle:mains-switch',
           vfx: 'CircuitPulseVFX',
         },
       },
@@ -611,7 +611,7 @@ export const MISSION_01: MissionDefinition = {
 
     {
       id: 'solved',
-      gesture: 'prop.nod:contact',
+      gesture: 'prop.restore:transmitter,prop.nod:contact',
       framing: 'camera.push-in:transmitter',
       tempo: Tempo.Respond,
       say:

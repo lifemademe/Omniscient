@@ -743,7 +743,15 @@ function buildRepairShop(scene: ContactScene): void {
    */
   const tubeRoot = ENGINE.SceneNode.create({ name: 'BattenTube', position: BATTEN_AT.clone() });
   tubeRoot.add(meshOf('Tube', batten.body, MAT.tube));
-  scene.registerProp('batten-tube', tubeRoot);
+  const battenLamps: ENGINE.PointLightNode[] = [];
+  let battenTime = 0;
+  scene.registerProp('batten-tube', tubeRoot, {
+    idle: (dt) => {
+      battenTime = (battenTime + dt) % 9.4;
+      const dip = battenTime < 0.035 ? 0.58 : battenTime < 0.09 ? 0.84 : 1;
+      for (const lamp of battenLamps) lamp.intensity = 1.1 * dip;
+    },
+  });
 
   /*
    * And the light it makes - three points along the tube, a third of a budget each.
@@ -767,17 +775,16 @@ function buildRepairShop(scene: ContactScene): void {
     ['batten-lamp-b', batten.anchors.lampB],
     ['batten-lamp-c', batten.anchors.lampC],
   ] as [string, THREE.Vector3][]) {
-    scene.registerProp(
-      id,
-      ENGINE.PointLightNode.create({
-        name: 'BattenLamp',
-        position: BATTEN_AT.clone().add(anchor),
-        intensity: 1.1,
-        color: new THREE.Color(LIGHT.fill),
-        distance: 3.4,
-        decay: 1.5,
-      })
-    );
+    const lamp = ENGINE.PointLightNode.create({
+      name: 'BattenLamp',
+      position: BATTEN_AT.clone().add(anchor),
+      intensity: 1.1,
+      color: new THREE.Color(LIGHT.fill),
+      distance: 3.4,
+      decay: 1.5,
+    });
+    battenLamps.push(lamp);
+    scene.registerProp(id, lamp);
   }
 
   /**
@@ -1306,6 +1313,53 @@ function buildRepairShop(scene: ContactScene): void {
     );
   }
 
+  /*
+   * A real needle over the painted face.
+   *
+   * The old meter baked its dead reading into the decal, so Mirela could say "the needle
+   * is moving" while the instrument stayed pinned at zero. Geometry makes the final test
+   * readable without replacing the deliberately low-resolution face or redrawing a canvas
+   * texture every frame.
+   */
+  const METER_REST = 2.45;
+  const METER_LIVE = 0.74;
+  const meterNeedleRoot = ENGINE.SceneNode.create({
+    name: 'MeterNeedle',
+    position: new THREE.Vector3(-0.1144, 0.064, 0.191),
+    rotation: new THREE.Euler(0, 0, METER_REST),
+  });
+  const needleGeo = new THREE.BoxGeometry(0.068, 0.005, 0.002);
+  needleGeo.translate(0.034, 0, 0);
+  meterNeedleRoot.add(
+    meshOf(
+      'MeterNeedleBar',
+      needleGeo,
+      new THREE.MeshBasicMaterial({ color: '#e8e2cf', toneMapped: false })
+    )
+  );
+  setRoot.add(meterNeedleRoot);
+
+  /* A carrier jewel beside the controls. Dim glass and live phosphor never share a frame. */
+  const carrierGeo = new THREE.CircleGeometry(0.012, 12);
+  const carrierRoot = ENGINE.SceneNode.create({
+    name: 'CarrierLamp',
+    position: new THREE.Vector3(0.14, 0.135, 0.188),
+  });
+  const carrierDim = meshOf(
+    'CarrierDim',
+    carrierGeo,
+    new THREE.MeshBasicMaterial({ color: '#493b2e', toneMapped: false })
+  );
+  const carrierLive = meshOf(
+    'CarrierLive',
+    carrierGeo.clone(),
+    new THREE.MeshBasicMaterial({ color: '#8fe39b', toneMapped: false })
+  );
+  carrierLive.visible = false;
+  carrierRoot.add(carrierDim);
+  carrierRoot.add(carrierLive);
+  setRoot.add(carrierRoot);
+
   // The rating plate, under the controls on the front panel.
   const plate = createRatingPlate();
   if (plate) {
@@ -1497,6 +1551,45 @@ function buildRepairShop(scene: ContactScene): void {
           },
           { duration: 1.1, easing: Ease.outCubic, channel: 'transmitter-spin' }
         );
+      },
+      /** Face the repaired instrument toward the link, acquire carrier, then let it live. */
+      restore: (tweener, node) => {
+        const from = node.rotation.y;
+        tweener.add(
+          (t) => {
+            const angle = from * (1 - t);
+            node.rotation.set(node.rotation.x, angle, node.rotation.z);
+            carryConnector(angle);
+          },
+          { duration: 1.05, easing: Ease.outCubic, channel: 'transmitter-spin' }
+        );
+        tweener.add(
+          (t) => {
+            const acquire = Ease.outBack(t);
+            const flutter = Math.sin(t * Math.PI * 7) * 0.08 * (1 - t);
+            meterNeedleRoot.rotation.z = METER_REST + (METER_LIVE - METER_REST) * acquire + flutter;
+          },
+          {
+            duration: 1.3,
+            delay: 0.78,
+            easing: Ease.linear,
+            channel: 'transmitter-meter',
+            onComplete: () => {
+              meterNeedleRoot.rotation.z = METER_LIVE;
+              carrierDim.visible = false;
+              carrierLive.visible = true;
+            },
+          }
+        );
+        tweener.add(() => undefined, {
+          duration: 0.01,
+          delay: 1.02,
+          channel: 'transmitter-carrier-lamp',
+          onComplete: () => {
+            carrierDim.visible = false;
+            carrierLive.visible = true;
+          },
+        });
       },
     },
   });
@@ -2605,6 +2698,36 @@ function buildBeaconMast(scene: ContactScene): void {
   }
   for (const shell of halo) beaconRoot.add(shell);
 
+  /*
+   * A rotating beam, kept barely visible until it crosses mist or structure.
+   *
+   * The point light establishes illumination but cannot describe a harbour beacon's one
+   * defining movement. This low-opacity cone supplies that movement without painting the
+   * whole sky amber or introducing a full volumetric pass. Its pivot is the lens, so the
+   * rotation remains mechanically believable from every authored shot.
+   */
+  const sweepRoot = ENGINE.SceneNode.create({
+    name: 'BeaconSweep',
+    position: new THREE.Vector3(0, beaconY + 0.08, 0),
+  });
+  const beamGeometry = new THREE.ConeGeometry(0.72, 8, 12, 1, true);
+  beamGeometry.rotateZ(Math.PI / 2);
+  beamGeometry.translate(4, 0, 0);
+  const beam = new THREE.Mesh(
+    beamGeometry,
+    new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#ffd27a'),
+      transparent: true,
+      opacity: 0.035,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    })
+  );
+  beam.name = 'BeaconBeam';
+  sweepRoot.add(beam);
+  beaconRoot.add(sweepRoot);
+
   /**
    * The fault, running on its own.
    *
@@ -2615,28 +2738,33 @@ function buildBeaconMast(scene: ContactScene): void {
    * rather than a conversation about a line of dialogue.
    */
   let beaconClock = 0;
+  let beaconSteady = false;
   scene.registerProp('beacon', beaconRoot, {
     // Inked: The beacon head. It is going out and coming back the whole time.
     inked: true,
     anchors: { default: new THREE.Vector3(0, beaconY, 0) },
     idle: (deltaTime) => {
       beaconClock = (beaconClock + deltaTime) % 11;
+      sweepRoot.rotation.y += deltaTime * 0.72;
       // Out for three and a half seconds in every eleven, hard on and hard off: a feed
       // being pulled down collapses, it does not fade.
-      const dark = beaconClock > 7.5;
+      const dark = !beaconSteady && beaconClock > 7.5;
       lens.material = dark ? MAT.beaconDark : MAT.beaconLit;
       glow.intensity = dark ? 0 : 15;
       // The bloom goes with it. A glow left hanging round a dead lens is the single most
       // obvious way for this whole effect to look like a bug.
       for (const shell of halo) shell.visible = !dark;
+      sweepRoot.visible = !dark;
     },
     actions: {
       /** Steady again, once the two sets are separated. */
       steady: () => {
+        beaconSteady = true;
         beaconClock = 0;
         lens.material = MAT.beaconLit;
         glow.intensity = 18;
         for (const shell of halo) shell.visible = true;
+        sweepRoot.visible = true;
       },
     },
   });
@@ -3361,8 +3489,59 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   });
   // Yellowing as well as stunted. Two signals, because the player reads this across four
   // metres of set at a shallow angle and through the shade that is causing it.
-  failing.colors = new THREE.Color('#cfc47e');
-  scene.registerProp('rows-failing', failing);
+  const FAILING_PALE = new THREE.Color('#cfc47e');
+  const FAILING_LIT = new THREE.Color('#d8d08b');
+  failing.colors = FAILING_PALE.clone();
+
+  /*
+   * The sunlight the two interventions earn.
+   *
+   * It begins effectively off. The cut removes the authored shade plane and the mower
+   * clears the bank; the final beat then lets a warm, low source rake across the weak row.
+   * The plants only warm slightly—they do not become healthy in three seconds—but their
+   * material and silhouette stop looking abandoned, which is the no-UI payoff the mission
+   * was missing.
+   */
+  const recoverySun = ENGINE.PointLightNode.create({
+    name: 'RecoverySun',
+    position: new THREE.Vector3(1.4, 2.8, 0.8),
+    intensity: 0.001,
+    color: new THREE.Color('#ffd18a'),
+    distance: 8,
+    decay: 1.05,
+  });
+  scene.registerProp('recovery-sun', recoverySun);
+
+  scene.registerProp('rows-failing', failing, {
+    actions: {
+      recover: (tweener, node) => {
+        const baseY = node.position.y;
+        tweener.add(
+          (t) => {
+            const eased = Ease.inOutCubic(t);
+            recoverySun.intensity = 5.8 * eased;
+            failing.setInstanceColors(FAILING_PALE.clone().lerp(FAILING_LIT, eased));
+            node.position.y = baseY + Math.sin(eased * Math.PI) * 0.015;
+          },
+          {
+            duration: 2.8,
+            easing: Ease.linear,
+            channel: 'seedling-recovery',
+            onComplete: () => {
+              recoverySun.intensity = 5.8;
+              failing.setInstanceColors(FAILING_LIT.clone());
+              node.position.y = baseY;
+            },
+          }
+        );
+      },
+    },
+  });
+  scene.onReset(() => {
+    recoverySun.intensity = 0.001;
+    failing.setInstanceColors(FAILING_PALE.clone());
+    failing.position.y = 0;
+  });
 
   /**
    * The shade itself, as a real object.
@@ -4454,11 +4633,11 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * for something the player is steering in a 1.1m gap.
    */
   const KEEP_OFF = [
-    { x: -1.05, z: -1.4, radius: 1.15 },
-    { x: -1.05, z: 1.0, radius: 1.15 },
-    { x: -3.7, z: -0.4, radius: 0.72 },
+    { x: -1.05, z: -1.4, radius: 1.15, kind: 'bed' as const },
+    { x: -1.05, z: 1.0, radius: 1.15, kind: 'bed' as const },
+    { x: -3.7, z: -0.4, radius: 0.72, kind: 'trunk' as const },
     // Adaeze herself. The machine is hers and it is not going to run over her.
-    { x: -1.12, z: 2.72, radius: 0.6 },
+    { x: -1.12, z: 2.72, radius: 0.6, kind: 'person' as const },
   ];
 
   const mowingField = new MowingField(BANK);
@@ -4630,9 +4809,10 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     /*
      * Not 100%. A blade wedged against the trunk that the deck physically cannot reach
      * would make the job impossible, and hunting the last three blades in a 30m2 bank is
-     * not the game - the game is the sweep. Nine tenths is unmistakably "done" to look at.
+     * not the game - the game is the sweep. Four fifths rewards a competent pattern and
+     * keeps this supporting interaction in a 30-45 second dramatic beat.
      */
-    target: 0.9,
+    target: 0.8,
   };
 
   /**
@@ -5574,9 +5754,13 @@ function buildClearedHouse(scene: ContactScene): void {
   boxRoot.add(meshOf('BoxShell', shell, MAT.plastic));
 
   const lid = new THREE.BoxGeometry(0.36, 0.02, 0.26);
-  lid.rotateZ(0.22);
-  lid.translate(0.32, 0.02, 0.04);
-  boxRoot.add(meshOf('BoxLid', lid, MAT.plastic));
+  const boxLidRoot = ENGINE.SceneNode.create({
+    name: 'BoxLid',
+    position: new THREE.Vector3(0.32, 0.02, 0.04),
+    rotation: new THREE.Euler(0, 0, 0.22),
+  });
+  boxLidRoot.add(meshOf('BoxLidMesh', lid, MAT.plastic));
+  boxRoot.add(boxLidRoot);
 
   const prints: THREE.BufferGeometry[] = [];
   for (let i = 0; i < 9; i++) {
@@ -5590,20 +5774,94 @@ function buildClearedHouse(scene: ContactScene): void {
     // Inked: The box of photographs the whole request is a search through.
     inked: true,
     anchors: { default: new THREE.Vector3(0, 0.14, 0) },
+    actions: {
+      /** The answer is in hand; the two-day search can finally be put away. */
+      settle: (tweener) => {
+        const from = boxLidRoot.position.clone();
+        const turn = boxLidRoot.rotation.z;
+        const to = new THREE.Vector3(0, 0.165, 0);
+        tweener.add(
+          (t) => {
+            const eased = Ease.inOutCubic(t);
+            boxLidRoot.position.lerpVectors(from, to, eased);
+            boxLidRoot.rotation.z = turn * (1 - eased);
+          },
+          {
+            duration: 1.15,
+            delay: 1.0,
+            easing: Ease.linear,
+            channel: 'photo-box-settle',
+          }
+        );
+      },
+    },
   });
 
-  // The four envelopes, squared up, waiting for names.
-  const letters: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < 4; i++) {
+  /*
+   * Four envelopes waiting, and the fifth still in the box.
+   *
+   * The final line has always been about Ileana realising she left Marta out; a merged
+   * four-envelope mesh made that discovery exist only in prose. Separate nodes let the
+   * missing fifth leave the photographs and let all five settle into an addressed row.
+   */
+  const lettersRoot = ENGINE.SceneNode.create({ name: 'Letters' });
+  const letterNodes: ENGINE.SceneNode[] = [];
+  const letterHomes: THREE.Vector3[] = [];
+  for (let i = 0; i < 5; i++) {
     const envelope = new THREE.BoxGeometry(0.16, 0.003, 0.11);
-    envelope.rotateY(jitter(rng, 0.06));
-    envelope.translate(0.34, 0.775 + i * 0.0035, -1.14 + jitter(rng, 0.01));
-    letters.push(envelope);
+    const home = i < 4
+      ? new THREE.Vector3(0.34, 0.775 + i * 0.0035, -1.14 + jitter(rng, 0.01))
+      : new THREE.Vector3(-0.55, 0.9, -1.06);
+    const node = ENGINE.SceneNode.create({
+      name: `Envelope${i + 1}`,
+      position: home.clone(),
+      rotation: new THREE.Euler(0, jitter(rng, i < 4 ? 0.06 : 0.18), 0),
+    });
+    node.add(meshOf(`EnvelopeMesh${i + 1}`, envelope, MAT.paper));
+    node.visible = i < 4;
+    lettersRoot.add(node);
+    letterNodes.push(node);
+    letterHomes.push(home);
   }
-  scene.registerProp(
-    'letters',
-    meshOf('Letters', mergeGeometries(letters, false) ?? letters[0], MAT.paper)
-  );
+
+  let paperTime = 0;
+  let addressed = false;
+  scene.registerProp('letters', lettersRoot, {
+    idle: (dt) => {
+      if (addressed) return;
+      paperTime += dt;
+      for (let i = 0; i < 4; i++) {
+        letterNodes[i].position.y = letterHomes[i].y + Math.sin(paperTime * 1.7 + i) * 0.0008;
+      }
+    },
+    actions: {
+      address: (tweener) => {
+        addressed = true;
+        const destinations = letterNodes.map((_, i) =>
+          new THREE.Vector3(-0.28 + i * 0.2, 0.785 + i * 0.0015, -0.88 - Math.abs(2 - i) * 0.025)
+        );
+        letterNodes.forEach((node, i) => {
+          node.visible = true;
+          const from = node.position.clone();
+          const fromTurn = node.rotation.y;
+          const toTurn = (i - 2) * 0.045;
+          tweener.add(
+            (t) => {
+              const eased = Ease.outCubic(t);
+              node.position.lerpVectors(from, destinations[i], eased);
+              node.rotation.y = fromTurn + (toTurn - fromTurn) * eased;
+            },
+            {
+              duration: 0.9,
+              delay: i * 0.1,
+              easing: Ease.linear,
+              channel: `address-envelope-${i}`,
+            }
+          );
+        });
+      },
+    },
+  });
 
   /**
    * Two chairs, one stacked on the other - and the second one has legs.
@@ -6747,7 +7005,54 @@ function buildFloodedCellar(scene: ContactScene): void {
   const outfall = new THREE.CylinderGeometry(0.07, 0.07, 0.5, 8);
   outfall.rotateX(Math.PI / 2);
   outfall.translate(3.05, runY, -2.15);
-  scene.registerProp('outfall', meshOf('Outfall', outfall, wettable(MAT.steel, 3.05)));
+  const outfallRoot = ENGINE.SceneNode.create({ name: 'Outfall' });
+  outfallRoot.add(meshOf('OutfallPipe', outfall, wettable(MAT.steel, 3.05)));
+
+  /*
+   * Pressure reaching the wall, visible at the mouth of the run.
+   *
+   * The travelling wet front proves topology, but its last half metre used to terminate in
+   * a dark pipe. A small moving meniscus gives the route an endpoint and makes the broad
+   * release in the sound mix belong to something on screen. It stays restrained: the
+   * actual outfall is outside, and this is only the water passing through the inner mouth.
+   */
+  const outfallMaterial = new THREE.MeshBasicMaterial({
+    color: new THREE.Color('#8fc6be'),
+    transparent: true,
+    opacity: 0.08,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const outfallFlow = meshOf('OutfallFlow', new THREE.CircleGeometry(0.058, 14), outfallMaterial);
+  outfallFlow.position.set(3.05, runY, -1.892);
+  outfallFlow.visible = false;
+  outfallRoot.add(outfallFlow);
+
+  scene.registerProp('outfall', outfallRoot, {
+    anchors: { default: new THREE.Vector3(3.05, runY, -1.89) },
+    actions: {
+      release: (tweener) => {
+        outfallFlow.visible = true;
+        tweener.add(
+          (t) => {
+            const arrive = Ease.outCubic(t);
+            const pulse = 1 + Math.sin(t * Math.PI * 5) * 0.12 * (1 - t);
+            outfallFlow.scale.setScalar(pulse);
+            outfallMaterial.opacity = 0.08 + arrive * 0.34;
+          },
+          {
+            duration: 1.25,
+            easing: Ease.linear,
+            channel: 'outfall-release',
+            onComplete: () => {
+              outfallFlow.scale.setScalar(1);
+              outfallMaterial.opacity = 0.42;
+            },
+          }
+        );
+      },
+    },
+  });
 
   /**
    * The three settable junctions - and the fourth attempt at what they should look like.
@@ -7906,6 +8211,24 @@ function buildNightDoor(scene: ContactScene): void {
   spill.rotateX(-Math.PI / 2);
   spill.translate(DOOR_X + 0.1, 0.02, -0.55 - HALL_D + 0.8);
   hallRoot.add(meshOf('HallSpill', spill, MAT.landingSpill));
+
+  /*
+   * The landing light only becomes a source when the leaf opens.
+   *
+   * Point lights do not receive shadow occlusion here, so leaving this live behind the
+   * closed door would illuminate the step before the player earns the result. It begins
+   * effectively off and is raised in lockstep with the door angle below: the existing
+   * painted spill supplies the distant source, this light supplies the changing threshold.
+   */
+  const hallLight = ENGINE.PointLightNode.create({
+    name: 'HallLight',
+    position: new THREE.Vector3(DOOR_X + 0.1, 1.15, -1.65),
+    intensity: 0.001,
+    color: new THREE.Color('#ffd39a'),
+    distance: 5.2,
+    decay: 1.25,
+  });
+  hallRoot.add(hallLight);
   scene.registerProp('hall', hallRoot);
 
   /**
@@ -8071,6 +8394,8 @@ function buildNightDoor(scene: ContactScene): void {
     facing: 1.2,
     seed: 'rasca-cat',
   });
+  const catRestY = cat.root.position.y;
+  const catRestFacing = cat.root.rotation.y;
   scene.registerProp('cat', cat.root, { idle: cat.idle });
 
   /**
@@ -8675,6 +9000,38 @@ function buildNightDoor(scene: ContactScene): void {
           easing: Ease.outCubic,
           channel: 'door-open',
         });
+
+        /** Warmth reaches the doorstep at the same rate as the opening, not before it. */
+        tweener.add(
+          (t) => {
+            hallLight.intensity = 7.2 * Ease.outCubic(t);
+          },
+          {
+            duration: 2.2,
+            delay: 2.0,
+            easing: Ease.linear,
+            channel: 'hall-light-open',
+          }
+        );
+
+        /** The one witness on the sill finally decides the noise merits a reaction. */
+        tweener.add(
+          (t) => {
+            const turn = Ease.outCubic(t);
+            cat.root.rotation.y = catRestFacing + turn * 0.5;
+            cat.root.position.y = catRestY + Math.sin(t * Math.PI) * 0.045;
+          },
+          {
+            duration: 0.9,
+            delay: 2.08,
+            easing: Ease.linear,
+            channel: 'door-cat-react',
+            onComplete: () => {
+              cat.root.position.y = catRestY;
+              cat.root.rotation.y = catRestFacing + 0.5;
+            },
+          }
+        );
       },
     },
   });
@@ -10610,6 +10967,67 @@ function buildWireCity(scene: ContactScene): void {
   for (const mesh of [cabin, glass, wipers, phone, rim]) cabinGroup.add(mesh);
 
   /*
+   * The intervention the machine can perform and cannot enforce.
+   *
+   * The lights route previously hid the solid car and left the wireframe unchanged. The
+   * dialogue said a municipal signal turned red and the car drove through it, while the
+   * world showed neither event. This miniature signal lives at the windscreen landing and
+   * shares the cabin's road-aligned frame: red asserts, the tracked return crosses the stop
+   * line, and the player sees the precise limit of OMNISCIENT_'s reach.
+   */
+  const signalRoot = new THREE.Group();
+  signalRoot.name = 'TrafficIntervention';
+  signalRoot.visible = false;
+
+  const signalMaterial = new THREE.LineBasicMaterial({
+    color: new THREE.Color('#ff4f5f'),
+    transparent: true,
+    opacity: 0.9,
+  });
+  const signalGeometry = new THREE.BufferGeometry();
+  signalGeometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(
+      [
+        -3.4, -2.0, -15.8, 3.4, -2.0, -15.8,
+        -3.1, -2.0, -15.8, -3.1, 1.15, -15.8,
+        -3.1, 1.15, -15.8, -2.3, 1.15, -15.8,
+      ],
+      3
+    )
+  );
+  signalRoot.add(new THREE.LineSegments(signalGeometry, signalMaterial));
+
+  const signalLamp = new THREE.Mesh(
+    new THREE.RingGeometry(0.13, 0.24, 14),
+    new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#ff5968'),
+      transparent: true,
+      opacity: 0.88,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+  );
+  signalLamp.position.set(-2.3, 1.15, -15.78);
+  signalRoot.add(signalLamp);
+
+  const suspectGeometry = new THREE.BufferGeometry();
+  suspectGeometry.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(
+      [-0.48, 0, 0, 0.48, 0, 0, 0, 0, -0.82, 0, 0, 0.82],
+      3
+    )
+  );
+  const suspect = new THREE.LineSegments(
+    suspectGeometry,
+    new THREE.LineBasicMaterial({ color: new THREE.Color('#bfe9c8'), transparent: true, opacity: 0.98 })
+  );
+  suspect.position.set(0, -1.88, -23);
+  signalRoot.add(suspect);
+  cabinGroup.add(signalRoot);
+
+  /*
    * The rain, and the light to see it by.
    *
    * This scene sets `atmosphere = false` and has no lights in it, because everything else in
@@ -10653,8 +11071,16 @@ function buildWireCity(scene: ContactScene): void {
       road: inCar(car.anchors.road),
     },
     idle: (deltaTime) => {
-      if (!cabin.visible) return;
+      if (!cabin.visible && !signalRoot.visible) return;
       carClock += deltaTime;
+      if (signalRoot.visible) {
+        // The four-second camera descent arrives as the trace crosses the red line.
+        const crossing = Math.max(0, Math.min(1, (carClock - 2.75) / 1.55));
+        suspect.position.z = -23 + crossing * 18;
+        signalMaterial.opacity = 0.72 + Math.sin(carClock * 7) * 0.18;
+        signalLamp.scale.setScalar(0.9 + Math.sin(carClock * 7) * 0.12);
+      }
+      if (!cabin.visible) return;
       /*
        * One sweep every 2.4 seconds, and it PARKS between them. A wiper that never stops is
        * a metronome; the pause is what makes the next sweep feel like weather.
@@ -10695,6 +11121,9 @@ function buildWireCity(scene: ContactScene): void {
         // Stays in the wireframe. Nothing of the car is revealed; the district IS the shot.
         for (const mesh of [cabin, glass, wipers, phone, rim]) mesh.visible = false;
         rain.setVisible(false);
+        signalRoot.visible = true;
+        suspect.position.z = -23;
+        carClock = 0;
       },
       'arrive-call': () => {
         for (const mesh of [cabin, glass, wipers, phone]) mesh.visible = true;
@@ -10702,6 +11131,7 @@ function buildWireCity(scene: ContactScene): void {
         // car through a phone nobody picks up.
         rim.visible = false;
         rain.setVisible(true);
+        signalRoot.visible = false;
         carClock = 0;
       },
       'arrive-watch': () => {
@@ -10711,6 +11141,7 @@ function buildWireCity(scene: ContactScene): void {
         phone.visible = false;
         rim.visible = true;
         rain.setVisible(true);
+        signalRoot.visible = false;
         carClock = 0;
       },
     },
@@ -10796,6 +11227,12 @@ function buildStationDesk(scene: ContactScene): void {
       },
       close: () => {
         desktop.state = 'idle';
+      },
+      log: () => {
+        desktop.showResolution('logged');
+      },
+      contained: () => {
+        desktop.showResolution('contained');
       },
     },
   });

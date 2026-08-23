@@ -84,6 +84,10 @@ import type { ComposerPass } from './composerPass.js';
  * has always got them from this module and there is no reason to move that.
  */
 import { FRAGMENT, RETRO_LOOKS, VERTEX } from './retroShader.js';
+import {
+  getAccessibilityPreferences,
+  onAccessibilityPreferencesChanged,
+} from '../accessibility/preferences.js';
 
 import type { RetroLook, RetroLookName } from './retroShader.js';
 
@@ -331,6 +335,55 @@ class OmniscientRetroEffect extends ENGINE.IPostProcessEffect<RetroConfig> {
  */
 let effect: OmniscientRetroEffect | null = null;
 let mounted = false;
+let activeLook: RetroLookName = 'world';
+
+/**
+ * Preserve the authored grade while taking out the parts of the display treatment most
+ * likely to cost readability or comfort.
+ *
+ * SOFT keeps the fiction of a transmitted picture, but removes all temporal modulation
+ * and reduces geometry, convergence and raster artefacts. OFF is a genuinely clean image;
+ * a setting labelled off must not quietly leave the vignette or colour cast behind.
+ */
+function accessibleLook(name: RetroLookName): RetroLook {
+  const source = RETRO_LOOKS[name];
+  const mode = getAccessibilityPreferences().displayFilter;
+  if (mode === 'full') return source;
+  if (mode === 'off') {
+    return {
+      pixel: 1,
+      curve: 0,
+      aberration: 0,
+      scanline: 0,
+      scanPitch: source.scanPitch,
+      grille: 0,
+      bleed: 0,
+      vignette: 0,
+      roll: 0,
+      flicker: 0,
+      saturation: 1,
+      tint: new THREE.Color(1, 1, 1),
+    };
+  }
+
+  return {
+    ...source,
+    pixel: 1 + (source.pixel - 1) * 0.42,
+    curve: source.curve * 0.3,
+    aberration: source.aberration * 0.25,
+    scanline: source.scanline * 0.35,
+    grille: source.grille * 0.2,
+    bleed: source.bleed * 0.4,
+    vignette: source.vignette * 0.65,
+    roll: 0,
+    flicker: 0,
+    tint: source.tint.clone(),
+  };
+}
+
+onAccessibilityPreferencesChanged(() => {
+  effect?.pass.setLook(accessibleLook(activeLook), true);
+});
 
 /** What `installRetro` needs from the manager. Narrow on purpose - see below. */
 interface RetroHost {
@@ -371,7 +424,8 @@ export function installRetro(post: RetroHost): boolean {
  * a diorama, the console room, or the machine's own interior.
  */
 export function setRetroLook(name: RetroLookName, immediate = false): void {
-  effect?.pass.setLook(RETRO_LOOKS[name], immediate);
+  activeLook = name;
+  effect?.pass.setLook(accessibleLook(name), immediate);
 }
 
 /**

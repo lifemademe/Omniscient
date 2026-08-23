@@ -28,6 +28,8 @@
 import { ACCENT } from './palette.js';
 
 const STYLE_ID = 'omniscient-cursor';
+const HIDDEN_CLASS = 'omni-cursor-hidden';
+let telemetrySuppressed = false;
 
 /** Where the point of the arrow actually is, in the SVG's own pixels. */
 const ARROW_HOTSPOT = '3 2';
@@ -77,7 +79,11 @@ const HAND = `
  * meaningful; they just stop being the operating system's hand and start being this one.
  */
 export function installCursor(): void {
-  if (document.getElementById(STYLE_ID)) return;
+  suppressEditorTelemetry();
+  if (document.getElementById(STYLE_ID)) {
+    setCursorVisible(false);
+    return;
+  }
 
   const style = document.createElement('style');
   style.id = STYLE_ID;
@@ -90,8 +96,21 @@ button, a, [role='button'],
 .omni-board__cell, .omni-board__person, .omni-board__slot, .omni-board__pin,
 .omni-board__track, .omni-hint, .omni-terminal__send {
   cursor: ${encode(HAND)} ${HAND_HOTSPOT}, pointer !important;
+}
+html.${HIDDEN_CLASS}, html.${HIDDEN_CLASS} * {
+  cursor: none !important;
+}
+/*
+ * Sandbox Studio's play runner injects the standard Three.js Stats panel into the game
+ * document. It is not part of the project and is absent from a published build, but it
+ * otherwise contaminates every editor capture. Match the library's exact fixed/clickable
+ * 10000-layer signature rather than hiding arbitrary canvases or game UI.
+ */
+body > div[style*='position: fixed'][style*='z-index: 10000'][style*='cursor: pointer'] {
+  display: none !important;
 }`;
   document.head.appendChild(style);
+  setCursorVisible(false);
 
   /**
    * Refuse pointer lock, whoever asks for it.
@@ -110,4 +129,57 @@ button, a, [role='button'],
   document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement) void document.exitPointerLock();
   });
+}
+
+/**
+ * Remove only the injected Three.js Stats panel from editor play windows.
+ *
+ * Some runner versions mount it in the game's document and others in the parent host. Its
+ * library signature is unusually specific: a fixed/absolute clickable layer at z-index
+ * 10000 containing several tiny canvases. A MutationObserver covers runners that add it a
+ * frame after beginPlay; published builds match nothing and pay no ongoing work.
+ */
+function suppressEditorTelemetry(): void {
+  if (telemetrySuppressed) return;
+  telemetrySuppressed = true;
+
+  const documents: Document[] = [document];
+  try {
+    if (window.parent !== window && window.parent.document !== document) {
+      documents.push(window.parent.document);
+    }
+  } catch {
+    // A cross-origin host is allowed; the project document is still scanned below.
+  }
+
+  for (const owner of documents) {
+    const hide = (): void => {
+      for (const candidate of owner.body?.querySelectorAll('div') ?? []) {
+        const style = owner.defaultView?.getComputedStyle(candidate);
+        const position = style?.position;
+        if (
+          style?.zIndex === '10000' &&
+          style.cursor === 'pointer' &&
+          (position === 'fixed' || position === 'absolute') &&
+          candidate.querySelectorAll('canvas').length >= 2
+        ) {
+          candidate.style.setProperty('display', 'none', 'important');
+        }
+      }
+    };
+    hide();
+    if (owner.body) new MutationObserver(hide).observe(owner.body, { childList: true });
+  }
+}
+
+/**
+ * The pointer is an interaction affordance, not a watermark.
+ *
+ * It is hidden while the machine is booting or the camera is carrying the player between
+ * spaces, then restored at the first moment there is something to choose. Keeping this as
+ * a root class also beats host/editor cursor rules without making individual screens know
+ * which element currently owns the pointer.
+ */
+export function setCursorVisible(visible: boolean): void {
+  document.documentElement.classList.toggle(HIDDEN_CLASS, !visible);
 }

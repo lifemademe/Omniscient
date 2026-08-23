@@ -425,7 +425,8 @@ export class GlobeView {
       const flare = this.flares.find((f) => f.id === signal.id);
       // A flaring signal is SOLID for the duration - the reveal must not strobe.
       const color = flare ? PALETTE.unknown : this.colorFor(signal, pulse);
-      if (!color) continue;
+      const offworldUnknown = signal.offworld === true && signal.state === SignalState.Unknown;
+      if (!color && !offworldUnknown) continue;
 
       if (flare) {
         /*
@@ -449,7 +450,43 @@ export class GlobeView {
         }
       }
 
+      if (offworldUnknown) {
+        /*
+         * A tether and a diamond, never the same plus used for a person.
+         *
+         * The line begins at the sphere's rim and ends beyond it, so even with colour
+         * removed the geometry says what the event is: something outside the mapped world
+         * has a carrier into it. During the slow blink it remains in terminator ink; the
+         * reveal flare and pulse lift it into the anomaly red.
+         */
+        const dx = point.x - this.centreX;
+        const dy = point.y - this.centreY;
+        const distance = Math.max(1, Math.hypot(dx, dy));
+        const startX = this.centreX + (dx / distance) * this.radius;
+        const startY = this.centreY + (dy / distance) * this.radius;
+        const tether = color ?? PALETTE.terminator;
+        for (let i = 0; i <= 18; i++) {
+          if (i % 3 === 2) continue;
+          const t = i / 18;
+          this.surface.pixel(
+            Math.round(startX + (point.x - startX) * t),
+            Math.round(startY + (point.y - startY) * t),
+            tether
+          );
+        }
+        const diamond = color ?? PALETTE.terminator;
+        for (let i = 0; i <= 4; i++) {
+          this.surface.pixel(Math.round(point.x - 4 + i), Math.round(point.y - i), diamond);
+          this.surface.pixel(Math.round(point.x + i), Math.round(point.y - 4 + i), diamond);
+          this.surface.pixel(Math.round(point.x + 4 - i), Math.round(point.y + i), diamond);
+          this.surface.pixel(Math.round(point.x - i), Math.round(point.y + 4 - i), diamond);
+        }
+        if (color) this.surface.pixel(point.x, point.y, PALETTE.unknown);
+        continue;
+      }
 
+      // The only colourless signal allowed this far is the off-world one handled above.
+      if (!color) continue;
       // Solid 2x2 core with arms. The grid is one pixel wide, so a signal has to be
       // heavier than a grid line or it disappears into the wireframe.
       const core = signal.state === SignalState.Waiting ? PALETTE.active : color;

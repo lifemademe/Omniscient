@@ -204,7 +204,7 @@ const GLOBE_CSS = `
   width: min(23vw, 260px);
 }
 .omni-record__tag {
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: rgba(159, 216, 168, 0.55);
@@ -216,7 +216,7 @@ const GLOBE_CSS = `
   padding: 4px 8px;
   border-left: 2px solid rgba(127, 224, 138, 0.4);
   background: rgba(10, 24, 15, 0.55);
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   color: rgba(159, 216, 168, 0.8);
 }
 .omni-record__n {
@@ -227,7 +227,7 @@ const GLOBE_CSS = `
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   color: rgba(159, 216, 168, 0.45);
 }
 .omni-globe__hintline { color: #35603f; }
@@ -241,7 +241,7 @@ const GLOBE_CSS = `
   position: absolute;
   transform: translate(10px, -50%);
   white-space: nowrap;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   letter-spacing: 0.08em;
   text-transform: uppercase;
   text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
@@ -258,7 +258,7 @@ const GLOBE_CSS = `
   position: absolute;
   top: 18px; left: 24px;
   color: #4f9a5e;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -266,7 +266,7 @@ const GLOBE_CSS = `
   position: absolute;
   bottom: 46px; right: 26px;
   color: #3f6b48;
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -278,7 +278,7 @@ const GLOBE_CSS = `
   border: 1px solid #2b5c39;
   color: #4f9a5e;
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   letter-spacing: 0.14em;
   text-transform: uppercase;
   cursor: pointer;
@@ -292,7 +292,7 @@ const GLOBE_CSS = `
   background: rgba(6, 20, 13, 0.96);
   border: 1px solid #2b5c39;
   color: #cfe6c4;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   line-height: 1.5;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   transform: translate(14px, -50%);
@@ -313,7 +313,7 @@ const GLOBE_CSS = `
   background: transparent;
   color: #7fe08a;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   letter-spacing: 0.14em;
   text-transform: uppercase;
   cursor: pointer;
@@ -480,6 +480,7 @@ export class GlobeScreen {
   private recordStrip: HTMLElement | null = null;
   /** Last shelf drawn, so it is not rebuilt every frame. */
   private renderedRecordKey = '';
+  private inputEnabled = true;
   /** Contact ids in completion order, from the save. See OmniscientRig.answered. */
   private answeredOrder: readonly string[] = [];
   /** Where each visible label ended up after de-collision. Also the hit-test targets. */
@@ -680,6 +681,7 @@ export class GlobeScreen {
     });
 
     this.root = root;
+    root.style.pointerEvents = this.inputEnabled ? 'auto' : 'none';
     this.stage = stage;
     this.marks = marks;
   }
@@ -705,6 +707,18 @@ export class GlobeScreen {
   /** Advance rotation, cooldowns and the drawing. */
   /** Fire the arrival rings on one signal. See GlobeView.flare. */
   public flareSignal(id: string): void {
+    this.globe.flare(id);
+  }
+
+  /** Hold the final acquisition on screen without letting a click dismiss its framing. */
+  public setInputEnabled(enabled: boolean): void {
+    this.inputEnabled = enabled;
+    if (this.root) this.root.style.pointerEvents = enabled ? 'auto' : 'none';
+  }
+
+  /** Select and flare a signal as a machine-owned reveal rather than a pointer action. */
+  public focusSignal(id: string): void {
+    this.selectedId = id;
     this.globe.flare(id);
   }
 
@@ -942,7 +956,7 @@ export class GlobeScreen {
         (p) =>
           p.visible &&
           !p.signal.hidden &&
-          p.signal.state !== SignalState.Unknown &&
+          (p.signal.state !== SignalState.Unknown || p.signal.offworld === true) &&
           // Answered contacts have no dot on the globe any more, so they must not keep a
           // label either - see GlobeView.colorFor. A name hanging off nothing is worse
           // than the dot was.
@@ -972,7 +986,9 @@ export class GlobeScreen {
       if (!name) {
         name = document.createElement('span');
         // Contact names are content - textContent, never innerHTML.
-        name.textContent = signal.name;
+        name.textContent = signal.offworld
+          ? `${signal.name}  //  OUTSIDE SPHERE`
+          : signal.name;
         this.nameEls.set(signal.id, name);
         this.marks.appendChild(name);
       }
@@ -1106,7 +1122,9 @@ export class GlobeScreen {
       // an expired cooldown wrongly fell into, and even where it was correct the player
       // could not tell whether they had missed something or nothing was there.
       wait.textContent =
-        signal.state === SignalState.Resolved
+        signal.state === SignalState.Unknown
+          ? 'carrier origin does not resolve'
+          : signal.state === SignalState.Resolved
           ? 'you helped here already'
           : 'nobody is asking here yet';
 

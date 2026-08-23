@@ -277,11 +277,11 @@ let currentName: string | null = null;
 function build(bed: Bed): Live | null {
   const bus = audio.bus();
   if (!bus) return null;
-  const { ctx, master, noise } = bus;
+  const { ctx, ambience, noise } = bus;
 
   const gain = ctx.createGain();
   gain.gain.value = 0;
-  gain.connect(master);
+  gain.connect(ambience);
 
   const stops: Array<() => void> = [];
 

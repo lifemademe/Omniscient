@@ -67,6 +67,7 @@ const C = {
 
 /** What the desktop is doing. Driven by the mission's cues. */
 export type DesktopState = 'idle' | 'selected' | 'opening' | 'open';
+export type DesktopResolution = 'none' | 'logged' | 'contained';
 
 interface Icon {
   x: number;
@@ -108,14 +109,24 @@ const ICONS: Icon[] = [
 
 export class StationDesktop {
   public state: DesktopState = 'idle';
+  private resolution: DesktopResolution = 'none';
   private openAmount = 0;
   private time = 0;
   private lastClock = -1;
   private lastState: DesktopState | null = null;
   private lastOpen = -1;
+  private lastResolution: DesktopResolution | null = null;
   private caret = false;
 
   public constructor(private readonly surface: CRTSurface) {}
+
+  /** Turn the file into a station record instead of resolving Keller through generic UI. */
+  public showResolution(resolution: Exclude<DesktopResolution, 'none'>): void {
+    this.state = 'open';
+    this.openAmount = 1;
+    this.resolution = resolution;
+    this.lastResolution = null;
+  }
 
   public advance(dt: number): void {
     this.time += dt;
@@ -137,7 +148,8 @@ export class StationDesktop {
       clock === this.lastClock &&
       caret === this.caret &&
       this.state === this.lastState &&
-      this.openAmount === this.lastOpen
+      this.openAmount === this.lastOpen &&
+      this.resolution === this.lastResolution
     ) {
       return;
     }
@@ -145,6 +157,7 @@ export class StationDesktop {
     this.caret = caret;
     this.lastState = this.state;
     this.lastOpen = this.openAmount;
+    this.lastResolution = this.resolution;
     this.draw();
   }
 
@@ -156,6 +169,7 @@ export class StationDesktop {
     for (const icon of ICONS) this.drawIcon(ctx, icon);
     this.drawTerminal(ctx);
     if (this.openAmount > 0.01) this.drawSpecimenWindow(ctx);
+    if (this.resolution !== 'none') this.drawResolutionReceipt(ctx);
     this.drawMenuBar(ctx);
     this.drawTaskbar(ctx);
 
@@ -353,6 +367,23 @@ export class StationDesktop {
       ctx.fillRect(x + 8, ry + 10, w - 16, 1);
     });
     textAt(ctx, x + 10, y + h - 16, contained ? 'NOTHING TO TAKE' : 'TAKING THE FEED', C.screenCyan, 1);
+  }
+
+  /** A station-owned receipt: Keller's result persists in the world she called from. */
+  private drawResolutionReceipt(ctx: CanvasRenderingContext2D): void {
+    const contained = this.resolution === 'contained';
+    const x = 112;
+    const y = 211;
+    const w = 216;
+    const h = 31;
+    ctx.fillStyle = C.ink;
+    ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
+    ctx.fillStyle = contained ? C.live : C.screenCyan;
+    ctx.fillRect(x, y, 4, h);
+    ctx.fillStyle = C.panel;
+    ctx.fillRect(x + 4, y, w - 4, h);
+    textAt(ctx, x + 12, y + 7, contained ? 'CONTAINMENT CONFIRMED' : 'SESSION APPENDED', contained ? C.live : C.screenCyan, 1);
+    textAt(ctx, x + 12, y + 19, contained ? 'TANK 02 // SEAL HOLDING' : 'OBSERVER 02 // RECORD SEALED', C.label, 1);
   }
 
   // -- chrome --------------------------------------------------------------------------

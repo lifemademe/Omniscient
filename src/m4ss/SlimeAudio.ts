@@ -61,6 +61,8 @@ export type SlimeCue =
   | 'crush'
   /** The portal takes the specimen. */
   | 'portal'
+  /** The final chamber seals around an empty room. */
+  | 'contained'
   /** The body lands from a real fall. */
   | 'land';
 
@@ -133,6 +135,16 @@ const CUES: Record<SlimeCue, Voice[]> = {
     { hz: 330, length: 0.2, level: 0.09, type: 'sine', delay: 0.1 },
     { hz: 440, length: 0.42, level: 0.08, type: 'sine', delay: 0.22 },
   ],
+  /*
+   * Not a victory fanfare. The shimmer has already swallowed the specimen; this is the
+   * room answering with a descending biological pulse and a dry station latch. It leaves
+   * the empty chamber feeling secured rather than celebrated.
+   */
+  contained: [
+    { hz: 196, to: 142, length: 0.46, level: 0.12, type: 'sine' },
+    { hz: null, band: 720, q: 3.2, length: 0.07, level: 0.55, delay: 0.34, dry: true },
+    { hz: 92, to: 68, length: 0.72, level: 0.11, type: 'triangle', delay: 0.3 },
+  ],
   land: [{ hz: null, band: 540, q: 0.9, length: 0.06, level: 0.4 }],
 };
 
@@ -157,12 +169,12 @@ export class SlimeAudio {
       filter.type = 'lowpass';
       filter.frequency.value = FILTER_OPEN;
       filter.Q.value = 0.4;
-      filter.connect(bus.master);
+      filter.connect(bus.gameplay);
       this.wet = filter;
 
       const dry = bus.ctx.createGain();
       dry.gain.value = 1;
-      dry.connect(bus.master);
+      dry.connect(bus.gameplay);
       this.dry = dry;
     }
     return { ctx: bus.ctx, noise: bus.noise };

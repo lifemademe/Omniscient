@@ -69,7 +69,7 @@ const BOARD_CSS = `
   gap: 12px;
 }
 .omni-board__prompt {
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   letter-spacing: 0.06em;
   color: #9fd8a8;
   text-transform: uppercase;
@@ -146,7 +146,7 @@ const BOARD_CSS = `
   background: rgba(10, 24, 15, 0.85);
   color: #cfe9d2;
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px + var(--omni-font-boost, 0px));
   text-align: left;
   cursor: pointer;
   transition: border-color 120ms ease, background 120ms ease;
@@ -158,9 +158,9 @@ const BOARD_CSS = `
   box-shadow: 0 0 0 1px rgba(127, 224, 138, 0.5);
 }
 .omni-board__box--linked { border-color: rgba(127, 224, 138, 0.7); }
-.omni-board__box--slot { font-size: 13px; letter-spacing: 0.04em; }
+.omni-board__box--slot { font-size: calc(13px + var(--omni-font-boost, 0px)); letter-spacing: 0.04em; }
 .omni-board__note {
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   color: rgba(159, 216, 168, 0.72);
   font-style: italic;
 }
@@ -205,13 +205,13 @@ const BOARD_CSS = `
 }
 .omni-kit__item img { width: 54px; height: 54px; image-rendering: pixelated; }
 .omni-kit__name {
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: #d8ffb0;
 }
 .omni-kit__note {
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   line-height: 1.35;
   text-align: center;
   color: rgba(159, 216, 168, 0.72);
@@ -223,7 +223,7 @@ const BOARD_CSS = `
   justify-content: space-between;
   gap: 12px;
 }
-.omni-board__status { font-size: 11px; color: rgba(159, 216, 168, 0.8); }
+.omni-board__status { font-size: calc(11px + var(--omni-font-boost, 0px)); color: rgba(159, 216, 168, 0.8); }
 .omni-board__status--score { color: #e0a24c; }
 
 /* -- The surveillance board -----------------------------------------------------------
@@ -247,12 +247,12 @@ const BOARD_CSS = `
   margin-bottom: 10px;
 }
 .omni-trace__count {
-  font-size: 40px;
+  font-size: calc(40px + var(--omni-font-boost, 0px));
   line-height: 1;
   letter-spacing: 0.04em;
   color: #7fe08a;
 }
-.omni-trace__caption { font-size: 11px; color: rgba(159, 216, 168, 0.72); }
+.omni-trace__caption { font-size: calc(11px + var(--omni-font-boost, 0px)); color: rgba(159, 216, 168, 0.72); }
 .omni-trace__facts {
   display: flex;
   flex-wrap: wrap;
@@ -268,7 +268,7 @@ const BOARD_CSS = `
   background: transparent;
   color: rgba(159, 216, 168, 0.65);
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   letter-spacing: 0.08em;
   cursor: pointer;
 }
@@ -295,7 +295,7 @@ const BOARD_CSS = `
   background: rgba(10, 24, 15, 0.7);
   color: #cfe9d2;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   text-align: left;
   cursor: pointer;
 }
@@ -321,7 +321,7 @@ const BOARD_CSS = `
 .omni-trace__row--wrap .omni-trace__plate { flex: 0 0 auto; }
 .omni-trace__detail {
   color: rgba(159, 216, 168, 0.78);
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   /* One line. The rows are a list to scan, and a row that reflows to four lines when the
      panel narrows stops being scannable at exactly the moment there are most of them. */
   white-space: nowrap;
@@ -330,7 +330,7 @@ const BOARD_CSS = `
 }
 .omni-hop__sighting {
   margin-bottom: 10px;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   letter-spacing: 0.06em;
   color: #e0a24c;
 }
@@ -356,14 +356,14 @@ const BOARD_CSS = `
   background: rgba(10, 24, 15, 0.7);
   color: #cfe9d2;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   text-align: left;
   cursor: pointer;
 }
 .omni-hop__option:hover { border-color: rgba(127, 224, 138, 0.75); }
 .omni-trace__more {
   padding: 5px 9px;
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   color: rgba(159, 216, 168, 0.6);
 }
 .omni-board__send {
@@ -373,7 +373,7 @@ const BOARD_CSS = `
   background: rgba(16, 40, 22, 0.9);
   color: #cfe9d2;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
@@ -431,7 +431,7 @@ const BOARD_CSS = `
   border-left: 2px solid rgba(127, 224, 138, 0.45);
   background: rgba(10, 24, 15, 0.6);
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   text-align: left;
   color: rgba(159, 216, 168, 0.75);
   cursor: pointer;
@@ -445,7 +445,7 @@ const BOARD_CSS = `
 /* Says what the click does, without a row of buttons saying it in words. */
 .omni-hop__step::after {
   margin-left: auto;
-  font-size: 9px;
+  font-size: calc(9px + var(--omni-font-boost, 0px));
   letter-spacing: 0.12em;
   opacity: 0;
   content: 'GO BACK';
@@ -468,7 +468,7 @@ const BOARD_CSS = `
 .omni-hop__step--lost b { color: rgba(168, 96, 80, 0.75); }
 .omni-hop__again {
   padding: 4px 2px 2px;
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #a8402f;
@@ -520,7 +520,7 @@ const BOARD_CSS = `
   background: rgba(10, 24, 15, 0.85);
   color: #7fe08a;
   font: inherit;
-  font-size: 17px;
+  font-size: calc(17px + var(--omni-font-boost, 0px));
   line-height: 1;
   cursor: pointer;
   transition: transform 120ms ease, border-color 120ms ease;
@@ -594,7 +594,7 @@ const BOARD_CSS = `
   display: flex;
   gap: 14px;
   align-items: center;
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: rgba(159, 216, 168, 0.62);
@@ -680,7 +680,7 @@ const BOARD_CSS = `
   background: none;
   color: rgba(207, 233, 210, 0.7);
   font: inherit;
-  font-size: 9px;
+  font-size: calc(9px + var(--omni-font-boost, 0px));
   letter-spacing: 0.06em;
   cursor: pointer;
 }
@@ -726,7 +726,7 @@ const BOARD_CSS = `
 /* The number is the readout: a pin's place in the order the player is proposing. */
 .omni-board__pin-order {
   min-height: 15px;
-  font-size: 13px;
+  font-size: calc(13px + var(--omni-font-boost, 0px));
   color: #e0a24c;
   letter-spacing: 0.04em;
 }

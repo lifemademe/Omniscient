@@ -49,11 +49,20 @@ const STUBBLE = 0.09;
 /** Cell size for the lookup grid, in metres. About half a deck width. */
 const CELL = 0.5;
 
+export type MowerCollisionKind = 'boundary' | 'bed' | 'trunk' | 'person';
+
+export interface MowerCollision {
+  kind: MowerCollisionKind;
+  /** 0..1 fraction of the intended movement displaced by the contact. */
+  force: number;
+}
+
 /** Somewhere the mower cannot go: a bed, a trunk, the person standing in the field. */
 export interface Obstacle {
   x: number;
   z: number;
   radius: number;
+  kind?: Exclude<MowerCollisionKind, 'boundary'>;
 }
 
 export interface FieldBounds {
@@ -379,6 +388,9 @@ export class MowerDrive {
   /** Smoothed throttle and steer, so the body leans into changes instead of snapping. */
   private lean = 0;
   private roll = 0;
+  /** Current contact and its short mechanical recoil. Both decay when the bumper clears. */
+  private collisionState: MowerCollision | null = null;
+  private impact = 0;
   /**
    * The clipping pool: where each one is, how fast, and how long it has left.
    *
@@ -408,6 +420,10 @@ export class MowerDrive {
     return this.heading;
   }
 
+  public get collision(): MowerCollision | null {
+    return this.collisionState;
+  }
+
   /** Park it somewhere and point it. */
   public place(x: number, z: number, heading: number): void {
     this.at.set(x, 0, z);
@@ -421,6 +437,8 @@ export class MowerDrive {
     this.shudder = 0;
     this.lean = 0;
     this.roll = 0;
+    this.collisionState = null;
+    this.impact = 0;
     const positions = this.mower.clippings.geometry.getAttribute('position') as THREE.BufferAttribute;
     const array = positions.array as Float32Array;
     for (let i = 0; i < CLIPPINGS; i++) {
@@ -458,13 +476,27 @@ export class MowerDrive {
     this.heading -= steer * MOWER_TURN * deltaTime * (throttle < 0 ? -1 : 1) * Math.max(0.25, Math.abs(throttle));
 
     const step = throttle * MOWER_SPEED * deltaTime;
+    const intendedX = this.at.x + Math.sin(this.heading) * step;
+    const intendedZ = this.at.z + Math.cos(this.heading) * step;
     const wanted = new THREE.Vector3(
-      this.at.x + Math.sin(this.heading) * step,
+      intendedX,
       0,
-      this.at.z + Math.cos(this.heading) * step
+      intendedZ
     );
 
-    this.slide(wanted);
+    const collisionKind = this.slide(wanted);
+    const correction = Math.hypot(wanted.x - intendedX, wanted.z - intendedZ);
+    const collisionForce = Math.min(1, correction / Math.max(0.001, Math.abs(step)));
+    this.collisionState =
+      collisionKind && collisionForce > 0.02
+        ? { kind: collisionKind, force: collisionForce }
+        : null;
+    // A hard edge compresses the chassis once; the fast decay prevents a held key from
+    // turning contact into a permanent camera shake.
+    this.impact = Math.max(
+      this.impact * Math.exp(-deltaTime * 11),
+      this.collisionState?.force ?? 0
+    );
     /*
      * Measured AFTER the slide, so grinding along a bed frame stops the shake.
      *
@@ -577,12 +609,16 @@ export class MowerDrive {
    * carries on down the side of it instead of sticking to it. Stopping on contact is the
    * version where the player fights the controls in a 1.1m gap.
    */
-  private slide(wanted: THREE.Vector3): void {
+  private slide(wanted: THREE.Vector3): MowerCollisionKind | null {
     // Derived, not typed. This was 0.31 sitting next to a MOWER_WIDTH of 0.62, and widening
     // the machine without it would leave the body overhanging every boundary by 4cm.
     const half = MOWER_WIDTH / 2;
+    const beforeClampX = wanted.x;
+    const beforeClampZ = wanted.z;
     wanted.x = Math.min(this.bounds.maxX - half, Math.max(this.bounds.minX + half, wanted.x));
     wanted.z = Math.min(this.bounds.maxZ - half, Math.max(this.bounds.minZ + half, wanted.z));
+    let kind: MowerCollisionKind | null =
+      wanted.x !== beforeClampX || wanted.z !== beforeClampZ ? 'boundary' : null;
 
     for (const obstacle of this.obstacles) {
       const dx = wanted.x - obstacle.x;
@@ -592,7 +628,9 @@ export class MowerDrive {
       if (distance >= clear || distance < 1e-5) continue;
       wanted.x = obstacle.x + (dx / distance) * clear;
       wanted.z = obstacle.z + (dz / distance) * clear;
+      kind = obstacle.kind ?? 'bed';
     }
+    return kind;
   }
 
   /**
@@ -620,10 +658,12 @@ export class MowerDrive {
     this.mower.root.position.set(this.at.x, bump + idle, this.at.z);
     this.mower.root.rotation.set(
       // Pitching back under power and nodding forward off it, the way a light machine does.
-      -this.lean * 0.055 + Math.sin(rolling * 0.93) * 0.012,
+      -this.lean * 0.055 + Math.sin(rolling * 0.93) * 0.012 + this.impact * 0.075,
       this.heading,
       // Rolling into the turn, which is the term that makes steering feel like weight.
-      -this.roll * 0.09 + Math.sin(rolling * 1.31 + 2.2) * 0.010
+      -this.roll * 0.09
+        + Math.sin(rolling * 1.31 + 2.2) * 0.010
+        + Math.sin(this.shudder * 78) * this.impact * 0.025
     );
   }
 
@@ -641,11 +681,13 @@ export class MowerDrive {
    */
   public shot(): { position: THREE.Vector3; target: THREE.Vector3 } {
     const back = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
+    const right = new THREE.Vector3(back.z, 0, -back.x);
+    const kick = Math.sin(this.shudder * 83) * this.impact;
     return {
       position: new THREE.Vector3(
-        this.at.x - back.x * 1.15,
-        DECK_Y + 0.55,
-        this.at.z - back.z * 1.15
+        this.at.x - back.x * (1.15 + this.impact * 0.06) + right.x * kick * 0.025,
+        DECK_Y + 0.55 + this.impact * 0.035,
+        this.at.z - back.z * (1.15 + this.impact * 0.06) + right.z * kick * 0.025
       ),
       target: new THREE.Vector3(this.at.x + back.x * 2.2, 0.12, this.at.z + back.z * 2.2),
     };

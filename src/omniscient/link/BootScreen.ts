@@ -102,7 +102,7 @@ const CSS = `
   max-width: 84vw;
 }
 .omni-boot__line {
-  font-size: clamp(11px, 1.15vw, 17px);
+  font-size: clamp(calc(11px + var(--omni-font-boost, 0px)), 1.15vw, calc(17px + var(--omni-font-boost, 0px)));
   letter-spacing: 0.09em;
   line-height: 1.85;
   white-space: pre;
@@ -117,7 +117,7 @@ const CSS = `
    * A machine printing its own name after a self-test is stating a fact, not announcing
    * itself.
    */
-  font-size: clamp(20px, 2.2vw, 38px);
+  font-size: clamp(calc(20px + var(--omni-font-boost, 0px)), 2.2vw, calc(38px + var(--omni-font-boost, 0px)));
   letter-spacing: 0.24em;
   color: #d8ffb0;
   /*
@@ -130,9 +130,9 @@ const CSS = `
 }
 .omni-boot__prompt {
   margin-top: 3.2vh;
-  font-size: clamp(10px, 1vw, 15px);
+  font-size: clamp(calc(12px + var(--omni-font-boost, 0px)), 1.1vw, calc(16px + var(--omni-font-boost, 0px)));
   letter-spacing: 0.34em;
-  color: rgba(127, 224, 138, 0.72);
+  color: rgba(127, 224, 138, 0.86);
   /*
    * Slow. A prompt that flashes is a warning; a prompt that breathes is an invitation, and
    * this one is being offered rather than demanded.
@@ -140,7 +140,7 @@ const CSS = `
   animation: omni-boot-breathe 1.9s ease-in-out infinite;
 }
 @keyframes omni-boot-breathe {
-  0%, 100% { opacity: 0.28; }
+  0%, 100% { opacity: 0.45; }
   50% { opacity: 1; }
 }
 .omni-boot--going { animation: omni-boot-out 0.5s ease-in forwards; }

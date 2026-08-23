@@ -34,10 +34,9 @@ import { seedFrom } from '../core/rng.js';
  * the transmitter is `inked` and everything on it goes warm at KNOWN. So the one part of
  * the set that should read as glass read as a slab of painted metal.
  *
- * A meter is a face, not a colour: a pale card, an arc of graduations, and a needle sitting
- * where the reading is. Mirela's line is that the lamp comes on and nothing else happens,
- * so the needle rests at the bottom of the scale - the set has power and no signal, which
- * is the diagnosis stated on the instrument before anybody says it (§131).
+ * A meter is a face, not a colour: a dark card and an arc of graduations. The needle is
+ * geometry in the repair-shop builder rather than paint on this texture, because the
+ * request ends with that reading changing and the object has to own its own payoff.
  *
  * Drawn rather than lit: the glass highlight is a painted diagonal, because a real specular
  * would come and go with the camera and this has to read from the two shots the mission
@@ -46,17 +45,18 @@ import { seedFrom } from '../core/rng.js';
 export function createMeterFace(): THREE.CanvasTexture | null {
   return createDecal(320, 220, (ctx, w, h) => {
     /*
-     * A DARK card with a pale needle, which is the third attempt and the first that reads.
+     * A DARK card with five heavy graduations, which is the third attempt and the first
+     * that reads.
      *
      * The first two drew a correct instrument - cream card, twenty graduations, fine needle
      * - and both resolved to a blank panel, because this meter is about 65 pixels wide from
      * the shot the mission uses and because a lit decal under the work lamp blows out
      * whatever is painted on it. Darkening the card helped and did not fix it.
      *
-     * So it stops being a drawing and becomes a SHAPE: a dark rectangle in a cream case,
-     * with one bright mark across it. That reads at 65 pixels and at 650, which is the only
-     * test that matters here. §4.1 - silhouette first, and a dial's silhouette is its
-     * needle against its face, not its graduations.
+     * So the face stops being a detailed drawing and becomes a SHAPE: a dark rectangle in
+     * a cream case, with heavy marks framing the physical needle supplied by the repair-shop
+     * builder. That reads at 65 pixels and at 650, which is the only test that matters here.
+     * §4.1 - silhouette first, and a dial's silhouette is its needle against its face.
      */
     ctx.fillStyle = '#22221f';
     ctx.fillRect(0, 0, w, h);
@@ -75,19 +75,6 @@ export function createMeterFace(): THREE.CanvasTexture | null {
       ctx.lineTo(cx + Math.cos(angle) * (radius - 26), cy + Math.sin(angle) * (radius - 26));
       ctx.stroke();
     }
-
-    /*
-     * The needle, resting at the bottom of the scale. Mirela's line is that the lamp comes
-     * on and nothing else happens, so the instrument says the same thing before she does
-     * (§131): power in, nothing coming through.
-     */
-    const rest = Math.PI * 1.23;
-    ctx.strokeStyle = '#e8e2cf';
-    ctx.lineWidth = 9;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.cos(rest) * (radius - 10), cy + Math.sin(rest) * (radius - 10));
-    ctx.stroke();
 
     // A bezel, so the face reads as set into the case rather than stuck on it.
     ctx.strokeStyle = '#6e6a5e';

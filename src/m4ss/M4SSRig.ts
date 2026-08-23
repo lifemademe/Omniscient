@@ -153,6 +153,8 @@ const DOT_REACH = 0.34;
 const DOT_REACH_SLOWMO = 0.5;
 const DOT_COUNT = 4;
 
+type TutorialAction = 'move' | 'target' | 'split' | 'recall';
+
 /**
  * How far the body travels along the ground between deposits, in px.
  *
@@ -271,6 +273,7 @@ export class M4SSRig extends ENGINE.SceneNode {
   private hudShed: HTMLElement | null = null;
   private hudLabel: HTMLElement | null = null;
   private hudNote: HTMLElement | null = null;
+  private containmentMark: HTMLElement | null = null;
 
   private body: ENGINE.MeshNode | null = null;
   private shine: ENGINE.MeshNode | null = null;
@@ -419,7 +422,13 @@ export class M4SSRig extends ENGINE.SceneNode {
    * buildLevel's floor pools - light that lands has to know where it came from. */
   private lanternXs: number[] = [];
   /** The tutorial plates, and the world points they are pinned to. See placeSigns. */
-  private readonly signLabels: Array<{ el: HTMLElement; x: number; y: number }> = [];
+  private readonly signLabels: Array<{
+    el: HTMLElement;
+    x: number;
+    y: number;
+    action: TutorialAction;
+  }> = [];
+  private readonly dismissedTutorials = new Set<TutorialAction>();
   /** The pulsing ring over the growth a click would catch. See chooseTarget. */
   private latchRing: ENGINE.MeshNode | null = null;
   /** 1 the frame the tendril grips, decaying - drives the ring's grip flash. */
@@ -1813,12 +1822,21 @@ export class M4SSRig extends ENGINE.SceneNode {
           'pointer-events:none',
           'text-shadow:0 1px 2px rgba(0,0,0,0.75)',
           'z-index:12',
+          'transition:opacity 220ms ease,transform 220ms ease',
         ].join(';');
         // textContent, never innerHTML: these strings are authored here today, and the
         // habit is what keeps a player-supplied one from ever becoming markup.
         label.textContent = sign.lines.join('\n');
         container.appendChild(label);
-        this.signLabels.push({ el: label, x: sign.x, y: sign.y });
+        const words = sign.lines.join(' ').toUpperCase();
+        const action: TutorialAction = words.includes('A D')
+          ? 'move'
+          : words.includes('CLICK')
+            ? 'target'
+            : words.includes('SPACE')
+              ? 'split'
+              : 'recall';
+        this.signLabels.push({ el: label, x: sign.x, y: sign.y, action });
       });
     }
 
@@ -2671,10 +2689,10 @@ export class M4SSRig extends ENGINE.SceneNode {
     hud.style.cssText = [
       'position:absolute',
       'left:22px',
-      // Below the engine's FPS overlay, which owns the top-left corner and wins.
-      'top:64px',
+      // Safe area belongs to the game. Development telemetry must never dictate layout.
+      'top:22px',
       'z-index:20',
-      'width:260px',
+      'width:240px',
       'background:rgba(27,35,49,0.88)', // stationDesk C.panel
       'border:1px solid #2f5f8f',
       'box-shadow:0 2px 12px rgba(0,0,0,0.45)',
@@ -2767,10 +2785,12 @@ export class M4SSRig extends ENGINE.SceneNode {
     if (this.hudMass) this.hudMass.style.width = `${heldPct - shedPct}%`;
     if (this.hudShed) this.hudShed.style.width = `${shedPct}%`;
     if (this.hudLabel) {
+      const reach = reachOf(state);
+      const reachBand = reach < 80 ? 'SHORT' : reach < 150 ? 'NOMINAL' : 'EXTENDED';
       this.hudLabel.textContent =
         this.splitHold > 0
           ? `SPLIT  ${Math.round(this.splitFraction() * 100)}%`
-          : `MASS  ${held}    REACH ${Math.round(reachOf(state))}px`;
+          : `MASS  ${held}    REACH ${reachBand}`;
     }
     if (this.hudNote) {
       /*
@@ -2806,8 +2826,14 @@ export class M4SSRig extends ENGINE.SceneNode {
        */
       audio.unlock();
       this.held.add(e.code);
+      if (e.code === 'KeyA' || e.code === 'KeyD' || e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+        this.dismissTutorial('move');
+      }
       if (e.code === 'KeyQ' && !e.repeat) this.voice.play('recall');
-      if (e.code === 'KeyQ') this.recalling = true;
+      if (e.code === 'KeyQ') {
+        this.recalling = true;
+        this.dismissTutorial('recall');
+      }
       if (e.code === 'Space') e.preventDefault();
     };
     const up = (e: KeyboardEvent): void => {
@@ -2818,6 +2844,7 @@ export class M4SSRig extends ENGINE.SceneNode {
         if (shed > 0) {
           this.voice.play('split');
           this.justSplit = true;
+          this.dismissTutorial('split');
         }
         this.splitHold = 0;
       }
@@ -2922,6 +2949,19 @@ export class M4SSRig extends ENGINE.SceneNode {
       return;
     }
     this.latched = this.target;
+    this.dismissTutorial('target');
+  }
+
+  /** Fade a lesson once the player has demonstrated it; learned verbs stop being signage. */
+  private dismissTutorial(action: TutorialAction): void {
+    if (this.dismissedTutorials.has(action)) return;
+    this.dismissedTutorials.add(action);
+    for (const sign of this.signLabels) {
+      if (sign.action !== action) continue;
+      sign.el.style.opacity = '0';
+      sign.el.style.transform = 'translate(-50%,-50%) translateY(-4px)';
+      window.setTimeout(() => sign.el.remove(), 240);
+    }
   }
 
   /**
@@ -3110,7 +3150,63 @@ export class M4SSRig extends ENGINE.SceneNode {
     saveM4ssContained();
     if (this.hudLabel) this.hudLabel.textContent = 'SPECIMEN CONTAINED';
     if (this.hudNote) this.hudNote.textContent = this.onContained ? 'returning to the feed' : 'the record is closed';
-    this.containedDelay = 2.8;
+    this.voice.play('contained');
+    this.showContainmentMark();
+    this.containedDelay = 3.4;
+  }
+
+  /**
+   * The station, not the game, certifies the empty chamber.
+   *
+   * One centred acquisition mark holds after the portal veil lifts. It has no score,
+   * confetti or celebratory language: the unsettling image is an empty room, a living
+   * residual portal, and an institution calmly stamping the record closed.
+   */
+  private showContainmentMark(): void {
+    if (this.containmentMark) return;
+    const container = this.getWorld()?.gameContainer;
+    if (!container) return;
+
+    const mark = document.createElement('div');
+    mark.setAttribute('aria-hidden', 'true');
+    mark.style.cssText = [
+      'position:absolute',
+      'left:50%',
+      'top:54%',
+      'transform:translate(-50%,-50%) scale(1.08)',
+      'z-index:31',
+      'min-width:280px',
+      'padding:14px 20px 12px',
+      'border:1px solid rgba(143,224,162,0.72)',
+      'background:rgba(12,19,28,0.78)',
+      'box-shadow:0 0 0 1px rgba(47,95,143,0.55),0 0 34px rgba(79,174,110,0.22)',
+      'color:#dff5e5',
+      'font:11px/1.45 "Courier New",monospace',
+      'letter-spacing:2px',
+      'text-align:center',
+      'pointer-events:none',
+      'opacity:0',
+      'transition:opacity 420ms ease,transform 620ms cubic-bezier(.18,.9,.22,1)',
+    ].join(';');
+
+    const title = document.createElement('div');
+    title.textContent = 'CONTAINMENT LOCK  //  CLOSED';
+    const sub = document.createElement('div');
+    sub.textContent = 'SPECIMEN M4SS  ·  CHAMBER 02  ·  MASS ACCOUNTED';
+    sub.style.cssText = 'margin-top:5px;color:#8fe0a2;font-size:9px;letter-spacing:1.3px';
+    mark.append(title, sub);
+    container.appendChild(mark);
+    this.containmentMark = mark;
+    this.detach.push(() => {
+      mark.remove();
+      if (this.containmentMark === mark) this.containmentMark = null;
+    });
+
+    requestAnimationFrame(() => {
+      if (this.containmentMark !== mark) return;
+      mark.style.opacity = '1';
+      mark.style.transform = 'translate(-50%,-50%) scale(1)';
+    });
   }
 
   /**

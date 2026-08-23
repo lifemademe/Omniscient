@@ -26,7 +26,7 @@ import { createScreenGlass } from './art/glass.js';
 import { PAINT_UNIFORMS } from './art/painterly.js';
 import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
-import { audio } from './audio/ConsoleAudio.js';
+import { audio, MowerAudio } from './audio/ConsoleAudio.js';
 import {
   clearM4ssStage,
   clearSave,
@@ -35,7 +35,7 @@ import {
   loadM4ssStage,
   saveGame,
 } from './session/persistence.js';
-import { installCursor } from './art/cursor.js';
+import { installCursor, setCursorVisible } from './art/cursor.js';
 import { installRetro, setRetroLook, setRetroScreenQuad } from './art/retro.js';
 import { projectScreenQuad } from './art/screenQuad.js';
 import { setRoomTone } from './audio/RoomTone.js';
@@ -45,6 +45,7 @@ import type { BootScreen } from './link/BootScreen.js';
 import { installPaint, setPaintLook } from './art/paintPass.js';
 import { ScanTargets } from './link/ScanTargets.js';
 import { MowerPlot } from './link/MowerPlot.js';
+import { playM4SSHandoff } from './link/M4SSHandoff.js';
 import { DriveKeys } from './view/mowing.js';
 import { installSceneJump } from './dev/SceneJump.js';
 import { playWarp } from './art/warp.js';
@@ -73,6 +74,10 @@ import { MainMenu } from './menu/MainMenu.js';
 import { drawMenuLabel } from './crt/menuLabel.js';
 import { EndingPanel } from './menu/EndingPanel.js';
 import { SessionController } from './session/SessionController.js';
+import {
+  accessibleCameraDuration,
+  installAccessibilityPreferences,
+} from './accessibility/preferences.js';
 import { VFX_LIBRARY } from './vfx/library.js';
 
 /**
@@ -288,6 +293,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private post: ENGINE.PostProcessManager | null = null;
   /** Settings and credits, over the menu. Built on first use. */
   private systemPanel: SystemPanel | null = null;
+  /** Removes the preference listener and container attributes when editor play stops. */
+  private disposeAccessibility: (() => void) | null = null;
   /** Gulls and a boat in the window. Driven from the tick; see createSeaLife. */
   private seaLife: ReturnType<typeof createSeaLife> | null = null;
   /** The workstation lights, kept so the panel can reach them. */
@@ -307,9 +314,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
    *
    * Split from `activeIndex` because those were one number and could not stay one. A
    * single cursor works only while exactly one request is answerable at a time - open
-   * it, resolve it, hand out the next - and the globe now offers up to five at once, so
-   * the player can answer the third one first and the cursor would release the fourth
-   * while the first two were still waiting on it.
+   * it, resolve it, hand out the next - and the globe now offers up to two at once, so
+   * the player can answer the second one first and the cursor still has to release the next
+   * while the earlier request is waiting on it.
    */
   private offered = 1;
   /*
@@ -323,15 +330,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
   /**
    * How many requests the globe will hold at once.
    *
-   * Five. Enough that the map is a place with things happening on it rather than a
-   * corridor with one lit door, and few enough that a player can still hold what is
-   * waiting in their head - a globe with everything on it at once has the same problem
-   * as a globe with one thing, which is that there is no choice being made.
+   * Two. Enough that the map offers a real choice without turning the authored campaign
+   * into a mission-select screen or letting late-game requests arrive before their setup.
    *
    * The first request is exempt on purpose. Mirela arrives alone, because the opening
    * teaches what the globe IS, and it cannot do that while offering four alternatives.
    */
-  private static readonly OPEN_AT_ONCE = 5;
+  private static readonly OPEN_AT_ONCE = 2;
   private pauseRemaining = 0;
   /** Seconds left holding the Contact View after a resolution. Zero when not holding. */
   private resolveHold = 0;
@@ -597,7 +602,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
         this.cameraTarget.lerpVectors(fromTarget, shot.target, t);
         this.applyCameraTransform();
       },
-      { duration, easing: Ease.inOutCubic, channel: 'camera' }
+      { duration: accessibleCameraDuration(duration), easing: Ease.inOutCubic, channel: 'camera' }
     );
   }
 
@@ -640,6 +645,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * than waiting for a session that has not started yet.
      */
     installCursor();
+
+    const accessibilityContainer = this.getWorld()?.gameContainer;
+    if (accessibilityContainer) {
+      this.disposeAccessibility?.();
+      this.disposeAccessibility = installAccessibilityPreferences(accessibilityContainer);
+    }
 
     this.configureLook();
 
@@ -1715,7 +1726,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
         this.scene?.learn(factIds);
       },
       onResolved: () => {
-        audio.play('solved');
+        const acknowledgementDelay = audio.playContactPayoff(this.scene?.sceneId ?? '') ?? 0;
+        window.setTimeout(() => audio.play('solved'), acknowledgementDelay);
         /*
          * And the machine's own three notes, under the verdict.
          *
@@ -1723,8 +1735,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
          * two musical cues on the same frame is a chord neither of them meant. This is one
          * of exactly three places the motif is allowed to play; see the cue table.
          */
-        window.setTimeout(() => audio.play('motif'), 420);
-        this.holdThenReturnHome();
+        window.setTimeout(() => audio.play('motif'), acknowledgementDelay + 420);
+        this.holdThenReturnHome(acknowledgementDelay);
       },
       onFailed: (failure) => {
         audio.play('failed');
@@ -1782,7 +1794,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.menu?.setEnabled(false);
       this.boot = showBoot(bootContainer, () => {
         this.boot = null;
-        this.menu?.setEnabled(true);
         /*
          * Everything that needs a user gesture happens here, on the same press.
          *
@@ -1795,13 +1806,24 @@ export class OmniscientRig extends ENGINE.SceneNode {
         // 2.6s rather than SCREEN_SHOT's own 1.6 - this is the reveal, and it is the only
         // time this move is the point rather than a way of getting somewhere.
         this.moveTo(HOME_SHOT, 2.6);
+        this.cameraTweener.add(() => undefined, {
+          duration: 0.01,
+          delay: 2.2,
+          channel: 'boot-input',
+          onComplete: () => {
+            if (this.phase !== Phase.Menu) return;
+            this.menu?.setEnabled(true);
+            setCursorVisible(true);
+          },
+        });
       });
     } else {
       // No container to hang it on: skip the ceremony rather than start inside the tube
       // with no way out of it.
       this.cutTo(HOME_SHOT);
+      this.menu?.setEnabled(true);
+      setCursorVisible(true);
     }
-    this.menu?.setEnabled(true);
     this.phone.setVisible(false);
   }
 
@@ -2174,6 +2196,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     if (this.leaving) return;
     this.leaving = true;
+    setCursorVisible(false);
 
     audio.play('disconnect');
     audio.setOnAir(false);
@@ -2234,10 +2257,19 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.phone?.setVisible(false);
     this.globeHandoff = 0;
     this.setPhase(Phase.Menu);
+    setCursorVisible(false);
     this.screen = Screen.Tree;
     this.menu?.setEnabled(true);
     this.refreshFrontDoor();
     this.moveTo(HOME_SHOT, 1.4);
+    this.cameraTweener.add(() => undefined, {
+      duration: 0.01,
+      delay: 1.2,
+      channel: 'menu-input',
+      onComplete: () => {
+        if (this.phase === Phase.Menu) setCursorVisible(true);
+      },
+    });
   }
 
   /**
@@ -2274,6 +2306,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
     setRoomTone('home');
 
     this.setPhase(Phase.Choosing);
+    setCursorVisible(false);
+    this.globeScreen?.setInputEnabled(true);
     this.screen = Screen.Globe;
     this.phone?.setVisible(false);
 
@@ -2281,6 +2315,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // the globe is under the camera by the time it settles rather than arriving after it.
     this.moveTo(SCREEN_SHOT, 2.0);
     this.globeHandoff = 1.9;
+    this.cameraTweener.add(() => undefined, {
+      duration: 0.01,
+      delay: 1.75,
+      channel: 'globe-input',
+      onComplete: () => {
+        if (this.phase === Phase.Choosing) setCursorVisible(true);
+      },
+    });
   }
 
   /**
@@ -2288,13 +2330,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
    *
    * Counts what is actually ANSWERABLE rather than what has been handed out: a contact
    * on a countdown after a failure is on the globe but cannot be taken, and so does not
-   * fill a slot. Resolved ones do not either. So a player who fails one still has five
-   * things they can do, which is the point of the number.
+   * fill a slot. Resolved ones do not either. So a player who fails one still has another
+   * live request instead of being trapped on a cooldown.
    *
    * Order is preserved. The queue is authored - Mirela teaches looking, Ileana breaks
    * the habit of looking for a fault, Tomas pays off Mirela's shared feed - and this
-   * releases along it rather than choosing. What changes is that five doors are open at
-   * once instead of one, not which door comes next.
+   * releases along it rather than choosing. Two adjacent doors stay open: enough agency to
+   * avoid a corridor, not enough to erase the campaign's escalation.
    */
   private topUpGlobe(): void {
     const answerable = (): number =>
@@ -2304,25 +2346,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
       ).length;
 
     /*
-     * After the first request, the whole world is on the globe.
-     *
-     * The quota existed to stop the opening being a wall of eight strangers, and for that
-     * one job it is right - Mirela has to be the only thing on screen, or "select a signal"
-     * is a menu rather than a person calling. Past her it was costing more than it bought:
-     * the globe spent the rest of the game holding five of eight, so it never became the
-     * populated world the screen is for, and a player who wanted to choose was choosing from
-     * a queue that had already chosen for them.
-     *
-     * Order still means something - the campaign is authored, and the beats are written
-     * assuming the earlier requests came first - but it is now the order they arrived in
-     * rather than a gate.
+     * Mirela still arrives alone; this method is first called after her resolution. From
+     * then on it maintains a two-signal frontier through the authored queue. The globe feels
+     * alive and the player can defer a contact, while setup/payoff pairs remain in order and
+     * the finale cannot appear beside mission two.
      */
     /*
      * The station is handed out by the loop below like every other request now - it has a
      * mission, a contact and an outcome, so the special case that used to sit here is gone.
      */
-    const anyResolved = this.signals.some((s) => s.state === SignalState.Resolved);
-    const quota = anyResolved ? this.queue.length : OmniscientRig.OPEN_AT_ONCE;
+    const quota = OmniscientRig.OPEN_AT_ONCE;
     while (answerable() < quota && this.offered < this.queue.length) {
       const request = this.queue[this.offered];
       this.offered += 1;
@@ -2345,6 +2378,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // a connection to somewhere.
     audio.play('connect');
     audio.setOnAir(true);
+    setCursorVisible(false);
 
     this.setSignalState(signalId, SignalState.Active);
     this.openable.delete(signalId);
@@ -2363,6 +2397,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.overhead = false;
     this.screen = Screen.Tree;
     this.globeScreen?.detach();
+    this.phone?.beginConnection();
     this.phone?.setVisible(true);
 
     const request = this.queue[index];
@@ -2378,6 +2413,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
       dustNode.startEmitting();
     }
     this.session.start(request.mission, request.contact);
+    this.cameraTweener.add(() => undefined, {
+      duration: 0.01,
+      delay: 0.94,
+      channel: 'contact-input',
+      onComplete: () => {
+        if (this.phase === Phase.Contact) setCursorVisible(true);
+      },
+    });
   }
 
   /**
@@ -2395,6 +2438,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
    */
   private enterM4SS(): void {
     if (this.m4ss) return;
+
+    const container = this.getWorld()?.gameContainer;
+    if (container) playM4SSHandoff(container, 'opening');
 
     audio.play('connect');
     audio.setOnAir(true);
@@ -2468,6 +2514,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
    */
   private exitM4SS(): void {
     if (!this.m4ss) return;
+
+    const container = this.getWorld()?.gameContainer;
+    if (container) playM4SSHandoff(container, 'returning');
 
     if (this.onM4SSKey) window.removeEventListener('keydown', this.onM4SSKey);
     this.onM4SSKey = null;
@@ -2659,8 +2708,34 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * The console keeps the closing line up and the diorama keeps playing whatever the
    * resolution set going, and then the camera goes home.
    */
-  private holdThenReturnHome(): void {
-    this.resolveHold = RESOLVE_HOLD;
+  private holdThenReturnHome(acknowledgementDelayMs = 0): void {
+    setCursorVisible(false);
+    this.phone?.beginResolution();
+
+    /*
+     * Let the authored result shot land first, then breathe a fraction closer into it.
+     *
+     * Outcome transitions frequently start a 1.4-2.2 second prop/camera cue on the same
+     * frame as this hook. Moving immediately would cancel the very payoff this hold exists
+     * to show. At 2.35 seconds those moves are settled; a 3.5% push that preserves the
+     * current target reads as attention, not as a new shot, and finishes before departure.
+     */
+    const resolvedScene = this.scene;
+    const settleDelay = Math.max(2.35, acknowledgementDelayMs / 1000 + 0.25);
+    this.cameraTweener.add(() => undefined, {
+      duration: 0.01,
+      delay: settleDelay,
+      channel: 'resolve-settle',
+      onComplete: () => {
+        if (this.phase !== Phase.Contact || this.scene !== resolvedScene) return;
+        const settle: CameraShot = {
+          position: this.cameraPosition.clone().lerp(this.cameraTarget, 0.035),
+          target: this.cameraTarget.clone(),
+        };
+        this.moveTo(settle, 1.35);
+      },
+    });
+    this.resolveHold = Math.max(RESOLVE_HOLD, acknowledgementDelayMs / 1000 + 1.35);
   }
 
   private returnHome(): void {
@@ -2668,6 +2743,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // should sound the same from here on: the difference was in the verdict cue, and the
     // link closing is the link closing.
     audio.setOnAir(false);
+    setCursorVisible(false);
 
     /**
      * The pull back into the machine.
@@ -2864,8 +2940,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (!anomaly || !anomaly.hidden) return;
     anomaly.hidden = false;
     anomaly.pace = 3;
+    // The workstation bed disappearing is the negative space around the new caller. The
+    // connect squelch is the only sound left, so a compressed capture cannot mistake the
+    // flare for an ordinary globe pulse.
+    setRoomTone(null);
     audio.play('connect');
-    this.globeScreen?.flareSignal(ANOMALY_SIGNAL);
+    this.globeScreen?.focusSignal(ANOMALY_SIGNAL);
     this.persist();
   }
 
@@ -2915,10 +2995,31 @@ export class OmniscientRig extends ENGINE.SceneNode {
       const anomaly = this.signals.find((s) => s.id === ANOMALY_SIGNAL);
       if (anomaly?.hidden) {
         this.showGlobe();
-        this.anomalyDelay = 3.0;
+        this.globeScreen?.setInputEnabled(false);
+        this.anomalyDelay = 3.5;
+        /*
+         * Replace showGlobe's ordinary 1.75s input handoff. The screen belongs to the
+         * machine until the off-world acquisition has flared and held as a final image.
+         */
+        this.cameraTweener.add(() => undefined, {
+          duration: 0.01,
+          delay: 5.4,
+          channel: 'globe-input',
+          onComplete: () => {
+            if (this.phase !== Phase.Choosing) return;
+            this.globeScreen?.setInputEnabled(true);
+            setCursorVisible(true);
+          },
+        });
       } else {
         // The player leaves the machine the way they found it: on, at the desk.
         this.moveTo(HOME_SHOT, HOME_SHOT.duration ?? 2.0);
+        this.cameraTweener.add(() => undefined, {
+          duration: 0.01,
+          delay: 2.1,
+          channel: 'globe-input',
+          onComplete: () => setCursorVisible(true),
+        });
       }
     });
     this.endingPanel.open(this.knowledge, resolved, this.queue.length);
@@ -3093,23 +3194,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * reaching down a wire into a stranger's room - and it had less ceremony than opening a
      * menu.
      *
-     * Now it arrives wide and settles. The camera starts 16% further out along its own view
-     * axis and pushes to the framed shot over 0.9s, which is a machine's picture stabilising
+     * Now it arrives wide and settles. The camera starts 24% further out along its own view
+     * axis and pushes to the framed shot over 1.05s, which is a machine's picture stabilising
      * rather than a director cutting. Derived from the shot rather than authored per scene,
      * so all eight rooms get it and a new room cannot forget.
      *
-     * 0.9 seconds is short on purpose. The player does this nine times; anything with real
+     * 1.05 seconds is short on purpose. The player does this nine times; anything with real
      * weight is a delay by the third request. The intent is that they never consciously see
      * it and would notice at once if it went.
      */
     const opening = next?.getShot('default');
     if (opening) {
       const wide = {
-        position: opening.position.clone().lerp(opening.target, -0.16),
+        position: opening.position.clone().lerp(opening.target, -0.24),
         target: opening.target.clone(),
       };
       this.cutTo(wide);
-      this.moveTo(opening, 0.9);
+      this.moveTo(opening, 1.05);
     }
 
     /*
@@ -3132,7 +3233,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     this.cameraTweener.add(() => undefined, {
       duration: 0.01,
-      delay: 0.75,
+      delay: 0.78,
       channel: 'arrival-notice',
       onComplete: () => {
         if (this.phase === Phase.Contact) this.applyEnvironmentCue('prop.nod:contact');
@@ -3179,11 +3280,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private driving: RemoteUnit | null = null;
   private readonly driveKeys = new DriveKeys();
   private plot: MowerPlot | null = null;
+  private readonly mowerAudio = new MowerAudio();
   /** Seconds to keep driving after the job is done, so the last pass can be watched. */
   private driveHold = 0;
-  /** Blades cut since the last score pop, and how long ago that was. */
-  private driveScore = 0;
-  private driveScoreHold = 0;
 
   /**
    * Sign into the unit this diorama has parked on it.
@@ -3198,8 +3297,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.driving = unit;
     this.driveHold = 0;
+    setCursorVisible(false);
     unit.drive.engage(true);
     this.driveKeys.attach();
+    this.mowerAudio.start();
 
     /*
      * The console goes away, because for the next minute it is not what the player is
@@ -3214,6 +3315,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     const container = this.getWorld()?.gameContainer;
     if (container) this.plot ??= new MowerPlot(container);
+    this.plot?.reset();
     this.plot?.setGround(unit.bounds, unit.shapes, unit.field.total);
     this.plot?.setVisible(true);
 
@@ -3245,14 +3347,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     unit.drive.engage(false);
     this.driveKeys.detach();
+    this.mowerAudio.stop();
     this.plot?.setVisible(false);
-    this.plot?.clearPops();
-    this.driveScore = 0;
-    this.driveScoreHold = 0;
     this.driving = null;
     // And she is back on the line. Only when the request is carrying on - on the way out of
     // the diorama the console is being put away with everything else.
-    if (returnCamera) this.phone?.setVisible(true);
+    if (returnCamera) {
+      this.phone?.setVisible(true);
+      setCursorVisible(true);
+    }
 
     // Back to the room, eased this time - the machine is letting go rather than taking
     // hold, and the shot it returns to is a composed one again.
@@ -3272,7 +3375,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const unit = this.driving;
     if (!unit) return;
 
-    const cut = unit.drive.update(deltaTime, this.driveKeys.read());
+    const input = this.driveKeys.read();
+    const cut = unit.drive.update(deltaTime, input);
+    this.mowerAudio.update(input.forward, cut > 0);
+    const collision = unit.drive.collision;
+    if (collision) this.mowerAudio.impact(collision.kind, collision.force);
     this.cutTo(unit.drive.shot());
 
     const progress = unit.field.progress();
@@ -3298,27 +3405,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
           : null,
     });
 
-    /*
-     * Score pops, off the same number the cut returns.
-     *
-     * The one piece of arcade in this game and it is here for a reason a serious one would
-     * accept: a rotary deck going through long grass gives almost no feedback per blade,
-     * because a blade is 2.6cm wide and there are two hundred of them per square metre.
-     * The work is legible in aggregate and invisible per moment. A number that leaves the
-     * machine every time it eats something makes the moment-to-moment readable, which is
-     * the difference between mowing and pushing a camera around a field.
-     *
-     * Accumulated and flushed rather than one per blade - forty blades a frame would be
-     * forty labels, which is a slot machine.
-     */
-    this.driveScore += cut;
-    this.driveScoreHold += deltaTime;
-    if (this.driveScore > 0 && this.driveScoreHold > 0.22) {
-      this.plot?.pop(this.driveScore);
-      this.driveScore = 0;
-      this.driveScoreHold = 0;
-    }
-
     if (progress < unit.target) return;
 
     /*
@@ -3328,6 +3414,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * sees the finished bank from the machine - the reward for the work is a cut. The hold
      * lets the last pass finish under its own steam, and then the room comes back.
      */
+    if (this.driveHold === 0) {
+      this.plot?.complete();
+      this.mowerAudio.complete();
+    }
     this.driveHold += deltaTime;
     if (this.driveHold < 1.6) return;
     this.releaseUnit();
@@ -3649,6 +3739,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     this.boot?.dispose();
     this.boot = null;
+    this.systemPanel?.close();
+    this.systemPanel = null;
+    this.disposeAccessibility?.();
+    this.disposeAccessibility = null;
     this.tune?.dispose();
     this.tune = null;
     this.session?.end();

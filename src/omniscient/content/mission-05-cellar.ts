@@ -339,7 +339,8 @@ export const MISSION_05: MissionDefinition = {
          */
         onSolved: {
           to: 'solved',
-          environment: 'camera.push:valve,prop.turn:valve,prop.clear:water',
+          environment:
+            'camera.push:valve,prop.turn:valve,prop.clear:water,prop.release:outfall@1.35',
         },
         onWrong: { to: 'covers', environment: 'camera.push:valve,prop.burst:valve' },
         wrongSay:

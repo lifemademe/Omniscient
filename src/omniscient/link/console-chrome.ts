@@ -49,7 +49,7 @@ export const CONSOLE_CHROME_CSS = `
   justify-content: space-between;
   gap: 16px;
   padding: 9px 18px;
-  font-size: 11px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   letter-spacing: 0.16em;
   text-transform: uppercase;
   background: linear-gradient(#0d1a12, #060d08);
@@ -62,7 +62,7 @@ export const CONSOLE_CHROME_CSS = `
   border-top: 1px solid #1d3325;
   background: linear-gradient(#060d08, #0b1710);
   box-shadow: inset 0 -1px 0 #204631, 0 -1px 0 #040906;
-  font-size: 10px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   color: #35603f;
 }
 .omni-cv__brand { color: #cfe6c4; letter-spacing: 0.28em; }
@@ -81,10 +81,72 @@ export const CONSOLE_CHROME_CSS = `
 /* The middle band: scene on the left, conversation on the right. */
 .omni-cv__body {
   display: grid;
-  grid-template-columns: 1fr min(34vw, 430px);
+  grid-template-columns: 1fr min(29vw, 390px);
   gap: 14px;
   padding: 14px 18px;
   min-height: 0;
+  transition: grid-template-columns 320ms ease;
+}
+.omni-cv--device-focus .omni-cv__body {
+  grid-template-columns: 1fr min(38vw, 520px);
+}
+.omni-cv--resolving .omni-cv__body {
+  grid-template-columns: 1fr min(31vw, 440px);
+}
+.omni-cv--connecting .omni-cv__body,
+.omni-cv--acquiring .omni-cv__body {
+  grid-template-columns: 1fr 0;
+}
+
+/*
+ * A contact arrives as a place first and an interface second.
+ *
+ * CONNECTING leaves only the viewport brackets. ACQUIRING brings up the link readouts and
+ * machine frame. READY reveals the transcript after the caller has had a clean moment to
+ * acknowledge the connection. The motion is deliberately tiny: hardware warming up, not a
+ * web page sliding into place.
+ */
+.omni-cv__top,
+.omni-cv__foot,
+.omni-cv__readouts,
+.omni-cv__actions,
+.omni-objective,
+.omni-terminal {
+  transition: opacity 220ms ease, transform 280ms ease;
+}
+.omni-cv--connecting .omni-cv__top,
+.omni-cv--connecting .omni-cv__foot,
+.omni-cv--connecting .omni-cv__readouts,
+.omni-cv--connecting .omni-cv__actions,
+.omni-cv--connecting .omni-objective,
+.omni-cv--connecting .omni-terminal,
+.omni-cv--acquiring .omni-cv__actions,
+.omni-cv--acquiring .omni-objective,
+.omni-cv--acquiring .omni-terminal {
+  opacity: 0;
+  transform: translateY(4px);
+  pointer-events: none;
+}
+
+/*
+ * Resolution belongs to the room, not to the dashboard.
+ *
+ * The transcript and verdict stay at full strength. Everything the player could operate
+ * recedes, making the authored final gesture and physical result the largest live things
+ * in the frame while also making it impossible to send a stray input after the outcome.
+ */
+.omni-cv--resolving .omni-cv__readouts,
+.omni-cv--resolving .omni-cv__actions,
+.omni-cv--resolving .omni-objective,
+.omni-cv--resolving .omni-tabs,
+.omni-cv--resolving .omni-suggest,
+.omni-cv--resolving .omni-terminal__input,
+.omni-cv--resolving .omni-terminal__hint {
+  opacity: 0.28;
+  pointer-events: none;
+}
+.omni-cv--resolving .omni-terminal {
+  box-shadow: 0 0 0 1px rgba(127, 224, 138, 0.08), 0 12px 30px rgba(0, 0, 0, 0.42);
 }
 /*
  * The left column: readouts at the top, controls at the bottom, air in between.
@@ -203,8 +265,9 @@ export const CONSOLE_CHROME_CSS = `
   flex-direction: column;
   align-items: flex-start;
   gap: 10px;
-  width: min(23vw, 260px);
+  width: min(21vw, 248px);
   margin: 13px 0 0 13px;
+  transition: width 280ms ease, opacity 220ms ease, transform 280ms ease;
 }
 /*
  * Bevelled, and square.
@@ -232,14 +295,31 @@ export const CONSOLE_CHROME_CSS = `
 }
 .omni-card__label {
   display: block;
-  font-size: 9px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: #4f9a5e;
   margin-bottom: 5px;
 }
-.omni-card__value { display: block; font-size: 12px; color: #cfe6c4; }
-.omni-card__sub { display: block; font-size: 10px; color: #6a8f72; margin-top: 3px; }
+.omni-card__value { display: block; font-size: calc(13px + var(--omni-font-boost, 0px)); color: #cfe6c4; }
+.omni-card__sub { display: block; font-size: calc(11px + var(--omni-font-boost, 0px)); color: #6a8f72; margin-top: 3px; }
+
+/* Telemetry teaches itself at full size, then gets out of the room's way. */
+.omni-cv--compact .omni-cv__readouts {
+  width: min(17vw, 196px);
+  gap: 5px;
+}
+.omni-cv--compact .omni-card {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 6px 8px;
+}
+.omni-cv--compact .omni-card__label { margin: 0; font-size: calc(9px + var(--omni-font-boost, 0px)); }
+.omni-cv--compact .omni-card__value { font-size: calc(11px + var(--omni-font-boost, 0px)); }
+.omni-cv--compact .omni-meter,
+.omni-cv--compact .omni-card__sub { display: none; }
 /*
  * The meter is a channel cut into the plate, with lamps in it.
  *
@@ -284,7 +364,7 @@ export const CONSOLE_CHROME_CSS = `
   min-width: 96px;
   padding: 8px 12px;
   font: inherit;
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #8fbe93;
@@ -308,7 +388,11 @@ export const CONSOLE_CHROME_CSS = `
     0 0 0 1px #0b1a11;
   transform: translate(1px, 1px);
 }
-.omni-action__glyph { font-size: 15px; line-height: 1; }
+.omni-action:focus-visible {
+  outline: 2px solid #d8ffb0;
+  outline-offset: 3px;
+}
+.omni-action__glyph { font-size: calc(15px + var(--omni-font-boost, 0px)); line-height: 1; }
 .omni-action--end { color: #c2483a; }
 .omni-action--end:hover { color: #e8877a; box-shadow:
   inset 1px 1px 0 #8a4438, inset -1px -1px 0 #040906, 0 0 0 1px #3a1c17; }

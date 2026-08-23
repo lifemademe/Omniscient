@@ -52,9 +52,9 @@ export const MOWER_WIDTH = 0.7;
  * uncut lines between them unless they overlap, which is the entire skill in mowing and
  * the only reason this is a game rather than a walk.
  */
-export const CUT_WIDTH = 0.62;
-/** Metres per second flat out. A walking pace - this is a groundskeeper, not a kart. */
-export const MOWER_SPEED = 1.5;
+export const CUT_WIDTH = 0.68;
+/** Metres per second flat out. A brisk walking pace - this is a groundskeeper, not a kart. */
+export const MOWER_SPEED = 1.85;
 /** Radians per second at full lock. */
 export const MOWER_TURN = 1.9;
 /** Deck height off the ground, which is also where the camera sits over. */

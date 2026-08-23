@@ -439,6 +439,8 @@ export const MISSION_04: MissionDefinition = {
     },
     {
       id: 'solved',
+      gesture: 'prop.address:letters,prop.settle:photo-box,prop.nod:contact',
+      framing: 'camera.push-in:photo-box',
       tempo: Tempo.Respond,
       say:
         'That is it. That is them. Aunt, cousin, grandmother, grandfather, niece. Two ' +

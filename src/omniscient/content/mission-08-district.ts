@@ -605,6 +605,7 @@ export const MISSION_08: MissionDefinition = {
      */
     {
       id: 'arrival-lights',
+      gesture: 'prop.nod:contact',
       /*
        * Stays in the wireframe, which is the point of this one. The machine reached into
        * the municipal network and changed a light, so the shot is the machine's own view of
@@ -623,6 +624,7 @@ export const MISSION_08: MissionDefinition = {
 
     {
       id: 'arrival-call',
+      gesture: 'prop.nod:contact',
       // The same drop into the traffic as the other two. What differs is what is standing
       // there when it lands - see the car's registration in scenes.ts.
       framing: ARRIVE,
@@ -646,6 +648,7 @@ export const MISSION_08: MissionDefinition = {
        * reaction to what it just attempted.
        */
       id: 'arrival-watch',
+      gesture: 'prop.nod:contact',
       // The same drop, and the fullest landing: a windscreen, rain, and no phone ringing.
       framing: ARRIVE,
       say:

@@ -30,8 +30,8 @@ const STYLE_ID = 'omni-mower-plot-style';
 const CSS = `
 .omni-plot {
   position: absolute;
-  left: 50%;
-  bottom: 20px;
+  left: max(18px, env(safe-area-inset-left));
+  bottom: max(18px, env(safe-area-inset-bottom));
   /*
    * Scaled up on arrival as well as faded.
    *
@@ -40,8 +40,9 @@ const CSS = `
    * arrives - 0.86 to 1 over a quarter second, which is under the threshold of feeling
    * like an animation and over the threshold of catching an eye that is looking at a field.
    */
-  transform: translateX(-50%) scale(0.86);
-  width: 214px;
+  transform: scale(0.86);
+  transform-origin: left bottom;
+  width: 190px;
   padding: 9px 9px 7px;
   background: rgba(9, 20, 13, 0.82);
   border: 1px solid rgba(143, 190, 147, 0.45);
@@ -54,43 +55,21 @@ const CSS = `
   transition: opacity 260ms ease, transform 260ms cubic-bezier(0.2, 1.3, 0.4, 1);
   z-index: 40;
 }
-.omni-plot--on { opacity: 1; transform: translateX(-50%) scale(1); }
-/*
- * Where the score pops live: over the middle of the screen, not over the chart.
- *
- * They are feedback about the thing being cut, and the thing being cut is under the
- * machine in the main view. Putting them on the panel would have the player reading the
- * corner of the screen for confirmation of something happening in the centre of it.
- */
-.omni-pops {
-  position: absolute;
-  left: 50%;
-  top: 58%;
-  width: 0;
-  height: 0;
-  pointer-events: none;
-  z-index: 39;
-  font-family: 'Courier New', Courier, monospace;
+.omni-plot--on { opacity: 1; transform: scale(1); }
+.omni-plot--complete {
+  border-color: rgba(216, 255, 176, 0.9);
+  box-shadow: 0 0 0 1px rgba(216, 255, 176, 0.18), 0 0 24px rgba(84, 154, 88, 0.4);
+  animation: omni-plot-lock 620ms ease-out both;
 }
-.omni-pop {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  font-size: 15px;
-  font-weight: bold;
-  color: #d8ffb0;
-  text-shadow: 0 0 6px rgba(20, 50, 24, 0.9);
-  white-space: nowrap;
-  animation: omni-pop-rise 780ms ease-out forwards;
-}
-@keyframes omni-pop-rise {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
-  18% { opacity: 1; transform: translate(-50%, -76%) scale(1.06); }
-  100% { opacity: 0; transform: translate(-50%, -190%) scale(1); }
+@keyframes omni-plot-lock {
+  0% { filter: brightness(1); }
+  32% { filter: brightness(1.75); }
+  100% { filter: brightness(1); }
 }
 .omni-plot__head {
   display: flex;
   justify-content: space-between;
-  font-size: 9px;
+  font-size: calc(9px + var(--omni-font-boost, 0px));
   letter-spacing: 0.14em;
   text-transform: uppercase;
   margin-bottom: 5px;
@@ -106,14 +85,14 @@ const CSS = `
  */
 .omni-plot__canvas {
   display: block;
-  width: 196px;
-  height: 196px;
+  width: 172px;
+  height: 172px;
   border-radius: 50%;
   border: 1px solid rgba(143, 190, 147, 0.3);
 }
 .omni-plot__keys {
   margin-top: 5px;
-  font-size: 9px;
+  font-size: calc(9px + var(--omni-font-boost, 0px));
   letter-spacing: 0.1em;
   text-align: center;
   opacity: 0.62;
@@ -219,15 +198,7 @@ export class MowerPlot {
   private readonly canvas: HTMLCanvasElement;
   private readonly progressLabel: HTMLSpanElement;
   private status!: HTMLDivElement;
-  private pops!: HTMLDivElement;
-  /**
-   * Where the next pop goes, advanced by the golden ratio.
-   *
-   * Not random. Math.random on a burst of these clusters visibly - two or three land on
-   * top of each other and leave a gap elsewhere - while stepping by 0.618 of a turn is the
-   * classic way to get a spread that never repeats and never bunches.
-   */
-  private spray = 0;
+  private completed = false;
   /** Where the sonar head is pointing, machine-relative. See the note on SWEEP_RATE. */
   private sweep = 0;
   /**
@@ -306,40 +277,6 @@ export class MowerPlot {
 
     this.root.append(head, this.canvas, keys);
     container.appendChild(this.root);
-
-    this.pops = document.createElement('div');
-    this.pops.className = 'omni-pops';
-    container.appendChild(this.pops);
-  }
-
-  /**
-   * A number leaving the machine, because it ate something.
-   *
-   * Scattered rather than stacked. Two labels in the same place read as one label
-   * flickering, and the whole value of this is that it should feel like a spray of
-   * clippings coming off the deck - so each one takes a random offset inside a small box
-   * around the centre.
-   *
-   * The element removes itself. A pop is 780ms of CSS animation and nothing needs to
-   * remember it afterwards; keeping a list of them so they could be cleaned up on teardown
-   * would be more bookkeeping than the thing being bookkept.
-   */
-  public pop(amount: number): void {
-    if (!this.pops) return;
-    const label = document.createElement('div');
-    label.className = 'omni-pop';
-    label.textContent = `+${amount}`;
-    this.spray = (this.spray + 0.618) % 1;
-    const angle = this.spray * Math.PI * 2;
-    label.style.left = `${Math.cos(angle) * 46}px`;
-    label.style.top = `${Math.sin(angle) * 26}px`;
-    label.addEventListener('animationend', () => label.remove());
-    this.pops.appendChild(label);
-  }
-
-  /** Cancel anything still in flight, so a release does not leave numbers on screen. */
-  public clearPops(): void {
-    this.pops?.replaceChildren();
   }
 
   /** The ground this plot covers, and the things on it that cannot be driven over. */
@@ -351,6 +288,22 @@ export class MowerPlot {
 
   public setVisible(on: boolean): void {
     this.root.classList.toggle('omni-plot--on', on);
+  }
+
+  public reset(): void {
+    this.completed = false;
+    this.root.classList.remove('omni-plot--complete');
+    this.progressLabel.textContent = '0%';
+    this.status.textContent = 'W A S D  /  ARROWS';
+  }
+
+  /** One report, not a score spray: the unit locks the completed bank on its instrument. */
+  public complete(): void {
+    if (this.completed) return;
+    this.completed = true;
+    this.root.classList.add('omni-plot--complete');
+    this.progressLabel.textContent = '100%';
+    this.status.textContent = 'BANK CLEAR  //  LIGHT PATH OPEN';
   }
 
   public destroy(): void {
@@ -612,8 +565,10 @@ export class MowerPlot {
     ctx.closePath();
     ctx.fill();
 
-    this.progressLabel.textContent = `${Math.round(state.progress * 100)}%`;
-    this.status.textContent = statusFor(state.progress, state.guide != null);
+    if (!this.completed) {
+      this.progressLabel.textContent = `${Math.round(state.progress * 100)}%`;
+      this.status.textContent = statusFor(state.progress, state.guide != null);
+    }
   }
 }
 

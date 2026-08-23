@@ -59,7 +59,7 @@ export const TERMINAL_CSS = `
   justify-content: space-between;
   align-items: baseline;
   padding: 8px 12px 0;
-  font-size: 9px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #35603f;
@@ -67,7 +67,7 @@ export const TERMINAL_CSS = `
 .omni-terminal__where {
   display: block;
   padding: 0 12px 8px;
-  font-size: 10px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: #6a8f72;
@@ -81,7 +81,7 @@ export const TERMINAL_CSS = `
   padding: 4px 12px 8px;
   border-bottom: 1px solid #23422c;
   letter-spacing: 0.08em;
-  font-size: 12px;
+  font-size: calc(13px + var(--omni-font-boost, 0px));
   color: #4f9a5e;
   text-transform: uppercase;
 }
@@ -105,8 +105,8 @@ export const TERMINAL_CSS = `
   display: flex;
   flex-direction: column;
   gap: 10px;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: calc(15px + var(--omni-font-boost, 0px));
+  line-height: 1.5;
   scrollbar-width: thin;
   scrollbar-color: #2b5c39 transparent;
 }
@@ -128,7 +128,7 @@ export const TERMINAL_CSS = `
 }
 .omni-line__who {
   display: block;
-  font-size: 10px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   letter-spacing: 0.14em;
   text-transform: uppercase;
   margin-bottom: 2px;
@@ -158,7 +158,7 @@ export const TERMINAL_CSS = `
 .omni-line--omniscient .omni-line__who { color: #4f9a5e; }
 .omni-line--system {
   color: #c9a227;
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -191,14 +191,14 @@ export const TERMINAL_CSS = `
 .omni-objective[hidden] { display: none; }
 .omni-objective__text {
   color: #d8ffb0;
-  font-size: 14px;
+  font-size: calc(15px + var(--omni-font-boost, 0px));
   line-height: 1.35;
   letter-spacing: 0.02em;
 }
 .omni-objective__tag {
   flex: none;
   color: #5f9c6c;
-  font-size: 10px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -223,7 +223,7 @@ export const TERMINAL_CSS = `
   flex-basis: 100%;
   margin-bottom: 1px;
   color: #35603f;
-  font-size: 9px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
@@ -233,7 +233,7 @@ export const TERMINAL_CSS = `
   border: 1px solid #2b5c39;
   color: #cfe6c4;
   font: inherit;
-  font-size: 11px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   line-height: 1.3;
   text-align: left;
   cursor: pointer;
@@ -289,7 +289,7 @@ export const TERMINAL_CSS = `
   border-right: 1px solid #1a2f21;
   color: #4f9a5e;
   font: inherit;
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.14em;
   text-transform: uppercase;
   cursor: pointer;
@@ -309,7 +309,7 @@ export const TERMINAL_CSS = `
   border: 1px solid #23422c;
   color: #cfe6c4;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   line-height: 1.4;
   cursor: pointer;
 }
@@ -318,7 +318,7 @@ export const TERMINAL_CSS = `
 .omni-item--static:hover { border-color: #23422c; color: #cfe6c4; }
 .omni-item__meta {
   display: block;
-  font-size: 9px;
+  font-size: calc(9px + var(--omni-font-boost, 0px));
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #4f9a5e;
@@ -336,14 +336,14 @@ export const TERMINAL_CSS = `
 .omni-key { color: #d8ffb0; font-weight: bold; }
 .omni-empty {
   color: #3f6b48;
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 10px;
 }
 /* Confirmation and failure. */
 .omni-confirm { padding: 10px; border-top: 1px solid #23422c; }
-.omni-confirm__q { display: block; color: #d8ffb0; font-size: 13px; margin-bottom: 8px; }
+.omni-confirm__q { display: block; color: #d8ffb0; font-size: calc(13px + var(--omni-font-boost, 0px)); margin-bottom: 8px; }
 .omni-confirm__row { display: flex; gap: 8px; }
 .omni-confirm__btn {
   padding: 5px 18px;
@@ -351,7 +351,7 @@ export const TERMINAL_CSS = `
   border: 1px solid #4f9a5e;
   color: #7fe08a;
   font: inherit;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
@@ -368,7 +368,7 @@ export const TERMINAL_CSS = `
   border-left: 3px solid #c2483a;
   background: #1a0e0c;
   color: #d99b8f;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   line-height: 1.45;
 
   /*
@@ -395,7 +395,7 @@ export const TERMINAL_CSS = `
 .omni-failure__title {
   display: block;
   color: #c2483a;
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.16em;
   text-transform: uppercase;
   margin-bottom: 5px;
@@ -434,7 +434,7 @@ export const TERMINAL_CSS = `
   border-left: 3px solid #c9a227;
   background: rgba(201, 162, 39, 0.1);
   color: #e0c265;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   line-height: 1.5;
   letter-spacing: 0.02em;
 }
@@ -449,14 +449,14 @@ export const TERMINAL_CSS = `
 .omni-terminal__input--called { animation: omni-called 900ms ease-out 2; }
 .omni-failure__pen {
   flex: none;
-  font-size: 22px;
+  font-size: calc(22px + var(--omni-font-boost, 0px));
   line-height: 1;
   color: #c9a227;
   animation: omni-note-blink 1.1s steps(1, end) infinite;
 }
 .omni-failure__prompt strong {
   display: block;
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.16em;
   text-transform: uppercase;
   margin-bottom: 3px;
@@ -475,12 +475,12 @@ export const TERMINAL_CSS = `
   background: rgba(79, 154, 94, 0.08);
   padding: 9px 11px;
   color: #a7d8ae;
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   line-height: 1.5;
 }
 .omni-notice strong {
   display: block;
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.16em;
   text-transform: uppercase;
   margin-bottom: 4px;
@@ -528,7 +528,7 @@ export const TERMINAL_CSS = `
   padding: 1px 0 2px;
   background: rgba(6, 12, 8, 0.72);
   color: #4f9a5e;
-  font-size: 8px;
+  font-size: calc(8px + var(--omni-font-boost, 0px));
   letter-spacing: 0.14em;
   text-transform: uppercase;
   text-align: center;
@@ -537,7 +537,7 @@ export const TERMINAL_CSS = `
   width: 100%;
   margin-top: 2px;
   color: #3f6b48;
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.08em;
 }
 .omni-terminal__foot {
@@ -565,7 +565,7 @@ export const TERMINAL_CSS = `
   border-left: 2px solid #c9a227;
   background: rgba(201, 162, 39, 0.08);
   color: #e0c265;
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -596,7 +596,7 @@ export const TERMINAL_CSS = `
 .omni-terminal--note .omni-terminal__input::placeholder { color: #8a7434; }
 .omni-terminal--note .omni-terminal__caret { color: #c9a227; }
 .omni-terminal__hint {
-  font-size: 10px;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #4f9a5e;
@@ -611,7 +611,7 @@ export const TERMINAL_CSS = `
   margin-bottom: 8px;
 }
 .omni-suggest__label {
-  font-size: 9px;
+  font-size: calc(9px + var(--omni-font-boost, 0px));
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: #3f7a4c;
@@ -620,7 +620,7 @@ export const TERMINAL_CSS = `
 }
 .omni-suggest__chip {
   font: inherit;
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   color: #a8f0b6;
   background: rgba(40, 96, 56, 0.4);
   border: 1px solid #2f6b3a;
@@ -643,7 +643,7 @@ export const TERMINAL_CSS = `
   outline: none;
   color: #d8ffb0;
   font: inherit;
-  font-size: 13px;
+  font-size: calc(13px + var(--omni-font-boost, 0px));
   caret-color: #7fe08a;
 }
 .omni-terminal__input::placeholder { color: #3f6b48; }
@@ -768,6 +768,10 @@ export class LocalSurface implements InterventionSurface {
   private renderedHintKey = '';
   /** Whether the last frame was already waiting on a note - see focusNote. */
   private wasLocked = false;
+  /** Timed stages of a newly established contact link. */
+  private readonly connectionTimers: number[] = [];
+  /** Delayed collapse of telemetry once the player has had time to read it. */
+  private compactTimer: number | null = null;
 
   constructor(private readonly container: HTMLElement) {}
 
@@ -1084,6 +1088,9 @@ export class LocalSurface implements InterventionSurface {
     const element = this.objectiveText;
     if (!element || text === this.objectiveShown) return;
     this.objectiveShown = text;
+    this.shell?.classList.remove('omni-cv--compact');
+    if (this.compactTimer !== null) window.clearTimeout(this.compactTimer);
+    this.compactTimer = null;
 
     if (this.objectiveTimer !== null) window.clearInterval(this.objectiveTimer);
     this.objectiveTimer = null;
@@ -1113,6 +1120,7 @@ export class LocalSurface implements InterventionSurface {
         window.setTimeout(() => {
           if (this.objectiveText === element && this.objectiveShown === text) {
             element.textContent = text;
+            this.scheduleCompact(3000);
           }
         }, 520);
       }
@@ -1301,13 +1309,86 @@ export class LocalSurface implements InterventionSurface {
     this.shell?.classList.toggle('omni-cv--leaving', leaving);
   }
 
+  /**
+   * Give the resolved room back to the person for the last few seconds of the call.
+   *
+   * The verdict remains readable, but telemetry and controls recede and stop accepting
+   * input. This is deliberately separate from `setLeaving`: resolution is the human beat
+   * before the carrier drops, while leaving is the machine switching its instruments off.
+   */
+  public beginResolution(): void {
+    const shell = this.shell;
+    if (!shell) return;
+    this.clearConnectionTimers();
+    shell.classList.remove(
+      'omni-cv--connecting',
+      'omni-cv--acquiring',
+      'omni-cv--ready',
+      'omni-cv--compact',
+      'omni-cv--leaving'
+    );
+    shell.classList.add('omni-cv--resolving');
+  }
+
+  /**
+   * Establish a contact in readable stages: room, telemetry, then conversation.
+   *
+   * The world is deliberately visible before the machine explains it. This gives the
+   * caller's room and acknowledgement gesture a clean beat instead of burying both under a
+   * fully assembled interface on the first frame.
+   */
+  public beginConnection(): void {
+    const shell = this.shell;
+    if (!shell) return;
+    this.clearConnectionTimers();
+    shell.classList.remove(
+      'omni-cv--leaving',
+      'omni-cv--resolving',
+      'omni-cv--acquiring',
+      'omni-cv--ready',
+      'omni-cv--compact'
+    );
+    shell.classList.add('omni-cv--connecting');
+
+    this.connectionTimers.push(
+      window.setTimeout(() => {
+        if (this.shell !== shell) return;
+        shell.classList.remove('omni-cv--connecting');
+        shell.classList.add('omni-cv--acquiring');
+      }, 260),
+      window.setTimeout(() => {
+        if (this.shell !== shell) return;
+        shell.classList.remove('omni-cv--acquiring');
+        shell.classList.add('omni-cv--ready');
+      }, 930)
+    );
+    this.scheduleCompact(4800);
+  }
+
   public setVisible(visible: boolean): void {
     // The whole console, not just the transcript - hiding one and leaving the frame up
     // left an empty operator shell floating over the main menu.
     if (this.shell) this.shell.style.display = visible ? 'grid' : 'none';
   }
 
+  private scheduleCompact(delay: number): void {
+    if (this.compactTimer !== null) window.clearTimeout(this.compactTimer);
+    this.compactTimer = window.setTimeout(() => {
+      this.compactTimer = null;
+      this.shell?.classList.add('omni-cv--compact');
+    }, delay);
+  }
+
+  private clearConnectionTimers(): void {
+    for (const timer of this.connectionTimers) window.clearTimeout(timer);
+    this.connectionTimers.length = 0;
+    if (this.compactTimer !== null) window.clearTimeout(this.compactTimer);
+    this.compactTimer = null;
+  }
+
   public detach(): void {
+    this.clearConnectionTimers();
+    this.cancelConsoleOpen();
     this.shell?.remove();
     this.shell = null;
     this.root = null;
@@ -1730,6 +1811,7 @@ export class LocalSurface implements InterventionSurface {
     if (!this.panelElement || !this.logElement) return;
 
     const showingChat = this.tab === 'chat';
+    this.shell?.classList.toggle('omni-cv--device-focus', !showingChat);
     this.logElement.style.display = showingChat ? 'flex' : 'none';
     this.panelElement.style.display = showingChat ? 'none' : 'flex';
     if (this.hintsElement) this.hintsElement.hidden = !showingChat;
@@ -1770,14 +1852,18 @@ export class LocalSurface implements InterventionSurface {
    * safe-UI rule holds with no exception carved out for "trusted" content.
    */
   private appendEmphasised(parent: HTMLElement, text: string, keywords?: string[]): void {
+    // Content is authored as plain text, but a few early observation strings retained
+    // Markdown emphasis markers. Strip the notation and rebuild emphasis with safe DOM
+    // nodes below; the player should see the word, never the asterisks.
+    const clean = text.replace(/\*\*([^*]+)\*\*/g, '$1');
     if (!keywords || keywords.length === 0) {
-      parent.appendChild(document.createTextNode(text));
+      parent.appendChild(document.createTextNode(clean));
       return;
     }
 
     // Longest first, so "aerial lead" wins over "aerial" when both are listed.
     const ordered = [...keywords].sort((a, b) => b.length - a.length);
-    let rest = text;
+    let rest = clean;
 
     while (rest.length > 0) {
       let bestIndex = -1;

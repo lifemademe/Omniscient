@@ -739,7 +739,7 @@ export const MISSION_03: MissionDefinition = {
 
     {
       id: 'solved',
-      gesture: 'prop.nod:contact',
+      gesture: 'prop.recover:rows-failing,prop.nod:contact',
       framing: 'camera.pan:tunnel-rows',
       tempo: Tempo.Respond,
       say:

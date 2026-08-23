@@ -1,40 +1,26 @@
 /**
- * The three menu plates that did nothing.
+ * Settings and credits in the machine's own visual language.
  *
- * ## Why this is worth the file
- *
- * SETTINGS, CREDITS and SHUT DOWN have been on the wall since the first build, lit and
- * labelled and hooked to nothing. `onMenuAction` said so in a comment: "Only NEW GAME is
- * wired for the Jam slice. §103 wants the machine to look like it does more than the
- * player currently needs it to."
- *
- * §103 is right about the MACHINE - a console should look like it does more than you are
- * using. It is not right about the front door. A player who presses SHUT DOWN and gets
- * nothing has not found a machine with depth, they have found a broken game, and the same
- * goes for somebody reaching for a volume control because the carrier hum is louder than
- * they want at one in the morning. Muting at the operating system is what happens next,
- * and that mute never comes back off.
- *
- * ## Why it is one panel and not three
- *
- * They share everything: the same frame, the same way in and out, the same escape key, the
- * same restoration of the menu underneath. Three files would be three chances for those to
- * drift apart.
- *
- * ## Keyboard as well as mouse
- *
- * Every control here answers arrow keys and Escape, which is worth the few extra lines for
- * two reasons. It is the accessible thing to do. And this project's automated capture
- * cannot click DOM overlays at all - the harness can reach the 3D picker and nothing else
- * - so a settings panel that only answered the mouse would be a panel nobody could ever
- * verify again.
+ * This remains authored DOM rather than a generic settings widget because it is part of
+ * the console fiction. Underneath that skin the rows use focusable native buttons with
+ * explicit slider/switch semantics, so mouse, keyboard and assistive technology all edit
+ * the same persistent state.
  */
 
-import { audio } from '../audio/ConsoleAudio.js';
-import { clearM4ssStage, clearSave } from '../session/persistence.js';
 import { ACCENT } from '../art/palette.js';
+import { audio } from '../audio/ConsoleAudio.js';
+import {
+  DISPLAY_FILTERS,
+  TEXT_SIZES,
+  getAccessibilityPreferences,
+  setAccessibilityPreference,
+} from '../accessibility/preferences.js';
+import { clearM4ssStage, clearSave } from '../session/persistence.js';
+
+import type { DisplayFilter, TextSize } from '../accessibility/preferences.js';
 
 const STYLE_ID = 'omniscient-system-panel';
+const TITLE_ID = 'omniscient-system-panel-title';
 
 export type SystemScreen = 'settings' | 'credits';
 
@@ -52,14 +38,16 @@ const CSS = `
   pointer-events: auto;
 }
 .omni-sys__frame {
-  width: min(560px, 74vw);
+  width: min(640px, 84vw);
+  max-height: 86vh;
+  overflow: hidden auto;
   border: 1px solid rgba(127, 224, 138, 0.32);
   background: linear-gradient(180deg, rgba(8, 24, 14, 0.97), rgba(4, 14, 9, 0.97));
   padding: 26px 30px 22px;
   box-shadow: 0 0 44px rgba(0, 0, 0, 0.6);
 }
 .omni-sys__title {
-  font-size: 13px;
+  font-size: calc(13px + var(--omni-font-boost, 0px));
   letter-spacing: 0.24em;
   text-transform: uppercase;
   color: ${ACCENT.knowledge};
@@ -69,19 +57,39 @@ const CSS = `
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 11px 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px;
   border: 1px solid transparent;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-/* The focused row, which is how the keyboard path stays legible. */
-.omni-sys__row--on {
+.omni-sys__row--on,
+.omni-sys__row:focus-visible {
+  outline: none;
   border-color: rgba(127, 224, 138, 0.5);
   background: rgba(127, 224, 138, 0.07);
 }
-.omni-sys__label { flex: 0 0 132px; font-size: 12px; letter-spacing: 0.1em; }
-.omni-sys__value { font-size: 12px; color: ${ACCENT.amber}; min-width: 52px; }
-/* The level, drawn as blocks rather than as a native slider - a chrome slider in this
-   frame would be the one control that came from somewhere else. */
-.omni-sys__bar { display: flex; gap: 3px; flex: 1; cursor: pointer; }
+.omni-sys__row:focus-visible {
+  box-shadow: inset 3px 0 0 ${ACCENT.knowledge};
+}
+.omni-sys__label {
+  flex: 0 0 150px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
+  letter-spacing: 0.1em;
+}
+.omni-sys__value {
+  margin-left: auto;
+  min-width: 112px;
+  color: ${ACCENT.amber};
+  font-size: calc(12px + var(--omni-font-boost, 0px));
+  text-align: right;
+  text-transform: uppercase;
+}
+.omni-sys__bar { display: flex; gap: 3px; flex: 1; min-width: 120px; }
 .omni-sys__seg {
   flex: 1;
   height: 15px;
@@ -91,26 +99,51 @@ const CSS = `
 .omni-sys__seg--lit { background: ${ACCENT.knowledge}; border-color: ${ACCENT.knowledge}; }
 .omni-sys__note {
   margin-top: 16px;
-  font-size: 11px;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   line-height: 1.7;
-  opacity: 0.62;
+  opacity: 0.68;
 }
-.omni-sys__credits { font-size: 12px; line-height: 2; }
+.omni-sys__credits {
+  font-size: calc(12px + var(--omni-font-boost, 0px));
+  line-height: 2;
+}
 .omni-sys__credits b { color: ${ACCENT.knowledge}; font-weight: normal; letter-spacing: 0.1em; }
+@media (max-width: 620px) {
+  .omni-sys__frame { width: 90vw; padding-inline: 18px; }
+  .omni-sys__row { flex-wrap: wrap; gap: 8px 12px; }
+  .omni-sys__label { flex-basis: calc(100% - 124px); }
+  .omni-sys__bar { order: 3; flex-basis: 100%; }
+}
 `;
 
-const STEPS = 10;
+const VOLUME_STEPS = 10;
 
-/**
- * A modal over the menu. One at a time, and Escape always closes it.
- */
+interface SettingRow {
+  element: HTMLButtonElement;
+  nudge?: (direction: number) => void;
+  activate?: () => void;
+  paint: () => void;
+}
+
+const TEXT_LABELS: Readonly<Record<TextSize, string>> = {
+  standard: 'Standard',
+  large: 'Large',
+  largest: 'Largest',
+};
+
+const FILTER_LABELS: Readonly<Record<DisplayFilter, string>> = {
+  full: 'Full',
+  soft: 'Soft',
+  off: 'Off',
+};
+
+/** A modal over the menu. Escape always returns focus to wherever the player came from. */
 export class SystemPanel {
   private root: HTMLDivElement | null = null;
   private onKey: ((event: KeyboardEvent) => void) | null = null;
   private focused = 0;
-  private rows: HTMLElement[] = [];
-  /** Armed/fired by the RESET row. Set in buildSettings. */
-  private fireReset: (() => void) | null = null;
+  private rows: SettingRow[] = [];
+  private previouslyFocused: HTMLElement | null = null;
 
   public constructor(private readonly container: HTMLElement) {
     if (!document.getElementById(STYLE_ID)) {
@@ -127,14 +160,19 @@ export class SystemPanel {
 
   public open(screen: SystemScreen): void {
     this.close();
+    this.previouslyFocused = document.activeElement as HTMLElement | null;
 
     const root = document.createElement('div');
     root.className = 'omni-sys';
+    root.setAttribute('role', 'dialog');
+    root.setAttribute('aria-modal', 'true');
+    root.setAttribute('aria-labelledby', TITLE_ID);
 
     const frame = document.createElement('div');
     frame.className = 'omni-sys__frame';
 
     const title = document.createElement('div');
+    title.id = TITLE_ID;
     title.className = 'omni-sys__title';
     title.textContent = screen === 'settings' ? 'Settings' : 'Credits';
     frame.appendChild(title);
@@ -146,12 +184,11 @@ export class SystemPanel {
     note.className = 'omni-sys__note';
     note.textContent =
       screen === 'settings'
-        ? 'Left and right adjust. Escape closes.'
+        ? 'Up and down select. Left and right adjust. Enter confirms. Escape closes.'
         : 'Escape closes.';
     frame.appendChild(note);
 
     root.appendChild(frame);
-    // Clicking the darkness outside the frame closes, which is what everybody tries first.
     root.addEventListener('mousedown', (event) => {
       if (event.target === root) this.close();
     });
@@ -161,23 +198,12 @@ export class SystemPanel {
     this.focused = 0;
     this.paint();
 
-    this.onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') {
-        this.close();
-        return;
-      }
-      if (!this.rows.length) return;
-      if (event.key === 'ArrowDown') this.focused = (this.focused + 1) % this.rows.length;
-      if (event.key === 'ArrowUp') {
-        this.focused = (this.focused + this.rows.length - 1) % this.rows.length;
-      }
-      if (event.key === 'ArrowLeft') this.nudge(-1);
-      if (event.key === 'ArrowRight') this.nudge(1);
-      // Enter activates the focused row - only RESET has an activation.
-      if (event.key === 'Enter' && this.focused === 1) this.fireReset?.();
-      this.paint();
-    };
+    this.onKey = (event: KeyboardEvent): void => this.handleKey(event);
     window.addEventListener('keydown', this.onKey);
+
+    if (this.rows.length) {
+      window.setTimeout(() => this.rows[0]?.element.focus({ preventScroll: true }), 0);
+    }
   }
 
   public close(): void {
@@ -186,60 +212,187 @@ export class SystemPanel {
     this.root?.remove();
     this.root = null;
     this.rows = [];
+    this.previouslyFocused?.focus?.({ preventScroll: true });
+    this.previouslyFocused = null;
+  }
+
+  private handleKey(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      this.close();
+      return;
+    }
+    if (!this.rows.length) return;
+
+    let handled = true;
+    if (event.key === 'Tab') this.moveFocus(event.shiftKey ? -1 : 1);
+    else if (event.key === 'ArrowDown') this.moveFocus(1);
+    else if (event.key === 'ArrowUp') this.moveFocus(-1);
+    else if (event.key === 'ArrowLeft') this.nudge(-1);
+    else if (event.key === 'ArrowRight') this.nudge(1);
+    else if (event.key === 'Enter' || event.key === ' ') this.activate();
+    else handled = false;
+
+    if (!handled) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.paint();
+  }
+
+  private moveFocus(direction: number): void {
+    this.focused = (this.focused + this.rows.length + direction) % this.rows.length;
+    this.rows[this.focused]?.element.focus({ preventScroll: true });
+  }
+
+  private focus(index: number): void {
+    this.focused = index;
+    this.rows[index]?.element.focus({ preventScroll: true });
+    this.paint();
   }
 
   // -- screens ---------------------------------------------------------------
 
   private buildSettings(frame: HTMLElement): void {
-    const row = document.createElement('div');
-    row.className = 'omni-sys__row';
+    this.addVolumeRow(frame);
+    this.addChoiceRow(
+      frame,
+      'TEXT SIZE',
+      TEXT_SIZES,
+      () => getAccessibilityPreferences().textSize,
+      (value) => setAccessibilityPreference('textSize', value),
+      (value) => TEXT_LABELS[value]
+    );
+    this.addChoiceRow(
+      frame,
+      'DISPLAY FILTER',
+      DISPLAY_FILTERS,
+      () => getAccessibilityPreferences().displayFilter,
+      (value) => setAccessibilityPreference('displayFilter', value),
+      (value) => FILTER_LABELS[value]
+    );
+    this.addMotionRow(frame);
+    this.addResetRow(frame);
+  }
 
-    const label = document.createElement('div');
-    label.className = 'omni-sys__label';
-    label.textContent = 'VOLUME';
+  private addVolumeRow(frame: HTMLElement): void {
+    const { element, value } = this.rowShell('VOLUME');
+    element.setAttribute('role', 'slider');
+    element.setAttribute('aria-label', 'Master volume');
+    element.setAttribute('aria-valuemin', '0');
+    element.setAttribute('aria-valuemax', '100');
 
-    const bar = document.createElement('div');
+    const bar = document.createElement('span');
     bar.className = 'omni-sys__bar';
-
-    const value = document.createElement('div');
-    value.className = 'omni-sys__value';
-
-    for (let i = 0; i < STEPS; i++) {
-      const seg = document.createElement('div');
-      seg.className = 'omni-sys__seg';
-      seg.addEventListener('mousedown', (event) => {
+    for (let i = 0; i < VOLUME_STEPS; i++) {
+      const segment = document.createElement('span');
+      segment.className = 'omni-sys__seg';
+      segment.addEventListener('click', (event) => {
+        if (event.button !== 0) return;
         event.preventDefault();
-        audio.setVolume((i + 1) / STEPS);
+        event.stopPropagation();
+        this.focus(this.rows.findIndex((row) => row.element === element));
+        audio.setVolume((i + 1) / VOLUME_STEPS);
         audio.play('tap');
         this.paint();
       });
-      bar.appendChild(seg);
+      bar.appendChild(segment);
     }
+    element.insertBefore(bar, value);
 
-    row.append(label, bar, value);
-    frame.appendChild(row);
+    const row: SettingRow = {
+      element,
+      nudge: (direction) => {
+        const step = 1 / VOLUME_STEPS;
+        audio.setVolume(
+          Math.round((audio.getVolume() + direction * step) * VOLUME_STEPS) / VOLUME_STEPS
+        );
+        audio.play('tap');
+      },
+      paint: () => {
+        const percent = Math.round(audio.getVolume() * 100);
+        value.textContent = `${String(percent)}%`;
+        element.setAttribute('aria-valuenow', String(percent));
+        element.setAttribute('aria-valuetext', `${String(percent)} percent`);
+        const lit = Math.round(audio.getVolume() * VOLUME_STEPS);
+        bar.querySelectorAll('.omni-sys__seg').forEach((segment, index) => {
+          segment.classList.toggle('omni-sys__seg--lit', index < lit);
+        });
+      },
+    };
+    this.register(frame, row, () => row.nudge?.(1));
+  }
 
-    /*
-     * RESET, with a two-step arm. A one-click erase next to the volume bar is a disaster
-     * waiting for a mis-click; the row arms on the first activation ("SURE? CLICK AGAIN")
-     * and erases on the second, and closing the panel disarms it. Erasing reloads the
-     * page - a reset that leaves the current session's state alive is not a reset, it is
-     * a lie with a delay on it.
-     */
-    const reset = document.createElement('div');
-    reset.className = 'omni-sys__row';
-    const resetLabel = document.createElement('div');
-    resetLabel.className = 'omni-sys__label';
-    resetLabel.textContent = 'RESET SAVE';
-    const resetValue = document.createElement('div');
-    resetValue.className = 'omni-sys__value';
-    resetValue.textContent = 'erase all progress';
-    reset.append(resetLabel, resetValue);
+  private addChoiceRow<T extends string>(
+    frame: HTMLElement,
+    label: string,
+    values: readonly T[],
+    get: () => T,
+    set: (value: T) => void,
+    display: (value: T) => string
+  ): void {
+    const { element, value } = this.rowShell(label);
+    element.setAttribute('role', 'slider');
+    element.setAttribute('aria-label', label.toLocaleLowerCase());
+    element.setAttribute('aria-valuemin', '0');
+    element.setAttribute('aria-valuemax', String(values.length - 1));
+
+    const change = (direction: number): void => {
+      const at = Math.max(0, values.indexOf(get()));
+      const next = (at + values.length + direction) % values.length;
+      set(values[next]);
+      audio.play('tap');
+    };
+    const row: SettingRow = {
+      element,
+      nudge: change,
+      paint: () => {
+        const selected = get();
+        const labelText = display(selected);
+        value.textContent = `‹  ${labelText}  ›`;
+        element.setAttribute('aria-valuenow', String(values.indexOf(selected)));
+        element.setAttribute('aria-valuetext', labelText);
+      },
+    };
+    this.register(frame, row, () => change(1));
+  }
+
+  private addMotionRow(frame: HTMLElement): void {
+    const { element, value } = this.rowShell('REDUCED MOTION');
+    element.setAttribute('role', 'switch');
+    element.setAttribute('aria-label', 'Reduced motion');
+
+    const toggle = (): void => {
+      setAccessibilityPreference(
+        'reducedMotion',
+        !getAccessibilityPreferences().reducedMotion
+      );
+      audio.play('tap');
+    };
+    const row: SettingRow = {
+      element,
+      nudge: toggle,
+      activate: toggle,
+      paint: () => {
+        const enabled = getAccessibilityPreferences().reducedMotion;
+        value.textContent = enabled ? 'On' : 'Off';
+        element.setAttribute('aria-checked', String(enabled));
+      },
+    };
+    this.register(frame, row, toggle);
+  }
+
+  private addResetRow(frame: HTMLElement): void {
+    const { element, value } = this.rowShell('RESET SAVE');
+    value.textContent = 'Erase all progress';
+    element.setAttribute('aria-label', 'Reset save data');
+
     let armed = false;
     const fire = (): void => {
       if (!armed) {
         armed = true;
-        resetValue.textContent = 'SURE? CLICK AGAIN';
+        value.textContent = 'Sure? Confirm again';
+        element.setAttribute('aria-label', 'Confirm reset of all save data');
         audio.play('reject');
         return;
       }
@@ -248,14 +401,12 @@ export class SystemPanel {
       audio.play('failed');
       window.setTimeout(() => window.location.reload(), 250);
     };
-    reset.addEventListener('mousedown', (event) => {
-      event.preventDefault();
-      fire();
-    });
-    this.fireReset = fire;
-    frame.appendChild(reset);
-
-    this.rows = [row, reset];
+    const row: SettingRow = {
+      element,
+      activate: fire,
+      paint: () => undefined,
+    };
+    this.register(frame, row, fire);
   }
 
   private buildCredits(frame: HTMLElement): void {
@@ -272,7 +423,6 @@ export class SystemPanel {
       const tag = document.createElement('b');
       tag.textContent = `${role}  `;
       line.appendChild(tag);
-      // textContent throughout - see the Safe UI note in the console surface.
       line.appendChild(document.createTextNode(who));
       body.appendChild(line);
     }
@@ -280,28 +430,58 @@ export class SystemPanel {
     this.rows = [];
   }
 
-  // -- state -----------------------------------------------------------------
+  // -- row mechanics ---------------------------------------------------------
+
+  private rowShell(labelText: string): {
+    element: HTMLButtonElement;
+    value: HTMLSpanElement;
+  } {
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.className = 'omni-sys__row';
+    element.tabIndex = -1;
+
+    const label = document.createElement('span');
+    label.className = 'omni-sys__label';
+    label.textContent = labelText;
+
+    const value = document.createElement('span');
+    value.className = 'omni-sys__value';
+    element.append(label, value);
+    return { element, value };
+  }
+
+  private register(frame: HTMLElement, row: SettingRow, onClick: () => void): void {
+    const index = this.rows.length;
+    this.rows.push(row);
+    row.element.addEventListener('click', () => {
+      this.focus(index);
+      onClick();
+      this.paint();
+    });
+    row.element.addEventListener('focus', () => {
+      this.focused = index;
+      this.paint();
+    });
+    frame.appendChild(row.element);
+  }
 
   private nudge(direction: number): void {
-    if (!this.rows.length) return;
-    const step = 1 / STEPS;
-    audio.setVolume(Math.round((audio.getVolume() + direction * step) * STEPS) / STEPS);
-    audio.play('tap');
+    this.rows[this.focused]?.nudge?.(direction);
+  }
+
+  private activate(): void {
+    const row = this.rows[this.focused];
+    if (!row) return;
+    if (row.activate) row.activate();
+    else row.nudge?.(1);
   }
 
   private paint(): void {
-    this.rows.forEach((row, i) => {
-      row.classList.toggle('omni-sys__row--on', i === this.focused);
+    this.rows.forEach((row, index) => {
+      row.element.classList.toggle('omni-sys__row--on', index === this.focused);
+      row.element.tabIndex = index === this.focused ? 0 : -1;
+      row.paint();
     });
-    if (!this.root) return;
-
-    const lit = Math.round(audio.getVolume() * STEPS);
-    this.root.querySelectorAll('.omni-sys__seg').forEach((seg, i) => {
-      seg.classList.toggle('omni-sys__seg--lit', i < lit);
-    });
-    const value = this.root.querySelector('.omni-sys__value');
-    // From the volume, not from the segment count. `lit * STEPS` happens to be right while
-    // STEPS is 10 and would silently start lying the moment anybody changed it.
-    if (value) value.textContent = `${Math.round(audio.getVolume() * 100)}%`;
   }
 }

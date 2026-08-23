@@ -119,12 +119,12 @@ export const SCAN_CSS = `
   border-left: 2px solid ${ACCENT.data};
 }
 .omni-scan__n {
-  font-size: 12px;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   letter-spacing: 0.06em;
   color: #9fd8ec;
 }
 .omni-scan__name {
-  font-size: 9px;
+  font-size: calc(9px + var(--omni-font-boost, 0px));
   letter-spacing: 0.2em;
   text-transform: uppercase;
   color: #5f93a8;
@@ -162,7 +162,7 @@ export const SCAN_CSS = `
   bottom: 0;
   padding: 6px 9px 7px;
   text-align: right;
-  font-size: 9px;
+  font-size: calc(9px + var(--omni-font-boost, 0px));
   line-height: 1.65;
   letter-spacing: 0.2em;
   text-transform: uppercase;
