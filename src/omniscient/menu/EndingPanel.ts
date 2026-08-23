@@ -27,6 +27,7 @@
  */
 
 import { audio } from '../audio/ConsoleAudio.js';
+import { accessibleTextSeconds } from '../accessibility/preferences.js';
 import { ACCENT } from '../art/palette.js';
 import { setCursorVisible } from '../art/cursor.js';
 import {
@@ -36,6 +37,7 @@ import {
 } from '../content/ending.js';
 
 import type { KnowledgeStore } from '../knowledge/KnowledgeStore.js';
+import type { NavigationCommand } from '../input/FocusNavigator.js';
 
 const STYLE_ID = 'omniscient-ending-panel';
 
@@ -393,40 +395,73 @@ export class EndingPanel {
   public update(deltaTime: number): void {
     if (!this.root || this.finished) return;
 
-    if (this.wait > 0) {
-      this.wait -= deltaTime;
-      return;
-    }
-
-    const step = this.steps[this.stepIndex];
-    if (!step) {
+    if (accessibleTextSeconds(1) === 0) {
+      for (const step of this.steps.slice(this.stepIndex)) {
+        this.activateMovement(step.movement);
+        if (step.kind === 'line') step.into.textContent = step.text;
+        else step.element.classList.add('omni-end__row--on');
+      }
+      this.stepIndex = this.steps.length;
+      audio.play('receive');
       this.finish();
       return;
     }
-    this.activateMovement(step.movement);
 
-    if (step.kind === 'row') {
-      step.element.classList.add('omni-end__row--on');
-      audio.play('tap');
-      this.stepIndex += 1;
-      this.wait = ROW_DWELL;
-      return;
-    }
+    this.wait -= deltaTime;
+    let budget = 512;
+    while (this.wait <= 0 && budget > 0) {
+      budget -= 1;
+      const step = this.steps[this.stepIndex];
+      if (!step) {
+        this.finish();
+        return;
+      }
+      this.activateMovement(step.movement);
 
-    if (this.charIndex === 0) audio.play('receive');
-    this.charIndex += 1;
-    step.into.textContent = step.text.slice(0, this.charIndex);
-    if (this.charIndex >= step.text.length) {
-      this.stepIndex += 1;
-      this.charIndex = 0;
-      this.wait = LINE_DWELL;
-    } else {
-      this.wait = CHAR_SECONDS;
+      if (step.kind === 'row') {
+        step.element.classList.add('omni-end__row--on');
+        audio.play('tap');
+        this.stepIndex += 1;
+        this.wait += accessibleTextSeconds(ROW_DWELL);
+        continue;
+      }
+
+      if (this.charIndex === 0) audio.play('receive');
+      this.charIndex += 1;
+      step.into.textContent = step.text.slice(0, this.charIndex);
+      if (this.charIndex >= step.text.length) {
+        this.stepIndex += 1;
+        this.charIndex = 0;
+        this.wait += accessibleTextSeconds(LINE_DWELL);
+      } else {
+        this.wait += accessibleTextSeconds(CHAR_SECONDS);
+      }
     }
   }
 
+  /** Route a controller through the ending's existing, deliberately skippable delivery. */
+  public handleNavigation(command: NavigationCommand): boolean {
+    if (!this.root) return false;
+    if (command === 'activate') {
+      this.handleKey(new KeyboardEvent('keydown', { code: 'Enter' }));
+      return true;
+    }
+    if (command === 'back') {
+      this.handleKey(new KeyboardEvent('keydown', { code: 'Escape' }));
+      return true;
+    }
+    return false;
+  }
+
   private handleKey(event: KeyboardEvent): void {
-    if (event.code === 'Enter' || event.code === 'Space') {
+    if (
+      event.code === 'Enter' ||
+      event.code === 'Space' ||
+      event.key === 'Enter' ||
+      event.key === 'Return' ||
+      event.key === ' ' ||
+      event.key === 'Spacebar'
+    ) {
       event.preventDefault();
       if (this.finished) {
         this.close();

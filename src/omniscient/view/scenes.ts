@@ -66,6 +66,7 @@ import type { FieldBounds } from './mowing.js';
 import { ACCENT, LIGHT, MAP, MAT } from '../art/palette.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
 import { createRng, jitter, range, seedFrom } from '../core/rng.js';
+import { getAccessibilityPreferences } from '../accessibility/preferences.js';
 
 import type { Rng } from '../core/rng.js';
 import { Ease } from '../core/tween.js';
@@ -2748,13 +2749,29 @@ function buildBeaconMast(scene: ContactScene): void {
       sweepRoot.rotation.y += deltaTime * 0.72;
       // Out for three and a half seconds in every eleven, hard on and hard off: a feed
       // being pulled down collapses, it does not fade.
-      const dark = !beaconSteady && beaconClock > 7.5;
+      const flash = getAccessibilityPreferences().flashIntensity;
+      const dropout = !beaconSteady && beaconClock > 7.5;
+      let strength = dropout ? (flash === 'reduced' ? 0.3 : 0) : 1;
+      if (flash === 'off' && !beaconSteady) {
+        // Keep the fault visible without a sudden full-frame luminance edge. It falls and
+        // recovers over a second, then holds at a readable quarter-output floor.
+        if (beaconClock < 6.5) strength = 1;
+        else if (beaconClock < 7.5) {
+          strength = 1 - THREE.MathUtils.smoothstep(beaconClock, 6.5, 7.5) * 0.75;
+        } else if (beaconClock < 9.8) strength = 0.25;
+        else {
+          strength = 0.25 + THREE.MathUtils.smoothstep(beaconClock, 9.8, 11) * 0.75;
+        }
+      }
+      const dark = strength < 0.48;
       lens.material = dark ? MAT.beaconDark : MAT.beaconLit;
-      glow.intensity = dark ? 0 : 15;
+      glow.intensity = 15 * strength;
       // The bloom goes with it. A glow left hanging round a dead lens is the single most
       // obvious way for this whole effect to look like a bug.
-      for (const shell of halo) shell.visible = !dark;
-      sweepRoot.visible = !dark;
+      for (const [index, shell] of halo.entries()) {
+        shell.visible = strength > (index === 0 ? 0.18 : 0.42);
+      }
+      sweepRoot.visible = strength > 0.42;
     },
     actions: {
       /** Steady again, once the two sets are separated. */

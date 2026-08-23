@@ -29,6 +29,11 @@
 
 import * as THREE from 'three';
 
+import {
+  accessibleScreenShakeScale,
+  getAccessibilityPreferences,
+} from '../accessibility/preferences.js';
+
 // Type-only: nothing here calls into the engine, it only names its node types. Which also
 // means this module loads outside a browser, and the cut can be tested without a scene.
 import type * as ENGINE from '@gnsx/genesys.js';
@@ -452,6 +457,7 @@ export class MowerDrive {
   /** Blades on. The rotor spins and the beacon flashes only while this is true. */
   public engage(on: boolean): void {
     this.engaged = on;
+    if (!on) this.mower.beacon.visible = false;
   }
 
   /**
@@ -521,8 +527,11 @@ export class MowerDrive {
     this.spin += (2.5 + Math.abs(throttle) * 26) * deltaTime;
     this.mower.rotor.rotation.y = this.spin;
 
-    this.beaconPhase = (this.beaconPhase + deltaTime * 3.4) % (Math.PI * 2);
-    this.mower.beacon.visible = Math.sin(this.beaconPhase) > -0.35;
+    const flash = getAccessibilityPreferences().flashIntensity;
+    const beaconRate = flash === 'reduced' ? 1.7 : 3.4;
+    this.beaconPhase = (this.beaconPhase + deltaTime * beaconRate) % (Math.PI * 2);
+    this.mower.beacon.visible =
+      flash === 'off' || Math.sin(this.beaconPhase) > (flash === 'reduced' ? -0.7 : -0.35);
 
     /*
      * Cut along the segment travelled, not at the point arrived at.
@@ -682,12 +691,13 @@ export class MowerDrive {
   public shot(): { position: THREE.Vector3; target: THREE.Vector3 } {
     const back = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
     const right = new THREE.Vector3(back.z, 0, -back.x);
-    const kick = Math.sin(this.shudder * 83) * this.impact;
+    const cameraImpact = this.impact * accessibleScreenShakeScale();
+    const kick = Math.sin(this.shudder * 83) * cameraImpact;
     return {
       position: new THREE.Vector3(
-        this.at.x - back.x * (1.15 + this.impact * 0.06) + right.x * kick * 0.025,
-        DECK_Y + 0.55 + this.impact * 0.035,
-        this.at.z - back.z * (1.15 + this.impact * 0.06) + right.z * kick * 0.025
+        this.at.x - back.x * (1.15 + cameraImpact * 0.06) + right.x * kick * 0.025,
+        DECK_Y + 0.55 + cameraImpact * 0.035,
+        this.at.z - back.z * (1.15 + cameraImpact * 0.06) + right.z * kick * 0.025
       ),
       target: new THREE.Vector3(this.at.x + back.x * 2.2, 0.12, this.at.z + back.z * 2.2),
     };

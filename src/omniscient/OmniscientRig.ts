@@ -69,6 +69,7 @@ import { SurfaceGroup } from './link/SurfaceGroup.js';
 import { GlobeScreen } from './globe/GlobeScreen.js';
 import { KELLER } from './content/contacts.js';
 import { M4SSRig } from '../m4ss/M4SSRig.js';
+import { FocusNavigator } from './input/FocusNavigator.js';
 import { Picker } from './input/Picker.js';
 import { MainMenu } from './menu/MainMenu.js';
 import { drawMenuLabel } from './crt/menuLabel.js';
@@ -125,6 +126,11 @@ import { buildContactScene } from './view/scenes.js';
 import type { RemoteUnit } from './view/ContactScene.js';
 
 import type { Signal } from './crt/GlobeView.js';
+import type {
+  NavigationCommand,
+  NavigationDirection,
+  NavigationMode,
+} from './input/FocusNavigator.js';
 import type { MenuAction } from './menu/MainMenu.js';
 import type { Contact, MissionDefinition, MissionFailure } from './mission/types.js';
 import { Urgency } from './mission/types.js';
@@ -358,6 +364,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private screen: Screen = Screen.Tree;
   private menu: MainMenu | null = null;
   private picker: Picker | null = null;
+  private navigator: FocusNavigator | null = null;
   private globeScreen: GlobeScreen | null = null;
   /** Seconds until the globe screen takes over from the push-in. */
   private globeHandoff = 0;
@@ -1766,6 +1773,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
     );
 
     this.attachPicker(world, container);
+    this.navigator = new FocusNavigator(container, {
+      mode: () => this.navigationMode(),
+      command: (command) => this.handleNavigation(command),
+    });
+    world.inputManager?.addInputHandler(this.navigator);
 
     // Held so it can be taken off again in endPlay, rather than outliving the rig.
     this.onOverviewKey = (event: KeyboardEvent): void => {
@@ -1839,6 +1851,58 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (this.facilityPlate) this.facilityPlate.visible = next === Phase.Menu;
   }
 
+  /** Which interaction language owns directions and confirm on this frame. */
+  private navigationMode(): NavigationMode {
+    if (this.boot) return 'boot';
+    if (this.systemPanel?.isOpen) return 'system';
+    if (this.endingPanel) return 'ending';
+    if (this.m4ss || this.driving || this.leaving) return 'disabled';
+    if (this.phase === Phase.Menu) return this.menu?.canNavigate ? 'menu' : 'disabled';
+    if (this.phase === Phase.Choosing) {
+      return this.globeScreen?.canNavigate ? 'globe' : 'disabled';
+    }
+    if (this.phase === Phase.Contact && this.phone?.connected) return 'dom';
+    return 'disabled';
+  }
+
+  /** Screen-specific meaning; DOM spatial movement is handled inside FocusNavigator. */
+  private handleNavigation(command: NavigationCommand): boolean {
+    const mode = this.navigationMode();
+    if (mode === 'boot') {
+      if (command !== 'activate') return false;
+      this.boot?.begin();
+      return true;
+    }
+    if (mode === 'system') return this.systemPanel?.handleNavigation(command) ?? false;
+    if (mode === 'ending') return this.endingPanel?.handleNavigation(command) ?? false;
+
+    if (mode === 'menu') {
+      if (command === 'activate') return this.menu?.activateFocused() ?? false;
+      if (this.isDirection(command)) {
+        const direction = command === 'up' || command === 'left' ? -1 : 1;
+        return this.menu?.focusNext(direction) ?? false;
+      }
+      return false;
+    }
+
+    if (mode === 'globe') {
+      if (command === 'back') {
+        this.returnToMenu();
+        return true;
+      }
+      if (command === 'activate') return this.globeScreen?.activateFocused() ?? false;
+      if (this.isDirection(command)) {
+        const direction = command === 'up' || command === 'left' ? -1 : 1;
+        return this.globeScreen?.focusNext(direction) ?? false;
+      }
+    }
+    return false;
+  }
+
+  private isDirection(command: NavigationCommand): command is NavigationDirection {
+    return command === 'up' || command === 'down' || command === 'left' || command === 'right';
+  }
+
   private attachPicker(world: ENGINE.World, container: HTMLElement): void {
     this.picker = new Picker(() => this.camera?.getCamera() ?? null, container);
     world.inputManager?.addInputHandler(this.picker);
@@ -1881,7 +1945,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       const world = this.getWorld();
       const container = world?.gameContainer;
       if (!container) return;
-      this.systemPanel ??= new SystemPanel(container);
+      this.systemPanel ??= new SystemPanel(container, () => this.menu?.releaseFocus());
       this.systemPanel.open(action);
       return;
     }
@@ -3563,6 +3627,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   public override tickPrePhysics(deltaTime: number): void {
     super.tickPrePhysics(deltaTime);
+    this.navigator?.update(deltaTime);
 
     /*
      * The post-process pipeline is built lazily on the first render, so the retro pass
@@ -3728,6 +3793,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   public override endPlay(): boolean {
+    if (this.navigator) {
+      this.getWorld()?.inputManager?.removeInputHandler(this.navigator);
+      this.navigator.dispose();
+      this.navigator = null;
+    }
     if (this.onOverviewKey) window.removeEventListener('keydown', this.onOverviewKey);
     this.onOverviewKey = null;
     /*

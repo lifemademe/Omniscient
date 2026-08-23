@@ -11,13 +11,23 @@ import { ACCENT } from '../art/palette.js';
 import { audio } from '../audio/ConsoleAudio.js';
 import {
   DISPLAY_FILTERS,
+  FLASH_INTENSITIES,
+  SCREEN_SHAKES,
   TEXT_SIZES,
+  TEXT_SPEEDS,
   getAccessibilityPreferences,
   setAccessibilityPreference,
 } from '../accessibility/preferences.js';
 import { clearM4ssStage, clearSave } from '../session/persistence.js';
 
-import type { DisplayFilter, TextSize } from '../accessibility/preferences.js';
+import type {
+  DisplayFilter,
+  FlashIntensity,
+  ScreenShake,
+  TextSize,
+  TextSpeed,
+} from '../accessibility/preferences.js';
+import type { NavigationCommand } from '../input/FocusNavigator.js';
 
 const STYLE_ID = 'omniscient-system-panel';
 const TITLE_ID = 'omniscient-system-panel-title';
@@ -77,7 +87,7 @@ const CSS = `
   box-shadow: inset 3px 0 0 ${ACCENT.knowledge};
 }
 .omni-sys__label {
-  flex: 0 0 150px;
+  flex: 0 0 184px;
   font-size: calc(12px + var(--omni-font-boost, 0px));
   letter-spacing: 0.1em;
 }
@@ -137,6 +147,24 @@ const FILTER_LABELS: Readonly<Record<DisplayFilter, string>> = {
   off: 'Off',
 };
 
+const TEXT_SPEED_LABELS: Readonly<Record<TextSpeed, string>> = {
+  standard: 'Standard',
+  fast: 'Fast',
+  instant: 'Instant',
+};
+
+const SHAKE_LABELS: Readonly<Record<ScreenShake, string>> = {
+  full: 'Full',
+  reduced: 'Reduced',
+  off: 'Off',
+};
+
+const FLASH_LABELS: Readonly<Record<FlashIntensity, string>> = {
+  full: 'Full',
+  reduced: 'Reduced',
+  off: 'Off',
+};
+
 /** A modal over the menu. Escape always returns focus to wherever the player came from. */
 export class SystemPanel {
   private root: HTMLDivElement | null = null;
@@ -145,7 +173,10 @@ export class SystemPanel {
   private rows: SettingRow[] = [];
   private previouslyFocused: HTMLElement | null = null;
 
-  public constructor(private readonly container: HTMLElement) {
+  public constructor(
+    private readonly container: HTMLElement,
+    private readonly onClosed?: () => void
+  ) {
     if (!document.getElementById(STYLE_ID)) {
       const style = document.createElement('style');
       style.id = STYLE_ID;
@@ -207,6 +238,7 @@ export class SystemPanel {
   }
 
   public close(): void {
+    const wasOpen = this.root !== null;
     if (this.onKey) window.removeEventListener('keydown', this.onKey);
     this.onKey = null;
     this.root?.remove();
@@ -214,6 +246,25 @@ export class SystemPanel {
     this.rows = [];
     this.previouslyFocused?.focus?.({ preventScroll: true });
     this.previouslyFocused = null;
+    if (wasOpen) this.onClosed?.();
+  }
+
+  /** The same row mechanics used by the keyboard, exposed to the shared gamepad router. */
+  public handleNavigation(command: NavigationCommand): boolean {
+    if (!this.root) return false;
+    if (command === 'back') {
+      this.close();
+      return true;
+    }
+    if (!this.rows.length) return false;
+    if (command === 'up') this.moveFocus(-1);
+    else if (command === 'down') this.moveFocus(1);
+    else if (command === 'left') this.nudge(-1);
+    else if (command === 'right') this.nudge(1);
+    else if (command === 'activate') this.activate();
+    else return false;
+    this.paint();
+    return true;
   }
 
   private handleKey(event: KeyboardEvent): void {
@@ -231,7 +282,12 @@ export class SystemPanel {
     else if (event.key === 'ArrowUp') this.moveFocus(-1);
     else if (event.key === 'ArrowLeft') this.nudge(-1);
     else if (event.key === 'ArrowRight') this.nudge(1);
-    else if (event.key === 'Enter' || event.key === ' ') this.activate();
+    else if (
+      event.key === 'Enter' ||
+      event.key === 'Return' ||
+      event.key === ' ' ||
+      event.key === 'Spacebar'
+    ) this.activate();
     else handled = false;
 
     if (!handled) return;
@@ -265,6 +321,14 @@ export class SystemPanel {
     );
     this.addChoiceRow(
       frame,
+      'TEXT SPEED',
+      TEXT_SPEEDS,
+      () => getAccessibilityPreferences().textSpeed,
+      (value) => setAccessibilityPreference('textSpeed', value),
+      (value) => TEXT_SPEED_LABELS[value]
+    );
+    this.addChoiceRow(
+      frame,
       'DISPLAY FILTER',
       DISPLAY_FILTERS,
       () => getAccessibilityPreferences().displayFilter,
@@ -272,6 +336,22 @@ export class SystemPanel {
       (value) => FILTER_LABELS[value]
     );
     this.addMotionRow(frame);
+    this.addChoiceRow(
+      frame,
+      'SCREEN SHAKE',
+      SCREEN_SHAKES,
+      () => getAccessibilityPreferences().screenShake,
+      (value) => setAccessibilityPreference('screenShake', value),
+      (value) => SHAKE_LABELS[value]
+    );
+    this.addChoiceRow(
+      frame,
+      'HIGH-INTENSITY FLASHES',
+      FLASH_INTENSITIES,
+      () => getAccessibilityPreferences().flashIntensity,
+      (value) => setAccessibilityPreference('flashIntensity', value),
+      (value) => FLASH_LABELS[value]
+    );
     this.addResetRow(frame);
   }
 

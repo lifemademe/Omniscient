@@ -14,6 +14,7 @@
  */
 
 import { injectConsoleChrome } from '../link/console-chrome.js';
+import { audio } from '../audio/ConsoleAudio.js';
 
 import { GlobeView, SignalState } from '../crt/GlobeView.js';
 
@@ -319,6 +320,10 @@ const GLOBE_CSS = `
   cursor: pointer;
 }
 .omni-globe__answer:hover { background: #14301f; color: #d8ffb0; }
+.omni-globe__answer:focus-visible {
+  outline: 2px solid #d8ffb0;
+  outline-offset: 3px;
+}
 .omni-globe__wait { color: #c2483a; letter-spacing: 0.1em; text-transform: uppercase; }
 /* CRT treatment - §221, since RetroEffect is unavailable on WebGL. */
 .omni-globe__stage::after {
@@ -510,6 +515,12 @@ export class GlobeScreen {
 
   public get isSelecting(): boolean {
     return this.selectedId !== null;
+  }
+
+  public get canNavigate(): boolean {
+    return Boolean(
+      this.inputEnabled && this.root && this.root.style.display !== 'none'
+    );
   }
 
   public attach(
@@ -718,8 +729,40 @@ export class GlobeScreen {
 
   /** Select and flare a signal as a machine-owned reveal rather than a pointer action. */
   public focusSignal(id: string): void {
-    this.selectedId = id;
+    this.selectSignal(id, false, true);
     this.globe.flare(id);
+  }
+
+  /** Cycle every unresolved, revealed carrier and turn it into view. */
+  public focusNext(direction: number): boolean {
+    if (!this.canNavigate) return false;
+    const available = this.signals.filter(
+      (signal) =>
+        !signal.hidden &&
+        signal.state !== SignalState.Resolved &&
+        signal.state !== SignalState.Dormant
+    );
+    if (!available.length) return false;
+
+    const at = available.findIndex((signal) => signal.id === this.selectedId);
+    const next =
+      at < 0
+        ? direction < 0
+          ? available.length - 1
+          : 0
+        : (at + available.length + Math.sign(direction)) % available.length;
+    this.selectSignal(available[next].id, true, true);
+    return true;
+  }
+
+  /** Answer the focused carrier, or establish focus on the first one. */
+  public activateFocused(): boolean {
+    if (!this.canNavigate) return false;
+    if (!this.selectedId) return this.focusNext(1);
+    const signal = this.signals.find((candidate) => candidate.id === this.selectedId);
+    if (!signal || !this.openable.has(signal.id)) return false;
+    this.onAnswer(signal.id);
+    return true;
   }
 
   public update(deltaTime: number): void {
@@ -933,11 +976,19 @@ export class GlobeScreen {
       }
     }
 
-    this.selectedId = best?.id ?? null;
+    this.selectSignal(best?.id ?? null, true);
   }
 
   private clearSelection(): void {
     this.selectedId = null;
+  }
+
+  private selectSignal(id: string | null, acknowledge = false, face = false): void {
+    if (this.selectedId === id) return;
+    this.selectedId = id;
+    if (!id) return;
+    if (face) this.globe.faceSignal(id);
+    if (acknowledge) audio.play('tap');
   }
 
   /**

@@ -20,6 +20,7 @@
  */
 
 import { injectConsoleChrome } from './console-chrome.js';
+import { accessibleTextMilliseconds } from '../accessibility/preferences.js';
 import { audio } from '../audio/ConsoleAudio.js';
 
 import { createPhotographs } from './photographs.js';
@@ -1110,6 +1111,12 @@ export class LocalSurface implements InterventionSurface {
      * a second is somebody who has finished a sentence.
      */
     let shown = 0;
+    const interval = accessibleTextMilliseconds(18);
+    if (interval === 0) {
+      element.textContent = text;
+      this.scheduleCompact(3000);
+      return;
+    }
     this.objectiveTimer = window.setInterval(() => {
       shown += 1;
       element.textContent = `${text.slice(0, shown)}${shown < text.length ? '█' : ''}`;
@@ -1122,9 +1129,9 @@ export class LocalSurface implements InterventionSurface {
             element.textContent = text;
             this.scheduleCompact(3000);
           }
-        }, 520);
+        }, accessibleTextMilliseconds(520));
       }
-    }, 18);
+    }, interval);
   }
 
   private buildCard(label: string): ReadoutCard {

@@ -7,7 +7,7 @@ Original review scope: analysis and future-work instructions. Implementation beg
 
 ## Implementation status — 2026-08-23
 
-Five production passes have now been applied to the runtime TypeScript systems. No editor-authored scene assets were changed.
+Seven production passes have now been applied to the runtime TypeScript systems. No editor-authored scene assets were changed.
 
 Completed in pass one:
 
@@ -58,6 +58,29 @@ Completed in pass five (accessibility and input-resilience pass):
 - Runtime teardown now closes an open system panel and removes the accessibility subscription, preventing focus/listener accumulation across repeated editor play sessions.
 
 Verification completed after pass five: `pnpm lint`, `pnpm build`, Sandbox Studio `buildProject`, and the authoritative editor error store all completed with zero errors or warnings. A live settings pass verified mouse opening, arrow navigation, Tab traversal, live text reflow, live `FULL`→`SOFT` CRT retargeting, and Space activation of reduced motion. Test preferences were restored to `STANDARD / FULL / OFF`, and Sandbox Studio is back in edit mode. Still outstanding for a true accessibility sign-off: full controller traversal/remapping, independent shake and flash controls, non-dialogue sound captions, text-speed options, aspect-ratio/720p safe-area checks, and minimum-spec release profiling.
+
+Completed in pass six (shared keyboard/controller continuity pass):
+
+- One Genesys input handler now owns navigation modality across the physical 3D front door and the screen-space console. Keyboard arrows/Tab/Enter/Space/Escape and gamepad D-pad/stick/bumpers/A/B route through the active boot, menu, globe, contact, settings, or ending state instead of leaking into inactive gameplay systems.
+- The main menu's controller focus is physical rather than a detached outline: moving focus changes the selected plate, CRT label, and cable route; confirming seats the cable and invokes the same authored connection sequence as pointer input. Closing SETTINGS restores this machine focus correctly.
+- Globe navigation now cycles only actionable signals, turns the carrier to face the selected request, exposes its tooltip, and answers through the existing signal path. The Machine remains an explicit back destination instead of an invisible keyboard escape hatch.
+- Contact View and other DOM-authored console surfaces now receive spatial focus with a highly visible phosphor rail. Semantic activation bridges both conventional click controls and the project's intentional `mousedown`-commit controls without firing either twice; text inputs keep native editing behavior.
+- Custom physical instruments can opt into directional navigation. The flashlight chase now exposes slider semantics, value text, arrow/D-pad aiming, and a player-facing instruction that describes moving the light ahead of the subject.
+- Gamepad prompts appear only after actual gamepad input, keyboard/pointer modality clears them, held directions repeat at a controlled cadence, and direct-action M4SS/mower states deliberately retain their existing gameplay controls.
+- Ending and boot actions now expose the same confirm/back contract as the rest of the game, including legacy browser/host aliases for Return and Space discovered during the live editor pass.
+
+Verification completed after pass six: `pnpm lint`, `pnpm build`, Sandbox Studio `buildProject`, and the authoritative editor diagnostics all completed with zero errors or warnings. A live Sandbox Studio pass verified Return through boot, arrow traversal of the physical menu with synchronized plate/CRT/cable feedback, keyboard SETTINGS activation and row navigation, globe signal selection/rotation/answering, and entry into Contact View. The live pass also caught and corrected legacy Return naming and a focus-discovery edge case caused by Contact View's intentionally pointer-transparent layout shell. Sandbox Studio was returned to edit mode. A real controller, packaged-build Back/Escape behavior, every mission-specific instrument, controller remapping, and 720p/ultrawide safe areas still require hands-on release QA.
+
+Completed in pass seven (independent comfort-controls pass):
+
+- The persistent accessibility model now adds independent `SCREEN SHAKE`, `HIGH-INTENSITY FLASHES`, and `TEXT SPEED` choices. Existing settings saves migrate safely; a player already using reduced motion defaults to no camera shake without coupling the controls permanently.
+- SETTINGS now fits eight keyboard/controller-accessible rows at 1280×720: volume, text size, text speed (`STANDARD`, `FAST`, `INSTANT`), display filter, reduced motion, screen shake (`FULL`, `REDUCED`, `OFF`), flash intensity (`FULL`, `REDUCED`, `OFF`), and the protected save reset.
+- Screen-shake strength applies only to camera displacement in M4SS impacts and mower collisions. Physical chassis recoil, contact state, sound, particles, and other world feedback remain intact, so `OFF` removes discomfort without making impacts unreadable.
+- Bright-event alternatives are authored instead of deleted. M4SS stage swaps use a portal midtone or dark veil, the machine pull-back becomes a lower-intensity or dark iris, the mower beacon slows or holds steady, and the harbour beacon's hard dropout becomes a lower-contrast or smoothly dimmed fault. Console emphasis pulses stop or reduce while their final state remains visible.
+- Text speed now reaches the boot self-test/title, Contact View objective keying, scan-analysis readouts and target acquisition, and the final transmission. `FAST` scales the authored cadence to 42%; `INSTANT` lands complete text and keeps the normal reading hold rather than collapsing the surrounding UI immediately.
+- Finale typing now carries fractional frame time and can reveal multiple characters on a slow frame. This removes frame-rate-dependent pacing while preserving receive cues, line dwells, movement boundaries, and manual fast-forward.
+
+Verification completed after pass seven: `pnpm lint`, `pnpm build`, Sandbox Studio `buildProject`, and the authoritative editor error store all completed with zero errors or warnings. A live 1280×720 Sandbox Studio pass verified the complete eight-row layout, focus rail, live `STANDARD`→`FAST`, `FULL`→`REDUCED` shake, and `FULL`→`OFF` flash changes. Test values were restored to `STANDARD / FULL / FULL`, the modal closed cleanly, and Sandbox Studio returned to edit mode. Release QA still needs physical controller testing, packaged-build Back/Escape behavior, direct photosensitivity review of every mission route, 720p/ultrawide safe-area sweeps, and minimum-spec profiling.
 
 ## Executive verdict
 

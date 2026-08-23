@@ -23,6 +23,10 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
 import { decorMesh } from '../omniscient/art/mesh.js';
+import {
+  accessibleScreenShakeScale,
+  getAccessibilityPreferences,
+} from '../omniscient/accessibility/preferences.js';
 import { buildSurface } from './surface.js';
 import { teardrop } from './swingShape.js';
 import { freshLab } from './lab.js';
@@ -3221,10 +3225,15 @@ export class M4SSRig extends ENGINE.SceneNode {
     const container = this.getWorld()?.gameContainer;
     if (container) {
       const veil = document.createElement('div');
-      // The portal's own colour, not white: a white flash reads as a screenshot being
-      // taken. This reads as being inside the thing you just entered.
-      veil.style.cssText =
-        'position:absolute;inset:0;background:#bff2e4;opacity:0;pointer-events:none;z-index:30';
+      /*
+       * Preserve the occlusion the stage swap needs without forcing a bright full-frame
+       * event. Reduced uses the portal's midtone; off becomes a dark iris. Both still hide
+       * the rebuild, so the comfort setting never exposes a one-frame level pop.
+       */
+      const flash = getAccessibilityPreferences().flashIntensity;
+      const veilColour =
+        flash === 'full' ? '#bff2e4' : flash === 'reduced' ? '#52766d' : '#06100d';
+      veil.style.cssText = `position:absolute;inset:0;background:${veilColour};opacity:0;pointer-events:none;z-index:30`;
       container.appendChild(veil);
       this.warpVeil = veil;
     }
@@ -4231,10 +4240,11 @@ export class M4SSRig extends ENGINE.SceneNode {
      * - the point is that the DOOR was heavy, not that the camera operator was shot.
      * Deterministic (a sine, not a random walk), so captures are reproducible.
      */
-    if (this.shake > 0) {
+    const shakeScale = accessibleScreenShakeScale();
+    if (this.shake > 0 && shakeScale > 0) {
       const k = this.shake / 0.35;
-      at.x += Math.sin(this.shake * 70) * 5 * k;
-      at.y += Math.cos(this.shake * 55) * 3 * k;
+      at.x += Math.sin(this.shake * 70) * 5 * k * shakeScale;
+      at.y += Math.cos(this.shake * 55) * 3 * k * shakeScale;
     }
     /*
      * Slow motion pushes the camera in four percent. Together with the veil it is the

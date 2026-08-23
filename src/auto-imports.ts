@@ -89,6 +89,7 @@ import './omniscient/geometry/wildlife.js';
 import './omniscient/geometry/wireCity.js';
 import './omniscient/geometry/workshop.js';
 import './omniscient/globe/GlobeScreen.js';
+import './omniscient/input/FocusNavigator.js';
 import './omniscient/input/Picker.js';
 import './omniscient/knowledge/KnowledgeStore.js';
 import './omniscient/link/BoardPanel.js';

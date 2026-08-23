@@ -33,6 +33,7 @@
 
 import * as THREE from 'three';
 
+import { accessibleTextMilliseconds } from '../accessibility/preferences.js';
 import { ACCENT } from '../art/palette.js';
 
 export const SCAN_STYLE_ID = 'omniscient-scan-targets';
@@ -308,9 +309,7 @@ export class ScanTargets {
     const full = lines.join('\n');
     let shown = 0;
 
-    this.statusTyper = window.setInterval(() => {
-      shown += 1;
-      const text = full.slice(0, shown);
+    const paint = (text: string): void => {
       status.replaceChildren();
       for (const [i, line] of text.split('\n').entries()) {
         if (i > 0) status.appendChild(document.createElement('br'));
@@ -325,8 +324,19 @@ export class ScanTargets {
         value.textContent = line.slice(cut + 2);
         status.appendChild(value);
       }
+    };
+
+    const interval = accessibleTextMilliseconds(26);
+    if (interval === 0) {
+      paint(full);
+      return;
+    }
+
+    this.statusTyper = window.setInterval(() => {
+      shown += 1;
+      paint(full.slice(0, shown));
       if (shown >= full.length) window.clearInterval(this.statusTyper);
-    }, 26);
+    }, interval);
   }
 
   /**
@@ -376,7 +386,10 @@ export class ScanTargets {
 
       // Staggered, so they register one after another instead of arriving as a set. The
       // machine is finding them, not remembering them.
-      window.setTimeout(() => root.classList.add('omni-scan__t--on'), 240 + index * 260);
+      window.setTimeout(
+        () => root.classList.add('omni-scan__t--on'),
+        accessibleTextMilliseconds(240 + index * 260)
+      );
 
       /*
        * Measure the object once.

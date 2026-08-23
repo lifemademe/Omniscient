@@ -205,6 +205,13 @@ export class GlobeView {
     this.rotation = (this.rotation + radians) % (Math.PI * 2);
   }
 
+  /** Put one signal on the front meridian for non-pointer navigation. */
+  public faceSignal(id: string): void {
+    const signal = this.signals.find((candidate) => candidate.id === id);
+    if (!signal || signal.offworld) return;
+    this.rotation = (-signal.longitude * DEG) % (Math.PI * 2);
+  }
+
   public setSignals(signals: Signal[]): void {
     this.signals = signals;
   }

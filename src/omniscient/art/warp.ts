@@ -33,6 +33,7 @@
  * is moving fastest.
  */
 
+import { getAccessibilityPreferences } from '../accessibility/preferences.js';
 import { ACCENT } from './palette.js';
 
 const STYLE_ID = 'omniscient-warp';
@@ -102,6 +103,14 @@ export function playWarp(container: HTMLElement, seconds = 3.4): void {
   const streaks = document.createElement('div');
   streaks.className = 'omni-warp__streaks';
 
+  const flash = getAccessibilityPreferences().flashIntensity;
+  if (flash === 'reduced') streaks.style.opacity = '0.28';
+  if (flash === 'off') {
+    edge.style.background =
+      'radial-gradient(ellipse at center, rgba(2,8,5,0) 30%, rgba(2,8,5,.34) 54%, rgba(1,5,3,.74) 76%, rgba(0,0,0,.94) 100%)';
+    streaks.style.display = 'none';
+  }
+
   root.append(edge, streaks);
   container.appendChild(root);
 
@@ -123,11 +132,13 @@ export function playWarp(container: HTMLElement, seconds = 3.4): void {
    * slowly. The hold is what makes it read as a thing happening rather than a cut. Peak is
    * 0.62, because this is a veil over the room and not a curtain across it.
    */
+  const peak = flash === 'full' ? 0.62 : flash === 'reduced' ? 0.34 : 0.76;
+  const hold = flash === 'full' ? 0.55 : flash === 'reduced' ? 0.28 : 0.68;
   const rush = root.animate(
     [
       { opacity: 0 },
-      { opacity: 0.62, offset: 0.11 },
-      { opacity: 0.55, offset: 0.62 },
+      { opacity: peak, offset: 0.11 },
+      { opacity: hold, offset: 0.62 },
       { opacity: 0 },
     ],
     { duration: seconds * 1000, easing: 'ease-in-out', fill: 'forwards' }

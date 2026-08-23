@@ -31,6 +31,7 @@ import { DISTRICT_CITY } from '../content/district-07.js';
 import { FEED_STYLES, feedOverlay } from './FeedOverlay.js';
 
 import type { BeamState } from '../mission/beam.js';
+import type { NavigationDirection } from '../input/FocusNavigator.js';
 
 import type { ClueId, Evidence } from '../mission/traces.js';
 import { createKitPlate } from './kit.js';
@@ -2049,6 +2050,12 @@ export class BoardPanel {
   private buildBeam(): void {
     const track = document.createElement('div');
     track.className = 'omni-board__track';
+    track.tabIndex = 0;
+    track.setAttribute('role', 'slider');
+    track.setAttribute('aria-label', 'Flashlight aim');
+    track.setAttribute('aria-valuemin', '-100');
+    track.setAttribute('aria-valuemax', '100');
+    track.dataset.omniNavAxis = 'horizontal';
 
     const beam = document.createElement('div');
     beam.className = 'omni-board__beam';
@@ -2067,12 +2074,12 @@ export class BoardPanel {
       if (!this.chase || this.chase.blinded || this.chase.caught) return;
       const rect = track.getBoundingClientRect();
       const to = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-      audio.play('tap');
-      // Straight up to the world as well as into the local simulation, so the torch in the
-      // diorama swings at the same moment the wedge on this panel does.
-      this.dispatch({ kind: 'aim', to: Math.max(-1, Math.min(1, to)) });
-      this.calls.push({ at: this.chase.elapsed, to });
-      this.chase = { ...this.chase, aim: Math.max(-1, Math.min(1, to)) };
+      this.aimBeam(to);
+    });
+    track.addEventListener('omni-navigate', (event) => {
+      const direction = (event as CustomEvent<NavigationDirection>).detail;
+      if (direction !== 'left' && direction !== 'right') return;
+      this.aimBeam((this.chase?.aim ?? 0) + (direction === 'left' ? -0.14 : 0.14));
     });
 
     this.grid.appendChild(track);
@@ -2080,6 +2087,17 @@ export class BoardPanel {
     this.chase = initialBeam();
     this.calls = [];
     this.startChase();
+  }
+
+  private aimBeam(to: number): void {
+    if (!this.chase || this.chase.blinded || this.chase.caught) return;
+    const clamped = Math.max(-1, Math.min(1, to));
+    audio.play('tap');
+    // Straight up to the world as well as into the local simulation, so the torch in the
+    // diorama swings at the same moment the wedge on this panel does.
+    this.dispatch({ kind: 'aim', to: clamped });
+    this.calls.push({ at: this.chase.elapsed, to: clamped });
+    this.chase = { ...this.chase, aim: clamped };
   }
 
   /**
@@ -2123,6 +2141,7 @@ export class BoardPanel {
 
     const place = (value: number): string => `${((value + 1) / 2) * 100}%`;
     parts.beam.style.left = place(state.beam);
+    parts.track.setAttribute('aria-valuenow', String(Math.round(state.aim * 100)));
     parts.follower.style.left = place(state.follower);
     parts.follower.classList.toggle(
       'omni-board__follower--lit',
@@ -2135,7 +2154,7 @@ export class BoardPanel {
       ? 'he has turned away'
       : state.caught
         ? 'he has reached her'
-        : 'click where the light should go';
+        : 'move the light ahead of him';
   }
 
   /**

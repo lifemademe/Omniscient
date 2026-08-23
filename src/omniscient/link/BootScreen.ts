@@ -35,6 +35,11 @@
  * this screen has to work as hard.
  */
 
+import {
+  accessibleCameraDuration,
+  accessibleTextMilliseconds,
+} from '../accessibility/preferences.js';
+
 const STYLE_ID = 'omniscient-boot-styles';
 
 const CSS = `
@@ -178,6 +183,8 @@ const WIDTH = 34;
 const RULE = WIDTH + 2;
 
 export interface BootScreen {
+  /** Begin from a non-pointer control, such as a gamepad face button. */
+  begin: () => void;
   /** Take it down early - endPlay, or a scene change nobody expected. */
   dispose: () => void;
 }
@@ -238,7 +245,7 @@ export function showBoot(container: HTMLElement, onBegin: () => void): BootScree
 
   const timers: number[] = [];
   const after = (ms: number, run: () => void): void => {
-    timers.push(window.setTimeout(run, ms));
+    timers.push(window.setTimeout(run, accessibleTextMilliseconds(ms)));
   };
 
   /*
@@ -264,12 +271,17 @@ export function showBoot(container: HTMLElement, onBegin: () => void): BootScree
 
   const NAME = 'OMNISCIENT_';
   after(at + 240, () => {
+    const interval = accessibleTextMilliseconds(55);
+    if (interval === 0) {
+      title.textContent = NAME;
+      return;
+    }
     let shown = 0;
     const typing = window.setInterval(() => {
       shown += 1;
       title.textContent = NAME.slice(0, shown);
       if (shown >= NAME.length) window.clearInterval(typing);
-    }, 55);
+    }, interval);
     timers.push(typing);
   });
 
@@ -285,7 +297,10 @@ export function showBoot(container: HTMLElement, onBegin: () => void): BootScree
     root.classList.add('omni-boot--going');
     // Removed after the fade rather than on the frame it starts, or the last thing the
     // player sees of the boot screen is it vanishing.
-    window.setTimeout(() => root.remove(), 520);
+    window.setTimeout(
+      () => root.remove(),
+      Math.round(accessibleCameraDuration(0.52) * 1000)
+    );
     onBegin();
   };
 
@@ -301,6 +316,7 @@ export function showBoot(container: HTMLElement, onBegin: () => void): BootScree
   window.addEventListener('pointerdown', onPointer);
 
   return {
+    begin,
     dispose: () => {
       detach();
       for (const timer of timers) window.clearTimeout(timer);

@@ -168,6 +168,8 @@ export class MainMenu {
   private plugTarget: MenuAction | null = null;
   /** The module under the pointer, tracked so a plug can be abandoned when it leaves. */
   private hovered: MenuAction | null = null;
+  /** A d-pad owns the loose end until the pointer reaches or clicks a plate. */
+  private controllerFocused = false;
 
   constructor(origin: THREE.Vector3) {
     this.root = ENGINE.SceneNode.create({ name: 'MainMenu', position: origin.clone() });
@@ -267,8 +269,14 @@ export class MainMenu {
     }
 
     this.unsubscribe.push(
-      picker.onHover((id) => this.setHovered(id as MenuAction | null)),
-      picker.onClick((id) => this.onClick(id as MenuAction | null))
+      picker.onHover((id) => {
+        this.controllerFocused = false;
+        this.setHovered(id as MenuAction | null);
+      }),
+      picker.onClick((id) => {
+        this.controllerFocused = false;
+        this.onClick(id as MenuAction | null);
+      })
     );
   }
 
@@ -294,17 +302,61 @@ export class MainMenu {
     return () => this.handlers.delete(handler);
   }
 
+  public get canNavigate(): boolean {
+    return this.enabled && this.root.visible;
+  }
+
   public setEnabled(enabled: boolean): void {
     this.enabled = enabled;
     this.root.visible = enabled;
     if (!enabled) {
+      this.controllerFocused = false;
       this.setHovered(null);
+      this.plugTarget = null;
       this.cable.unplug();
     }
   }
 
+  /** Move the physical cable focus without pretending a gamepad has a screen-space cursor. */
+  public focusNext(direction: number): boolean {
+    if (!this.enabled) return false;
+    const available = MODULES.filter((spec) => this.modules.get(spec.id)?.spec.disabled !== true);
+    if (!available.length) return false;
+
+    const at = available.findIndex((spec) => spec.id === this.hovered);
+    const next =
+      at < 0
+        ? direction < 0
+          ? available.length - 1
+          : 0
+        : (at + available.length + Math.sign(direction)) % available.length;
+    const module = this.modules.get(available[next].id);
+    this.controllerFocused = true;
+    this.setHovered(available[next].id);
+    if (module) this.cable.setTarget(module.node.position.clone().add(module.socket));
+    return true;
+  }
+
+  /** Seat the cable in the currently focused module. */
+  public activateFocused(): boolean {
+    if (!this.enabled || !this.hovered) return false;
+    const module = this.modules.get(this.hovered);
+    if (!module || module.spec.disabled) return false;
+    this.onClick(this.hovered);
+    return true;
+  }
+
+  /** Release a modal's cable connection when control returns to the front door. */
+  public releaseFocus(): void {
+    this.controllerFocused = false;
+    this.plugTarget = null;
+    this.cable.unplug();
+    this.setHovered(null);
+  }
+
   private setHovered(id: MenuAction | null): void {
-    if (!this.enabled) return;
+    // Clearing is always allowed, including while setEnabled(false) is taking the menu down.
+    if (!this.enabled && id !== null) return;
     /*
      * The plate answers when the pointer reaches it.
      *
@@ -394,7 +446,7 @@ export class MainMenu {
      * The reach zone is the plate stack's own bounds with a margin, so it turns on exactly
      * where the thing it can plug into is.
      */
-    if (this.enabled && !this.cable.isSeated) {
+    if (this.enabled && !this.controllerFocused && !this.cable.isSeated) {
       const point = picker.projectOntoPlane(this.cablePlane, this.scratch);
       if (point) {
         const local = point.sub(this.root.position);
