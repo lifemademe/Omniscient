@@ -34,6 +34,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   createBoxLabel,
   createCorrosionBloom,
+  createHouseNumber,
   createMeterFace,
   createPuddleSurface,
   createRatingPlate,
@@ -7341,6 +7342,46 @@ function buildNightDoor(scene: ContactScene): void {
   scene.registerProp('path', meshOf('Path', path, MAT.ground));
 
   /**
+   * A line of green in the joint where the path meets the house.
+   *
+   * The one place weeds always win, because nobody's brush reaches into a right angle. It
+   * also does something the composition wants: the facade currently meets the ground on a
+   * hard straight edge that runs the full width of the frame, and a soft band breaks it.
+   *
+   * ## This was very nearly a second `path-weeds`
+   *
+   * It was written as a pair - a patch through the path and a band at the wall - and the
+   * patch was a DUPLICATE. There was already a `path-weeds` forty lines below, on the newer
+   * meadow system, and registering the same id twice quietly replaces the first. So the
+   * first one's geometry was built, uploaded and then dropped every time this scene loaded,
+   * and nothing anywhere would have said so.
+   *
+   * Worth the paragraph because the check that would have caught it is trivial and does not
+   * exist: prop ids are a namespace, and `registerProp` treats a collision as an update.
+   *
+   * The band survives on its own merits, and it is on `meadow` like its neighbour - the
+   * clumping is what makes grass read as grass rather than as bristles, and it picks up the
+   * same `stepWind` so the two patches move together instead of one being frozen.
+   */
+  scene.registerProp(
+    'wall-seam',
+    meadow(rng, {
+      at: new THREE.Vector3(0, 0, -0.42),
+      width: 5.4,
+      depth: 0.3,
+      count: 140,
+      // Shorter than the path grass. It is growing out of a crack, not out of soil.
+      height: [0.05, 0.14],
+      bareBelow: 0.4,
+      // The doorway is swept, or at least walked through. Nothing grows across the threshold.
+      clear: [{ centre: new THREE.Vector3(DOOR_X, 0, -0.42), radius: 0.62 }],
+      y: 0,
+    }),
+    { idle: (deltaTime) => stepWind(deltaTime) }
+  );
+
+
+  /**
    * Weeds through the path, which is the theme doing quiet work.
    *
    * The jam theme is Overgrown and this is the one set where it had no presence at all - a
@@ -7537,6 +7578,118 @@ function buildNightDoor(scene: ContactScene): void {
   uv.needsUpdate = true;
 
   scene.registerProp('front', meshOf('Front', frontMesh, brickWall));
+
+  /**
+   * -- What is screwed to the front of a house -------------------------------------------
+   *
+   * The facade was seven metres of unbroken brick with three holes in it, and at this shot's
+   * distance that is a backdrop rather than a building. Everything below goes on the strip
+   * between the door and the left-hand window, which is where the frame is emptiest: the
+   * projection puts the cat at screen x 0.20 and the door at 0.43, with NOTHING between them.
+   *
+   * All of it is measured into that gap rather than placed by eye - `probe-door.ts` does the
+   * arithmetic. A downpipe at world x -1.02 lands at 0.29, which is far enough off the cat
+   * not to crowd it and far enough off the door not to argue with it.
+   */
+  const PIPE_X = -1.02;
+  const FITTING_Z = -0.22;
+
+  /**
+   * A rainwater pipe, which is the most valuable object on this wall.
+   *
+   * Not because anybody looks at a downpipe. Because this shot is a horizontal one - a wall,
+   * a step, a path, a cat, all of them lying down - and it has exactly one vertical in it,
+   * which is the door. A wall reads as a wall when something runs down it: the pipe takes the
+   * porch light along one edge and goes dark on the other, and that single soft gradient is
+   * what says the brick is a plane in space rather than a photograph of brick.
+   *
+   * It runs to 3.6m and the top of the frame cuts the wall at about 3.2, so it LEAVES the
+   * picture rather than stopping in it. A vertical that ends inside the frame draws the eye
+   * to where it ends; one that runs off the edge just says the house carries on.
+   */
+  const rain: THREE.BufferGeometry[] = [];
+  const shaft = new THREE.CylinderGeometry(0.045, 0.045, 3.6, 9);
+  shaft.translate(PIPE_X, 1.8, FITTING_Z);
+  rain.push(shaft);
+  // The hopper at the top, where the gutter empties into it.
+  const head = new THREE.CylinderGeometry(0.115, 0.055, 0.22, 8);
+  head.translate(PIPE_X, 3.68, FITTING_Z);
+  rain.push(head);
+  /*
+   * The shoe at the bottom - the bend that throws the water clear of the brick.
+   *
+   * Worth four lines because it is the detail that separates a pipe from a cylinder. One
+   * running straight into the ground reads as a column; one that kicks out at ankle height
+   * reads as plumbing, and the kick lands right where the eye leaves the wall for the path.
+   */
+  const shoe = new THREE.CylinderGeometry(0.05, 0.055, 0.26, 8);
+  shoe.rotateX(-0.5);
+  shoe.translate(PIPE_X, 0.14, FITTING_Z + 0.11);
+  rain.push(shoe);
+  // Brackets. Three, unevenly spaced, because nobody sets these out with a tape.
+  for (const y of [0.55, 1.62, 2.78]) {
+    const strap = new THREE.BoxGeometry(0.15, 0.035, 0.075);
+    strap.translate(PIPE_X, y, FITTING_Z - 0.03);
+    rain.push(strap);
+  }
+  scene.registerProp(
+    'downpipe',
+    meshOf('Downpipe', mergeGeometries(rain, false) ?? shaft, MAT.galvanised)
+  );
+
+  /*
+   * The meter box, in the gap between the pipe and the door.
+   *
+   * Small, pale and rectangular against a field of brick - doing the pipe's job on the other
+   * axis. Between them they turn that strip of wall into somewhere things have been fitted
+   * over the years instead of a texture sample.
+   */
+  const METER_X = -0.86;
+  const meter: THREE.BufferGeometry[] = [];
+  /*
+   * 240 x 320, not 300 x 400.
+   *
+   * The first size was a blank tan slab a third of a metre across at door height, and next to
+   * a door it read as a second, smaller door. Everything on a wall competes with the thing the
+   * shot is about; a meter box earns its place by being incidental, which means small enough
+   * that the eye passes over it on the way to the door.
+   *
+   * Grey rather than the warm cream it was in `MAT.plastic`. Same reasoning as the number
+   * plate that used to be here: the whole of this wall is warm, so a cool object separates for
+   * free, and one that has to separate on value alone is competing with the porch light.
+   */
+  const meterBody = new THREE.BoxGeometry(0.24, 0.32, 0.12);
+  meterBody.translate(METER_X, 1.06, FITTING_Z - 0.05);
+  meter.push(meterBody);
+  // The lid line, built as a proud lip rather than drawn. Nothing here casts a shadow, so a
+  // painted seam would be invisible and a real step of geometry catches the porch light.
+  const meterLip = new THREE.BoxGeometry(0.26, 0.016, 0.135);
+  meterLip.translate(METER_X, 1.2, FITTING_Z - 0.045);
+  meter.push(meterLip);
+  // And the window somebody reads it through - a dark rectangle, which is all it is at this
+  // distance, and the one thing that says box-with-a-purpose rather than box.
+  const meterWindow = new THREE.BoxGeometry(0.13, 0.06, 0.005);
+  meterWindow.translate(METER_X, 1.08, FITTING_Z - 0.111);
+  meter.push(meterWindow);
+  scene.registerProp(
+    'meter-box',
+    meshOf('MeterBox', mergeGeometries(meter, false) ?? meterBody, MAT.galvanised)
+  );
+
+  /*
+   * There WAS an enamel house number here, and it came out again.
+   *
+   * `createHouseNumber` in decals.ts is still worth having and is still correct. What was
+   * wrong is that this door already carries its number, on the top rail, put there deliberately
+   * and documented where it is built - so the wall version was a second address on the same
+   * house, forty centimetres from the first, and in the capture the two of them read as a pair
+   * of identical blue plates flanking the doorway for no reason.
+   *
+   * Second duplicate of the day, after `path-weeds`, and the same shape both times: a set is
+   * big enough that adding to it needs a look at what is already in it. Neither one announced
+   * itself - a duplicate prop id is silently an update, and a duplicate OBJECT is silently
+   * just an object. The check is reading the file, and it is the check that got skipped.
+   */
 
   /**
    * And what is on the other side of it, because now there is an other side.
@@ -7760,9 +7913,17 @@ function buildNightDoor(scene: ContactScene): void {
    */
   const cat = buildCat({
     at: new THREE.Vector3(DOOR_X - 1.45, 0.765, -0.225),
-    // Its own +z is forward. From the left sill the door is to its RIGHT, so the sign
-    // flips with the side it is sitting on.
-    facing: 1.45,
+    /*
+     * Its own +z is forward. From the left sill the door is to its RIGHT, so the sign flips
+     * with the side it is sitting on.
+     *
+     * 1.2 rather than 1.45, which is about fifteen degrees back toward the camera. The note
+     * above is right that it should watch the door - "a cat watching the thing the player is
+     * watching is funnier and more alive than a cat facing out" - and at a full right angle
+     * its eyes point across the frame and are seen edge-on, which is half of why they never
+     * registered. Fifteen degrees keeps it watching the door and lets the light find them.
+     */
+    facing: 1.2,
     seed: 'rasca-cat',
   });
   scene.registerProp('cat', cat.root, { idle: cat.idle });
@@ -8130,19 +8291,34 @@ function buildNightDoor(scene: ContactScene): void {
   knockerRing.translate(DOOR.x, 1.415, LEAF_FRONT + 0.012);
   furniture.push(knockerRing);
 
-  /*
-   * The number, on the top rail.
+  /**
+   * The number, on the top rail, and it is a PLATE now rather than two brass bars.
    *
-   * It was at 1.74, which is inside the glazed opening - so two brass bars were floating
-   * on a pane of glass with the muntin behind them. Seen on screen it read as a pair of
-   * leftover tabs rather than as a number. The top rail is solid, it is where a number
-   * goes on a door with glass in it, and it puts the digits above the glazing where they
-   * are read against wood.
+   * The note this replaces is a good record of a fix that did not finish. It was at 1.74,
+   * floating on the glass with the muntin behind it, and moving it up to the solid rail was
+   * right - but what moved was still `BoxGeometry(0.015, 0.062)` twice, which is two tabs
+   * whatever they are mounted on. The old note even says the earlier version "read as a pair
+   * of leftover tabs"; the tabs were never the position's fault.
+   *
+   * A number has to be READABLE or it is not a number, and geometry cannot do that at 15mm a
+   * digit. A painted decal can, because the resolution is in the texture rather than in the
+   * triangles - this is `createRatingPlate`'s whole argument applied to a doorway.
+   *
+   * ## Why the plate rather than paint on the rail
+   *
+   * Box UVs are shared across all six faces (decals.ts, top), so anything belonging to one
+   * face needs its own quad. Which is also how it works in life: it was screwed on afterwards,
+   * and a vitreous enamel plate is the object half the houses in the country have.
+   *
+   * Its own mesh rather than merged into `furniture`, because furniture is one brass mesh and
+   * this carries a texture. It still goes through `ontoHinge` and onto `doorRoot`, so it swings
+   * with the leaf - the mistake the glass made once already.
    */
-  for (const ox of [-0.028, 0.028] as const) {
-    const digit = new THREE.BoxGeometry(0.015, 0.062, 0.012);
-    digit.translate(DOOR.x + ox, DOOR.h - 0.065, LEAF_FRONT + 0.006);
-    furniture.push(digit);
+  const doorNumber = createHouseNumber('14');
+  if (doorNumber) {
+    const plate = new THREE.PlaneGeometry(0.19, 0.131);
+    plate.translate(DOOR.x, DOOR.h - 0.075, LEAF_FRONT + 0.006);
+    doorRoot.add(meshOf('DoorNumber', ontoHinge(plate), decalMaterial(doorNumber, 0.55)));
   }
   /**
    * The handle, which the door did not have.
@@ -8731,9 +8907,168 @@ function buildNightDoor(scene: ContactScene): void {
   bulb.translate(porchAt.x, porchAt.y, porchAt.z + 0.05);
   scene.registerProp('porch-bulb', meshOf('PorchBulb', bulb, MAT.lamp));
 
-  const hood = new THREE.CylinderGeometry(0.1, 0.13, 0.07, 10);
-  hood.translate(porchAt.x, porchAt.y + 0.07, porchAt.z + 0.05);
-  scene.registerProp('porch-hood', meshOf('PorchHood', hood, MAT.metal));
+  /**
+   * Moths, and this is the only thing in the scene that MOVES on its own.
+   *
+   * That is the whole argument. Everything else at this door is furniture: the brick, the
+   * step, the pots, the pipe, all of it completely still, and Dorin holds one pose at the
+   * lock for most of the call. A frozen night reads as a render of a night. Half a dozen
+   * insects working the one bright point in the frame cost a `Points` draw and turn the
+   * picture into somewhere with air in it.
+   *
+   * They also do a second job, which is why they are HERE and not somewhere prettier: they
+   * mark the lamp. §187 gives the eye to the brightest thing, and the fix that moved this
+   * light off the soffit left it correctly lit but no longer the loudest object on the wall.
+   * Motion is the other way to claim attention, and it is the one that does not cost the
+   * scene any of its darkness.
+   *
+   * `createMotes` rather than anything new: it was written for flies over Adaeze's beds and
+   * its whole design note is about being Brownian instead of orbital - a home position each
+   * one is loosely sprung to, plus a random kick per frame. Moths at a porch light do
+   * precisely that. The only changes are the box, the count and the colour.
+   */
+  const MOTH_BOX = new THREE.Vector3(0.62, 0.34, 0.34);
+  const moths = createMotes({
+    /*
+     * Dropped by half the box height, because `createMotes` does not centre on Y.
+     *
+     * X and Z are laid out about the node - `range(-half.x, half.x)` - and Y is not: it is
+     * `range(0, size.y)`, so the node is the FLOOR of the swarm, not its middle. Written that
+     * way for the flies over Adaeze's vegetable beds, where a cloud that starts at ground
+     * level and rises is exactly right.
+     *
+     * Here it put nine moths in a band from the bulb up to 34cm above it - which is inside the
+     * shade and then behind the brick, so the one piece of motion in the scene rendered
+     * completely invisible and looked like a feature that had failed to build. Half the box
+     * down and they straddle the lamp.
+     */
+    at: porchAt.clone().add(new THREE.Vector3(0, -MOTH_BOX.y / 2 - 0.02, 0.06)),
+    // Wider than tall, and shallow. They work the face of the lamp, not a sphere around it.
+    size: MOTH_BOX,
+    /*
+     * Nine. A count this low is a decision rather than a budget.
+     *
+     * Twenty of anything small and pale reads as dirt on the lens or as snow; the flies over
+     * the vegetable beds get away with forty because a swarm is the point there. Here each
+     * one has to read as an individual animal blundering at a bulb, and that only happens
+     * when you can count them.
+     */
+    count: 9,
+    /*
+     * Unlit and near-white, because `PointsMaterial` takes no light and these are 3cm
+     * across at four and a half metres. A correctly-coloured moth - a dull grey-brown -
+     * would be black at this size against a dark wall. What the eye actually sees at a
+     * porch light is the lamp reflecting off a wing for a frame at a time, and this is
+     * that: the colour is the LIGHT, not the insect.
+     */
+    color: '#ffe6b4',
+    scale: 0.032,
+    seed: 'rasca-porch-moths',
+  });
+  scene.registerProp('moths', moths.root, { idle: moths.idle });
+
+  /**
+   * The shade, which was a plate.
+   *
+   * `CylinderGeometry(0.1, 0.13, 0.07)` sitting 7cm above the bulb is a saucer balanced over
+   * a naked lamp: 7cm deep against a bulb 11cm across, so from the shot's own angle the whole
+   * sphere hangs below the rim with nothing round it. A porch light is a COWL - a shade that
+   * comes down past the bulb's equator, so what you see from below is metal with a glow
+   * under it, not a ball on a stick.
+   *
+   * 13cm deep, narrow at the crown and flared to 17cm at the rim, dropped so the rim sits
+   * 3cm below the bulb's centre. About two thirds of the sphere is inside it now.
+   *
+   * ## Two shells, and why
+   *
+   * Open-ended, because a capped cone seen from below - which is where this camera is, 70cm
+   * under the lamp - would be a solid disc hiding the bulb completely. But an open cone shows
+   * only its OUTSIDE: the far wall's inner surface is back-facing and culled, so a single
+   * shell reads as half a shade with a hole behind the bulb.
+   *
+   * So there are two, and the inner one is mirrored on X. Mirroring reverses a geometry's
+   * winding, which turns its faces inward - the same property that silently culls a
+   * hand-built quad when somebody scales it negative by accident, used deliberately here.
+   * The result is a shade with an inside, for the cost of twenty triangles.
+   */
+  /*
+   * ## How deep, worked out rather than tried
+   *
+   * The bulb is a 110mm sphere centred at `porchAt`, so its underside is 55mm below that. The
+   * camera sits 70cm lower and 4.4m out, which is a sight line rising at nine degrees - and
+   * that angle is the whole calculation, because a rim only hides the bulb if the line from
+   * the lens through the rim passes UNDER it.
+   *
+   * At 130mm deep the rim landed at 2.39, above the bulb's underside, and a third of the
+   * sphere hung in the open. At 170mm with a 185mm mouth the rim is at 2.355 and the sight
+   * line clears the bulb's bottom by about four millimetres: nearly covered, with a sliver of
+   * filament glow still showing. Deliberately a sliver rather than nothing - a completely
+   * hidden bulb takes the warm point out of the frame and leaves a grey cone.
+   *
+   * ## Two shells, and why
+   *
+   * Open-ended, because a capped cone seen from below would be a solid disc hiding everything.
+   * But an open cone shows only its OUTSIDE: the far wall's inner surface is back-facing and
+   * culled, so a single shell reads as half a shade with a hole behind the bulb.
+   *
+   * So there are two, and the inner one is mirrored on X. Mirroring reverses a geometry's
+   * winding, which turns its faces inward - the same property that silently culls a hand-built
+   * quad when somebody scales it negative by accident, used deliberately here.
+   *
+   * ## And they are not the same material, which was the bug
+   *
+   * Both were `MAT.metal`, which is metalness 0.65 - and a metal at 0.65 with a point light
+   * five centimetres off it returns a specular that clips. The shade rendered PURE WHITE, the
+   * brightest object in the frame, which is precisely the fault §2 had just finished fixing on
+   * this same lamp. A shade cannot be allowed to out-shine the lamp inside it.
+   *
+   * Galvanised was the first answer and it was not enough: measured, the outer shell came back
+   * at median 209 against the wall it hangs on at 158 - still the brightest object in the
+   * frame, still §187's problem, just a less blinding version of it.
+   *
+   * The reason is worth having, because it is not obvious and it will come back. The porch
+   * light is not INSIDE this shade. §2 moved it 45cm forward to stop it scorching the brick,
+   * which means it now sits out in the air in front of the lamp shining BACK at it - so the
+   * shade's outer face, which ought to be the one surface here that never sees the bulb, is
+   * square-on to a light at point-blank range. No roughness value fixes a geometry problem.
+   *
+   * What fixes it is albedo. `MAT.dark` is about a sixth reflective against galvanised's four
+   * tenths, which lands the shade near 80 - well under the wall, where a shade belongs. And it
+   * is not a cheat: a porch lamp painted dark, seen at night from below, IS a black shape with
+   * light coming out from under it. Making it pale was the stylisation; this is the photograph.
+   *
+   * Warm pale inside, because the inside of a shade over a lit bulb really is bright, and the
+   * two disagreeing is what makes it read as a hollow object rather than a cone.
+   */
+  const SHADE_DEEP = 0.17;
+  const SHADE_MID = porchAt.y - 0.055 + SHADE_DEEP / 2;
+  const hoods: THREE.BufferGeometry[] = [];
+  const shell = new THREE.CylinderGeometry(0.058, 0.185, SHADE_DEEP, 12, 1, true);
+  shell.translate(porchAt.x, SHADE_MID, porchAt.z + 0.05);
+  hoods.push(shell);
+  // A crown cap, so the top is closed the way a fitting's is.
+  const crown = new THREE.CylinderGeometry(0.058, 0.058, 0.012, 12);
+  crown.translate(porchAt.x, SHADE_MID + SHADE_DEEP / 2 + 0.005, porchAt.z + 0.05);
+  hoods.push(crown);
+  /*
+   * The stem it hangs off the brick on, and it runs BACK rather than sideways.
+   *
+   * It was 120mm long centred a centimetre behind the bulb, which put half of it out in front
+   * of the shade where it read as a dark bar sticking out of the side of the lamp. The wall
+   * face is at z -0.25; this now spans the gap from the crown to the brick and stops.
+   */
+  const stem = new THREE.BoxGeometry(0.03, 0.03, 0.2);
+  stem.translate(porchAt.x, SHADE_MID + SHADE_DEEP / 2 + 0.012, porchAt.z - 0.05);
+  hoods.push(stem);
+  scene.registerProp(
+    'porch-hood',
+    meshOf('PorchHood', mergeGeometries(hoods, false) ?? shell, MAT.dark)
+  );
+
+  const lining = new THREE.CylinderGeometry(0.053, 0.178, SHADE_DEEP - 0.005, 12, 1, true);
+  lining.scale(-1, 1, 1);
+  lining.translate(porchAt.x, SHADE_MID, porchAt.z + 0.05);
+  scene.registerProp('porch-hood-inner', meshOf('PorchHoodInner', lining, MAT.plastic));
 
   scene.registerProp(
     'porch',
@@ -8949,6 +9284,7 @@ function buildNightDoor(scene: ContactScene): void {
 
     ['porch', CERTAINTY.SHAPED],
     ['porch-hood', CERTAINTY.SHAPED],
+    ['porch-hood-inner', CERTAINTY.SHAPED],
     ['porch-bulb', CERTAINTY.SHAPED],
     ['step', CERTAINTY.SHAPED],
     ['front', CERTAINTY.SHAPED],
@@ -8978,6 +9314,19 @@ function buildNightDoor(scene: ContactScene): void {
     ['hall', CERTAINTY.SHAPED],
     ['path', CERTAINTY.SHAPED],
     ['path-weeds', CERTAINTY.SHAPED],
+    ['wall-seam', CERTAINTY.SHAPED],
+    /*
+     * The fittings go with the wall they are screwed to, and the house number goes with them
+     * even though it is the one object here carrying a hard fact.
+     *
+     * Tempting to draw the number at KNOWN - the machine has an address, that is how it found
+     * the street. But what the tier expresses is confidence in the RECONSTRUCTION, and the
+     * number being right is not the same as the enamel plate under it being right. It has
+     * never seen the plate. Drawing one legible object at full certainty on a wall of guesses
+     * would read as the machine being oddly sure about a piece of tin.
+     */
+    ['downpipe', CERTAINTY.SHAPED],
+    ['meter-box', CERTAINTY.SHAPED],
     /*
      * The stoop stays SHAPED, and this is the clearest lesson of the pass that added it.
      *

@@ -83,22 +83,35 @@ export function buildCat(options: CatOptions): GeneratedCat {
    */
   const body: THREE.BufferGeometry[] = [];
 
-  const haunch = new THREE.CylinderGeometry(0.1, 0.14, 0.16, 7);
-  haunch.translate(0, 0.08, -0.02);
+  /*
+   * Narrowed, and the reason is what a cat is NOT.
+   *
+   * The haunch was 280mm across on a body 420mm tall - proportions that belong to a badger.
+   * Rendered on the sill it read as a squat pale wedge and the most common guess at what it
+   * was, looking at the capture cold, was a paper bag. A sitting cat is startlingly narrow
+   * from the front: roughly 200mm across the hips on 400mm of height, and it is the NARROWNESS
+   * that carries the read, because every other small animal that sits like this is wider.
+   *
+   * The other half of the same fix is height. Taller segments on a thinner body restore the
+   * S-curve the note above is about - ground, up the chest, out to the head - which is the
+   * line a squat version cannot draw no matter how the pieces are shaped.
+   */
+  const haunch = new THREE.CylinderGeometry(0.082, 0.108, 0.17, 7);
+  haunch.translate(0, 0.085, -0.02);
   body.push(haunch);
 
-  const chest = new THREE.CylinderGeometry(0.075, 0.1, 0.19, 7);
+  const chest = new THREE.CylinderGeometry(0.058, 0.084, 0.2, 7);
   chest.rotateX(-0.16);
-  chest.translate(0, 0.22, 0.015);
+  chest.translate(0, 0.235, 0.015);
   body.push(chest);
 
   // The front legs, straight down from the chest, which is what a sitting cat does.
   for (const side of [-1, 1] as const) {
-    const leg = new THREE.CylinderGeometry(0.022, 0.026, 0.15, 5);
-    leg.translate(side * 0.045, 0.075, 0.075);
+    const leg = new THREE.CylinderGeometry(0.02, 0.023, 0.16, 5);
+    leg.translate(side * 0.038, 0.08, 0.07);
     body.push(leg);
-    const paw = new THREE.BoxGeometry(0.05, 0.03, 0.07);
-    paw.translate(side * 0.045, 0.015, 0.095);
+    const paw = new THREE.BoxGeometry(0.044, 0.028, 0.07);
+    paw.translate(side * 0.038, 0.014, 0.09);
     body.push(paw);
   }
 
@@ -113,9 +126,28 @@ export function buildCat(options: CatOptions): GeneratedCat {
    */
   const headNode = ENGINE.SceneNode.create({
     name: 'CatHead',
-    position: new THREE.Vector3(0, 0.335, 0.035),
+    position: new THREE.Vector3(0, 0.355, 0.035),
   });
   const head: THREE.BufferGeometry[] = [];
+  /*
+   * A box, and it was briefly not one. Recording the failure because the reasoning behind it
+   * was sound and the result was still worse.
+   *
+   * The capture showed a hard black rectangle beside the head, and the diagnosis was that a
+   * box face has ONE normal, so on a night with 0.14 of ambient and a single lamp its unlit
+   * side is not dark, it is black - while the seven-sided cylinders that make up the body
+   * ramp across seven values and read as form. Replacing the skull with an eight-sided drum
+   * lying nose-to-nape should have fixed exactly that.
+   *
+   * It made the cat worse. The drum lost the corners, and the corners are what the ears sit
+   * on and what gives a cat's head its width at the cheeks; side-on it rendered as a pale
+   * horizontal bar with one ear on it. The box went back.
+   *
+   * And the black rectangle was never the skull. It is the WINDOW - the cat sits on the sill
+   * in front of an unlit pane, and what looked like a shading fault on the animal was the
+   * dark glass showing between its ear and its shoulder. Diagnosing a lighting problem from
+   * a crop of an object, without checking what is behind the object, cost a whole pass.
+   */
   const skull = new THREE.BoxGeometry(0.105, 0.085, 0.095);
   head.push(skull);
   const muzzle = new THREE.BoxGeometry(0.055, 0.04, 0.035);
@@ -146,9 +178,28 @@ export function buildCat(options: CatOptions): GeneratedCat {
    */
   const eyes: ENGINE.MeshNode[] = [];
   for (const side of [-1, 1] as const) {
-    const iris = new THREE.SphereGeometry(0.014, 6, 5);
+    /*
+     * 12mm, set wide, and standing proud of the skull. Two numbers, both learned the hard way
+     * in opposite directions.
+     *
+     * At 14mm and z 0.05 the eyes measured ZERO pixels: the skull's front face is at 0.0475,
+     * so they stood two millimetres out, and from a near-perpendicular view half of each one
+     * was buried in the head. Going to 20mm at a 30mm spacing overcorrected into something
+     * worse than invisible - two 40mm spheres on a 105mm skull leave a 20mm gap between them,
+     * which the pixel grid closes, and the cat rendered wearing a VISOR: one bright bar across
+     * its whole face. A machine, not an animal.
+     *
+     * What matters is not the size, it is the GAP. At 12mm on a 32mm half-spacing the gap is
+     * 40mm against a 12mm eye - more than three times - so the grid cannot bridge it at any
+     * distance the cat is still visible at. Small and separated beats large and merged, and
+     * two dots with dark between them is the whole read.
+     *
+     * A cat at the edge of a dark frame IS its eyes. Everything else is a silhouette that
+     * could be a bag or a plant pot; the two bright chips make it an animal looking at you.
+     */
+    const iris = new THREE.SphereGeometry(0.012, 6, 5);
     const eye = meshOf(`CatEye${side > 0 ? 'R' : 'L'}`, iris, MAT.catEye);
-    eye.position.set(side * 0.032, 0.012, 0.05);
+    eye.position.set(side * 0.032, 0.013, 0.052);
     headNode.add(eye);
     eyes.push(eye);
   }

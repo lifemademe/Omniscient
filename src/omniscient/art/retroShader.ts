@@ -17,6 +17,15 @@ export interface RetroLook {
   /**
    * The signal's pixel size, in device pixels. 1 or below is off.
    *
+   * 2.4 in all three presets. It was 3 - a 640-wide source on a 1920 window - and that turned
+   * out to sit just past the point where the game's own detail starts losing: the pegboard
+   * holes, the pin stacks on the lock, a face at four metres. 2.4 is 800 wide. Still
+   * unmistakably a coarse signal, with about forty per cent more to look at.
+   *
+   * Non-integer deliberately, and it costs nothing: the grid is `resolution / uPixel`, so any
+   * value works, and whole numbers were only ever a coincidence of the window being 1920 wide
+   * in the first place.
+   *
    * This is the one field that is not a television artefact - it is how coarse the picture
    * being SENT to the television is, which on this machine is a different question from how
    * the television draws it. 3 on a 1920-wide window is a 640-wide source; 6 would be the
@@ -64,7 +73,7 @@ export const RETRO_LOOKS = {
      * face stops being a face. 3 halves the resolution twice over and still leaves an
      * expression readable, which is the constraint this game has and a platformer does not.
      */
-    pixel: 3,
+    pixel: 2.4,
     curve: 0,
     aberration: 0.0008,
     scanline: 0,
@@ -95,7 +104,7 @@ export const RETRO_LOOKS = {
      * pixels a block reads as writing without being readable. Which is what small text on a
      * screwed-on plate looks like from across a room anyway.
      */
-    pixel: 3,
+    pixel: 2.4,
     curve: 0.010,
     aberration: 0.0018,
     scanline: 0.055,
@@ -121,7 +130,7 @@ export const RETRO_LOOKS = {
      *
      * One size, everywhere, so the grid is the machine rather than the mood.
      */
-    pixel: 3,
+    pixel: 2.4,
     curve: 0.055,
     aberration: 0.0060,
     scanline: 0.20,

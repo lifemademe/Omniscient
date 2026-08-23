@@ -581,8 +581,35 @@ export const MAT = {
    * sits on, from any angle, without being a white cat in a dark street. Half the cats in
    * the country are this colour and it is the one that survives being unlit.
    */
-  catFur: standard('#8a8174', 0.94),
-  catEye: new THREE.MeshBasicMaterial({ color: '#c8d67a', toneMapped: false }),
+  /*
+   * RE-MEASURED, and the note above is now history rather than instruction.
+   *
+   * "At #8a8174 the same spot reads 86 against that 56" was true of the frame it was taken
+   * from, and that frame no longer exists: the porch light moved off the facade and its decay
+   * slackened, and the default shot pulled back from 3.05m to 4.2m. Under the lighting that
+   * came out of those two changes the cat measured median 32.7 against brick at 34.5 - DARKER
+   * than the wall it is supposed to stand out from, exactly inverting what this value was
+   * chosen for.
+   *
+   * The lesson is not about cats. A colour picked against one lighting setup is a measurement
+   * with an expiry date, and nothing tells you when it expires.
+   *
+   * Lighter, and neutral. The brick behind it runs R-B +29 - strongly warm - so a warm cat has
+   * to win on value alone, against a wall lit by the same lamp it is. A grey cat separates on
+   * hue as well, which is the axis that was doing no work at all before, and it picks up the
+   * cold sky fill that the warm brick does not.
+   */
+  catFur: standard('#a8a79c', 0.94),
+  /*
+   * Eye-shine, and it has to be nearly white.
+   *
+   * At #c8d67a the eyes measured ZERO pixels in a capture - not dim, absent. Some of that is
+   * size (fixed in cat.ts) and some is that a mid yellow-green at four metres, through the
+   * pixel grid, lands in the same bucket as the lit brick behind it. A cat's eyes at night are
+   * the brightest thing on the animal by a long way, because they are a retroreflector aimed
+   * back at the light, and near-white is what that looks like.
+   */
+  catEye: new THREE.MeshBasicMaterial({ color: '#eaffa8', toneMapped: false }),
   /**
    * The landing light lying on the hall floor at the far end.
    *

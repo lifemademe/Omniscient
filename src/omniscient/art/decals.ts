@@ -55,7 +55,7 @@ export function createMeterFace(): THREE.CanvasTexture | null {
      *
      * So it stops being a drawing and becomes a SHAPE: a dark rectangle in a cream case,
      * with one bright mark across it. That reads at 65 pixels and at 650, which is the only
-     * test that matters here. ง4.1 - silhouette first, and a dial's silhouette is its
+     * test that matters here. ยง4.1 - silhouette first, and a dial's silhouette is its
      * needle against its face, not its graduations.
      */
     ctx.fillStyle = '#22221f';
@@ -79,7 +79,7 @@ export function createMeterFace(): THREE.CanvasTexture | null {
     /*
      * The needle, resting at the bottom of the scale. Mirela's line is that the lamp comes
      * on and nothing else happens, so the instrument says the same thing before she does
-     * (ง131): power in, nothing coming through.
+     * (ยง131): power in, nothing coming through.
      */
     const rest = Math.PI * 1.23;
     ctx.strokeStyle = '#e8e2cf';
@@ -283,6 +283,73 @@ export function createRatingPlate(): THREE.CanvasTexture | null {
         );
         const p = (y * w + x) * 4;
         image.data[p + 3] *= 1 - lost * 0.85;
+      }
+    }
+    ctx.putImageData(image, 0, 0);
+  });
+}
+
+/**
+ * The number on his mother's house.
+ *
+ * S131 again, and this is the cheapest possible instance of it: the player is being asked to
+ * help a man get into a specific house, and until now the house had no address. A number is
+ * the difference between "a door" and "number 14", and the second one belongs to somebody.
+ *
+ * ## Why it is the brightest cool thing on the wall
+ *
+ * The facade is brick under a warm porch lamp - every hue in that corner of the frame is on
+ * the same side of the wheel. A vitreous enamel plate is dark blue with white figures, which
+ * is both a real object (they are on half the houses in the country) and the one thing that
+ * can be small and still read, because it separates on hue and on value at once. A brass or
+ * painted-timber number at this size would dissolve into the wall it is screwed to.
+ *
+ * Drawn with a generous margin because the quad is 20cm wide at four and a half metres -
+ * about fifty pixels before the retro grid takes two thirds of them. The figures have to be
+ * fat and few. Two digits read; four would be a smudge.
+ */
+export function createHouseNumber(figures: string): THREE.CanvasTexture | null {
+  return createDecal(256, 176, (ctx, w, h) => {
+    // The enamel, and its rolled white edge.
+    ctx.fillStyle = '#e8e4d8';
+    ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = '#1d3a63';
+    ctx.fillRect(7, 7, w - 14, h - 14);
+
+    ctx.fillStyle = '#f2efe6';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 116px "Arial Narrow", "Helvetica Neue", Arial, sans-serif';
+    ctx.fillText(figures, w / 2, h / 2 + 4);
+
+    // Two fixing screws, and the ring of chipped enamel that always comes with them.
+    for (const sx of [30, w - 30]) {
+      ctx.beginPath();
+      ctx.arc(sx, h / 2, 13, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(232,228,216,0.5)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(sx, h / 2, 8, 0, Math.PI * 2);
+      ctx.fillStyle = '#7e7a6c';
+      ctx.fill();
+    }
+
+    /*
+     * Age. Enamel does not fade, it chips - so this replaces pixels with the steel colour
+     * underneath in hard-edged patches, rather than eating the alpha the way the fbm erosion
+     * on the rating plate does. Same noise field, opposite treatment, because the two
+     * materials fail in completely different ways and a worn enamel plate that has gone
+     * translucent looks like a decal with a bug in it.
+     */
+    const image = ctx.getImageData(0, 0, w, h);
+    const seed = seedFrom(`house-number-${figures}`);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (fbm(seed, x / w, y / h, { frequency: 18, octaves: 3 }) <= 0.78) continue;
+        const p = (y * w + x) * 4;
+        image.data[p] = 116;
+        image.data[p + 1] = 110;
+        image.data[p + 2] = 99;
       }
     }
     ctx.putImageData(image, 0, 0);
