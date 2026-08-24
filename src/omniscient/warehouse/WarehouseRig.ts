@@ -551,7 +551,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
      *
      * Re-enabling means finding the source pixel first, not shortening the blur.
      */
-    post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: false });
+    post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: true, strength: 0.3, threshold: 0.82, radius: 0.5, levels: 4 });
   }
 
   private buildDrone(): void {
@@ -743,10 +743,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const lamp = ENGINE.PointLightNode.create({
       name: 'DroneLandingLight',
       color: '#ffd0a0',
-      intensity: 15,
+      intensity: 10,
       distance: 11,
       decay: 1.35,
-      position: new THREE.Vector3(0, -0.16, -0.44),
+      position: new THREE.Vector3(0, -0.3, -0.5),
     });
 
     // A hot little glass under the lens, so the source is visible on the drone itself and not
@@ -860,7 +860,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
       intensity: 8,
       distance: 6.5,
       decay: 1.85,
-      position: new THREE.Vector3(0, 0.05, 0.34),
+      // Clear of the hull. Inside it, the fill was a hot spot on its own airframe - the same
+      // fault as the ceiling lamps, at a fifth of the intensity.
+      position: new THREE.Vector3(0, 0.3, 0.52),
     });
     this.drone.add(this.droneVisual);
     // The pulses live in world space, not on the drone - a ring parented to the airframe

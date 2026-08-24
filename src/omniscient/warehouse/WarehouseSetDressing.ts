@@ -323,7 +323,9 @@ export class WarehouseSetDressing {
         intensity: 5,
         distance: 6,
         decay: 1.8,
-        position: new THREE.Vector3(x, 3.3, z),
+        // Above the housing rather than buried in it, so the beacon lights the room instead
+        // of cooking its own lens.
+        position: new THREE.Vector3(x, 3.62, z),
       });
       this.beaconMaterials.push(material);
       this.beaconLights.push(light);

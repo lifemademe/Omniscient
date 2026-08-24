@@ -828,7 +828,31 @@ export class WarehouseEnvironment {
             intensity: 54,
             distance: 26,
             decay: 1.2,
-            position: new THREE.Vector3(x, 9.45, z),
+            /*
+             * ## Out of the shade, and below the lens
+             *
+             * A level validator found all twelve of this building's embedded lights sitting
+             * INSIDE their own CeilingFixtureShade, and this is the fix. Two faults, one
+             * position.
+             *
+             * A point light touching a surface is a hot spot with no upper bound worth
+             * trusting: three.js clamps the distance falloff at 100x, so an intensity-54 lamp
+             * a centimetre off the inside of its own cone puts something like 430 on that
+             * face. Thirty-one of those, next to a lens that is emissive at 4.7 with
+             * toneMapped off, is the brightest cluster in the room by a wide margin - and a
+             * small, very hot region is exactly what overflows a half-float bloom mip into Inf
+             * and then NaN. That is the signature the black square had, and it is why the
+             * square only appeared when the camera swept the ceiling.
+             *
+             * The second fault is plainer and was always visible: the lens is a solid disc at
+             * 9.16 and mesh() casts shadows by default, so a lamp at 9.45 was sitting ABOVE
+             * its own lens and shadowing the floor it was supposed to light. Every high bay in
+             * the building was blocking itself.
+             *
+             * 9.02 puts the emitter below the lens, where a lamp's emitter actually is, clear
+             * of the shade and still 67cm above the drone's ceiling.
+             */
+            position: new THREE.Vector3(x, 9.02, z),
           });
           this.workLights.push(workLight);
           this.root.add(workLight);
