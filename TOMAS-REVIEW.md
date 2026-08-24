@@ -506,7 +506,7 @@ that is correct — but the hard cut in §6 is what a player will read as one.
 | 9 | 15.7kHz down | **DONE** — 0.0022 → 0.0008 |
 | 10 | symmetric exit | **DONE** — the scene is held 0.45s into the move home |
 | 11 | warp mask falloff | **WITHDRAWN** — the claim was wrong, see §6 |
-| 12 | the scene-resolve entrance | **NOT DONE** — the biggest remaining item, see below |
+| 12 | the scene-resolve entrance | **PARTLY DONE** — the signal lock ships and is measured; the `suspected` and certainty passes do not |
 | 13 | camera drift on long shots | **DONE and measured** — `drift` on `CameraShot`; held-shot frame delta 0.11% → 0.39% |
 | 14 | stereo on the room tone | **DONE and measured** — L/R correlation 0.993–0.998 → **0.070** |
 | 15 | trust-linked mix envelope | **NOT DONE** |
@@ -556,7 +556,23 @@ Two things this pass leaves behind:
   The bass row is the one that proves the design rather than the effect: it stays at 0.998
   and dead centre while everything above it decorrelates, which is exactly what
   `BASS_CENTRE_HZ` exists to guarantee.
-- Items **12 and 15 remain NOT DONE**.
+- **Item 12 has its first third.** `retroAcquire()` opens every scene as a signal being
+  acquired: resolution steps down a ladder while curve and aberration relax onto the room's
+  look. Measured on screen, blockiness settles **0.940 → 0.938 → 0.918 → 0.913 → 0.900** over
+  about 0.4s and the captured frames show heavy chromatic fringing resolving to a clean image.
+
+  One correction to this section: it asks for pixel to **ease** from 12 to the preset. The
+  retro pass refuses to ease `uPixel` deliberately, and its note is right — a picture sliding
+  through 2.7 pixels spends the whole ease at a block size no grid divides evenly, so the
+  blocks shimmer and crawl. Stepping is both safe and the more honest fiction: a digital
+  signal locking does not slide through resolutions.
+
+  Still not done from this section: pointing `art/suspected.ts` at the whole scene, and
+  opening at `CERTAINTY.SHAPED` to resolve into the authored tiers. The `connect` lead was
+  looked at and left alone — the cue already fires before `setPhase(Phase.Contact)` in code,
+  so the measured +120ms is engine and audio latency rather than ordering, and moving it
+  without a synchronised A/V capture would be guesswork.
+- Item **15 remains NOT DONE**.
 - **`default` is deliberately left alone.** It measures a p2–p98 range of 38, the weakest shot
   in the scene, and that is defensible rather than broken: the mission OPENS on a dead beacon,
   and `backdrop.ts` states the rule that "there is only one light in this mission that is

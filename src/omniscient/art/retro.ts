@@ -428,6 +428,63 @@ export function setRetroLook(name: RetroLookName, immediate = false): void {
   effect?.pass.setLook(accessibleLook(name), immediate);
 }
 
+let acquireToken = 0;
+
+/**
+ * Open a scene as a signal being acquired, rather than as a room that was already there.
+ *
+ * TOMAS-REVIEW measured the entrance at ONE FRAME: the globe at t=2.27, the mast at full
+ * brightness at t=2.30. No dissolve, no acquisition, the contact standing mid-idle in the
+ * first frame he exists - while the HUD panels politely stagger in over 1.2s around him. Its
+ * words: the single biggest piece of juice available in the game. The premise is an optical
+ * feed reaching a machine that is not yet sure what it is looking at, and none of that was on
+ * screen.
+ *
+ * ## Stepped, not eased - the review asked for the wrong shape here
+ *
+ * The review suggested opening at pixel 12 and easing to the preset over 0.9s. This pass
+ * refuses to ease `uPixel` on purpose, and the note on that refusal is right: a picture
+ * sliding through 2.7 pixels on its way from 2 to 3 spends the whole ease at a block size no
+ * grid divides evenly, so the blocks shimmer and crawl. It is the one visibly WRONG state the
+ * shader can be in.
+ *
+ * So the resolution comes down a LADDER, each rung held long enough to be a stable picture,
+ * while curve and aberration - which do ease, and are supposed to - relax underneath it. That
+ * is also the more honest reading of the fiction: a digital signal locking does not slide
+ * through resolutions, it steps.
+ *
+ * Skipped entirely under reduced motion or a display filter that is off, because both are
+ * asking for the picture rather than the performance.
+ */
+export function retroAcquire(seconds = 0.9): void {
+  if (!effect) return;
+  const preferences = getAccessibilityPreferences();
+  if (preferences.reducedMotion || preferences.displayFilter === 'off') return;
+
+  // A second call supersedes the first - a scene change during an acquire must not leave the
+  // old ladder still stepping into the new room.
+  const token = ++acquireToken;
+  const base = accessibleLook(activeLook);
+  const ladder = [
+    { pixel: 12, curve: base.curve + 0.09, aberration: base.aberration + 0.02 },
+    { pixel: 7, curve: base.curve + 0.05, aberration: base.aberration + 0.011 },
+    { pixel: 4, curve: base.curve + 0.02, aberration: base.aberration + 0.005 },
+  ];
+  const step = (seconds * 1000) / (ladder.length + 1);
+
+  effect.pass.setLook({ ...base, ...ladder[0] }, true);
+  for (const [index, rung] of ladder.slice(1).entries()) {
+    window.setTimeout(() => {
+      if (acquireToken !== token) return;
+      effect?.pass.setLook({ ...base, ...rung }, true);
+    }, step * (index + 1));
+  }
+  window.setTimeout(() => {
+    if (acquireToken !== token) return;
+    effect?.pass.setLook(accessibleLook(activeLook), true);
+  }, step * ladder.length);
+}
+
 /**
  * Tell the pass where the CRT's face is on screen, so the pixel grid can skip it.
  *

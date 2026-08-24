@@ -37,7 +37,7 @@ import {
   saveGame,
 } from './session/persistence.js';
 import { installCursor, setCursorVisible } from './art/cursor.js';
-import { installRetro, setRetroLook, setRetroScreenQuad } from './art/retro.js';
+import { installRetro, retroAcquire, setRetroLook, setRetroScreenQuad } from './art/retro.js';
 import { projectScreenQuad } from './art/screenQuad.js';
 import { setRoomTone, stopRoomTone } from './audio/RoomTone.js';
 import { showBoot } from './link/BootScreen.js';
@@ -3605,6 +3605,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * own reconstruction of a district it has never seen, and it should look like one.
      */
     setRetroLook(sceneId === 'scene-wire-city' ? 'machine' : 'world');
+    /*
+     * And the room arrives as a signal rather than as a fact.
+     *
+     * Ordered after setRetroLook deliberately: the acquire ladder is built from whatever look
+     * is active, so it has to know which one this room wants before it starts stepping down
+     * onto it. See retroAcquire for why the resolution steps instead of easing.
+     */
+    retroAcquire();
     /*
      * And the room's air, switched from the same line for the same reason.
      *
