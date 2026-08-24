@@ -255,6 +255,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
    * climb would be undone by the next frame's damp back to its band.
    */
   private altitude = 3.2;
+  /** How much stick the player is holding, 0..1. Feeds the FOV breathe in applyCamera. */
+  private throttle = 0;
+  private chaseFov = 68;
   private view: WarehouseView = 'cctv';
   private perspective: DronePerspective = 'third';
   private opticalAimHeld = false;
@@ -891,6 +894,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
     const desired = forward.multiplyScalar(-y).addScaledVector(right, x);
     if (desired.lengthSq() > 1) desired.normalize();
+    this.throttle = desired.length();
     const nearWorker = this.workers.some((worker) => worker.visible && worker.position.distanceTo(this.drone.position) < 2.2);
     const speed = nearWorker ? 2.4 : 5.2;
     const previous = this.drone.position.clone();
@@ -914,7 +918,24 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.drone.position.y = THREE.MathUtils.damp(this.drone.position.y, this.altitude, 7.5, deltaTime);
     this.drone.rotation.y = this.yaw;
     this.droneVisual.rotation.z = THREE.MathUtils.damp(this.droneVisual.rotation.z, -x * 0.18, 8, deltaTime);
-    this.droneVisual.rotation.x = THREE.MathUtils.damp(this.droneVisual.rotation.x, y * 0.11, 8, deltaTime);
+    /*
+     * The body follows the mouse as well as the stick.
+     *
+     * The tilt used to come from thrust alone, so flying where you look left the hull dead
+     * level while the camera pitched - a machine ignoring its own controls. Now the look
+     * pitch carries into the airframe at about two thirds, on top of the thrust lean, and
+     * the drone visibly noses up and down with the mouse. Two thirds rather than one to one
+     * because the full 41 degrees of look range on a hovering quad reads as it falling over.
+     *
+     * This works because `drive` runs every frame with zeros when idle - the damp is always
+     * live, so releasing the mouse settles the body back instead of freezing it mid-tilt.
+     */
+    this.droneVisual.rotation.x = THREE.MathUtils.damp(
+      this.droneVisual.rotation.x,
+      y * 0.11 - this.pitch * 0.65,
+      8,
+      deltaTime
+    );
   }
 
   public look(dx: number, dy: number): void {
@@ -2197,7 +2218,21 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.cameraTarget.copy(pose.target);
       if (this.camera.getFOV() !== pose.fov) this.camera.setFOV(pose.fov);
     } else if (this.view === 'drone') {
-      if (this.camera.getFOV() !== 68) this.camera.setFOV(68);
+      /*
+       * The lens breathes with the throttle.
+       *
+       * A fixed FOV makes 5.2 m/s feel like a slow pan because nothing on screen says
+       * "speed" except parallax, and a warehouse aisle is mostly parallel lines that give
+       * little of it. Four degrees of widening at full stick is under the threshold where
+       * anyone names it and comfortably over the one where they feel it - the standard
+       * sprint-kick trick, sized down for a machine that tops out at jogging pace.
+       *
+       * Damped at 4 rather than snapped so a tap of W does not pulse the lens; only held
+       * movement opens it. Reduced-motion players get none of it.
+       */
+      const fovTarget = 68 + (getAccessibilityPreferences().reducedMotion ? 0 : this.throttle * 4);
+      this.chaseFov = THREE.MathUtils.damp(this.chaseFov, fovTarget, 4, deltaTime > 0 ? deltaTime : 1 / 60);
+      if (Math.abs(this.camera.getFOV() - this.chaseFov) > 0.01) this.camera.setFOV(this.chaseFov);
       const forward = new THREE.Vector3(Math.sin(this.yaw), Math.sin(this.pitch), Math.cos(this.yaw)).normalize();
       if (this.perspective === 'first') {
         // Hide the body and keep the lens inside the drone's collision envelope. Pushing
@@ -2317,8 +2352,32 @@ export class WarehouseRig extends ENGINE.SceneNode {
     return safeDistance;
   }
 
+  /**
+   * ## Why the screen still went black after the slab clamp
+   *
+   * The last fix bounded the DESIRED camera position inside the shell and declared the job
+   * done. But the rendered position is not the desired position - it is a lerp toward it,
+   * and that lerped point is clamped by THIS function, which until now asked only the
+   * raycast. Two reasons the raycast cannot answer "am I still indoors":
+   *
+   *  - `isCameraBlocker` skips every PlaneGeometry, a rule that exists so floor decals and
+   *    label quads never block the arm - and the exterior ground and several wall pieces
+   *    ARE planes, so the ray sails through the very surfaces that mark the outside.
+   *  - The clerestory band is a true opening, in both senses: the daylight module cuts a
+   *    real hole in the wall so its light is honest. A hole blocks nothing. Swing the
+   *    camera near the top of a wall and the arm's swept path crosses the gap, the ray
+   *    finds no geometry, and the lens exits the building - which renders as the whole
+   *    diorama going black behind a live HUD, because outside is back-faced walls and void.
+   *
+   * So the rendered position takes the SAME slab bound the desired one does. The two are
+   * min-ed because they answer different questions - "is something in the way" and "does
+   * the building end" - and the arm has to respect whichever comes first.
+   */
   private resolveCameraOcclusion(anchor: THREE.Vector3, desired: THREE.Vector3, result: THREE.Vector3): number {
-    const safeDistance = this.cameraClearanceDistance(anchor, desired);
+    const safeDistance = Math.min(
+      this.cameraClearanceDistance(anchor, desired),
+      this.cameraBoundsDistance(anchor, desired)
+    );
     this.cameraDirection.copy(desired).sub(anchor);
     const distance = this.cameraDirection.length();
     if (distance < 0.001 || !Number.isFinite(distance)) {
