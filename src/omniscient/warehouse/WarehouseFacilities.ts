@@ -30,6 +30,28 @@ import { WAREHOUSE_LAYOUT, WAREHOUSE_SECURITY_ZONES, WAREHOUSE_SECURITY_ZONE_IDS
  * aisle geometry is fixed and this furniture has to live around it.
  */
 
+/**
+ * The mezzanine's solid volume, exported because the drone has to be stopped by it.
+ *
+ * The flight box reaches x 22.6 and z 27.4, which is straight through this deck - so without
+ * a collision entry the player flies through three metres of steel and an office. That is not
+ * this project's convention: constrainDrone already blocks the racking and the sortation
+ * conveyors, so large solid structures are expected to stop the drone, and a new one that does
+ * not is a regression rather than a style.
+ *
+ * The volume covers the deck and the office only. Under it is a real space a drone can use, and
+ * over it is open air below the roof, so both stay flyable - the same reasoning that lets the
+ * racking be overflown rather than walled off floor to ceiling.
+ */
+export const MEZZANINE_BOUNDS = {
+  minX: 13.4,
+  maxX: 22.6,
+  minZ: 21.4,
+  maxZ: 28.2,
+  minY: 3.3,
+  maxY: 6.5,
+} as const;
+
 const BODY = new THREE.MeshStandardMaterial({ color: '#a86f24', roughness: 0.62, metalness: 0.22 });
 const BODY_DARK = new THREE.MeshStandardMaterial({ color: '#2a2c2b', roughness: 0.74, metalness: 0.34 });
 const STEEL = new THREE.MeshStandardMaterial({ color: '#5a5f63', roughness: 0.58, metalness: 0.6 });

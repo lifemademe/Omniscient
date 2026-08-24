@@ -16,7 +16,7 @@ import { WAREHOUSE_DOOR_IDS, WAREHOUSE_DOORS, WarehouseServiceDoor } from './War
 import { WarehouseAutomation } from './WarehouseAutomation.js';
 import { WarehouseDaylight } from './WarehouseDaylight.js';
 import { WarehouseSetDressing } from './WarehouseSetDressing.js';
-import { WarehouseFacilities } from './WarehouseFacilities.js';
+import { MEZZANINE_BOUNDS, WarehouseFacilities } from './WarehouseFacilities.js';
 
 import type {
   WarehouseDoorId,
@@ -1116,6 +1116,18 @@ export class WarehouseEnvironment {
         position.copy(previous);
         return true;
       }
+    }
+    // The mezzanine deck and the office on it. See MEZZANINE_BOUNDS.
+    if (
+      position.y > MEZZANINE_BOUNDS.minY &&
+      position.y < MEZZANINE_BOUNDS.maxY &&
+      position.x > MEZZANINE_BOUNDS.minX &&
+      position.x < MEZZANINE_BOUNDS.maxX &&
+      position.z > MEZZANINE_BOUNDS.minZ &&
+      position.z < MEZZANINE_BOUNDS.maxZ
+    ) {
+      position.copy(previous);
+      return true;
     }
     if (
       position.y < 2.25 &&
