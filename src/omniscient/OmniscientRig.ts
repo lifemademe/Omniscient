@@ -559,6 +559,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
         mission.urgency === Urgency.Critical ? 3 : mission.urgency === Urgency.Timed ? 2 : 1;
     }
 
+    // Here rather than earlier: the queue has to exist to be dealt out, and the pace loop
+    // above is the last thing that populates it.
+    this.revealEverythingForTesting();
+
     this.buildScenes();
     this.buildCamera();
 
@@ -638,6 +642,53 @@ export class OmniscientRig extends ENGINE.SceneNode {
       },
       { duration: accessibleCameraDuration(duration), easing: Ease.inOutCubic, channel: 'camera' }
     );
+  }
+
+  /**
+   * TESTING: hand out the whole queue at once, so every mission is one click away.
+   *
+   * The authored globe is a two-signal frontier - `OPEN_AT_ONCE`, and the long note on it
+   * explains why. That is correct for a player and slow for anybody who needs to look at
+   * mission seven. This deals the entire queue in one go, and it does it through exactly the
+   * hand-out the offer loop uses - `setSignalState` to Waiting, which also unhides, plus
+   * membership in `openable` - rather than reaching into signal fields directly. Two
+   * conditions make a signal answerable, and this codebase's oldest documented bug is
+   * setting one of them without the other.
+   *
+   * ## `isPublishedGame`, and that is the whole point of the method
+   *
+   * There was already an unconditional block in `synchronizeWarehouseSignals` exposing
+   * Warehouse 07 on the opening globe, carrying its own comment asking for its own removal
+   * "when the post-game gate is restored". That is how a debug hook ships, and this project
+   * has done it twice: POLISH-REVIEW §8 had "strip debug overlay from the build" as item one
+   * for three weeks, and the tool written to replace that bad practice quietly became an
+   * instance of it.
+   *
+   * So the gate is the engine's own flag rather than a constant anybody has to remember. A
+   * DEV boolean has to be turned off on the day of the freeze, by somebody who has spent
+   * that day doing something else. This cannot be forgotten, because nobody has to do
+   * anything: the editor gets every mission, a published build gets the authored campaign,
+   * and the difference costs one condition.
+   *
+   * To take it out for good, delete the method and its two call sites. Nothing else refers
+   * to it, and the offer loop it borrows from is untouched.
+   */
+  private revealEverythingForTesting(): void {
+    if (ENGINE.isPublishedGame()) return;
+
+    for (const request of this.queue) {
+      this.setSignalState(request.mission.contactId, SignalState.Waiting);
+      this.openable.add(request.mission.contactId);
+    }
+    /*
+     * And move the cursor past the end.
+     *
+     * `offered` is how far down the queue requests have been HANDED OUT, and the offer loop
+     * resumes from it after every resolve. Leaving it at 1 with the whole globe already open
+     * would deal the same contacts a second time on the first resolution - which does not
+     * crash, it silently re-opens a request the player has finished.
+     */
+    this.offered = this.queue.length;
   }
 
   /** Construct every diorama the queue needs, hidden, before play begins. */
@@ -2248,6 +2299,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.synchronizeWarehouseSignals();
 
+    // After the save, not before: `applySave` replaces `openable` wholesale, so a reveal
+    // applied at construction is gone the moment somebody presses CONTINUE.
+    this.revealEverythingForTesting();
+
     // The menu screen is the tree, and it is already on. Redraw it as the restored
     // knowledge, the same derive-from-state path a fresh boot takes.
     this.tree?.setState(this.knowledge.toTreeState());
@@ -2262,10 +2317,22 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const archive = loadWarehouseSave();
     const anomaly = this.signals.find((signal) => signal.id === ANOMALY_SIGNAL);
     const warehouse = this.signals.find((signal) => signal.id === WAREHOUSE_SIGNAL);
-    // Temporary playtest access: expose Warehouse 07 from the opening globe even when an
-    // older save still remembers it as hidden. Remove this block when the post-game gate
-    // is restored; the trace-resolved branch below remains the canonical release path.
-    if (warehouse) {
+    /*
+     * Playtest access to Warehouse 07, on the same flag as everything else in
+     * `revealEverythingForTesting` and for the same reason.
+     *
+     * This block used to run unconditionally, with a comment asking whoever came next to
+     * remember to remove it. It exposed the post-game bonus mission on the opening globe of
+     * a shipped build, against the first acceptance requirement in
+     * WAREHOUSE_07_IMPLEMENTATION_PLAN.md - "Warehouse 07 stays inaccessible before campaign
+     * completion" - and it would have gone out that way, because a comment is not a
+     * mechanism.
+     *
+     * The trace-resolved branch below is untouched and remains the canonical release path:
+     * in a published build the warehouse appears when the player traces the red signal, and
+     * not before.
+     */
+    if (warehouse && !ENGINE.isPublishedGame()) {
       warehouse.hidden = false;
       warehouse.state = SignalState.Waiting;
       warehouse.actionLabel = archive.storyCompleted ? 'Select shift' : 'Enter';
