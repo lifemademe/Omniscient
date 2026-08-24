@@ -1927,6 +1927,17 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.decisionCommitted = true;
     this.decisions += 1;
     const correct = decision === active.definition.correctDecision;
+    /*
+     * The judgement lands before any of the bookkeeping below it.
+     *
+     * Committing a decision is the whole mission and it used to produce a cue, a line of text
+     * and a meter tick - less presence than picking up a crate, at the moment the player has
+     * actually been playing towards. The ring goes at the SUBJECT so the answer is attached to
+     * the thing judged, and the edge flash and the lens kick carry the weight. Fired first
+     * because everything after this can branch, return early, or reset the case.
+     */
+    this.feedback.verdictPulse(this.scanSubjectPosition(), correct);
+    this.hud?.flashVerdict(correct);
     if (decision === 'release') this.performCargoHandoff();
     if (decision === 'deny-lockdown') {
       this.environment.lockdownServiceDoor(active.visitorDoorId);

@@ -164,6 +164,37 @@ const CSS = `
    because HTML collapses the run of spaces that was standing in for a line break. */
 .warehouse-hud__controls span { display: block; }
 
+/*
+ * The verdict, felt at the edges of the picture.
+ *
+ * Committing a decision is the entire mission - the game is a judgement, made once per case -
+ * and it produced a sound, a line of text and a meter tick. Nothing happened to the PICTURE,
+ * so the most important moment in the loop had less presence than picking up a crate.
+ *
+ * An edge vignette rather than a full-screen wash: the frame is a remote feed and the player
+ * is reading evidence in the middle of it, so the response belongs in the periphery where it
+ * cannot cover the thing being judged. Wrong is red, hard and fast. Right is the console's own
+ * green, softer and slower - a confirmation should not punch as hard as a mistake, or the
+ * player stops being able to tell them apart at a glance.
+ */
+.warehouse-hud__verdict {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s ease-out;
+}
+.warehouse-hud__verdict--wrong {
+  box-shadow: inset 0 0 74px 8px rgba(196, 58, 44, 0.5), inset 0 0 20px 2px rgba(255, 120, 96, 0.42);
+  opacity: 1;
+  transition: opacity 0.06s ease-in;
+}
+.warehouse-hud__verdict--right {
+  box-shadow: inset 0 0 70px 10px rgba(84, 176, 108, 0.4);
+  opacity: 1;
+  transition: opacity 0.14s ease-in;
+}
+
 .warehouse-hud__scanfx {
   position: absolute;
   inset: 18% 16%;
@@ -407,6 +438,7 @@ export class WarehouseHUD {
   private skipButton: HTMLButtonElement;
   private ops: WarehouseOpsPanel;
   private opticalHint: HTMLElement;
+  private verdict: HTMLDivElement;
   private opticalAim = false;
   private messageTimer = 0;
   private decisionHandler: ((decision: WarehouseDecision) => void) | null = null;
@@ -521,6 +553,8 @@ export class WarehouseHUD {
     this.feed.className = 'warehouse-hud__feed';
     this.scanFx = document.createElement('div');
     this.scanFx.className = 'warehouse-hud__scanfx';
+    this.verdict = document.createElement('div');
+    this.verdict.className = 'warehouse-hud__verdict';
     const optical = document.createElement('div');
     optical.className = 'warehouse-hud__optical';
     const opticalReadout = document.createElement('div');
@@ -608,6 +642,7 @@ export class WarehouseHUD {
     frame.stage.append(
       optical,
       this.scanFx,
+      this.verdict,
       centre,
       alerts,
       this.message,
@@ -867,6 +902,21 @@ export class WarehouseHUD {
     this.message.textContent = text;
     this.message.classList.add('warehouse-hud__message--shown');
     this.messageTimer = seconds;
+  }
+
+  /**
+   * Flash the verdict at the edge of the feed. See the verdict rule in the CSS.
+   *
+   * The class is removed and re-added across a frame so a second decision inside the fade of
+   * the first still reads as a second decision - re-adding a class already present does not
+   * restart a CSS transition, which would silently swallow exactly the case where the player
+   * is making mistakes quickly.
+   */
+  public flashVerdict(correct: boolean): void {
+    const shown = correct ? 'warehouse-hud__verdict--right' : 'warehouse-hud__verdict--wrong';
+    this.verdict.classList.remove('warehouse-hud__verdict--right', 'warehouse-hud__verdict--wrong');
+    requestAnimationFrame(() => this.verdict.classList.add(shown));
+    window.setTimeout(() => this.verdict.classList.remove(shown), correct ? 420 : 620);
   }
 
   public pulseScan(): void {

@@ -148,6 +148,10 @@ export class WarehouseDroneFeedback {
   private readonly subjectPulse = new PulseRing('#8dfff0', 0.44, 0.1);
   private readonly emitterPulse = new PulseRing('#bff4ea', 0.16, 0.05);
   private readonly gripRing = new PulseRing('#ffcf92', 0.2, 0.06);
+  /* Two rings rather than one whose colour is rewritten: a verdict is two different events,
+     and the material for each can then be built once and never touched. */
+  private readonly verdictGood = new PulseRing('#8dffc0', 0.5, 0.1);
+  private readonly verdictBad = new PulseRing('#ff8f78', 0.5, 0.13);
 
   /** The gripper mesh, borrowed so the recoil happens on the part that did the gripping. */
   private gripper: ENGINE.MeshNode | null = null;
@@ -163,7 +167,7 @@ export class WarehouseDroneFeedback {
    * initialiser or this constructor - see PulseRing.build for what that costs.
    */
   public build(): void {
-    for (const ring of [this.subjectPulse, this.emitterPulse, this.gripRing]) {
+    for (const ring of [this.subjectPulse, this.emitterPulse, this.gripRing, this.verdictGood, this.verdictBad]) {
       ring.build();
       this.root.add(ring.root);
     }
@@ -227,6 +231,23 @@ export class WarehouseDroneFeedback {
     this.kickPhase = 0;
   }
 
+  /**
+   * The judgement, at the thing being judged.
+   *
+   * A wrong call kicks nearly three times as hard as a right one and rings wider. That
+   * asymmetry is the point: a confirmation and a mistake must be distinguishable before the
+   * player has read a word of the text that explains which it was, and the body knows the
+   * difference between a nod and a knock long before the eye finishes reading.
+   */
+  public verdictPulse(at: THREE.Vector3, correct: boolean): void {
+    const still = getAccessibilityPreferences().reducedMotion;
+    const ring = correct ? this.verdictGood : this.verdictBad;
+    ring.fire(this.toLocal(at), still ? 0.8 : correct ? 0.5 : 0.66, correct ? 2.4 : 3.6);
+    if (still) return;
+    this.kick = Math.max(this.kick, correct ? 0.035 : 0.095);
+    this.kickPhase = 0;
+  }
+
   public tick(deltaTime: number, face: THREE.Quaternion): void {
     const still = getAccessibilityPreferences().reducedMotion;
     /*
@@ -241,6 +262,8 @@ export class WarehouseDroneFeedback {
     this.subjectPulse.tick(deltaTime, FACE_LOCAL, still);
     this.emitterPulse.tick(deltaTime, FACE_LOCAL, still);
     this.gripRing.tick(deltaTime, FACE_LOCAL, still);
+    this.verdictGood.tick(deltaTime, FACE_LOCAL, still);
+    this.verdictBad.tick(deltaTime, FACE_LOCAL, still);
 
     /*
      * The gripper drops and springs back rather than easing home, because a magnetic clamp
@@ -281,6 +304,8 @@ export class WarehouseDroneFeedback {
     this.subjectPulse.dispose();
     this.emitterPulse.dispose();
     this.gripRing.dispose();
+    this.verdictGood.dispose();
+    this.verdictBad.dispose();
     if (this.gripper) {
       this.gripper.position.y = this.gripperRest;
       this.gripper.scale.setScalar(1);
