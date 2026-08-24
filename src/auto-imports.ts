@@ -155,6 +155,7 @@ import './omniscient/warehouse/WarehouseAutomation.js';
 import './omniscient/warehouse/WarehouseContainmentResponse.js';
 import './omniscient/warehouse/WarehouseDaylight.js';
 import './omniscient/warehouse/WarehouseDroneFeedback.js';
+import './omniscient/warehouse/WarehouseFacilities.js';
 import './omniscient/warehouse/WarehouseHUD.js';
 import './omniscient/warehouse/WarehouseIntruder.js';
 import './omniscient/warehouse/WarehouseLaunchPanel.js';

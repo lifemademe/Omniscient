@@ -16,6 +16,7 @@ import { WAREHOUSE_DOOR_IDS, WAREHOUSE_DOORS, WarehouseServiceDoor } from './War
 import { WarehouseAutomation } from './WarehouseAutomation.js';
 import { WarehouseDaylight } from './WarehouseDaylight.js';
 import { WarehouseSetDressing } from './WarehouseSetDressing.js';
+import { WarehouseFacilities } from './WarehouseFacilities.js';
 
 import type {
   WarehouseDoorId,
@@ -195,6 +196,7 @@ export class WarehouseEnvironment {
   public rearDoor: ENGINE.MeshNode | null = null;
   public conveyorRollers: ENGINE.SceneNode[] = [];
   private readonly setDressing = new WarehouseSetDressing();
+  private readonly facilities = new WarehouseFacilities();
   private readonly daylight = new WarehouseDaylight();
   private readonly automation = new WarehouseAutomation();
   private readonly serviceDoors = new Map<WarehouseDoorId, WarehouseServiceDoor>();
@@ -252,6 +254,9 @@ export class WarehouseEnvironment {
     this.root.add(this.automation.root);
     this.setDressing.build();
     this.root.add(this.setDressing.root);
+    // Vehicles, mezzanine, office and loose life. Built and parented here, never in a field.
+    this.facilities.build();
+    this.root.add(this.facilities.root);
     buildRain(this.root);
   }
 

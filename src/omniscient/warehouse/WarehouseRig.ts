@@ -551,7 +551,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
      *
      * Re-enabling means finding the source pixel first, not shortening the blur.
      */
-    post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: true, strength: 0.3, threshold: 0.82, radius: 0.5, levels: 4 });
+    post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: true, strength: 0.2, threshold: 0.85, radius: 0.5, levels: 4 });
   }
 
   private buildDrone(): void {
