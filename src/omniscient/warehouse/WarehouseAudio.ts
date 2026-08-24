@@ -76,6 +76,8 @@ const PITCH: Readonly<Record<WarehouseCue, readonly [number, number, number]>> =
 };
 
 export class WarehouseAudio {
+  /** Shared noise source for the transient layers. Built on first use - see noise(). */
+  private noiseBuffer: AudioBuffer | null = null;
   private ambience: GainNode | null = null;
   private ambienceSources: AudioScheduledSourceNode[] = [];
   private droneGain: GainNode | null = null;
@@ -217,12 +219,25 @@ export class WarehouseAudio {
     if (!bus) return;
     const [from, to, length] = PITCH[cue];
     const at = bus.ctx.currentTime;
+    /*
+     * The two verbs the player fires all session get a little detuning.
+     *
+     * Every cue here is one oscillator on a fixed sweep, which means a scan sounds byte-for-byte
+     * identical every time it is pressed - and a repeated identical one-shot is the fastest way
+     * to make a good sound tiring. Seven percent is under the threshold where anyone hears a
+     * wrong note and over the one where repeats stop phase-locking into a single machine tone.
+     *
+     * Deliberately not applied to the other cues: a lockdown or a siren fires once at a dramatic
+     * beat, and those want to be exactly the same sound every time so they stay recognisable.
+     */
+    const varied = cue === 'scan' || cue === 'grip';
+    const detune = varied ? 1 + (Math.random() - 0.5) * 0.07 : 1;
     const oscillator = bus.ctx.createOscillator();
     oscillator.type = cue === 'reject' || cue === 'anomaly' || cue === 'tamper' || cue === 'siren' || cue === 'metal-impact'
       ? 'sawtooth'
       : 'triangle';
-    oscillator.frequency.setValueAtTime(from, at);
-    oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, to), at + length);
+    oscillator.frequency.setValueAtTime(from * detune, at);
+    oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, to * detune), at + length);
     const gain = bus.ctx.createGain();
     gain.gain.setValueAtTime(cue === 'bell' ? 0.09 : 0.055, at);
     gain.gain.exponentialRampToValueAtTime(0.0001, at + length);
@@ -232,6 +247,111 @@ export class WarehouseAudio {
       : bus.gameplay);
     oscillator.start(at);
     oscillator.stop(at + length + 0.02);
+    if (cue === 'scan') this.scanTexture(at);
+    else if (cue === 'grip') this.gripTexture(at);
+  }
+
+  /**
+   * Shared white noise, generated once and looped by the burst layers.
+   *
+   * Deterministic rather than Math.random so the grain of the noise is identical every time -
+   * the variation between one grip and the next should come from the envelope and the detune,
+   * which are tuned, and not from the sample content, which is not.
+   */
+  private noise(ctx: BaseAudioContext): AudioBuffer {
+    if (this.noiseBuffer && this.noiseBuffer.sampleRate === ctx.sampleRate) return this.noiseBuffer;
+    const frames = Math.floor(ctx.sampleRate * 0.25);
+    const buffer = ctx.createBuffer(1, frames, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    let seed = 0x9e3779b9;
+    for (let index = 0; index < frames; index++) {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      data[index] = (seed / 0xffffffff) * 2 - 1;
+    }
+    this.noiseBuffer = buffer;
+    return buffer;
+  }
+
+  /**
+   * A filtered noise burst - the transient that a pure oscillator cannot produce.
+   *
+   * Machines do not start at a pitch; they start with a hit and then ring. Every cue in this
+   * file was an oscillator with an instant-on gain, which gives an onset but no CONTENT at the
+   * onset, and reads as thin and synthetic however the sweep is tuned. Four milliseconds of
+   * attack rather than zero because a true instant start adds a broadband click of its own that
+   * the filter cannot shape.
+   */
+  private burst(at: number, frequency: number, q: number, peak: number, length: number): void {
+    const bus = audio.bus();
+    if (!bus) return;
+    const source = bus.ctx.createBufferSource();
+    source.buffer = this.noise(bus.ctx);
+    source.loop = true;
+    const filter = bus.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(frequency, at);
+    filter.Q.value = q;
+    const gain = bus.ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(peak, at + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + length);
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(bus.gameplay);
+    source.start(at);
+    source.stop(at + length + 0.02);
+  }
+
+  /** A tick at the head of the sweep, so the scan reads as struck rather than faded in. */
+  private scanTexture(at: number): void {
+    this.burst(at, 3200, 6, 0.03, 0.03);
+  }
+
+  /**
+   * A magnetic clamp: the clack of the plates meeting, then the mass it just took.
+   *
+   * The cue was a 180-120Hz triangle, which is a soft blip and reads as a UI acknowledgement
+   * rather than a piece of hardware closing on a crate. The clack carries the mechanism and the
+   * thump carries the weight; either alone sounds like half a machine.
+   */
+  private gripTexture(at: number): void {
+    /*
+     * The clack carries this cue, and the levels here are measured rather than guessed.
+     *
+     * Captured off the running game through a loopback recorder and A-weighted, because
+     * unweighted energy answers the wrong question for a cue that lives this low - a thump
+     * under 200Hz can dominate the spectrum and still be inaudible on the laptop speakers
+     * most players will use. As mixed: grip 0.0056 A-rms with a 3.5ms attack and 35-75% of
+     * its energy above 1kHz, which puts it level with a scan (0.0058) and comfortably under
+     * the bell (0.0131). That is the balance intended - grip and scan are the two verbs the
+     * player fires constantly and neither should out-shout a story beat.
+     *
+     * The thump stays because on speakers that CAN reproduce it, it is the difference between
+     * a click and a mass being caught. It simply is not allowed to be the whole cue.
+     *
+     * A warning for whoever measures this next: the warehouse ambience contains a periodic
+     * low rumble - about 166Hz, 0.00047 A-rms, zero attack - that recurs roughly every 11
+     * seconds. It looks exactly like a soft cue in an onset list and it cost this pass a
+     * wrong diagnosis, because grip was read as 12x too quiet when what was being measured
+     * was the room. Separate cues into their own firing windows and check the spacing before
+     * trusting any onset.
+     */
+    this.burst(at, 1800, 1.2, 0.14, 0.06);
+    this.burst(at, 3600, 2, 0.05, 0.022);
+    const bus = audio.bus();
+    if (!bus) return;
+    const thump = bus.ctx.createOscillator();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(150, at);
+    thump.frequency.exponentialRampToValueAtTime(58, at + 0.11);
+    const gain = bus.ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, at);
+    gain.gain.exponentialRampToValueAtTime(0.05, at + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.12);
+    thump.connect(gain);
+    gain.connect(bus.gameplay);
+    thump.start(at);
+    thump.stop(at + 0.14);
   }
 
   public dispose(): void {

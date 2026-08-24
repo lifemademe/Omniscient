@@ -764,12 +764,30 @@ export class OmniscientRig extends ENGINE.SceneNode {
       const openWarehouse = (event: KeyboardEvent): void => {
         if (event.code !== 'F9' || this.warehouse) return;
         event.preventDefault();
+        audio.unlock();
         this.boot?.dispose();
         this.boot = null;
         this.enterWarehouse('story');
       };
       window.addEventListener('keydown', openWarehouse);
       this.onWarehouseDevKey = openWarehouse;
+      /*
+       * Any click in an editor session starts the audio context.
+       *
+       * ConsoleAudio.unlock() has to run from a real user gesture, and the only place that
+       * normally happens is the main menu's NEW GAME. Every dev route into a scene - F9, the
+       * jump strip, a scripted auto-open - skips the menu, so the context is never created,
+       * bus() returns null, and every cue in the game silently does nothing.
+       *
+       * That is not a shipping bug (players come through the menu) and is exactly why it is
+       * worth handling: it presents as "the warehouse has no sound", which is indistinguishable
+       * from a broken mix and sends you looking in the wrong file. It cost a loopback recording
+       * of pure silence to notice. Published builds never register this.
+       */
+      const unlockOnGesture = (): void => audio.unlock();
+      window.addEventListener('pointerdown', unlockOnGesture);
+      this.onDevAudioUnlock = unlockOnGesture;
+
     }
 
     void this.startSession();
@@ -3451,6 +3469,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private disposeSceneJump: (() => void) | null = null;
   /** Editor-only F9 route to the runtime bonus world; never registered in published builds. */
   private onWarehouseDevKey: ((event: KeyboardEvent) => void) | null = null;
+  /** Editor-only: starts the audio context on the first click. See where it is registered. */
+  private onDevAudioUnlock: (() => void) | null = null;
 
   /**
    * The menu plate under the pointer, drawn on the CRT because the plates cannot name
@@ -4169,6 +4189,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.onM4SSKey = null;
     if (this.onWarehouseDevKey) window.removeEventListener('keydown', this.onWarehouseDevKey);
     this.onWarehouseDevKey = null;
+    if (this.onDevAudioUnlock) window.removeEventListener('pointerdown', this.onDevAudioUnlock);
+    this.onDevAudioUnlock = null;
     /*
      * The boot screen owns two window listeners and a fistful of timers.
      *
