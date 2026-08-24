@@ -334,6 +334,8 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private handoff = 4.8;
   private finished = false;
   private savedPost: { tone: unknown; bloom: unknown } | null = null;
+  /** The engine's default fallback camera, held across the mount. See keepActive. */
+  private savedFallbackCamera: THREE.PerspectiveCamera | null = null;
   private readonly blockContextMenu = (event: MouseEvent): void => {
     event.preventDefault();
   };
@@ -437,6 +439,17 @@ export class WarehouseRig extends ENGINE.SceneNode {
       world.inputManager?.removeInputHandler(this.suspendedPlayerController);
     }
     world.inputManager?.addInputHandler(this.input);
+    /*
+     * The warehouse owns the fallback for as long as it is mounted.
+     *
+     * This is the guarantee, where keepActive is only the repair: whatever happens to the
+     * view-target stack - popped, superseded, momentarily empty - the frame the engine
+     * falls back to is now THIS camera, so the worst possible failure renders the correct
+     * view instead of the void at the world origin. The default is put back on unmount
+     * because the workstation owns its own failures.
+     */
+    this.savedFallbackCamera = world.fallbackCamera;
+    if (this.camera) world.fallbackCamera = this.camera.getCamera();
     container.addEventListener('contextmenu', this.blockContextMenu);
     // Capture phase: the release is seen before any overlay target can swallow it.
     window.addEventListener('mouseup', this.releaseOptical, true);
@@ -901,6 +914,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.drone.position.addScaledVector(desired, deltaTime * speed);
     this.drone.position.x = THREE.MathUtils.clamp(this.drone.position.x, WAREHOUSE_LAYOUT.drone.minX, WAREHOUSE_LAYOUT.drone.maxX);
     this.drone.position.z = THREE.MathUtils.clamp(this.drone.position.z, WAREHOUSE_LAYOUT.drone.minZ, WAREHOUSE_LAYOUT.drone.maxZ);
+    /*
+     * Y is clamped HERE, before the collision test, and that ordering is a fix and not a
+     * tidiness. `constrainDrone` answers any out-of-bounds position by copying the whole
+     * previous position back - x and z included - so a climb that nudged y a centimetre
+     * over the ceiling froze the drone dead in the air. Pushing up while flying forward
+     * cancelled the flying forward, which is most of what "the drone can't fly over the
+     * racks" felt like from the stick.
+     */
+    this.drone.position.y = THREE.MathUtils.clamp(this.drone.position.y, 0.85, WAREHOUSE_LAYOUT.drone.maxY);
     this.environment.constrainDrone(this.drone.position, previous);
     /*
      * The height the stick asked for becomes the height it holds.
@@ -2191,8 +2213,14 @@ export class WarehouseRig extends ENGINE.SceneNode {
       [anchor.z, this.cameraDirection.z, shell.rearZ + 0.7],
       [anchor.z, this.cameraDirection.z, shell.frontZ - 0.7],
       [anchor.y, this.cameraDirection.y, 0.6],
-      // Below the hanging fixtures, which reach down to 9.14.
-      [anchor.y, this.cameraDirection.y, 8.7],
+      /*
+       * 8.9, and the 20cm above 8.7 matter. At the drone's ceiling of 8.35 the anchor sits
+       * at 8.57, and against a plane at 8.7 the arm's climb allowed only 0.32m - under the
+       * tight-camera threshold, so flying at max altitude FORCED the first-person fallback
+       * every frame. The fixtures hang to 9.14; 8.9 leaves 24cm clear and the arm at 0.81m,
+       * which is tight and legal rather than collapsed.
+       */
+      [anchor.y, this.cameraDirection.y, 8.9],
     ];
     let allowed = distance;
     for (const [origin, direction, plane] of limits) {
@@ -2408,6 +2436,25 @@ export class WarehouseRig extends ENGINE.SceneNode {
       );
   }
 
+  /**
+   * Re-claim the render camera if anything took it - and it is not paranoia, it is the
+   * black screen.
+   *
+   * ## What the black frames actually were
+   *
+   * Measured off a capture: during the blackouts the diorama region is EXACTLY zero while
+   * the DOM console stays live and the post chain keeps presenting - so the scene was being
+   * rendered, from somewhere with nothing in it. The engine names the somewhere:
+   * `GameLoop.renderFrame` falls back to `world.fallbackCamera` whenever
+   * `getActiveCamera()` fails, and that camera is constructed at (0, 5, 10) looking at the
+   * origin - which in this game is empty fogged space. Pure black, with scanlines.
+   *
+   * The view-target stack holds WeakRefs and this method already existed to re-push after
+   * something disturbed it, but it is REACTIVE: it repairs on the next warehouse tick, so
+   * every disturbance still rendered at least one frame from (0, 5, 10), and a sustained
+   * disturbance rendered seconds of them. The flicker in the reports - black, normal,
+   * black, half a second apart - is this method and the disturbance taking turns.
+   */
   private keepActive(): void {
     if (this.mounted && this.camera && !this.camera.isActive()) this.camera.setActive(true);
   }
@@ -2487,6 +2534,11 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     this.hud?.destroy();
     this.hud = null;
+    if (this.savedFallbackCamera) {
+      const worldNow = this.getWorld();
+      if (worldNow) worldNow.fallbackCamera = this.savedFallbackCamera;
+      this.savedFallbackCamera = null;
+    }
     this.sound.dispose();
     this.camera?.setActive(false);
     world?.inputManager?.exitPointerLock();

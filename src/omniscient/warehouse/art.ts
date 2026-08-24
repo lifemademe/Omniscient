@@ -236,9 +236,23 @@ export class WarehouseEnvironment {
       const aisle = index + 1;
       const rack = mesh(`Rack-${aisle}`, rackGeometry(), STEEL, new THREE.Vector3(x, 0, WAREHOUSE_LAYOUT.rack.centerZ));
       this.root.add(rack);
+      /**
+       * 8.55, not 7.2 - the aisle numbers were being eclipsed by the light fittings.
+       *
+       * Reported as a large dark ceiling panel hiding the numbers from one side, and the
+       * geometry checks out exactly: a fixture shade hangs at y 9.35 in the z=20 row, the
+       * sign hung at 7.2 at z=15.4, and from a drone at working height mid-aisle the two
+       * lie on the same sight line - the shade sat squarely in front of the number for the
+       * whole approach from the building's middle. From the other side there is no fixture
+       * row in the way, hence "only from one side".
+       *
+       * Raising the sign steepens its angle faster than the shade's, so the eclipse point
+       * retreats to the far rear wall where the fog already owns it. z moves off the
+       * fixture row's line for the same reason.
+       */
       const signRoot = ENGINE.SceneNode.create({
         name: `AisleSign-${aisle}`,
-        position: new THREE.Vector3(x, 7.2, 15.4),
+        position: new THREE.Vector3(x, 8.55, 16.2),
       });
       const frame = mesh(
         'SignFrame',
@@ -654,13 +668,20 @@ export class WarehouseEnvironment {
          * clamp in WarehouseRig stops the lens getting in at all; this makes the geometry safe
          * on its own terms as well, on a fault whose symptom is the entire screen going out.
          */
+        /*
+         * 0.62 rather than 0.86. At 0.86 the thirty shades were the "large dark panels" in
+         * the report - from below at a shallow angle an open cone reads as a solid disc
+         * nearly two metres wide, and five of them in a row eclipsed whole signs. 0.62
+         * keeps the bright-thing-inside-dark-thing read and takes half the silhouette area
+         * off it.
+         */
         const shade = mesh(
           'CeilingFixtureShade',
-          new THREE.CylinderGeometry(0.2, 0.86, 0.42, 12, 1, true),
+          new THREE.CylinderGeometry(0.18, 0.62, 0.4, 12, 1, true),
           SHADE,
           new THREE.Vector3(x, 9.35, z)
         );
-        const lens = mesh('CeilingFixtureLens', new THREE.CylinderGeometry(0.78, 0.78, 0.05, 12), fixtureLens, new THREE.Vector3(x, 9.16, z));
+        const lens = mesh('CeilingFixtureLens', new THREE.CylinderGeometry(0.56, 0.56, 0.05, 12), fixtureLens, new THREE.Vector3(x, 9.16, z));
         this.root.add(stem, shade, lens);
         /*
          * Nine lamps, not fifteen.
@@ -826,11 +847,23 @@ export class WarehouseEnvironment {
       position.copy(previous);
       return true;
     }
-    for (const rackX of WAREHOUSE_LAYOUT.rack.centers) {
-      if (position.z < WAREHOUSE_LAYOUT.rack.minCollisionZ || position.z > WAREHOUSE_LAYOUT.rack.maxCollisionZ) continue;
-      if (Math.abs(position.x - rackX) >= WAREHOUSE_LAYOUT.rack.halfCollisionX) continue;
-      position.copy(previous);
-      return true;
+    /*
+     * The racks are 6.1m tall and the drone's ceiling is 8.35 - there are two clear metres
+     * of air above every rack, and this test used to ignore Y entirely, so the collision
+     * wall ran floor to roof and the building was five corridors. Reported directly as
+     * "the drone can't fly over the racks", and flying over them is half the point of
+     * being a drone.
+     *
+     * 6.55 is the rack top plus enough for the hull, so skimming the cartons stays an
+     * honest collision while clearing them becomes flight.
+     */
+    if (position.y < 6.55) {
+      for (const rackX of WAREHOUSE_LAYOUT.rack.centers) {
+        if (position.z < WAREHOUSE_LAYOUT.rack.minCollisionZ || position.z > WAREHOUSE_LAYOUT.rack.maxCollisionZ) continue;
+        if (Math.abs(position.x - rackX) >= WAREHOUSE_LAYOUT.rack.halfCollisionX) continue;
+        position.copy(previous);
+        return true;
+      }
     }
     if (
       position.y < 2.25 &&
