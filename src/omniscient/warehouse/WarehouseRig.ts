@@ -2417,12 +2417,32 @@ export class WarehouseRig extends ENGINE.SceneNode {
     return safeDistance;
   }
 
+  /**
+   * ## The PlaneGeometry exemption was the black screen
+   *
+   * This used to skip every PlaneGeometry, so decals and markings could never snag the
+   * camera arm. But EVERY LABEL in the warehouse is a plane - aisle signs, door signage,
+   * bay ranges, station and conveyor plates, via createWarehouseLabelGeometry - and their
+   * material is unlit MeshBasicMaterial on a #07100d ground, luma about seven.
+   *
+   * So the arm was free to park the lens centimetres BEHIND a 1.45-metre near-black plate.
+   * A plate that close covers roughly a hundred degrees of view, which is exactly the width
+   * of the reported black band - and whether the lens tucks behind one depends on the
+   * damped lerp's history, not just the final yaw, which is why the same bearing would go
+   * black on a fast turn and render fine approached slowly. Proven live: a scripted
+   * full-circle spin hit a fifteen-step black band that a 12px-step retrace of the same
+   * arc could not reproduce.
+   *
+   * The exemption is by NAME now. Floor markings stay exempt because rays from the drone
+   * to the camera can graze them at shallow angles and the arm must not jitter on paint;
+   * everything else flat - and above all the labels - blocks like the solid signage it
+   * visually is.
+   */
   private isCameraBlocker(object: THREE.Object3D): boolean {
     if (!(object instanceof THREE.Mesh)) return false;
-    if (object.geometry instanceof THREE.PlaneGeometry || object.geometry instanceof THREE.CircleGeometry) return false;
     const materials = Array.isArray(object.material) ? object.material : [object.material];
     if (materials.every((material) => material.transparent && material.opacity < 0.45)) return false;
-    return !/(Lens|Lamp|Status|Beacon|Rain|Dust|Tape|ShrinkWrap)/i.test(object.name);
+    return !/(Lens|Lamp|Status|Beacon|Rain|Dust|Tape|ShrinkWrap|AisleGuide|SafetyChevron|FloorWear|WetGround|Sky)/i.test(object.name);
   }
 
   private nearestCargoDistance(): number {
