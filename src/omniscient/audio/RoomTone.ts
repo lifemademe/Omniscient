@@ -63,6 +63,25 @@ export interface Bed {
    * cellar has a shorter irregular one, a data hum has none at all.
    */
   drift: [number, number] | null;
+  /**
+   * Where this room sits across the stereo field.
+   *
+   * TOMAS-REVIEW measured left/right correlation at 0.993-0.998 for an entire recording -
+   * no width on the wind, no side for the guy wire, nothing panned anywhere. In a game whose
+   * whole verb is listening to a place, that is a dimension the design never spent.
+   *
+   * Optional, and absence is not silence: `build` gives every room a default image anyway
+   * (see the panning rules there), because a room with no stereo authored should still not be
+   * a point source. This is for saying something specific - which side the guy wire is on.
+   */
+  stereo?: {
+    /** Pan per tone, -1 hard left to +1 hard right. Missing entries centre. */
+    tones?: number[];
+    /** Width of the air bed: 0 mono, 1 fully decorrelated left and right. */
+    air?: number;
+    /** Where the work lands. Each strike is scattered a little either side of it. */
+    work?: number;
+  };
 }
 
 /**
@@ -135,6 +154,15 @@ export const BEDS: Record<string, Bed> = {
    */
   'scene-beacon-mast': {
     work: [320, 0.13, 0.045, 15],
+    /*
+     * The image TOMAS-REVIEW asked for by name: guy wire hard-ish left, the sea wide, the
+     * knock slightly right, and the 44Hz centred because bass always is.
+     *
+     * It is also the honest reading of the set. Tomas stands to the right of frame in both
+     * held shots and the splice box is to his left, so metal complaining on the left and a
+     * tool landing on the right is where those sounds are, not merely where they sit well.
+     */
+    stereo: { tones: [0, 0, -0.55], air: 0.7, work: 0.3 },
     tones: [
       [44, 0.02, 'sine'],
       // 118 rather than the 105 this was first written at. The repair shop has a tone at
@@ -274,6 +302,23 @@ let currentName: string | null = null;
  * nodes and live for minutes; pooling them would be an optimisation of the cheapest thing
  * in the file, paid for with the possibility of a stuck oscillator.
  */
+/**
+ * Bass stays centred, and this is a rule rather than a preference.
+ *
+ * Below roughly 120Hz the ear localises by level difference alone and does it badly, so a
+ * panned low tone does not read as "over there", it reads as a channel imbalance. It also
+ * costs headroom on any system that sums to mono, which includes most laptops. Enforced here
+ * rather than left to whoever authors a bed, because it is the kind of thing that is easy to
+ * get wrong once and never hear.
+ */
+const BASS_CENTRE_HZ = 120;
+
+function pannerFor(ctx: BaseAudioContext, pan: number): StereoPannerNode {
+  const node = ctx.createStereoPanner();
+  node.pan.value = Math.max(-1, Math.min(1, pan));
+  return node;
+}
+
 function build(bed: Bed): Live | null {
   const bus = audio.bus();
   if (!bus) return null;
@@ -285,31 +330,69 @@ function build(bed: Bed): Live | null {
 
   const stops: Array<() => void> = [];
 
-  for (const [frequency, level, type] of bed.tones) {
+  for (const [index, [frequency, level, type]] of bed.tones.entries()) {
     const osc = ctx.createOscillator();
     osc.type = type;
     osc.frequency.value = frequency;
     const g = ctx.createGain();
     g.gain.value = level;
-    osc.connect(g).connect(gain);
+    /*
+     * Authored pan if the bed says so, otherwise a gentle alternating spread so that a room
+     * nobody has panned still has more than one place in it. Either way the bass is centred.
+     */
+    const authored = bed.stereo?.tones?.[index];
+    const fallback = index === 0 ? 0 : (index % 2 === 1 ? -0.22 : 0.22);
+    const pan = frequency < BASS_CENTRE_HZ ? 0 : (authored ?? fallback);
+    osc.connect(g).connect(pannerFor(ctx, pan)).connect(gain);
     osc.start();
     stops.push(() => osc.stop());
   }
 
   if (bed.air) {
     const [cutoff, q, level] = bed.air;
-    const source = ctx.createBufferSource();
-    source.buffer = noise;
-    source.loop = true;
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = cutoff;
-    filter.Q.value = q;
+    /*
+     * Width comes from TWO noise sources, not from panning one.
+     *
+     * This is the part that is easy to get wrong. Sending a single source through panners at
+     * -1 and +1 puts the same signal in both ears, which the brain fuses into a phantom point
+     * in the middle - not wide, just centred and quieter. Width needs the two channels
+     * DECORRELATED, so the second source reads the same noise buffer from half a buffer away.
+     * Same texture, unrelated samples, genuinely two-eared.
+     *
+     * Each half gets its own filter so each can be modulated, and the drift LFO drives both -
+     * otherwise the two ears would breathe out of step, which reads as a phasing artefact
+     * rather than as weather.
+     *
+     * At width 0 it collapses to one centred source, which is right for a bed that should be
+     * a point: a data hum in a small room has no width in life either.
+     */
+    const width = bed.stereo?.air ?? 0.45;
     const g = ctx.createGain();
-    g.gain.value = level;
-    source.connect(filter).connect(g).connect(gain);
-    source.start();
-    stops.push(() => source.stop());
+    // Two decorrelated halves sum to about 3dB more than one, so the level comes back down.
+    g.gain.value = width > 0 ? level * 0.72 : level;
+    g.connect(gain);
+
+    const filters: BiquadFilterNode[] = [];
+    const spawnHalf = (offset: number, pan: number): void => {
+      const source = ctx.createBufferSource();
+      source.buffer = noise;
+      source.loop = true;
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = cutoff;
+      filter.Q.value = q;
+      source.connect(filter).connect(pannerFor(ctx, pan)).connect(g);
+      source.start(ctx.currentTime, offset);
+      filters.push(filter);
+      stops.push(() => source.stop());
+    };
+
+    if (width > 0) {
+      spawnHalf(0, -width);
+      spawnHalf(noise.duration * 0.5, width);
+    } else {
+      spawnHalf(0, 0);
+    }
 
     if (bed.drift) {
       const [depth, period] = bed.drift;
@@ -318,7 +401,8 @@ function build(bed: Bed): Live | null {
       lfo.frequency.value = 1 / period;
       const lfoGain = ctx.createGain();
       lfoGain.gain.value = depth;
-      lfo.connect(lfoGain).connect(filter.frequency);
+      lfo.connect(lfoGain);
+      for (const filter of filters) lfoGain.connect(filter.frequency);
       lfo.start();
       stops.push(() => lfo.stop());
     }
@@ -346,7 +430,13 @@ function build(bed: Bed): Live | null {
       const g = ctx.createGain();
       g.gain.setValueAtTime(level, ctx.currentTime);
       g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + decay);
-      source.connect(filter).connect(g).connect(gain);
+      /*
+       * Scattered around its authored side rather than pinned to it. The same reasoning as
+       * the irregular gap above: a knock that arrives from the identical spot every time is a
+       * loudspeaker, and one that wanders a little is somebody moving around a room.
+       */
+      const side = bed.stereo?.work ?? 0.28;
+      source.connect(filter).connect(g).connect(pannerFor(ctx, side + (Math.random() - 0.5) * 0.3)).connect(gain);
       source.start();
       source.stop(ctx.currentTime + decay + 0.05);
       workTimer = window.setTimeout(knock, (gap * (0.5 + Math.random())) * 1000);

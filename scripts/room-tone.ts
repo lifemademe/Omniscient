@@ -150,5 +150,43 @@ const quiet = Object.keys(BEDS).filter((name) => BEDS[name].tones.length === 0 &
 if (quiet.length) fail(`beds with neither tones nor air: ${quiet.join(', ')}`);
 else console.log('  ok    every bed has something in it');
 
+/*
+ * The stereo image, which is new and therefore worth fencing.
+ *
+ * `build` already forces sub-120Hz tones to centre, so a bed that pans its bass is not a
+ * bug that can reach a speaker - it is a bug that reaches the next person to read the file,
+ * who will believe the number. An authored value the engine silently ignores is worse than
+ * a wrong one, because nothing ever contradicts it.
+ */
+console.log('--- stereo ---');
+const beforeStereo = failures;
+const BASS_CENTRE_HZ = 120;
+let authored = 0;
+for (const name of Object.keys(BEDS)) {
+  const stereo = BEDS[name].stereo;
+  if (!stereo) continue;
+  authored += 1;
+  for (const [index, pan] of (stereo.tones ?? []).entries()) {
+    if (pan < -1 || pan > 1) fail(`${name} tone ${index} pans to ${pan}, outside -1..1`);
+    const tone = BEDS[name].tones[index];
+    if (!tone) fail(`${name} pans tone ${index}, which does not exist`);
+    else if (tone[0] < BASS_CENTRE_HZ && pan !== 0) {
+      fail(`${name} pans its ${tone[0]}Hz tone to ${pan}, but build() centres anything under ${BASS_CENTRE_HZ}Hz`);
+    }
+  }
+  if (stereo.air !== undefined && (stereo.air < 0 || stereo.air > 1)) {
+    fail(`${name} air width ${stereo.air} is outside 0..1`);
+  }
+  if (stereo.work !== undefined && (stereo.work < -1 || stereo.work > 1)) {
+    fail(`${name} work pan ${stereo.work} is outside -1..1`);
+  }
+  if (stereo.work !== undefined && !BEDS[name].work) {
+    fail(`${name} pans work it does not have`);
+  }
+}
+if (failures === beforeStereo) {
+  console.log(`  ok    ${authored} bed(s) author a stereo image, all of them legal`);
+}
+
 console.log(failures === 0 ? `\nALL CHECKS PASSED${warnings ? ` (${warnings} inert)` : ''}` : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);

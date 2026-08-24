@@ -508,7 +508,7 @@ that is correct — but the hard cut in §6 is what a player will read as one.
 | 11 | warp mask falloff | **WITHDRAWN** — the claim was wrong, see §6 |
 | 12 | the scene-resolve entrance | **NOT DONE** — the biggest remaining item, see below |
 | 13 | camera drift on long shots | **DONE and measured** — `drift` on `CameraShot`; held-shot frame delta 0.11% → 0.39% |
-| 14 | stereo on the room tone | **NOT DONE** |
+| 14 | stereo on the room tone | **BUILT, NOT YET HEARD** — panners in `RoomTone`, mast image authored; L/R correlation not re-measured |
 | 15 | trust-linked mix envelope | **NOT DONE** |
 
 ### Seen on screen at last — 2026-08-24
@@ -536,7 +536,16 @@ Two things this pass leaves behind:
   1.16%, and 16 of 25 samples now clear the 0.3% ceiling this document identified, against 0
   of 25 before). The control run with drift disabled reproduces this document's original
   0.0–0.3% reading almost exactly, which is a nice independent confirmation of the finding.
-- Items **12, 14 and 15 remain NOT DONE**.
+- **Item 14 is built but not yet heard.** `RoomTone` now routes every element through a
+  `StereoPannerNode`, the air bed is genuinely wide (two decorrelated noise sources, not one
+  source split — that would fuse to a phantom centre), and the mast authors the image this
+  document asked for: guy wire hard-ish left, sea wide, knock slightly right, bass centred.
+  `scripts/room-tone.ts` gained checks for the new invariants and caught a real fault on its
+  first run — the first pass panned the 118Hz swell believing it was the guy wire, which
+  `build()` would have silently centred as sub-120Hz. The guy wire is the 190Hz triangle.
+  **The 0.993–0.998 L/R correlation has NOT been re-measured**, because the editor world
+  unloaded mid-session; that number is what closes this item.
+- Items **12 and 15 remain NOT DONE**.
 - **`default` is deliberately left alone.** It measures a p2–p98 range of 38, the weakest shot
   in the scene, and that is defensible rather than broken: the mission OPENS on a dead beacon,
   and `backdrop.ts` states the rule that "there is only one light in this mission that is
