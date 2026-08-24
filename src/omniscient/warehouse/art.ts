@@ -181,6 +181,14 @@ function buildRain(root: ENGINE.SceneNode): void {
  */
 const WAREHOUSE_SKY_FILL = 1.8;
 
+/** Mirrors ZONE_ACCENT in WarehouseFacilities so signage and floor read as one code. */
+const ZONE_SIGN_ACCENT: Readonly<Record<string, string>> = {
+  receiving: '#d29a4a',
+  'storage-west': '#6ba0b0',
+  'storage-east': '#93b96b',
+  sortation: '#c8756a',
+};
+
 export class WarehouseEnvironment {
   public readonly root = ENGINE.SceneNode.create({ name: 'WarehouseEnvironment' });
   public readonly stationPositions: Readonly<Record<'quarantine' | 'return' | 'hold', THREE.Vector3>> = {
@@ -642,7 +650,16 @@ export class WarehouseEnvironment {
         `${zone.shortLabel} // ${zone.label}`,
         3.9,
         0.58,
-        '#df6b5c',
+        /*
+         * The sign takes the zone's own accent instead of one shared red.
+         *
+         * All four hung in the same colour, which meant the only thing distinguishing four
+         * places was text eight metres up. Matching the floor plate below it lets the sign and
+         * the ground agree, so the colour is learned once and then recognised without reading.
+         * See ZONE_ACCENT in WarehouseFacilities - the two tables are deliberately the same
+         * four values, and if they ever diverge the room stops teaching its own colour code.
+         */
+        ZONE_SIGN_ACCENT[id] ?? '#df6b5c',
         new THREE.Vector3(
           (zone.bounds.minX + zone.bounds.maxX) / 2,
           8.35,

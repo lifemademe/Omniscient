@@ -3,7 +3,7 @@ import * as THREE from 'three';
 
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
-import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
+import { WAREHOUSE_LAYOUT, WAREHOUSE_SECURITY_ZONES, WAREHOUSE_SECURITY_ZONE_IDS } from './WarehouseLayout.js';
 
 /**
  * The machinery, the mezzanine and the office - the things that make a shed a workplace.
@@ -45,6 +45,34 @@ const GLASS = new THREE.MeshStandardMaterial({
 });
 const OFFICE_WALL = new THREE.MeshStandardMaterial({ color: '#43484c', roughness: 0.86, metalness: 0.08 });
 const RUBBER = new THREE.MeshStandardMaterial({ color: '#101413', roughness: 0.95, metalness: 0.04 });
+
+/**
+ * One accent per security zone - the whole of §229 in four colours.
+ *
+ * The four zones were indistinguishable in the picture. They had hanging labels, but all four
+ * were the same red, eight metres up and small, so a player asked "where are you?" had to read
+ * a sign rather than recognise a place. Somewhere you have been should be identifiable before
+ * you can read anything in it.
+ *
+ * Floor colour is the answer because the floor is the one surface always in frame from a drone
+ * and the one thing a warehouse genuinely colour-codes. Kept inside the game's existing range -
+ * amber, blue-teal, olive, brick - so this reads as painted concrete rather than as a menu.
+ */
+const ZONE_ACCENT: Readonly<Record<string, string>> = {
+  receiving: '#b5762a',
+  'storage-west': '#41707e',
+  'storage-east': '#6d8f45',
+  sortation: '#a0524a',
+};
+
+/** Where each zone's floor marker sits: open floor inside the zone, clear of racks and stations. */
+const ZONE_MARKER: Readonly<Record<string, readonly [number, number]>> = {
+  // Clear of the inbound truck and its dock seal, which own the middle of receiving.
+  receiving: [7.6, -19.4],
+  'storage-west': [-15.5, 6.4],
+  'storage-east': [5.5, 6.4],
+  sortation: [16.4, 7.6],
+};
 /*
  * Fluorescent tube: the second fixture type this building needed.
  *
@@ -151,6 +179,7 @@ export class WarehouseFacilities {
     this.buildMezzanine(bucket);
     this.buildLooseLife(bucket);
     this.buildStripLighting(bucket);
+    this.buildZoneIdentity();
 
     const merged: Array<[string, THREE.BufferGeometry[], THREE.Material]> = [
       ['FacilityBody', bucket.body, BODY],
@@ -189,6 +218,100 @@ export class WarehouseFacilities {
         position: new THREE.Vector3(18.4, 5.15, 24.4),
       })
     );
+  }
+
+  /**
+   * Give each security zone a face: a painted floor plate carrying its letter, and a colour
+   * band at its threshold.
+   *
+   * Not merged with the rest, because each plate needs its own canvas texture - and four extra
+   * draw calls for the thing that makes the building navigable is the best trade in this file.
+   */
+  private buildZoneIdentity(): void {
+    for (const id of WAREHOUSE_SECURITY_ZONE_IDS) {
+      const zone = WAREHOUSE_SECURITY_ZONES[id];
+      const accent = ZONE_ACCENT[id] ?? '#b5762a';
+      const marker = ZONE_MARKER[id] ?? [0, 0];
+
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#20211f';
+        ctx.fillRect(0, 0, 256, 256);
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 14;
+        ctx.strokeRect(7, 7, 242, 242);
+        /*
+         * The lettering is drawn MIRRORED, so that it arrives unmirrored.
+         *
+         * Chasing this through the texture matrix did not converge: no flip gave mirrored text
+         * with the label above the letter, flipping U alone fixed one plate, and flipping both
+         * turned out to be a 180 degree rotation - two reflections compose to a rotation - which
+         * fixed the vertical order and left the mirroring exactly where it was. Three builds,
+         * three different wrong answers.
+         *
+         * The canvas is the one place in this chain where the transform is unambiguous, so the
+         * mirror happens here and repeat/offset only carry the vertical flip. Anyone changing
+         * the plate's rotation must re-check this on screen; the derivation is not trustworthy.
+         */
+        ctx.save();
+        ctx.translate(256, 0);
+        ctx.scale(-1, 1);
+        ctx.fillStyle = accent;
+        ctx.font = 'bold 150px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(zone.shortLabel, 128, 116);
+        ctx.font = 'bold 27px monospace';
+        ctx.fillText(zone.label, 128, 214);
+        ctx.restore();
+      }
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      /*
+       * Both axes flipped, and this was arrived at by looking rather than by reasoning.
+       *
+       * A PlaneGeometry laid flat by rotating -90 degrees about X, viewed from the drone's
+       * usual heading, presents the canvas both mirrored and upside down - measured on screen
+       * across two separate plates in two separate builds, reading TSEW EGAROTS with the label
+       * above the letter instead of below it. Flipping U alone fixed the mirroring and left the
+       * rotation; flipping neither left both. Flipping both is what actually lands.
+       *
+       * Recorded because the derivation says otherwise: canvas top should map to world -Z and
+       * canvas +U to world +X, which would need no flip at all. Something between flipY, the
+       * plane's winding and the rotation disagrees with that, and the screen is the authority.
+       */
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.repeat.set(-1, -1);
+      texture.offset.set(1, 1);
+      const plate = ENGINE.MeshNode.create({
+        name: `ZoneFloorPlate-${id}`,
+        geometry: new THREE.PlaneGeometry(3.5, 3.5),
+        material: new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }),
+        receiveShadow: false,
+      });
+      plate.rotation.x = -Math.PI / 2;
+      plate.position.set(marker[0], 0.016, marker[1]);
+      this.root.add(plate);
+
+      /*
+       * A band across the zone's own width at its near edge. Thin, unlit, and sitting just
+       * above the floor paint already there - a threshold you cross rather than a carpet.
+       */
+      const width = Math.min(zone.bounds.maxX - zone.bounds.minX, 20);
+      const band = ENGINE.MeshNode.create({
+        name: `ZoneThreshold-${id}`,
+        geometry: new THREE.PlaneGeometry(width, 0.42),
+        material: new THREE.MeshBasicMaterial({ color: accent, toneMapped: false }),
+        receiveShadow: false,
+      });
+      band.rotation.x = -Math.PI / 2;
+      band.position.set((zone.bounds.minX + zone.bounds.maxX) / 2, 0.015, marker[1] + 2.6);
+      this.root.add(band);
+    }
   }
 
   /**
