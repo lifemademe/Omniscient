@@ -508,7 +508,7 @@ that is correct — but the hard cut in §6 is what a player will read as one.
 | 11 | warp mask falloff | **WITHDRAWN** — the claim was wrong, see §6 |
 | 12 | the scene-resolve entrance | **NOT DONE** — the biggest remaining item, see below |
 | 13 | camera drift on long shots | **DONE and measured** — `drift` on `CameraShot`; held-shot frame delta 0.11% → 0.39% |
-| 14 | stereo on the room tone | **BUILT, NOT YET HEARD** — panners in `RoomTone`, mast image authored; L/R correlation not re-measured |
+| 14 | stereo on the room tone | **DONE and measured** — L/R correlation 0.993–0.998 → **0.070** |
 | 15 | trust-linked mix envelope | **NOT DONE** |
 
 ### Seen on screen at last — 2026-08-24
@@ -543,8 +543,19 @@ Two things this pass leaves behind:
   `scripts/room-tone.ts` gained checks for the new invariants and caught a real fault on its
   first run — the first pass panned the 118Hz swell believing it was the guy wire, which
   `build()` would have silently centred as sub-120Hz. The guy wire is the 190Hz triangle.
-  **The 0.993–0.998 L/R correlation has NOT been re-measured**, because the editor world
-  unloaded mid-session; that number is what closes this item.
+  **Measured, and it closes the item.** Recorded off the running game through a loopback
+  and analysed by band:
+
+  | band | correlation | L/R balance | |
+  |---|---|---|---|
+  | overall | **0.070** (was 0.993–0.998) | | mono → genuinely stereo |
+  | bass 20–120Hz | 0.998 | +0.1 dB | centred, as the engine rule intends |
+  | guy wire 120–300Hz | −0.543 | **+17.0 dB left** | hard-ish left, as asked |
+  | air 300–900Hz | 0.071 | +1.4 dB | decorrelated — real width, not a phantom centre |
+
+  The bass row is the one that proves the design rather than the effect: it stays at 0.998
+  and dead centre while everything above it decorrelates, which is exactly what
+  `BASS_CENTRE_HZ` exists to guarantee.
 - Items **12 and 15 remain NOT DONE**.
 - **`default` is deliberately left alone.** It measures a p2–p98 range of 38, the weakest shot
   in the scene, and that is defensible rather than broken: the mission OPENS on a dead beacon,
