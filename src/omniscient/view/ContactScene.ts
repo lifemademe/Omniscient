@@ -23,6 +23,7 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
 import { applyCertainty, CERTAINTY } from '../art/certainty.js';
+import { getAccessibilityPreferences } from '../accessibility/preferences.js';
 import { createSuspicion, type Suspicion } from '../art/suspected.js';
 
 /** Seconds between staggered resolves. ART_DIRECTION §3. */
@@ -183,6 +184,57 @@ export class ContactScene extends ENGINE.SceneNode {
     this.visible = true;
     this.live = true;
     this.applyCertainties();
+  }
+
+  /**
+   * Open the room as the machine's guess at it, and let it resolve into the real thing.
+   *
+   * TOMAS-REVIEW measured the entrance at ONE FRAME and called a proper one the single
+   * biggest piece of juice available in the game. The premise is an optical feed reaching a
+   * machine that is not yet sure what it is looking at, so the honest entrance is the machine
+   * being unsure and then not: the room arrives as lit wireframe boxes and collapses into
+   * objects.
+   *
+   * ## Why this reuses the hint mechanism rather than adding one
+   *
+   * `createSuspicion` already does exactly this for a single prop, and the resolve sweep it
+   * plays is the beat the whole art direction is built around - a black box with lit edges
+   * becomes a thing because somebody said what it was. Pointing it at the room on entry does
+   * not invent a new effect; it says that at the moment a feed opens, the machine has not yet
+   * said what ANY of it is.
+   *
+   * ## What it deliberately leaves alone
+   *
+   * Props already below SHAPED keep the suspicion they have. Those are things the mission
+   * says the machine genuinely has not identified, and they must still be unresolved after
+   * the entrance finishes - sweeping them in with the scenery would answer a question the
+   * player is supposed to be asked. This only wraps what is already known, so it only ever
+   * un-tells something the room was about to tell anyway.
+   *
+   * Staggered across the whole window rather than fired together: several identical
+   * animations on one frame read as a glitch, which is the same reason `applyCertainties`
+   * staggers its own promotions.
+   */
+  public openAsUnknown(seconds = 0.8): void {
+    if (getAccessibilityPreferences().reducedMotion) return;
+
+    const eligible = [...this.props.entries()].filter(([, prop]) => {
+      if (prop.suspicion) return false;
+      const certainty = prop.certainty ?? (prop.inked ? CERTAINTY.KNOWN : CERTAINTY.SHAPED);
+      return certainty >= CERTAINTY.SHAPED;
+    });
+    if (eligible.length === 0) return;
+
+    const step = seconds / eligible.length;
+    for (const [index, [id, prop]] of eligible.entries()) {
+      const suspicion = createSuspicion(
+        prop.node as unknown as THREE.Object3D,
+        seedFrom(`${this.sceneId}:entry:${id}`)
+      );
+      if (!suspicion) continue;
+      prop.suspicion = suspicion;
+      suspicion.resolve(index * step);
+    }
   }
 
   /** Hide this diorama. */

@@ -455,8 +455,21 @@ let acquireToken = 0;
  *
  * Skipped entirely under reduced motion or a display filter that is off, because both are
  * asking for the picture rather than the performance.
+ *
+ * ## Shorter than the wireframe entrance, on purpose
+ *
+ * 0.55 rather than the 0.9 this was first written at, and the reason is an ordering that only
+ * showed up once both effects were on screen together. `ContactScene.openAsUnknown` wraps the
+ * room in lit wireframe edges for 0.8s, and those edges are ONE PIXEL WIDE - at the ladder's
+ * first rung a block is twelve, so the coarse phase does not merely coexist with the
+ * wireframe, it erases it. Captured side by side, the boxes were invisible at 12px and
+ * obvious two rungs later.
+ *
+ * So the lock finishes first and hands over: the signal arrives, and then you watch the
+ * machine's guess at the room resolve in a picture sharp enough to read it. Two effects in
+ * sequence say two things; the same two on top of each other said neither.
  */
-export function retroAcquire(seconds = 0.9): void {
+export function retroAcquire(seconds = 0.55): void {
   if (!effect) return;
   const preferences = getAccessibilityPreferences();
   if (preferences.reducedMotion || preferences.displayFilter === 'off') return;

@@ -3593,6 +3593,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
      */
     this.scene?.reset();
     this.scene?.activate();
+    /*
+     * And the room resolves rather than appearing.
+     *
+     * After activate, not inside it: activate runs applyCertainties, which resolves any
+     * suspicion a prop already has. Wrapping the room before that would hand the entrance's
+     * own boxes straight to the promotion pass and sweep them all on frame one.
+     */
+    this.scene?.openAsUnknown();
 
     /**
      * §187, enforced here rather than trusted to discipline.

@@ -506,7 +506,7 @@ that is correct — but the hard cut in §6 is what a player will read as one.
 | 9 | 15.7kHz down | **DONE** — 0.0022 → 0.0008 |
 | 10 | symmetric exit | **DONE** — the scene is held 0.45s into the move home |
 | 11 | warp mask falloff | **WITHDRAWN** — the claim was wrong, see §6 |
-| 12 | the scene-resolve entrance | **PARTLY DONE** — the signal lock ships and is measured; the `suspected` and certainty passes do not |
+| 12 | the scene-resolve entrance | **MOSTLY DONE** — signal lock and the wireframe entrance both ship, measured; the certainty-tier resolve does not |
 | 13 | camera drift on long shots | **DONE and measured** — `drift` on `CameraShot`; held-shot frame delta 0.11% → 0.39% |
 | 14 | stereo on the room tone | **DONE and measured** — L/R correlation 0.993–0.998 → **0.070** |
 | 15 | trust-linked mix envelope | **NOT DONE** |
@@ -567,8 +567,26 @@ Two things this pass leaves behind:
   blocks shimmer and crawl. Stepping is both safe and the more honest fiction: a digital
   signal locking does not slide through resolutions.
 
-  Still not done from this section: pointing `art/suspected.ts` at the whole scene, and
-  opening at `CERTAINTY.SHAPED` to resolve into the authored tiers. The `connect` lead was
+  **The wireframe entrance ships too.** `ContactScene.openAsUnknown()` wraps every already-known
+  prop in `createSuspicion` on mount and resolves them staggered across 0.8s, so the room
+  arrives as the machine's guess and collapses into objects. Measured: teal wireframe pixels
+  run **887 → 572 → 6 → 0** across the entrance. Props already below SHAPED keep the suspicion
+  they have — sweeping those in with the scenery would answer a question the player is
+  supposed to be asked.
+
+  Tuning both together produced one real finding: the two effects were fighting. The wireframe
+  edges are one pixel wide and the lock's first rung makes a block twelve wide, so the coarse
+  phase did not coexist with the wireframe, it erased it. The lock came down from 0.9s to
+  0.55s so it finishes first and hands over. Two effects in sequence say two things; stacked
+  they said neither.
+
+  **Honest limit:** this is a handful of wireframe box edges, not the "cloud" this section
+  imagines. Only REGISTERED PROPS can be suspected, and most of a scene's visual mass — sky,
+  sea, terrain, the mast lattice itself — is backdrop geometry that no prop owns. Covering
+  those would mean suspecting the backdrop, which is a different and much larger change.
+
+  Still not done from this section: opening at `CERTAINTY.SHAPED` to resolve into the authored
+  tiers. The `connect` lead was
   looked at and left alone — the cue already fires before `setPhase(Phase.Contact)` in code,
   so the measured +120ms is engine and audio latency rather than ordering, and moving it
   without a synchronised A/V capture would be guesswork.
