@@ -61,7 +61,7 @@ const ALTITUDES = [1.8, 3.2, 6.8] as const;
 const THIRD_PERSON_ARM = 2.8;
 const THIRD_PERSON_HEIGHT = 1.25;
 const THIRD_PERSON_DISTANCE = Math.hypot(THIRD_PERSON_ARM, THIRD_PERSON_HEIGHT);
-const TIGHT_CAMERA_THRESHOLD = 0.7;
+const TIGHT_CAMERA_THRESHOLD = 0.34;
 const CAMERA_PROBE_OFFSETS = [
   [0, 0],
   [-0.26, 0],
@@ -109,7 +109,9 @@ class WarehouseInput extends ENGINE.BaseInputHandler {
 
   public override handleKeyDown(event: KeyboardEvent): boolean {
     if (isTextEntry(event.target)) return false;
-    if (event.repeat && !['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code)) return false;
+    // Q and E join the repeat list: they nudge a continuous height now rather than stepping
+    // between three bands, so holding one should climb rather than move you 85cm and stop.
+    if (event.repeat && !['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE'].includes(event.code)) return false;
     this.held.add(event.code);
     switch (event.code) {
       case 'Escape': this.rig.requestExit(); return true;
@@ -245,7 +247,14 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private cameraTarget = new THREE.Vector3(0, 2.8, 0);
   private yaw = Math.PI;
   private pitch = -0.04;
-  private altitudeIndex = 1;
+  /**
+   * Free height, in metres, rather than an index into three bands.
+   *
+   * The bands were 1.8, 3.2 and 6.8 - low, work, inspection - and they are still what Q and E
+   * step between in feel, but a fixed set cannot coexist with flying where you look: any
+   * climb would be undone by the next frame's damp back to its band.
+   */
+  private altitude = 3.2;
   private view: WarehouseView = 'cctv';
   private perspective: DronePerspective = 'third';
   private opticalAimHeld = false;
@@ -857,10 +866,29 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.hud?.setBell(false, 0);
   }
 
+  /**
+   * Fly where you are looking.
+   *
+   * Movement used to be strictly horizontal - `forward` had its Y zeroed - and height was
+   * three fixed bands on Q and E. So the mouse turned the camera and nothing else, and going
+   * up meant stopping, tapping a key, and waiting for a damp. Asked for directly: the mouse
+   * should move the drone up and down too.
+   *
+   * The forward vector carries the pitch now, so nosing up and holding W climbs, which is
+   * what a drone does and what anybody who has flown one in any other game will try first.
+   *
+   * The vertical component is deliberately scaled to 0.62. At parity a full-pitch climb is as
+   * fast as a full-speed dash down an aisle, which overshoots the rack you were aiming at
+   * every time - the room is 26 metres long and 8 metres tall, so the axes are not equal and
+   * the control should not pretend they are. Q and E still nudge, for fine height without
+   * changing where the camera is pointed.
+   */
   public drive(x: number, y: number, deltaTime: number): void {
     if (this.view !== 'drone' || this.handoff > 0 || this.finished || this.isCinematicActive()) return;
-    const forward = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
-    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    const lift = Math.sin(this.pitch);
+    const flat = Math.cos(this.pitch);
+    const forward = new THREE.Vector3(Math.sin(this.yaw) * flat, lift * 0.62, Math.cos(this.yaw) * flat);
+    const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
     const desired = forward.multiplyScalar(-y).addScaledVector(right, x);
     if (desired.lengthSq() > 1) desired.normalize();
     const nearWorker = this.workers.some((worker) => worker.visible && worker.position.distanceTo(this.drone.position) < 2.2);
@@ -870,7 +898,20 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.drone.position.x = THREE.MathUtils.clamp(this.drone.position.x, WAREHOUSE_LAYOUT.drone.minX, WAREHOUSE_LAYOUT.drone.maxX);
     this.drone.position.z = THREE.MathUtils.clamp(this.drone.position.z, WAREHOUSE_LAYOUT.drone.minZ, WAREHOUSE_LAYOUT.drone.maxZ);
     this.environment.constrainDrone(this.drone.position, previous);
-    this.drone.position.y = THREE.MathUtils.damp(this.drone.position.y, ALTITUDES[this.altitudeIndex], 5.5, deltaTime);
+    /*
+     * The height the stick asked for becomes the height it holds.
+     *
+     * It used to damp toward one of three authored bands every frame, which would have fought
+     * the climb above and won - the drone would rise while W was held and sink straight back
+     * the moment it was released. `altitude` is now a free target that pitched movement writes
+     * to and Q/E nudge, and the damp still runs so the drone settles rather than snapping.
+     */
+    this.altitude = THREE.MathUtils.clamp(
+      this.altitude + this.drone.position.y - previous.y,
+      0.85,
+      WAREHOUSE_LAYOUT.drone.maxY
+    );
+    this.drone.position.y = THREE.MathUtils.damp(this.drone.position.y, this.altitude, 7.5, deltaTime);
     this.drone.rotation.y = this.yaw;
     this.droneVisual.rotation.z = THREE.MathUtils.damp(this.droneVisual.rotation.z, -x * 0.18, 8, deltaTime);
     this.droneVisual.rotation.x = THREE.MathUtils.damp(this.droneVisual.rotation.x, y * 0.11, 8, deltaTime);
@@ -884,8 +925,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
 
   public changeAltitude(direction: number): void {
     if (this.isCinematicActive()) return;
-    this.altitudeIndex = THREE.MathUtils.clamp(this.altitudeIndex + Math.sign(direction), 0, ALTITUDES.length - 1);
-    this.hud?.flash(`ALTITUDE ${this.altitudeIndex === 0 ? 'LOW' : this.altitudeIndex === 1 ? 'WORK' : 'INSPECTION'}`, 1);
+    this.altitude = THREE.MathUtils.clamp(
+      this.altitude + Math.sign(direction) * 0.85,
+      0.85,
+      WAREHOUSE_LAYOUT.drone.maxY
+    );
+    // Metres, not a band name. Three names for a continuous value is a label that is wrong
+    // most of the time, and the number is the thing a player navigating by aisle and bay
+    // actually wants.
+    this.hud?.flash(`ALTITUDE ${this.altitude.toFixed(1)}M`, 0.9);
   }
 
   public isDroneView(): boolean {
@@ -910,7 +958,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.drone.position.copy(DRONE_START);
     this.yaw = Math.PI;
     this.pitch = -0.04;
-    this.altitudeIndex = 1;
+    this.altitude = ALTITUDES[1];
     this.setOpticalAim(false);
     this.perspective = 'third';
     this.cameraArmDistance = THIRD_PERSON_DISTANCE;
@@ -2090,11 +2138,48 @@ export class WarehouseRig extends ENGINE.SceneNode {
    * adds 1.25m of height puts the lens at 9.6 - inside a shade, looking at the inside of a
    * cone that is drawn from the outside only.
    */
-  private clampCameraInside(): void {
-    const { shell, roofY } = { shell: WAREHOUSE_LAYOUT.shell, roofY: WAREHOUSE_LAYOUT.shell.roofY };
-    this.cameraPosition.x = THREE.MathUtils.clamp(this.cameraPosition.x, -shell.wallX + 0.55, shell.wallX - 0.55);
-    this.cameraPosition.z = THREE.MathUtils.clamp(this.cameraPosition.z, shell.rearZ + 0.55, shell.frontZ - 0.55);
-    this.cameraPosition.y = THREE.MathUtils.clamp(this.cameraPosition.y, 0.45, roofY - 1.75);
+  /**
+   * How far the arm may extend before it leaves the building.
+   *
+   * ## Clamping each axis was the wrong shape of fix
+   *
+   * The first version clamped x, z and y independently, which stops the lens leaving the
+   * shell and does something worse instead: it SLIDES the camera along the wall it hit. Fly
+   * into the west aisle and the arm ends up pressed flat against the cladding, 30cm off it,
+   * with a dim grey panel filling three quarters of the frame and the warehouse visible past
+   * one edge. Reported as a black panel blocking the aisle labels, and it is the wall.
+   *
+   * A chase camera near an obstacle SHORTENS. It does not step sideways, because the whole
+   * point of the arm is that it stays on the line between the lens and the thing being
+   * chased - move it off that line and the shot stops being about the drone.
+   *
+   * So this returns a DISTANCE along the anchor-to-desired ray, the same currency the
+   * occlusion probes already return, and the caller takes whichever is smaller. It is a slab
+   * test per axis: for each of the six planes, how far along the ray until it is crossed.
+   */
+  private cameraBoundsDistance(anchor: THREE.Vector3, desired: THREE.Vector3): number {
+    const shell = WAREHOUSE_LAYOUT.shell;
+    this.cameraDirection.copy(desired).sub(anchor);
+    const distance = this.cameraDirection.length();
+    if (distance < 0.001 || !Number.isFinite(distance)) return 0;
+    this.cameraDirection.multiplyScalar(1 / distance);
+
+    const limits: Array<[number, number, number]> = [
+      [anchor.x, this.cameraDirection.x, -shell.wallX + 0.7],
+      [anchor.x, this.cameraDirection.x, shell.wallX - 0.7],
+      [anchor.z, this.cameraDirection.z, shell.rearZ + 0.7],
+      [anchor.z, this.cameraDirection.z, shell.frontZ - 0.7],
+      [anchor.y, this.cameraDirection.y, 0.6],
+      // Below the hanging fixtures, which reach down to 9.14.
+      [anchor.y, this.cameraDirection.y, 8.7],
+    ];
+    let allowed = distance;
+    for (const [origin, direction, plane] of limits) {
+      if (Math.abs(direction) < 1e-5) continue;
+      const t = (plane - origin) / direction;
+      if (t > 0) allowed = Math.min(allowed, t);
+    }
+    return Math.max(0, allowed);
   }
 
   private applyCamera(deltaTime = 0): void {
@@ -2127,7 +2212,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
         this.desiredCameraPosition.copy(this.cameraAnchor)
           .addScaledVector(chaseForward, -THIRD_PERSON_ARM)
           .add(new THREE.Vector3(0, THIRD_PERSON_HEIGHT, 0));
-        const availableDistance = this.cameraClearanceDistance(this.cameraAnchor, this.desiredCameraPosition);
+        /*
+         * Whichever runs out first: something solid in the way, or the building itself.
+         * Both are answered as a distance along the same ray, so the arm just takes the
+         * smaller and stays on the line between the lens and the drone.
+         */
+        const availableDistance = Math.min(
+          this.cameraClearanceDistance(this.cameraAnchor, this.desiredCameraPosition),
+          this.cameraBoundsDistance(this.cameraAnchor, this.desiredCameraPosition)
+        );
         if (!Number.isFinite(this.cameraArmDistance) || deltaTime <= 0) {
           this.cameraArmDistance = availableDistance;
         } else if (this.cameraArmDistance > availableDistance) {
@@ -2150,6 +2243,20 @@ export class WarehouseRig extends ENGINE.SceneNode {
         // actual rendered position as well as the destination.
         const renderedDistance = this.resolveCameraOcclusion(this.cameraAnchor, this.cameraPosition, this.cameraPosition);
         this.cameraTarget.lerp(this.desiredCameraTarget, blend);
+        /*
+         * ## Why this threshold got lower
+         *
+         * At 0.7 the fallback fired constantly. An aisle is seven metres wide with racking on
+         * both sides, the arm is 3.06m, and every turn swung it into a rack - so the game
+         * dropped to the drone lens, hid the body, and stayed there. Reported as right mouse
+         * leaving the camera stuck in first person, and the optical hold was innocent: what
+         * the player saw was the chase camera unable to find room to exist.
+         *
+         * 0.34, which is inside the drone's own hull, so this now means what it was written
+         * to mean - the lens is genuinely inside something - rather than merely "close". A
+         * short arm is a tight over-the-shoulder shot and that is a perfectly good picture;
+         * it does not need rescuing.
+         */
         if (Math.min(this.cameraArmDistance, renderedDistance) < TIGHT_CAMERA_THRESHOLD) {
           // Fall back to the collision-safe drone lens instead of rendering from inside a
           // shelf or filling the view with the drone body.
@@ -2179,10 +2286,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.cameraPosition.set(-20.5, 8.85, 24.2);
       this.cameraTarget.set(0, 2.25, -2.5);
     }
-    // Fixed poses - CCTV, pursuit, containment - are authored and checked by
-    // scripts/warehouse-cameras.ts. Only the free-flying chase can wander, so only it is
-    // clamped; clamping the authored ones would silently move a shot somebody measured.
-    if (!this.containmentResponse && !this.pursuit && this.view === 'drone') this.clampCameraInside();
     this.camera.position.copy(this.cameraPosition);
     CAMERA_MATRIX.lookAt(this.cameraPosition, this.cameraTarget, this.camera.up);
     this.camera.quaternion.setFromRotationMatrix(CAMERA_MATRIX);
