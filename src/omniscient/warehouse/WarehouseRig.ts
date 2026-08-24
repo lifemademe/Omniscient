@@ -782,7 +782,13 @@ export class WarehouseRig extends ENGINE.SceneNode {
       material: new THREE.MeshStandardMaterial({
         color: '#ffe6c4',
         emissive: '#ffc98a',
-        emissiveIntensity: 3.4,
+        /*
+         * 1.5, not 3.4. This is a 7cm bulb, and at 3.4 with bloom on it was expanding into the
+         * largest bright shape on the machine - a yellow blob under a black airframe, brighter
+         * than the sensor it is meant to support. The lamp reads as a lamp at half the value
+         * now that the body behind it is dark.
+         */
+        emissiveIntensity: 1.5,
         roughness: 0.24,
       }),
     });
@@ -1772,6 +1778,68 @@ export class WarehouseRig extends ENGINE.SceneNode {
    * subject in the drone's view - and there it sits just ahead of the lens so the verb still
    * registers rather than passing in silence.
    */
+  /**
+   * What the optical view marks: things the machine has ALREADY established.
+   *
+   * The rule, and it is a design decision rather than a rendering one: never the unfound
+   * target. Outlining the package before the player has located it would delete the search the
+   * whole mission is built on - hold the button, see a glowing box, fly to it - which is a
+   * worse game bought with a cheaper convenience.
+   *
+   * So this marks the places the player has been TOLD about and now has to go back to: the
+   * three decision stations, the launch cradle, and the active subject only once the evidence
+   * says it has been found. It answers "where do I take this" and "where was that again", and
+   * never "where is it".
+   */
+  private opticalTargets(): Array<{ at: THREE.Vector3; scale: number }> {
+    const marks: Array<{ at: THREE.Vector3; scale: number }> = [];
+    /*
+     * Converted to WORLD, because setTargets takes world and these do not start there.
+     *
+     * stationPositions and the cradle are rig-LOCAL, while scanSubjectPosition below returns
+     * world - so a list built from both is a list in two different spaces. The first version
+     * did exactly that, and every bracket vanished: the feedback module rebases what it is
+     * handed, so the local ones were pushed a further 800m down. Same trap as the scan rings,
+     * caught the same way, which is why the whole list is normalised at the source rather than
+     * fixed downstream.
+     */
+    const rig = this as unknown as THREE.Object3D;
+    /*
+     * Brackets grow with distance so they stay the same size ON SCREEN.
+     *
+     * At a fixed world size the far stations shrank to a few pixels, which is the opposite of
+     * what a tracking aid is for - the thing you most need marked is the thing across the
+     * building. Scaling with range is what every reticle does, and the clamp keeps it from
+     * swallowing the object when the drone is right on top of it.
+     *
+     * Distance is measured in LOCAL space against the composed camera, because both live in
+     * the rig's frame; only the final position is converted to world, which is what setTargets
+     * takes.
+     */
+    const bracket = (local: THREE.Vector3, base: number): { at: THREE.Vector3; scale: number } => ({
+      at: rig.localToWorld(local.clone()),
+      scale: THREE.MathUtils.clamp(this.cameraPosition.distanceTo(local) * 0.2, 0.8, 3.4) * base,
+    });
+    for (const station of Object.values(this.environment.stationPositions)) {
+      marks.push(bracket(station.clone().setY(1.35), 1));
+    }
+    marks.push(bracket(WAREHOUSE_LAYOUT.cradle.clone().setY(0.9), 0.8));
+
+    /*
+     * The subject joins the list only after it has been scanned. `evidence.cargo` and
+     * `evidence.visitor` are the machine's own record of having identified something, so
+     * gating on them means the bracket appears at the moment the mission says the drone knows
+     * what it is looking at - which is exactly when a tracking aid stops being a spoiler.
+     */
+    const found = this.evidence.cargo || this.evidence.visitor;
+    if (found) {
+      const subject = this.scanSubjectPosition();
+      const subjectLocal = rig.worldToLocal(subject.clone()).setY(rig.worldToLocal(subject.clone()).y + 0.6);
+      marks.push(bracket(subjectLocal, 0.9));
+    }
+    return marks;
+  }
+
   private scanSubjectPosition(): THREE.Vector3 {
     const scratch = new THREE.Vector3();
     if (this.intruder?.visible) return this.intruder.getWorldPosition(scratch);
@@ -2822,6 +2890,8 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     this.ropeAnchor.copy(this.drone.position).add(new THREE.Vector3(0, -0.48, 0));
     this.cargoRope.tick(deltaTime, this.ropeAnchor);
+    this.feedback.setOpticalHeld(this.opticalAimHeld && this.view === 'drone');
+    this.feedback.setTargets(this.opticalAimHeld ? this.opticalTargets() : []);
     this.feedback.tick(deltaTime, this.camera ? this.camera.getCamera().quaternion : FEEDBACK_FACING);
     this.updateDeliveredCargo(deltaTime);
     this.hud?.tick(deltaTime);

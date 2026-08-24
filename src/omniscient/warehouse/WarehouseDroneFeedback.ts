@@ -1,6 +1,8 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
 import { getAccessibilityPreferences } from '../accessibility/preferences.js';
 
 /**
@@ -141,6 +143,135 @@ class PulseRing {
   }
 }
 
+/**
+ * The scan itself, as a bar of light that travels the subject.
+ *
+ * A ring says "here"; it does not say "being read". A line sweeping the height of a thing is
+ * the universal shorthand for a machine taking a measurement of it, and it is the one moment in
+ * this mission where the drone is doing its actual job. It runs DOWN first, because that is the
+ * direction a person reads a label and the direction a scanner in a warehouse is pointed.
+ *
+ * A single bar rather than a lattice of beams: at the resolution the retro pass leaves, several
+ * thin lines crossing become noise, and one thick line stays a line.
+ */
+class ScanSweep {
+  public readonly root = ENGINE.SceneNode.create({ name: 'ScanSweep' });
+  private bar: ENGINE.MeshNode | null = null;
+  private material: THREE.MeshBasicMaterial | null = null;
+  private life = 0;
+  private duration = 0.52;
+  private height = 1.6;
+
+  public build(): void {
+    if (this.bar) return;
+    this.material = new THREE.MeshBasicMaterial({
+      color: '#9dffe4',
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    });
+    this.bar = ENGINE.MeshNode.create({
+      name: 'ScanSweepBar',
+      geometry: new THREE.PlaneGeometry(1.5, 0.055),
+      material: this.material,
+    });
+    this.root.add(this.bar);
+    this.root.visible = false;
+  }
+
+  public fire(duration: number, height: number): void {
+    if (!this.bar) return;
+    this.duration = duration;
+    this.height = height;
+    this.life = duration;
+    this.root.visible = true;
+  }
+
+  public tick(deltaTime: number, face: THREE.Quaternion, still: boolean): void {
+    if (this.life <= 0 || !this.bar || !this.material) return;
+    this.life = Math.max(0, this.life - deltaTime);
+    const t = this.duration > 0 ? 1 - this.life / this.duration : 1;
+    this.root.quaternion.copy(face);
+    /*
+     * Down over the first two thirds, back up over the last third. The return is faster than
+     * the pass because a scanner confirming is quicker than a scanner reading, and because a
+     * symmetric bounce reads as an animation rather than as an instrument.
+     */
+    const travel = t < 0.66 ? 1 - t / 0.66 : (t - 0.66) / 0.34;
+    this.bar.position.y = still ? this.height * 0.5 : this.height * travel;
+    this.material.opacity = 0.85 * (1 - t * t);
+    if (this.life <= 0) this.root.visible = false;
+  }
+
+  public dispose(): void {
+    this.bar?.geometry?.dispose();
+    this.material?.dispose();
+  }
+}
+
+/**
+ * A corner bracket around something the machine has already identified.
+ *
+ * Deliberately NOT a locator. It marks the delivery stations, the service doors, the cradle and
+ * the active subject once it has been found - things the player has been told about and now has
+ * to go back to. Outlining the target before it is located would delete the search this whole
+ * mission is built on, which is a worse game for a cheaper convenience.
+ *
+ * Four corners rather than a full box: a closed rectangle around an object reads as a UI window
+ * sitting in the world, while corners read as a reticle placed ON it. Chunky quads rather than
+ * lines, because the retro pass eats anything a pixel wide.
+ */
+class TargetMark {
+  public readonly root = ENGINE.SceneNode.create({ name: 'TargetMark' });
+  private built = false;
+
+  public build(): void {
+    if (this.built) return;
+    this.built = true;
+    const material = new THREE.MeshBasicMaterial({
+      color: '#7fe0d0',
+      transparent: true,
+      opacity: 0.72,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    });
+    const arm = 0.3;
+    const thick = 0.055;
+    const half = 0.62;
+    const pieces: THREE.BufferGeometry[] = [];
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        const h = new THREE.PlaneGeometry(arm, thick);
+        h.translate(sx * (half - arm / 2), sy * half, 0);
+        pieces.push(h);
+        const v = new THREE.PlaneGeometry(thick, arm);
+        v.translate(sx * half, sy * (half - arm / 2), 0);
+        pieces.push(v);
+      }
+    }
+    const merged = mergeGeometries(pieces, false);
+    if (!merged) return;
+    this.root.add(ENGINE.MeshNode.create({ name: 'TargetMarkBracket', geometry: merged, material }));
+    this.root.visible = false;
+  }
+
+  public place(at: THREE.Vector3, face: THREE.Quaternion, scale: number): void {
+    this.root.visible = true;
+    this.root.position.copy(at);
+    this.root.quaternion.copy(face);
+    this.root.scale.setScalar(scale);
+  }
+
+  public hide(): void {
+    this.root.visible = false;
+  }
+}
+
 /** World-space acknowledgement for scan and grip, plus the lens kick that sells both. */
 export class WarehouseDroneFeedback {
   public readonly root = ENGINE.SceneNode.create({ name: 'WarehouseDroneFeedback' });
@@ -152,6 +283,11 @@ export class WarehouseDroneFeedback {
      and the material for each can then be built once and never touched. */
   private readonly verdictGood = new PulseRing('#8dffc0', 0.5, 0.1);
   private readonly verdictBad = new PulseRing('#ff8f78', 0.5, 0.13);
+  private readonly sweep = new ScanSweep();
+  /** A small fixed pool: the stations, the doors, the cradle and the active subject. */
+  private readonly marks = Array.from({ length: 8 }, () => new TargetMark());
+  private opticalHeld = false;
+  private targets: Array<{ at: THREE.Vector3; scale: number }> = [];
 
   /** The gripper mesh, borrowed so the recoil happens on the part that did the gripping. */
   private gripper: ENGINE.MeshNode | null = null;
@@ -170,6 +306,12 @@ export class WarehouseDroneFeedback {
     for (const ring of [this.subjectPulse, this.emitterPulse, this.gripRing, this.verdictGood, this.verdictBad]) {
       ring.build();
       this.root.add(ring.root);
+    }
+    this.sweep.build();
+    this.root.add(this.sweep.root);
+    for (const mark of this.marks) {
+      mark.build();
+      this.root.add(mark.root);
     }
   }
 
@@ -210,6 +352,9 @@ export class WarehouseDroneFeedback {
     const still = getAccessibilityPreferences().reducedMotion;
     this.emitterPulse.fire(this.toLocal(from), still ? 0.5 : 0.26, 1.5);
     this.subjectPulse.fire(this.toLocal(to), still ? 0.75 : 0.52, 3.1);
+    // The bar travels the subject, anchored at its feet. See ScanSweep.
+    this.sweep.root.position.copy(this.toLocal(to)).setY(this.toLocal(to).y - 0.2);
+    this.sweep.fire(still ? 0.8 : 0.52, 1.7);
     if (!still) {
       this.kick = Math.max(this.kick, 0.035);
       this.kickPhase = 0;
@@ -264,6 +409,18 @@ export class WarehouseDroneFeedback {
     this.gripRing.tick(deltaTime, FACE_LOCAL, still);
     this.verdictGood.tick(deltaTime, FACE_LOCAL, still);
     this.verdictBad.tick(deltaTime, FACE_LOCAL, still);
+    this.sweep.tick(deltaTime, FACE_LOCAL, still);
+
+    /*
+     * Brackets follow the optical trigger, not a toggle. They exist only while the player is
+     * actually looking through the machine's own lens, which is what makes them read as the
+     * drone's annotation rather than as a permanent HUD layer bolted over the world.
+     */
+    for (const [index, mark] of this.marks.entries()) {
+      const target = this.opticalHeld ? this.targets[index] : undefined;
+      if (!target) { mark.hide(); continue; }
+      mark.place(this.toLocal(target.at), FACE_LOCAL, target.scale);
+    }
 
     /*
      * The gripper drops and springs back rather than easing home, because a magnetic clamp
@@ -293,6 +450,21 @@ export class WarehouseDroneFeedback {
    * flight model and leave the machine drifting off where the player left it. The camera owns
    * the recoil, the drone owns its position, and neither has to know about the other.
    */
+  /**
+   * What the optical view is allowed to mark, in WORLD positions.
+   *
+   * The caller decides what qualifies; this only draws. That split matters because the rule -
+   * only things already established, never the unfound target - is a design decision about the
+   * mission rather than a rendering one, and it belongs where the mission state lives.
+   */
+  public setTargets(targets: Array<{ at: THREE.Vector3; scale: number }>): void {
+    this.targets = targets.slice(0, this.marks.length);
+  }
+
+  public setOpticalHeld(held: boolean): void {
+    this.opticalHeld = held;
+  }
+
   public applyKick(target: THREE.Vector3, right: THREE.Vector3, up: THREE.Vector3): void {
     if (this.kick <= 0) return;
     const decay = this.kick;
@@ -306,6 +478,7 @@ export class WarehouseDroneFeedback {
     this.gripRing.dispose();
     this.verdictGood.dispose();
     this.verdictBad.dispose();
+    this.sweep.dispose();
     if (this.gripper) {
       this.gripper.position.y = this.gripperRest;
       this.gripper.scale.setScalar(1);
