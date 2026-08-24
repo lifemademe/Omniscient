@@ -42,6 +42,12 @@ import type {
 const WALL = new THREE.MeshStandardMaterial({ color: '#3a3937', roughness: 0.88, metalness: 0.1 });
 const STEEL = new THREE.MeshStandardMaterial({ color: '#5a5f63', roughness: 0.6, metalness: 0.58 });
 const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#23262a', roughness: 0.76, metalness: 0.42 });
+/* Stock that is not cardboard - see the tote and drum buckets in buildRacks. The drums
+   carry the only saturated colour on the racking and it is cool on purpose. */
+const TOTE = new THREE.MeshStandardMaterial({ color: '#3f4a4d', roughness: 0.72, metalness: 0.06 });
+const TOTE_LID = new THREE.MeshStandardMaterial({ color: '#556366', roughness: 0.66, metalness: 0.08 });
+const DRUM = new THREE.MeshStandardMaterial({ color: '#41707e', roughness: 0.54, metalness: 0.12 });
+const DRUM_BAND = new THREE.MeshStandardMaterial({ color: '#8d949a', roughness: 0.44, metalness: 0.46 });
 const FLOOR = new THREE.MeshStandardMaterial({ color: '#3d3b38', roughness: 0.91, metalness: 0.04 });
 const AMBER = new THREE.MeshStandardMaterial({ color: '#8d6c31', emissive: '#39250b', emissiveIntensity: 0.55, roughness: 0.58 });
 const RED = new THREE.MeshStandardMaterial({ color: '#6e2d2d', emissive: '#2c0909', emissiveIntensity: 0.6, roughness: 0.62 });
@@ -338,6 +344,23 @@ export class WarehouseEnvironment {
         tapeLight: [] as THREE.BufferGeometry[],
         tapeDark: [] as THREE.BufferGeometry[],
         carton: [[], [], []] as THREE.BufferGeometry[][],
+        /*
+         * Stock that is not cardboard.
+         *
+         * The loading above already varies count, height, jitter, tape and wrap, and a long
+         * aisle still read as one thing repeated - because every unit in the building was a
+         * tan box. Variation WITHIN a type reads as noise; a second type reads as inventory.
+         * Two more silhouettes is all it takes, and both are things a warehouse of this kind
+         * genuinely holds.
+         *
+         * The drums are also the only saturated colour on the racking, and they are cool -
+         * which gives the room's cold half a third place to land after the clerestory and the
+         * floor wear, this time at eye height in the middle distance.
+         */
+        tote: [] as THREE.BufferGeometry[],
+        toteLid: [] as THREE.BufferGeometry[],
+        drum: [] as THREE.BufferGeometry[],
+        drumBand: [] as THREE.BufferGeometry[],
       };
       const BAY_Z = [-10.7, -6, -1.3, 3.4, 8.1, 12.8];
       const LEVEL_Y = [0.55, 1.9, 3.25, 4.6];
@@ -354,6 +377,37 @@ export class WarehouseEnvironment {
           const pallet = new THREE.BoxGeometry(1.18, 0.14, 1.06);
           pallet.translate(px, levelY - 0.14, pz);
           bucket.pallet.push(pallet);
+
+          /*
+           * Drawn per pallet, not per carton, because a pallet holds ONE kind of thing. Mixed
+           * boxes and drums on a single pallet reads as a bug rather than as stock.
+           */
+          const stock = rng();
+          if (stock < 0.07) {
+            for (const [dx, dz] of [[-0.3, -0.26], [0.3, -0.26], [-0.3, 0.26], [0.3, 0.26]] as const) {
+              if (rng() < 0.22) continue;
+              const drum = new THREE.CylinderGeometry(0.26, 0.26, 0.82, 12);
+              drum.translate(px + dx, levelY + 0.27, pz + dz);
+              bucket.drum.push(drum);
+              const band = new THREE.CylinderGeometry(0.268, 0.268, 0.07, 12);
+              band.translate(px + dx, levelY + 0.44, pz + dz);
+              bucket.drumBand.push(band);
+            }
+            continue;
+          }
+          if (stock < 0.19) {
+            const stack = 1 + Math.floor(rng() * 3);
+            for (let tier = 0; tier < stack; tier++) {
+              const y = levelY + tier * 0.4 + 0.06;
+              const tote = new THREE.BoxGeometry(1.02, 0.36, 0.76);
+              tote.translate(px + jitter(rng, 0.04), y, pz + jitter(rng, 0.04));
+              bucket.tote.push(tote);
+              const lid = new THREE.BoxGeometry(1.06, 0.05, 0.8);
+              lid.translate(px + jitter(rng, 0.04), y + 0.2, pz + jitter(rng, 0.04));
+              bucket.toteLid.push(lid);
+            }
+            continue;
+          }
 
           const load = 1 + Math.floor(rng() * 3);
           const wrapped = rng() < 0.26;
@@ -390,6 +444,10 @@ export class WarehouseEnvironment {
       ];
       const merged: Array<[string, THREE.BufferGeometry[], THREE.Material]> = [
         [`RackPallets-${aisle}`, bucket.pallet, PALLET],
+        [`RackTotes-${aisle}`, bucket.tote, TOTE],
+        [`RackToteLids-${aisle}`, bucket.toteLid, TOTE_LID],
+        [`RackDrums-${aisle}`, bucket.drum, DRUM],
+        [`RackDrumBands-${aisle}`, bucket.drumBand, DRUM_BAND],
         [`RackTapeLight-${aisle}`, bucket.tapeLight, TAPE_LIGHT],
         [`RackTapeDark-${aisle}`, bucket.tapeDark, TAPE_DARK],
         [`RackWrap-${aisle}`, bucket.wrap, WRAP],
