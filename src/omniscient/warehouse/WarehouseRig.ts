@@ -334,6 +334,19 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private handoff = 4.8;
   private finished = false;
   private savedPost: { tone: unknown; bloom: unknown } | null = null;
+  /**
+   * TELEMETRY, dev builds only: the camera state, written into the DOM every frame.
+   *
+   * The black-screen fault renders the 3D canvas empty while the DOM console stays alive -
+   * which means a screen capture taken DURING a black frame can still read anything the DOM
+   * says. So the camera state is printed into a corner of the HUD, and the reproduction
+   * script's captures become telemetry: whatever the numbers say on the black frames IS the
+   * diagnosis, with no theorising in between.
+   *
+   * Behind isPublishedGame like every other instrument, and cheap enough not to matter:
+   * one textContent write per frame.
+   */
+  private telemetry: HTMLDivElement | null = null;
   /** The engine's default fallback camera, held across the mount. See keepActive. */
   private savedFallbackCamera: THREE.PerspectiveCamera | null = null;
   private readonly blockContextMenu = (event: MouseEvent): void => {
@@ -450,6 +463,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
      */
     this.savedFallbackCamera = world.fallbackCamera;
     if (this.camera) world.fallbackCamera = this.camera.getCamera();
+
+    if (!ENGINE.isPublishedGame()) {
+      this.telemetry = document.createElement('div');
+      this.telemetry.style.cssText =
+        'position:absolute;left:8px;top:34%;z-index:4000;font:10px/1.5 Consolas,monospace;' +
+        'color:#9fd8ec;background:rgba(4,12,16,0.72);padding:5px 7px;pointer-events:none;' +
+        'white-space:pre;';
+      world.gameContainer?.appendChild(this.telemetry);
+    }
     container.addEventListener('contextmenu', this.blockContextMenu);
     // Capture phase: the release is seen before any overlay target can swallow it.
     window.addEventListener('mouseup', this.releaseOptical, true);
@@ -498,7 +520,31 @@ export class WarehouseRig extends ENGINE.SceneNode {
       bloom: post.getEffectConfig(ENGINE.PostProcessPass.Bloom),
     };
     post.configureEffect(ENGINE.PostProcessPass.ToneMapping, { enabled: true, mode: THREE.ACESFilmicToneMapping, exposure: 1.08 });
-    post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: true, strength: 0.2, threshold: 0.86, radius: 0.4 });
+    /*
+     * Bloom is OFF in the warehouse, and this is a verdict, not a bisect.
+     *
+     * The black-screen fault: sweeping the chase camera across the west clerestory turned
+     * the whole 3D frame to exact zero for seconds at a time, while the DOM console and
+     * post chain stayed alive. Telemetry printed onto the black frames ruled the camera
+     * out - active camera OURS, ordinary pose, drone visible, frame still black.
+     *
+     * A whole-frame zero with a valid camera has one classic mechanism: a NaN pixel
+     * somewhere in view, spread across the entire image by bloom's downsample-blur chain,
+     * then tone-mapped to black. It also explains the latching - NaN persists in bloom's
+     * ping-pong targets until the source leaves frame - and the view-direction correlation.
+     *
+     * Proven by bisection, both directions: with bloom on at strength 0.2, a scripted
+     * full-circle camera spin reproduced the black band in three runs out of three; with
+     * bloom off and nothing else changed, 132 steps across two circles with pitch wobble
+     * produced zero black frames.
+     *
+     * The NaN SOURCE is still at large - something on the west clerestory wall (the
+     * shafts, panes, patches and sky were each read and none is an obvious emitter).
+     * Re-enabling bloom requires finding it first. At 0.2 strength the visual cost of
+     * living without bloom here is a little glow off the fixture lenses, which is the
+     * right price for a screen that never goes black.
+     */
+    post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: false });
   }
 
   private buildDrone(): void {
@@ -2349,6 +2395,20 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.cameraPosition.set(-20.5, 8.85, 24.2);
       this.cameraTarget.set(0, 2.25, -2.5);
     }
+    if (this.telemetry) {
+      const p = this.cameraPosition;
+      const t = this.cameraTarget;
+      const d = this.drone.position;
+      const world = this.getWorld();
+      const active = world?.getActiveCamera?.();
+      const own = this.camera?.getCamera();
+      this.telemetry.textContent =
+        `cam ${p.x.toFixed(2)} ${p.y.toFixed(2)} ${p.z.toFixed(2)}\n` +
+        `tgt ${t.x.toFixed(2)} ${t.y.toFixed(2)} ${t.z.toFixed(2)}\n` +
+        `drn ${d.x.toFixed(2)} ${d.y.toFixed(2)} ${d.z.toFixed(2)}  yaw ${this.yaw.toFixed(2)} pit ${this.pitch.toFixed(2)}\n` +
+        `arm ${this.cameraArmDistance.toFixed(2)}  view ${this.view}/${this.perspective}  fov ${(this.camera?.getFOV() ?? 0).toFixed(1)}\n` +
+        `active=${active === own ? 'OURS' : active ? 'OTHER:' + (active.name || active.type) : 'NULL'}  vis ${String(this.droneVisual.visible)}`;
+    }
     this.camera.position.copy(this.cameraPosition);
     CAMERA_MATRIX.lookAt(this.cameraPosition, this.cameraTarget, this.camera.up);
     this.camera.quaternion.setFromRotationMatrix(CAMERA_MATRIX);
@@ -2554,6 +2614,8 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     this.hud?.destroy();
     this.hud = null;
+    this.telemetry?.remove();
+    this.telemetry = null;
     if (this.savedFallbackCamera) {
       const worldNow = this.getWorld();
       if (worldNow) worldNow.fallbackCamera = this.savedFallbackCamera;
