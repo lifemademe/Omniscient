@@ -796,7 +796,117 @@ export class WarehouseEnvironment {
     }
   }
 
+  /**
+   * The floor, which was the largest surface in frame and the emptiest.
+   *
+   * It was a flat plane with five short stripes near the front door - about two square metres
+   * of intent across a 48x58 room. Everything the eye uses to judge the scale of an interior
+   * lives on its floor: where traffic goes, where you may not stand, how long the place has
+   * been working. None of that was there, so the aisles read as corridors of cardboard with
+   * nothing underneath them.
+   *
+   * ## Painted geometry rather than a floor texture
+   *
+   * A canvas map is the usual answer and it is the wrong one here. The retro pass quantises
+   * the whole picture to a coarse pixel grid, so fine texture detail is destroyed before the
+   * player sees it, and a map stretched over 48 metres would be a handful of pixels per metre
+   * anyway. Flat quads survive the grid because they are the same shapes the grid is made of -
+   * which is also how the drains and the front safety lane in this file were already built.
+   *
+   * Merged per material, one draw call each, for the same reason the racks are.
+   *
+   * ## The wear runs cool
+   *
+   * Polished concrete under traffic is a mirror for whatever is above it, and what is above it
+   * here is now the cold clerestory - see CLERESTORY_NIGHT. Making the traffic strips lean
+   * cool is both what a worn floor does and a second place for the room's cold half to land,
+   * which is what stops the two temperatures reading as a trick done once at the windows.
+   */
   private buildFloorWear(): void {
+    const rack = WAREHOUSE_LAYOUT.rack;
+    const zFrom = rack.centerZ - rack.length / 2 - 1.4;
+    const zTo = rack.centerZ + rack.length / 2 + 1.4;
+    const runLength = zTo - zFrom;
+    const runCentre = (zFrom + zTo) / 2;
+
+    /*
+     * Aisle centres, derived from the rack centres rather than written out. The gaps BETWEEN
+     * racks are where people walk, plus one outboard run down each wall. Deriving it means a
+     * layout change moves the paint with the racking instead of leaving it behind.
+     */
+    const lanes: number[] = [];
+    for (let index = 0; index < rack.centers.length - 1; index++) {
+      lanes.push((rack.centers[index]! + rack.centers[index + 1]!) / 2);
+    }
+    lanes.push(rack.centers[0]! - rack.spacing / 2, rack.centers[rack.centers.length - 1]! + rack.spacing / 2);
+
+    const wear: THREE.BufferGeometry[] = [];
+    const paint: THREE.BufferGeometry[] = [];
+    for (const x of lanes) {
+      const track = new THREE.PlaneGeometry(3.1, runLength);
+      track.rotateX(-Math.PI / 2);
+      track.translate(x, 0.006, runCentre);
+      wear.push(track);
+      for (const offset of [-1.72, 1.72]) {
+        const line = new THREE.PlaneGeometry(0.14, runLength);
+        line.rotateX(-Math.PI / 2);
+        line.translate(x + offset, 0.011, runCentre);
+        paint.push(line);
+      }
+    }
+
+    // The cross aisle at the front, where the drone launches and the handoffs happen.
+    const cross = new THREE.PlaneGeometry(WAREHOUSE_LAYOUT.shell.width - 4, 3.4);
+    cross.rotateX(-Math.PI / 2);
+    cross.translate(0, 0.006, 18.6);
+    wear.push(cross);
+    for (const z of [16.9, 20.3]) {
+      const line = new THREE.PlaneGeometry(WAREHOUSE_LAYOUT.shell.width - 4, 0.14);
+      line.rotateX(-Math.PI / 2);
+      line.translate(0, 0.011, z);
+      paint.push(line);
+    }
+
+    /*
+     * Hatching at the stations: the one floor marking that means "do not put anything here",
+     * and the three places in this room where that is true.
+     */
+    for (const station of [
+      WAREHOUSE_LAYOUT.stations.quarantine,
+      WAREHOUSE_LAYOUT.stations.return,
+      WAREHOUSE_LAYOUT.stations.hold,
+    ]) {
+      for (let bar = -2; bar <= 2; bar++) {
+        const hatch = new THREE.PlaneGeometry(0.16, 2.6);
+        hatch.rotateX(-Math.PI / 2);
+        hatch.rotateY(Math.PI / 4);
+        hatch.translate(station.x + bar * 0.62, 0.01, station.z);
+        paint.push(hatch);
+      }
+    }
+
+    const wearMerged = mergeGeometries(wear, false);
+    if (wearMerged) {
+      this.root.add(
+        mesh(
+          'FloorWear',
+          wearMerged,
+          new THREE.MeshStandardMaterial({ color: '#43464a', roughness: 0.62, metalness: 0.12 })
+        )
+      );
+    }
+    const paintMerged = mergeGeometries(paint, false);
+    if (paintMerged) {
+      this.root.add(
+        mesh(
+          'FloorPaint',
+          paintMerged,
+          new THREE.MeshStandardMaterial({ color: '#8a6a2d', roughness: 0.82, metalness: 0.05 })
+        )
+      );
+    }
+
+    // The original front-door stripes, kept: they mark the cradle apron specifically.
     for (const x of [-21.5, -7, 0, 7, 21.5]) {
       const stripe = mesh('SafetyLane', new THREE.PlaneGeometry(4.2, 0.18), new THREE.MeshBasicMaterial({ color: '#8a6a2d' }), new THREE.Vector3(x, 0.012, 22.2));
       stripe.rotation.x = -Math.PI / 2;
