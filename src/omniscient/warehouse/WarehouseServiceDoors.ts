@@ -83,8 +83,23 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
     camera: {
       // Mounted on the outside of the west wall, 5.8m up-run of the door and looking back
       // along it. 3.5m up, 20.6 degrees down, subject 6.2m out.
-      position: new THREE.Vector3(-24.6, 3.5, 25.8),
-      target: new THREE.Vector3(-25.3, 1.3, WAREHOUSE_LAYOUT.service.sideZ),
+      /*
+       * Outside the door, looking BACK at it - not along the wall past it.
+       *
+       * The old pose sat at x -24.6, four tenths of a metre off the cladding, and 5.8m along
+       * the wall from a door at z 20. That is a raking shot: the visitor stands nearly
+       * edge-on, the wall runs away to the vanishing point and fills most of the frame, and
+       * the one thing the camera exists to show is the smallest thing in it. It passed the
+       * harness because the harness asks whether the subject is IN frame, not whether the
+       * wall is eating it.
+       *
+       * Now it stands off the building at x -30 and comes back at the door on a three-quarter
+       * angle: the visitor is against their own doorway, the wall is behind them rather than
+       * beside them, and the approach is visible. That is what a door camera is for and what
+       * every real one does.
+       */
+      position: new THREE.Vector3(-30, 3.5, 23.4),
+      target: new THREE.Vector3(-25.9, 1.4, WAREHOUSE_LAYOUT.service.sideZ + 0.3),
       fov: 54,
     },
     pursuit: {
@@ -120,8 +135,10 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
     camera: {
       // On the outside of the front wall, 5.8m west of the door, looking east along the
       // facade. 3.5m up, 22 degrees down, subject 5.9m out.
-      position: new THREE.Vector3(-5.8, 3.5, WAREHOUSE_LAYOUT.shell.frontZ + 0.4),
-      target: new THREE.Vector3(-0.4, 1.3, WAREHOUSE_LAYOUT.shell.frontZ + 1.1),
+      /* Same correction as service-a: off the building and back at the door, rather than
+         hard against the cladding looking along it. */
+      position: new THREE.Vector3(3.6, 3.5, WAREHOUSE_LAYOUT.shell.frontZ + 5.1),
+      target: new THREE.Vector3(0.1, 1.4, WAREHOUSE_LAYOUT.shell.frontZ + 1.9),
       fov: 54,
     },
     pursuit: {
@@ -156,8 +173,9 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
     handoffPosition: new THREE.Vector3(WAREHOUSE_LAYOUT.shell.wallX - WAREHOUSE_LAYOUT.service.handoffInset, 0, WAREHOUSE_LAYOUT.service.sideZ),
     camera: {
       // The mirror of A, on the east wall.
-      position: new THREE.Vector3(24.6, 3.5, 25.8),
-      target: new THREE.Vector3(25.3, 1.3, WAREHOUSE_LAYOUT.service.sideZ),
+      /* The mirror of service-a, and corrected for the same reason. */
+      position: new THREE.Vector3(30, 3.5, 23.4),
+      target: new THREE.Vector3(25.9, 1.4, WAREHOUSE_LAYOUT.service.sideZ + 0.3),
       fov: 54,
     },
     pursuit: {
@@ -308,6 +326,34 @@ export class WarehouseServiceDoor {
       root.add(bolt);
     }
 
+    /*
+     * The canopy lamp finally emits something.
+     *
+     * There has been a lit lamp housing over every service door since the doors were built,
+     * and it was a glowing MESH with no light behind it - so the apron underneath, the door
+     * itself and anyone standing at it were unlit at night. The three door cameras therefore
+     * looked at a black rectangle, which is exactly the "shows nothing recognisable" this was
+     * reported as. Repositioning the cameras was necessary and not sufficient: a camera
+     * pointed correctly at an unlit subject still shows nothing.
+     *
+     * Cold, where the interior is amber. Security lighting genuinely is - sodium went out of
+     * fashion for exactly this reason - and it also does real work for the picture: crossing a
+     * service door is now a change of colour temperature as well as a change of room, and the
+     * warehouse's two-temperature scheme extends to its threshold instead of stopping at the
+     * wall.
+     *
+     * Placed just outboard of the canopy lamp so the housing reads as the source rather than
+     * as a second bright thing beside it.
+     */
+    const canopyLight = ENGINE.PointLightNode.create({
+      name: 'ServiceCanopyLight',
+      color: '#cfe2ea',
+      intensity: 26,
+      distance: 15,
+      decay: 1.5,
+      position: new THREE.Vector3(0, 3.42, 1.42),
+    });
+
     this.redLight = ENGINE.PointLightNode.create({
       name: 'LocalResponseRed',
       color: '#ff2c27',
@@ -338,6 +384,7 @@ export class WarehouseServiceDoor {
       tamper,
       canopy,
       canopyLamp,
+      canopyLight,
       sign,
       interiorSign,
       pad,
