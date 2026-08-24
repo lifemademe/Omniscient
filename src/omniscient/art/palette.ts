@@ -204,6 +204,12 @@ function standard(color: string, roughness: number, metalness = 0): THREE.MeshSt
  *
  * Roughness carries most of the surface variation - §187 asks for selective roughness
  * variation and simplified material response rather than noisy texture detail.
+ *
+ * Every value in here must be a Material. MainMenu and OmniscientRig both iterate this table
+ * and hand its values straight to code expecting one, so a factory function among them is a
+ * type error two files away from the change that caused it - which has happened. A lookup
+ * table's homogeneity is part of its contract even when nothing says so out loud; anything
+ * that needs to be built per-use belongs in its own module, the way art/glow.ts does it.
  */
 export const MAT = {
   ground: standard(HUMAN.ground, 0.96),
@@ -680,39 +686,6 @@ export const MAT = {
   beaconLit: new THREE.MeshBasicMaterial({ color: '#ffcf7a', toneMapped: false }),
   /** The same lens with nothing behind it. Its whole job is to be conspicuously off. */
   beaconDark: standard('#4a4034', 0.7),
-  /**
-   * The bloom around the beacon lens, in two shells.
-   *
-   * Two entries rather than the factory this started as. `MAT` is iterated elsewhere as a map
-   * of Materials - MainMenu and OmniscientRig both hand its values straight to code expecting
-   * one - so a function in it is a type error two files away from the change that caused it.
-   * Worth the note: a lookup table's homogeneity is part of its contract even when nothing
-   * says so out loud.
-   *
-   * Additive, so where the shells overlap they sum and the centre comes out brightest without
-   * anybody authoring a gradient. Unlit and unfogged for the same reason `sunDisc` is - this
-   * is the light itself rather than a surface receiving light, and letting the atmosphere
-   * touch it would grey out the one warm thing in a cold frame. `depthWrite` off so they
-   * never occlude each other or the lens inside them.
-   */
-  beaconHaloInner: new THREE.MeshBasicMaterial({
-    color: new THREE.Color('#ffcf7a'),
-    transparent: true,
-    opacity: 0.3,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false,
-    fog: false,
-  }),
-  beaconHaloOuter: new THREE.MeshBasicMaterial({
-    color: new THREE.Color('#ffcf7a'),
-    transparent: true,
-    opacity: 0.14,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-    toneMapped: false,
-    fog: false,
-  }),
   leaf: standard(GROWTH.leaf, 0.88),
   /**
    * Seedlings that are not getting enough light: paler and yellower than healthy leaf,

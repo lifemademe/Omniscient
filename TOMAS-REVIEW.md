@@ -511,7 +511,28 @@ that is correct — but the hard cut in §6 is what a player will read as one.
 | 14 | stereo on the room tone | **NOT DONE** |
 | 15 | trust-linked mix envelope | **NOT DONE** |
 
-### None of it has been seen on screen
+### Seen on screen at last — 2026-08-24
+
+The editor is back, and items 1–10 have now been looked at rather than reasoned about. The
+three questions this section said a harness could not judge, answered:
+
+1. **Is the mast too dark now?** No. The puzzle shot measures **p2–p98 = 153**, against the
+   46 it started at and the 110 this section set as the bar. `beacon` is 111, `default` 38.
+2. **Does the halo read as a bloom or as a ball?** It read as a **ball** — two hard concentric
+   circles, exactly the risk named here. Fixed, and it took two goes: nine graded shells made
+   it *worse* (nine edges, a dartboard), because no number of hard edges adds up to a soft one.
+   It is now two camera-facing quads carrying a radial alpha ramp — see `art/glow.ts`.
+3. **Does the light coming on land as an event?** Still open — it needs watching in motion,
+   not in a frame.
+
+Two things this pass leaves behind:
+
+- **`default` is the flat-dark shot now**, at a p2–p98 range of 38 against the puzzle shot's
+  153. Item 7 fixed its framing and nobody has ever judged its light.
+- Items **12–15 remain NOT DONE**. This session spent its budget verifying the ten that were
+  already written, on the grounds that shipped-and-never-seen is a worse risk than not-yet-built.
+
+### The original note — none of it had been seen on screen
 
 The Genesys MCP server disconnected during this session, so there was no way to rebuild into
 the editor, enter play mode, or capture a frame. Everything above typechecks, lints, builds

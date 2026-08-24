@@ -64,6 +64,7 @@ import { MowerDrive, MowingField } from './mowing.js';
 
 import type { FieldBounds } from './mowing.js';
 import { ACCENT, LIGHT, MAP, MAT } from '../art/palette.js';
+import { billboard, glowMaterial } from '../art/glow.js';
 import { decalMaterial, texturedFrom } from '../art/surface.js';
 import { createRng, jitter, range, seedFrom } from '../core/rng.js';
 import { getAccessibilityPreferences } from '../accessibility/preferences.js';
@@ -2714,18 +2715,35 @@ function buildBeaconMast(scene: ContactScene): void {
    * idle has no camera reference to do. A sphere looks the same from every angle by
    * construction, which is exactly what a bloom should do.
    *
-   * Two of them, at 1.6x and 2.7x the lens, because a single shell has an edge and a bloom
-   * must not. Additive so they sum where they overlap and the middle is brightest, and
-   * `depthWrite: false` so they never occlude each other or the lens inside them.
+   * Spheres came out, and it took two attempts to learn why.
+   *
+   * TOMAS-REVIEW flagged the halo as the thing a harness could not judge - bloom or ball? On
+   * screen it was unmistakably a ball: two shells at uniform alpha gave two hard concentric
+   * circles, because a sphere has a silhouette however faint it is and additive blending on a
+   * night sky renders that edge perfectly legible.
+   *
+   * The obvious repair is to subdivide - more shells, less alpha each, until the steps blur.
+   * Nine were tried, at about 0.05 of alpha per step, and it was WORSE: nine hard edges read
+   * as concentric rings, a dartboard rather than a lamp. No number of hard edges adds up to a
+   * soft one. The falloff has to live inside the primitive.
+   *
+   * So it is two camera-facing quads carrying a radial alpha ramp that reaches exactly zero at
+   * the rim - see art/glow.ts, which also explains why this needs no `THREE.Sprite` and no
+   * camera reference in the prop idle. `depthWrite: false` so they never occlude each other or
+   * the lens inside them.
    */
   const halo: ENGINE.MeshNode[] = [];
-  for (const [radius, material] of [
-    [0.45, MAT.beaconHaloInner],
-    [0.76, MAT.beaconHaloOuter],
+  const haloThresholds: number[] = [];
+  for (const [size, opacity, threshold] of [
+    [1.5, 0.52, 0.18],
+    [3.0, 0.3, 0.34],
   ] as const) {
-    const shell = new THREE.SphereGeometry(radius, 12, 9);
-    shell.translate(0, beaconY + 0.08, 0);
-    halo.push(meshOf('BeaconHalo', shell, material));
+    const quad = new THREE.PlaneGeometry(size, size);
+    quad.translate(0, beaconY + 0.08, 0);
+    const node = meshOf('BeaconHalo', quad, glowMaterial('#ffcf7a', opacity));
+    billboard(node);
+    halo.push(node);
+    haloThresholds.push(threshold);
   }
   for (const shell of halo) beaconRoot.add(shell);
 
@@ -2799,7 +2817,7 @@ function buildBeaconMast(scene: ContactScene): void {
       // The bloom goes with it. A glow left hanging round a dead lens is the single most
       // obvious way for this whole effect to look like a bug.
       for (const [index, shell] of halo.entries()) {
-        shell.visible = strength > (index === 0 ? 0.18 : 0.42);
+        shell.visible = strength > (haloThresholds[index] ?? 0.42);
       }
       sweepRoot.visible = strength > 0.42;
     },

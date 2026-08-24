@@ -20,6 +20,7 @@ import './omniscient/art/decals.js';
 import './omniscient/art/floodstain.js';
 import './omniscient/art/floodwater.js';
 import './omniscient/art/glass.js';
+import './omniscient/art/glow.js';
 import './omniscient/art/mesh.js';
 import './omniscient/art/noise.js';
 import './omniscient/art/obn.js';
