@@ -19,30 +19,37 @@ import { getAccessibilityPreferences } from '../accessibility/preferences.js';
  * the recoil happens on the gripper, and the lens takes a small kick. Nothing here changes
  * what a verb DOES - it only makes the world admit that it happened.
  *
- * ## The fade is a flipbook, and it has to be
+ * ## The fade is a real fade, and that was worth checking
  *
- * Writing material.opacity from the frame loop does not reach the renderer through
- * ENGINE.MeshNode in this project - the value handed in at construction is honoured and
- * later writes are silently dropped. That has already killed three effects across this
- * codebase, each hunted as "the sprite never appears" before the cause was found.
+ * A standing note in this project says per-frame material.opacity writes never reach the
+ * renderer through ENGINE.MeshNode, so these rings were first built as a stack of meshes at
+ * fixed descending opacities, faded by showing one rung at a time.
  *
- * Rather than risk a fourth, every ring is built as a stack of meshes whose opacities are
- * fixed at construction and descending, and the fade is done by showing one rung at a time.
- * visible, position, scale and quaternion all work every frame, so the whole module is built
- * out of only those four.
+ * Measured 2026-08-24, that turns out not to hold here: two probe quads driven by a square
+ * wave and compared with a per-pixel diff across frames showed BOTH opacity and
+ * emissiveIntensity animating correctly on materials handed to ENGINE.MeshNode.create. The
+ * warehouse already leans on that in ten places - the beacon pulses, the god-ray breathing,
+ * the door status lamps and the whole emergency lighting ramp - and all of them are live.
+ *
+ * So the flipbook came out and the ring fades properly. Worth recording how close that came
+ * to being "fixed": the first pass at measuring it counted green pixels and concluded the
+ * writes were dead, when at high emissive the quad simply blows out to white and stops being
+ * green. The count was wrong in both directions at once. The per-pixel diff is the honest
+ * instrument here, and it is what the next person should reach for.
  */
 
-/** Opacities of the fade stack, brightest first. Fixed at construction - see the header. */
-const FADE_STEPS = [0.5, 0.34, 0.2, 0.09] as const;
+/** Peak opacity of a ring at the instant it fires, before the fade takes it down. */
+const PEAK_OPACITY = 0.5;
 
 /** Scratch quaternions for rebasing the billboard facing into the rig's space. */
 const FACE_WORLD = new THREE.Quaternion();
 const FACE_LOCAL = new THREE.Quaternion();
 
-/** One expanding ring, faded by swapping between pre-built rungs. */
+/** One expanding, fading ring. */
 class PulseRing {
   public readonly root = ENGINE.SceneNode.create({ name: 'ScanPulseRing' });
-  private readonly rungs: ENGINE.MeshNode[] = [];
+  private face: ENGINE.MeshNode | null = null;
+  private material: THREE.MeshBasicMaterial | null = null;
   private life = 0;
   private duration = 0.5;
   private spread = 1;
@@ -73,30 +80,27 @@ class PulseRing {
    * field and does everything else in build(). That is the convention here for a reason.
    */
   public build(): void {
-    if (this.rungs.length > 0) return;
-    for (const [index, opacity] of FADE_STEPS.entries()) {
-      const node = ENGINE.MeshNode.create({
-        name: `ScanPulseRung-${index + 1}`,
-        geometry: new THREE.RingGeometry(this.innerRadius, this.innerRadius + this.thickness, 40),
-        material: new THREE.MeshBasicMaterial({
-          color: this.colour,
-          transparent: true,
-          opacity,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-          blending: THREE.AdditiveBlending,
-          toneMapped: false,
-        }),
-      });
-      node.visible = false;
-      this.rungs.push(node);
-      this.root.add(node);
-    }
+    if (this.face) return;
+    this.material = new THREE.MeshBasicMaterial({
+      color: this.colour,
+      transparent: true,
+      opacity: PEAK_OPACITY,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      toneMapped: false,
+    });
+    this.face = ENGINE.MeshNode.create({
+      name: 'ScanPulseFace',
+      geometry: new THREE.RingGeometry(this.innerRadius, this.innerRadius + this.thickness, 40),
+      material: this.material,
+    });
+    this.root.add(this.face);
     this.root.visible = false;
   }
 
   public fire(at: THREE.Vector3, duration: number, spread: number): void {
-    if (this.rungs.length === 0) return;
+    if (!this.face) return;
     this.root.position.copy(at);
     this.duration = duration;
     this.spread = spread;
@@ -122,19 +126,18 @@ class PulseRing {
     // does not travel outward.
     const scale = still ? this.spread * 0.6 : 0.25 + progress * this.spread;
     this.root.scale.setScalar(Math.max(0.001, scale));
-    const rung = Math.min(this.rungs.length - 1, Math.floor(progress * this.rungs.length));
-    for (const [index, node] of this.rungs.entries()) node.visible = index === rung;
-    if (this.life <= 0) {
-      this.root.visible = false;
-      for (const node of this.rungs) node.visible = false;
-    }
+    /*
+     * Squared falloff rather than linear: a ring that fades on a straight line reads as a
+     * dimmer switch, while one that drops away fast and then lingers reads as a pulse. The
+     * expansion is linear, so all the character has to come from the alpha.
+     */
+    if (this.material) this.material.opacity = PEAK_OPACITY * (1 - progress) * (1 - progress);
+    if (this.life <= 0) this.root.visible = false;
   }
 
   public dispose(): void {
-    for (const node of this.rungs) {
-      node.geometry?.dispose();
-      (node.material as THREE.Material | undefined)?.dispose();
-    }
+    this.face?.geometry?.dispose();
+    this.material?.dispose();
   }
 }
 
