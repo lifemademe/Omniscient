@@ -348,6 +348,19 @@ export const CONSOLE_CHROME_CSS = `
   background: #7fe08a;
   box-shadow: inset 1px 1px 0 #040906, inset -1px -1px 0 #2a5138, inset 0 2px 0 #c2f5c9;
 }
+/*
+ * A meter that is telling you something is wrong.
+ *
+ * Added for the warehouse's integrity seals, and deliberately the only place red enters the
+ * margin readouts. The game reserves red for security and anomaly states; a permanently
+ * amber status banner - which is what Warehouse 07 shipped with - spends that meaning on a
+ * number that is usually fine, so by the time something IS wrong the colour has nothing
+ * left to say.
+ */
+.omni-meter--warn i.on {
+  background: #b8564b;
+  box-shadow: inset 1px 1px 0 #1a0605, inset -1px -1px 0 #6d2f28, inset 0 2px 0 #ff897b;
+}
 
 /* Bottom-left controls, sitting over the scene. */
 .omni-cv__actions {
@@ -422,6 +435,46 @@ export const CONSOLE_CHROME_CSS = `
   opacity: 0.75;
   pointer-events: none;
 }
+
+/*
+ * The right-hand column.
+ *
+ * A bare grid cell - the frame decides how wide it is and the screen decides what goes in
+ * it. Its own rule rather than nothing at all, so a panel that forgets to set a height
+ * cannot stretch the body grid.
+ */
+.omni-cv__column {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.omni-objective {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  margin: 14px 18px 0;
+  padding: 9px 14px;
+  border: 1px solid #2b5c39;
+  border-left: 3px solid #7fe08a;
+  background: linear-gradient(90deg, rgba(30, 74, 44, 0.55), rgba(13, 28, 20, 0.35));
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.45);
+}
+.omni-objective[hidden] { display: none; }
+.omni-objective__text {
+  color: #d8ffb0;
+  font-size: calc(15px + var(--omni-font-boost, 0px));
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+}
+.omni-objective__tag {
+  flex: none;
+  color: #5f9c6c;
+  font-size: calc(11px + var(--omni-font-boost, 0px));
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
 `;
 
 /** Add the chrome stylesheet once, whichever screen asks for it first. */
@@ -431,4 +484,214 @@ export function injectConsoleChrome(): void {
   style.id = CONSOLE_CHROME_ID;
   style.textContent = CONSOLE_CHROME_CSS;
   document.head.appendChild(style);
+}
+
+/**
+ * A margin readout: label, eight-segment meter, value, and a lowercase line under it.
+ *
+ * Extracted because it existed twice, character for character, in `LocalSurface` and
+ * `GlobeScreen` - and the warehouse was about to become the third. This file's own header
+ * already says the margin readouts belong here; only the CSS had made the trip.
+ *
+ * The duplication was not harmless. Two identical private methods are two places a segment
+ * count or a class name can change independently, and the whole reason this module exists is
+ * that the globe and the Contact View drifted apart while nobody was looking at both at once.
+ */
+export interface ReadoutCard {
+  card: HTMLDivElement;
+  meter: HTMLDivElement;
+  value: HTMLSpanElement;
+  sub: HTMLSpanElement;
+}
+
+export function buildReadoutCard(label: string): ReadoutCard {
+  const card = document.createElement('div');
+  card.className = 'omni-card';
+
+  const caption = document.createElement('span');
+  caption.className = 'omni-card__label';
+  caption.textContent = label;
+
+  const meter = document.createElement('div');
+  meter.className = 'omni-meter';
+  for (let i = 0; i < 8; i++) meter.appendChild(document.createElement('i'));
+
+  const value = document.createElement('span');
+  value.className = 'omni-card__value';
+
+  const sub = document.createElement('span');
+  sub.className = 'omni-card__sub';
+
+  card.append(caption, meter, value, sub);
+  return { card, meter, value, sub };
+}
+
+/** Light the first `filled` segments of a meter and clear the rest. */
+export function fillMeter(meter: HTMLDivElement, filled: number, extraClass = ''): void {
+  meter.className = `omni-meter${extraClass ? ` ${extraClass}` : ''}`;
+  const segments = meter.children;
+  for (let i = 0; i < segments.length; i++) {
+    segments[i].className = i < filled ? 'on' : '';
+  }
+}
+
+/**
+ * A console control - a glyph and a word.
+ *
+ * `mousedown` rather than `click`, with both `preventDefault` and `stopPropagation`, because
+ * these sit over a canvas that is picking. A press that reaches the world behind the button
+ * is a call ended and a request opened on the same click.
+ */
+export function buildAction(
+  glyph: string,
+  label: string,
+  onPress: () => void,
+  modifier = ''
+): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = `omni-action${modifier ? ` ${modifier}` : ''}`;
+
+  const icon = document.createElement('span');
+  icon.className = 'omni-action__glyph';
+  icon.textContent = glyph;
+
+  const text = document.createElement('span');
+  text.textContent = label;
+
+  button.append(icon, text);
+  button.addEventListener('mousedown', (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    onPress();
+  });
+  return button;
+}
+
+export interface ConsoleFrame {
+  /** The full-screen shell. Append it to the game container. */
+  shell: HTMLDivElement;
+  /** The hole the world shows through. Anything over the scene goes in here. */
+  stage: HTMLDivElement;
+  /** Top of the stage column: the margin cards. */
+  readouts: HTMLDivElement;
+  /** Foot of the stage column: the call controls. */
+  actions: HTMLDivElement;
+  /** The right-hand column, handed back empty for the caller to fill. */
+  column: HTMLDivElement;
+  /** The plate above both panels. Write to it through `setObjective`. */
+  objective: HTMLDivElement;
+  setObjective: (tag: string, text: string) => void;
+}
+
+/**
+ * The whole console frame, minus whatever fills the right-hand column.
+ *
+ * ## Why this exists
+ *
+ * Warehouse 07 arrived with a parallel `warehouse-hud` vocabulary: its own top strip, its own
+ * footer saying almost exactly what this one says in different words, a briefing card where
+ * the readouts go, and four keyboard-hint buttons stacked down the left over the scene. It
+ * used the right colours and none of the right grammar, so it read as a different game
+ * wearing this one's palette - which is precisely the drift the note at the top of this file
+ * was written about, happening again one folder over.
+ *
+ * The frame is not decoration. It is the argument that OMNISCIENT_ is ONE instrument looking
+ * at different places: same bar, same margins, same footer, and a hole in the middle where
+ * this time there is a warehouse instead of a workshop. A screen that rebuilds the frame is
+ * a screen saying it is somewhere else.
+ *
+ * ## What it deliberately does not do
+ *
+ * It does not build the right-hand column. The Contact View puts a transcript there and the
+ * warehouse an operations panel, and below the class name those have nothing in common.
+ *
+ * `LocalSurface` still builds its own copy of this inline. It was left alone in the pass that
+ * added this: its shell is threaded through connection-state classes, the objective plate and
+ * an END CALL reference in ways that want their own change, and a refactor that breaks the
+ * main Contact View to tidy the bonus one has the priorities backwards. Switching it over is
+ * the obvious next tidy-up.
+ */
+export function buildConsoleFrame(options: { brand: string; network: string }): ConsoleFrame {
+  injectConsoleChrome();
+
+  const shell = document.createElement('div');
+  shell.className = 'omni-cv';
+
+  const top = document.createElement('div');
+  top.className = 'omni-cv__top';
+  const brand = document.createElement('span');
+  brand.className = 'omni-cv__brand';
+  brand.textContent = options.brand;
+  const net = document.createElement('span');
+  net.className = 'omni-cv__net';
+  const bars = document.createElement('span');
+  bars.className = 'omni-cv__bars';
+  for (let i = 0; i < 4; i++) bars.appendChild(document.createElement('i'));
+  const netName = document.createElement('span');
+  netName.textContent = options.network;
+  net.append(bars, netName);
+  const secure = document.createElement('span');
+  secure.textContent = 'Secure link';
+  top.append(brand, net, secure);
+
+  /*
+   * Sentence case in the markup, capitals from the stylesheet.
+   *
+   * The chrome's `text-transform: uppercase` carries 0.16em of letter-spacing with it, so a
+   * string typed in capitals renders at a different rhythm from one the CSS raised. The
+   * warehouse HUD typed every one of its labels in capitals, and that is one of the reasons
+   * it did not sit right beside the rest of the game even where the colours already matched.
+   */
+  const objective = document.createElement('div');
+  objective.className = 'omni-objective';
+  objective.hidden = true;
+  const objectiveTag = document.createElement('span');
+  objectiveTag.className = 'omni-objective__tag';
+  const objectiveText = document.createElement('span');
+  objectiveText.className = 'omni-objective__text';
+  objective.append(objectiveTag, objectiveText);
+
+  const body = document.createElement('div');
+  body.className = 'omni-cv__body';
+
+  const stage = document.createElement('div');
+  stage.className = 'omni-cv__stage';
+  const readouts = document.createElement('div');
+  readouts.className = 'omni-cv__readouts';
+  const actions = document.createElement('div');
+  actions.className = 'omni-cv__actions';
+  stage.append(readouts, actions);
+
+  const column = document.createElement('div');
+  column.className = 'omni-cv__column';
+
+  body.append(stage, column);
+
+  const foot = document.createElement('div');
+  foot.className = 'omni-cv__foot';
+  const version = document.createElement('span');
+  version.textContent = 'Omniscient OS';
+  const notice = document.createElement('span');
+  notice.textContent = 'All handling decisions are monitored and recorded.';
+  const corp = document.createElement('span');
+  corp.textContent = 'Omniscient';
+  foot.append(version, notice, corp);
+
+  shell.append(top, objective, body, foot);
+
+  return {
+    shell,
+    stage,
+    readouts,
+    actions,
+    column,
+    objective,
+    setObjective: (tag, text) => {
+      objectiveTag.textContent = tag;
+      objectiveText.textContent = text;
+      objective.hidden = !text;
+    },
+  };
 }

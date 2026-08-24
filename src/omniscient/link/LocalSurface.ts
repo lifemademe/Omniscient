@@ -178,31 +178,16 @@ export const TERMINAL_CSS = `
   min-height: 0;
 }
 .omni-cv__middle > .omni-cv__body { flex: 1; min-height: 0; }
-.omni-objective {
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-  margin: 14px 18px 0;
-  padding: 9px 14px;
-  border: 1px solid #2b5c39;
-  border-left: 3px solid #7fe08a;
-  background: linear-gradient(90deg, rgba(30, 74, 44, 0.55), rgba(13, 28, 20, 0.35));
-  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.45);
-}
-.omni-objective[hidden] { display: none; }
-.omni-objective__text {
-  color: #d8ffb0;
-  font-size: calc(15px + var(--omni-font-boost, 0px));
-  line-height: 1.35;
-  letter-spacing: 0.02em;
-}
-.omni-objective__tag {
-  flex: none;
-  color: #5f9c6c;
-  font-size: calc(11px + var(--omni-font-boost, 0px));
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-}
+/*
+ * The objective plate moved to console-chrome.
+ *
+ * It was here, and console-chrome was already styling its transitions - four rules naming
+ * .omni-objective in a file that could not see it - and note the class name is written
+ * bare here on purpose: this comment lives INSIDE a CSS template literal, and a backtick
+ * in one closes it. That has now cost this project three separate debugging sessions.
+ * exists to close, and it only surfaced when the warehouse asked for the frame and got back
+ * a plate with no styling on it.
+ */
 /* The observations, over the conversation. Titles; the detail goes into the chat. */
 .omni-observed {
   display: flex;
