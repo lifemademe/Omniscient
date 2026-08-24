@@ -703,6 +703,25 @@ export class WarehouseEnvironment {
     });
     this.root.add(this.ambientLight, this.moonLight);
     /*
+     * AIM IT. This is a bug fix, not a tuning change.
+     *
+     * LightNode.updateMatrixWorld builds a directional's target from getWorldDirection() -
+     * the node's ROTATION. `position` places the light and does not point it, so an unrotated
+     * DirectionalLightNode fires along a fixed axis whatever its position says. Both
+     * directionals in this building were unrotated, which means the moon has been contributing
+     * essentially nothing to a horizontal floor since it was added, and the "cold key doing the
+     * silhouette work" in the note above was never doing it.
+     *
+     * The tell was outside: the yard read as night while the windows read as noon, because the
+     * interior daylight was emissive panes and fake bounce lights - things that glow on their
+     * own - and the only light that could have reached the exterior ground was aimed at the
+     * horizon. Aiming it is what makes the moon a light rather than a comment.
+     *
+     * Must be called AFTER add(), or the world matrix it derives from is not the one that ends
+     * up in the scene.
+     */
+    this.moonLight.lookAt(new THREE.Vector3(2, 0, -2));
+    /*
      * The fixture has to look like the source of the light under it.
      *
      * It was a pale green lens at 1.15 emissive, which reads as a panel that happens to be

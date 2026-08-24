@@ -87,8 +87,8 @@ export class WarehouseDaylight {
   public tick(deltaTime: number, emergencyLevel: number, contained: boolean, reducedMotion: boolean): void {
     this.clock += deltaTime;
     const emergency = THREE.MathUtils.clamp(emergencyLevel, 0, 1);
-    if (this.sunLight) this.sunLight.intensity = THREE.MathUtils.lerp(2.55, 1.05, emergency);
-    for (const light of this.bounceLights) light.intensity = THREE.MathUtils.lerp(7.6, 2.1, emergency);
+    if (this.sunLight) this.sunLight.intensity = THREE.MathUtils.lerp(0.9, 0.45, emergency);
+    for (const light of this.bounceLights) light.intensity = THREE.MathUtils.lerp(4.6, 1.6, emergency);
     // The night side barely dims. When the work lights drop it is most of what is left, and
     // an emergency that goes black is a scene the player cannot act in.
     for (const light of this.nightLights) light.intensity = THREE.MathUtils.lerp(CLERESTORY_NIGHT, 14, emergency);
@@ -97,7 +97,7 @@ export class WarehouseDaylight {
       material.opacity = THREE.MathUtils.lerp(0.036 * breathing, 0.009, emergency);
     }
     for (const material of this.windowMaterials) {
-      material.emissiveIntensity = THREE.MathUtils.lerp(0.52, 0.16, emergency);
+      material.emissiveIntensity = THREE.MathUtils.lerp(0.12, 0.05, emergency);
     }
   }
 
@@ -105,7 +105,7 @@ export class WarehouseDaylight {
     const sky = mesh(
       'RainbreakSkyVolume',
       new THREE.BoxGeometry(104, 48, 116),
-      new THREE.MeshBasicMaterial({ color: '#607981', side: THREE.BackSide, toneMapped: false }),
+      new THREE.MeshBasicMaterial({ color: '#1b2733', side: THREE.BackSide, toneMapped: false }),
       new THREE.Vector3(0, 13, 0),
       false,
       false
@@ -214,8 +214,14 @@ export class WarehouseDaylight {
       else paneCenter.z += offset;
       const glass = new THREE.MeshStandardMaterial({
         color: bay % 3 === 0 ? '#a6c4c8' : '#789ba2',
-        emissive: '#88aeb4',
-        emissiveIntensity: 0.52,
+        /*
+         * Glass, not a lamp. At 0.52 these panes GLOWED - emissive ignores scene lighting, so
+         * they read as bright daylight at midnight and were most of why the interior looked
+         * like noon while the yard looked like night. Down to a value that reads as night sky
+         * caught in glass, which is what a clerestory does after dark.
+         */
+        emissive: '#5f7f96',
+        emissiveIntensity: 0.12,
         transparent: true,
         opacity: 0.32,
         roughness: 0.2,
@@ -255,9 +261,22 @@ export class WarehouseDaylight {
   private buildSunlight(): void {
     this.sunLight = ENGINE.DirectionalLightNode.create({
       name: 'WarehouseSunbreak',
-      color: '#ffd39a',
-      intensity: 2.55,
-      position: new THREE.Vector3(-42, 17, 22),
+      /*
+       * ## This was a sun in a mission that happens at night
+       *
+       * The objective line reads "receive the NIGHT truck". The exterior ground, the moon,
+       * the door cameras and the whole security-shift fiction are night. A warm 2.55 sunbreak
+       * was the one element arguing for daytime, and it was arguing badly: it was never
+       * aimed, so it contributed almost nothing and the daylight the player actually saw came
+       * from emissive window panes and five warm point lights faking spill.
+       *
+       * The apparatus is kept and re-tempered rather than deleted. The same key light, the
+       * same shadow rig, the same clerestory geometry now carry moonlight: cold, a third of
+       * the strength, and pointed at the floor it is supposed to be lighting. One story.
+       */
+      color: '#b9d2e2',
+      intensity: 0.9,
+      position: new THREE.Vector3(-42, 26, 22),
       castShadow: true,
       isSunLight: true,
       shadowMapSize: 2048,
@@ -272,12 +291,16 @@ export class WarehouseDaylight {
       shadowRadius: 2.4,
     });
     this.root.add(this.sunLight);
+    // Aimed after add() - see the note on the moon in art.ts. position does not point a
+    // directional; rotation does, and this one had none.
+    this.sunLight.lookAt(new THREE.Vector3(-4, 0, 0));
 
     for (const [index, z] of [14, 6, -2, -10, -18].entries()) {
       const bounce = ENGINE.PointLightNode.create({
         name: `ClerestoryBounce-${index + 1}`,
-        color: index % 2 ? '#f2c58c' : '#e9ba7d',
-        intensity: 7.6,
+        /* Was warm sun spill through the west clerestory. Night: the same spill, moonlit. */
+        color: index % 2 ? '#9dc0dc' : '#8fb2d0',
+        intensity: 4.6,
         distance: 16,
         decay: 1.75,
         position: new THREE.Vector3(-21.1, 6.7, z),
@@ -334,7 +357,7 @@ export class WarehouseDaylight {
       }
 
       const material = new THREE.MeshBasicMaterial({
-        color: '#ffc77f',
+        color: '#a9c8e4',
         transparent: true,
         opacity: 0.036,
         depthWrite: false,
@@ -363,7 +386,7 @@ export class WarehouseDaylight {
         `SunPatch-${index + 1}`,
         new THREE.PlaneGeometry(6.8, 2.15),
         new THREE.MeshBasicMaterial({
-          color: '#d9a75f',
+          color: '#93b4cc',
           transparent: true,
           opacity: 0.08,
           depthWrite: false,
