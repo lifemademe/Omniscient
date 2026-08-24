@@ -607,32 +607,73 @@ export class WarehouseRig extends ENGINE.SceneNode {
      * guards and booms going dark instead - see below - which costs the frame nothing because
      * they are thin.
      */
+    /*
+     * ## Turntable review, and what the six angles said
+     *
+     * The first redesign was judged from the chase camera alone, which is the one view that
+     * flattered it. Orbited, it fell apart: from three-quarters and from the side it read as a
+     * flat PLATE with a plain BRICK on top. The chassis at 10cm deep was a sliver in profile,
+     * so the machine had no body - just a disc - and the avionics spine, being the only thing
+     * with height, became the whole silhouette and it was a featureless rectangle.
+     *
+     * Only the rear view worked, because the rear view is carried by the tail lamps rather
+     * than by the form.
+     *
+     * ## A fuselage, in two steps
+     *
+     * A wide lower hull and a narrower upper deck, stacked and tapered. That gives the drone
+     * real depth in profile and a stepped edge that catches light along its length, which is
+     * what makes a small object read as machined rather than as a block. Faceted at six sides
+     * for the same reason the chassis was: the retro pass quantises hard, and flats survive
+     * a coarse grid where curvature turns to mush.
+     */
     const shell = ENGINE.MeshNode.create({
-      name: 'DroneChassis',
-      geometry: new THREE.CylinderGeometry(0.44, 0.4, 0.1, 6),
+      name: 'DroneLowerHull',
+      geometry: new THREE.CylinderGeometry(0.44, 0.38, 0.15, 6),
       material: hull,
       castShadow: true,
     });
     shell.rotation.y = Math.PI / 6;
     const dome = ENGINE.MeshNode.create({
-      name: 'DroneAvionicsSpine',
-      geometry: new THREE.BoxGeometry(0.25, 0.12, 0.5),
+      name: 'DroneUpperDeck',
+      geometry: new THREE.CylinderGeometry(0.3, 0.42, 0.13, 6),
       material: panel,
       castShadow: true,
     });
-    dome.position.y = 0.1;
+    dome.rotation.y = Math.PI / 6;
+    dome.position.y = 0.135;
     /*
      * The nose, which is the whole point of the redesign: an asymmetric wedge so the front is
      * identifiable from any angle including the one the player actually uses.
      */
+    /*
+     * A sensor housing rather than a spike, because the front has to read as a FACE.
+     *
+     * From dead ahead the old nose was invisible and all the drone showed was a teal ball
+     * slung under it - the front view of a machine whose entire job is looking at things had
+     * nothing that looked back. A blunt housing with a dark visor slot across it, sensor
+     * recessed inside, is the shape every camera drone and every inspection robot converges
+     * on, and it is legible at a dozen pixels.
+     */
     const nose = ENGINE.MeshNode.create({
-      name: 'DroneNose',
-      geometry: new THREE.CylinderGeometry(0.18, 0.08, 0.32, 6),
-      material: panel,
+      name: 'DroneSensorHousing',
+      geometry: new THREE.BoxGeometry(0.32, 0.155, 0.28),
+      /*
+       * Hull, not panel. In the darker panel grey the housing read as a separate black brick
+       * bolted to the nose rather than as part of the airframe - a silhouette with a lump on
+       * it. Matching the body makes it structure, and lets the one genuinely dark element up
+       * front, the visor slot, be the thing the eye finds.
+       */
+      material: hull,
       castShadow: true,
     });
-    nose.rotation.set(Math.PI / 2, 0, Math.PI / 6);
-    nose.position.set(0, 0.01, -0.36);
+    nose.position.set(0, 0.025, -0.4);
+    const visor = ENGINE.MeshNode.create({
+      name: 'DroneVisor',
+      geometry: new THREE.BoxGeometry(0.285, 0.085, 0.04),
+      material: dark,
+    });
+    visor.position.set(0, 0.03, -0.545);
     /*
      * A brass rim line, and the first attempt at it was a mistake worth recording: at 0.455
      * radius by 2.8cm tall against a chassis only 10cm deep, it stopped being a strake and
@@ -646,10 +687,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
       material: brass,
     });
     strake.rotation.set(Math.PI / 2, 0, Math.PI / 6);
-    strake.position.y = 0.03;
+    strake.position.y = 0.072;
     const eye = ENGINE.MeshNode.create({
       name: 'DroneEye',
-      geometry: new THREE.SphereGeometry(0.105, 14, 10),
+      geometry: new THREE.SphereGeometry(0.062, 12, 8),
       material: new THREE.MeshStandardMaterial({ color: '#09100f', emissive: '#315f55', emissiveIntensity: 1.2, roughness: 0.22 }),
     });
     /*
@@ -658,7 +699,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
      * carrying; a sensor belongs in the housing built for it, where its size says "instrument"
      * rather than "cargo".
      */
-    eye.position.set(0, 0.01, -0.5);
+    eye.position.set(0, 0.03, -0.558);
     const grip = ENGINE.MeshNode.create({
       name: 'MagneticGripper',
       geometry: new THREE.CylinderGeometry(0.18, 0.24, 0.12, 12),
@@ -722,7 +763,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     });
     lampGlass.position.set(0, -0.1, -0.36);
 
-    this.droneVisual.add(shell, dome, nose, strake, eye, grip, lamp, lampGlass);
+    this.droneVisual.add(shell, dome, nose, visor, strake, eye, grip, lamp, lampGlass);
     this.feedback.bindGripper(grip);
 
     const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(0.52, 0.07, 0.08), dark, 4);
