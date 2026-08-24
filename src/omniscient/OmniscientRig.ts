@@ -2782,6 +2782,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.warehouse.removeFromParent();
     this.warehouse = null;
     if (this.warehouseFog && this.fog) {
+      // Colour too, not just the distances - see mountScene: a room that retunes the global
+      // fog owes the next room every part of it back, and the colour was the part this
+      // forgot. Left set, it would have tinted the workstation on the way home.
+      this.fog.setFogColor(new THREE.Color(LIGHT.haze));
       this.fog.setFogNear(this.warehouseFog.near);
       this.fog.setFogFar(this.warehouseFog.far);
     }
@@ -2836,8 +2840,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.m4ssFog = this.fog
       ? { near: this.fog.getFogNear(), far: this.fog.getFogFar() }
       : null;
-    this.fog?.setFogNear(1e6);
-    this.fog?.setFogFar(1e7);
+    /**
+     * The warehouse gets its OWN fog rather than none at all.
+     *
+     * These were 1e6 and 1e7 - fog effectively switched off - because the workstation's values
+     * are tuned to a diorama a few metres across and would have swallowed a building. Off is
+     * the wrong answer to that: a 48 by 58 metre shed with no atmosphere in it reads as a
+     * small room with distant walls, because the far end of an aisle is exactly as crisp as
+     * the crate in front of the lens and the eye has nothing to judge distance by.
+     *
+     * 22 to 82 metres, which puts the near racks clean, the far end of an aisle softening,
+     * and the back wall well into haze. It is also the cheapest depth cue available: no
+     * geometry, no light, one pair of numbers, and it is most of why the reference shots of
+     * real warehouses look enormous.
+     */
+    this.fog?.setFogColor(new THREE.Color('#1b2028'));
+    this.fog?.setFogNear(22);
+    this.fog?.setFogFar(82);
 
     const rig = M4SSRig.create({ name: 'M4SSRig', position: M4SS_ORIGIN });
     this.add(rig);

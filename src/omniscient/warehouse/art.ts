@@ -24,10 +24,25 @@ import type {
   WarehouseSecurityZoneId,
 } from './types.js';
 
-const WALL = new THREE.MeshStandardMaterial({ color: '#33403e', roughness: 0.88, metalness: 0.1 });
-const STEEL = new THREE.MeshStandardMaterial({ color: '#506365', roughness: 0.6, metalness: 0.58 });
-const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#202b2a', roughness: 0.76, metalness: 0.42 });
-const FLOOR = new THREE.MeshStandardMaterial({ color: '#373d3a', roughness: 0.91, metalness: 0.04 });
+/**
+ * The warehouse palette.
+ *
+ * ## Everything used to be the same green
+ *
+ * Wall #33403e, steel #506365, dark steel #202b2a, floor #373d3a - four surfaces inside one
+ * narrow desaturated teal band, lit by a cyan hemisphere, a cyan moon and fifteen cyan work
+ * lights. The whole room came out as one wash, which is what "nothing reads" looks like when
+ * the geometry is actually fine.
+ *
+ * Neutral now, not green. A neutral grey under a warm lamp goes warm and under the moon goes
+ * cool, and that difference is the entire picture; a green-grey stays green under both and
+ * throws away the only thing the lighting was doing. Cheapest colour work there is - the hex
+ * codes barely move, but they stop fighting every light in the room.
+ */
+const WALL = new THREE.MeshStandardMaterial({ color: '#3a3937', roughness: 0.88, metalness: 0.1 });
+const STEEL = new THREE.MeshStandardMaterial({ color: '#5a5f63', roughness: 0.6, metalness: 0.58 });
+const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#23262a', roughness: 0.76, metalness: 0.42 });
+const FLOOR = new THREE.MeshStandardMaterial({ color: '#3d3b38', roughness: 0.91, metalness: 0.04 });
 const AMBER = new THREE.MeshStandardMaterial({ color: '#8d6c31', emissive: '#39250b', emissiveIntensity: 0.55, roughness: 0.58 });
 const RED = new THREE.MeshStandardMaterial({ color: '#6e2d2d', emissive: '#2c0909', emissiveIntensity: 0.6, roughness: 0.62 });
 const GREEN = new THREE.MeshStandardMaterial({ color: '#315c42', emissive: '#102b18', emissiveIntensity: 0.45, roughness: 0.62 });
@@ -235,7 +250,19 @@ export class WarehouseEnvironment {
         const carton = mesh(
           `RackCarton-${aisle}-${stack}`,
           new THREE.BoxGeometry(width, 0.68 + (stack % 3) * 0.08, 0.66 + (stack % 2) * 0.12),
-          new THREE.MeshStandardMaterial({ color: stack % 3 === 0 ? '#70593b' : stack % 2 ? '#5c513d' : '#6b5c43', roughness: 0.95 }),
+          /*
+           * Cardboard, at the value cardboard actually is.
+           *
+           * These were #70593b / #5c513d / #6b5c43 - dark brown-olive, about 35% grey. Under a
+           * cyan work light that is the muddy teal mass filling three quarters of every shot,
+           * and it is the single biggest surface in the building.
+           *
+           * Real board is 65-72% and warm. Lifting it does three things at once: the racks get
+           * a value the near-black steel can read against, the warm lamps have something warm
+           * to land on, and the aisles gain the depth ramp they never had - lit board close,
+           * unlit board far.
+           */
+          new THREE.MeshStandardMaterial({ color: stack % 3 === 0 ? '#c2a274' : stack % 2 ? '#ac9068' : '#b79b6e', roughness: 0.95 }),
           new THREE.Vector3(x + (stack % 2 ? 0.28 : -0.25), y, z)
         );
         this.root.add(carton);
@@ -243,7 +270,8 @@ export class WarehouseEnvironment {
           const tape = mesh(
             `RackCartonTape-${aisle}-${stack}`,
             new THREE.BoxGeometry(0.075, 0.7 + (stack % 3) * 0.08, 0.69 + (stack % 2) * 0.12),
-            new THREE.MeshStandardMaterial({ color: stack % 2 ? '#aa9569' : '#8f7c59', roughness: 0.72 }),
+            // Packing tape is lighter than the board it is on, not darker.
+            new THREE.MeshStandardMaterial({ color: stack % 2 ? '#d8c9a4' : '#c3b085', roughness: 0.72 }),
             carton.position.clone()
           );
           this.root.add(tape);
@@ -431,11 +459,26 @@ export class WarehouseEnvironment {
   }
 
   private buildLights(): void {
-    this.ambientLight = ENGINE.HemisphereLightNode.create({ name: 'WarehouseAmbient', color: '#bad5cf', groundColor: '#28322e', intensity: 1.9 });
+    /**
+     * ## The hemisphere was the thing flattening the room
+     *
+     * 1.9 of directionless fill, and an ambient has no direction by definition - so every
+     * shadow in the building was lifted to roughly the value of every lit surface. Same fault,
+     * same number, same symptom as the beacon mast sitting at `daylight` 1: a scene that looks
+     * deliberate and measures flat.
+     *
+     * 0.6, and the sky term goes properly cold while the ground bounce goes warm. That is what
+     * a night interior does - cold light down the roof lights, warm light back off a concrete
+     * floor under sodium - and it means the ambient itself now carries a little of the
+     * warm/cool split rather than washing it out.
+     */
+    this.ambientLight = ENGINE.HemisphereLightNode.create({ name: 'WarehouseAmbient', color: '#93b4c6', groundColor: '#38302a', intensity: 0.6 });
     this.moonLight = ENGINE.DirectionalLightNode.create({
       name: 'WarehouseMoon',
       color: '#a9d0d7',
-      intensity: 1.35,
+      // Up from 1.35: with the hemisphere down by two thirds this is the light doing the
+      // silhouette work, and it is the only cold key in the building.
+      intensity: 1.7,
       position: new THREE.Vector3(-18, 24, 15),
       castShadow: true,
       shadowMapSize: 2048,
@@ -444,10 +487,18 @@ export class WarehouseEnvironment {
       shadowBias: -0.0004,
     });
     this.root.add(this.ambientLight, this.moonLight);
+    /*
+     * The fixture has to look like the source of the light under it.
+     *
+     * It was a pale green lens at 1.15 emissive, which reads as a panel that happens to be
+     * slightly brighter than the ceiling. Thirty of them across the roof and not one of them
+     * looked switched on. Warm and hot enough to be the brightest thing up there, because a
+     * pool on the floor with nothing above it is a decal.
+     */
     const fixtureLens = new THREE.MeshStandardMaterial({
-      color: '#a8c8be',
-      emissive: '#82aa9e',
-      emissiveIntensity: 1.15,
+      color: '#e8d3ab',
+      emissive: '#ffbe72',
+      emissiveIntensity: 2.8,
       roughness: 0.38,
       metalness: 0.12,
     });
@@ -458,11 +509,25 @@ export class WarehouseEnvironment {
         const fixture = mesh('CeilingFixtureLens', new THREE.BoxGeometry(2.48, 0.055, 0.23), fixtureLens, new THREE.Vector3(x, 9.82, z));
         this.root.add(housing, fixture);
         if ((xIndex + zIndex) % 2 === 0) {
+          /**
+           * High bay lamps, and they are WARM.
+           *
+           * They were #c4ddd1 - the same pale cyan as the hemisphere and the moon. Three
+           * light sources of one colour is one light source: nothing in the room could be
+           * warm, nothing could be cold, and there was no separation left for anything to
+           * read against.
+           *
+           * Sodium and metal halide are warm, which is both true of a real warehouse at night
+           * and the thing this set needs most: warm pools on a neutral floor, cold moonlight
+           * through the roof, and the amber floor markings and cardboard finally sitting in
+           * light that agrees with them. It is the same split the game already runs on -
+           * amber for what is lit and working, cyan for what the machine is looking through.
+           */
           const workLight = ENGINE.PointLightNode.create({
             name: 'WarehouseWorkLight',
-            color: '#c4ddd1',
-            intensity: 19,
-            distance: 17,
+            color: '#ffbe78',
+            intensity: 27,
+            distance: 19,
             decay: 1.65,
             position: new THREE.Vector3(x, 9.45, z),
           });
@@ -714,11 +779,13 @@ export class WarehouseEnvironment {
     const contained = this.lightingMode === 'contained';
     const reducedMotion = getAccessibilityPreferences().reducedMotion;
     const basePulse = contained || reducedMotion ? 1 : 0.64 + Math.sin(this.clock * 4.1) * 0.22;
-    if (this.ambientLight) this.ambientLight.intensity = THREE.MathUtils.lerp(1.9, 0.55, emergency);
-    if (this.moonLight) this.moonLight.intensity = THREE.MathUtils.lerp(1.35, 0.88, emergency);
+    // Rebased on the new rig. The ratios are what the emergency mode is about, not the
+    // absolute numbers, so both ends move together.
+    if (this.ambientLight) this.ambientLight.intensity = THREE.MathUtils.lerp(0.6, 0.2, emergency);
+    if (this.moonLight) this.moonLight.intensity = THREE.MathUtils.lerp(1.7, 1.05, emergency);
     if (this.frontLight) this.frontLight.intensity = THREE.MathUtils.lerp(35, 4, emergency);
     if (this.fixtureLensMaterial) this.fixtureLensMaterial.emissiveIntensity = THREE.MathUtils.lerp(1.15, 0.1, emergency);
-    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(19, 1.9, emergency);
+    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(27, 2.4, emergency);
     for (const [index, material] of this.emergencyMaterials.entries()) {
       const sequence = contained || reducedMotion ? 1 : 0.72 + Math.sin(this.clock * 2.5 - index * 0.8) * 0.28;
       material.emissiveIntensity = emergency * (1.2 + sequence * 3.8);

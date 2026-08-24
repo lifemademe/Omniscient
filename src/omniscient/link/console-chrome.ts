@@ -437,6 +437,25 @@ export const CONSOLE_CHROME_CSS = `
 }
 
 /*
+ * The band between the bars, and it is load-bearing.
+ *
+ * .omni-cv is a three-row grid - auto, 1fr, auto - so the shell must have exactly THREE
+ * children. Append a fourth and the objective plate lands in the 1fr row, the body drops to
+ * auto, and the request banner inflates to fill the window: reported as the collection
+ * canvas taking most of the screen, and it was a 300px-tall plate with one line of text at
+ * the top of it.
+ *
+ * The objective and the body ride in here together so the shell keeps its three rows
+ * whatever either of them does.
+ */
+.omni-cv__middle {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.omni-cv__middle > .omni-cv__body { flex: 1; min-height: 0; }
+
+/*
  * The right-hand column.
  *
  * A bare grid cell - the frame decides how wide it is and the screen decides what goes in
@@ -669,6 +688,15 @@ export function buildConsoleFrame(options: { brand: string; network: string }): 
 
   body.append(stage, column);
 
+  /*
+   * Three children, not four. See the note on .omni-cv__middle - the grid has three rows and
+   * appending the objective beside the body rather than inside this wrapper is what made the
+   * request plate swallow the screen.
+   */
+  const middle = document.createElement('div');
+  middle.className = 'omni-cv__middle';
+  middle.append(objective, body);
+
   const foot = document.createElement('div');
   foot.className = 'omni-cv__foot';
   const version = document.createElement('span');
@@ -679,7 +707,7 @@ export function buildConsoleFrame(options: { brand: string; network: string }): 
   corp.textContent = 'Omniscient';
   foot.append(version, notice, corp);
 
-  shell.append(top, objective, body, foot);
+  shell.append(top, middle, foot);
 
   return {
     shell,

@@ -172,12 +172,7 @@ export const TERMINAL_CSS = `
  * machine rather than to a game overlay.
  */
 /* Splits the shell's middle row: the request band, then the two panels under it. */
-.omni-cv__middle {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.omni-cv__middle > .omni-cv__body { flex: 1; min-height: 0; }
+/* .omni-cv__middle moved to console-chrome - it is part of the shell's row contract. */
 /*
  * The objective plate moved to console-chrome.
  *
