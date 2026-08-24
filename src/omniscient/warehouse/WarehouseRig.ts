@@ -569,12 +569,35 @@ export class WarehouseRig extends ENGINE.SceneNode {
      *
      * Lighter, and a good deal less metallic, so the warm high bays actually land on it.
      */
-    const hull = new THREE.MeshStandardMaterial({ color: '#69707a', roughness: 0.5, metalness: 0.22 });
+    /*
+     * ## The airframe is black, like its rotors
+     *
+     * The hull was mid-grey #69707a, and that value was chosen under a room that measured 97%
+     * warm with bloom off. Neither is true any more: the warehouse is night-converted and bloom
+     * is on, and the first thing that showed was this hull blowing out - it had to be tuned
+     * around twice while setting the bloom threshold, which is the picture telling you the
+     * value is wrong rather than the effect being wrong.
+     *
+     * A pale body was originally a fix for the drone reading as "a silhouette with a bauble" at
+     * median luma 23 against a frame median of 24. That fix solved the symptom. The cause was
+     * that the machine had no light of its own; it now has a landing light, an inspection fill,
+     * status lamps and tail lamps, and bloom to carry them. A dark body with lit accents is the
+     * stronger answer to the same problem, and it is the idiom the rest of this game already
+     * uses - charcoal structure, warm accents.
+     *
+     * Not flat black, though. Three values a few points apart - chassis, deck, rotors - so the
+     * form still separates into parts under the coarse grid the retro pass leaves. A single
+     * black would read as one blob, which is the failure mode a dark airframe actually has.
+     */
+    const hull = new THREE.MeshStandardMaterial({ color: '#16191c', roughness: 0.62, metalness: 0.3 });
     const dark = new THREE.MeshStandardMaterial({ color: '#09110f', roughness: 0.68, metalness: 0.38 });
     const brass = new THREE.MeshStandardMaterial({ color: '#b08a3f', roughness: 0.52, metalness: 0.58 });
     /* Between hull and dark: the spine and nose read as separate components rather than as one
        pale mass, without going so dark that the drone loses the luma a previous pass bought. */
-    const panel = new THREE.MeshStandardMaterial({ color: '#4d545c', roughness: 0.58, metalness: 0.2 });
+    /* The deck's top face is the one surface aimed straight at the high bays, so it takes the
+       least specular of the three - at 0.26 metalness it was catching enough to blow white and
+       undo the point of a black airframe. */
+    const panel = new THREE.MeshStandardMaterial({ color: '#0d1113', roughness: 0.82, metalness: 0.1 });
     /*
      * ## The redesign, and what was actually wrong with the old one
      *
@@ -683,7 +706,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
      */
     const strake = ENGINE.MeshNode.create({
       name: 'DroneStrake',
-      geometry: new THREE.TorusGeometry(0.425, 0.014, 6, 6),
+      /* Thicker than it was: a brass line that read as a highlight on a grey hull is the only
+         warm thing on a black one, and it is what stops the silhouette being a hole. */
+      geometry: new THREE.TorusGeometry(0.43, 0.022, 6, 6),
       material: brass,
     });
     strake.rotation.set(Math.PI / 2, 0, Math.PI / 6);
@@ -766,7 +791,17 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.droneVisual.add(shell, dome, nose, visor, strake, eye, grip, lamp, lampGlass);
     this.feedback.bindGripper(grip);
 
-    const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(0.52, 0.07, 0.08), dark, 4);
+    /*
+     * The booms take a mid value, and this is the cost of a black airframe.
+     *
+     * With hull, deck, guards and arms all near-black the four rotor rings stopped separating
+     * from the mass they are bolted to - the machine read as one dark blob with lights on it.
+     * A dark object needs internal value steps to keep its parts, so the arms sit between the
+     * body and the guards: light enough to draw the cross that says quadcopter, dark enough
+     * that they never compete with the accents.
+     */
+    const boom = new THREE.MeshStandardMaterial({ color: '#2a3033', roughness: 0.66, metalness: 0.28 });
+    const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(0.52, 0.07, 0.08), boom, 4);
     arms.name = 'DroneRotorArms';
     arms.castShadow = true;
     /*
