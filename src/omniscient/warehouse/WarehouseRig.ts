@@ -477,7 +477,21 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
 
   private buildDrone(): void {
-    const hull = new THREE.MeshStandardMaterial({ color: '#263d39', roughness: 0.42, metalness: 0.62 });
+    /**
+     * ## The player's own avatar was the darkest thing on screen
+     *
+     * Measured off a capture: the drone came out at median luma 23 against a frame median of
+     * 24, with its only highlight the teal sensor ball. It sits dead centre of every
+     * third-person shot and it read as a silhouette with a bauble.
+     *
+     * Two causes, both here. The hull was #263d39 - a dark teal at 62% metalness - and
+     * metalness that high needs an environment to reflect or it simply goes black; the
+     * warehouse has no reflection probe, so it did. And the drone carried no light of its
+     * own, which is the odd part for a machine whose entire job is looking at things.
+     *
+     * Lighter, and a good deal less metallic, so the warm high bays actually land on it.
+     */
+    const hull = new THREE.MeshStandardMaterial({ color: '#69707a', roughness: 0.5, metalness: 0.22 });
     const dark = new THREE.MeshStandardMaterial({ color: '#09110f', roughness: 0.68, metalness: 0.38 });
     const brass = new THREE.MeshStandardMaterial({ color: '#b08a3f', roughness: 0.52, metalness: 0.58 });
     const shell = ENGINE.MeshNode.create({
@@ -506,7 +520,58 @@ export class WarehouseRig extends ENGINE.SceneNode {
       material: brass,
     });
     grip.position.set(0, -0.42, 0);
-    this.droneVisual.add(shell, dome, eye, grip);
+
+    /**
+     * A landing light, and it earns its place three times over.
+     *
+     * It is true - every inspection drone has one - and it solves the readability problem at
+     * the source rather than by turning the hull up: a machine that emits light is legible
+     * against any background, because it brings its own.
+     *
+     * It also does the job the mission is about. The player is flying down unlit aisles
+     * looking for a package, and until now the only thing lighting the thing they were
+     * peering at was a lamp ten metres above it. A cone in front of the drone means moving
+     * closer to something makes it clearer, which is the loop this whole mission runs on.
+     *
+     * Warm, matching the high bays, so the drone belongs to the building rather than looking
+     * like a torch somebody carried in. Angled slightly down, because the interesting things
+     * are on shelves and floors and nobody flies a drone looking at the ceiling.
+     */
+    const lamp = ENGINE.SpotLightNode.create({
+      name: 'DroneLandingLight',
+      color: '#ffd0a0',
+      intensity: 26,
+      distance: 15,
+      decay: 1.15,
+      angle: 0.62,
+      penumbra: 0.55,
+      position: new THREE.Vector3(0, -0.1, -0.34),
+    });
+    /*
+     * `lookAt`, not a target node.
+     *
+     * `SpotLightNode` has no `.target` - the engine's own spots are aimed with `lookAt`, the
+     * same way the desk lamp and the window key are. Worth the line because a three.js
+     * SpotLight normally does have one, and reaching for it here is a compile error rather
+     * than a light that quietly points at the origin.
+     */
+    lamp.lookAt(new THREE.Vector3(0, -1.7, -6));
+
+    // A hot little glass under the lens, so the source is visible on the drone itself and not
+    // only in what it lights. A beam with no lamp at the end of it reads as a bug.
+    const lampGlass = ENGINE.MeshNode.create({
+      name: 'DroneLandingGlass',
+      geometry: new THREE.SphereGeometry(0.07, 10, 8),
+      material: new THREE.MeshStandardMaterial({
+        color: '#ffe6c4',
+        emissive: '#ffc98a',
+        emissiveIntensity: 3.4,
+        roughness: 0.24,
+      }),
+    });
+    lampGlass.position.set(0, -0.1, -0.36);
+
+    this.droneVisual.add(shell, dome, eye, grip, lamp, lampGlass);
 
     const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(0.52, 0.07, 0.08), dark, 4);
     arms.name = 'DroneRotorArms';

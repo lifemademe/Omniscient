@@ -505,9 +505,28 @@ export class WarehouseEnvironment {
     this.fixtureLensMaterial = fixtureLens;
     for (const [xIndex, x] of [-20, -12, -4, 4, 12, 20].entries()) {
       for (const [zIndex, z] of [-20, -10, 0, 10, 20].entries()) {
-        const housing = mesh('CeilingFixtureHousing', new THREE.BoxGeometry(2.72, 0.15, 0.34), DARK_STEEL, new THREE.Vector3(x, 9.92, z));
-        const fixture = mesh('CeilingFixtureLens', new THREE.BoxGeometry(2.48, 0.055, 0.23), fixtureLens, new THREE.Vector3(x, 9.82, z));
-        this.root.add(housing, fixture);
+        /**
+         * High bays that hang, rather than strips flush with the roof.
+         *
+         * Measured, the ceiling band came out at median luma 6 - a black void across the top
+         * third of every shot - because a 55mm-deep strip pressed against a dark roof ten
+         * metres up has no silhouette and no side to catch anything. The reference shots of
+         * real warehouses all have the same thing going on up there: a row of deep shades on
+         * stems, receding, and it is most of what tells you the building is tall.
+         *
+         * A stem, a conical shade and a lens under it. The shade is deliberately DARK on the
+         * outside and the lens is hot - that pairing is the whole read, because a lamp is a
+         * bright thing inside a dark thing, and a fixture that glows all over is a floating
+         * rectangle.
+         *
+         * Hung to 9.05, which is 70cm below the roof and still 70cm above the drone's ceiling
+         * at 8.35 - close enough to be objects in the room rather than texture on it, clear
+         * enough that nobody flies into one.
+         */
+        const stem = mesh('CeilingFixtureStem', new THREE.CylinderGeometry(0.045, 0.045, 0.62, 6), DARK_STEEL, new THREE.Vector3(x, 9.9, z));
+        const shade = mesh('CeilingFixtureShade', new THREE.CylinderGeometry(0.2, 0.86, 0.42, 12, 1, true), DARK_STEEL, new THREE.Vector3(x, 9.35, z));
+        const lens = mesh('CeilingFixtureLens', new THREE.CylinderGeometry(0.78, 0.78, 0.05, 12), fixtureLens, new THREE.Vector3(x, 9.16, z));
+        this.root.add(stem, shade, lens);
         if ((xIndex + zIndex) % 2 === 0) {
           /**
            * High bay lamps, and they are WARM.
@@ -526,9 +545,24 @@ export class WarehouseEnvironment {
           const workLight = ENGINE.PointLightNode.create({
             name: 'WarehouseWorkLight',
             color: '#ffbe78',
-            intensity: 27,
-            distance: 19,
-            decay: 1.65,
+            /*
+             * ## Decay, not intensity, is the lever
+             *
+             * Measured after the first pass: 55% of the frame was under luma 25 and the floor
+             * came out at median 23 - the pools were not reaching the ground the lamps hang
+             * over. At decay 1.65 the falloff from 9.45m up is a factor of about 41, so an
+             * intensity of 27 arrives as 0.66 at the floor. Turning the number up fixes the
+             * floor and blows out the ceiling, because the same curve is steepest where the
+             * lamp is.
+             *
+             * 1.2 flattens the curve: the same lamp arrives at about 2.6 on the floor - four
+             * times brighter - while barely changing at head height. That is also what a high
+             * bay with a reflector physically does, which is why it looks right rather than
+             * merely brighter: the fitting exists to stop the light behaving like a bare bulb.
+             */
+            intensity: 40,
+            distance: 26,
+            decay: 1.2,
             position: new THREE.Vector3(x, 9.45, z),
           });
           this.workLights.push(workLight);
@@ -785,7 +819,7 @@ export class WarehouseEnvironment {
     if (this.moonLight) this.moonLight.intensity = THREE.MathUtils.lerp(1.7, 1.05, emergency);
     if (this.frontLight) this.frontLight.intensity = THREE.MathUtils.lerp(35, 4, emergency);
     if (this.fixtureLensMaterial) this.fixtureLensMaterial.emissiveIntensity = THREE.MathUtils.lerp(1.15, 0.1, emergency);
-    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(27, 2.4, emergency);
+    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(40, 3.4, emergency);
     for (const [index, material] of this.emergencyMaterials.entries()) {
       const sequence = contained || reducedMotion ? 1 : 0.72 + Math.sin(this.clock * 2.5 - index * 0.8) * 0.28;
       material.emissiveIntensity = emergency * (1.2 + sequence * 3.8);
