@@ -347,6 +347,17 @@ export class WarehouseRig extends ENGINE.SceneNode {
    * one textContent write per frame.
    */
   private telemetry: HTMLDivElement | null = null;
+  /*
+   * Rolling frame timing, printed beside the camera state.
+   *
+   * It exists because it settled an argument the screenshots could not. A whole-frame
+   * black with a valid camera has two candidate causes - a bad pixel, or the compositor
+   * presenting an unfinished buffer - and they call for opposite fixes. Reading fps 55,
+   * dt 17.5ms off a black frame ruled the stall out in one measurement.
+   */
+  private frameStamps: number[] = [];
+  private worstFrameMs = 0;
+  private worstFrameDecay = 0;
   /** The engine's default fallback camera, held across the mount. See keepActive. */
   private savedFallbackCamera: THREE.PerspectiveCamera | null = null;
   private readonly blockContextMenu = (event: MouseEvent): void => {
@@ -521,28 +532,48 @@ export class WarehouseRig extends ENGINE.SceneNode {
     };
     post.configureEffect(ENGINE.PostProcessPass.ToneMapping, { enabled: true, mode: THREE.ACESFilmicToneMapping, exposure: 1.08 });
     /*
-     * Bloom is OFF in the warehouse, and this is a verdict, not a bisect.
+     * Bloom is OFF in the warehouse, and the reason is now measured rather than suspected.
      *
-     * The black-screen fault: sweeping the chase camera across the west clerestory turned
-     * the whole 3D frame to exact zero for seconds at a time, while the DOM console and
-     * post chain stayed alive. Telemetry printed onto the black frames ruled the camera
-     * out - active camera OURS, ordinary pose, drone visible, frame still black.
+     * ## The black screen
      *
-     * A whole-frame zero with a valid camera has one classic mechanism: a NaN pixel
-     * somewhere in view, spread across the entire image by bloom's downsample-blur chain,
-     * then tone-mapped to black. It also explains the latching - NaN persists in bloom's
-     * ping-pong targets until the source leaves frame - and the view-direction correlation.
+     * Sweeping the chase camera turned the whole 3D frame to exact zero for seconds while
+     * the DOM console stayed alive. Four camera-side fixes each reduced the incidence
+     * without ending it, because the camera was never the problem: telemetry printed onto
+     * the black frames reads active camera OURS, ordinary pose, drone visible, and the
+     * frame is still black. The same strip reads fps 55, dt 17.5ms on those frames, so the
+     * renderer is running at full speed and rendering black - not stalling and presenting
+     * an unfinished buffer.
      *
-     * Proven by bisection, both directions: with bloom on at strength 0.2, a scripted
-     * full-circle camera spin reproduced the black band in three runs out of three; with
-     * bloom off and nothing else changed, 132 steps across two circles with pitch wobble
-     * produced zero black frames.
+     * That leaves a bad pixel spread by bloom's blur. The size of the damage is set by how
+     * far the mipmap chain goes, which is what makes it certain:
      *
-     * The NaN SOURCE is still at large - something on the west clerestory wall (the
-     * shafts, panes, patches and sky were each read and none is an obvious emitter).
-     * Re-enabling bloom requires finding it first. At 0.2 strength the visual cost of
-     * living without bloom here is a little glow off the fixture lenses, which is the
-     * right price for a screen that never goes black.
+     *   levels 8 (library default)  entire frame black across a 145-degree arc
+     *   levels 4                    one hard-edged ~250px black square, screen-axis-aligned
+     *   levels 2                    nothing measurable
+     *   bloom off                   nothing
+     *
+     * The square at levels 4 is the tell. It has vertical and horizontal edges, does not
+     * perspective-distort with the scene, and rays fired through it pass clean to the floor
+     * 24.8m away - it is not an object, it is one contaminated texel of a coarse mip drawn
+     * back over the frame. It is also, almost certainly, the "large dark panel blocking the
+     * aisle numbers" reported twice and blamed first on the camera and then on the light
+     * fittings. Both of those were wrong; this was always it.
+     *
+     * ## Why off rather than levels 2
+     *
+     * levels 2 measured clean - 88 steps of spin-plus-pitch with no black frame, and a
+     * 48px dark-block scan statistically identical to bloom off (worst 1.2 vs 1.0, 46 of
+     * 66 frames flagged in both, all of it real scene content). It is tempting.
+     *
+     * It is declined because it treats the blast radius and not the fault. The pixel that
+     * poisons the chain is still being produced somewhere; levels 2 only guarantees the
+     * damage stays under one texel of a two-deep chain, and nothing guarantees that holds
+     * in scene states this sweep never entered - containment red, the pursuit rig, the
+     * emergency ramp. At strength 0.2 the whole effect is a little glow on the fixture
+     * lenses. That is not worth a known-live NaN and a screen that has already gone black
+     * on this player more times than any other bug in the project.
+     *
+     * Re-enabling means finding the source pixel first, not shortening the blur.
      */
     post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: false });
   }
@@ -2396,6 +2427,18 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.cameraTarget.set(0, 2.25, -2.5);
     }
     if (this.telemetry) {
+      const now = performance.now();
+      this.frameStamps.push(now);
+      while (this.frameStamps.length > 0 && now - this.frameStamps[0] > 1000) this.frameStamps.shift();
+      const fps = this.frameStamps.length;
+      const last = this.frameStamps.length > 1 ? now - this.frameStamps[this.frameStamps.length - 2] : 0;
+      if (last > this.worstFrameMs) {
+        this.worstFrameMs = last;
+        this.worstFrameDecay = now;
+      } else if (now - this.worstFrameDecay > 2000) {
+        this.worstFrameMs = last;
+        this.worstFrameDecay = now;
+      }
       const p = this.cameraPosition;
       const t = this.cameraTarget;
       const d = this.drone.position;
@@ -2407,7 +2450,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
         `tgt ${t.x.toFixed(2)} ${t.y.toFixed(2)} ${t.z.toFixed(2)}\n` +
         `drn ${d.x.toFixed(2)} ${d.y.toFixed(2)} ${d.z.toFixed(2)}  yaw ${this.yaw.toFixed(2)} pit ${this.pitch.toFixed(2)}\n` +
         `arm ${this.cameraArmDistance.toFixed(2)}  view ${this.view}/${this.perspective}  fov ${(this.camera?.getFOV() ?? 0).toFixed(1)}\n` +
-        `active=${active === own ? 'OURS' : active ? 'OTHER:' + (active.name || active.type) : 'NULL'}  vis ${String(this.droneVisual.visible)}`;
+        `active=${active === own ? 'OURS' : active ? 'OTHER:' + (active.name || active.type) : 'NULL'}  vis ${String(this.droneVisual.visible)}
+` +
+        `fps ${fps}  dt ${last.toFixed(1)}ms  worst2s ${this.worstFrameMs.toFixed(1)}ms`;
     }
     this.camera.position.copy(this.cameraPosition);
     CAMERA_MATRIX.lookAt(this.cameraPosition, this.cameraTarget, this.camera.up);
