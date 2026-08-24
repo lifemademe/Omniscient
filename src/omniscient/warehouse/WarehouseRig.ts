@@ -537,25 +537,31 @@ export class WarehouseRig extends ENGINE.SceneNode {
      * like a torch somebody carried in. Angled slightly down, because the interesting things
      * are on shelves and floors and nobody flies a drone looking at the ceiling.
      */
-    const lamp = ENGINE.SpotLightNode.create({
+    /**
+     * A point light, not the spot this started as.
+     *
+     * A cone was the better picture and it was the wrong call, and the way it went wrong is
+     * worth keeping. This was the only SpotLight in the warehouse - a scene that already runs
+     * 36 point lights, two directionals with shadow maps and a hemisphere - and adding the
+     * first light of a new TYPE does not cost one light, it adds a whole spot-light block to
+     * every lit shader in the room and forces the lot to recompile.
+     *
+     * The screen started going black while turning, in a build where it never had before, and
+     * the diorama went while the DOM console stayed - which is the signature of the lit
+     * materials failing rather than of the camera being somewhere empty.
+     *
+     * A point light at the nose does the job the cone was added for: fly closer to a package
+     * and it gets brighter, which is the loop the mission runs on. What it gives up is the
+     * shaped pool on the floor ahead, and that is a fair trade against a screen that works.
+     */
+    const lamp = ENGINE.PointLightNode.create({
       name: 'DroneLandingLight',
       color: '#ffd0a0',
-      intensity: 26,
-      distance: 15,
-      decay: 1.15,
-      angle: 0.62,
-      penumbra: 0.55,
-      position: new THREE.Vector3(0, -0.1, -0.34),
+      intensity: 15,
+      distance: 11,
+      decay: 1.35,
+      position: new THREE.Vector3(0, -0.16, -0.44),
     });
-    /*
-     * `lookAt`, not a target node.
-     *
-     * `SpotLightNode` has no `.target` - the engine's own spots are aimed with `lookAt`, the
-     * same way the desk lamp and the window key are. Worth the line because a three.js
-     * SpotLight normally does have one, and reaching for it here is a compile error rather
-     * than a light that quietly points at the origin.
-     */
-    lamp.lookAt(new THREE.Vector3(0, -1.7, -6));
 
     // A hot little glass under the lens, so the source is visible on the drone itself and not
     // only in what it lights. A beam with no lamp at the end of it reads as a bug.
@@ -2070,6 +2076,27 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.syncIntrusionHud();
   }
 
+  /**
+   * Keep the lens inside the room it is meant to be looking at.
+   *
+   * The chase arm has occlusion probes, but they answer "is something between the drone and
+   * the camera", which is a different question from "is the camera anywhere useful". A camera
+   * that ends up beyond a wall, under the slab or up inside a light fitting passes every
+   * probe and renders a black frame, because from in there the only surfaces are back-facing
+   * and back faces are not drawn.
+   *
+   * A hard clamp costs four comparisons and removes the whole category. The ceiling is the
+   * one worth stating: the fixtures hang to 9.14 and the drone can reach 8.35, so an arm that
+   * adds 1.25m of height puts the lens at 9.6 - inside a shade, looking at the inside of a
+   * cone that is drawn from the outside only.
+   */
+  private clampCameraInside(): void {
+    const { shell, roofY } = { shell: WAREHOUSE_LAYOUT.shell, roofY: WAREHOUSE_LAYOUT.shell.roofY };
+    this.cameraPosition.x = THREE.MathUtils.clamp(this.cameraPosition.x, -shell.wallX + 0.55, shell.wallX - 0.55);
+    this.cameraPosition.z = THREE.MathUtils.clamp(this.cameraPosition.z, shell.rearZ + 0.55, shell.frontZ - 0.55);
+    this.cameraPosition.y = THREE.MathUtils.clamp(this.cameraPosition.y, 0.45, roofY - 1.75);
+  }
+
   private applyCamera(deltaTime = 0): void {
     if (!this.camera) return;
     if (this.containmentResponse) {
@@ -2152,6 +2179,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.cameraPosition.set(-20.5, 8.85, 24.2);
       this.cameraTarget.set(0, 2.25, -2.5);
     }
+    // Fixed poses - CCTV, pursuit, containment - are authored and checked by
+    // scripts/warehouse-cameras.ts. Only the free-flying chase can wander, so only it is
+    // clamped; clamping the authored ones would silently move a shot somebody measured.
+    if (!this.containmentResponse && !this.pursuit && this.view === 'drone') this.clampCameraInside();
     this.camera.position.copy(this.cameraPosition);
     CAMERA_MATRIX.lookAt(this.cameraPosition, this.cameraTarget, this.camera.up);
     this.camera.quaternion.setFromRotationMatrix(CAMERA_MATRIX);

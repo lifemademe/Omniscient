@@ -65,6 +65,8 @@ const WRAP = new THREE.MeshPhysicalMaterial({
 });
 /* The guide rails down a conveyor. The strongest readable line in the sortation bay. */
 const GUIDE = new THREE.MeshStandardMaterial({ color: '#c8862e', emissive: '#3a2408', emissiveIntensity: 0.5, roughness: 0.62 });
+/* The high-bay shades. Double-sided, because an open cone drawn on one side is a hole. */
+const SHADE = new THREE.MeshStandardMaterial({ color: '#23262a', roughness: 0.76, metalness: 0.42, side: THREE.DoubleSide });
 
 function mesh(name: string, geometry: THREE.BufferGeometry, material: THREE.Material, position?: THREE.Vector3): ENGINE.MeshNode {
   const node = ENGINE.MeshNode.create({ name, geometry, material, castShadow: true, receiveShadow: true });
@@ -646,10 +648,34 @@ export class WarehouseEnvironment {
          * enough that nobody flies into one.
          */
         const stem = mesh('CeilingFixtureStem', new THREE.CylinderGeometry(0.045, 0.045, 0.62, 6), DARK_STEEL, new THREE.Vector3(x, 9.9, z));
-        const shade = mesh('CeilingFixtureShade', new THREE.CylinderGeometry(0.2, 0.86, 0.42, 12, 1, true), DARK_STEEL, new THREE.Vector3(x, 9.35, z));
+        /*
+         * DoubleSide, because an open-ended cone is a hole from the inside: back faces are not
+         * drawn, so a camera in here sees straight through the building and renders black. The
+         * clamp in WarehouseRig stops the lens getting in at all; this makes the geometry safe
+         * on its own terms as well, on a fault whose symptom is the entire screen going out.
+         */
+        const shade = mesh(
+          'CeilingFixtureShade',
+          new THREE.CylinderGeometry(0.2, 0.86, 0.42, 12, 1, true),
+          SHADE,
+          new THREE.Vector3(x, 9.35, z)
+        );
         const lens = mesh('CeilingFixtureLens', new THREE.CylinderGeometry(0.78, 0.78, 0.05, 12), fixtureLens, new THREE.Vector3(x, 9.16, z));
         this.root.add(stem, shade, lens);
-        if ((xIndex + zIndex) % 2 === 0) {
+        /*
+         * Nine lamps, not fifteen.
+         *
+         * The checkerboard put a light under every other fixture on a six-by-five grid. At the
+         * old decay of 1.65 that was defensible - each pool was small and they barely met - but
+         * at 1.2 over 26 metres they overlap three deep, so most of the fifteen were paying
+         * full shader cost to brighten ground another lamp had already covered.
+         *
+         * Every other row AND column is nine, still 8-10m apart, with the intensity below
+         * making up the difference. The room looks the same and every lit material in it
+         * compiles a shorter shader - which matters in a scene that also runs ten clerestory
+         * lights, six door lights, four zone lights and two shadow-casting directionals.
+         */
+        if (xIndex % 2 === 0 && zIndex % 2 === 0) {
           /**
            * High bay lamps, and they are WARM.
            *
@@ -682,7 +708,7 @@ export class WarehouseEnvironment {
              * bay with a reflector physically does, which is why it looks right rather than
              * merely brighter: the fitting exists to stop the light behaving like a bare bulb.
              */
-            intensity: 40,
+            intensity: 54,
             distance: 26,
             decay: 1.2,
             position: new THREE.Vector3(x, 9.45, z),
@@ -941,7 +967,7 @@ export class WarehouseEnvironment {
     if (this.moonLight) this.moonLight.intensity = THREE.MathUtils.lerp(1.7, 1.05, emergency);
     if (this.frontLight) this.frontLight.intensity = THREE.MathUtils.lerp(35, 4, emergency);
     if (this.fixtureLensMaterial) this.fixtureLensMaterial.emissiveIntensity = THREE.MathUtils.lerp(1.15, 0.1, emergency);
-    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(40, 3.4, emergency);
+    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(54, 4.6, emergency);
     for (const [index, material] of this.emergencyMaterials.entries()) {
       const sequence = contained || reducedMotion ? 1 : 0.72 + Math.sin(this.clock * 2.5 - index * 0.8) * 0.28;
       material.emissiveIntensity = emergency * (1.2 + sequence * 3.8);
