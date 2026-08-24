@@ -28,6 +28,7 @@
  */
 
 import * as ENGINE from '@gnsx/genesys.js';
+import { roomToneSwell } from '../audio/RoomTone.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -2826,6 +2827,14 @@ function buildBeaconMast(scene: ContactScene): void {
       steady: () => {
         beaconSteady = true;
         beaconClock = 0;
+        /*
+         * The room reacts to its own resolution.
+         *
+         * TOMAS-REVIEW: the payoff had the beacon relighting, a cue and a held shot, and a bed
+         * that carried on exactly as it had through the diagnosis. A place that does not
+         * change when the thing it is about comes good says the thing did not matter.
+         */
+        roomToneSwell();
         lens.material = MAT.beaconLit;
         glow.intensity = 18;
         for (const shell of halo) shell.visible = true;

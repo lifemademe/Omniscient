@@ -289,6 +289,12 @@ export type RoomToneName = keyof typeof BEDS;
 
 interface Live {
   gain: GainNode;
+  /** The air bed's own gain, and the level it was built at. See setRoomToneFocus. */
+  air: GainNode | null;
+  airLevel: number;
+  /** The drift LFO's depth, and its authored value. */
+  driftDepth: GainNode | null;
+  driftBase: number;
   stop: () => void;
 }
 
@@ -329,6 +335,10 @@ function build(bed: Bed): Live | null {
   gain.connect(ambience);
 
   const stops: Array<() => void> = [];
+  let airGain: GainNode | null = null;
+  let airLevel = 0;
+  let driftDepth: GainNode | null = null;
+  let driftBase = 0;
 
   for (const [index, [frequency, level, type]] of bed.tones.entries()) {
     const osc = ctx.createOscillator();
@@ -371,6 +381,8 @@ function build(bed: Bed): Live | null {
     // Two decorrelated halves sum to about 3dB more than one, so the level comes back down.
     g.gain.value = width > 0 ? level * 0.72 : level;
     g.connect(gain);
+    airGain = g;
+    airLevel = g.gain.value;
 
     const filters: BiquadFilterNode[] = [];
     const spawnHalf = (offset: number, pan: number): void => {
@@ -401,6 +413,8 @@ function build(bed: Bed): Live | null {
       lfo.frequency.value = 1 / period;
       const lfoGain = ctx.createGain();
       lfoGain.gain.value = depth;
+      driftDepth = lfoGain;
+      driftBase = depth;
       lfo.connect(lfoGain);
       for (const filter of filters) lfoGain.connect(filter.frequency);
       lfo.start();
@@ -447,6 +461,10 @@ function build(bed: Bed): Live | null {
 
   return {
     gain,
+    air: airGain,
+    airLevel,
+    driftDepth,
+    driftBase,
     stop: () => {
       for (const stop of stops) stop();
       if (workTimer !== null) window.clearTimeout(workTimer);
@@ -492,6 +510,63 @@ export function setRoomTone(name: RoomToneName | null): void {
   if (!live) return;
   live.gain.gain.setTargetAtTime(1, bus.ctx.currentTime, CROSSFADE / 3);
   current = live;
+}
+
+/**
+ * Duck the room while the player is reading the console, and open its weather.
+ *
+ * TOMAS-REVIEW measured a whole 56-second call sitting inside a 4.3dB range, most of which
+ * was two transients: "the mission has a shape - a problem, a diagnosis, a decision, a fix -
+ * and the sound is a flat line through all of it". Trust moved 45% to 63% across that
+ * recording and nothing in the mix knew.
+ *
+ * This is the shape the mix was missing, and it is deliberately tied to what the PLAYER is
+ * doing rather than to a number. Opening the console tab is the moment they stop looking at
+ * a place and start reading evidence, so the place steps back: the air drops 3dB and its
+ * drift widens, which is the sound of listening past something rather than to it. Coming back
+ * to the conversation restores it.
+ *
+ * Ducking the AIR rather than the master is what makes it read as attention rather than as a
+ * volume control. The tones and the work keep their level, so the room does not go away - it
+ * loses its weather, which is exactly what a room does when you stop attending to it.
+ *
+ * Long time constants on purpose. This must never be perceptible AS a duck; if a player can
+ * hear the mix move, it has become an effect rather than a point of view.
+ */
+export function setRoomToneFocus(onConsole: boolean): void {
+  const live = current;
+  const bus = audio.bus();
+  if (!live || !bus) return;
+  const now = bus.ctx.currentTime;
+  // 0.71 is -3dB in amplitude, which is the figure the review asked for by name.
+  live.air?.gain.setTargetAtTime(live.airLevel * (onConsole ? 0.71 : 1), now, 0.6);
+  live.driftDepth?.gain.setTargetAtTime(live.driftBase * (onConsole ? 1.7 : 1), now, 0.9);
+}
+
+/**
+ * A swell, for the beat where the thing the mission was about comes good.
+ *
+ * The other half of the review's note: bring the room back with a swell on `steady`. The
+ * mission's payoff had the beacon relighting, a cue, and a held shot - and a bed that carried
+ * on exactly as it had through the diagnosis. A room that does not react to its own resolution
+ * says the resolution did not matter.
+ *
+ * Returns to unity rather than to whatever the focus state left, because the swell IS the
+ * return: the console is behind the player by the time this fires.
+ */
+export function roomToneSwell(): void {
+  const live = current;
+  const bus = audio.bus();
+  if (!live || !bus) return;
+  const now = bus.ctx.currentTime;
+  const air = live.air;
+  if (air) {
+    air.gain.cancelScheduledValues(now);
+    air.gain.setValueAtTime(air.gain.value, now);
+    air.gain.linearRampToValueAtTime(live.airLevel * 1.5, now + 1.1);
+    air.gain.setTargetAtTime(live.airLevel, now + 1.1, 1.6);
+  }
+  live.driftDepth?.gain.setTargetAtTime(live.driftBase, now, 1.2);
 }
 
 /** Silence the world. For leaving play, or for a mute that must not leave a drone running. */

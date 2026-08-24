@@ -20,6 +20,7 @@
  */
 
 import { injectConsoleChrome } from './console-chrome.js';
+import { setRoomToneFocus } from '../audio/RoomTone.js';
 import { accessibleTextMilliseconds } from '../accessibility/preferences.js';
 import { audio } from '../audio/ConsoleAudio.js';
 
@@ -731,6 +732,8 @@ export class LocalSurface implements InterventionSurface {
   /** Who the log currently belongs to. See the reset in `present`. */
   private talkingTo: string | null = null;
   private tab: Tab = 'chat';
+  /** Last focus state handed to RoomTone, so the duck is edge-triggered. */
+  private roomToneOnConsole = false;
   private lastState: SurfaceState | null = null;
   /**
    * The way out of a request, held so it can be locked.
@@ -1808,6 +1811,19 @@ export class LocalSurface implements InterventionSurface {
     if (!this.panelElement || !this.logElement) return;
 
     const showingChat = this.tab === 'chat';
+    /*
+     * The room steps back while the player reads evidence. See RoomTone.setRoomToneFocus.
+     *
+     * Hooked here rather than at the nine places that assign `this.tab`, because every one of
+     * them lands in this render and a single edge-triggered notify cannot miss one of them.
+     * Guarded on change so it is not re-issued on every repaint - the ramps are half-second
+     * time constants and restarting them each frame would flatten them into nothing.
+     */
+    const onConsole = this.tab === 'console';
+    if (onConsole !== this.roomToneOnConsole) {
+      this.roomToneOnConsole = onConsole;
+      setRoomToneFocus(onConsole);
+    }
     this.shell?.classList.toggle('omni-cv--device-focus', !showingChat);
     this.logElement.style.display = showingChat ? 'flex' : 'none';
     this.panelElement.style.display = showingChat ? 'none' : 'flex';

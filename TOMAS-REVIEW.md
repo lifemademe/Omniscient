@@ -509,7 +509,7 @@ that is correct — but the hard cut in §6 is what a player will read as one.
 | 12 | the scene-resolve entrance | **DONE, two of three** — signal lock and wireframe entrance ship and are measured; the certainty-tier resolve was built, measured, and **withdrawn** |
 | 13 | camera drift on long shots | **DONE and measured** — `drift` on `CameraShot`; held-shot frame delta 0.11% → 0.39% |
 | 14 | stereo on the room tone | **DONE and measured** — L/R correlation 0.993–0.998 → **0.070** |
-| 15 | trust-linked mix envelope | **NOT DONE** |
+| 15 | trust-linked mix envelope | **DONE** — console-tab duck measured at −2.98 dB; the `steady` swell is wired but not yet triggered in play |
 
 ### Seen on screen at last — 2026-08-24
 
@@ -607,7 +607,28 @@ Two things this pass leaves behind:
   looked at and left alone — the cue already fires before `setPhase(Phase.Contact)` in code,
   so the measured +120ms is engine and audio latency rather than ordering, and moving it
   without a synchronised A/V capture would be guesswork.
-- Item **15 remains NOT DONE**.
+- **Item 15 ships.** `setRoomToneFocus` ducks the air and opens the drift when the console tab
+  takes over, and `roomToneSwell` brings it back on `steady`. Measured by reading the gain
+  nodes back off the running game:
+
+  ```
+    before  : air 0.02160 / base 0.02160   drift 260.0 / base 260.0
+    ducked  : air 0.01534 / base 0.02160   drift 439.9 / base 260.0
+    restored: air 0.02159 / base 0.02160   drift 260.7 / base 260.0
+  ```
+
+  0.02160 → 0.01534 is a ratio of 0.710, which is **−2.98 dB** — the figure this section asked
+  for by name — and the drift opens 1.69×. Both return cleanly.
+
+  It ducks the AIR rather than the master on purpose: the tones and the work keep their level,
+  so the room does not go away, it loses its weather. That is what a place does when you stop
+  attending to it, and it is why this reads as a point of view rather than as a volume control.
+
+  Two honest gaps. The **acoustic** effect could not be isolated from a loopback recording —
+  the air bed is one small element under the adaptive score and console ambience, and a 3 dB
+  move on it sits well inside the noise of the full mix; what is verified is the envelope
+  itself, exactly. And the **`steady` swell is wired but never fired in this session**, because
+  reaching it means playing the mission to its payoff rather than jumping to the scene.
 - **`default` is deliberately left alone.** It measures a p2–p98 range of 38, the weakest shot
   in the scene, and that is defensible rather than broken: the mission OPENS on a dead beacon,
   and `backdrop.ts` states the rule that "there is only one light in this mission that is
