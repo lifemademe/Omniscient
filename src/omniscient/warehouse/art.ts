@@ -47,6 +47,24 @@ const AMBER = new THREE.MeshStandardMaterial({ color: '#8d6c31', emissive: '#392
 const RED = new THREE.MeshStandardMaterial({ color: '#6e2d2d', emissive: '#2c0909', emissiveIntensity: 0.6, roughness: 0.62 });
 const GREEN = new THREE.MeshStandardMaterial({ color: '#315c42', emissive: '#102b18', emissiveIntensity: 0.45, roughness: 0.62 });
 const BELT = new THREE.MeshStandardMaterial({ color: '#151a19', roughness: 0.82, metalness: 0.25 });
+/* Softwood, and darker than the board it carries so a load reads as sitting on something. */
+const PALLET = new THREE.MeshStandardMaterial({ color: '#8a7248', roughness: 0.96 });
+const TAPE_LIGHT = new THREE.MeshStandardMaterial({ color: '#d8c9a4', roughness: 0.72 });
+const TAPE_DARK = new THREE.MeshStandardMaterial({ color: '#c3b085', roughness: 0.72 });
+/*
+ * Stretch wrap. Nearly clear, slightly cool, and it must not write depth - a dozen
+ * transparent boxes that do will sort against each other and flicker as the drone moves.
+ */
+const WRAP = new THREE.MeshPhysicalMaterial({
+  color: '#cfe2dc',
+  transparent: true,
+  opacity: 0.13,
+  roughness: 0.22,
+  metalness: 0,
+  depthWrite: false,
+});
+/* The guide rails down a conveyor. The strongest readable line in the sortation bay. */
+const GUIDE = new THREE.MeshStandardMaterial({ color: '#c8862e', emissive: '#3a2408', emissiveIntensity: 0.5, roughness: 0.62 });
 
 function mesh(name: string, geometry: THREE.BufferGeometry, material: THREE.Material, position?: THREE.Vector3): ENGINE.MeshNode {
   const node = ENGINE.MeshNode.create({ name, geometry, material, castShadow: true, receiveShadow: true });
@@ -243,51 +261,136 @@ export class WarehouseEnvironment {
       signRoot.add(frame, front, back, leftHanger, rightHanger);
       if (aisle === 4) this.duplicateAisleSigns = [front, back];
       this.root.add(signRoot);
-      for (let stack = 0; stack < 24; stack++) {
-        const y = 0.55 + (stack % 4) * 1.35;
-        const z = -10.7 + Math.floor(stack / 4) * 4.7 + jitter(rng, 0.18);
-        const width = 0.72 + jitter(rng, 0.16);
-        const carton = mesh(
-          `RackCarton-${aisle}-${stack}`,
-          new THREE.BoxGeometry(width, 0.68 + (stack % 3) * 0.08, 0.66 + (stack % 2) * 0.12),
-          /*
-           * Cardboard, at the value cardboard actually is.
-           *
-           * These were #70593b / #5c513d / #6b5c43 - dark brown-olive, about 35% grey. Under a
-           * cyan work light that is the muddy teal mass filling three quarters of every shot,
-           * and it is the single biggest surface in the building.
-           *
-           * Real board is 65-72% and warm. Lifting it does three things at once: the racks get
-           * a value the near-black steel can read against, the warm lamps have something warm
-           * to land on, and the aisles gain the depth ramp they never had - lit board close,
-           * unlit board far.
-           */
-          new THREE.MeshStandardMaterial({ color: stack % 3 === 0 ? '#c2a274' : stack % 2 ? '#ac9068' : '#b79b6e', roughness: 0.95 }),
-          new THREE.Vector3(x + (stack % 2 ? 0.28 : -0.25), y, z)
-        );
-        this.root.add(carton);
-        if (stack % 3 !== 1) {
-          const tape = mesh(
-            `RackCartonTape-${aisle}-${stack}`,
-            new THREE.BoxGeometry(0.075, 0.7 + (stack % 3) * 0.08, 0.69 + (stack % 2) * 0.12),
-            // Packing tape is lighter than the board it is on, not darker.
-            new THREE.MeshStandardMaterial({ color: stack % 2 ? '#d8c9a4' : '#c3b085', roughness: 0.72 }),
-            carton.position.clone()
-          );
-          this.root.add(tape);
+      /**
+       * The rack, loaded like a rack rather than filled like a spreadsheet.
+       *
+       * It was 24 cartons on a strict four-by-six grid, one per slot, all within a few
+       * centimetres of each other in size. Regularity at that scale is the loudest "this was
+       * generated" signal a set can send - the eye finds the period immediately, and once it
+       * has, every aisle in the building is the same aisle.
+       *
+       * Four things break it, and each is true of a working warehouse rather than merely
+       * random:
+       *
+       *  - EMPTY BAYS. A warehouse that is completely full is one that has stopped trading.
+       *    About one slot in six is bare decking, and the gaps are what let you see through a
+       *    rack into the next aisle - most of the depth in any shot of one.
+       *  - PALLETS. Nothing sits on steel decking, and the 14cm dark band under every load is
+       *    what makes a stack look supported rather than floating.
+       *  - VARIED HEIGHT. One, two or three cartons, because loads are whatever the supplier
+       *    sent. A level where every load is the same height reads as a shelf of one product.
+       *  - SHRINK WRAP on about a quarter of them, which is the detail that says somebody
+       *    prepared these for transport.
+       *
+       * Seeded off the aisle, so a rack is the same rack every run. That matters more here
+       * than the usual §123 reasons: the mission asks the player to remember where 2034 was.
+       *
+       * ## Merged, and this is not an optimisation afterthought
+       *
+       * Built as individual nodes this is about 450 meshes across five aisles - roughly 90
+       * draw calls an aisle for scenery that never moves a millimetre. The implementation
+       * plan asks for exactly this ("instance repeated racks, lights, crates and fittings;
+       * merge static decoration by material") against a 60 FPS target at 1080p, and the
+       * variety above is what makes merging both necessary and free: every carton needs its
+       * own size and position, none of them needs its own draw call.
+       *
+       * Six buckets, one mesh each per aisle. The three carton shades stay separate because
+       * they are three materials; everything else collapses.
+       */
+      const bucket = {
+        pallet: [] as THREE.BufferGeometry[],
+        wrap: [] as THREE.BufferGeometry[],
+        tapeLight: [] as THREE.BufferGeometry[],
+        tapeDark: [] as THREE.BufferGeometry[],
+        carton: [[], [], []] as THREE.BufferGeometry[][],
+      };
+      const BAY_Z = [-10.7, -6, -1.3, 3.4, 8.1, 12.8];
+      const LEVEL_Y = [0.55, 1.9, 3.25, 4.6];
+      for (const [bayIndex, bayZ] of BAY_Z.entries()) {
+        for (const [level, levelY] of LEVEL_Y.entries()) {
+          // Never the bottom of a bay: a rack with a hole at floor level reads as broken
+          // rather than as busy.
+          if (level > 0 && rng() < 0.17) continue;
+
+          const side = (bayIndex + level) % 2 ? 0.27 : -0.24;
+          const px = x + side * 0.4;
+          const pz = bayZ + jitter(rng, 0.1);
+
+          const pallet = new THREE.BoxGeometry(1.18, 0.14, 1.06);
+          pallet.translate(px, levelY - 0.14, pz);
+          bucket.pallet.push(pallet);
+
+          const load = 1 + Math.floor(rng() * 3);
+          const wrapped = rng() < 0.26;
+          for (let tier = 0; tier < load; tier++) {
+            const height = 0.52 + rng() * 0.26;
+            const cx = px + jitter(rng, 0.07);
+            const cy = levelY + tier * 0.68 + height * 0.5 - 0.26;
+            const cz = pz + jitter(rng, 0.07);
+            const depth = 0.6 + rng() * 0.26;
+
+            const carton = new THREE.BoxGeometry(0.66 + rng() * 0.3, height, depth);
+            carton.translate(cx, cy, cz);
+            bucket.carton[Math.floor(rng() * 3)].push(carton);
+
+            // Tape down the middle, on most of them but not all - a box nobody has opened.
+            if (rng() < 0.62) {
+              const tape = new THREE.BoxGeometry(0.072, height + 0.012, depth + 0.012);
+              tape.translate(cx, cy, cz);
+              (rng() < 0.5 ? bucket.tapeLight : bucket.tapeDark).push(tape);
+            }
+          }
+          if (wrapped && load > 1) {
+            const wrap = new THREE.BoxGeometry(1.06, load * 0.68 + 0.06, 0.98);
+            wrap.translate(px, levelY + (load * 0.68) / 2 - 0.2, pz);
+            bucket.wrap.push(wrap);
+          }
         }
+      }
+
+      const CARTONS = [
+        new THREE.MeshStandardMaterial({ color: '#c2a274', roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: '#ac9068', roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: '#b79b6e', roughness: 0.95 }),
+      ];
+      const merged: Array<[string, THREE.BufferGeometry[], THREE.Material]> = [
+        [`RackPallets-${aisle}`, bucket.pallet, PALLET],
+        [`RackTapeLight-${aisle}`, bucket.tapeLight, TAPE_LIGHT],
+        [`RackTapeDark-${aisle}`, bucket.tapeDark, TAPE_DARK],
+        [`RackWrap-${aisle}`, bucket.wrap, WRAP],
+        ...bucket.carton.map(
+          (pieces, index) =>
+            [`RackCartons-${aisle}-${index}`, pieces, CARTONS[index]] as [string, THREE.BufferGeometry[], THREE.Material]
+        ),
+      ];
+      for (const [name, pieces, material] of merged) {
+        if (!pieces.length) continue;
+        const geometry = mergeGeometries(pieces, false);
+        if (geometry) this.root.add(mesh(name, geometry, material));
       }
       for (const [index, z] of [-10.4, -4.2, 2, 8.2].entries()) {
         const rangeEnd = index === 3 ? 99 : (index + 1) * 25;
         const rangeLabel = `${String(index * 25 + 1).padStart(2, '0')}-${String(rangeEnd).padStart(2, '0')}`;
         for (const side of [-1, 1]) {
+          /*
+           * Bigger, warmer, and lower.
+           *
+           * A package address in this mission is spatial - 2034 is aisle 2, bay 34 - so these
+           * four panels per aisle are the only thing standing between the player and the
+           * whole navigation loop. They were 0.76 by 0.24 metres in a muted green at 2.5m,
+           * which is a sticker: unreadable from the aisle mouth, which is exactly where
+           * somebody stands when they are deciding which way to fly.
+           *
+           * 1.34 by 0.42 in the amber this game uses for wayfinding, dropped to 1.95 so it is
+           * nearer eye level for a drone. Same information, legible from the end of the run.
+           */
           const bay = readableLabelPanel(
             `BayRange-${aisle}-${index + 1}-${side < 0 ? 'L' : 'R'}`,
             rangeLabel,
-            0.76,
-            0.24,
-            '#8fbe93',
-            new THREE.Vector3(x + side * 0.79, 2.5, z)
+            1.34,
+            0.42,
+            '#e0a24c',
+            new THREE.Vector3(x + side * 0.79, 1.95, z)
           );
           bay.root.rotation.y = side < 0 ? -Math.PI / 2 : Math.PI / 2;
           this.root.add(bay.root);
@@ -365,6 +468,25 @@ export class WarehouseEnvironment {
         rollerNode.rotation.z = Math.PI / 2;
         laneRoot.add(rollerNode);
         this.conveyorRollers.push(rollerNode);
+      }
+      /*
+       * Guide rails, and they are the reason a conveyor reads as a conveyor.
+       *
+       * The belt was a dark box with steel rollers on it - correct, and at any distance a
+       * dark stripe on a dark floor. Every reference photograph of a sortation bay has the
+       * same thing doing the work: a pair of painted rails running the length of the run,
+       * catching the light along their whole top edge. It is a continuous line where
+       * everything else in the room is a repeated object, which is what makes it read
+       * instantly and from anywhere.
+       *
+       * Amber, because that is this game's colour for a working system, and because the
+       * three lanes are a decision the player has to make at a glance.
+       */
+      for (const rail of [-0.92, 0.92]) {
+        laneRoot.add(
+          mesh('ConveyorGuide', new THREE.BoxGeometry(0.09, 0.2, WAREHOUSE_LAYOUT.sortation.conveyorLength), GUIDE, new THREE.Vector3(rail, 0.94, 0)),
+          mesh('ConveyorGuideFoot', new THREE.BoxGeometry(0.07, 0.36, WAREHOUSE_LAYOUT.sortation.conveyorLength), DARK_STEEL, new THREE.Vector3(rail, 0.68, 0))
+        );
       }
       for (const z of [-8.5, -2.8, 2.8, 8.5]) {
         laneRoot.add(
