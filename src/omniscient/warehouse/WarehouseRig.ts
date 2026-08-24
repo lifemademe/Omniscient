@@ -342,30 +342,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private handoff = 4.8;
   private finished = false;
   private savedPost: { tone: unknown; bloom: unknown } | null = null;
-  /**
-   * TELEMETRY, dev builds only: the camera state, written into the DOM every frame.
-   *
-   * The black-screen fault renders the 3D canvas empty while the DOM console stays alive -
-   * which means a screen capture taken DURING a black frame can still read anything the DOM
-   * says. So the camera state is printed into a corner of the HUD, and the reproduction
-   * script's captures become telemetry: whatever the numbers say on the black frames IS the
-   * diagnosis, with no theorising in between.
-   *
-   * Behind isPublishedGame like every other instrument, and cheap enough not to matter:
-   * one textContent write per frame.
-   */
-  private telemetry: HTMLDivElement | null = null;
-  /*
-   * Rolling frame timing, printed beside the camera state.
-   *
-   * It exists because it settled an argument the screenshots could not. A whole-frame
-   * black with a valid camera has two candidate causes - a bad pixel, or the compositor
-   * presenting an unfinished buffer - and they call for opposite fixes. Reading fps 55,
-   * dt 17.5ms off a black frame ruled the stall out in one measurement.
-   */
-  private frameStamps: number[] = [];
-  private worstFrameMs = 0;
-  private worstFrameDecay = 0;
   /** The engine's default fallback camera, held across the mount. See keepActive. */
   private savedFallbackCamera: THREE.PerspectiveCamera | null = null;
   private readonly blockContextMenu = (event: MouseEvent): void => {
@@ -483,14 +459,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.savedFallbackCamera = world.fallbackCamera;
     if (this.camera) world.fallbackCamera = this.camera.getCamera();
 
-    if (!ENGINE.isPublishedGame()) {
-      this.telemetry = document.createElement('div');
-      this.telemetry.style.cssText =
-        'position:absolute;left:8px;top:34%;z-index:4000;font:10px/1.5 Consolas,monospace;' +
-        'color:#9fd8ec;background:rgba(4,12,16,0.72);padding:5px 7px;pointer-events:none;' +
-        'white-space:pre;';
-      world.gameContainer?.appendChild(this.telemetry);
-    }
     container.addEventListener('contextmenu', this.blockContextMenu);
     // Capture phase: the release is seen before any overlay target can swallow it.
     window.addEventListener('mouseup', this.releaseOptical, true);
@@ -2481,34 +2449,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.cameraPosition.set(-20.5, 8.85, 24.2);
       this.cameraTarget.set(0, 2.25, -2.5);
     }
-    if (this.telemetry) {
-      const now = performance.now();
-      this.frameStamps.push(now);
-      while (this.frameStamps.length > 0 && now - this.frameStamps[0] > 1000) this.frameStamps.shift();
-      const fps = this.frameStamps.length;
-      const last = this.frameStamps.length > 1 ? now - this.frameStamps[this.frameStamps.length - 2] : 0;
-      if (last > this.worstFrameMs) {
-        this.worstFrameMs = last;
-        this.worstFrameDecay = now;
-      } else if (now - this.worstFrameDecay > 2000) {
-        this.worstFrameMs = last;
-        this.worstFrameDecay = now;
-      }
-      const p = this.cameraPosition;
-      const t = this.cameraTarget;
-      const d = this.drone.position;
-      const world = this.getWorld();
-      const active = world?.getActiveCamera?.();
-      const own = this.camera?.getCamera();
-      this.telemetry.textContent =
-        `cam ${p.x.toFixed(2)} ${p.y.toFixed(2)} ${p.z.toFixed(2)}\n` +
-        `tgt ${t.x.toFixed(2)} ${t.y.toFixed(2)} ${t.z.toFixed(2)}\n` +
-        `drn ${d.x.toFixed(2)} ${d.y.toFixed(2)} ${d.z.toFixed(2)}  yaw ${this.yaw.toFixed(2)} pit ${this.pitch.toFixed(2)}\n` +
-        `arm ${this.cameraArmDistance.toFixed(2)}  view ${this.view}/${this.perspective}  fov ${(this.camera?.getFOV() ?? 0).toFixed(1)}\n` +
-        `active=${active === own ? 'OURS' : active ? 'OTHER:' + (active.name || active.type) : 'NULL'}  vis ${String(this.droneVisual.visible)}
-` +
-        `fps ${fps}  dt ${last.toFixed(1)}ms  worst2s ${this.worstFrameMs.toFixed(1)}ms`;
-    }
     /*
      * The kick rides on the composed position rather than the drone, and is applied after
      * the bounds and occlusion work rather than before. Both orderings matter: shaking the
@@ -2729,8 +2669,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     this.hud?.destroy();
     this.hud = null;
-    this.telemetry?.remove();
-    this.telemetry = null;
     if (this.savedFallbackCamera) {
       const worldNow = this.getWorld();
       if (worldNow) worldNow.fallbackCamera = this.savedFallbackCamera;

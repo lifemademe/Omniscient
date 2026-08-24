@@ -65,7 +65,7 @@ const CSS = `
   position: absolute;
   right: 0;
   bottom: 0;
-  padding: 6px 9px 7px;
+  padding: 6px 18px 7px;
   text-align: right;
   font-size: calc(9px + var(--omni-font-boost, 0px));
   letter-spacing: 0.2em;
@@ -91,7 +91,9 @@ const CSS = `
   flex-direction: column;
   align-items: flex-end;
   gap: 3px;
-  padding: 7px 10px;
+  /* 18px on the right, not 10: the stage's own inset frame runs along that edge and clipped
+     the last glyph of WAITING against it. Measured off a capture, not guessed. */
+  padding: 7px 24px;
   pointer-events: none;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -110,19 +112,57 @@ const CSS = `
  * unreadable for its whole length. Centre is the one part of the stage floor with nothing
  * in it: the actions own the left, the view name owns the right.
  */
+/*
+ * Legible over a LIT room, which is what the rest of this game never had to solve.
+ *
+ * The console's label tones - 35603f here, 4f9a5e elsewhere - were chosen to sit on dark
+ * plates, and every contact scene they overlay is a night exterior, so they read. The
+ * warehouse is a bright amber interior and the same colours simply vanish into the floor:
+ * measured off a capture, this legend was invisible against the aisle behind it.
+ *
+ * The fix follows what the feed readout in this same file already does rather than inventing
+ * a layer - a scrim under the text, and a tone lifted far enough to survive it. Overlay type
+ * on a world needs its own ground; overlay type on a plate already has one.
+ */
+/*
+ * Bounded between the call actions and the feed readout, not centred on the stage.
+ *
+ * Centred, it was ~70 characters wide on a band that already has two occupants: the console
+ * actions hold the bottom left and the feed name holds the bottom right, and the legend ran
+ * straight through both. Any of the three could be shortened; none of them should have to be,
+ * because they are simply three things sharing one edge without a rule about who owns what.
+ *
+ * So the edge gets divided. Percentages rather than pixels because the stage is a fraction of
+ * the window and this has to survive a resize, and the ellipsis is the honest fallback - a
+ * legend that cannot fit should truncate visibly rather than overlap the status it is next to.
+ */
 .warehouse-hud__controls {
   position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 25%;
+  right: 20%;
   bottom: 0;
-  padding: 7px 10px;
-  color: #35603f;
+  text-align: center;
+  padding: 6px 14px 7px;
+  color: #7fb98a;
+  text-shadow: 0 1px 2px rgba(3, 8, 6, 0.95);
+  background: linear-gradient(180deg, rgba(6, 13, 8, 0), rgba(6, 13, 8, 0.72));
   font-size: calc(10px + var(--omni-font-boost, 0px));
-  letter-spacing: 0.1em;
+  letter-spacing: 0.06em;
+  line-height: 1.45;
   text-transform: uppercase;
-  white-space: nowrap;
+  /*
+   * Wraps rather than truncates. One line of six bindings could not fit the band between the
+   * call actions and the feed name at any tracking that stayed readable, and cutting it mid
+   * word - WASD ... F GRIP // TA - looked like a bug rather than a legend. Two short lines
+   * read faster than one long one anyway, which is why control prompts are grouped in games
+   * that ship.
+   */
+  white-space: normal;
   pointer-events: none;
 }
+/* Explicit rows. Relying on the wrap put the break after "F" and left GRIP alone on line two,
+   because HTML collapses the run of spaces that was standing in for a line break. */
+.warehouse-hud__controls span { display: block; }
 
 .warehouse-hud__scanfx {
   position: absolute;
@@ -280,24 +320,34 @@ const CSS = `
 .warehouse-hud__optical-readout { position: absolute; left: 12px; bottom: 10px; color: #4f9a5e; }
 .warehouse-hud__optical-readout span { color: #d8ffb0; }
 
+/*
+ * A caption, not a control - and that distinction is the whole edit.
+ *
+ * This was a bevelled plate with an inset highlight and a dark fill, which is exactly the
+ * treatment the tool buttons and the console actions use. Stacked directly above them it read
+ * as a fourth button that did not respond, and a dead control is worse than no control: the
+ * player learns the panel lies. It is a legend saying which mouse button holds optical.
+ *
+ * So it keeps the console's label voice - 10px, wide tracking, upper case, the same #4f9a5e
+ * as the console's own card label (written bare: a backtick in here closes the CSS template
+ * literal, which this project has now been bitten by four times) - and drops every affordance. Nothing bevelled on this margin is
+ * un-pressable now, which is the rule the rest of the console already follows.
+ */
 .warehouse-hud__opticalhint {
   pointer-events: none;
   position: absolute;
-  left: 13px;
-  bottom: 88px;
+  left: 14px;
+  bottom: 92px;
   font-size: calc(10px + var(--omni-font-boost, 0px));
-  letter-spacing: 0.12em;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: #8fbe93;
-  background: rgba(11, 24, 15, 0.9);
-  padding: 8px 11px;
-  box-shadow: inset 1px 1px 0 #3f7a52, inset -1px -1px 0 #040906, 0 0 0 1px #0b1a11;
+  color: #7fb98a;
+  text-shadow: 0 1px 2px rgba(3, 8, 6, 0.95);
 }
 .warehouse-hud__opticalhint:empty { display: none; }
-.warehouse-hud[data-optical=true] .warehouse-hud__opticalhint {
-  color: #d8ffb0;
-  box-shadow: inset 1px 1px 0 #5fb277, inset -1px -1px 0 #040906, 0 0 0 1px #17402a;
-}
+/* Held: the legend brightens to the console's live-value colour, and still does not become a
+   button. State is carried by the tool plate above it, which IS one. */
+.warehouse-hud[data-optical=true] .warehouse-hud__opticalhint { color: #d8ffb0; }
 .warehouse-hud:not([data-view=drone]) .warehouse-hud__opticalhint { opacity: 0.58; }
 
 @media (max-width: 760px) {
@@ -307,6 +357,22 @@ const CSS = `
   .warehouse-hud__doors { bottom: 128px; }
 }
 `;
+
+/*
+ * The control legend, grouped: how you move, then what you can do.
+ *
+ * Two clauses rather than six items in a row, because a legend is read at a glance and a
+ * glance takes groups, not lists. The wrap between them is left to the layout - see the
+ * controls rule in the CSS above.
+ */
+const WAREHOUSE_KEYMAP: readonly [string, string] = [
+  'WASD move // QE altitude // TAB view',
+  'LMB scan // RMB optical // F grip',
+];
+const WAREHOUSE_KEYMAP_INTRUSION: readonly [string, string] = [
+  'WASD move // QE altitude // TAB view',
+  'LMB tag // RMB optical // C next feed',
+];
 
 export class WarehouseHUD {
   private root: HTMLElement;
@@ -522,7 +588,7 @@ export class WarehouseHUD {
     this.message.className = 'warehouse-hud__message';
     this.controls = document.createElement('div');
     this.controls.className = 'warehouse-hud__controls';
-    this.controls.textContent = 'WASD move // QE altitude // RMB optical // LMB scan // F grip // TAB view';
+    this.setKeymap(WAREHOUSE_KEYMAP);
     /*
      * The keymap, as one line under the stage.
      *
@@ -625,6 +691,16 @@ export class WarehouseHUD {
    * Integrity turns to the warning meter only when it is actually low, which is the one
    * moment the colour is telling the truth.
    */
+  /** Two rows: how you move, then what you can do. See the controls rule in the CSS. */
+  private setKeymap(lines: readonly [string, string]): void {
+    this.controls.replaceChildren();
+    for (const line of lines) {
+      const row = document.createElement('span');
+      row.textContent = line;
+      this.controls.appendChild(row);
+    }
+  }
+
   public setIntegrity(integrity: number, stage: number, chain: number): void {
     const seals = Math.max(0, Math.min(3, integrity));
     fillMeter(
@@ -701,9 +777,7 @@ export class WarehouseHUD {
     this.intrusion = intrusion;
     for (const button of this.doorButtons.values()) button.hidden = intrusion !== null;
     for (const button of this.zoneButtons.values()) button.hidden = intrusion === null;
-    this.controls.textContent = intrusion
-      ? 'WASD move // QE altitude // RMB optical // LMB tag // C next feed // TAB view'
-      : 'WASD move // QE altitude // RMB optical // LMB scan // F grip // TAB view';
+    this.setKeymap(intrusion ? WAREHOUSE_KEYMAP_INTRUSION : WAREHOUSE_KEYMAP);
     for (const state of states) {
       const button = this.zoneButtons.get(state.id);
       if (!button) continue;
