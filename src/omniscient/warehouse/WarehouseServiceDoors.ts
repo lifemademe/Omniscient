@@ -40,6 +40,35 @@ export const WAREHOUSE_DOOR_IDS: readonly WarehouseDoorId[] = [
   'service-c',
 ];
 
+/**
+ * The three service doors, and the cameras that watch them.
+ *
+ * ## The cameras were pointed at the floor
+ *
+ * Reported as showing nothing recognisable, and it was one mistake made six times: every
+ * fixed camera here sat about seven and a half metres up and four to five metres back,
+ * looking DOWN at between 49 and 57 degrees. That is not a surveillance angle, it is a
+ * ceiling hatch - at 57 degrees a standing person is a hat, a pair of shoulders and their own
+ * shadow, with no face, no posture and no door behind them.
+ *
+ * A fixed camera at a doorway is about three and a half metres up and five to twelve metres
+ * back, looking down between twelve and twenty-five degrees. That range is not a style
+ * choice: it is where a standing person still reads as a standing person, which is the entire
+ * job of a camera the player is asked to identify somebody through.
+ *
+ * All six are re-aimed, and `scripts/warehouse-cameras.ts` now fails the build if any of them
+ * drifts back - it checks height, pitch, standoff, and whether the person the camera exists
+ * to show is actually inside the frame at both aspect ratios.
+ *
+ * ## Where they are mounted
+ *
+ * On the OUTSIDE face of the wall they belong to, offset along it rather than square on. Two
+ * reasons. A camera square to a door sees a person head-on with the door hidden behind them;
+ * from along the wall you get the door, the person, and the ground between - which is what
+ * makes it read as a place rather than a portrait. And a camera on the inside face is aimed
+ * at the back of a wall, which renders as a dark rectangle and looks exactly like a
+ * mis-aimed camera rather than a mis-placed one.
+ */
 export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayout>> = {
   'service-a': {
     id: 'service-a',
@@ -52,9 +81,11 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
     visitorFacing: Math.PI / 2,
     handoffPosition: new THREE.Vector3(-WAREHOUSE_LAYOUT.shell.wallX + WAREHOUSE_LAYOUT.service.handoffInset, 0, WAREHOUSE_LAYOUT.service.sideZ),
     camera: {
-      position: new THREE.Vector3(-27.6, 7.4, 16.4),
-      target: new THREE.Vector3(-25.72, 1.1, WAREHOUSE_LAYOUT.service.sideZ),
-      fov: 50,
+      // Mounted on the outside of the west wall, 5.8m up-run of the door and looking back
+      // along it. 3.5m up, 20.6 degrees down, subject 6.2m out.
+      position: new THREE.Vector3(-24.6, 3.5, 25.8),
+      target: new THREE.Vector3(-25.3, 1.3, WAREHOUSE_LAYOUT.service.sideZ),
+      fov: 54,
     },
     pursuit: {
       suspectStart: new THREE.Vector3(-25.9, 0, WAREHOUSE_LAYOUT.service.sideZ),
@@ -62,9 +93,17 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
       officerStart: new THREE.Vector3(-25.9, 0, 25.2),
       officerEnd: new THREE.Vector3(-25.9, 0, -5.5),
       camera: {
-        position: new THREE.Vector3(-28.2, 7.3, 2.5),
-        target: new THREE.Vector3(-25.9, 1.05, 7.2),
-        fov: 48,
+        /*
+         * Down the run, looking back up it, so a suspect runs AT the lens.
+         *
+         * Sitting beside the route and panning across it is the shot that reads as a diagram;
+         * a figure growing in the frame is the one that reads as somebody getting away. It is
+         * placed three metres short of the route's end, so they arrive and pass rather than
+         * stopping in front of the camera.
+         */
+        position: new THREE.Vector3(-25.3, 4.4, -5.2),
+        target: new THREE.Vector3(-25.9, 1.25, 5.8),
+        fov: 50,
       },
     },
   },
@@ -79,9 +118,11 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
     visitorFacing: Math.PI,
     handoffPosition: new THREE.Vector3(0, 0, WAREHOUSE_LAYOUT.shell.frontZ - 3.6),
     camera: {
-      position: new THREE.Vector3(-5.4, 7.5, 32.2),
-      target: new THREE.Vector3(0, 1.1, WAREHOUSE_LAYOUT.shell.frontZ + 1.5),
-      fov: 50,
+      // On the outside of the front wall, 5.8m west of the door, looking east along the
+      // facade. 3.5m up, 22 degrees down, subject 5.9m out.
+      position: new THREE.Vector3(-5.8, 3.5, WAREHOUSE_LAYOUT.shell.frontZ + 0.4),
+      target: new THREE.Vector3(-0.4, 1.3, WAREHOUSE_LAYOUT.shell.frontZ + 1.1),
+      fov: 54,
     },
     pursuit: {
       suspectStart: new THREE.Vector3(0, 0, 30.9),
@@ -89,9 +130,17 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
       officerStart: new THREE.Vector3(-7.4, 0, 30.5),
       officerEnd: new THREE.Vector3(18.1, 0, 30.2),
       camera: {
-        position: new THREE.Vector3(26.5, 7.4, 24.4),
-        target: new THREE.Vector3(15.5, 1.05, 30.2),
-        fov: 49,
+        /*
+         * Looking back west along the front face at the 23m run.
+         *
+         * Brought in from the corner at x 26.6: from there the middle of the route was 15.4m
+         * away and a running figure was 12% of frame height, which is a speck. This puts the
+         * midpoint at 10.8m and the figure at 17%, and it costs nothing - the run still fills
+         * the frame end to end because the camera looks straight down it.
+         */
+        position: new THREE.Vector3(22, 4.3, 30.2),
+        target: new THREE.Vector3(11, 1.25, 30.3),
+        fov: 50,
       },
     },
   },
@@ -106,9 +155,10 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
     visitorFacing: -Math.PI / 2,
     handoffPosition: new THREE.Vector3(WAREHOUSE_LAYOUT.shell.wallX - WAREHOUSE_LAYOUT.service.handoffInset, 0, WAREHOUSE_LAYOUT.service.sideZ),
     camera: {
-      position: new THREE.Vector3(27.6, 7.4, 16.4),
-      target: new THREE.Vector3(25.72, 1.1, WAREHOUSE_LAYOUT.service.sideZ),
-      fov: 50,
+      // The mirror of A, on the east wall.
+      position: new THREE.Vector3(24.6, 3.5, 25.8),
+      target: new THREE.Vector3(25.3, 1.3, WAREHOUSE_LAYOUT.service.sideZ),
+      fov: 54,
     },
     pursuit: {
       suspectStart: new THREE.Vector3(25.9, 0, WAREHOUSE_LAYOUT.service.sideZ),
@@ -116,9 +166,10 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
       officerStart: new THREE.Vector3(25.9, 0, 25.2),
       officerEnd: new THREE.Vector3(25.9, 0, -5.5),
       camera: {
-        position: new THREE.Vector3(28.2, 7.3, 2.5),
-        target: new THREE.Vector3(25.9, 1.05, 7.2),
-        fov: 48,
+        // The mirror of A's pursuit angle, down the east wall.
+        position: new THREE.Vector3(25.3, 4.4, -5.2),
+        target: new THREE.Vector3(25.9, 1.25, 5.8),
+        fov: 50,
       },
     },
   },
