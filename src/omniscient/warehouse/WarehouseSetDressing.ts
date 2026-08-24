@@ -1,6 +1,8 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+
 import { createRng, range, seedFrom } from '../core/rng.js';
 import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
 
@@ -172,12 +174,64 @@ export class WarehouseSetDressing {
       }
       if (index < 3) {
         pallet.add(
-          mesh('PalletCarton', new THREE.BoxGeometry(1.35, 0.72, 1.25), new THREE.MeshStandardMaterial({ color: '#5d4d36', roughness: 0.96 }), new THREE.Vector3(0, 0.59, 0)),
+          // Lifted with the rack cartons. #5d4d36 is 35% grey, which is the mud the whole set
+          // was mixed from before the palette pass, and it is cardboard.
+          mesh('PalletCarton', new THREE.BoxGeometry(1.35, 0.72, 1.25), new THREE.MeshStandardMaterial({ color: '#b79b6e', roughness: 0.96 }), new THREE.Vector3(0, 0.59, 0)),
           mesh('ShrinkWrap', new THREE.BoxGeometry(1.39, 0.76, 1.29), new THREE.MeshPhysicalMaterial({ color: '#b8d2c8', transparent: true, opacity: 0.08, roughness: 0.2, metalness: 0 }), new THREE.Vector3(0, 0.59, 0))
         );
       }
       pallet.rotation.y = index % 2 ? 0.16 : -0.12;
       this.root.add(pallet);
+    }
+
+    /**
+     * Pallets in the AISLES, not only round the edges.
+     *
+     * The four above are at the perimeter - two by the rear muster, one at each far corner -
+     * and the aisles themselves were swept clean. A working warehouse is not swept clean; the
+     * floor between the racks is where the half-finished jobs live, and it is also the only
+     * surface the player looks at for minutes at a time while flying down a run.
+     *
+     * Set against the rack feet rather than mid-aisle, so nothing here is an obstacle: the
+     * middle of every run stays clear for the drone, and these read as things stacked out of
+     * the way, which is what they would be. Seeded, so a run is the same run every visit -
+     * the mission asks the player to remember where a package was.
+     *
+     * Merged by material, for the same reason the rack contents are. Twelve loose stacks as
+     * individual nodes is another forty draw calls of scenery that never moves.
+     */
+    const looseRng = createRng(seedFrom('warehouse-aisle-floor'));
+    const slats: THREE.BufferGeometry[] = [];
+    const boxes: THREE.BufferGeometry[] = [];
+    for (const aisleX of [-15.5, -8.5, -1.5, 5.5]) {
+      for (const z of [-9.4, -1.2, 7.6]) {
+        if (looseRng() < 0.22) continue;
+        const side = looseRng() < 0.5 ? -1 : 1;
+        const px = aisleX + side * (2.05 + looseRng() * 0.3);
+        const pz = z + range(looseRng, -1.1, 1.1);
+        for (const offset of [-0.55, 0, 0.55]) {
+          const slat = new THREE.BoxGeometry(1.55, 0.08, 0.28);
+          slat.translate(px, 0.18, pz + offset);
+          slats.push(slat);
+        }
+        const stack = Math.floor(looseRng() * 3);
+        for (let tier = 0; tier < stack; tier++) {
+          const height = 0.5 + looseRng() * 0.24;
+          const box = new THREE.BoxGeometry(1.16 + looseRng() * 0.2, height, 1.06 + looseRng() * 0.16);
+          box.translate(px + range(looseRng, -0.08, 0.08), 0.26 + tier * 0.66 + height * 0.5, pz);
+          boxes.push(box);
+        }
+      }
+    }
+    if (slats.length) {
+      const merged = mergeGeometries(slats, false);
+      if (merged) this.root.add(mesh('AisleFloorPallets', merged, PALLET));
+    }
+    if (boxes.length) {
+      const merged = mergeGeometries(boxes, false);
+      // Board, at the value the rack cartons were lifted to. These sat at #5d4d36, which is
+      // the same 35%-grey mud the racks were mixed from before the palette pass.
+      if (merged) this.root.add(mesh('AisleFloorCartons', merged, new THREE.MeshStandardMaterial({ color: '#b79b6e', roughness: 0.95 })));
     }
 
     for (const [index, [x, z]] of [[-22.5, -7.2], [-22.5, -6.1], [22.4, 16.2]].entries()) {

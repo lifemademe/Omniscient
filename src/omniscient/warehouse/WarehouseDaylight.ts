@@ -77,7 +77,7 @@ export class WarehouseDaylight {
     for (const light of this.bounceLights) light.intensity = THREE.MathUtils.lerp(7.6, 2.1, emergency);
     // The night side barely dims. When the work lights drop it is most of what is left, and
     // an emergency that goes black is a scene the player cannot act in.
-    for (const light of this.nightLights) light.intensity = THREE.MathUtils.lerp(4.4, 3.2, emergency);
+    for (const light of this.nightLights) light.intensity = THREE.MathUtils.lerp(12, 7, emergency);
     const breathing = reducedMotion || contained ? 1 : 0.94 + Math.sin(this.clock * 0.24) * 0.06;
     for (const material of this.shaftMaterials) {
       material.opacity = THREE.MathUtils.lerp(0.036 * breathing, 0.009, emergency);
@@ -291,10 +291,21 @@ export class WarehouseDaylight {
       const nightSide = ENGINE.PointLightNode.create({
         name: `ClerestoryNight-${index + 1}`,
         color: index % 2 ? '#7fb4d8' : '#8ec3e0',
-        intensity: 4.4,
-        distance: 22,
-        decay: 1.35,
-        position: new THREE.Vector3(21.1, 7.1, z),
+        /*
+         * 12, not 4.4, and further in.
+         *
+         * Measured after it was added: cool pixels went from 2.1% to 0.7%, so at 4.4 against
+         * nine warm high bays at 54 it was not merely losing, it was inaudible. It also sat at
+         * x 21.1 - hard against the east wall, behind the racking from every angle the player
+         * flies down an aisle.
+         *
+         * Still deliberately weak next to the lamps. Its job is to put something that is not
+         * amber on the tops of the east racks and the upper wall, not to light the floor.
+         */
+        intensity: 12,
+        distance: 30,
+        decay: 1.25,
+        position: new THREE.Vector3(17.4, 7.6, z),
       });
       this.nightLights.push(nightSide);
       this.root.add(nightSide);

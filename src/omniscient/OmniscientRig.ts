@@ -2854,9 +2854,27 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * geometry, no light, one pair of numbers, and it is most of why the reference shots of
      * real warehouses look enormous.
      */
-    this.fog?.setFogColor(new THREE.Color('#1b2028'));
-    this.fog?.setFogNear(22);
-    this.fog?.setFogFar(82);
+    /**
+     * ## The warm/cool split is a DISTANCE, not a second set of lamps
+     *
+     * A cold clerestory was added on the east wall to answer a measured 2.1% cool share, and
+     * after it the frame measured 0.7% - worse. Nine high bays at 54 simply out-shout five
+     * wall bounces at 4.4, and the wall they are on is behind the racks from every angle the
+     * player flies.
+     *
+     * Fog does it for nothing, and it is what the reference photographs are actually doing:
+     * warm lamps near, cold air far, and the transition happening across a single aisle. The
+     * near plane was the whole problem at 22 metres - an aisle is 26m long and the drone sits
+     * in the middle of one, so essentially everything on screen was inside the near plane and
+     * no fog was applied to any of it.
+     *
+     * 9 to 62. The crate in front of the lens is clean, the far end of the run is about half
+     * fogged and reads cold, and the back wall is gone. It costs two numbers, it cannot fail
+     * to reach anything, and unlike a lamp it gets stronger exactly where the room is emptiest.
+     */
+    this.fog?.setFogColor(new THREE.Color('#18202c'));
+    this.fog?.setFogNear(9);
+    this.fog?.setFogFar(62);
 
     const rig = M4SSRig.create({ name: 'M4SSRig', position: M4SS_ORIGIN });
     this.add(rig);
