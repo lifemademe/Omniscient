@@ -15,6 +15,7 @@ import { createWarehouseVisitor, WarehouseCargoNode, WarehouseWorkerNode } from 
 import { loadWarehouseSave, updateWarehouseSave } from './persistence.js';
 import { WarehouseAudio } from './WarehouseAudio.js';
 import { DroneCargoRope } from './DroneCargoRope.js';
+import { WarehouseDroneFeedback } from './WarehouseDroneFeedback.js';
 import { WarehouseHUD } from './WarehouseHUD.js';
 import { WarehousePursuit } from './WarehousePursuit.js';
 import { WAREHOUSE_DOORS, WAREHOUSE_DOOR_IDS } from './WarehouseServiceDoors.js';
@@ -62,6 +63,11 @@ const THIRD_PERSON_ARM = 2.8;
 const THIRD_PERSON_HEIGHT = 1.25;
 const THIRD_PERSON_DISTANCE = Math.hypot(THIRD_PERSON_ARM, THIRD_PERSON_HEIGHT);
 const TIGHT_CAMERA_THRESHOLD = 0.34;
+/** Fallback billboard facing for the feedback rings before the camera exists. */
+const FEEDBACK_FACING = new THREE.Quaternion();
+/** Scratch axes for the lens kick, so the recoil allocates nothing per frame. */
+const KICK_RIGHT = new THREE.Vector3();
+const KICK_UP = new THREE.Vector3();
 const CAMERA_PROBE_OFFSETS = [
   [0, 0],
   [-0.26, 0],
@@ -227,6 +233,8 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private camera: ENGINE.ViewTargetCameraNode | null = null;
   private drone = ENGINE.SceneNode.create({ name: 'WarehouseDrone', position: DRONE_START.clone() });
   private droneVisual = ENGINE.SceneNode.create({ name: 'WarehouseDroneVisual' });
+  /** World-space acknowledgement for scan and grip. See WarehouseDroneFeedback. */
+  private readonly feedback = new WarehouseDroneFeedback();
   private droneRotorBlades: THREE.InstancedMesh | null = null;
   private readonly droneRotorTransform = new THREE.Object3D();
   private droneRotorSpin = 0;
@@ -680,6 +688,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     lampGlass.position.set(0, -0.1, -0.36);
 
     this.droneVisual.add(shell, dome, eye, grip, lamp, lampGlass);
+    this.feedback.bindGripper(grip);
 
     const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(0.52, 0.07, 0.08), dark, 4);
     arms.name = 'DroneRotorArms';
@@ -730,6 +739,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
       position: new THREE.Vector3(0, 0.05, 0.34),
     });
     this.drone.add(this.droneVisual);
+    // The pulses live in world space, not on the drone - a ring parented to the airframe
+    // would ride along with it and stop marking the place the scan actually landed.
+    this.feedback.build();
+    this.add(this.feedback.root);
     this.drone.add(inspectionFill);
     this.add(this.drone);
   }
@@ -1539,6 +1552,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     this.sound.play('scan');
     this.hud?.pulseScan();
+    this.pulseScanAt(this.scanSubjectPosition());
     const container = this.getWorld()?.gameContainer;
     if (container) {
       void captureWarehouseFrame(container, {
@@ -1585,6 +1599,44 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
   }
 
+  /**
+   * Where the scan just landed, in world space.
+   *
+   * The rings are placed on the SUBJECT rather than at a fixed distance down the barrel,
+   * because the point of the effect is to say which thing the machine read. A pulse that
+   * always appears three metres ahead would confirm that a button was pressed and nothing
+   * about what it was pressed on.
+   *
+   * The fallback is the only case where that is not possible - a console or CCTV scan has no
+   * subject in the drone's view - and there it sits just ahead of the lens so the verb still
+   * registers rather than passing in silence.
+   */
+  private scanSubjectPosition(): THREE.Vector3 {
+    const scratch = new THREE.Vector3();
+    if (this.intruder?.visible) return this.intruder.getWorldPosition(scratch);
+    if (this.activeCase?.definition.subjectType === 'worker') {
+      const worker = this.workers.find((entry) => entry.visible && !entry.authorized)
+        ?? this.workers.find((entry) => entry.visible);
+      if (worker) return worker.getWorldPosition(scratch);
+    }
+    const cargo = [this.cargo, this.duplicateCargo].find((entry): entry is WarehouseCargoNode => entry !== null);
+    if (cargo) return cargo.getWorldPosition(scratch);
+    return this.droneLensPosition().addScaledVector(this.droneForward(), 2.6);
+  }
+
+  /** Roughly where the eye sits, so the ping leaves the lens instead of the airframe centre. */
+  private droneLensPosition(): THREE.Vector3 {
+    return this.drone.getWorldPosition(new THREE.Vector3()).addScaledVector(this.droneForward(), 0.42);
+  }
+
+  private droneForward(): THREE.Vector3 {
+    return new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+  }
+
+  private pulseScanAt(target: THREE.Vector3): void {
+    this.feedback.scanPulse(this.droneLensPosition(), target);
+  }
+
   private scanIntruder(): void {
     const intruder = this.intruder;
     const intrusion = this.intrusion;
@@ -1601,6 +1653,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.evidence.action = true;
       this.sound.play('scan');
       this.hud?.pulseScan();
+      this.pulseScanAt(this.scanSubjectPosition());
       this.hud?.flash('REAR ENTRY HISTORY // UNLISTED PERSON RECORDED', 2.3);
       this.syncIntrusionHud();
       return;
@@ -1645,6 +1698,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       cargo.carried = false;
       this.carried = null;
       this.sound.play('grip');
+      this.feedback.gripPulse(cargo.getWorldPosition(new THREE.Vector3()), false);
       this.hud?.flash('LOAD RELEASED');
       return;
     }
@@ -1667,6 +1721,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     cargo.carried = true;
     this.carried = cargo;
     this.sound.play('grip');
+    this.feedback.gripPulse(cargoAt, true);
     this.hud?.flash(`LOAD ${this.activeCase?.packageId ?? ''} SECURED`);
   }
 
@@ -2454,6 +2509,20 @@ export class WarehouseRig extends ENGINE.SceneNode {
 ` +
         `fps ${fps}  dt ${last.toFixed(1)}ms  worst2s ${this.worstFrameMs.toFixed(1)}ms`;
     }
+    /*
+     * The kick rides on the composed position rather than the drone, and is applied after
+     * the bounds and occlusion work rather than before. Both orderings matter: shaking the
+     * airframe would fight the flight model, and kicking before the slab test would let a
+     * recoil push the lens through a wall - which is exactly the class of bug that cost this
+     * mission its black screen. Two centimetres cannot escape a clamp it is applied after.
+     *
+     * The look target deliberately does NOT take the kick. Moving both leaves the shot
+     * translating with nothing to measure it against, which reads as drift; moving only the
+     * eye rotates the view a fraction around the subject, which reads as an impact.
+     */
+    KICK_RIGHT.set(1, 0, 0).applyQuaternion(this.camera.quaternion);
+    KICK_UP.set(0, 1, 0).applyQuaternion(this.camera.quaternion);
+    this.feedback.applyKick(this.cameraPosition, KICK_RIGHT, KICK_UP);
     this.camera.position.copy(this.cameraPosition);
     CAMERA_MATRIX.lookAt(this.cameraPosition, this.cameraTarget, this.camera.up);
     this.camera.quaternion.setFromRotationMatrix(CAMERA_MATRIX);
@@ -2609,6 +2678,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     this.ropeAnchor.copy(this.drone.position).add(new THREE.Vector3(0, -0.48, 0));
     this.cargoRope.tick(deltaTime, this.ropeAnchor);
+    this.feedback.tick(deltaTime, this.camera ? this.camera.getCamera().quaternion : FEEDBACK_FACING);
     this.updateDeliveredCargo(deltaTime);
     this.hud?.tick(deltaTime);
     this.environment.tick(deltaTime);
@@ -2666,6 +2736,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       if (worldNow) worldNow.fallbackCamera = this.savedFallbackCamera;
       this.savedFallbackCamera = null;
     }
+    this.feedback.dispose();
     this.sound.dispose();
     this.camera?.setActive(false);
     world?.inputManager?.exitPointerLock();
