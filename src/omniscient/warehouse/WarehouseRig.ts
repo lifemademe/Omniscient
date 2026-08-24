@@ -115,7 +115,6 @@ class WarehouseInput extends ENGINE.BaseInputHandler {
       case 'Escape': this.rig.requestExit(); return true;
       case 'Tab': event.preventDefault(); this.rig.cycleView(); return true;
       case 'KeyC': this.rig.cycleDoor(1); return true;
-      case 'KeyM': this.rig.toggleInputMode(); return true;
       case 'KeyF': this.rig.toggleGrip(); return true;
       case 'KeyR': this.rig.recover(); return true;
       case 'KeyQ': this.rig.changeAltitude(-1); return true;
@@ -250,6 +249,17 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private view: WarehouseView = 'cctv';
   private perspective: DronePerspective = 'third';
   private opticalAimHeld = false;
+  /**
+   * Whether the pointer is free rather than locked to the drone.
+   *
+   * No longer toggleable. It is derived from the VIEW: drone view captures the pointer
+   * because the mouse is aiming a camera, and CCTV and console views release it because
+   * the mouse is pointing at an interface. See `shouldCapturePointer`.
+   *
+   * The field survives its own toggle because `syncPointerMode` and the optical guard both
+   * read it, and because a later view - a map, a cinematic - may want the pointer free
+   * without being either of the three that exist today.
+   */
   private cursorControl = false;
   private mounted = false;
   private input: WarehouseInput | null = null;
@@ -316,6 +326,54 @@ export class WarehouseRig extends ENGINE.SceneNode {
     event.preventDefault();
   };
 
+  /**
+   * Let go of the optical view, from the window, whatever happened.
+   *
+   * ## The bug
+   *
+   * Holding right mouse enters the drone's first-person optical view and releasing it is
+   * supposed to come back out. It did not, and the reason is in the engine rather than here:
+   * `InputManager.setupEventListeners` binds `keyup` to WINDOW and `mouseup` to
+   * `rendererDomElement`. A key release is caught wherever the pointer is; a mouse release
+   * is only caught over the canvas.
+   *
+   * The warehouse has a full-screen DOM console over that canvas. Most of it is
+   * `pointer-events: none` and passes clicks through, but the console actions, the tool row,
+   * the camera row and the whole operations panel are deliberately `auto` - so releasing the
+   * button anywhere over those targets the overlay, `handleMouseUp` never runs, and
+   * `opticalAimHeld` stays true forever. The player is stuck in first person with no way out
+   * except a key that happens to clear it as a side effect.
+   *
+   * ## Why this fixes it rather than papering over it
+   *
+   * A held input has to be released by something that cannot miss. `window` in the capture
+   * phase sees the release before any target does, and the guard inside `setOpticalAim`
+   * makes a second call harmless - so this and the engine's own `handleMouseUp` can both
+   * fire and only the first one does anything.
+   *
+   * `blur` is here for the same reason and is not hypothetical: alt-tab while holding the
+   * button and the release happens to a window that is not this one.
+   */
+  private readonly releaseOptical = (event?: MouseEvent): void => {
+    if (event && event.button !== 2) return;
+    this.setOpticalAim(false);
+  };
+
+  private readonly releaseOpticalOnBlur = (): void => {
+    this.setOpticalAim(false);
+  };
+
+  /**
+   * And if the pointer lock goes, the hold goes with it.
+   *
+   * Escape exits pointer lock without producing a mouseup at all - the browser does it, not
+   * the page - so a player who presses Escape mid-aim would otherwise keep the optical view
+   * and lose the camera control that goes with it.
+   */
+  private readonly releaseOpticalOnLockChange = (): void => {
+    if (!document.pointerLockElement) this.setOpticalAim(false);
+  };
+
   public constructor() {
     super();
     this.isRoot = false;
@@ -368,13 +426,16 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     world.inputManager?.addInputHandler(this.input);
     container.addEventListener('contextmenu', this.blockContextMenu);
+    // Capture phase: the release is seen before any overlay target can swallow it.
+    window.addEventListener('mouseup', this.releaseOptical, true);
+    window.addEventListener('blur', this.releaseOpticalOnBlur);
+    document.addEventListener('pointerlockchange', this.releaseOpticalOnLockChange);
     setPointerLockAllowed(true);
     this.hud = new WarehouseHUD(
       container,
       this.mode,
       () => this.requestExit(),
       () => this.recover(),
-      () => this.toggleInputMode()
     );
     this.hud.onDecision((decision) => this.tryDecision(decision));
     this.hud.onTool((tool) => {
@@ -979,21 +1040,25 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.scan();
   }
 
-  public toggleInputMode(): void {
-    if (this.finished || this.isCinematicActive()) return;
-    this.setOpticalAim(false);
-    if (this.view !== 'drone') {
-      this.view = 'drone';
-      this.cursorControl = false;
-      this.hud?.setView(this.view);
-    } else {
-      this.cursorControl = !this.cursorControl;
-    }
-    this.syncPointerMode();
-    this.hud?.flash(this.cursorControl
-      ? 'CURSOR RELEASED // CONSOLE CONTROLS AVAILABLE'
-      : 'DRONE LOOK CONTROL ACTIVE // M RELEASES CURSOR', 1.8);
-  }
+  /*
+   * `toggleInputMode` and the M binding were removed.
+   *
+   * It released the mouse cursor so the operations panel could be clicked without leaving
+   * drone view, and it was reported as "the key that toggles first and third person" -
+   * which it was not, and which is the interesting part. Right mouse enters the optical
+   * first-person view and releasing it was supposed to leave; releasing it did nothing,
+   * because the engine binds `mouseup` to the renderer canvas while this game puts a
+   * console over that canvas. M happened to call `setOpticalAim(false)` on its way past,
+   * so it became the only reliable way out of first person, and it got learned as that.
+   *
+   * Two controls that both half-did the same job, one of them by accident. With the release
+   * fixed at the window, TAB covers the rest on its own: drone view captures the pointer
+   * because the mouse is aiming a camera, and CCTV and console views release it because the
+   * mouse is pointing at an interface. Nobody has to know a key for that.
+   *
+   * The CURSOR button went with it. It lived in the actions row and was unclickable in the
+   * one state where it was needed, because a locked pointer cannot click anything.
+   */
 
   public cycleTool(direction: number): void {
     if (!this.tools.length) return;
@@ -2155,6 +2220,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (this.input) world?.inputManager?.removeInputHandler(this.input);
     this.input = null;
     world?.gameContainer?.removeEventListener('contextmenu', this.blockContextMenu);
+    window.removeEventListener('mouseup', this.releaseOptical, true);
+    window.removeEventListener('blur', this.releaseOpticalOnBlur);
+    document.removeEventListener('pointerlockchange', this.releaseOpticalOnLockChange);
     if (this.suspendedPlayerController) {
       world?.inputManager?.addInputHandler(this.suspendedPlayerController);
       this.suspendedPlayerController = null;

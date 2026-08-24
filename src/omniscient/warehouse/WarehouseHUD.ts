@@ -75,34 +75,52 @@ const CSS = `
   pointer-events: none;
 }
 
-/* Events, top of the stage: a bell that is ringing and a truck that is coming. */
+/*
+ * Events, top RIGHT of the stage.
+ *
+ * They were top-left and landed straight on top of the integrity card - both were anchored
+ * to the same corner, which is the corner the console frame reserves for its readouts.
+ * Right is the only edge of the stage with nothing on it: the panel starts beyond it, so
+ * there is no third thing to collide with.
+ */
 .warehouse-hud__alerts {
   position: absolute;
-  left: 0;
+  right: 0;
   top: 0;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 3px;
   padding: 7px 10px;
   pointer-events: none;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+  text-align: right;
   font-size: calc(10px + var(--omni-font-boost, 0px));
 }
 .warehouse-hud__bell { color: #e8877a; }
 .warehouse-hud__bell:empty, .warehouse-hud__inbound:empty { display: none; }
 .warehouse-hud__inbound { color: #e0c265; }
 
-/* The keymap. One line, at the foot of the picture, under everything it describes. */
+/*
+ * The keymap. One line, centred at the foot of the picture.
+ *
+ * Bottom LEFT put it directly under the console actions, which sit 13px off the floor and
+ * are 68px tall - so the legend rendered behind END LINK, RECOVER DRONE and CURSOR and was
+ * unreadable for its whole length. Centre is the one part of the stage floor with nothing
+ * in it: the actions own the left, the view name owns the right.
+ */
 .warehouse-hud__controls {
   position: absolute;
-  left: 0;
+  left: 50%;
+  transform: translateX(-50%);
   bottom: 0;
   padding: 7px 10px;
   color: #35603f;
   font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  white-space: nowrap;
   pointer-events: none;
 }
 
@@ -160,8 +178,15 @@ const CSS = `
   align-items: center;
   pointer-events: auto;
 }
-.warehouse-hud__tools { left: 13px; bottom: 74px; }
-.warehouse-hud__doors { left: 13px; bottom: 108px; }
+/*
+ * Stacked upward from the console actions, which occupy the floor to about 81px.
+ *
+ * These were 74px and 108px - the first of them behind the buttons. Measured off a capture:
+ * the actions sit 13px off the stage floor and are 68px tall, so anything under 81px is
+ * hidden. The gaps are 40px, which is a row plus air.
+ */
+.warehouse-hud__tools { left: 13px; bottom: 128px; }
+.warehouse-hud__doors { left: 13px; bottom: 168px; }
 .warehouse-hud:not([data-view=cctv]) .warehouse-hud__doors { display: none; }
 .warehouse-hud__tools button, .warehouse-hud__doors button {
   font: inherit;
@@ -259,7 +284,7 @@ const CSS = `
   pointer-events: none;
   position: absolute;
   left: 13px;
-  bottom: 142px;
+  bottom: 88px;
   font-size: calc(10px + var(--omni-font-boost, 0px));
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -278,7 +303,8 @@ const CSS = `
 @media (max-width: 760px) {
   .warehouse-hud__opticalhint, .warehouse-hud__controls { display: none; }
   .warehouse-hud__optical { inset: 8%; }
-  .warehouse-hud__doors { bottom: 108px; }
+  .warehouse-hud__tools { bottom: 88px; }
+  .warehouse-hud__doors { bottom: 128px; }
 }
 `;
 
@@ -315,7 +341,6 @@ export class WarehouseHUD {
   private skipButton: HTMLButtonElement;
   private ops: WarehouseOpsPanel;
   private opticalHint: HTMLElement;
-  private inputButton: HTMLButtonElement;
   private opticalAim = false;
   private messageTimer = 0;
   private decisionHandler: ((decision: WarehouseDecision) => void) | null = null;
@@ -338,7 +363,6 @@ export class WarehouseHUD {
     mode: WarehouseMode,
     onExit: () => void,
     onRecover: () => void,
-    onInputMode: () => void
   ) {
     if (!document.getElementById(STYLE_ID)) {
       const style = document.createElement('style');
@@ -400,8 +424,7 @@ export class WarehouseHUD {
      */
     const exit = buildAction('\u260E', 'End link', onExit, 'omni-action--end');
     const recover = buildAction('\u21BA', 'Recover drone', onRecover);
-    this.inputButton = buildAction('\u2316', 'Cursor', onInputMode);
-    frame.actions.append(exit, recover, this.inputButton);
+    frame.actions.append(exit, recover);
 
     /*
      * The bell and the inbound clock, over the stage rather than in the margin.
@@ -628,7 +651,7 @@ export class WarehouseHUD {
     this.bell.textContent = waiting
       ? location
         ? `Perimeter contact // ${location}`
-        : `Perimeter contact // ${count} unresolved`
+        : `${count} waiting`
       : '';
   }
 
@@ -722,19 +745,16 @@ export class WarehouseHUD {
     if (this.root.dataset.view === 'drone') this.setView('drone');
   }
 
+  /**
+   * The pointer is free, or it is not.
+   *
+   * Only a data attribute now - the crosshair reads it, and nothing else has to. There was a
+   * CURSOR action beside END LINK that flipped its own label, and it went with the M key:
+   * a button that can only be pressed when the pointer is free is a button that cannot be
+   * pressed in the state it exists to leave.
+   */
   public setCursorMode(cursorVisible: boolean): void {
     this.root.dataset.cursor = String(cursorVisible);
-    /*
-     * The LABEL, not the button.
-     *
-     * A console action is a glyph and a word - see `buildAction` - so assigning to the
-     * button's own `textContent` replaces both children with a string and the glyph is gone
-     * for the rest of the session. It only shows on the second press, which is exactly the
-     * kind of fault that survives a play-through.
-     */
-    const label = this.inputButton.querySelector('span:not(.omni-action__glyph)');
-    if (label) label.textContent = cursorVisible ? 'Drone look' : 'Cursor';
-    this.inputButton.setAttribute('aria-pressed', String(cursorVisible));
   }
 
   public setControlsVisible(visible: boolean): void {
