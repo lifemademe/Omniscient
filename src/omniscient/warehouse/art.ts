@@ -189,6 +189,22 @@ const ZONE_SIGN_ACCENT: Readonly<Record<string, string>> = {
   sortation: '#c8756a',
 };
 
+/*
+ * Rack geometry shared by the builder and the collision test.
+ *
+ * These were local literals inside buildRacks, which was fine while the racking was a solid
+ * wall to the drone. It is not any more: an empty bay is now flyable, so constrainDrone has to
+ * agree with the loader about exactly where the bays and shelves are. Two copies of these
+ * numbers would mean the player clipping through a full pallet or bouncing off thin air.
+ */
+const RACK_BAY_Z = [-10.7, -6, -1.3, 3.4, 8.1, 12.8] as const;
+const RACK_LEVEL_Y = [0.55, 1.9, 3.25, 4.6] as const;
+const RACK_SHELF_Y = [0.18, 1.55, 2.9, 4.25, 5.48] as const;
+/** Half-depth of a bay along z. Bays are 4.7m apart, so this leaves a rib between them. */
+const RACK_BAY_HALF_Z = 1.85;
+/** Clearance the drone needs above a shelf and below the next one to pass between them. */
+const RACK_GAP_MARGIN = 0.34;
+
 export class WarehouseEnvironment {
   public readonly root = ENGINE.SceneNode.create({ name: 'WarehouseEnvironment' });
   public readonly stationPositions: Readonly<Record<'quarantine' | 'return' | 'hold', THREE.Vector3>> = {
@@ -203,6 +219,8 @@ export class WarehouseEnvironment {
   };
   public rearDoor: ENGINE.MeshNode | null = null;
   public conveyorRollers: ENGINE.SceneNode[] = [];
+  /** Slots the loader left empty, as aisle:bay:level. Flyable - see constrainDrone. */
+  private readonly emptyBays = new Set<string>();
   private readonly setDressing = new WarehouseSetDressing();
   private readonly facilities = new WarehouseFacilities();
   private readonly daylight = new WarehouseDaylight();
@@ -375,13 +393,21 @@ export class WarehouseEnvironment {
         drum: [] as THREE.BufferGeometry[],
         drumBand: [] as THREE.BufferGeometry[],
       };
-      const BAY_Z = [-10.7, -6, -1.3, 3.4, 8.1, 12.8];
-      const LEVEL_Y = [0.55, 1.9, 3.25, 4.6];
+      const BAY_Z = RACK_BAY_Z;
+      const LEVEL_Y = RACK_LEVEL_Y;
       for (const [bayIndex, bayZ] of BAY_Z.entries()) {
         for (const [level, levelY] of LEVEL_Y.entries()) {
           // Never the bottom of a bay: a rack with a hole at floor level reads as broken
           // rather than as busy.
-          if (level > 0 && rng() < 0.17) continue;
+          /*
+           * An empty slot is now a hole the drone can fly through, so it has to be recorded
+           * rather than merely skipped. The key is aisle:bay:level and the set is read by
+           * constrainDrone - see the rack section there.
+           */
+          if (level > 0 && rng() < 0.17) {
+            this.emptyBays.add(`${aisle}:${bayIndex}:${level}`);
+            continue;
+          }
 
           const side = (bayIndex + level) % 2 ? 0.27 : -0.24;
           const px = x + side * 0.4;
@@ -1110,9 +1136,10 @@ export class WarehouseEnvironment {
      * honest collision while clearing them becomes flight.
      */
     if (position.y < 6.55) {
-      for (const rackX of WAREHOUSE_LAYOUT.rack.centers) {
+      for (const [aisle, rackX] of WAREHOUSE_LAYOUT.rack.centers.entries()) {
         if (position.z < WAREHOUSE_LAYOUT.rack.minCollisionZ || position.z > WAREHOUSE_LAYOUT.rack.maxCollisionZ) continue;
         if (Math.abs(position.x - rackX) >= WAREHOUSE_LAYOUT.rack.halfCollisionX) continue;
+        if (this.canPassThroughRack(aisle, position)) continue;
         position.copy(previous);
         return true;
       }
@@ -1156,6 +1183,42 @@ export class WarehouseEnvironment {
         position.copy(previous);
         return true;
       }
+    }
+    return false;
+  }
+
+  /**
+   * Is the drone lined up with an EMPTY bay, and flying at a height that clears its shelves?
+   *
+   * The racking used to be a solid wall below 6.55m, so the building was five corridors and the
+   * only way between aisles was over the top. But the loader has always left about one slot in
+   * six empty - that is where the variety in the racking comes from - and those holes are real
+   * gaps in a real structure. Flying through one is the manoeuvre a drone in a warehouse
+   * obviously has, and the racking was the only thing saying otherwise.
+   *
+   * Three conditions, all of which have to hold:
+   *
+   *  - the drone is inside ONE bay along z, not straddling the rib between two;
+   *  - that bay's slot at this level was left empty by the loader;
+   *  - the drone is clear of the shelf below and the shelf above by RACK_GAP_MARGIN.
+   *
+   * The last one is what stops this being a cheat. Shelves are 1.35m apart, so with margin
+   * there is about 65cm of usable window per level - enough to fly through deliberately, not
+   * enough to blunder through. Miss the window and the rack is still solid.
+   */
+  private canPassThroughRack(aisle: number, position: THREE.Vector3): boolean {
+    let bay = -1;
+    for (const [index, z] of RACK_BAY_Z.entries()) {
+      if (Math.abs(position.z - z) <= RACK_BAY_HALF_Z) { bay = index; break; }
+    }
+    if (bay < 0) return false;
+
+    for (const [level] of RACK_LEVEL_Y.entries()) {
+      if (!this.emptyBays.has(`${aisle}:${bay}:${level}`)) continue;
+      const below = RACK_SHELF_Y[level]!;
+      const above = RACK_SHELF_Y[level + 1];
+      if (above === undefined) continue;
+      if (position.y > below + RACK_GAP_MARGIN && position.y < above - RACK_GAP_MARGIN) return true;
     }
     return false;
   }
