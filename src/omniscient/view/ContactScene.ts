@@ -38,6 +38,23 @@ export interface CameraShot {
   target: THREE.Vector3;
   /** Seconds. Pans are slower than push-ins by default. */
   duration?: number;
+  /**
+   * Metres of slow float while this shot is held. Omit for a locked-off frame.
+   *
+   * TOMAS-REVIEW's headline was that the beacon mission holds one frame for 34 of its 44
+   * seconds with a frame-to-frame difference that never exceeds 4.8% - "nothing moves, not
+   * the camera, not the contact, not a light, not a cloud". Lighting and framing fixes
+   * addressed what the frame CONTAINS; this addresses the fact that it is dead.
+   *
+   * Opt-in per shot rather than global, because some shots should be locked off: a cut to
+   * evidence wants to feel like a machine looking, and drifting it would make the picture
+   * feel handheld exactly when it should feel clinical. Long HELD shots are the ones that
+   * need to breathe.
+   *
+   * Sensible values are small - 0.04 to 0.10. This is a camera on a mast in wind, not a
+   * handheld operator.
+   */
+  drift?: number;
 }
 
 /** A prop action: an authored animation the scene can run on demand. */

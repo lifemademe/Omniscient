@@ -3157,6 +3157,9 @@ function buildBeaconMast(scene: ContactScene): void {
   scene.registerShot('default', {
     position: new THREE.Vector3(0, 4.95, 6),
     target: new THREE.Vector3(0.5, 4, -0.2),
+    // Held while the call opens. Wide shots take the larger float: the same offset in metres
+    // covers less of the frame the further back the lens sits.
+    drift: 0.085,
   });
   /**
    * The join on the bracket - and the shot the mission actually lives in.
@@ -3202,6 +3205,16 @@ function buildBeaconMast(scene: ContactScene): void {
     position: new THREE.Vector3(-1.1, 2.65, 2),
     target: new THREE.Vector3(0.45, 2.95, 0.3),
     duration: 2.4,
+    /*
+     * This is the shot TOMAS-REVIEW measured being held for 34 of the mission's 44 seconds
+     * with a frame-to-frame difference that never exceeded 4.8%. Lighting fixed what it
+     * contains; this is what stops it being a still.
+     *
+     * 0.05 rather than the wide's 0.085 because the lens is 2.3m out instead of 6.3m, so the
+     * same metres cover nearly three times as much of the frame. Tuned in screen terms, not
+     * world terms - which is the only way a drift number means anything.
+     */
+    drift: 0.05,
   });
   /**
    * The payoff, and the man it is for.

@@ -84,6 +84,7 @@ import { EndingPanel } from './menu/EndingPanel.js';
 import { SessionController } from './session/SessionController.js';
 import {
   accessibleCameraDuration,
+  getAccessibilityPreferences,
   installAccessibilityPreferences,
 } from './accessibility/preferences.js';
 import { installSoundCaptions } from './accessibility/SoundCaptions.js';
@@ -160,6 +161,13 @@ const GROWTH_REVEAL_SECONDS = 1.8;
 
 /** Scratch matrix for camera orientation. Reused to avoid per-frame allocation. */
 const CAMERA_MATRIX = new THREE.Matrix4();
+/** Scratch for the held-shot drift, so the float allocates nothing per frame. */
+const DRIFT_EYE = new THREE.Vector3();
+const DRIFT_AT = new THREE.Vector3();
+const DRIFT_FORWARD = new THREE.Vector3();
+const DRIFT_RIGHT = new THREE.Vector3();
+const DRIFT_UP = new THREE.Vector3();
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 const meshOf = decorMesh;
 
@@ -615,10 +623,45 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * convention (+Z toward the target) and the child camera, which looks down -Z, ends up
    * facing exactly backwards. Matrix4.lookAt gives the camera convention directly.
    */
+  /**
+   * Write the composed camera, plus whatever drift the held shot asks for.
+   *
+   * The drift is added HERE and never accumulated into `cameraPosition`, which stays the
+   * authored value. That matters for two reasons: a tween lerping toward a shot would
+   * otherwise fight an offset that keeps moving under it, and every framing assertion in
+   * scripts/dev/probe-mast.ts is written against the authored numbers. Drift is a thing that
+   * happens to the lens, not a change to where the shot is.
+   *
+   * Two sinusoids at deliberately incommensurate periods, so the float never returns to the
+   * same place and never reads as a loop. The eye moves across frame and the target moves a
+   * third as far in the opposite sense - the small parallax between them is what sells it as
+   * air rather than as a pan.
+   */
+  /** Metres of float on the shot currently held. 0 locks the frame off. */
+  private shotDrift = 0;
+  /** Seconds since this shot was taken, which is what the drift is a function of. */
+  private shotClock = 0;
+
   private applyCameraTransform(): void {
     if (!this.camera) return;
-    this.camera.position.copy(this.cameraPosition);
-    CAMERA_MATRIX.lookAt(this.cameraPosition, this.cameraTarget, this.camera.up);
+    DRIFT_EYE.copy(this.cameraPosition);
+    DRIFT_AT.copy(this.cameraTarget);
+    if (this.shotDrift > 0 && !getAccessibilityPreferences().reducedMotion) {
+      DRIFT_FORWARD.copy(this.cameraTarget).sub(this.cameraPosition);
+      if (DRIFT_FORWARD.lengthSq() > 1e-6) {
+        DRIFT_FORWARD.normalize();
+        DRIFT_RIGHT.crossVectors(DRIFT_FORWARD, WORLD_UP);
+        if (DRIFT_RIGHT.lengthSq() < 1e-6) DRIFT_RIGHT.set(1, 0, 0);
+        DRIFT_RIGHT.normalize();
+        DRIFT_UP.crossVectors(DRIFT_RIGHT, DRIFT_FORWARD).normalize();
+        const swayX = Math.sin(this.shotClock * 0.21) * this.shotDrift;
+        const swayY = Math.sin(this.shotClock * 0.134 + 1.7) * this.shotDrift * 0.62;
+        DRIFT_EYE.addScaledVector(DRIFT_RIGHT, swayX).addScaledVector(DRIFT_UP, swayY);
+        DRIFT_AT.addScaledVector(DRIFT_RIGHT, -swayX * 0.33).addScaledVector(DRIFT_UP, -swayY * 0.33);
+      }
+    }
+    this.camera.position.copy(DRIFT_EYE);
+    CAMERA_MATRIX.lookAt(DRIFT_EYE, DRIFT_AT, this.camera.up);
     this.camera.quaternion.setFromRotationMatrix(CAMERA_MATRIX);
   }
 
@@ -626,13 +669,24 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private cutTo(shot: CameraShot): void {
     this.cameraPosition.copy(shot.position);
     this.cameraTarget.copy(shot.target);
+    this.takeShotDrift(shot);
     this.applyCameraTransform();
+  }
+
+  /*
+   * The clock restarts on every shot so a cut always begins at zero offset - otherwise the
+   * new frame would open mid-sway, which lands as a bump on the cut rather than as air.
+   */
+  private takeShotDrift(shot: CameraShot): void {
+    this.shotDrift = shot.drift ?? 0;
+    this.shotClock = 0;
   }
 
   /** Ease to a shot. */
   private moveTo(shot: CameraShot, duration: number): void {
     const fromPosition = this.cameraPosition.clone();
     const fromTarget = this.cameraTarget.clone();
+    this.takeShotDrift(shot);
 
     this.cameraTweener.add(
       (t) => {
@@ -4013,6 +4067,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
     super.tickPrePhysics(deltaTime);
     this.navigator?.update(deltaTime);
     adaptiveScore.update();
+
+    /*
+     * A held shot is re-written every frame only when it has drift to apply. Without this
+     * the camera is set once per cue and never touched again, which is exactly the stillness
+     * TOMAS-REVIEW measured; with it, an unattended shot keeps breathing.
+     */
+    if (this.shotDrift > 0) {
+      this.shotClock += deltaTime;
+      this.applyCameraTransform();
+    }
 
     /*
      * The post-process pipeline is built lazily on the first render, so the retro pass

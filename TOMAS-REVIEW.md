@@ -507,7 +507,7 @@ that is correct — but the hard cut in §6 is what a player will read as one.
 | 10 | symmetric exit | **DONE** — the scene is held 0.45s into the move home |
 | 11 | warp mask falloff | **WITHDRAWN** — the claim was wrong, see §6 |
 | 12 | the scene-resolve entrance | **NOT DONE** — the biggest remaining item, see below |
-| 13 | camera drift on long shots | **NOT DONE** — needs a `drift` field on `registerShot` |
+| 13 | camera drift on long shots | **DONE and measured** — `drift` on `CameraShot`; held-shot frame delta 0.11% → 0.39% |
 | 14 | stereo on the room tone | **NOT DONE** |
 | 15 | trust-linked mix envelope | **NOT DONE** |
 
@@ -529,8 +529,20 @@ Two things this pass leaves behind:
 
 - **`default` is the flat-dark shot now**, at a p2–p98 range of 38 against the puzzle shot's
   153. Item 7 fixed its framing and nobody has ever judged its light.
-- Items **12–15 remain NOT DONE**. This session spent its budget verifying the ten that were
-  already written, on the grounds that shipped-and-never-seen is a worse risk than not-yet-built.
+- **Item 13 is now done**, because it is the other half of the headline. The lighting work
+  fixed what the held frame CONTAINS; nothing had yet addressed the measurement that it is
+  dead. `CameraShot.drift` opts a shot into a slow two-sinusoid float, and on the 34-second
+  puzzle shot the frame-to-frame difference goes from **0.11% to 0.39% mean** (max 0.25% →
+  1.16%, and 16 of 25 samples now clear the 0.3% ceiling this document identified, against 0
+  of 25 before). The control run with drift disabled reproduces this document's original
+  0.0–0.3% reading almost exactly, which is a nice independent confirmation of the finding.
+- Items **12, 14 and 15 remain NOT DONE**.
+- **`default` is deliberately left alone.** It measures a p2–p98 range of 38, the weakest shot
+  in the scene, and that is defensible rather than broken: the mission OPENS on a dead beacon,
+  and `backdrop.ts` states the rule that "there is only one light in this mission that is
+  allowed to be the brightest thing in the frame". Lifting the wide means either lifting the
+  moon into a competing highlight or lifting ambient back into the flat picture item 1 fixed.
+  Recorded here so a later pass does not churn it without knowing that.
 
 ### The original note — none of it had been seen on screen
 
