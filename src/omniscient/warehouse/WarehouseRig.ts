@@ -572,26 +572,93 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const hull = new THREE.MeshStandardMaterial({ color: '#69707a', roughness: 0.5, metalness: 0.22 });
     const dark = new THREE.MeshStandardMaterial({ color: '#09110f', roughness: 0.68, metalness: 0.38 });
     const brass = new THREE.MeshStandardMaterial({ color: '#b08a3f', roughness: 0.52, metalness: 0.58 });
+    /* Between hull and dark: the spine and nose read as separate components rather than as one
+       pale mass, without going so dark that the drone loses the luma a previous pass bought. */
+    const panel = new THREE.MeshStandardMaterial({ color: '#4d545c', roughness: 0.58, metalness: 0.2 });
+    /*
+     * ## The redesign, and what was actually wrong with the old one
+     *
+     * The previous hull was a tapered cylinder rotated onto its side with a hemisphere on
+     * top. Read off captures rather than argued about, it had three faults and only one of
+     * them was the shape.
+     *
+     * It had NO HEADING. The player flies this thing from directly behind for the whole
+     * mission, and from behind it was a pale egg with two small green dots - symmetrical,
+     * with its one distinguishing feature (the sensor) on the far side where the camera never
+     * sees it. Steering a machine whose front you cannot locate is a tax on every input.
+     *
+     * It had NO HIERARCHY. The body, the dome and the four rotor guards were all the same
+     * pale hull material, so the guards - four bright rings on the outside of the silhouette -
+     * carried as much visual weight as the chassis they were bolted to.
+     *
+     * And the mass was shapeless. A rotated tapered cylinder is an egg, and an egg reads as a
+     * toy however it is lit.
+     *
+     * ## What replaces it
+     *
+     * A flat hex chassis with a spine down it and a wedge nose. Flat plates and hard angles
+     * read as engineered at any resolution, which matters more than usual here because the
+     * retro pass quantises everything to a coarse grid - curvature is the first thing that
+     * grid destroys, and a faceted plate survives it intact.
+     *
+     * The hull KEEPS its mid-grey. A previous pass measured this drone at median luma 23
+     * against a frame median of 24 and lightened it to fix exactly that, and going dark again
+     * to buy a silhouette would walk straight back into it. The contrast comes from the
+     * guards and booms going dark instead - see below - which costs the frame nothing because
+     * they are thin.
+     */
     const shell = ENGINE.MeshNode.create({
-      name: 'DroneShell',
-      geometry: new THREE.CylinderGeometry(0.36, 0.48, 0.24, 12),
+      name: 'DroneChassis',
+      geometry: new THREE.CylinderGeometry(0.44, 0.4, 0.1, 6),
       material: hull,
       castShadow: true,
     });
-    shell.rotation.z = Math.PI / 2;
+    shell.rotation.y = Math.PI / 6;
     const dome = ENGINE.MeshNode.create({
-      name: 'DroneAvionicsDome',
-      geometry: new THREE.SphereGeometry(0.32, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.56),
-      material: hull,
+      name: 'DroneAvionicsSpine',
+      geometry: new THREE.BoxGeometry(0.25, 0.12, 0.5),
+      material: panel,
       castShadow: true,
     });
-    dome.position.y = 0.08;
+    dome.position.y = 0.1;
+    /*
+     * The nose, which is the whole point of the redesign: an asymmetric wedge so the front is
+     * identifiable from any angle including the one the player actually uses.
+     */
+    const nose = ENGINE.MeshNode.create({
+      name: 'DroneNose',
+      geometry: new THREE.CylinderGeometry(0.18, 0.08, 0.32, 6),
+      material: panel,
+      castShadow: true,
+    });
+    nose.rotation.set(Math.PI / 2, 0, Math.PI / 6);
+    nose.position.set(0, 0.01, -0.36);
+    /*
+     * A brass rim line, and the first attempt at it was a mistake worth recording: at 0.455
+     * radius by 2.8cm tall against a chassis only 10cm deep, it stopped being a strake and
+     * became a gold PLATE - the loudest element on the machine, and an accent that outshouts
+     * the thing it is accenting is not an accent. A torus at the rim gives the edge catch that
+     * was wanted with about a tenth of the area.
+     */
+    const strake = ENGINE.MeshNode.create({
+      name: 'DroneStrake',
+      geometry: new THREE.TorusGeometry(0.425, 0.014, 6, 6),
+      material: brass,
+    });
+    strake.rotation.set(Math.PI / 2, 0, Math.PI / 6);
+    strake.position.y = 0.03;
     const eye = ENGINE.MeshNode.create({
       name: 'DroneEye',
-      geometry: new THREE.SphereGeometry(0.16, 16, 10),
+      geometry: new THREE.SphereGeometry(0.105, 14, 10),
       material: new THREE.MeshStandardMaterial({ color: '#09100f', emissive: '#315f55', emissiveIntensity: 1.2, roughness: 0.22 }),
     });
-    eye.position.set(0, -0.02, -0.42);
+    /*
+     * Into the nose, not slung under the belly. At 0.16 radius hanging below the chassis it
+     * was the largest single feature on the drone and read as a bauble the machine was
+     * carrying; a sensor belongs in the housing built for it, where its size says "instrument"
+     * rather than "cargo".
+     */
+    eye.position.set(0, 0.01, -0.5);
     const grip = ENGINE.MeshNode.create({
       name: 'MagneticGripper',
       geometry: new THREE.CylinderGeometry(0.18, 0.24, 0.12, 12),
@@ -655,13 +722,21 @@ export class WarehouseRig extends ENGINE.SceneNode {
     });
     lampGlass.position.set(0, -0.1, -0.36);
 
-    this.droneVisual.add(shell, dome, eye, grip, lamp, lampGlass);
+    this.droneVisual.add(shell, dome, nose, strake, eye, grip, lamp, lampGlass);
     this.feedback.bindGripper(grip);
 
     const arms = new THREE.InstancedMesh(new THREE.BoxGeometry(0.52, 0.07, 0.08), dark, 4);
     arms.name = 'DroneRotorArms';
     arms.castShadow = true;
-    const guards = new THREE.InstancedMesh(new THREE.TorusGeometry(0.25, 0.025, 8, 22), hull, 4);
+    /*
+     * Guards go DARK, and this is the hierarchy fix rather than a colour preference.
+     *
+     * They were the same pale hull as the chassis, which put four bright rings on the outside
+     * of the silhouette carrying as much weight as the machine inside them. A rotor guard is a
+     * piece of wire mesh; it should be the thinnest, quietest thing on the airframe. Dark and
+     * slimmer, it recedes and the chassis becomes the drone.
+     */
+    const guards = new THREE.InstancedMesh(new THREE.TorusGeometry(0.25, 0.019, 8, 22), dark, 4);
     guards.name = 'DroneRotorGuards';
     guards.castShadow = true;
     const blades = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 0.018, 0.055), dark, 4);
@@ -698,6 +773,46 @@ export class WarehouseRig extends ENGINE.SceneNode {
       statusLamps.setMatrixAt(index, this.droneRotorTransform.matrix);
     }
     this.droneVisual.add(statusLamps);
+
+    /*
+     * Tail lights, and they are the most useful thing in this whole redesign.
+     *
+     * The player flies from directly behind for the entire mission, so the view they navigate
+     * by is the one view the old drone gave nothing to: symmetrical, pale, front on the far
+     * side. Two red lamps at the tail make heading unambiguous from exactly that angle, and
+     * they follow the convention every real aircraft uses, so nobody has to be taught it.
+     *
+     * Red because it is the one hue not already spoken for on this airframe - the sensor is
+     * teal, the status lamps green, the strake brass - and because red reads as "this is the
+     * back" to anyone who has ever seen a vehicle.
+     *
+     * Unlit material rather than emissive-on-standard: these are 3cm lamps seen at 3 metres,
+     * and MeshBasicMaterial guarantees they hold their colour whatever the warehouse lighting
+     * is doing, including the emergency ramp where every standard material in the room dims.
+     */
+    const tailLamps = new THREE.InstancedMesh(
+      new THREE.SphereGeometry(0.032, 8, 6),
+      new THREE.MeshBasicMaterial({ color: '#ff5d4a', toneMapped: false }),
+      2
+    );
+    tailLamps.name = 'DroneTailLamps';
+    for (const [index, x] of [-0.26, 0.26].entries()) {
+      this.droneRotorTransform.position.set(x, 0.1, 0.3);
+      this.droneRotorTransform.rotation.set(0, 0, 0);
+      this.droneRotorTransform.updateMatrix();
+      tailLamps.setMatrixAt(index, this.droneRotorTransform.matrix);
+    }
+    this.droneVisual.add(tailLamps);
+
+    /* A tail fin, so the heading survives even with the lamps behind a rack. */
+    const fin = ENGINE.MeshNode.create({
+      name: 'DroneTailFin',
+      geometry: new THREE.BoxGeometry(0.035, 0.19, 0.22),
+      material: dark,
+      castShadow: true,
+    });
+    fin.position.set(0, 0.2, 0.24);
+    this.droneVisual.add(fin);
     const inspectionFill = ENGINE.PointLightNode.create({
       name: 'DroneInspectionFill',
       color: '#a8d9c8',
