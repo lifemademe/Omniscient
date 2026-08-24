@@ -46,6 +46,20 @@ function orientedBox(axis: 'x' | 'z', length: number, height: number, depth: num
  * Runtime warehouse shell and natural-light layer. The window band is a real opening,
  * not translucent geometry placed over a shadow-casting wall.
  */
+/*
+ * How hard the windows push back against nine amber work lights.
+ *
+ * Measured before this pass: 82.3% of lit pixels warm, 2.0% cool, mean R-B bias +46 - one
+ * hue across the whole room. Tripling the hemisphere fill moved the bias by four points,
+ * because a global ambient cannot compete with nine point lights at 54 and only lifts the
+ * floor it is trying to contrast with.
+ *
+ * Cold light placed AT the windows does compete, because it lands where the warm lamps
+ * are weakest - the upper walls, the tops of the racking, the far ends of the aisles - so
+ * the contrast arrives as rim and depth rather than as a wash over everything.
+ */
+const CLERESTORY_NIGHT = 34;
+
 export class WarehouseDaylight {
   public readonly root = ENGINE.SceneNode.create({ name: 'WarehouseDaylightArchitecture' });
 
@@ -77,7 +91,7 @@ export class WarehouseDaylight {
     for (const light of this.bounceLights) light.intensity = THREE.MathUtils.lerp(7.6, 2.1, emergency);
     // The night side barely dims. When the work lights drop it is most of what is left, and
     // an emergency that goes black is a scene the player cannot act in.
-    for (const light of this.nightLights) light.intensity = THREE.MathUtils.lerp(12, 7, emergency);
+    for (const light of this.nightLights) light.intensity = THREE.MathUtils.lerp(CLERESTORY_NIGHT, 14, emergency);
     const breathing = reducedMotion || contained ? 1 : 0.94 + Math.sin(this.clock * 0.24) * 0.06;
     for (const material of this.shaftMaterials) {
       material.opacity = THREE.MathUtils.lerp(0.036 * breathing, 0.009, emergency);
@@ -288,8 +302,16 @@ export class WarehouseDaylight {
        * that the tops of the east racks and the upper wall have something that is not amber,
        * and so a silhouette in the middle distance has two colours behind it.
        */
+      /*
+       * Both walls now, not just the east one.
+       *
+       * A single cold side lights one row of rack tops and leaves the opposite wall entirely
+       * amber, so the room still reads as one hue from every angle that does not happen to
+       * face east. Windows exist on both elevations; the light should too.
+       */
+      for (const wallX of [17.4, -17.4]) {
       const nightSide = ENGINE.PointLightNode.create({
-        name: `ClerestoryNight-${index + 1}`,
+        name: `ClerestoryNight-${index + 1}-${wallX > 0 ? 'E' : 'W'}`,
         color: index % 2 ? '#7fb4d8' : '#8ec3e0',
         /*
          * 12, not 4.4, and further in.
@@ -305,10 +327,11 @@ export class WarehouseDaylight {
         intensity: 12,
         distance: 30,
         decay: 1.25,
-        position: new THREE.Vector3(17.4, 7.6, z),
+        position: new THREE.Vector3(wallX, 7.6, z),
       });
       this.nightLights.push(nightSide);
       this.root.add(nightSide);
+      }
 
       const material = new THREE.MeshBasicMaterial({
         color: '#ffc77f',

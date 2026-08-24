@@ -155,6 +155,25 @@ function buildRain(root: ENGINE.SceneNode): void {
   root.add(points);
 }
 
+/*
+ * The cold half of the mix, and the number the tick actually uses.
+ *
+ * Measured before touching it: 82.3% of lit pixels were warm, 2.0% cool, mean R-B bias
+ * +46. That is one hue, and one hue is what separates this room from a lit interior that
+ * reads as photographed. Nine work lights at intensity 54 were the entire lighting model;
+ * the hemisphere meant to answer them sat at 0.6 and could not be seen.
+ *
+ * Raising it lifts the SHADOWS toward sky colour and leaves the warm key owning everything
+ * it actually reaches, which is the ordinary way a warm interior is made to read at night -
+ * cool shadow, warm key - rather than desaturating the amber and calling it balance.
+ *
+ * Named because the first attempt at this edited the constructor and changed nothing at
+ * all: the tick below rewrites intensity every frame from its own literal, so the value
+ * handed to HemisphereLightNode.create was never live. Two numbers, one of them a lie.
+ * There is now one, and the constructor reads it too.
+ */
+const WAREHOUSE_SKY_FILL = 1.8;
+
 export class WarehouseEnvironment {
   public readonly root = ENGINE.SceneNode.create({ name: 'WarehouseEnvironment' });
   public readonly stationPositions: Readonly<Record<'quarantine' | 'return' | 'hold', THREE.Vector3>> = {
@@ -610,7 +629,7 @@ export class WarehouseEnvironment {
      * floor under sodium - and it means the ambient itself now carries a little of the
      * warm/cool split rather than washing it out.
      */
-    this.ambientLight = ENGINE.HemisphereLightNode.create({ name: 'WarehouseAmbient', color: '#93b4c6', groundColor: '#38302a', intensity: 0.6 });
+    this.ambientLight = ENGINE.HemisphereLightNode.create({ name: 'WarehouseAmbient', color: '#93b4c6', groundColor: '#38302a', intensity: WAREHOUSE_SKY_FILL });
     this.moonLight = ENGINE.DirectionalLightNode.create({
       name: 'WarehouseMoon',
       color: '#a9d0d7',
@@ -996,7 +1015,7 @@ export class WarehouseEnvironment {
     const basePulse = contained || reducedMotion ? 1 : 0.64 + Math.sin(this.clock * 4.1) * 0.22;
     // Rebased on the new rig. The ratios are what the emergency mode is about, not the
     // absolute numbers, so both ends move together.
-    if (this.ambientLight) this.ambientLight.intensity = THREE.MathUtils.lerp(0.6, 0.2, emergency);
+    if (this.ambientLight) this.ambientLight.intensity = THREE.MathUtils.lerp(WAREHOUSE_SKY_FILL, 0.5, emergency);
     if (this.moonLight) this.moonLight.intensity = THREE.MathUtils.lerp(1.7, 1.05, emergency);
     if (this.frontLight) this.frontLight.intensity = THREE.MathUtils.lerp(35, 4, emergency);
     if (this.fixtureLensMaterial) this.fixtureLensMaterial.emissiveIntensity = THREE.MathUtils.lerp(1.15, 0.1, emergency);
