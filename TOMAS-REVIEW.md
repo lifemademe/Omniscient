@@ -506,7 +506,7 @@ that is correct — but the hard cut in §6 is what a player will read as one.
 | 9 | 15.7kHz down | **DONE** — 0.0022 → 0.0008 |
 | 10 | symmetric exit | **DONE** — the scene is held 0.45s into the move home |
 | 11 | warp mask falloff | **WITHDRAWN** — the claim was wrong, see §6 |
-| 12 | the scene-resolve entrance | **MOSTLY DONE** — signal lock and the wireframe entrance both ship, measured; the certainty-tier resolve does not |
+| 12 | the scene-resolve entrance | **DONE, two of three** — signal lock and wireframe entrance ship and are measured; the certainty-tier resolve was built, measured, and **withdrawn** |
 | 13 | camera drift on long shots | **DONE and measured** — `drift` on `CameraShot`; held-shot frame delta 0.11% → 0.39% |
 | 14 | stereo on the room tone | **DONE and measured** — L/R correlation 0.993–0.998 → **0.070** |
 | 15 | trust-linked mix envelope | **NOT DONE** |
@@ -585,8 +585,25 @@ Two things this pass leaves behind:
   sea, terrain, the mast lattice itself — is backdrop geometry that no prop owns. Covering
   those would mean suspecting the backdrop, which is a different and much larger change.
 
-  Still not done from this section: opening at `CERTAINTY.SHAPED` to resolve into the authored
-  tiers. The `connect` lead was
+  **The certainty-tier resolve was built and then withdrawn**, and the reason is a fact about
+  this game's content rather than about the idea. It was implemented as a stepped walk from
+  `SHAPED` up to each prop's authored tier, measured on the repair shop, and moved mean frame
+  saturation by **0.005** — from 0.2765 to 0.2707, which is drift, not an effect.
+
+  The cause, counted rather than guessed: across `scenes.ts` there are **199 registered props,
+  0 with an explicit `certainty`, and 8 `inked`**. Every other prop already sits exactly at
+  SHAPED, so a walk that starts at SHAPED has nothing to travel. The technique needs a spread
+  of authored tiers to act on and this game does not have one — it uses certainty as a binary
+  (a thing is the machine's guess, or it is known), which the wireframe entrance already
+  dramatises far better.
+
+  Going lower than SHAPED to widen the range is not available either: below SHAPED the colour
+  law switches to flat shading, and flipping `flatShading` forces a shader recompile on every
+  material in the room — a hitch, at the exact moment the entrance is trying to feel smooth.
+
+  So the entrance is two techniques, not three, and this row says two. Reviving it would mean
+  authoring certainty tiers across the content first, which is a content decision and not a
+  rendering one. The `connect` lead was
   looked at and left alone — the cue already fires before `setPhase(Phase.Contact)` in code,
   so the measured +120ms is engine and audio latency rather than ordering, and moving it
   without a synchronised A/V capture would be guesswork.
