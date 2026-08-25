@@ -234,8 +234,53 @@ export class WarehouseAutomation {
       leftRailPieces.push(transformedBox(0.085, 0.31, length, midpoint.clone().addScaledVector(right, -0.76).add(new THREE.Vector3(0, 0.1, 0)), angle));
       rightRailPieces.push(transformedBox(0.085, 0.31, length, midpoint.clone().addScaledVector(right, 0.76).add(new THREE.Vector3(0, 0.1, 0)), angle));
     }
+    /*
+     * Legs and rollers, because this belt was holding itself up.
+     *
+     * The transfer run curves out of receiving at waist height with nothing between it and
+     * the slab - a dark ribbon hanging in mid-air over the one part of the floor the player
+     * crosses on every delivery. Thirty metres away its own sibling, the sortation line in
+     * buildConveyors, has eight legs and thirty-one rollers per lane. Two machines doing the
+     * same job in the same building, one of them supported and one of them levitating, is
+     * worse than either choice made consistently.
+     *
+     * The rollers are merged and therefore still, where the sortation line's turn. That is a
+     * deliberate trade and not an oversight: spinning these would cost sixty-odd draw calls
+     * on a background prop, and the eye already has motion here - the parcel tracking along
+     * the curve is the thing that says this belt is running.
+     */
+    const legPieces: THREE.BufferGeometry[] = [];
+    const rollerPieces: THREE.BufferGeometry[] = [];
+    const beltUnderside = 0.545;
+    for (let index = 0; index <= samples; index++) {
+      const t = index / samples;
+      const at = curve.getPoint(t);
+      const ahead = curve.getPoint(Math.min(1, t + 0.01));
+      const angle = Math.atan2(ahead.x - at.x, ahead.z - at.z);
+      const right = new THREE.Vector3(Math.cos(angle), 0, -Math.sin(angle));
+      // A roller every other sample - about 40cm apart, which is the pitch on the main line.
+      if (index % 2 === 0) {
+        const roller = new THREE.CylinderGeometry(0.085, 0.085, 1.34, 8);
+        roller.rotateZ(Math.PI / 2);
+        roller.rotateY(angle);
+        roller.translate(at.x, 0.755, at.z);
+        rollerPieces.push(roller);
+      }
+      // A leg pair every fifth sample, which lands them roughly two metres apart.
+      if (index % 5 !== 0) continue;
+      for (const side of [-0.58, 0.58]) {
+        const foot = at.clone().addScaledVector(right, side);
+        const leg = new THREE.BoxGeometry(0.09, beltUnderside, 0.09);
+        leg.translate(foot.x, beltUnderside / 2, foot.z);
+        legPieces.push(leg);
+      }
+      const tie = transformedBox(1.28, 0.06, 0.06, at.clone().setY(0.2), angle + Math.PI / 2);
+      legPieces.push(tie);
+    }
     this.root.add(
       mesh('ReceivingTransferBelt', mergeGeometries(beltPieces, false) ?? new THREE.BoxGeometry(), BELT),
+      mesh('ReceivingTransferRollers', mergeGeometries(rollerPieces, false) ?? new THREE.BoxGeometry(), STEEL),
+      mesh('ReceivingTransferLegs', mergeGeometries(legPieces, false) ?? new THREE.BoxGeometry(), STEEL),
       mesh('ReceivingTransferRail-L', mergeGeometries(leftRailPieces, false) ?? new THREE.BoxGeometry(), ORANGE),
       mesh('ReceivingTransferRail-R', mergeGeometries(rightRailPieces, false) ?? new THREE.BoxGeometry(), ORANGE)
     );

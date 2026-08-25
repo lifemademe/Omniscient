@@ -151,6 +151,7 @@ import './omniscient/warehouse/director.js';
 import './omniscient/warehouse/DroneCargoRope.js';
 import './omniscient/warehouse/entities.js';
 import './omniscient/warehouse/labelGeometry.js';
+import './omniscient/warehouse/palletGeometry.js';
 import './omniscient/warehouse/persistence.js';
 import './omniscient/warehouse/TracePanel.js';
 import './omniscient/warehouse/types.js';

@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { createRng, range, seedFrom } from '../core/rng.js';
+import { palletGeometries } from './palletGeometry.js';
 import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
 
 /**
@@ -226,16 +227,23 @@ export class WarehouseSetDressing {
         const side = looseRng() < 0.5 ? -1 : 1;
         const px = aisleX + side * (2.05 + looseRng() * 0.3);
         const pz = z + range(looseRng, -1.1, 1.1);
-        for (const offset of [-0.55, 0, 0.55]) {
-          const slat = new THREE.BoxGeometry(1.55, 0.08, 0.28);
-          slat.translate(px, 0.18, pz + offset);
-          slats.push(slat);
-        }
+        /*
+         * These were three planks hovering 14cm off the slab with nothing underneath them,
+         * and the boxes above them floated another 4cm clear of the top plank. A real pallet
+         * now, sitting on the floor, with the stack standing ON it - see palletGeometry.
+         */
+        // One turn for the pallet AND its load. Rotating only the pallet left a stack of
+        // boxes sitting square on a deck lying ten degrees off them, which reads as a
+        // mistake rather than as a job left half done.
+        const turn = range(looseRng, -0.18, 0.18);
+        slats.push(...palletGeometries(px, 0.14, pz, { width: 1.5, depth: 1.32, turn }));
         const stack = Math.floor(looseRng() * 3);
         for (let tier = 0; tier < stack; tier++) {
           const height = 0.5 + looseRng() * 0.24;
           const box = new THREE.BoxGeometry(1.16 + looseRng() * 0.2, height, 1.06 + looseRng() * 0.16);
-          box.translate(px + range(looseRng, -0.08, 0.08), 0.26 + tier * 0.66 + height * 0.5, pz);
+          box.translate(range(looseRng, -0.08, 0.08), 0.13 + tier * 0.78 + height * 0.5, 0);
+          box.rotateY(turn);
+          box.translate(px, 0, pz);
           boxes.push(box);
         }
       }
