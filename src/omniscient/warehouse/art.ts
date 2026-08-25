@@ -85,12 +85,39 @@ function mesh(name: string, geometry: THREE.BufferGeometry, material: THREE.Mate
   return node;
 }
 
-function labelMaterial(text: string, accent = '#d8ffb0', background = '#07100d'): THREE.MeshBasicMaterial {
+/**
+ * A label, optionally drawn back-to-front for a rear face.
+ *
+ * ## Why the mirror is in the canvas and not in the UVs
+ *
+ * A double-sided sign here is two quads, the rear one turned 180 degrees about Y, and that
+ * turn carries the texture with it - so every rear face in the warehouse read in mirror
+ * writing. A recording caught a hanging zone sign as `ƎƏAЯOTƧ`.
+ *
+ * Reversing the rear quad's U coordinate is the obvious fix and it was tried first. It
+ * changed nothing on screen: front still correct, rear still mirrored, with the rebuilt
+ * bundle confirmed newer than the source. Rather than keep guessing at why the UV write does
+ * not survive - `MeshNode.create` may well rebuild the attribute - the mirror moves somewhere
+ * that is not in doubt. Drawing the canvas back-to-front is the same trick the bay ruler
+ * already uses and it is verifiable by eye at the point it happens.
+ *
+ * `mirrored` is therefore the rear-face variant of a sign, and the two mirrors cancel.
+ */
+function labelMaterial(
+  text: string,
+  accent = '#d8ffb0',
+  background = '#07100d',
+  mirrored = false
+): THREE.MeshBasicMaterial {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 192;
   const ctx = canvas.getContext('2d');
   if (ctx) {
+    if (mirrored) {
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+    }
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.strokeStyle = accent;
@@ -119,6 +146,14 @@ function readableLabelPanel(
   const root = ENGINE.SceneNode.create({ name, position });
   const material = labelMaterial(text, accent);
   const front = mesh(`${name}-Front`, createWarehouseLabelGeometry(width, height), material, new THREE.Vector3(0, 0, 0.012));
+  /*
+   * The rear face needs NO mirroring, which is worth writing down because it cost two wrong
+   * fixes to establish. Turning a quad 180 degrees about Y also turns which way the viewer's
+   * right hand points, and the two cancel: the text reads correctly from behind. Both a UV
+   * mirror and a pre-mirrored canvas were added here in turn and each one BROKE a face that
+   * was already right - confirmed by tinting this material magenta and watching the mirrored
+   * sign turn magenta, so it really is this mesh and it really was fine.
+   */
   const back = mesh(`${name}-Back`, createWarehouseLabelGeometry(width, height), material, new THREE.Vector3(0, 0, -0.012));
   back.rotation.y = Math.PI;
   root.add(front, back);
@@ -293,6 +328,37 @@ const RACK_SHELF_Y = [0.18, 1.55, 2.9, 4.25, 5.48] as const;
 const RACK_BAY_HALF_Z = 1.85;
 /** Clearance the drone needs above a shelf and below the next one to pass between them. */
 const RACK_GAP_MARGIN = 0.34;
+
+/**
+ * Slots kept deliberately empty, so an addressed package has somewhere to BE.
+ *
+ * The mission hands the player an address - 2034 is aisle 2, bay 34 - and asks them to go and
+ * get it. That only works if the package is in the rack at that address, and until now it was
+ * not: `warehousePackagePosition` put it on the FLOOR beside the rack, 33cm clear of the
+ * face, out in the drive aisle. Reported exactly as it looks, which is that aisle 2 has no
+ * package anywhere in the 31-40 range on either side.
+ *
+ * Putting it on the shelf instead runs into the stock: every non-empty slot carries a pallet
+ * 1.18m wide on a shelf 1.58m deep, so there is no free pick face to stand a carton on and it
+ * would intersect whatever is already there. The generator does leave about one slot in six
+ * bare - that is what the drone flies through - so the answer is to make sure the ADDRESSED
+ * slot is one of them.
+ *
+ * Keyed `aisle:bayIndex:level`, matching `emptyBays`. Bay 34 lands at z -3.13, which is inside
+ * RACK_BAY_Z index 2 (-1.3, half-depth 1.85); level 1 is 1.9m, which is drone eye level and
+ * well inside the 3.65m grip range from the aisle. The tutorial's address is authored, so its
+ * slot is authored with it.
+ */
+const RESERVED_PICK_SLOTS: ReadonlySet<string> = new Set(['2:2:2']);
+/**
+ * Which shelf level a picked package stands on. Must match the level in RESERVED_PICK_SLOTS.
+ *
+ * Level 2 (deck 2.9m), not level 1 (deck 1.55m), because the bay ruler is mounted on the rack
+ * face at y 1.95 and is half a metre tall - a carton on the level below sits directly behind
+ * it and is invisible from the aisle. Found by flying to 2034 and seeing the number but not
+ * the box. 2.96m is still well inside the 3.65m grip range from the drone's closest approach.
+ */
+const PICK_LEVEL = 2;
 
 export class WarehouseEnvironment {
   public readonly root = ENGINE.SceneNode.create({ name: 'WarehouseEnvironment' });
@@ -493,8 +559,9 @@ export class WarehouseEnvironment {
            * rather than merely skipped. The key is aisle:bay:level and the set is read by
            * constrainDrone - see the rack section there.
            */
-          if (level > 0 && rng() < 0.17) {
-            this.emptyBays.add(`${aisle}:${bayIndex}:${level}`);
+          const slotKey = `${aisle}:${bayIndex}:${level}`;
+          if (level > 0 && (RESERVED_PICK_SLOTS.has(slotKey) || rng() < 0.17)) {
+            this.emptyBays.add(slotKey);
             continue;
           }
 
@@ -1245,8 +1312,28 @@ export class WarehouseEnvironment {
     return warehouseAisleX(aisle);
   }
 
+  /**
+   * Where an addressed package sits: on the shelf, in its own bay, label out to the aisle.
+   *
+   * `warehousePackagePosition` gives the address as a point on the floor - the right aisle and
+   * the right distance along it - and this lifts it onto the rack. The slot it lands in is
+   * kept empty by RESERVED_PICK_SLOTS, so the carton stands alone in a bare bay rather than
+   * inside somebody else's pallet, which is both how a picked order actually looks and the
+   * only way the player can see it from the aisle.
+   *
+   * Y is the deck top rather than a load height: `WarehouseCargoNode` builds its carton
+   * upward from the node origin, so the node sits ON the shelf and the box rests on it. X
+   * stays at the rack centre line - a carton pushed to the front lip would overhang a shelf
+   * whose stock is set 10cm off centre, and reads as falling off.
+   */
   public packagePosition(aisle: number, bay: number): THREE.Vector3 {
-    return warehousePackagePosition(aisle, bay);
+    const floor = warehousePackagePosition(aisle, bay);
+    const level = PICK_LEVEL;
+    return new THREE.Vector3(
+      warehouseAisleX(aisle),
+      RACK_SHELF_Y[level] + 0.055,
+      floor.z
+    );
   }
 
   /**

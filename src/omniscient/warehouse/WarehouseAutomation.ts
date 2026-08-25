@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
+import { createWarehouseLabelGeometry } from './labelGeometry.js';
 
 const CHARCOAL = new THREE.MeshStandardMaterial({ color: '#1a2221', roughness: 0.7, metalness: 0.54 });
 const STEEL = new THREE.MeshStandardMaterial({ color: '#56635f', roughness: 0.52, metalness: 0.7 });
@@ -147,14 +148,27 @@ export class WarehouseAutomation {
         mesh('SortationSafetyEdge', new THREE.BoxGeometry(0.09, 0.025, 27.25), ORANGE, new THREE.Vector3(x, 0.058, -0.45), false, false)
       );
     }
+    /*
+     * These three are the signs that were upside down.
+     *
+     * Every other runtime label in the warehouse is built with
+     * `createWarehouseLabelGeometry`, which reverses the quad's V axis because the engine
+     * uploads textures with flipY disabled. These three were built with a bare
+     * `THREE.PlaneGeometry`, so they missed it and hung inverted - and `SORT // S` is turned
+     * 180 degrees on top of that, which is why it read as mirrored rather than merely upside
+     * down. Caught on a recording: rotating the frame 180 degrees made `STORE // ...` legible.
+     *
+     * The range also said `01-05`, which reads as bay numbers on a rack that now numbers bays
+     * 1 to 100. It means aisles, so it says aisles.
+     */
     for (const [label, x, z, rotationY] of [
       ['RECEIVE // R', 8.2, -14.62, 0],
-      ['STORE // 01-05', -5, 15.45, 0],
+      ['STORE // AISLES 1-5', -5, 15.45, 0],
       ['SORT // S', 19.6, 14.18, Math.PI],
     ] as const) {
       const panel = mesh(
         `SectionIdentity-${label}`,
-        new THREE.PlaneGeometry(4.5, 0.72),
+        createWarehouseLabelGeometry(4.5, 0.72),
         displayMaterial(label),
         new THREE.Vector3(x, 7.8, z),
         false,

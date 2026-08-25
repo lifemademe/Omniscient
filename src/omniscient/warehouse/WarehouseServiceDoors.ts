@@ -77,7 +77,7 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
     glyph: 'triangle',
     rootPosition: new THREE.Vector3(-WAREHOUSE_LAYOUT.shell.wallX + 0.17, 0, WAREHOUSE_LAYOUT.service.sideZ),
     rootRotation: -Math.PI / 2,
-    visitorPosition: new THREE.Vector3(-WAREHOUSE_LAYOUT.shell.wallX - 1.66, 0, WAREHOUSE_LAYOUT.service.sideZ),
+    visitorPosition: new THREE.Vector3(-WAREHOUSE_LAYOUT.shell.wallX - 1.66, 0, WAREHOUSE_LAYOUT.service.sideZ + 0.72),
     visitorFacing: Math.PI / 2,
     handoffPosition: new THREE.Vector3(-WAREHOUSE_LAYOUT.shell.wallX + WAREHOUSE_LAYOUT.service.handoffInset, 0, WAREHOUSE_LAYOUT.service.sideZ),
     camera: {
@@ -129,7 +129,7 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
     glyph: 'bars',
     rootPosition: new THREE.Vector3(0, 0, WAREHOUSE_LAYOUT.shell.frontZ - 0.17),
     rootRotation: 0,
-    visitorPosition: new THREE.Vector3(0, 0, WAREHOUSE_LAYOUT.shell.frontZ + 1.66),
+    visitorPosition: new THREE.Vector3(-0.72, 0, WAREHOUSE_LAYOUT.shell.frontZ + 1.66),
     visitorFacing: Math.PI,
     handoffPosition: new THREE.Vector3(0, 0, WAREHOUSE_LAYOUT.shell.frontZ - 3.6),
     camera: {
@@ -168,7 +168,7 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
     glyph: 'circle',
     rootPosition: new THREE.Vector3(WAREHOUSE_LAYOUT.shell.wallX - 0.17, 0, WAREHOUSE_LAYOUT.service.sideZ),
     rootRotation: Math.PI / 2,
-    visitorPosition: new THREE.Vector3(WAREHOUSE_LAYOUT.shell.wallX + 1.66, 0, WAREHOUSE_LAYOUT.service.sideZ),
+    visitorPosition: new THREE.Vector3(WAREHOUSE_LAYOUT.shell.wallX + 1.66, 0, WAREHOUSE_LAYOUT.service.sideZ - 0.72),
     visitorFacing: -Math.PI / 2,
     handoffPosition: new THREE.Vector3(WAREHOUSE_LAYOUT.shell.wallX - WAREHOUSE_LAYOUT.service.handoffInset, 0, WAREHOUSE_LAYOUT.service.sideZ),
     camera: {
@@ -216,12 +216,17 @@ function mesh(
   return node;
 }
 
-function signMaterial(layout: WarehouseDoorLayout): THREE.MeshBasicMaterial {
+/** `mirrored` draws the rear-face variant - see labelMaterial in art.ts for why. */
+function signMaterial(layout: WarehouseDoorLayout, mirrored = false): THREE.MeshBasicMaterial {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
   canvas.height = 256;
   const context = canvas.getContext('2d');
   if (context) {
+    if (mirrored) {
+      context.translate(canvas.width, 0);
+      context.scale(-1, 1);
+    }
     context.fillStyle = '#07100d';
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.strokeStyle = '#76b08d';
@@ -327,12 +332,43 @@ export class WarehouseServiceDoor {
     const frameRight = mesh('ServiceDoorFrame', new THREE.BoxGeometry(0.22, 3.7, 0.38), FRAME, new THREE.Vector3(1.36, 1.85, 0));
     const frameTop = mesh('ServiceDoorFrame', new THREE.BoxGeometry(2.94, 0.22, 0.38), FRAME, new THREE.Vector3(0, 3.58, 0));
     const inner = mesh('ServiceDoorInner', new THREE.BoxGeometry(2.52, 3.25, 0.22), DARK, new THREE.Vector3(0, 1.73, 0.02));
-    this.hatch = mesh('ServiceCargoHatch', new THREE.BoxGeometry(1.72, 1.45, 0.14), FRAME, new THREE.Vector3(0, 1.35, 0.19));
+    /*
+     * A personnel door, set into the goods opening, because the people were the wrong size.
+     *
+     * Reported as the characters looking small, and measuring it showed the opposite: the
+     * visitor is 1.72m, the bollard 1.05m, the card reader sits at 1.45m and the canopy at
+     * 3.55m - every human-scale cue at this door is right, and right relative to each other.
+     * The DOOR was the outlier. A 2.52m wide by 3.25m tall opening is a vehicle door, and it
+     * is the biggest, most familiar object in the shot, so the eye takes it as the ruler and
+     * shrinks the person against it.
+     *
+     * Rather than resize the opening - which would drag the frame, the shutter, the canopy,
+     * the letter plates and the camera framing with it - the entrance becomes what a real
+     * service entrance is: a goods opening with a pedestrian leaf set into it. 0.95 by 2.10 is
+     * a standard single door, and a 1.72m person standing at one reads as a 1.72m person.
+     *
+     * The visitor moves across to stand at the leaf rather than in the middle of the shutter.
+     * That is 0.72m, well inside what the door camera already frames, and
+     * `scripts/warehouse-cameras.ts` re-checks it.
+     */
+    const leafX = -0.72;
+    const personnelFrame = mesh('ServicePersonnelFrame', new THREE.BoxGeometry(1.14, 2.28, 0.1), FRAME, new THREE.Vector3(leafX, 1.14, 0.16));
+    const personnelLeaf = mesh('ServicePersonnelLeaf', new THREE.BoxGeometry(0.95, 2.1, 0.08), DARK, new THREE.Vector3(leafX, 1.05, 0.21));
+    const personnelGlass = mesh('ServicePersonnelVision', new THREE.BoxGeometry(0.3, 0.62, 0.05), GLASS, new THREE.Vector3(leafX, 1.58, 0.25));
+    // Lever handle on the swing side, at 1.05m - the height every door handle in the world is.
+    const personnelHandle = mesh('ServicePersonnelHandle', new THREE.BoxGeometry(0.14, 0.04, 0.04), FRAME, new THREE.Vector3(leafX + 0.34, 1.05, 0.27));
+    const personnelKick = mesh('ServicePersonnelKick', new THREE.BoxGeometry(0.95, 0.28, 0.02), FRAME, new THREE.Vector3(leafX, 0.16, 0.26));
+    /*
+     * The hatch shrinks and moves aside. At 1.72 by 1.45 it was most of the door; a hatch a
+     * package is handed through is about a metre, and putting it beside the leaf rather than
+     * across the middle is what makes the two read as separate things doing separate jobs.
+     */
+    this.hatch = mesh('ServiceCargoHatch', new THREE.BoxGeometry(1.02, 0.82, 0.14), FRAME, new THREE.Vector3(0.64, 1.28, 0.19));
     this.shutter = mesh('ServiceLockdownShutter', new THREE.BoxGeometry(2.68, 3.3, 0.16), DARK, new THREE.Vector3(0, 5.15, 0.34));
-    const window = mesh('ServiceHatchWindow', new THREE.BoxGeometry(1.24, 0.34, 0.06), GLASS, new THREE.Vector3(0, 1.48, 0.29));
+    const window = mesh('ServiceHatchWindow', new THREE.BoxGeometry(0.78, 0.24, 0.06), GLASS, new THREE.Vector3(0.64, 1.42, 0.29));
     const scanner = mesh('ServiceCargoScanner', new THREE.BoxGeometry(2.12, 0.16, 1.35), this.statusMaterial, new THREE.Vector3(0, 0.18, -1.05));
-    const reader = mesh('ServiceCredentialReader', new THREE.BoxGeometry(0.32, 0.54, 0.2), DARK, new THREE.Vector3(1.62, 1.45, 0.34));
-    const readerLamp = mesh('ServiceReaderLamp', new THREE.SphereGeometry(0.065, 10, 6), this.statusMaterial, new THREE.Vector3(1.62, 1.62, 0.46));
+    const reader = mesh('ServiceCredentialReader', new THREE.BoxGeometry(0.14, 0.24, 0.08), DARK, new THREE.Vector3(leafX - 0.72, 1.32, 0.24));
+    const readerLamp = mesh('ServiceReaderLamp', new THREE.SphereGeometry(0.038, 10, 6), this.statusMaterial, new THREE.Vector3(leafX - 0.72, 1.40, 0.29));
     const tamper = mesh('ServiceTamperSensor', new THREE.CylinderGeometry(0.09, 0.09, 0.08, 12), this.statusMaterial, new THREE.Vector3(-1.6, 1.78, 0.31));
     tamper.rotation.x = Math.PI / 2;
     const canopy = mesh('ServiceCanopy', new THREE.BoxGeometry(4.2, 0.22, 2.7), FRAME, new THREE.Vector3(0, 3.66, 1.12));
@@ -437,6 +473,11 @@ export class WarehouseServiceDoor {
       frameRight,
       frameTop,
       inner,
+      personnelFrame,
+      personnelLeaf,
+      personnelGlass,
+      personnelHandle,
+      personnelKick,
       this.hatch,
       this.shutter,
       window,
