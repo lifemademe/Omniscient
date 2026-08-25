@@ -90,7 +90,15 @@ export const PAINT_LOOKS = {
     outlineWidth: 1.35, depthInk: 2, normalInk: 2, outlineStrength: 1,
     normalScale: 1, protectSignals: 1,
     inkColor: [0.025186859622305935, 0.035601314869097636, 0.03954623527052923],
-    brightness: 2.17,
+    /*
+     * 1.42, down from 2.17, settled alongside dropping the tone mapper to 0.62.
+     *
+     * The two do different jobs and were pulling against each other: exposure at 1.08 with a
+     * 2.17 gain inside the cel pass meant the pass was compensating for a tone map that was
+     * already lifting. Taking the exposure down and easing the gain gets to the same
+     * mid-range with more headroom left at the top, which is where the banding lives.
+     */
+    brightness: 1.42,
   },
   /** Lower-cost depth-led contour for high-DPI or constrained GPUs. */
   warehouseCelLow: {

@@ -1581,13 +1581,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * moved it, which is the tell that the key and not the practical was doing the
        * damage.
        */
-      // 3.2, down from 11: settled at the F8 panel once the cel pass was carrying the
-      // contrast. A window key sized for an unbanded image blew the sill out to white.
-      intensity: 3.2,
+      // Back to 11.6 at the panel: with the tone mapper at 0.62 the sill has the headroom
+      // it did not have at 3.2, and the window is the workstation's only exterior light.
+      intensity: 11.6,
       color: new THREE.Color(LIGHT.key),
       // Wide and very soft. A hard-edged pool on the floor would read as a stage light;
       // the penumbra is doing the work of a window's diffuse spill.
-      angle: 0.8,
+      angle: 0.828,
       penumbra: 1,
       distance: 8,
       decay: 1.25,

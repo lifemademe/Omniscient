@@ -592,7 +592,8 @@ export class WarehouseRig extends ENGINE.SceneNode {
       tone: post.getEffectConfig(ENGINE.PostProcessPass.ToneMapping),
       bloom: post.getEffectConfig(ENGINE.PostProcessPass.Bloom),
     };
-    post.configureEffect(ENGINE.PostProcessPass.ToneMapping, { enabled: true, mode: THREE.ACESFilmicToneMapping, exposure: 1.08 });
+    // 0.62, matching the workstation, so the two scenes no longer tone-map differently.
+    post.configureEffect(ENGINE.PostProcessPass.ToneMapping, { enabled: true, mode: THREE.ACESFilmicToneMapping, exposure: 0.62 });
     /*
      * Bloom is deliberately limited to a two-level chain in the warehouse.
      *
