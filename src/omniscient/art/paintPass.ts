@@ -26,8 +26,27 @@ class PaintPass implements ComposerPass {
   public renderToScreen = false;
   public needsDepthTexture = false;
   public renderer: THREE.WebGLRenderer | null = null;
-  /** Meshes hidden for the geometry prepass and restored the same frame. See renderGeometry. */
-  private readonly prepassHidden: THREE.Mesh[] = [];
+  /** Objects hidden for the geometry prepass and restored the same frame. See renderGeometry. */
+  private readonly prepassHidden: THREE.Object3D[] = [];
+  /**
+   * Subtrees to hide for the geometry prepass, named by the caller.
+   *
+   * The prepass renders the scene with an override material, which resurrects anything the
+   * beauty pass is not drawing: the workstation desk, lamp and CRT drew a full wireframe
+   * over the warehouse floor with no fill behind them. Their materials are not transparent,
+   * not colorWrite-off and not marked invisible, so none of the checks below catch them -
+   * whatever keeps them out of the beauty pass, an override material defeats it.
+   *
+   * The first attempt at this named the mission ROOT and hid everything that was not on the
+   * path to it. That removed the desk and the outline together: with the whole scene hidden
+   * the prepass wrote an empty buffer, every sample came back "no geometry", and the contour
+   * silently stopped existing. Proven by tinting the ink magenta - zero magenta pixels with
+   * the walk in, 6.4% with it out.
+   *
+   * So this is an explicit list rather than a rule. It can only ever remove the things named
+   * in it, which means the worst it can do is fail to fix a ghost - never erase the feature.
+   */
+  public readonly prepassExclude: THREE.Object3D[] = [];
   public mainScene: THREE.Scene | null = null;
   public mainCamera: THREE.Camera | null = null;
 
@@ -210,6 +229,12 @@ class PaintPass implements ComposerPass {
      * a full scene render is not the expensive half of this pass, and the alternative -
      * layer masks - needs every transparent material in the game to remember to opt out.
      */
+    for (const excluded of this.prepassExclude) {
+      if (!excluded.visible) continue;
+      excluded.visible = false;
+      this.prepassHidden.push(excluded);
+    }
+
     for (const object of scene.children) object.traverseVisible((node) => {
       const mesh = node as THREE.Mesh;
       if (!mesh.isMesh) return;
@@ -245,7 +270,7 @@ class PaintPass implements ComposerPass {
       renderer.clear(true, true, false);
       renderer.render(scene, camera);
     } finally {
-      for (const mesh of this.prepassHidden) mesh.visible = true;
+      for (const object of this.prepassHidden) object.visible = true;
       this.prepassHidden.length = 0;
       scene.overrideMaterial = previousOverride;
       renderer.autoClear = previousAutoClear;
@@ -407,6 +432,12 @@ export function setPaintView(scene: THREE.Scene | null, camera: THREE.Camera | n
   if (!effect) return;
   effect.pass.mainScene = scene;
   effect.pass.mainCamera = camera;
+}
+
+/** Name a subtree the contour prepass must not draw. See PaintPass.prepassExclude. */
+export function excludeFromPaintOutline(node: THREE.Object3D | null): void {
+  if (!effect || !node || effect.pass.prepassExclude.includes(node)) return;
+  effect.pass.prepassExclude.push(node);
 }
 
 export function setPaintLook(name: PaintLookName, immediate = false): void {

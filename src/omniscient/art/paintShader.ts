@@ -115,7 +115,7 @@ export const PAINT_LOOKS = {
      * being wiped off every saturated surface afterwards, widening it was pushing on a
      * rope.
      */
-    outlineWidth: 1.7, depthInk: 2, normalInk: 2, outlineStrength: 1,
+    outlineWidth: 1.4, depthInk: 2, normalInk: 2, outlineStrength: 1,
     /*
      * 0.55, down from 1.
      *
@@ -146,7 +146,7 @@ export const PAINT_LOOKS = {
      * crawls along a slowly curving surface as the drone moves - a few percent of ramp costs
      * nothing visible and kills the crawl.
      */
-    posterize: 4, posterizeSoft: 0.08, saturation: 1.14,
+    posterize: 4, posterizeSoft: 0.05, saturation: 1.26,
   },
   /** Lower-cost depth-led contour for high-DPI or constrained GPUs. */
   warehouseCelLow: {
@@ -448,9 +448,31 @@ void main() {
      */
     float facing = max( abs( centreNormal.z ), 0.12 );
     float slopeTolerance = 1.0 / facing;
+    /*
+     * Widened again once the room came up.
+     *
+     * These windows were set while the warehouse was still a night interior, where ink and
+     * shadow are the same colour and a generous contour just reads as more darkness. Against
+     * a high-key room the ink is the only dark thing in the frame, so it can afford to be
+     * drawn the way the reference draws it - present on every form, not only on the ones
+     * with a hard silhouette behind them.
+     */
+    /*
+     * Retuned once the prepass was pointed at the right camera.
+     *
+     * Every number here before this had been chosen against a contour that was never drawn -
+     * the prepass was rendering the workstation from the workstation's lens, so widening the
+     * line and lowering the windows changed an image nobody was looking at. With it live,
+     * the same values inked the racking solid: a rack upright is four to eight pixels wide
+     * down an aisle and a three-pixel contour on both sides of it leaves no member in the
+     * middle, only a dark bar where one used to be.
+     *
+     * These are set so the line reads on the SILHOUETTE and lets the surface keep its own
+     * colour, which is what the reference does - the ink there is a boundary, not a fill.
+     */
     float contour = max(
-      smoothstep( 0.05 * slopeTolerance, 0.17 * slopeTolerance, edge.x * uDepthInk ),
-      smoothstep( 0.12, 0.45, edge.y * uNormalInk )
+      smoothstep( 0.05 * slopeTolerance, 0.18 * slopeTolerance, edge.x * uDepthInk ),
+      smoothstep( 0.14, 0.42, edge.y * uNormalInk )
     );
     colour = mix( colour, uInkColor, contour * uOutlineStrength );
   }

@@ -44,7 +44,7 @@ import { setRoomTone, stopRoomTone } from './audio/RoomTone.js';
 import { showBoot } from './link/BootScreen.js';
 
 import type { BootScreen } from './link/BootScreen.js';
-import { installPaint, PAINT_LOOKS, setPaintLook, setPaintProtectedQuad, setPaintValues, setPaintView } from './art/paintPass.js';
+import { excludeFromPaintOutline, installPaint, PAINT_LOOKS, setPaintLook, setPaintProtectedQuad, setPaintValues, setPaintView } from './art/paintPass.js';
 import type { PaintLook } from './art/paintPass.js';
 import type { RetroLookName } from './art/retro.js';
 import { ScanTargets } from './link/ScanTargets.js';
@@ -238,9 +238,18 @@ const M4SS_ORIGIN = new THREE.Vector3(0, 400, 0);
  */
 const WAREHOUSE_ORIGIN = new THREE.Vector3(0, 0, 1200);
 /** Warehouse-interior haze. See enterWarehouse for why it is darker than the walls. */
-const WAREHOUSE_HAZE = '#262b2f';
-const WAREHOUSE_FOG_NEAR = 15;
-const WAREHOUSE_FOG_FAR = 72;
+/*
+ * Haze that LIGHTENS with distance, and starts later.
+ *
+ * At #262b2f the fog was darker than most of the surfaces in it, so the far end of an aisle
+ * fell away into a hole - correct for the night interior this used to be and wrong for a
+ * high-key look, where depth is carried by things going pale and low-contrast rather than
+ * dark. Near pushed out from 15 so the middle distance is unaffected, far pushed to 105 so
+ * the whole 58m building sits inside the ramp instead of ending in a wall of it.
+ */
+const WAREHOUSE_HAZE = '#6b7a85';
+const WAREHOUSE_FOG_NEAR = 24;
+const WAREHOUSE_FOG_FAR = 105;
 
 /**
  * The machine, three-quarter on. §129 wants this to be the shot a player screenshots at
@@ -500,6 +509,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private onM4SSKey: ((event: KeyboardEvent) => void) | null = null;
   /** The fog range to put back when M4SS closes - see enterM4SS. */
   private m4ssFog: { near: number; far: number } | null = null;
+  /** The desk and the room around it, held for the outline prepass. See buildWorkstation. */
+  private workstation: ENGINE.SceneNode | null = null;
   private warehouse: WarehouseRig | null = null;
   private warehouseFog: { near: number; far: number } | null = null;
   private warehouseArchiveDisplay: ENGINE.SceneNode | null = null;
@@ -912,6 +923,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
       name: 'Workstation',
       position: WORKSTATION_ORIGIN.clone(),
     });
+    // Held so the cel pass can keep this room out of its outline prepass while a mission
+    // is mounted - see excludeFromPaintOutline.
+    this.workstation = station;
 
     // The room around the machine. §119 wants a physical workstation, not a floating
     // object - the desk, the wall behind it and the clutter are what make the CRT read
@@ -4342,7 +4356,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * Every frame, because the active camera changes with the shot.
      */
     if (this.paintMounted) {
-      setPaintView(this.getWorld() ?? null, this.camera?.getCamera() ?? null);
+      // The mission root, so the contour cannot ink a scene the beauty pass has dropped.
+      /*
+       * The MISSION's camera, not this rig's.
+       *
+       * The warehouse builds and activates its own ViewTargetCameraNode while this rig goes
+       * on holding the workstation's, so handing the pass `this.camera` pointed the outline
+       * prepass at the desk - 1260 units from the mission it was supposed to be inking.
+       * The contour it produced was a wireframe of the workstation drawn over the aisle,
+       * and the racks were never in the prepass at all, which is why widening the outline
+       * changed nothing. Found by tinting the ink magenta and measuring where it landed:
+       * 14.5% of the lower third of the frame, 1.5% everywhere else.
+       */
+      const lens = this.warehouse?.activeCamera() ?? this.camera?.getCamera() ?? null;
+      setPaintView(this.getWorld() ?? null, lens);
+      // The desk is not in the warehouse, but the contour prepass draws it anyway. See
+      // PaintPass.prepassExclude for what was tried before naming it outright.
+      excludeFromPaintOutline(this.workstation);
     }
 
     this.cameraTweener.update(deltaTime);

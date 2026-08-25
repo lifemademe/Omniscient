@@ -93,8 +93,10 @@ export class WarehouseDaylight {
   public tick(deltaTime: number, emergencyLevel: number, contained: boolean, reducedMotion: boolean): void {
     this.clock += deltaTime;
     const emergency = THREE.MathUtils.clamp(emergencyLevel, 0, 1);
-    const sun = this.celStyleEnabled ? 1.22 : 0.9;
-    const bounce = this.celStyleEnabled ? 3.6 : 4.6;
+    // Pushed together with the hemisphere fill - see WAREHOUSE_SKY_FILL in art.ts for why
+    // the fill leads and these follow rather than the other way round.
+    const sun = this.celStyleEnabled ? 2.35 : 0.9;
+    const bounce = this.celStyleEnabled ? 6.2 : 4.6;
     /*
      * Do NOT reach for these to darken the ceiling. Measured: dropping them from 28 to 19 made
      * the room FLATTER, not deeper - top 99 to 97 while the bottom fell 110 to 107 and the
@@ -102,7 +104,7 @@ export class WarehouseDaylight {
      * light, so leaning on them dims the part of the picture the player works in and barely
      * touches the roof. The bright band up there is the glazing itself; see windowMaterials.
      */
-    const night = this.celStyleEnabled ? 28 : CLERESTORY_NIGHT;
+    const night = this.celStyleEnabled ? 36 : CLERESTORY_NIGHT;
     if (this.sunLight) this.sunLight.intensity = THREE.MathUtils.lerp(sun, 0.52, emergency);
     for (const light of this.bounceLights) light.intensity = THREE.MathUtils.lerp(bounce, 1.45, emergency);
     // The night side barely dims. When the work lights drop it is most of what is left, and

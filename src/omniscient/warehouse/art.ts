@@ -51,9 +51,9 @@ import type {
  * throws away the only thing the lighting was doing. Cheapest colour work there is - the hex
  * codes barely move, but they stop fighting every light in the room.
  */
-const WALL = new THREE.MeshStandardMaterial({ color: '#2d3744', roughness: 0.88, metalness: 0.1 });
-const STEEL = new THREE.MeshStandardMaterial({ color: '#4a6173', roughness: 0.6, metalness: 0.58 });
-const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#1b2432', roughness: 0.76, metalness: 0.42 });
+const WALL = new THREE.MeshStandardMaterial({ color: '#4d5e75', roughness: 0.88, metalness: 0.1 });
+const STEEL = new THREE.MeshStandardMaterial({ color: '#5c788f', roughness: 0.6, metalness: 0.58 });
+const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#32435d', roughness: 0.76, metalness: 0.42 });
 /**
  * The roof deck, dark and matte, and it needs its own material rather than DARK_STEEL.
  *
@@ -71,14 +71,14 @@ const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#1b2432', roughness:
  * nothing but brightness. The trusses stay DARK_STEEL, so they now read AGAINST the deck
  * instead of disappearing into it.
  */
-const ROOF_DECK = new THREE.MeshStandardMaterial({ color: '#10151f', roughness: 0.94, metalness: 0.05 });
+const ROOF_DECK = new THREE.MeshStandardMaterial({ color: '#26324a', roughness: 0.94, metalness: 0.05 });
 /* Stock that is not cardboard - see the tote and drum buckets in buildRacks. The drums
    carry the only saturated colour on the racking and it is cool on purpose. */
 const TOTE = new THREE.MeshStandardMaterial({ color: '#31535b', roughness: 0.72, metalness: 0.06 });
 const TOTE_LID = new THREE.MeshStandardMaterial({ color: '#476b74', roughness: 0.66, metalness: 0.08 });
 const DRUM = new THREE.MeshStandardMaterial({ color: '#35778a', roughness: 0.54, metalness: 0.12 });
 const DRUM_BAND = new THREE.MeshStandardMaterial({ color: '#8097a7', roughness: 0.44, metalness: 0.46 });
-const FLOOR = new THREE.MeshStandardMaterial({ color: '#433c32', roughness: 0.91, metalness: 0.04 });
+const FLOOR = new THREE.MeshStandardMaterial({ color: '#7b6e5c', roughness: 0.91, metalness: 0.04 });
 const AMBER = new THREE.MeshStandardMaterial({ color: '#8d6c31', emissive: '#39250b', emissiveIntensity: 0.55, roughness: 0.58 });
 const RED = new THREE.MeshStandardMaterial({ color: '#6e2d2d', emissive: '#2c0909', emissiveIntensity: 0.6, roughness: 0.62 });
 const BELT = new THREE.MeshStandardMaterial({ color: '#11171e', roughness: 0.82, metalness: 0.25 });
@@ -1203,7 +1203,9 @@ export class WarehouseEnvironment {
      * floor under sodium - and it means the ambient itself now carries a little of the
      * warm/cool split rather than washing it out.
      */
-    this.ambientLight = ENGINE.HemisphereLightNode.create({ name: 'WarehouseAmbient', color: '#93b4c6', groundColor: '#38302a', intensity: WAREHOUSE_SKY_FILL });
+    // Ground colour lifted with it: the fill bounces off the slab, and a near-black ground
+    // term cancels most of what the sky term is being raised to deliver.
+    this.ambientLight = ENGINE.HemisphereLightNode.create({ name: 'WarehouseAmbient', color: '#9fc2d6', groundColor: '#7a6a52', intensity: WAREHOUSE_SKY_FILL });
     this.moonLight = ENGINE.DirectionalLightNode.create({
       name: 'WarehouseMoon',
       color: '#a9d0d7',
@@ -1341,9 +1343,9 @@ export class WarehouseEnvironment {
              * bay with a reflector physically does, which is why it looks right rather than
              * merely brighter: the fitting exists to stop the light behaving like a bare bulb.
              */
-            intensity: 54,
-            distance: 26,
-            decay: 1.2,
+            intensity: 64,
+            distance: 30,
+            decay: 1.12,
             /*
              * ## Out of the shade, and below the lens
              *
@@ -1896,7 +1898,22 @@ export class WarehouseEnvironment {
     const basePulse = contained || reducedMotion ? 1 : 0.64 + Math.sin(this.clock * 4.1) * 0.22;
     // Rebased on the new rig. The ratios are what the emergency mode is about, not the
     // absolute numbers, so both ends move together.
-    const skyFill = this.celStyleEnabled ? 1.28 : WAREHOUSE_SKY_FILL;
+    /*
+     * 4.4, up from 1.28, and this is the main lever on "everything is visible".
+     *
+     * The reference look is high key: nothing in it is dark, the shadow side of an object is
+     * a lighter step of its own colour rather than an absence, and the darkest thing in the
+     * frame is the ink line. A hemisphere fill is exactly that shape of light - it has no
+     * direction to fall off from, so it lifts the side of every object that the work lights
+     * never reach without flattening the pools they make underneath them.
+     *
+     * It also has to be this rather than exposure. Turning the tone mapper up scales the
+     * lit and the unlit together and the picture stays as contrasty as it was, only paler.
+     * Lifting the fill compresses the range from the bottom, which is what actually makes a
+     * cel look readable: the four value steps land across the objects instead of spending
+     * two of them inside a shadow.
+     */
+    const skyFill = this.celStyleEnabled ? 4.4 : WAREHOUSE_SKY_FILL;
     const moon = this.celStyleEnabled ? 2.05 : 1.7;
     const front = this.celStyleEnabled ? 28 : 35;
     const fixture = this.celStyleEnabled ? 0.92 : 1.15;

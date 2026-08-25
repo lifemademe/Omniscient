@@ -283,6 +283,18 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private readonly celStyle = new WarehouseCelStyle();
   private celVisualsEnabled = true;
   private camera: ENGINE.ViewTargetCameraNode | null = null;
+
+  /**
+   * The lens this mission actually renders through.
+   *
+   * The warehouse builds and activates its OWN camera; the rig that mounts it keeps holding
+   * the workstation's. Anything outside this class that needs the live view - the cel pass's
+   * outline prepass, for one - has to ask for this rather than assume the owner's camera
+   * still means something.
+   */
+  public activeCamera(): THREE.Camera | null {
+    return this.camera?.getCamera() ?? null;
+  }
   private drone = ENGINE.SceneNode.create({ name: 'WarehouseDrone', position: DRONE_START.clone() });
   private droneVisual = ENGINE.SceneNode.create({ name: 'WarehouseDroneVisual' });
   /** World-space acknowledgement for scan and grip. See WarehouseDroneFeedback. */
@@ -593,7 +605,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       bloom: post.getEffectConfig(ENGINE.PostProcessPass.Bloom),
     };
     // 0.62, matching the workstation, so the two scenes no longer tone-map differently.
-    post.configureEffect(ENGINE.PostProcessPass.ToneMapping, { enabled: true, mode: THREE.ACESFilmicToneMapping, exposure: 0.62 });
+    post.configureEffect(ENGINE.PostProcessPass.ToneMapping, { enabled: true, mode: THREE.ACESFilmicToneMapping, exposure: 0.9 });
     /*
      * Bloom is deliberately limited to a two-level chain in the warehouse.
      *
