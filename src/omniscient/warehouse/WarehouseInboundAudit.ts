@@ -52,7 +52,9 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     index: 0,
     workerId: 'WX-1142',
     workerName: 'Joao Mara',
-    packageId: '1124',
+    // 1024: aisle 1, bay 024. It read 1124, which spells bay 124 on a rack that stops at
+    // 100 - the manifest, the rack ruler and the carton all disagreed.
+    packageId: '1024',
     packageDelivererName: 'Joao Mara',
     aisle: 1,
     bay: 24,
@@ -97,10 +99,12 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     index: 3,
     workerId: 'WX-4461',
     workerName: 'Arthur Lewis',
-    packageId: '4088',
+    // 4097, not 4088: bay 88 lands between two physical rack bays, on an upright, where
+    // there is no shelf to stand a carton on. See warehouseRackBayIndex.
+    packageId: '4097',
     packageDelivererName: 'Arthur Lewis',
     aisle: 4,
-    bay: 88,
+    bay: 97,
     vest: '#d0b744',
     helmet: '#e3c750',
     gloves: '#34403c',
@@ -112,10 +116,11 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     index: 4,
     workerId: 'WX-5198',
     workerName: 'Camila Sato',
-    packageId: '5013',
+    // 5023, not 5013: bay 13 is in the same class of gap as 4088 was.
+    packageId: '5023',
     packageDelivererName: 'Camila Sato',
     aisle: 5,
-    bay: 13,
+    bay: 23,
     vest: '#b85f37',
     helmet: '#f0cb51',
     gloves: '#243b38',

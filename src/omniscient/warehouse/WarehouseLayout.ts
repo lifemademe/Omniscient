@@ -184,6 +184,64 @@ export function warehousePackagePosition(aisle: number, bay: number): THREE.Vect
   return new THREE.Vector3(warehouseAisleX(aisle) + 1.12, 0, warehouseBayZ(bay));
 }
 
+/**
+ * Where the rack's PHYSICAL bays are, and how deep each one is.
+ *
+ * These used to live in art.ts beside the geometry that draws them, which was fine until
+ * something outside art.ts needed to know whether an address lands in a bay or on an
+ * upright. They are layout, not decoration, so they live with the rest of the layout and
+ * art.ts imports them - one definition, because two would drift and the drift is invisible.
+ */
+export const WAREHOUSE_RACK_BAY_Z = [-10.7, -6, -1.3, 3.4, 8.1, 12.8] as const;
+export const WAREHOUSE_RACK_BAY_HALF_Z = 1.85;
+
+/**
+ * Which physical bay an address falls in, or null if it falls between two.
+ *
+ * The rack is continuous in the ADDRESS space - bays 1 to 100 spread evenly along 24.8
+ * metres - and discontinuous in the world, because there are uprights every few metres and
+ * the shelf between them is what a pallet stands on. Twenty of the hundred addresses land on
+ * an upright rather than in a bay. A package sent to one of those has nowhere to be: it
+ * renders floating against a frame member, and the empty slot reserved for it sits over two
+ * metres away with nothing in it.
+ *
+ * That shipped. Deliveries 4088 and 5013 of the inbound audit were both in the gap, so two
+ * of five packages could not be found where the manifest said they were - the same fault
+ * as the original 2034, arrived at twice more by hand-maintaining a table of slot keys next
+ * to a separate table of addresses. Hence this function, and hence nothing computing a slot
+ * key by hand again.
+ */
+export function warehouseRackBayIndex(bay: number): number | null {
+  const z = warehouseBayZ(bay);
+  for (const [index, centre] of WAREHOUSE_RACK_BAY_Z.entries()) {
+    if (Math.abs(z - centre) <= WAREHOUSE_RACK_BAY_HALF_Z) return index;
+  }
+  return null;
+}
+
+/** Every bay number that lands in a real slot. The other twenty are uprights. */
+export const WAREHOUSE_ADDRESSABLE_BAYS: readonly number[] = Array
+  .from({ length: WAREHOUSE_BAY_MAX - WAREHOUSE_BAY_MIN + 1 }, (_, i) => WAREHOUSE_BAY_MIN + i)
+  .filter((bay) => warehouseRackBayIndex(bay) !== null);
+
+/**
+ * Every authored package address in the game, in one list.
+ *
+ * `RESERVED_PICK_SLOTS` in art.ts is DERIVED from this, so a package can never be sent to a
+ * slot that was not cleared for it. Anything added here has to be addressable;
+ * `scripts/warehouse-addresses.ts` fails the build otherwise.
+ */
+export const WAREHOUSE_RESERVED_ADDRESSES: readonly { aisle: number; bay: number; note: string }[] = [
+  { aisle: 2, bay: 34, note: 'tutorial 2034' },
+  { aisle: 5, bay: 18, note: 'package-5018' },
+  { aisle: 4, bay: 18, note: 'package-5018 duplicate, staged in aisle 4' },
+  { aisle: 1, bay: 24, note: 'inbound audit 1124' },
+  { aisle: 2, bay: 46, note: 'inbound audit 2046' },
+  { aisle: 3, bay: 72, note: 'inbound audit 3072' },
+  { aisle: 4, bay: 97, note: 'inbound audit 4097' },
+  { aisle: 5, bay: 23, note: 'inbound audit 5023' },
+];
+
 export function warehouseBayZ(bay: number): number {
   const clamped = Math.max(WAREHOUSE_BAY_MIN, Math.min(WAREHOUSE_BAY_MAX, bay));
   return WAREHOUSE_BAY_Z0 + ((clamped - WAREHOUSE_BAY_MIN) / (WAREHOUSE_BAY_MAX - WAREHOUSE_BAY_MIN)) * WAREHOUSE_BAY_RUN;

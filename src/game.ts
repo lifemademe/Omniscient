@@ -28,9 +28,19 @@ function wantsM4SS(): boolean {
   return new URLSearchParams(location.search).get('game') === 'm4ss';
 }
 
-/** Isolated img2threejs review route. Never selected by the campaign or published default. */
+/**
+ * Isolated img2threejs review route. Never selected by the campaign or published default.
+ *
+ * Gated on `isPublishedGame()` and not merely on the query string. "Never selected by the
+ * default" is true, and it is not the same as absent: a published build still carried the
+ * route, so anyone who appended `?game=mirela-procedural` got a character test rig instead
+ * of the game. That is the same shape of fault SceneJump and the tuning panel are gated
+ * against, and it is arguably worse than either, because nothing on screen hints that a
+ * route is there to be found or removed. `scripts/ship-clean.ts` asserts this one too.
+ */
 function wantsMirelaProceduralTest(): boolean {
   if (typeof location === 'undefined') return false;
+  if (ENGINE.isPublishedGame()) return false;
   return new URLSearchParams(location.search).get('game') === 'mirela-procedural';
 }
 

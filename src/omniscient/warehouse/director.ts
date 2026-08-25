@@ -1,6 +1,6 @@
 import { createRng, pick, seedFrom } from '../core/rng.js';
 import { CASE_DECK, WAREHOUSE_DECK_VERSION } from './content.js';
-import { WAREHOUSE_AISLE_COUNT } from './WarehouseLayout.js';
+import { WAREHOUSE_ADDRESSABLE_BAYS, WAREHOUSE_AISLE_COUNT } from './WarehouseLayout.js';
 
 import type {
   GeneratedWarehouseCase,
@@ -60,9 +60,22 @@ export class WarehouseDirector {
         ? CASE_DECK.find((entry) => entry.id === 'internal-breach') ?? CASE_DECK[0]
         : pick(rng, candidates.length > 0 ? candidates : CASE_DECK.slice(0, 3));
     const aisle = stage === 30 ? 5 : 1 + Math.floor(rng() * WAREHOUSE_AISLE_COUNT);
-    // 1..100, not 0..99: bay zero has no marker on the rack and no meaning to a picker,
-    // and the id it produced (`2000`) reads as a rounder number than it is.
-    const bay = stage === 30 ? 18 : 1 + Math.floor(rng() * 100);
+    /*
+     * Drawn from the ADDRESSABLE bays, not from 1..100.
+     *
+     * Twenty of the hundred addresses fall between physical rack bays, onto an upright, where
+     * a package has no shelf to stand on - so one generated case in five sent the player to
+     * an address that could not hold anything. The authored cases were fixed by hand twice
+     * before it was worth asking why the numbers kept being wrong; the answer is that a fifth
+     * of them always were.
+     *
+     * 1..100 rather than 0..99 for the older reason: bay zero has no marker on the rack and
+     * no meaning to a picker, and the id it produced (`2000`) reads as a rounder number than
+     * it is.
+     */
+    const bay = stage === 30
+      ? 18
+      : WAREHOUSE_ADDRESSABLE_BAYS[Math.floor(rng() * WAREHOUSE_ADDRESSABLE_BAYS.length)];
     const packageId = definition.id === 'internal-breach'
       ? 'UNLISTED'
       : stage === 30

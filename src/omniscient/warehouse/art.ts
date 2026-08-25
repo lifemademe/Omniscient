@@ -11,10 +11,14 @@ import {
   WAREHOUSE_SECURITY_ZONES,
   warehouseAisleX,
   warehousePackagePosition,
+  warehouseRackBayIndex,
   WAREHOUSE_BAY_MAX,
   WAREHOUSE_BAY_MIN,
   WAREHOUSE_BAY_RUN,
   WAREHOUSE_BAY_Z0,
+  WAREHOUSE_RACK_BAY_HALF_Z,
+  WAREHOUSE_RACK_BAY_Z,
+  WAREHOUSE_RESERVED_ADDRESSES,
 } from './WarehouseLayout.js';
 import { WAREHOUSE_DOOR_IDS, WAREHOUSE_DOORS, WarehouseServiceDoor } from './WarehouseServiceDoors.js';
 import { WarehouseAutomation } from './WarehouseAutomation.js';
@@ -322,13 +326,27 @@ const ZONE_SIGN_ACCENT: Readonly<Record<string, string>> = {
  * agree with the loader about exactly where the bays and shelves are. Two copies of these
  * numbers would mean the player clipping through a full pallet or bouncing off thin air.
  */
-const RACK_BAY_Z = [-10.7, -6, -1.3, 3.4, 8.1, 12.8] as const;
+const RACK_BAY_Z = WAREHOUSE_RACK_BAY_Z;
 const RACK_LEVEL_Y = [0.55, 1.9, 3.25, 4.6] as const;
 const RACK_SHELF_Y = [0.18, 1.55, 2.9, 4.25, 5.48] as const;
 /** Half-depth of a bay along z. Bays are 4.7m apart, so this leaves a rib between them. */
-const RACK_BAY_HALF_Z = 1.85;
+const RACK_BAY_HALF_Z = WAREHOUSE_RACK_BAY_HALF_Z;
 /** Clearance the drone needs above a shelf and below the next one to pass between them. */
 const RACK_GAP_MARGIN = 0.34;
+
+/**
+ * Which shelf level a picked package stands on.
+ *
+ * Level 2 (deck 2.9m), not level 1 (deck 1.55m), because the bay ruler is mounted on the rack
+ * face at y 1.95 and is half a metre tall - a carton on the level below sits directly behind
+ * it and is invisible from the aisle. Found by flying to 2034 and seeing the number but not
+ * the box. 2.96m is still well inside the 3.65m grip range from the drone's closest approach.
+ *
+ * Declared BEFORE the set below, which is not a style preference: a `const` read during
+ * module evaluation before its own declaration is a temporal dead zone throw, and the whole
+ * environment module fails to load.
+ */
+const PICK_LEVEL = 2;
 
 /**
  * Slots kept deliberately empty, so an addressed package has somewhere to BE.
@@ -345,27 +363,18 @@ const RACK_GAP_MARGIN = 0.34;
  * bare - that is what the drone flies through - so the answer is to make sure the ADDRESSED
  * slot is one of them.
  *
- * Keyed `aisle:bayIndex:level`, matching `emptyBays`. Bay 34 lands at z -3.13, which is inside
- * RACK_BAY_Z index 2 (-1.3, half-depth 1.85); level 1 is 1.9m, which is drone eye level and
- * well inside the 3.65m grip range from the aisle. The tutorial's address is authored, so its
- * slot is authored with it.
+ * DERIVED, not written. The first version of this was a hand-kept list of `aisle:bay:level`
+ * keys sitting next to a separate list of addresses, and it went wrong the moment the second
+ * list grew: two of the five inbound-audit packages were reserved a slot two and a half
+ * metres from where they actually spawn. Keys are now computed from the addresses by
+ * `warehouseRackBayIndex`, so the two cannot disagree, and
+ * `scripts/warehouse-addresses.ts` fails the build if an address has no slot to compute.
  */
-const RESERVED_PICK_SLOTS: ReadonlySet<string> = new Set([
-  '1:1:2', // 1124
-  '2:2:2', // 2034 / 2046
-  '3:4:2', // 3072
-  '4:5:2', // 4088
-  '5:1:2', // 5013
-]);
-/**
- * Which shelf level a picked package stands on. Must match the level in RESERVED_PICK_SLOTS.
- *
- * Level 2 (deck 2.9m), not level 1 (deck 1.55m), because the bay ruler is mounted on the rack
- * face at y 1.95 and is half a metre tall - a carton on the level below sits directly behind
- * it and is invisible from the aisle. Found by flying to 2034 and seeing the number but not
- * the box. 2.96m is still well inside the 3.65m grip range from the drone's closest approach.
- */
-const PICK_LEVEL = 2;
+const RESERVED_PICK_SLOTS: ReadonlySet<string> = new Set(
+  WAREHOUSE_RESERVED_ADDRESSES.map(
+    (address) => `${address.aisle}:${warehouseRackBayIndex(address.bay) ?? -1}:${PICK_LEVEL}`
+  )
+);
 
 export class WarehouseEnvironment {
   public readonly root = ENGINE.SceneNode.create({ name: 'WarehouseEnvironment' });

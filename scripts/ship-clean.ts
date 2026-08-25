@@ -50,11 +50,20 @@ console.log('\nthe dev tools are behind the published-game gate');
 const rig = read.get(join('src', 'omniscient', 'OmniscientRig.ts')) ?? '';
 check('the rig was found', rig.length > 0);
 
-for (const [what, pattern] of [
-  ['SceneJump', /installSceneJump\(/],
-  ['the tuning panel', /new TunePanel\(/],
-] as [string, RegExp][]) {
-  const match = pattern.exec(rig);
+/*
+ * The entry point is checked alongside the rig, because a dev ROUTE is the same fault as a
+ * dev panel. `?game=mirela-procedural` shipped, so a published build would have handed a
+ * judge a character test rig instead of the game if they ever typed it.
+ */
+const entry = read.get(join('src', 'game.ts')) ?? '';
+check('the entry point was found', entry.length > 0);
+
+for (const [what, pattern, source] of [
+  ['SceneJump', /installSceneJump\(/, rig],
+  ['the tuning panel', /new TunePanel\(/, rig],
+  ['the procedural character route', /function wantsMirelaProceduralTest/, entry],
+] as [string, RegExp, string][]) {
+  const match = pattern.exec(source);
   if (!match) {
     // Removed entirely is also a pass. The requirement is "not in a player's build".
     check(`${what} is gated or gone`, true, 'not mounted at all');
@@ -65,7 +74,7 @@ for (const [what, pattern] of [
    * hundred characters is about twenty lines, which comfortably covers a guard, its comment
    * and the call - and is far too short to be satisfied by an unrelated mention elsewhere.
    */
-  const window = rig.slice(Math.max(0, match.index - 600), match.index + 200);
+  const window = source.slice(Math.max(0, match.index - 600), match.index + 400);
   check(`${what} is behind isPublishedGame`, /isPublishedGame\(\)/.test(window));
 }
 
