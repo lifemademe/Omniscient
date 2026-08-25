@@ -34,7 +34,7 @@ function eligible(definition: WarehouseCaseDefinition, stage: number): boolean {
   if (definition.id === 'door-tamper') return stage >= 6;
   if (definition.id === 'identity-impostor') return stage >= 11;
   const tier = tierFor(stage);
-  if (tier === 0) return definition.anomaly === 'none' || definition.id === 'invalid-inbound-record';
+  if (tier === 0) return definition.anomaly === 'none';
   if (tier === 1) return definition.subjectType !== 'mixed' && definition.anomaly !== 'mass';
   if (tier === 2) return definition.anomaly !== 'mass';
   return true;
@@ -75,9 +75,6 @@ export class WarehouseDirector {
     const packageRecipientName = definition.id === 'door-tamper' || definition.id === 'identity-impostor'
       ? pick(rng, VISITORS.filter((name) => name !== visitorName))
       : visitorName;
-    const inboundStatus = definition.id === 'invalid-inbound-record'
-      ? pick(rng, ['recalled', 'voided', 'misrouted'] as const)
-      : 'valid';
     return {
       definition,
       packageId,
@@ -86,7 +83,7 @@ export class WarehouseDirector {
       visitorName,
       workerName: pick(rng, WORKERS),
       packageRecipientName,
-      inboundStatus,
+      inboundStatus: 'valid',
       expectedWeight,
       measuredWeight: Math.round((expectedWeight + mismatch) * 10) / 10,
       assignedDoorId,

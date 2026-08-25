@@ -1,6 +1,8 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { TUNED_BLOOM } from '../art/postTuning.js';
+
 import { adaptiveScore } from '../audio/AdaptiveScore.js';
 import { getAccessibilityPreferences } from '../accessibility/preferences.js';
 import { setCursorVisible, setPointerLockAllowed } from '../art/cursor.js';
@@ -8,8 +10,8 @@ import { setRoomTone } from '../audio/RoomTone.js';
 import { seedFrom } from '../core/rng.js';
 
 import { WarehouseEnvironment } from './art.js';
-import { captureWarehouseFrame } from './archive.js';
-import { CASE_DECK, STORY_MOVEMENTS, TOOL_UNLOCK_STAGE, WAREHOUSE_DECK_VERSION } from './content.js';
+import { captureWarehouseFrame, warehouseArchiveKey } from './archive.js';
+import { CASE_DECK, STORY_MOVEMENTS, TOOL_UNLOCK_STAGE, WAREHOUSE_DECK_VERSION, storyQuestNumber } from './content.js';
 import { WarehouseDirector } from './director.js';
 import { createWarehouseVisitor, WarehouseCargoNode, WarehouseWorkerNode } from './entities.js';
 import { loadWarehouseSave, updateWarehouseSave } from './persistence.js';
@@ -23,6 +25,12 @@ import { WAREHOUSE_DOORS, WAREHOUSE_DOOR_IDS } from './WarehouseServiceDoors.js'
 import { WarehouseContainmentResponse } from './WarehouseContainmentResponse.js';
 import { WarehouseIntruderNode } from './WarehouseIntruder.js';
 import {
+  createInboundAuditSnapshot,
+  INBOUND_AUDIT_DELIVERIES,
+  INBOUND_FUGITIVE_ROUTE,
+  type InboundAuditSnapshot,
+} from './WarehouseInboundAudit.js';
+import {
   WAREHOUSE_LAYOUT,
   WAREHOUSE_SECURITY_ZONE_IDS,
   WAREHOUSE_SECURITY_ZONES,
@@ -34,6 +42,7 @@ import type { WarehouseVisitor } from './entities.js';
 import type { WarehouseChatReply } from './WarehouseOpsPanel.js';
 import type {
   GeneratedWarehouseCase,
+  WarehouseConsoleAction,
   WarehouseDecision,
   WarehouseDoorId,
   WarehouseDockSnapshot,
@@ -65,6 +74,11 @@ const THIRD_PERSON_ARM = 2.8;
 const THIRD_PERSON_HEIGHT = 1.25;
 const THIRD_PERSON_DISTANCE = Math.hypot(THIRD_PERSON_ARM, THIRD_PERSON_HEIGHT);
 const TIGHT_CAMERA_THRESHOLD = 0.34;
+const DRONE_CRUISE_SPEED = 5.2;
+const DRONE_WORKER_SPEED = 2.4;
+const DRONE_ACCELERATION = 8.2;
+const DRONE_BRAKING = 11.5;
+const DRONE_CRUISE_VFX_THRESHOLD = 0.94;
 /**
  * How long each door camera holds during the opening sweep.
  *
@@ -289,6 +303,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private readonly cameraRaycaster = new THREE.Raycaster();
   private cameraArmDistance = THIRD_PERSON_DISTANCE;
   private readonly previousDroneAudioPosition = DRONE_START.clone();
+  private readonly droneVelocity = new THREE.Vector3();
+  private readonly desiredDroneVelocity = new THREE.Vector3();
+  private readonly droneVelocityDelta = new THREE.Vector3();
   private cameraPosition = DRONE_START.clone();
   private cameraTarget = new THREE.Vector3(0, 2.8, 0);
   private yaw = Math.PI;
@@ -301,7 +318,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
    * climb would be undone by the next frame's damp back to its band.
    */
   private altitude = 3.2;
-  /** How much stick the player is holding, 0..1. Feeds the FOV breathe in applyCamera. */
+  /** Current physical cruise ratio, 0..1. Feeds the FOV breathe in applyCamera. */
   private throttle = 0;
   private chaseFov = 68;
   private view: WarehouseView = 'cctv';
@@ -325,12 +342,19 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private hud: WarehouseHUD | null = null;
   private readonly sound = new WarehouseAudio();
   private workers: WarehouseWorkerNode[] = [];
+  private inboundAudit: InboundAuditSnapshot | null = null;
+  private inboundCargo: WarehouseCargoNode[] = [];
+  private inboundIntakeCargo: WarehouseCargoNode | null = null;
+  private inboundIntakeElapsed = 0;
+  private inboundFugitive: WarehouseWorkerNode | null = null;
+  private containmentPurpose: 'breach' | 'inbound' | null = null;
   private visitor: WarehouseVisitor | null = null;
   private cargo: WarehouseCargoNode | null = null;
   private duplicateCargo: WarehouseCargoNode | null = null;
   private carried: WarehouseCargoNode | null = null;
   private readonly dockedCargo: Array<{ node: WarehouseCargoNode; doorId: WarehouseDoorId; slot: number }> = [];
   private readonly scannedCargo = new Set<WarehouseCargoNode>();
+  private readonly lastInboundScanSubject = new THREE.Vector3();
   private deliveredCargo: {
     node: WarehouseCargoNode;
     from: THREE.Vector3;
@@ -570,7 +594,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     };
     post.configureEffect(ENGINE.PostProcessPass.ToneMapping, { enabled: true, mode: THREE.ACESFilmicToneMapping, exposure: 1.08 });
     /*
-     * Bloom is OFF in the warehouse, and the reason is now measured rather than suspected.
+     * Bloom is deliberately limited to a two-level chain in the warehouse.
      *
      * ## The black screen
      *
@@ -597,21 +621,16 @@ export class WarehouseRig extends ENGINE.SceneNode {
      * aisle numbers" reported twice and blamed first on the camera and then on the light
      * fittings. Both of those were wrong; this was always it.
      *
-     * ## Why off rather than levels 2
+     * ## Why the chain remains capped at levels 2
      *
      * levels 2 measured clean - 88 steps of spin-plus-pitch with no black frame, and a
      * 48px dark-block scan statistically identical to bloom off (worst 1.2 vs 1.0, 46 of
      * 66 frames flagged in both, all of it real scene content). It is tempting.
      *
-     * It is declined because it treats the blast radius and not the fault. The pixel that
-     * poisons the chain is still being produced somewhere; levels 2 only guarantees the
-     * damage stays under one texel of a two-deep chain, and nothing guarantees that holds
-     * in scene states this sweep never entered - containment red, the pursuit rig, the
-     * emergency ramp. At strength 0.2 the whole effect is a little glow on the fixture
-     * lenses. That is not worth a known-live NaN and a screen that has already gone black
-     * on this player more times than any other bug in the project.
-     *
-     * Re-enabling means finding the source pixel first, not shortening the blur.
+     * The first safety pass therefore disabled bloom entirely. The later F8 visual pass
+     * found a useful treatment at only 0.045 strength and explicitly retained the measured-
+     * clean two-level chain. That combination is the authored look below: the user's exact
+     * visual values without reintroducing the unsafe deep mip spread.
      *
      * ## And then it was on anyway
      *
@@ -629,9 +648,14 @@ export class WarehouseRig extends ENGINE.SceneNode {
      * exactly (0,0,0) across 200 by 200 pixels with no gradient at all. That is a
      * contaminated texel of a coarse mip, drawn back over the frame, exactly as described.
      *
-     * So the decision above is applied rather than merely written down.
+     * The cap below is therefore part of the setting, not an optional quality increase.
      */
-    post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: false, strength: 0.2, threshold: 0.85, radius: 0.5, levels: 2 });
+    post.configureEffect(ENGINE.PostProcessPass.Bloom, {
+      enabled: true,
+      ...TUNED_BLOOM,
+      // Keep the measured-safe chain depth: deeper mips caused the historical black frame.
+      levels: 2,
+    });
   }
 
   private buildDrone(): void {
@@ -1004,8 +1028,22 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private buildWorkers(): void {
     const routes = WAREHOUSE_LAYOUT.workerRoutes;
     for (let i = 0; i < routes.length; i++) {
+      const delivery = INBOUND_AUDIT_DELIVERIES[i];
       const worker = WarehouseWorkerNode.create({ name: `WarehouseWorker-${i + 1}` });
-      worker.configure(`W-${4839 + i * 941}`, routes[i][0], routes[i], WORKER_VESTS[i], i < 4);
+      worker.configure(
+        delivery?.workerId ?? `W-${4839 + i * 941}`,
+        routes[i][0],
+        routes[i],
+        delivery?.vest ?? WORKER_VESTS[i],
+        !delivery?.suspicious,
+        delivery ? {
+          displayName: delivery.workerName,
+          packageId: delivery.packageId,
+          helmet: delivery.helmet,
+          gloves: delivery.gloves,
+          equipmentIndex: i,
+        } : { equipmentIndex: i }
+      );
       worker.visible = false;
       this.add(worker);
       this.workers.push(worker);
@@ -1031,8 +1069,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.hud?.setTools(this.tools, this.activeTool);
       this.hud?.flash('HISTORICAL CCTV CHANNEL LOANED // INCIDENT COMPARISON REQUIRED', 3.2);
     }
-    this.stage = this.storyMovement + 1;
-    this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
     adaptiveScore.setState('warehouse', movement.finale ? 3 : movement.id === 'breach' ? 2 : this.storyMovement >= 2 ? 1 : 0);
     this.storyCase = 0;
     this.hud?.setCase(movement.title, movement.objective);
@@ -1049,15 +1085,21 @@ export class WarehouseRig extends ENGINE.SceneNode {
 
   private spawnStoryCase(): void {
     const movement = STORY_MOVEMENTS[this.storyMovement];
+    this.stage = storyQuestNumber(this.storyMovement, this.storyCase);
+    this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
     const caseId = movement.caseIds[this.storyCase];
     const definition = CASE_DECK.find((entry) => entry.id === caseId) ?? CASE_DECK[0];
+    if (definition.id === 'freight-sort') {
+      this.beginInboundAudit();
+      return;
+    }
     const base = this.director?.caseForStage(this.storyMovement * 5 + this.storyCase + 1, this.tools);
     if (!base) return;
     const data: GeneratedWarehouseCase = { ...base, definition };
     data.packageRecipientName = definition.id === 'door-tamper' || definition.id === 'identity-impostor'
       ? data.visitorName === 'Ana Reis' ? 'Lia Costa' : 'Ana Reis'
       : data.visitorName;
-    data.inboundStatus = definition.id === 'invalid-inbound-record' ? 'recalled' : 'valid';
+    data.inboundStatus = 'valid';
     data.measuredWeight = definition.id === 'weight-mismatch'
       ? Math.round((data.expectedWeight + 3.2) * 10) / 10
       : data.expectedWeight;
@@ -1083,6 +1125,94 @@ export class WarehouseRig extends ENGINE.SceneNode {
       data.assignedDoorId = 'service-c'; data.packageRecipientName = data.visitorName; data.inboundStatus = 'valid';
     }
     this.spawnCase(data);
+  }
+
+  private beginInboundAudit(): void {
+    this.clearCaseEntities();
+    const definition = CASE_DECK.find((entry) => entry.id === 'freight-sort');
+    if (!definition) return;
+    const savedResolved = loadWarehouseSave().inboundAuditResolved;
+    this.inboundAudit = createInboundAuditSnapshot(savedResolved >= INBOUND_AUDIT_DELIVERIES.length ? 0 : savedResolved);
+    this.stage = storyQuestNumber(this.storyMovement, 0);
+    this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
+    this.hud?.setInbound(null);
+    this.hud?.setBell(false, 0);
+    this.environment.setRearDoorOpen(0);
+    this.environment.setConveyorsRunning(false);
+    this.environment.setVerifiedIntakeState('ready');
+
+    for (const delivery of INBOUND_AUDIT_DELIVERIES) {
+      const deliveryDefinition = delivery.sealCompromised
+        ? { ...definition, anomaly: 'seal' as const, critical: true }
+        : definition;
+      const data: GeneratedWarehouseCase = {
+        definition: deliveryDefinition,
+        packageId: delivery.packageId,
+        aisle: delivery.aisle,
+        bay: delivery.bay,
+        visitorName: delivery.workerName,
+        workerName: delivery.workerName,
+        packageRecipientName: delivery.packageDelivererName,
+        inboundStatus: 'valid',
+        expectedWeight: Math.round((7.4 + delivery.index * 1.85) * 10) / 10,
+        measuredWeight: Math.round((7.4 + delivery.index * 1.85) * 10) / 10,
+        assignedDoorId: 'service-c',
+        visitorIntent: delivery.suspicious ? 'intrusion' : 'collection',
+        doorTamper: false,
+      };
+      const cargo = WarehouseCargoNode.create({ name: `InboundAuditCargo-${delivery.packageId}` });
+      cargo.configure(data);
+      cargo.position.copy(this.environment.packagePosition(delivery.aisle, delivery.bay));
+      cargo.visible = delivery.index >= this.inboundAudit.resolved;
+      this.add(cargo);
+      this.inboundCargo.push(cargo);
+    }
+    for (const [index, worker] of this.workers.entries()) {
+      const delivery = INBOUND_AUDIT_DELIVERIES[index];
+      if (!delivery) continue;
+      worker.setInspectionPosition(delivery.inspectionPosition);
+      worker.visible = index >= this.inboundAudit.resolved;
+    }
+    this.activateInboundDelivery(this.inboundAudit.activeIndex);
+    this.hud?.appendSystem(
+      'INBOUND CONTROL',
+      'Unloading complete. Five worker/package pairs require individual optical comparison before the verified intake will accept them.'
+    );
+  }
+
+  private activateInboundDelivery(index: number): void {
+    const audit = this.inboundAudit;
+    const delivery = INBOUND_AUDIT_DELIVERIES[index];
+    const cargo = this.inboundCargo[index];
+    if (!audit || !delivery || !cargo?.caseData) return;
+    audit.activeIndex = index;
+    audit.phase = 'scan-worker';
+    audit.workerScanned = false;
+    audit.packageScanned = false;
+    audit.delivererMatches = null;
+    audit.sealIntact = null;
+    audit.fugitiveZone = null;
+    audit.escapeSeconds = null;
+    this.activeCase = cargo.caseData;
+    this.cargo = cargo;
+    const activeWorker = this.workers[index];
+    if (activeWorker) {
+      activeWorker.setInspectionPosition(delivery.inspectionPosition);
+      activeWorker.visible = true;
+    }
+    this.evidence = emptyEvidence();
+    this.scannedCargo.clear();
+    this.decisionCommitted = false;
+    this.inboundIntakeCargo = null;
+    this.inboundIntakeElapsed = 0;
+    this.environment.setVerifiedIntakeState('ready');
+    this.environment.setConveyorsRunning(false);
+    this.hud?.setCase(
+      'QUEST 04 // INBOUND AUDIT',
+      `Delivery ${index + 1} of ${audit.total}: scan ${delivery.workerName}, then inspect package ${delivery.packageId} at Aisle ${delivery.aisle} // Bay ${String(delivery.bay).padStart(2, '0')}.`
+    );
+    this.hud?.setSecurityAlert(`DELIVERIES RESOLVED ${audit.resolved}/${audit.total} // ACTIVE BADGE ${delivery.workerId}`);
+    this.refreshCaseHud();
   }
 
   private spawnCase(data: GeneratedWarehouseCase | null): void {
@@ -1169,6 +1299,14 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.environment.setRearDoorOpen(0);
     this.sound.setEmergency(false);
     for (const worker of this.workers) worker.resumeRoute();
+    for (const cargo of this.inboundCargo) cargo.removeFromParent();
+    this.inboundCargo.length = 0;
+    this.inboundAudit = null;
+    this.inboundIntakeCargo = null;
+    this.inboundIntakeElapsed = 0;
+    this.inboundFugitive = null;
+    this.containmentPurpose = null;
+    this.environment.setVerifiedIntakeState('idle');
     this.hud?.setIntrusion(null);
     this.environment.setPursuitLights(this.activeCase?.assignedDoorId ?? 'service-a', false);
     this.pursuitPhase = '';
@@ -1253,18 +1391,33 @@ export class WarehouseRig extends ENGINE.SceneNode {
    * changing where the camera is pointed.
    */
   public drive(x: number, y: number, deltaTime: number): void {
-    if (this.view !== 'drone' || this.handoff > 0 || this.finished || this.isCinematicActive()) return;
+    if (this.view !== 'drone' || this.handoff > 0 || this.finished || this.isCinematicActive()) {
+      this.droneVelocity.set(0, 0, 0);
+      this.throttle = 0;
+      this.hud?.setSpeedLines(false);
+      return;
+    }
     const lift = Math.sin(this.pitch);
     const flat = Math.cos(this.pitch);
     const forward = new THREE.Vector3(Math.sin(this.yaw) * flat, lift * 0.62, Math.cos(this.yaw) * flat);
     const right = new THREE.Vector3(-Math.cos(this.yaw), 0, Math.sin(this.yaw));
     const desired = forward.multiplyScalar(-y).addScaledVector(right, x);
     if (desired.lengthSq() > 1) desired.normalize();
-    this.throttle = desired.length();
+    const inputStrength = desired.length();
     const nearWorker = this.workers.some((worker) => worker.visible && worker.position.distanceTo(this.drone.position) < 2.2);
-    const speed = nearWorker ? 2.4 : 5.2;
+    const speed = nearWorker ? DRONE_WORKER_SPEED : DRONE_CRUISE_SPEED;
+    this.desiredDroneVelocity.copy(desired).multiplyScalar(speed);
+    this.droneVelocityDelta.subVectors(this.desiredDroneVelocity, this.droneVelocity);
+    const velocityDelta = this.droneVelocityDelta.length();
+    const acceleration = inputStrength > 0.001 ? DRONE_ACCELERATION : DRONE_BRAKING;
+    const maxVelocityChange = acceleration * Math.max(0, deltaTime);
+    if (velocityDelta <= maxVelocityChange || velocityDelta < 0.0001) {
+      this.droneVelocity.copy(this.desiredDroneVelocity);
+    } else {
+      this.droneVelocity.addScaledVector(this.droneVelocityDelta, maxVelocityChange / velocityDelta);
+    }
     const previous = this.drone.position.clone();
-    this.drone.position.addScaledVector(desired, deltaTime * speed);
+    this.drone.position.addScaledVector(this.droneVelocity, deltaTime);
     this.drone.position.x = THREE.MathUtils.clamp(this.drone.position.x, WAREHOUSE_LAYOUT.drone.minX, WAREHOUSE_LAYOUT.drone.maxX);
     this.drone.position.z = THREE.MathUtils.clamp(this.drone.position.z, WAREHOUSE_LAYOUT.drone.minZ, WAREHOUSE_LAYOUT.drone.maxZ);
     /*
@@ -1291,6 +1444,22 @@ export class WarehouseRig extends ENGINE.SceneNode {
       WAREHOUSE_LAYOUT.drone.maxY
     );
     this.drone.position.y = THREE.MathUtils.damp(this.drone.position.y, this.altitude, 7.5, deltaTime);
+    if (deltaTime > 0) {
+      this.droneVelocity.copy(this.drone.position).sub(previous).multiplyScalar(1 / deltaTime);
+    }
+    const actualSpeed = this.droneVelocity.length();
+    this.throttle = Math.min(1, actualSpeed / DRONE_CRUISE_SPEED);
+    const directionAligned = actualSpeed > 0.001 && inputStrength > 0.001
+      ? this.droneVelocity.dot(desired) / (actualSpeed * inputStrength) > 0.96
+      : false;
+    const atCruise = !nearWorker
+      && inputStrength > 0.95
+      && directionAligned
+      && this.throttle >= DRONE_CRUISE_VFX_THRESHOLD;
+    this.hud?.setSpeedLines(
+      atCruise && this.perspective === 'third' && !getAccessibilityPreferences().reducedMotion,
+      (this.throttle - DRONE_CRUISE_VFX_THRESHOLD) / (1 - DRONE_CRUISE_VFX_THRESHOLD)
+    );
     this.drone.rotation.y = this.yaw;
     this.droneVisual.rotation.z = THREE.MathUtils.damp(this.droneVisual.rotation.z, -x * 0.18, 8, deltaTime);
     /*
@@ -1361,6 +1530,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.activeCase?.definition.id === 'package-5018' ? 2 : 1
     );
     this.drone.position.copy(DRONE_START);
+    this.droneVelocity.set(0, 0, 0);
+    this.throttle = 0;
+    this.hud?.setSpeedLines(false);
     this.yaw = Math.PI;
     this.pitch = -0.04;
     this.altitude = ALTITUDES[1];
@@ -1610,7 +1782,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
 
   private refreshCaseHud(): void {
     if (!this.activeCase) return;
-    this.hud?.showCase(this.activeCase, this.evidence, this.intrusion, this.dockSnapshot());
+    this.hud?.showCase(this.activeCase, this.evidence, this.intrusion, this.dockSnapshot(), this.inboundAudit);
   }
 
   private syncIntrusionHud(): void {
@@ -1636,6 +1808,17 @@ export class WarehouseRig extends ENGINE.SceneNode {
 
   private isBreachCase(): boolean {
     return this.activeCase?.definition.id === 'internal-breach';
+  }
+
+  /**
+   * The inbound audit normally keeps the familiar door-camera ring. Once its authored
+   * impostor has been contained, however, the response vignette is an interior security
+   * feed. Treating it like an ordinary freight case left the camera parked outside a
+   * service door while the worker and responding officer performed off-screen.
+   */
+  private usesInboundResponseCamera(): boolean {
+    return this.activeCase?.definition.id === 'freight-sort'
+      && this.inboundAudit?.phase === 'police-response';
   }
 
   private isCinematicActive(): boolean {
@@ -1868,8 +2051,14 @@ export class WarehouseRig extends ENGINE.SceneNode {
       return;
     }
     if (active.definition.correctDecision === 'deny-lockdown') {
-      if (direction === 'left' || direction === 'down') this.tryDecision('deny-lockdown');
+      if (direction === 'left') this.tryDecision('deny-lockdown');
+      else if (direction === 'down') this.tryDecision('return');
       else this.tryDecision('release');
+      return;
+    }
+    if (active.definition.id === 'freight-sort') {
+      if (direction === 'down') this.tryDecision('return');
+      else if (direction === 'left' || direction === 'up') this.tryDecision('deny-lockdown');
       return;
     }
     if (active.definition.id === 'package-5018') {
@@ -1893,7 +2082,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       else this.selectZone(zone);
       return;
     }
-    const decisions: readonly WarehouseDecision[] = ['release', 'quarantine', 'return', 'clear', 'hold', 'verify'];
+    const decisions: readonly WarehouseConsoleAction[] = ['release', 'quarantine', 'return', 'clear', 'hold', 'verify'];
     const decision = decisions[index];
     if (decision) this.tryDecision(decision);
   }
@@ -1916,11 +2105,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       }
       this.evidence.visitor = true;
     } else if (this.activeCase.definition.id === 'freight-sort') {
-      if (!this.inboundOpened) {
-        this.hud?.flash('REAR FREIGHT LOAD HAS NOT ARRIVED');
-        return;
-      }
-      this.evidence.cargo = true;
+      if (!this.scanInboundAudit()) return;
     } else if (this.view === 'cctv') {
       this.inspectSelectedDoor();
       if (this.selectedDoor !== this.activeCase.assignedDoorId || !this.evidence.located) {
@@ -1960,7 +2145,11 @@ export class WarehouseRig extends ENGINE.SceneNode {
       }).then((record) => {
         if (!record) return;
         const updated = updateWarehouseSave((save) => {
-          save.archiveRecords = [...save.archiveRecords.filter((entry) => entry.id !== record.id), record].slice(-32);
+          const key = warehouseArchiveKey(record);
+          save.archiveRecords = [
+            ...save.archiveRecords.filter((entry) => warehouseArchiveKey(entry) !== key),
+            record,
+          ].slice(-32);
         });
         this.hud?.setRecords(updated.archiveRecords);
       });
@@ -2075,6 +2264,16 @@ export class WarehouseRig extends ENGINE.SceneNode {
 
   private scanSubjectPosition(): THREE.Vector3 {
     const scratch = new THREE.Vector3();
+    if (this.activeCase?.definition.id === 'freight-sort' && this.inboundAudit) {
+      if (this.inboundAudit.phase === 'fugitive-search' || this.inboundAudit.phase === 'police-response') {
+        return this.inboundFugitive?.subjectPosition()
+          ?? this.workers[this.inboundAudit.activeIndex]?.subjectPosition()
+          ?? this.lastInboundScanSubject.clone();
+      }
+      return this.lastInboundScanSubject.lengthSq() > 0
+        ? this.lastInboundScanSubject.clone()
+        : this.workers[this.inboundAudit.activeIndex]?.subjectPosition() ?? scratch;
+    }
     if (this.intruder?.visible) return this.intruder.getWorldPosition(scratch);
     if (this.activeCase?.definition.subjectType === 'worker') {
       const worker = this.workers.find((entry) => entry.visible && !entry.authorized)
@@ -2153,6 +2352,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
 
   public toggleGrip(): void {
     if (this.view !== 'drone' || this.finished || this.decisionCommitted || this.isCinematicActive() || this.isBreachCase()) return;
+    if (this.activeCase?.definition.id === 'freight-sort' && this.inboundAudit) {
+      this.toggleInboundAuditGrip();
+      return;
+    }
     if (this.carried) {
       const active = this.activeCase;
       const nearest = this.environment.nearestDoorDock(this.carried.position);
@@ -2246,6 +2449,143 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const active = this.activeCase;
     const route = active ? ` // DOCK ${this.doorLabel(active.assignedDoorId)} // F TO CLAMP` : '';
     this.hud?.flash(`LOAD ${active?.packageId ?? ''} SECURED${route}`, route ? 2.8 : 1.5);
+  }
+
+  private toggleInboundAuditGrip(): void {
+    const audit = this.inboundAudit;
+    const cargo = audit ? this.inboundCargo[audit.activeIndex] : null;
+    const delivery = audit ? INBOUND_AUDIT_DELIVERIES[audit.activeIndex] : null;
+    if (!audit || !cargo || !delivery || this.inboundIntakeCargo) return;
+    if (this.carried) {
+      const intakeDistance = this.carried.position.distanceTo(this.environment.verifiedIntakePosition);
+      if (intakeDistance <= 2.35) {
+        if (!audit.packageScanned || !['sort-ready', 'alarm-ready'].includes(audit.phase)) {
+          this.hud?.flash('INTAKE LOCKED // COMPLETE WORKER + PACKAGE COMPARISON', 2.2);
+          return;
+        }
+        const load = this.cargoRope.detach() ?? this.carried;
+        load.position.copy(this.environment.verifiedIntakePosition);
+        load.quaternion.identity();
+        load.carried = false;
+        this.carried = null;
+        this.inboundIntakeCargo = load;
+        this.inboundIntakeElapsed = 0;
+        this.environment.setVerifiedIntakeState('processing');
+        this.environment.setConveyorsRunning(true);
+        this.sound.play('dock');
+        this.sound.play('conveyor');
+        this.feedback.gripPulse(load.getWorldPosition(new THREE.Vector3()), true);
+        this.hud?.flash(`VERIFIED INTAKE CLAMPED // PACKAGE ${delivery.packageId} // SCANNER ACTIVE`, 2.6);
+        return;
+      }
+      const load = this.cargoRope.detach() ?? this.carried;
+      load.position.y = 0;
+      load.quaternion.identity();
+      load.carried = false;
+      this.carried = null;
+      this.hud?.flash(`LOAD RELEASED // VERIFIED INTAKE ${intakeDistance.toFixed(1)}M`, 1.8);
+      return;
+    }
+    if (!audit.packageScanned || !['sort-ready', 'alarm-ready'].includes(audit.phase)) {
+      this.hud?.flash('GRIP LOCKED // SCAN ACTIVE WORKER AND PACKAGE FIRST', 2.2);
+      return;
+    }
+    const droneAt = this.drone.getWorldPosition(new THREE.Vector3());
+    const cargoAt = cargo.getWorldPosition(new THREE.Vector3());
+    if (cargoAt.distanceTo(droneAt) > 3.65) {
+      this.hud?.flash(`PACKAGE ${delivery.packageId} OUT OF RANGE // AISLE ${delivery.aisle} BAY ${String(delivery.bay).padStart(2, '0')}`);
+      return;
+    }
+    this.ropeAnchor.copy(this.drone.position).add(new THREE.Vector3(0, -0.48, 0));
+    this.cargoRope.attach(cargo, this, this.ropeAnchor);
+    cargo.carried = true;
+    this.carried = cargo;
+    this.sound.play('grip');
+    this.feedback.gripPulse(cargoAt, true);
+    this.hud?.flash(`LOAD ${delivery.packageId} SECURED // ROUTE TO VERIFIED INTAKE // F TO CLAMP`, 2.8);
+  }
+
+  private worldTargetAcquired(position: THREE.Vector3, maxDistance = 18, threshold = 0.94): boolean {
+    const toTarget = position.clone().sub(this.cameraPosition);
+    const distance = toTarget.length();
+    if (distance < 0.05 || distance > maxDistance) return false;
+    const direction = toTarget.multiplyScalar(1 / distance);
+    const forward = new THREE.Vector3(Math.sin(this.yaw), Math.sin(this.pitch), Math.cos(this.yaw)).normalize();
+    if (direction.dot(forward) < threshold) return false;
+    this.cameraRaycaster.set(this.cameraPosition, direction);
+    this.cameraRaycaster.near = 0.05;
+    this.cameraRaycaster.far = distance;
+    return !this.cameraRaycaster.intersectObject(this.environment.root, true)
+      .some((entry) => entry.distance < distance - 0.28 && this.isCameraBlocker(entry.object));
+  }
+
+  private scanInboundAudit(): boolean {
+    const audit = this.inboundAudit;
+    const delivery = audit ? INBOUND_AUDIT_DELIVERIES[audit.activeIndex] : null;
+    const worker = audit ? this.workers[audit.activeIndex] : null;
+    const cargo = audit ? this.inboundCargo[audit.activeIndex] : null;
+    if (!audit || !delivery || !worker || !cargo) return false;
+
+    if (audit.phase === 'fugitive-search') {
+      const target = worker.subjectPosition();
+      if (!this.worldTargetAcquired(target, 19, 0.93)) {
+        this.hud?.flash(`${audit.fugitiveZone?.toUpperCase() ?? 'WAREHOUSE'} // NO FUGITIVE INSIDE OPTICAL BRACKETS`, 2);
+        return false;
+      }
+      worker.contain();
+      this.lastInboundScanSubject.copy(target);
+      this.inboundFugitive = worker;
+      audit.phase = 'police-response';
+      audit.fugitiveZone = worker.fugitiveZone;
+      this.environment.setSecurityZoneLocked(worker.fugitiveZone, true);
+      this.environment.setLightingMode('contained');
+      this.sound.play('tracking');
+      this.sound.play('security-gate');
+      this.hud?.setSecurityAlert(`SUBJECT CONTAINED // ${warehouseZoneLabel(worker.fugitiveZone)} LOCKED`);
+      this.hud?.flash(`OPTICAL ID CONFIRMED // ${warehouseZoneLabel(worker.fugitiveZone)} SEALED // NO CONTACT`, 3.2);
+      window.setTimeout(() => this.beginInboundPoliceResponse(worker.fugitiveZone), getAccessibilityPreferences().reducedMotion ? 250 : 850);
+      return true;
+    }
+
+    if (!audit.workerScanned) {
+      if (!this.worldTargetAcquired(worker.subjectPosition(), 17, 0.94)) {
+        this.hud?.flash(`ACTIVE WORKER NOT INSIDE OPTICAL BRACKETS // BADGE ${delivery.workerId}`, 2.2);
+        return false;
+      }
+      audit.workerScanned = true;
+      this.lastInboundScanSubject.copy(worker.subjectPosition());
+      audit.phase = 'scan-package';
+      this.evidence.visitor = true;
+      this.hud?.appendSystem(
+        'OPTICAL PERSONNEL RECORD',
+        `${delivery.workerName} // BADGE ${delivery.workerId} // ASSIGNED PACKAGE ${delivery.packageId} // AISLE ${delivery.aisle} BAY ${String(delivery.bay).padStart(2, '0')}`
+      );
+      this.hud?.flash(`WORKER VERIFIED // PACKAGE ${delivery.packageId} // AISLE ${delivery.aisle} BAY ${String(delivery.bay).padStart(2, '0')}`, 3.1);
+      return true;
+    }
+
+    const cargoAt = cargo.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 0.32, 0));
+    if (!this.worldTargetAcquired(cargoAt, 17, 0.94)) {
+      this.hud?.flash(`PACKAGE ${delivery.packageId} NOT INSIDE OPTICAL BRACKETS // AISLE ${delivery.aisle} BAY ${String(delivery.bay).padStart(2, '0')}`, 2.4);
+      return false;
+    }
+    audit.packageScanned = true;
+    this.lastInboundScanSubject.copy(cargoAt);
+    audit.delivererMatches = delivery.packageDelivererName === delivery.workerName;
+    audit.sealIntact = !delivery.sealCompromised;
+    audit.phase = audit.delivererMatches && audit.sealIntact ? 'sort-ready' : 'alarm-ready';
+    this.evidence.cargo = true;
+    this.evidence.authorization = audit.delivererMatches;
+    this.evidence.tamper = !audit.sealIntact;
+    this.scannedCargo.add(cargo);
+    const comparison = [
+      audit.delivererMatches ? 'DELIVERER MATCH' : 'IDENTITY CONTRADICTION',
+      audit.sealIntact ? 'SEAL INTACT' : 'PACKAGE TAMPERED',
+      audit.phase === 'sort-ready' ? 'SORT AUTHORIZED' : 'REJECT + EMERGENCY ENABLED',
+    ].join(' // ');
+    this.hud?.appendSystem('PACKAGE COMPARISON', `${delivery.packageId} // ${comparison}`);
+    this.hud?.flash(comparison, 3.4);
+    return true;
   }
 
   private cargoHome(cargo: WarehouseCargoNode): THREE.Vector3 {
@@ -2348,6 +2688,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
 
   private beginContainmentResponse(zone: WarehouseSecurityZoneId): void {
     if (this.containmentResponse || !this.intruder) return;
+    this.containmentPurpose = 'breach';
     const response = new WarehouseContainmentResponse(zone);
     this.containmentResponse = response;
     this.add(response.officer.root);
@@ -2378,10 +2719,30 @@ export class WarehouseRig extends ENGINE.SceneNode {
 
   private finishContainmentResponse(): void {
     if (!this.containmentResponse) return;
+    const purpose = this.containmentPurpose;
     this.containmentResponse.destroy();
     this.containmentResponse = null;
+    this.containmentPurpose = null;
     this.hud?.setPursuit(false);
     this.hud?.setCctvTimestampOffset(0);
+    if (purpose === 'inbound' && this.inboundAudit) {
+      this.hud?.appendSystem('LOCAL RESPONSE', 'LOCAL UNIT SECURED SUBJECT // EVIDENCE TRANSFER COMPLETE');
+      this.hud?.flash('SUBJECT SECURED // NORMAL OPERATIONS RESUMING', 3.1);
+      this.inboundFugitive?.setFugitivePaused(true);
+      if (this.inboundFugitive) this.inboundFugitive.visible = false;
+      this.environment.setLightingMode('recovery');
+      this.environment.resetSecurityZones();
+      this.environment.setVerifiedIntakeState('ready');
+      this.environment.setConveyorsRunning(true);
+      this.sound.setEmergency(false);
+      this.sound.play('recovery');
+      this.hud?.setSecurityAlert('LOCAL RESPONSE COMPLETE // DELIVERIES RESOLVED 3/5');
+      this.view = 'drone';
+      this.hud?.setView(this.view);
+      this.syncPointerMode();
+      window.setTimeout(() => this.completeInboundDelivery('evidence'), getAccessibilityPreferences().reducedMotion ? 250 : 900);
+      return;
+    }
     this.hud?.appendSystem('LOCAL RESPONSE', 'SECURED SECTOR ENTERED // EVIDENCE TRANSFER COMPLETE // FEED CLOSED BEFORE CONTACT');
     this.hud?.flash('LOCAL RESPONSE COMPLETE // NORMAL POWER RECOVERING', 3);
     this.environment.setLightingMode('recovery');
@@ -2391,9 +2752,137 @@ export class WarehouseRig extends ENGINE.SceneNode {
     window.setTimeout(() => this.advance(), getAccessibilityPreferences().reducedMotion ? 300 : 1100);
   }
 
-  public tryDecision(decision: WarehouseDecision): void {
+  private resolveInboundEmergencyDecision(): void {
+    const audit = this.inboundAudit;
+    const delivery = audit ? INBOUND_AUDIT_DELIVERIES[audit.activeIndex] : null;
+    if (!audit || !delivery || !audit.workerScanned || !audit.packageScanned) {
+      this.hud?.flash('REJECTION LOCKED // SCAN ACTIVE WORKER + PACKAGE', 2.2);
+      return;
+    }
+    if (!delivery.suspicious) {
+      this.integrity = Math.max(0, this.integrity - 1);
+      this.cleanChain = 0;
+      this.decisionCommitted = true;
+      this.sound.play('reject');
+      this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
+      this.hud?.flash(`FALSE ALARM // ${delivery.workerName} + ${delivery.packageId} RECORDS AGREE // DELIVERY RESET`, 3.2);
+      updateWarehouseSave((save) => {
+        save.totalDecisions += 1;
+        save.storyMistakes += 1;
+      });
+      window.setTimeout(() => this.restartInboundDelivery(), 1500);
+      return;
+    }
+
+    this.decisionCommitted = true;
+    audit.phase = 'fugitive-search';
+    audit.fugitiveZone = 'receiving';
+    const cargo = this.inboundCargo[audit.activeIndex];
+    cargo.position.copy(this.environment.packagePosition(delivery.aisle, delivery.bay));
+    cargo.carried = false;
+    this.carried = null;
+    this.cargoRope.detach();
+    this.environment.setVerifiedIntakeState('evidence');
+    this.environment.setConveyorsRunning(false);
+    this.environment.setLightingMode('emergency');
+    this.sound.play('power-loss');
+    this.sound.setEmergency(true);
+    this.sound.play('warning');
+    const fugitive = this.workers[audit.activeIndex];
+    this.inboundFugitive = fugitive;
+    for (const [index, worker] of this.workers.entries()) {
+      if (worker === fugitive || index < audit.resolved) continue;
+      worker.moveToMuster(WAREHOUSE_LAYOUT.muster[index % WAREHOUSE_LAYOUT.muster.length]);
+    }
+    fugitive.startFugitive(INBOUND_FUGITIVE_ROUTE, {
+      onZoneChanged: (zone) => {
+        if (this.inboundAudit) this.inboundAudit.fugitiveZone = zone;
+        this.sound.play('footsteps');
+      },
+      onEscapeWarning: () => {
+        this.sound.play('tamper');
+        this.hud?.flash('SERVICE C ESCAPE ATTEMPT // 8 SECONDS TO OPTICALLY CONTAIN', 3.2);
+      },
+      onEscaped: () => this.failInboundEscape(),
+    });
+    this.hud?.setSecurityAlert('EMERGENCY // CONFIRMED IMPOSTOR // SEARCH ACTIVE');
+    this.hud?.appendSystem(
+      'SECURITY CONTROL',
+      `PACKAGE ${delivery.packageId} LOCKED AS EVIDENCE. ${delivery.workerName} abandoned the verified crew position. Locate and optically identify the same worker.`
+    );
+    this.hud?.flash('EMERGENCY MODE // IMPOSTOR FLED // SEARCH, SCAN, CONTAIN', 3.8);
+    this.refreshCaseHud();
+  }
+
+  private failInboundEscape(): void {
+    const audit = this.inboundAudit;
+    if (!audit || audit.phase !== 'fugitive-search') return;
+    this.integrity = Math.max(0, this.integrity - 1);
+    this.cleanChain = 0;
+    this.sound.play('reject');
+    this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
+    this.hud?.flash('SUBJECT REACHED SERVICE C // RESTORING EMERGENCY SEARCH AT RECEIVING', 3.2);
+    updateWarehouseSave((save) => {
+      save.totalDecisions += 1;
+      save.storyMistakes += 1;
+      save.criticalBreaches += 1;
+    });
+    window.setTimeout(() => this.restartInboundSearch(), 1600);
+  }
+
+  private restartInboundSearch(): void {
+    const audit = this.inboundAudit;
+    const fugitive = this.inboundFugitive;
+    if (!audit || !fugitive) return;
+    audit.phase = 'fugitive-search';
+    audit.fugitiveZone = 'receiving';
+    audit.escapeSeconds = null;
+    this.decisionCommitted = true;
+    this.environment.resetSecurityZones();
+    this.environment.setLightingMode('emergency');
+    this.sound.setEmergency(true);
+    fugitive.resetFugitiveAtReceiving(INBOUND_FUGITIVE_ROUTE[0].position);
+    fugitive.startFugitive(INBOUND_FUGITIVE_ROUTE, {
+      onZoneChanged: (zone) => { if (this.inboundAudit) this.inboundAudit.fugitiveZone = zone; },
+      onEscapeWarning: () => this.hud?.flash('SERVICE C ESCAPE ATTEMPT // 8 SECONDS', 2.8),
+      onEscaped: () => this.failInboundEscape(),
+    });
+    this.hud?.setSecurityAlert('EMERGENCY SEARCH RESTORED // RECEIVING MOTION');
+    this.refreshCaseHud();
+  }
+
+  private beginInboundPoliceResponse(zone: WarehouseSecurityZoneId): void {
+    if (this.containmentResponse) return;
+    this.containmentPurpose = 'inbound';
+    const response = new WarehouseContainmentResponse(zone);
+    this.containmentResponse = response;
+    this.add(response.officer.root);
+    this.view = 'cctv';
+    this.selectedZone = zone;
+    this.hud?.setView(this.view);
+    this.hud?.setPursuit(true);
+    this.hud?.appendSystem(
+      'LUCIAN BARBU // REMOTE LIAISON',
+      'Worker and package evidence agree on the impostor event. Forwarding the secured sector to the local unit.'
+    );
+    this.syncPointerMode();
+  }
+
+  public tryDecision(decision: WarehouseConsoleAction): void {
     const active = this.activeCase;
     if (!active || this.finished || this.isCinematicActive() || this.decisionCommitted || active.definition.id === 'internal-breach') return;
+    if (decision === 'return') {
+      this.returnActiveLoadToOrigin();
+      return;
+    }
+    if (active.definition.id === 'freight-sort') {
+      if (decision !== 'deny-lockdown') {
+        this.hud?.flash('INBOUND AUDIT // SORT PHYSICALLY AT VERIFIED INTAKE OR REJECT THROUGH CONSOLE');
+        return;
+      }
+      this.resolveInboundEmergencyDecision();
+      return;
+    }
     const evidenceReady = decision === 'deny-lockdown'
       ? active.definition.id === 'door-tamper'
         ? this.evidence.visitor && this.evidence.action && this.evidence.authorization && this.evidence.tamper
@@ -2434,20 +2923,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.hud?.flash(`HUMAN VERIFICATION REQUESTED // ${this.doorLabel(active.assignedDoorId)} HELD`, 2.8);
       return;
     }
-    if (active.definition.id === 'freight-sort' && !this.inboundOpened) {
-      this.hud?.flash('INBOUND LOAD NOT PRESENT // HOLD FOR DOCK COUNTDOWN');
-      return;
-    }
-    if (active.definition.id === 'freight-sort' && decision === 'verify') {
-      this.freightVerified = true;
-      this.sound.play('scan');
-      this.hud?.flash('EIGHT LOADS VERIFIED // THREE ROUTES READY', 2.2);
-      return;
-    }
-    if (active.definition.id === 'freight-sort' && decision === 'release' && !this.freightVerified) {
-      this.hud?.flash('VERIFY THE COMPLETE LOAD BEFORE STARTING SORT');
-      return;
-    }
     if (active.definition.id === 'temporary-worker' && decision === 'verify') {
       this.workerVerificationRequested = true;
       this.sound.play('resolved');
@@ -2462,7 +2937,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.hud?.flash('PRESERVE BOTH RECORDS // REQUEST HUMAN VERIFICATION FOR THE VISITOR');
       return;
     }
-    const cargoDecision = active.definition.id !== 'freight-sort' && ['release', 'quarantine', 'return'].includes(decision);
+    const cargoDecision = active.definition.id !== 'freight-sort' && (decision === 'release' || decision === 'quarantine');
     if (cargoDecision) {
       const required = active.definition.id === 'package-5018' ? 2 : 1;
       const secured = this.dockedCargo.filter((entry) => entry.doorId === active.assignedDoorId).length;
@@ -2493,7 +2968,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.hud?.flashVerdict(correct);
     if (decision === 'release') this.performCargoHandoff();
     else if (decision === 'quarantine') this.environment.setTransferDockState(active.assignedDoorId, 'quarantined');
-    else if (decision === 'return') this.performCargoReturn();
     if (decision === 'deny-lockdown') {
       this.environment.lockdownServiceDoor(active.assignedDoorId);
       this.environment.setTransferDockState(active.assignedDoorId, 'locked');
@@ -2529,7 +3003,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.cleanChain += 1;
     if (decision === 'quarantine') this.sound.play('quarantine');
     else if (decision === 'release') this.sound.play('release');
-    else if (decision !== 'return') this.sound.play('resolved');
+    else this.sound.play('resolved');
     this.environment.setConveyorsRunning(active.definition.id === 'freight-sort');
     if (active.definition.id === 'freight-sort') this.sound.play('conveyor');
     this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
@@ -2549,7 +3023,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (is5018) this.sound.play('anomaly');
     const deliveryDelay = decision === 'release'
       ? getAccessibilityPreferences().reducedMotion ? 900 : 5200
-      : decision === 'return' ? getAccessibilityPreferences().reducedMotion ? 500 : 2200
       : is5018 ? 3500 : 1200;
     window.setTimeout(() => this.advance(), deliveryDelay);
   }
@@ -2592,28 +3065,66 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.syncPointerMode();
   }
 
-  private performCargoReturn(): void {
+  /**
+   * Reversible load recovery, not a handling verdict. Evidence and case progress remain intact.
+   * Prefer the load in the drone's possession, then the most recently clamped load, then any
+   * loose package that has actually moved away from its authored rack slot.
+   */
+  private returnActiveLoadToOrigin(): void {
     const active = this.activeCase;
     if (!active) return;
-    this.environment.setTransferDockState(active.assignedDoorId, 'returning');
-    this.sound.play('return');
-    const direction = new THREE.Vector3(0, 0, -3.2)
-      .applyAxisAngle(THREE.Object3D.DEFAULT_UP, WAREHOUSE_DOORS[active.assignedDoorId].rootRotation);
-    const reducedMotion = getAccessibilityPreferences().reducedMotion;
-    for (const staged of this.dockedCargo.filter((entry) => entry.doorId === active.assignedDoorId)) {
-      const from = staged.node.position.clone();
-      const to = from.clone().add(direction);
-      const started = performance.now();
-      const duration = reducedMotion ? 80 : 1500;
-      const animate = (): void => {
-        if (this.activeCase !== active) return;
-        const progress = THREE.MathUtils.clamp((performance.now() - started) / duration, 0, 1);
-        staged.node.position.lerpVectors(from, to, THREE.MathUtils.smoothstep(progress, 0, 1));
-        if (progress < 1) requestAnimationFrame(animate);
-        else staged.node.visible = false;
-      };
-      animate();
+    if (active.definition.id === 'freight-sort' && this.inboundAudit) {
+      const delivery = INBOUND_AUDIT_DELIVERIES[this.inboundAudit.activeIndex];
+      const auditCargo = this.inboundCargo[this.inboundAudit.activeIndex];
+      if (!delivery || !auditCargo) return;
+      if (this.carried === auditCargo) this.cargoRope.detach();
+      this.carried = null;
+      this.inboundIntakeCargo = null;
+      this.inboundIntakeElapsed = 0;
+      auditCargo.position.copy(this.environment.packagePosition(delivery.aisle, delivery.bay));
+      auditCargo.quaternion.identity();
+      auditCargo.carried = false;
+      auditCargo.visible = true;
+      this.environment.setConveyorsRunning(false);
+      this.environment.setVerifiedIntakeState('ready');
+      this.sound.play('return');
+      this.hud?.flash(`LOAD ${delivery.packageId} RETURNED // AISLE ${delivery.aisle} // BAY ${String(delivery.bay).padStart(2, '0')} // AUDIT REMAINS OPEN`, 2.8);
+      return;
     }
+    let cargo = this.carried;
+    if (cargo) {
+      this.cargoRope.detach();
+      this.carried = null;
+    } else {
+      const staged = this.dockedCargo[this.dockedCargo.length - 1];
+      if (staged) {
+        cargo = staged.node;
+        this.dockedCargo.splice(this.dockedCargo.indexOf(staged), 1);
+      }
+    }
+    if (!cargo) {
+      cargo = [this.cargo, this.duplicateCargo]
+        .filter((entry): entry is WarehouseCargoNode => entry !== null && entry.visible)
+        .find((entry) => entry.position.distanceTo(this.cargoHome(entry)) > 0.08) ?? null;
+    }
+    if (!cargo) {
+      this.sound.play('warning');
+      this.hud?.flash('RETURN LOAD // NO MOVED OR STAGED PACKAGE', 1.8);
+      return;
+    }
+    cargo.position.copy(this.cargoHome(cargo));
+    cargo.quaternion.identity();
+    cargo.carried = false;
+    cargo.visible = true;
+    const capacity = active.definition.id === 'package-5018' ? 2 : 1;
+    this.environment.configureTransferDock(active.assignedDoorId, capacity);
+    if (this.dockedCargo.some((entry) => entry.doorId === active.assignedDoorId)) {
+      this.environment.setTransferDockState(active.assignedDoorId, 'staged');
+    }
+    this.sound.play('return');
+    const aisle = cargo === this.duplicateCargo ? 4 : active.aisle;
+    this.hud?.flash(`LOAD ${active.packageId} RETURNED // AISLE ${aisle} // BAY ${String(active.bay).padStart(2, '0')} // CASE REMAINS OPEN`, 2.8);
+    this.refreshCaseHud();
   }
 
   private beginPoliceResponse(): void {
@@ -2795,6 +3306,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
 
   private updateInbound(deltaTime: number): void {
+    if (this.inboundAudit) {
+      this.updateInboundAudit(deltaTime);
+      return;
+    }
     if (this.inboundTimer < 0 || this.inboundOpened) return;
     this.inboundTimer -= deltaTime;
     this.hud?.setInbound(this.inboundTimer);
@@ -2812,6 +3327,132 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.breachEntryTimer = getAccessibilityPreferences().reducedMotion ? 1.2 : 4.2;
       this.hud?.appendSystem('INBOUND CONTROL', 'Five authorized workers and incoming pallets recorded. Rear personnel beam remains active.');
     }
+  }
+
+  private updateInboundAudit(deltaTime: number): void {
+    const audit = this.inboundAudit;
+    if (!audit) return;
+    if (this.inboundFugitive && audit.phase === 'fugitive-search') {
+      this.inboundFugitive.setFugitivePaused(this.view === 'console');
+      const clearlyObserved = this.view === 'drone'
+        && this.opticalAimHeld
+        && this.worldTargetAcquired(this.inboundFugitive.subjectPosition(), 19, 0.955);
+      this.inboundFugitive.setClearlyObserved(clearlyObserved, deltaTime);
+      audit.fugitiveZone = this.inboundFugitive.fugitiveZone;
+      audit.escapeSeconds = this.inboundFugitive.escapeSeconds;
+      this.intrusionHudAccumulator += deltaTime;
+      if (this.intrusionHudAccumulator >= 0.16) {
+        this.intrusionHudAccumulator = 0;
+        this.hud?.setSecurityAlert(
+          audit.escapeSeconds !== null
+            ? `SERVICE C ESCAPE ATTEMPT // ${audit.escapeSeconds.toFixed(1)} SEC`
+            : `EMERGENCY SEARCH // LAST MOTION ${warehouseZoneLabel(audit.fugitiveZone)}`
+        );
+        this.refreshCaseHud();
+      }
+    }
+    const intake = this.inboundIntakeCargo;
+    if (!intake) return;
+    this.inboundIntakeElapsed += deltaTime;
+    intake.position.z -= deltaTime * 1.75;
+    if (this.inboundIntakeElapsed < 1.75) return;
+    this.inboundIntakeCargo = null;
+    const delivery = INBOUND_AUDIT_DELIVERIES[audit.activeIndex];
+    if (!delivery) return;
+    if (delivery.suspicious) {
+      this.failInboundDelivery('CRITICAL BREACH // CONTRADICTORY PACKAGE ENTERED SORTATION');
+      return;
+    }
+    this.completeInboundDelivery('sorted');
+  }
+
+  private completeInboundDelivery(resolution: 'sorted' | 'evidence'): void {
+    const audit = this.inboundAudit;
+    if (!audit) return;
+    const index = audit.activeIndex;
+    const delivery = INBOUND_AUDIT_DELIVERIES[index];
+    const cargo = this.inboundCargo[index];
+    const worker = this.workers[index];
+    if (!delivery || !cargo || !worker) return;
+    audit.resolutions[index] = resolution;
+    audit.resolved = Math.max(audit.resolved, index + 1);
+    cargo.visible = false;
+    worker.visible = false;
+    this.correct += 1;
+    this.decisions += 1;
+    this.cleanChain += 1;
+    this.environment.setConveyorsRunning(false);
+    this.environment.setVerifiedIntakeState('ready');
+    this.sound.play(resolution === 'evidence' ? 'lockdown' : 'resolved');
+    this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
+    updateWarehouseSave((save) => {
+      save.inboundAuditResolved = audit.resolved;
+      save.totalDecisions += 1;
+      save.correctDecisions += 1;
+      save.bestCleanChain = Math.max(save.bestCleanChain, this.cleanChain);
+      if (!save.discoveredCases.includes('freight-sort')) save.discoveredCases.push('freight-sort');
+    });
+    this.hud?.flash(
+      resolution === 'evidence'
+        ? `DELIVERY ${index + 1}/5 RESOLVED // PACKAGE HELD AS EVIDENCE`
+        : `DELIVERY ${index + 1}/5 SORTED // VERIFIED INTAKE ROUTING COMPLETE`,
+      2.8
+    );
+    if (audit.resolved >= audit.total) {
+      audit.phase = 'complete';
+      this.hud?.setSecurityAlert('DELIVERIES RESOLVED 5/5 // FOUR SORTED // ONE EVIDENCE HOLD');
+      window.setTimeout(() => {
+        updateWarehouseSave((save) => { save.inboundAuditResolved = 0; });
+        this.advance();
+      }, 1600);
+      return;
+    }
+    window.setTimeout(() => {
+      if (this.inboundAudit === audit) this.activateInboundDelivery(index + 1);
+    }, 1100);
+  }
+
+  private failInboundDelivery(message: string): void {
+    const audit = this.inboundAudit;
+    if (!audit || this.decisionCommitted) return;
+    this.decisionCommitted = true;
+    this.decisions += 1;
+    this.integrity = Math.max(0, this.integrity - 1);
+    this.cleanChain = 0;
+    this.environment.setConveyorsRunning(false);
+    this.environment.setVerifiedIntakeState('evidence');
+    this.sound.play('reject');
+    this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
+    this.hud?.flash(`${message} // RESTORING DELIVERY ${audit.activeIndex + 1} CHECKPOINT`, 3.3);
+    updateWarehouseSave((save) => {
+      save.totalDecisions += 1;
+      save.criticalBreaches += 1;
+      save.storyMistakes += 1;
+    });
+    window.setTimeout(() => this.restartInboundDelivery(), 1700);
+  }
+
+  private restartInboundDelivery(): void {
+    const audit = this.inboundAudit;
+    if (!audit) return;
+    const index = audit.activeIndex;
+    const delivery = INBOUND_AUDIT_DELIVERIES[index];
+    const cargo = this.inboundCargo[index];
+    const worker = this.workers[index];
+    if (!delivery || !cargo || !worker) return;
+    if (this.carried) this.cargoRope.detach();
+    this.carried = null;
+    this.inboundIntakeCargo = null;
+    cargo.position.copy(this.environment.packagePosition(delivery.aisle, delivery.bay));
+    cargo.visible = true;
+    cargo.carried = false;
+    worker.setInspectionPosition(delivery.inspectionPosition);
+    worker.visible = true;
+    this.inboundFugitive = null;
+    this.environment.resetSecurityZones();
+    this.environment.setLightingMode('normal');
+    this.sound.setEmergency(false);
+    this.activateInboundDelivery(index);
   }
 
   private updateBreach(deltaTime: number): void {
@@ -3055,7 +3696,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
         this.cameraPosition.copy(pose.position);
         this.cameraTarget.copy(pose.target);
         if (this.camera.getFOV() !== pose.fov) this.camera.setFOV(pose.fov);
-      } else if (this.isBreachCase()) {
+      } else if (this.isBreachCase() || this.usesInboundResponseCamera()) {
         const pose = WAREHOUSE_SECURITY_ZONES[this.selectedZone].camera;
         this.cameraPosition.copy(pose.position);
         this.cameraTarget.copy(pose.target);
@@ -3223,7 +3864,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const droneSpeed = deltaTime > 0
       ? this.drone.position.distanceTo(this.previousDroneAudioPosition) / deltaTime
       : 0;
-    this.sound.setDroneLoad(Math.min(1, droneSpeed / 5.2), this.view === 'drone' && this.handoff <= 0);
+    this.sound.setDroneLoad(Math.min(1, droneSpeed / DRONE_CRUISE_SPEED), this.view === 'drone' && this.handoff <= 0);
     this.previousDroneAudioPosition.copy(this.drone.position);
     this.droneRotorSpin += deltaTime * 27;
     if (this.droneRotorBlades) {

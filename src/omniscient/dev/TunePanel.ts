@@ -125,6 +125,7 @@ export class TunePanel {
   private readonly root: HTMLDivElement;
   private readonly readings: Reading[] = [];
   private readonly rows: KeyRow[] = [];
+  private readonly refreshers: Array<() => void> = [];
   private selected = 0;
   private currentGroup = '';
   private visible = false;
@@ -235,6 +236,11 @@ export class TunePanel {
       value.textContent = Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2);
     };
     show(spec.get());
+    this.refreshers.push(() => {
+      const current = spec.get();
+      input.value = String(current);
+      show(current);
+    });
 
     input.addEventListener('input', () => {
       const v = parseFloat(input.value);
@@ -273,6 +279,7 @@ export class TunePanel {
     input.type = 'color';
     input.value = spec.get();
     input.addEventListener('input', () => spec.set(input.value));
+    this.refreshers.push(() => (input.value = spec.get()));
     row.appendChild(input);
 
     const value = document.createElement('span');
@@ -301,7 +308,13 @@ export class TunePanel {
 
   private toggle(): void {
     this.visible = !this.visible;
+    if (this.visible) this.refresh();
     this.root.style.display = this.visible ? '' : 'none';
+  }
+
+  /** Re-read every control after a preset/reset button changes several values at once. */
+  public refresh(): void {
+    for (const refresh of this.refreshers) refresh();
   }
 
   /**

@@ -11,6 +11,13 @@ interface StoredCapture {
   image: Blob;
 }
 
+/** One visible evidence record per quest/package/channel; rescans replace the earlier frame. */
+export function warehouseArchiveKey(
+  record: Pick<WarehouseArchiveRecord, 'mode' | 'stage' | 'caseId' | 'packageId' | 'channel'>
+): string {
+  return `${record.mode}:${record.stage}:${record.caseId}:${record.packageId}:${record.channel}`;
+}
+
 function openArchive(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = window.indexedDB.open(DB_NAME, 1);
@@ -61,7 +68,7 @@ export async function captureWarehouseFrame(
     const image = await canvasBlob(frame);
     if (!image) return null;
     const capturedAt = new Date().toISOString();
-    const id = `w07-${capturedAt}-${record.caseId}-${record.packageId}`;
+    const id = `w07-${warehouseArchiveKey(record)}`;
     const metadata: WarehouseArchiveRecord = { ...record, id, capturedAt, favorite: false };
     const db = await openArchive();
     await new Promise<void>((resolve, reject) => {

@@ -24,6 +24,7 @@ import { MISSION_08 } from './content/mission-08-district.js';
 import { MISSION_09 } from './content/mission-09-specimen.js';
 import { createScreenGlass } from './art/glass.js';
 import { PAINT_UNIFORMS } from './art/painterly.js';
+import { TUNED_BLOOM, TUNED_OCCLUSION } from './art/postTuning.js';
 import { decorMesh } from './art/mesh.js';
 import { ACCENT, LIGHT, MAT } from './art/palette.js';
 import { audio, MowerAudio } from './audio/ConsoleAudio.js';
@@ -43,7 +44,14 @@ import { setRoomTone, stopRoomTone } from './audio/RoomTone.js';
 import { showBoot } from './link/BootScreen.js';
 
 import type { BootScreen } from './link/BootScreen.js';
-import { installPaint, setPaintLook } from './art/paintPass.js';
+import {
+  installPaint,
+  PAINT_LOOKS,
+  setPaintLook,
+  setPaintProtectedQuad,
+  setPaintValues,
+} from './art/paintPass.js';
+import type { PaintLook } from './art/paintPass.js';
 import type { RetroLookName } from './art/retro.js';
 import { ScanTargets } from './link/ScanTargets.js';
 import { MowerPlot } from './link/MowerPlot.js';
@@ -333,8 +341,8 @@ const NOTE_HOLD = 11;
  * Named because they are no longer only defaults: `ContactScene.daylight` scales both per
  * room, and a scene that wants less sun needs something to be a fraction OF.
  */
-const KEY_INTENSITY = 1.9;
-const SKY_INTENSITY = 1.35;
+const KEY_INTENSITY = 2.07;
+const SKY_INTENSITY = 0.64;
 
 /** The diorama atmosphere. Tuned to a room, not to a world - see mountScene. */
 const FOG_NEAR = 3.5;
@@ -498,6 +506,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private warehouseFog: { near: number; far: number } | null = null;
   private warehouseArchiveDisplay: ENGINE.SceneNode | null = null;
   private warehouseCelEnabled = true;
+  private warehouseCelTuning: PaintLook = {
+    ...PAINT_LOOKS.warehouseCel,
+    inkColor: [...PAINT_LOOKS.warehouseCel.inkColor],
+  };
   private warehousePreviousRetroLook: RetroLookName = 'console';
   private readonly cameraPosition = new THREE.Vector3(0.5, 1.35, 1.5);
   private readonly cameraTarget = new THREE.Vector3(0, 0.85, -0.5);
@@ -861,10 +873,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       const toggleWarehouseCel = (event: KeyboardEvent): void => {
         if (event.code !== 'F10' || !this.warehouse) return;
         event.preventDefault();
-        this.warehouseCelEnabled = !this.warehouseCelEnabled;
-        this.warehouse.setCelVisualsEnabled(this.warehouseCelEnabled);
-        setPaintLook(this.warehouseCelEnabled ? 'warehouseCel' : 'off');
-        setRetroLook(this.warehouseCelEnabled ? 'warehouseCel' : this.warehousePreviousRetroLook);
+        this.setWarehouseCelPrototypeEnabled(!this.warehouseCelEnabled);
       };
       window.addEventListener('keydown', toggleWarehouseCel);
       this.onWarehouseCelKey = toggleWarehouseCel;
@@ -1134,7 +1143,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const post = this.post;
     if (post) {
       // Mirrors the shipped values above, so the panel starts where the game actually is.
-      const bloom = { strength: 0.72, threshold: 0.55, radius: 0.82 };
+      const bloom: { strength: number; threshold: number; radius: number } = {
+        ...TUNED_BLOOM,
+      };
       const pushBloom = (): void =>
         post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: true, ...bloom });
 
@@ -1178,7 +1189,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * applied to the real configuration would be silently undone the first time anybody
        * touched the occlusion strength. Only the two values the sliders own live here.
        */
-      const ao = { ssaoStrength: 2.4, ssaoRadius: 0.11 };
+      const ao: { ssaoStrength: number; ssaoRadius: number } = {
+        ...TUNED_OCCLUSION,
+      };
       const pushAo = (): void =>
         post.configureEffect(ENGINE.PostProcessPass.AO, {
           enabled: true,
@@ -1207,13 +1220,46 @@ export class OmniscientRig extends ENGINE.SceneNode {
           pushAo();
         },
       });
+
+      /*
+       * Exposure, which is the OTHER brightness and worth keeping separate from the cel one.
+       *
+       * This drives the tone mapper, so it lifts the whole image including the parts the cel
+       * pass never touches, and it is what to reach for when the room is simply too dark.
+       * `PaintLook.brightness` below lifts only the shaded image inside the cel pass and
+       * leaves ink alone, which is what to reach for when the LOOK is too dark.
+       *
+       * Read live from the pipeline rather than cached, because the warehouse reconfigures
+       * tone mapping on mount - a cached seed would show the menu's exposure while the slider
+       * silently drove the warehouse's.
+       */
+      const exposureOf = (): number => {
+        const config = post.getEffectConfig(ENGINE.PostProcessPass.ToneMapping) as
+          | { exposure?: number }
+          | null
+          | undefined;
+        return config?.exposure ?? 1;
+      };
+      tune.group('tone');
+      tune.slider({
+        label: 'exposure',
+        min: 0.2,
+        max: 3,
+        step: 0.01,
+        get: exposureOf,
+        set: (v) => post.configureEffect(ENGINE.PostProcessPass.ToneMapping, {
+          enabled: true,
+          mode: THREE.ACESFilmicToneMapping,
+          exposure: v,
+        }),
+      });
     }
 
-    tune.group('painterly');
+    tune.group('global cel // material');
     tune.slider({
       label: 'bands',
       min: 2,
-      max: 8,
+      max: 6,
       step: 1,
       get: () => PAINT_UNIFORMS.uPaintBands.value,
       set: (v) => (PAINT_UNIFORMS.uPaintBands.value = Math.round(v)),
@@ -1225,6 +1271,70 @@ export class OmniscientRig extends ENGINE.SceneNode {
       get: () => PAINT_UNIFORMS.uPaintSoft.value,
       set: (v) => (PAINT_UNIFORMS.uPaintSoft.value = v),
     });
+
+    const applyCelTuning = (): void => {
+      if (!this.warehouse || this.warehouseCelEnabled) {
+        setPaintValues(this.warehouseCelTuning, true);
+      }
+    };
+    const celSlider = (
+      label: string,
+      key: Exclude<keyof PaintLook, 'inkColor'>,
+      min: number,
+      max: number,
+      step?: number
+    ): void => {
+      tune.slider({
+        label,
+        min,
+        max,
+        step,
+        get: () => this.warehouseCelTuning[key],
+        set: (value) => {
+          this.warehouseCelTuning[key] = value;
+          applyCelTuning();
+        },
+      });
+    };
+
+    tune.group('global cel // post');
+    celSlider('filter px', 'radius', 0, 3, 0.05);
+    celSlider('filter mix', 'strength', 0, 1, 0.01);
+    celSlider('luma ink', 'ink', 0, 1, 0.01);
+    celSlider('warm/cool', 'tint', 0, 1, 0.01);
+    celSlider('surface', 'tooth', 0, 0.25, 0.005);
+    celSlider('outline px', 'outlineWidth', 0.25, 3, 0.05);
+    celSlider('depth edge', 'depthInk', 0, 2, 0.02);
+    celSlider('normal edge', 'normalInk', 0, 2, 0.02);
+    celSlider('outline mix', 'outlineStrength', 0, 1, 0.01);
+    celSlider('outline res', 'normalScale', 0.25, 1, 0.01);
+    celSlider('signal keep', 'protectSignals', 0, 1, 0.01);
+    celSlider('brightness', 'brightness', 0.3, 2.5, 0.01);
+    tune.color({
+      label: 'ink colour',
+      get: () => {
+        const [r, g, b] = this.warehouseCelTuning.inkColor;
+        return `#${new THREE.Color(r, g, b).getHexString()}`;
+      },
+      set: (value) => {
+        const colour = new THREE.Color(value);
+        this.warehouseCelTuning.inkColor = [colour.r, colour.g, colour.b];
+        applyCelTuning();
+      },
+    });
+    tune.button('A // CEL', () => this.setWarehouseCelPrototypeEnabled(true, true));
+    tune.button('B // ORIGINAL', () => this.setWarehouseCelPrototypeEnabled(false, true));
+    tune.button('RESET CEL', () => {
+      this.warehouseCelTuning = {
+        ...PAINT_LOOKS.warehouseCel,
+        inkColor: [...PAINT_LOOKS.warehouseCel.inkColor],
+      };
+      PAINT_UNIFORMS.uPaintBands.value = 3;
+      PAINT_UNIFORMS.uPaintSoft.value = 0.32;
+      if (!this.warehouse || this.warehouseCelEnabled) this.applyCelPost(true);
+      tune.refresh();
+    });
+
     tune.group('key + sky');
     tune.slider({ label: 'key', min: 0, max: 6, get: () => rig.key.intensity, set: (v) => (rig.key.intensity = v) });
     tune.slider({ label: 'sky', min: 0, max: 4, get: () => rig.sky.intensity, set: (v) => (rig.sky.intensity = v) });
@@ -1401,7 +1511,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
          * A lamp is still allowed to be the warmest thing in the room. It is not allowed
          * to be the brightest.
          */
-        intensity: 5.4,
+        intensity: 4.38,
         color: new THREE.Color('#ffcf96'),
         distance: 2.4,
         decay: 1.7,
@@ -1467,12 +1577,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * moved it, which is the tell that the key and not the practical was doing the
        * damage.
        */
-      intensity: 11,
+      // 3.2, down from 11: settled at the F8 panel once the cel pass was carrying the
+      // contrast. A window key sized for an unbanded image blew the sill out to white.
+      intensity: 3.2,
       color: new THREE.Color(LIGHT.key),
       // Wide and very soft. A hard-edged pool on the floor would read as a stage light;
       // the penumbra is doing the work of a window's diffuse spill.
       angle: 0.8,
-      penumbra: 0.9,
+      penumbra: 1,
       distance: 8,
       decay: 1.25,
     });
@@ -1507,7 +1619,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const bounce = ENGINE.PointLightNode.create({
         name: 'FloorBounce',
         position: WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(0.6, -0.55, 0.5)),
-        intensity: 1.6,
+        intensity: 1.575,
         color: new THREE.Color(LIGHT.bounce),
         distance: 4.2,
         decay: 1.4,
@@ -1517,7 +1629,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const glow = ENGINE.PointLightNode.create({
         name: 'ScreenGlow',
         position: WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(0, 0.42, 0.34)),
-        intensity: 2.2,
+        intensity: 1.8,
         color: new THREE.Color(ACCENT.knowledge),
         distance: 2.1,
         decay: 1.8,
@@ -1658,10 +1770,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
        *
        * Radius up as well. The old 0.65 was a tight rim, and a wide low-strength spread is
        * what reads as light in air rather than as an outline traced round the bright thing.
+       * The final low-energy values now come from the user's warehouse cel-shading pass;
+       * TUNED_BLOOM is shared with the live panel so a restart reproduces that frame.
        */
-      strength: 0.72,
-      threshold: 0.55,
-      radius: 0.82,
+      ...TUNED_BLOOM,
     });
 
     /**
@@ -1784,11 +1896,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // costs the §232 value structure exactly what the texture pass was careful not to.
     this.post.configureEffect(ENGINE.PostProcessPass.AO, {
       enabled: true,
-      // 2.4 / 0.11, settled with the F8 panel against the home shot. 1.1 / 0.05 - the
+      // 1.98 / 0.153, settled with the F8 panel against the cel-shaded build. 1.1 / 0.05 - the
       // first guess from the engine defaults - was invisible in a capture; 4.0 / 0.27
       // grounds everything and starts reading as grime in the wall corners.
-      ssaoStrength: 2.4,
-      ssaoRadius: 0.11,
+      ...TUNED_OCCLUSION,
       ...AO_QUALITY,
     });
   }
@@ -2851,6 +2962,30 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.warehouseLaunchPanel.open();
   }
 
+  /** Apply the authored cel conversion to the current 3D scene. */
+  private applyCelPost(immediate = false): void {
+    setPaintLook('warehouseCel', immediate);
+    setPaintValues(this.warehouseCelTuning, immediate);
+  }
+
+  /** Warehouse A/B can still temporarily disable the otherwise global post treatment. */
+  private applyWarehouseCelPost(immediate = false): void {
+    if (!this.warehouseCelEnabled) {
+      setPaintLook('off', immediate);
+      return;
+    }
+    this.applyCelPost(immediate);
+  }
+
+  /** Shared by F10 and the F8 A/B buttons, preserving slider values between views. */
+  private setWarehouseCelPrototypeEnabled(enabled: boolean, immediate = false): void {
+    this.warehouseCelEnabled = enabled;
+    if (!this.warehouse) return;
+    this.warehouse.setCelVisualsEnabled(enabled);
+    this.applyWarehouseCelPost(immediate);
+    setRetroLook(enabled ? 'warehouseCel' : this.warehousePreviousRetroLook, immediate);
+  }
+
   /** Hand the active camera, input, atmosphere, and score to the runtime facility. */
   private enterWarehouse(mode: WarehouseMode): void {
     if (this.warehouse) return;
@@ -2889,7 +3024,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.add(rig);
     this.warehouse = rig;
     rig.setCelVisualsEnabled(this.warehouseCelEnabled, false);
-    setPaintLook(this.warehouseCelEnabled ? 'warehouseCel' : 'off', true);
+    this.applyWarehouseCelPost(true);
     setRetroLook(this.warehouseCelEnabled ? 'warehouseCel' : this.warehousePreviousRetroLook, true);
     rig.mount();
   }
@@ -2900,7 +3035,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.warehouse.unmount();
     this.warehouse.removeFromParent();
     this.warehouse = null;
-    setPaintLook('off');
+    this.applyCelPost();
     setRetroLook(this.warehousePreviousRetroLook);
     if (this.warehouseFog && this.fog) {
       // Colour too, not just the distances - see mountScene: a room that retunes the global
@@ -4166,12 +4301,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
        */
       if (this.retroMounted) setRetroLook('console', true);
     }
-    /* Warehouse cel treatment. Other missions keep the pass in its neutral off preset. */
+    /* Global cel treatment. DOM UI is outside the composer; the CRT face is masked below. */
     const PAINT_PASS = true;
     if (PAINT_PASS && !this.paintMounted && this.post) {
       this.paintMounted = installPaint(this.post);
       if (this.paintMounted) {
-        setPaintLook(this.warehouse && this.warehouseCelEnabled ? 'warehouseCel' : 'off', true);
+        if (this.warehouse) this.applyWarehouseCelPost(true);
+        else this.applyCelPost(true);
       }
     }
 
@@ -4226,7 +4362,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * any frame where a corner of the screen is behind the lens. `projectScreenQuad` explains
      * why the second of those has to refuse rather than guess.
      */
-    setRetroScreenQuad(projectScreenQuad(this.screenMesh, this.camera?.getCamera()));
+    const protectedScreen =
+      this.warehouse || this.m4ss || this.driving || this.phase === Phase.Contact
+        ? null
+        : projectScreenQuad(this.screenMesh, this.camera?.getCamera());
+    setRetroScreenQuad(protectedScreen);
+    setPaintProtectedQuad(protectedScreen);
 
 
     this.globeScreen?.update(deltaTime);

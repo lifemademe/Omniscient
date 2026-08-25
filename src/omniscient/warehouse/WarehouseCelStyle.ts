@@ -92,7 +92,8 @@ export class WarehouseCelStyle {
       this.captureNewMaterials(root);
     } else {
       this.restoreMaterials();
-      setPaintBandingLook('house');
+      // Cel banding is now the global house treatment; only restore warehouse material edits.
+      setPaintBandingLook('warehouseCel');
     }
   }
 

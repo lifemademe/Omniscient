@@ -1,9 +1,11 @@
 import { injectTerminalStyles } from '../link/LocalSurface.js';
+import { warehouseArchiveKey } from './archive.js';
+import type { InboundAuditSnapshot } from './WarehouseInboundAudit.js';
 
 import type {
   GeneratedWarehouseCase,
   WarehouseArchiveRecord,
-  WarehouseDecision,
+  WarehouseConsoleAction,
   WarehouseDockSnapshot,
   WarehouseEvidenceState,
   WarehouseIntrusionSnapshot,
@@ -57,7 +59,7 @@ export class WarehouseOpsPanel {
 
   public constructor(
     mode: WarehouseMode,
-    private readonly decide: (decision: WarehouseDecision) => void,
+    private readonly decide: (action: WarehouseConsoleAction) => void,
     private readonly transmit: (text: string) => WarehouseChatReply | null,
     private readonly contain: (zone: WarehouseSecurityZoneId) => void
   ) {
@@ -181,7 +183,8 @@ export class WarehouseOpsPanel {
     data: GeneratedWarehouseCase,
     evidence: WarehouseEvidenceState,
     intrusion: WarehouseIntrusionSnapshot | null = null,
-    dock: WarehouseDockSnapshot | null = null
+    dock: WarehouseDockSnapshot | null = null,
+    inboundAudit: InboundAuditSnapshot | null = null
   ): void {
     const caseKey = `${data.definition.id}:${data.packageId}:${data.visitorName}:${data.assignedDoorId}`;
     const newCase = caseKey !== this.activeCaseKey;
@@ -199,11 +202,11 @@ export class WarehouseOpsPanel {
       : data.definition.subjectType === 'worker'
       ? 'WAREHOUSE 07 // PERSONNEL CHANNEL'
       : data.definition.id === 'freight-sort'
-        ? 'WAREHOUSE 07 // REAR FREIGHT ENTRY'
+        ? 'WAREHOUSE 07 // INBOUND AUDIT'
         : evidence.located
           ? `WAREHOUSE 07 // ${this.doorName(data.assignedDoorId)}`
           : 'WAREHOUSE 07 // SOURCE UNRESOLVED';
-    this.renderObserved(data, evidence, intrusion);
+    this.renderObserved(data, evidence, intrusion, inboundAudit);
 
     if (newCase) {
       this.activeCaseKey = caseKey;
@@ -230,7 +233,7 @@ export class WarehouseOpsPanel {
       if (data.definition.subjectType === 'worker') {
         this.appendChat('visitor', data.workerName, 'Temporary shift credentials submitted for clearance.');
       } else if (data.definition.id === 'freight-sort') {
-        this.appendChat('system', 'INBOUND CONTROL', 'Dock manifest received. Load verification is required before sorting.');
+        this.appendChat('system', 'INBOUND CONTROL', `Delivery ${inboundAudit ? inboundAudit.activeIndex + 1 : 1} of 5 is active. Scan the named worker, then compare the package on their rack.`);
       }
       this.contact.classList.remove('warehouse-ops__contact-pulse');
       requestAnimationFrame(() => this.contact.classList.add('warehouse-ops__contact-pulse'));
@@ -248,7 +251,7 @@ export class WarehouseOpsPanel {
       );
     }
 
-    this.renderConsole(data, evidence, intrusion, dock);
+    this.renderConsole(data, evidence, intrusion, dock, inboundAudit);
     if ((evidence.visitor || evidence.cargo) && !this.scanAnnounced) {
       this.scanAnnounced = true;
       this.appendChat('system', 'WAREHOUSE 07', 'Optical evidence recorded. Console comparison is ready.');
@@ -257,17 +260,18 @@ export class WarehouseOpsPanel {
   }
 
   public setRecords(records: readonly WarehouseArchiveRecord[]): void {
+    const unique = [...new Map(records.map((record) => [warehouseArchiveKey(record), record])).values()];
     const tab = this.tabs.get('records');
-    if (tab) tab.textContent = `RECORDS ${records.length}`;
+    if (tab) tab.textContent = `RECORDS ${unique.length}`;
     this.recordsPane.replaceChildren();
-    if (!records.length) {
+    if (!unique.length) {
       const empty = document.createElement('div');
       empty.className = 'omni-empty';
       empty.textContent = 'NO EVIDENCE CAPTURED';
       this.recordsPane.appendChild(empty);
       return;
     }
-    for (const record of [...records].reverse().slice(0, 16)) {
+    for (const record of [...unique].reverse().slice(0, 16)) {
       const row = document.createElement('div');
       row.className = 'omni-item omni-item--static';
       const title = document.createElement('strong');
@@ -275,7 +279,8 @@ export class WarehouseOpsPanel {
       title.textContent = `${record.packageId} // ${record.channel.toUpperCase()}`;
       const detail = document.createElement('span');
       detail.className = 'warehouse-ops__record-meta';
-      detail.textContent = `${record.caseId.toUpperCase()} // STAGE ${record.stage} // ${new Date(record.capturedAt).toLocaleString()}`;
+      const progressLabel = record.mode === 'story' ? 'QUEST' : 'STAGE';
+      detail.textContent = `${record.caseId.toUpperCase()} // ${progressLabel} ${record.stage} // ${new Date(record.capturedAt).toLocaleString()}`;
       row.append(title, detail);
       this.recordsPane.appendChild(row);
     }
@@ -289,7 +294,8 @@ export class WarehouseOpsPanel {
   private renderObserved(
     data: GeneratedWarehouseCase,
     evidence: WarehouseEvidenceState,
-    intrusion: WarehouseIntrusionSnapshot | null
+    intrusion: WarehouseIntrusionSnapshot | null,
+    inboundAudit: InboundAuditSnapshot | null
   ): void {
     this.observed.replaceChildren();
     const tag = document.createElement('span');
@@ -302,6 +308,12 @@ export class WarehouseOpsPanel {
         [intrusion.evidence.headcount ? 'Personnel mismatch confirmed' : 'Personnel count required', 'personnel count', intrusion.evidence.headcount],
         [intrusion.evidence.liveTag ? 'Live optical tag acquired' : 'Live optical tag required', 'optical tag', intrusion.evidence.liveTag],
       ]
+      : data.definition.id === 'freight-sort' && inboundAudit
+        ? [
+          [inboundAudit.workerScanned ? `Worker ${data.workerName} scanned` : `Scan worker ${data.workerName}`, 'visitor identity', inboundAudit.workerScanned],
+          [inboundAudit.packageScanned ? `Package ${data.packageId} scanned` : `Package ${data.packageId} // Aisle ${data.aisle} Bay ${String(data.bay).padStart(2, '0')}`, 'package', inboundAudit.packageScanned],
+          [`Deliveries resolved ${inboundAudit.resolved}/${inboundAudit.total}`, 'manifest', inboundAudit.resolved >= inboundAudit.total],
+        ]
       : data.definition.subjectType === 'worker'
       ? [
         [`Worker ${data.workerName}`, 'visitor identity', evidence.visitor],
@@ -331,14 +343,15 @@ export class WarehouseOpsPanel {
     data: GeneratedWarehouseCase,
     evidence: WarehouseEvidenceState,
     intrusion: WarehouseIntrusionSnapshot | null,
-    dock: WarehouseDockSnapshot | null
+    dock: WarehouseDockSnapshot | null,
+    inboundAudit: InboundAuditSnapshot | null
   ): void {
     this.consolePane.replaceChildren();
     const heading = document.createElement('div');
     heading.className = 'omni-empty';
     heading.textContent = 'ACTIVE MANIFEST // EVIDENCE COMPARISON';
     this.consolePane.appendChild(heading);
-    const rows = this.consoleRows(data, evidence, intrusion, dock);
+    const rows = this.consoleRows(data, evidence, intrusion, dock, inboundAudit);
     for (const [label, value, state] of rows) {
       const row = document.createElement('div');
       row.className = 'warehouse-ops__readout';
@@ -360,7 +373,11 @@ export class WarehouseOpsPanel {
     briefLabel.textContent = 'CASE ASSESSMENT';
     const briefText = document.createElement('span');
     briefText.className = 'omni-item__detail';
-    briefText.textContent = data.definition.id === 'internal-breach'
+    briefText.textContent = data.definition.id === 'freight-sort' && inboundAudit
+      ? inboundAudit.phase === 'fugitive-search'
+        ? 'Locate and scan the same worker who supplied the contradictory package. The drone records and contains; it never confronts.'
+        : 'Compare the active worker badge with the package deliverer and seal. Carry clean loads to VERIFIED INTAKE.'
+      : data.definition.id === 'internal-breach'
       ? 'Contain the tagged person inside the matching security sector. The drone never confronts the subject.'
       : evidence.visitor && evidence.cargo
       ? data.definition.briefing
@@ -378,19 +395,27 @@ export class WarehouseOpsPanel {
     const required = dock?.requiredCount ?? 0;
     const evidenceReady = evidence.visitor && evidence.cargo;
     const dockCommitted = dock && dock.state !== 'empty' && dock.state !== 'staged';
-    prompt.textContent = dockCommitted
+    prompt.textContent = data.definition.id === 'freight-sort' && inboundAudit
+      ? inboundAudit.phase === 'alarm-ready'
+        ? 'CONTRADICTION CONFIRMED // REJECT + EMERGENCY AVAILABLE'
+        : inboundAudit.phase === 'sort-ready'
+          ? 'SORT AUTHORIZED // CARRY LOAD TO VERIFIED INTAKE // FALSE ALARM REMAINS POSSIBLE'
+          : inboundAudit.phase === 'fugitive-search'
+            ? `EMERGENCY SEARCH // LAST SEEN ${inboundAudit.fugitiveZone?.toUpperCase() ?? 'RECEIVING'}`
+            : 'SCAN ACTIVE WORKER + PACKAGE // RETURN LOAD AVAILABLE'
+      : dockCommitted
       ? `TRANSFER COMMITTED // ${dock.state.toUpperCase()}`
       : data.definition.id === 'door-tamper'
       ? evidence.action && evidence.authorization && evidence.tamper
         ? 'IDENTITY + TAMPER STACK CONFIRMED // DENY REQUIRES NO CARGO STAGING'
-        : 'DECISIONS LOCKED // COMPLETE ACTION, IDENTITY, AND TAMPER EVIDENCE'
+        : 'VERDICTS LOCKED // COMPLETE ACTION, IDENTITY, AND TAMPER EVIDENCE // RETURN LOAD AVAILABLE'
       : data.definition.correctDecision === 'deny-lockdown' && evidenceReady
         ? 'RECIPIENT IDENTITY MISMATCH // DENY REQUIRES NO CARGO STAGING'
         : !evidenceReady && dock
           ? data.definition.id === 'package-5018'
-            ? 'DECISIONS LOCKED // INSPECT VISITOR FEED + SCAN OR DOCK BOTH PHYSICAL 5018 LOADS'
+            ? 'VERDICTS LOCKED // INSPECT VISITOR FEED + SCAN OR DOCK BOTH 5018 LOADS // RETURN AVAILABLE'
             : !evidence.visitor && !evidence.cargo
-              ? 'DECISIONS LOCKED // INSPECT VISITOR FEED + SCAN OR DOCK PACKAGE'
+              ? 'VERDICTS LOCKED // INSPECT VISITOR FEED + SCAN OR DOCK PACKAGE // RETURN LOAD AVAILABLE'
               : !evidence.visitor
                 ? `VISITOR RECORD REQUIRED // INSPECT ${this.doorName(data.assignedDoorId)} FEED`
                 : 'PACKAGE RECORD REQUIRED // RMB + LMB SCAN OR F // DOCK LOAD'
@@ -420,19 +445,19 @@ export class WarehouseOpsPanel {
       this.consolePane.appendChild(actions);
       return;
     }
-    const decisions: readonly WarehouseDecision[] = data.definition.subjectType === 'worker'
+    const decisions: readonly WarehouseConsoleAction[] = data.definition.subjectType === 'worker'
       ? ['clear', 'hold', 'verify']
       : data.definition.id === 'freight-sort'
-        ? ['verify', 'release']
+        ? ['deny-lockdown', 'return']
         : data.definition.id === 'door-tamper'
-          ? ['deny-lockdown', 'release']
+          ? ['deny-lockdown', 'release', 'return']
         : data.definition.id === 'package-5018'
           ? ['verify', 'release', 'quarantine', 'return']
           : ['release', 'quarantine', 'return', 'deny-lockdown'];
-    const labels: Readonly<Partial<Record<WarehouseDecision, string>>> = {
+    const labels: Readonly<Partial<Record<WarehouseConsoleAction, string>>> = {
       hold: 'HOLD BAY',
       verify: 'REQUEST VERIFICATION',
-      return: 'RETURN TO INBOUND',
+      return: 'RETURN LOAD',
       'deny-lockdown': 'DENY + LOCKDOWN',
     };
     for (const decision of decisions) {
@@ -440,9 +465,12 @@ export class WarehouseOpsPanel {
       button.type = 'button';
       button.className = 'omni-confirm__btn';
       button.textContent = data.definition.id === 'freight-sort'
-        ? decision === 'verify' ? 'VERIFY LOAD' : 'START SORT'
+        ? decision === 'deny-lockdown' ? 'REJECT + EMERGENCY' : 'RETURN LOAD'
         : labels[decision] ?? decision.toUpperCase();
-      button.disabled = !this.decisionReady(data, evidence, decision, dock);
+      if (decision === 'return') {
+        button.title = 'Send the current carried or docked load back to its original rack position.';
+      }
+      button.disabled = !this.decisionReady(data, evidence, decision, dock, inboundAudit);
       button.addEventListener('click', () => this.decide(decision));
       actionRow.appendChild(button);
     }
@@ -454,7 +482,8 @@ export class WarehouseOpsPanel {
     data: GeneratedWarehouseCase,
     evidence: WarehouseEvidenceState,
     intrusion: WarehouseIntrusionSnapshot | null,
-    dock: WarehouseDockSnapshot | null
+    dock: WarehouseDockSnapshot | null,
+    inboundAudit: InboundAuditSnapshot | null
   ): Array<[string, string, 'good' | 'bad' | null]> {
     if (data.definition.id === 'internal-breach' && intrusion) {
       const evidenceCount = Number(intrusion.evidence.rearHistory)
@@ -467,6 +496,20 @@ export class WarehouseOpsPanel {
         ['OPTICAL TAG', intrusion.tagSeconds > 0 ? `${intrusion.tagSeconds.toFixed(1)} SEC // LIVE` : intrusion.evidence.liveTag ? 'EXPIRED // REACQUIRE' : 'SCAN REQUIRED', intrusion.tagSeconds > 0 ? 'good' : intrusion.evidence.liveTag ? 'bad' : null],
         ['LAST SEEN', intrusion.lastSeenZone ? this.zoneName(intrusion.lastSeenZone) : 'UNKNOWN', intrusion.lastSeenZone ? 'good' : null],
         ['EVIDENCE STACK', `${evidenceCount} / 3 CONFIRMED`, evidenceCount === 3 ? 'good' : null],
+      ];
+    }
+    if (data.definition.id === 'freight-sort' && inboundAudit) {
+      const deliverer = inboundAudit.delivererMatches;
+      const seal = inboundAudit.sealIntact;
+      return [
+        ['DELIVERY', `${inboundAudit.activeIndex + 1} / ${inboundAudit.total}`, null],
+        ['WORKER', inboundAudit.workerScanned ? `${data.workerName} // ${data.workerName === 'Rui Alves' ? 'WX-3319' : 'BADGE VERIFIED'}` : 'OPTICAL SCAN REQUIRED', inboundAudit.workerScanned ? 'good' : null],
+        ['ASSIGNED PACKAGE', `${data.packageId} // AISLE ${data.aisle} // BAY ${String(data.bay).padStart(2, '0')}`, null],
+        ['PACKAGE DELIVERER', inboundAudit.packageScanned ? data.packageRecipientName : 'PACKAGE SCAN REQUIRED', deliverer === null ? null : deliverer ? 'good' : 'bad'],
+        ['DELIVERER MATCH', deliverer === null ? 'COMPARISON REQUIRED' : deliverer ? 'CONFIRMED' : 'IDENTITY CONTRADICTION', deliverer === null ? null : deliverer ? 'good' : 'bad'],
+        ['SECURITY SEAL', seal === null ? 'PACKAGE SCAN REQUIRED' : seal ? 'INTACT' : 'PACKAGE TAMPERED', seal === null ? null : seal ? 'good' : 'bad'],
+        ['SORT CONTROL', inboundAudit.phase === 'sort-ready' ? 'AUTHORIZED' : inboundAudit.phase === 'alarm-ready' ? 'REJECT AUTHORIZED' : inboundAudit.phase === 'fugitive-search' ? 'EMERGENCY HOLD' : 'LOCKED', inboundAudit.phase === 'sort-ready' ? 'good' : inboundAudit.phase === 'alarm-ready' ? 'bad' : null],
+        ['DELIVERIES RESOLVED', `${inboundAudit.resolved} / ${inboundAudit.total}`, inboundAudit.resolved >= inboundAudit.total ? 'good' : null],
       ];
     }
     if (data.definition.subjectType === 'worker') {
@@ -520,19 +563,25 @@ export class WarehouseOpsPanel {
   private decisionReady(
     data: GeneratedWarehouseCase,
     evidence: WarehouseEvidenceState,
-    decision: WarehouseDecision,
-    dock: WarehouseDockSnapshot | null
+    decision: WarehouseConsoleAction,
+    dock: WarehouseDockSnapshot | null,
+    inboundAudit: InboundAuditSnapshot | null
   ): boolean {
+    if (decision === 'return') return !dock || dock.state === 'empty' || dock.state === 'staged';
     if (dock && dock.state !== 'empty' && dock.state !== 'staged') return false;
     if (decision === 'deny-lockdown') {
+      if (data.definition.id === 'freight-sort') {
+        return !!inboundAudit && inboundAudit.workerScanned && inboundAudit.packageScanned
+          && !['fugitive-search', 'police-response', 'complete'].includes(inboundAudit.phase);
+      }
       return data.definition.id === 'door-tamper'
         ? evidence.visitor && evidence.action && evidence.authorization && evidence.tamper
         : evidence.visitor && evidence.cargo;
     }
     if (data.definition.subjectType === 'worker') return evidence.visitor;
-    if (data.definition.id === 'freight-sort') return evidence.cargo;
+    if (data.definition.id === 'freight-sort') return !!inboundAudit && inboundAudit.workerScanned && inboundAudit.packageScanned;
     if (decision === 'verify') return evidence.visitor || evidence.cargo;
-    const cargoDecision = decision === 'release' || decision === 'quarantine' || decision === 'return';
+    const cargoDecision = decision === 'release' || decision === 'quarantine';
     const staged = dock?.stagedPackageIds.length ?? 0;
     const required = dock?.requiredCount ?? 1;
     return evidence.visitor && evidence.cargo && (!cargoDecision || staged >= required);

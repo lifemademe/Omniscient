@@ -1,10 +1,11 @@
 /**
- * Warehouse stylisation pass.
+ * Global cel-shading pass.
  *
  * It performs restrained, edge-preserving colour simplification and a camera-matched
  * depth/normal prepass. That prepass supplies silhouette and crease ink with ordinary depth
  * testing, so outlines cannot show through shelves or walls. It runs at order 70, before the
- * subtle CRT pass at order 80, keeping scanlines crisp and interface overlays untouched.
+ * subtle CRT pass at order 80. DOM interface overlays live outside the scene composer;
+ * the physical menu CRT supplies an explicit protected quad for its raster image.
  */
 
 import * as ENGINE from '@gnsx/genesys.js';
@@ -82,6 +83,12 @@ class PaintPass implements ComposerPass {
         uNormalInk: { value: 0 },
         uOutlineStrength: { value: 0 },
         uProtectSignals: { value: 0 },
+        uBrightness: { value: 1 },
+        uProtectedA: { value: new THREE.Vector2() },
+        uProtectedB: { value: new THREE.Vector2() },
+        uProtectedC: { value: new THREE.Vector2() },
+        uProtectedD: { value: new THREE.Vector2() },
+        uProtectedOn: { value: 0 },
         uHasGeometry: { value: 0 },
         uCameraNear: { value: 0.05 },
         uCameraFar: { value: 180 },
@@ -102,6 +109,20 @@ class PaintPass implements ComposerPass {
   /** The live values, for a tuning panel to read and write. */
   public get values(): PaintLook {
     return this.now;
+  }
+
+  /** Exempt one camera-projected surface from filtering and contour ink. */
+  public setProtectedQuad(corners: readonly THREE.Vector2[] | null): void {
+    const uniforms = this.material.uniforms;
+    if (!corners || corners.length !== 4) {
+      uniforms.uProtectedOn.value = 0;
+      return;
+    }
+    (uniforms.uProtectedA.value as THREE.Vector2).copy(corners[0]);
+    (uniforms.uProtectedB.value as THREE.Vector2).copy(corners[1]);
+    (uniforms.uProtectedC.value as THREE.Vector2).copy(corners[2]);
+    (uniforms.uProtectedD.value as THREE.Vector2).copy(corners[3]);
+    uniforms.uProtectedOn.value = 1;
   }
 
   public setSize(width: number, height: number): void {
@@ -208,6 +229,7 @@ class PaintPass implements ComposerPass {
     this.now.outlineStrength += (this.target.outlineStrength - this.now.outlineStrength) * k;
     this.now.normalScale += (this.target.normalScale - this.now.normalScale) * k;
     this.now.protectSignals += (this.target.protectSignals - this.now.protectSignals) * k;
+    this.now.brightness += (this.target.brightness - this.now.brightness) * k;
     this.now.inkColor = [
       this.now.inkColor[0] + (this.target.inkColor[0] - this.now.inkColor[0]) * k,
       this.now.inkColor[1] + (this.target.inkColor[1] - this.now.inkColor[1]) * k,
@@ -227,6 +249,7 @@ class PaintPass implements ComposerPass {
     u.uNormalInk.value = this.now.normalInk;
     u.uOutlineStrength.value = this.now.outlineStrength;
     u.uProtectSignals.value = this.now.protectSignals;
+    u.uBrightness.value = this.now.brightness;
     (u.uInkColor.value as THREE.Color).setRGB(...this.now.inkColor);
     u.uEncode.value = this.renderToScreen ? 1 : 0;
 
@@ -278,6 +301,11 @@ interface PaintHost {
 let effect: OmniscientPaintEffect | null = null;
 let mounted = false;
 let activeLook: PaintLookName = 'off';
+const cloneLook = (look: PaintLook): PaintLook => ({
+  ...look,
+  inkColor: [...look.inkColor],
+});
+let activeValues: PaintLook = cloneLook(PAINT_LOOKS.off);
 
 /** Mount the pass. Returns false until the pipeline exists - same contract as installRetro. */
 export function installPaint(post: PaintHost): boolean {
@@ -286,7 +314,7 @@ export function installPaint(post: PaintHost): boolean {
   post.registerEffect(effect as unknown as ENGINE.IPostProcessEffect);
   mounted = post.getEffect('omniscient-paint') !== null;
   if (mounted) {
-    effect.pass.setLook(PAINT_LOOKS[activeLook], true);
+    effect.pass.setLook(activeValues, true);
     effect.pass.enabled = activeLook !== 'off';
   }
   return mounted;
@@ -294,19 +322,35 @@ export function installPaint(post: PaintHost): boolean {
 
 export function setPaintLook(name: PaintLookName, immediate = false): void {
   activeLook = name;
+  activeValues = cloneLook(PAINT_LOOKS[name]);
   if (!effect) return;
   if (name === 'off') {
-    // Other missions should not pay for a neutral full-screen blit.
-    effect.pass.setLook(PAINT_LOOKS.off, true);
+    // The editor A/B path should not pay for a neutral full-screen blit.
+    effect.pass.setLook(activeValues, true);
     effect.pass.enabled = false;
     return;
   }
   effect.pass.enabled = true;
-  effect.pass.setLook(PAINT_LOOKS[name], immediate);
+  effect.pass.setLook(activeValues, immediate);
 }
 
-/** The live values, for the F8 panel. Null before the pass is mounted. */
-export function paintValues(): PaintLook | null {
-  return effect?.pass.values ?? null;
+/** Patch the active look, including before the lazily-created post pipeline is mounted. */
+export function setPaintValues(values: Partial<PaintLook>, immediate = true): void {
+  activeValues = cloneLook({
+    ...activeValues,
+    ...values,
+    inkColor: values.inkColor ?? activeValues.inkColor,
+  });
+  effect?.pass.setLook(activeValues, immediate);
+}
+
+/** Keep a camera-projected UI surface outside the full-scene cel conversion. */
+export function setPaintProtectedQuad(corners: readonly THREE.Vector2[] | null): void {
+  effect?.pass.setProtectedQuad(corners);
+}
+
+/** The target values, for the F8 panel and clipboard dump. */
+export function paintValues(): PaintLook {
+  return cloneLook(activeValues);
 }
 

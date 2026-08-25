@@ -4,15 +4,17 @@ import {
   buildReadoutCard,
   fillMeter,
 } from '../link/console-chrome.js';
+import { STORY_QUEST_COUNT } from './content.js';
 import { WarehouseOpsPanel } from './WarehouseOpsPanel.js';
 
 import type { ConsoleFrame, ReadoutCard } from '../link/console-chrome.js';
 
 import type { WarehouseChatReply } from './WarehouseOpsPanel.js';
+import type { InboundAuditSnapshot } from './WarehouseInboundAudit.js';
 import type {
   GeneratedWarehouseCase,
   WarehouseArchiveRecord,
-  WarehouseDecision,
+  WarehouseConsoleAction,
   WarehouseDockSnapshot,
   WarehouseDoorId,
   WarehouseDoorSnapshot,
@@ -194,6 +196,39 @@ const CSS = `
   box-shadow: inset 0 0 70px 10px rgba(84, 176, 108, 0.4);
   opacity: 1;
   transition: opacity 0.14s ease-in;
+}
+
+/* Third-person cruise streaks, scoped to the world viewport rather than the console UI. */
+.warehouse-hud__speed-lines {
+  --speed-opacity: 0;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.24s ease-out;
+}
+.warehouse-hud[data-view=drone][data-optical=false] .warehouse-hud__speed-lines[data-active=true] {
+  opacity: var(--speed-opacity);
+}
+.warehouse-hud__speed-line {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: clamp(64px, 10vw, 170px);
+  height: 1px;
+  transform-origin: 0 50%;
+  background: linear-gradient(90deg, rgba(216, 255, 176, 0), rgba(216, 255, 176, 0.7), rgba(127, 224, 138, 0));
+  box-shadow: 0 0 4px rgba(127, 224, 138, 0.3);
+  animation: warehouse-speed-streak 0.48s linear infinite;
+}
+@keyframes warehouse-speed-streak {
+  from { transform: rotate(var(--line-angle)) translateX(10vmin) scaleX(0.18); opacity: 0; }
+  18% { opacity: 0.85; }
+  to { transform: rotate(var(--line-angle)) translateX(72vmax) scaleX(1.45); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .warehouse-hud__speed-lines { display: none; }
 }
 
 .warehouse-hud__scanfx {
@@ -437,6 +472,7 @@ export class WarehouseHUD {
   private inbound: HTMLElement;
   private feed: HTMLElement;
   private scanFx: HTMLElement;
+  private speedLines: HTMLElement;
   private controls: HTMLElement;
   private message: HTMLElement;
   private tools: HTMLElement;
@@ -450,7 +486,7 @@ export class WarehouseHUD {
   private verdict: HTMLDivElement;
   private opticalAim = false;
   private messageTimer = 0;
-  private decisionHandler: ((decision: WarehouseDecision) => void) | null = null;
+  private decisionHandler: ((action: WarehouseConsoleAction) => void) | null = null;
   private toolHandler: ((tool: WarehouseTool) => void) | null = null;
   private transmitHandler: ((text: string) => WarehouseChatReply | null) | null = null;
   private doorSelectHandler: ((door: WarehouseDoorId) => void) | null = null;
@@ -467,7 +503,7 @@ export class WarehouseHUD {
 
   public constructor(
     container: HTMLElement,
-    mode: WarehouseMode,
+    private readonly mode: WarehouseMode,
     onExit: () => void,
     onRecover: () => void,
   ) {
@@ -501,15 +537,15 @@ export class WarehouseHUD {
      *
      * Its cards are a label, an eight-segment meter, a value and a lowercase line under it -
      * and the warehouse has exactly three things that fit that shape and were being written
-     * as one run-on amber string instead: INTEGRITY (three seals), STAGE (progress through
-     * thirty) and CLEAN CHAIN.
+     * as one run-on amber string instead: INTEGRITY (three seals), PROGRESS (story movements
+     * or Night Shift stages) and CLEAN CHAIN.
      *
      * The order repeats the Contact View's argument: the machine states the condition of the
      * link before it says anything about the work. Integrity is the warehouse's CONNECTION
      * STRENGTH - the reading that ends the run when it reaches zero.
-     */
+    */
     this.integrityCard = buildReadoutCard('Integrity');
-    this.stageCard = buildReadoutCard('Stage');
+    this.stageCard = buildReadoutCard(mode === 'story' ? 'Quest' : 'Stage');
     this.chainCard = buildReadoutCard('Clean chain');
     [this.integrityCard, this.stageCard, this.chainCard].forEach((card, index) => {
       card.card.classList.add('omni-arrive');
@@ -562,6 +598,16 @@ export class WarehouseHUD {
     this.feed.className = 'warehouse-hud__feed';
     this.scanFx = document.createElement('div');
     this.scanFx.className = 'warehouse-hud__scanfx';
+    this.speedLines = document.createElement('div');
+    this.speedLines.className = 'warehouse-hud__speed-lines';
+    this.speedLines.dataset.active = 'false';
+    for (let index = 0; index < 18; index++) {
+      const line = document.createElement('span');
+      line.className = 'warehouse-hud__speed-line';
+      line.style.setProperty('--line-angle', `${String(index * 20 + (index % 3) * 3)}deg`);
+      line.style.animationDelay = `${String(-(index % 6) * 0.08)}s`;
+      this.speedLines.appendChild(line);
+    }
     this.verdict = document.createElement('div');
     this.verdict.className = 'warehouse-hud__verdict';
     const optical = document.createElement('div');
@@ -649,6 +695,7 @@ export class WarehouseHUD {
      * what guarantees no overlay can cross into the panel again.
      */
     frame.stage.append(
+      this.speedLines,
       optical,
       this.scanFx,
       this.verdict,
@@ -672,7 +719,7 @@ export class WarehouseHUD {
     this.setView('cctv');
   }
 
-  public onDecision(handler: (decision: WarehouseDecision) => void): void {
+  public onDecision(handler: (action: WarehouseConsoleAction) => void): void {
     this.decisionHandler = handler;
   }
 
@@ -756,11 +803,16 @@ export class WarehouseHUD {
     this.integrityCard.sub.textContent =
       seals === 3 ? 'unbroken' : seals === 0 ? 'run over' : 'seal broken';
 
-    // Thirty stages, eight segments. The value carries the precision; the meter carries the
-    // shape of the run, which is the thing a glance is for.
-    fillMeter(this.stageCard.meter, Math.max(0, Math.min(8, Math.round((stage / 30) * 8))));
+    /*
+     * Story counts individual playable cases (quests), while Night Shift counts procedural
+     * stages. The movement/chapter index is intentionally absent from this progress card.
+     */
+    const total = this.mode === 'story' ? STORY_QUEST_COUNT : 30;
+    fillMeter(this.stageCard.meter, Math.max(0, Math.min(8, Math.round((stage / total) * 8))));
     this.stageCard.value.textContent = String(Math.max(0, stage)).padStart(2, '0');
-    this.stageCard.sub.textContent = stage >= 30 ? 'final stage' : 'of 30';
+    this.stageCard.sub.textContent = stage >= total
+      ? this.mode === 'story' ? 'final quest' : 'final stage'
+      : `of ${String(total).padStart(2, '0')}`;
 
     fillMeter(this.chainCard.meter, Math.max(0, Math.min(8, chain)));
     this.chainCard.value.textContent = String(Math.max(0, chain));
@@ -883,9 +935,10 @@ export class WarehouseHUD {
     data: GeneratedWarehouseCase,
     evidence: WarehouseEvidenceState,
     intrusion: WarehouseIntrusionSnapshot | null = null,
-    dock: WarehouseDockSnapshot | null = null
+    dock: WarehouseDockSnapshot | null = null,
+    inboundAudit: InboundAuditSnapshot | null = null
   ): void {
-    this.ops.showCase(data, evidence, intrusion, dock);
+    this.ops.showCase(data, evidence, intrusion, dock, inboundAudit);
   }
 
   public appendSystem(name: string, body: string): void {
@@ -912,6 +965,12 @@ export class WarehouseHUD {
     this.message.textContent = text;
     this.message.classList.add('warehouse-hud__message--shown');
     this.messageTimer = seconds;
+  }
+
+  public setSpeedLines(active: boolean, intensity = 1): void {
+    const strength = Math.max(0, Math.min(1, intensity));
+    this.speedLines.dataset.active = String(active && strength > 0);
+    this.speedLines.style.setProperty('--speed-opacity', String(0.18 + strength * 0.42));
   }
 
   /**

@@ -96,7 +96,7 @@ export interface BandingOptions {
 
 export const PAINT_BANDING_LOOKS = {
   /** The established house look used by the contact dioramas. */
-  house: { bands: 3, softness: 0.45 },
+  house: { bands: 3, softness: 0.32 },
   /** Three readable warehouse value groups without the brittle edge of a hard comic ramp. */
   warehouseCel: { bands: 3, softness: 0.32 },
   /** Lower-contrast fallback for dense or low-resolution captures. */
@@ -130,15 +130,14 @@ export const PAINT_UNIFORMS = {
    * 69-74 and then nothing at all until 85. That is not noise, it is quantisation, and no
    * amount of looking at it as "grain" would have found the cause.
    *
-   * 0.45 keeps 55% of every band flat - the painted read §230 asks for is carried by the big
-   * transitions, not by the small ones - and turns the fine terracing into a gradient. The
-   * alternative fixes are heavier: fewer lights per room, or moving the injection after the
-   * light loop so accumulated light is banded once. Both remain open if this is not enough.
+   * 0.32 is the global cel-shaded setting settled through the F8 comparison panel. It keeps
+   * the major three-value structure readable while leaving enough ramp to stop multiple
+   * practical lights producing brittle, intersecting terraces.
    *
    * MEASURED, because a shared uniform read by a shader nobody can breakpoint is exactly the
-   * kind of change that silently does nothing. Frame against frame, 0.17 to 0.45 moves 16.9%
-   * of pixels by more than four luma, against a 5.1% floor between two builds with an
-   * unrelated change in them. It is a real change and a gentle one, which is what it is for.
+   * kind of change that silently does nothing. Earlier frame comparisons established that
+   * this shared uniform materially changes the image; the final 0.32 value is authored now,
+   * rather than being an editor-only override.
    *
    * The first attempt to measure it looked at edge energy on flat wall patches and reported
    * no change at all - because a band transition on a wall lit from across the room is a
@@ -146,7 +145,7 @@ export const PAINT_UNIFORMS = {
    * life at 2 bands and 0.02 softness, which moved 61.9% of pixels: it is very much alive,
    * and the metric had been wrong rather than the change. Diff whole frames for this.
    */
-  uPaintSoft: { value: 0.45 },
+  uPaintSoft: { value: 0.32 },
 };
 
 interface PaintBandingState {

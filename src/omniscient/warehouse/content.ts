@@ -1,7 +1,7 @@
 import type { WarehouseCaseDefinition, WarehouseMovementDefinition, WarehouseTool } from './types.js';
 
 export const WAREHOUSE_COORDINATES = { latitude: -11.5, longitude: -57.0 } as const;
-export const WAREHOUSE_DECK_VERSION = 5;
+export const WAREHOUSE_DECK_VERSION = 7;
 
 export const STORY_MOVEMENTS: readonly WarehouseMovementDefinition[] = [
   {
@@ -14,21 +14,20 @@ export const STORY_MOVEMENTS: readonly WarehouseMovementDefinition[] = [
   {
     id: 'judgement',
     title: 'MOVEMENT 02 // JUDGEMENT',
-    objective: 'Return an invalid inbound record, quarantine a mass anomaly, and isolate a compromised seal.',
-    caseIds: ['invalid-inbound-record', 'weight-mismatch', 'broken-seal'],
+    objective: 'Quarantine a mass anomaly and isolate a compromised seal.',
+    caseIds: ['weight-mismatch', 'broken-seal'],
   },
   {
     id: 'freight',
-    title: 'MOVEMENT 03 // INBOUND',
-    objective: 'Receive the night truck, verify its crew, and stage the manifest.',
+    title: 'QUEST 04 // INBOUND AUDIT',
+    objective: 'Audit five worker deliveries. Sort verified packages and reject confirmed contradictions.',
     caseIds: ['freight-sort'],
-    inboundIn: 12,
   },
   {
     id: 'overlap',
     title: 'MOVEMENT 04 // OVERLAP',
     objective: 'Maintain collections, verify personnel, and contain an unauthorized door attempt.',
-    caseIds: ['valid-collection', 'temporary-worker', 'invalid-inbound-record', 'door-tamper'],
+    caseIds: ['valid-collection', 'temporary-worker', 'door-tamper'],
     inboundIn: 9,
   },
   {
@@ -47,6 +46,16 @@ export const STORY_MOVEMENTS: readonly WarehouseMovementDefinition[] = [
   },
 ] as const;
 
+/** Total individual cases in Story mode; these are what the player experiences as quests. */
+export const STORY_QUEST_COUNT = STORY_MOVEMENTS.reduce((total, movement) => total + movement.caseIds.length, 0);
+
+export function storyQuestNumber(movementIndex: number, caseIndex: number): number {
+  const completedBeforeMovement = STORY_MOVEMENTS
+    .slice(0, Math.max(0, movementIndex))
+    .reduce((total, movement) => total + movement.caseIds.length, 0);
+  return completedBeforeMovement + Math.max(0, caseIndex) + 1;
+}
+
 export const CASE_DECK: readonly WarehouseCaseDefinition[] = [
   {
     id: 'valid-collection',
@@ -57,16 +66,6 @@ export const CASE_DECK: readonly WarehouseCaseDefinition[] = [
     correctDecision: 'release',
     anomaly: 'none',
     baseSeconds: 35,
-  },
-  {
-    id: 'invalid-inbound-record',
-    title: 'Invalid inbound record',
-    briefing: 'Recipient identity matches, but the package inbound record is recalled, voided, or misrouted.',
-    subjectType: 'cargo',
-    requiredTools: ['optical'],
-    correctDecision: 'return',
-    anomaly: 'inbound',
-    baseSeconds: 38,
   },
   {
     id: 'weight-mismatch',
@@ -90,8 +89,8 @@ export const CASE_DECK: readonly WarehouseCaseDefinition[] = [
   },
   {
     id: 'freight-sort',
-    title: 'Inbound freight',
-    briefing: 'Verify the arriving crew and stage cargo by its destination lane.',
+    title: 'Inbound worker audit',
+    briefing: 'Compare each worker badge, assigned package, recorded deliverer, and security seal before sorting.',
     subjectType: 'mixed',
     requiredTools: ['optical'],
     correctDecision: 'release',

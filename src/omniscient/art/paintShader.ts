@@ -33,6 +33,16 @@ export interface PaintLook {
   normalScale: number;
   /** Preserve saturated semantic scan, evidence, and door-state colours. */
   protectSignals: number;
+  /**
+   * Gain on the shaded image, 1 = unchanged.
+   *
+   * Applied after the edge-preserving filter and BEFORE ink, outline and tooth, which is the
+   * placement that makes it behave like a light rather than like a wash: contours still mix
+   * toward `inkColor` afterwards, so brightening the room does not fade its lines. The
+   * protected-signal colours are lifted by the same factor, so scan and evidence hues keep
+   * their relationship to everything around them instead of going dull as the room comes up.
+   */
+  brightness: number;
   /** Linear ink colour. Dark blue-green reads as shadow rather than UI black. */
   inkColor: readonly [number, number, number];
 }
@@ -43,6 +53,7 @@ export const PAINT_LOOKS = {
     radius: 0, strength: 0, ink: 0, tint: 0, tooth: 0,
     outlineWidth: 0, depthInk: 0, normalInk: 0, outlineStrength: 0,
     normalScale: 0.5, protectSignals: 0, inkColor: [0.025, 0.035, 0.04],
+    brightness: 1,
   },
   /**
    * The one to look at first.
@@ -54,24 +65,39 @@ export const PAINT_LOOKS = {
     radius: 1.2, strength: 0.18, ink: 0.24, tint: 0.4, tooth: 0.04,
     outlineWidth: 0, depthInk: 0, normalInk: 0, outlineStrength: 0,
     normalScale: 0.5, protectSignals: 0.3, inkColor: [0.025, 0.035, 0.04],
+    brightness: 1,
   },
   /** Pushed, for judging the direction rather than for shipping. */
   heavy: {
     radius: 1.8, strength: 0.34, ink: 0.48, tint: 0.65, tooth: 0.08,
     outlineWidth: 1.5, depthInk: 1, normalInk: 0.7, outlineStrength: 0.8,
     normalScale: 0.85, protectSignals: 0.55, inkColor: [0.018, 0.025, 0.03],
+    brightness: 1,
   },
   /** Warehouse prototype: clean value bands, occluded contours, no canvas or oil smearing. */
   warehouseCel: {
-    radius: 1, strength: 0.12, ink: 0.08, tint: 0.28, tooth: 0,
-    outlineWidth: 1.15, depthInk: 1, normalInk: 0.65, outlineStrength: 0.72,
-    normalScale: 0.72, protectSignals: 0.92, inkColor: [0.025, 0.035, 0.04],
+    radius: 3, strength: 1, ink: 1, tint: 0.12, tooth: 0,
+    /*
+     * Settled at the F8 panel, 2026-08-25.
+     *
+     * The outline goes from a quarter of a pixel to 1.35, which is the difference between a
+     * contour you can find if you look for it and one that draws the room. And brightness
+     * more than doubles, because the cel pass bands toward the darker step and the warehouse
+     * was already a night interior - the two compounded into a room lit like a cupboard.
+     * Lifting inside the pass rather than at the tone mapper is what keeps the ink black
+     * while the surfaces come up; see PaintLook.brightness.
+     */
+    outlineWidth: 1.35, depthInk: 2, normalInk: 2, outlineStrength: 1,
+    normalScale: 1, protectSignals: 1,
+    inkColor: [0.025186859622305935, 0.035601314869097636, 0.03954623527052923],
+    brightness: 2.17,
   },
   /** Lower-cost depth-led contour for high-DPI or constrained GPUs. */
   warehouseCelLow: {
     radius: 0, strength: 0, ink: 0.06, tint: 0.24, tooth: 0,
     outlineWidth: 1, depthInk: 1, normalInk: 0.38, outlineStrength: 0.58,
     normalScale: 0.48, protectSignals: 0.92, inkColor: [0.025, 0.035, 0.04],
+    brightness: 1,
   },
 } as const satisfies Record<string, PaintLook>;
 
@@ -108,6 +134,12 @@ uniform float uDepthInk;
 uniform float uNormalInk;
 uniform float uOutlineStrength;
 uniform float uProtectSignals;
+uniform float uBrightness;
+uniform vec2 uProtectedA;
+uniform vec2 uProtectedB;
+uniform vec2 uProtectedC;
+uniform vec2 uProtectedD;
+uniform float uProtectedOn;
 uniform float uHasGeometry;
 uniform float uCameraNear;
 uniform float uCameraFar;
@@ -115,6 +147,19 @@ uniform vec3 uInkColor;
 uniform float uEncode;
 
 float luma( vec3 c ) { return dot( c, vec3( 0.2126, 0.7152, 0.0722 ) ); }
+
+float protectedSide( vec2 a, vec2 b, vec2 p ) {
+  return ( b.x - a.x ) * ( p.y - a.y ) - ( b.y - a.y ) * ( p.x - a.x );
+}
+
+bool insideProtectedQuad( vec2 p ) {
+  float s0 = protectedSide( uProtectedA, uProtectedB, p );
+  float s1 = protectedSide( uProtectedB, uProtectedC, p );
+  float s2 = protectedSide( uProtectedC, uProtectedD, p );
+  float s3 = protectedSide( uProtectedD, uProtectedA, p );
+  return ( s0 >= 0.0 && s1 >= 0.0 && s2 >= 0.0 && s3 >= 0.0 )
+      || ( s0 <= 0.0 && s1 <= 0.0 && s2 <= 0.0 && s3 <= 0.0 );
+}
 
 float toothHash( vec2 p ) {
   return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 );
@@ -147,6 +192,14 @@ vec2 geometryDifference( vec2 uv, float centreDepth, vec3 centreNormal ) {
 void main() {
   vec2 texel = 1.0 / uResolution;
   vec4 src = texture2D( tDiffuse, vUv );
+
+  /* The physical CRT is part of the room; its raster image is UI and stays untouched. */
+  if ( uProtectedOn > 0.5 && insideProtectedQuad( vUv * 2.0 - 1.0 ) ) {
+    gl_FragColor = src;
+    if ( uEncode > 0.5 ) gl_FragColor = linearToOutputTexel( gl_FragColor );
+    return;
+  }
+
   vec3 colour = src.rgb;
 
   if ( uStrength > 0.0 && uRadius > 0.0 ) {
@@ -167,6 +220,10 @@ void main() {
     total += w0 + w1 + w2 + w3;
     colour = mix( colour, sum / total, uStrength );
   }
+
+  // Brightness sits here on purpose: after the filter, before every line-drawing step, so
+  // lifting the room never lifts its ink. See PaintLook.brightness.
+  colour *= uBrightness;
 
   if ( uInk > 0.0 ) {
     // Compact luminance derivative. Geometry contours are supplied separately below.
@@ -218,7 +275,7 @@ void main() {
   float high = max( src.r, max( src.g, src.b ) );
   float low = min( src.r, min( src.g, src.b ) );
   float semanticSignal = smoothstep( 0.14, 0.38, high - low ) * smoothstep( 0.2, 0.55, high );
-  colour = mix( colour, src.rgb, semanticSignal * uProtectSignals );
+  colour = mix( colour, src.rgb * uBrightness, semanticSignal * uProtectSignals );
 
   gl_FragColor = vec4( colour, src.a );
   // Only the pass that reaches the canvas owes it an encode - same rule as the CRT.

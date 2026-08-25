@@ -350,7 +350,13 @@ const RACK_GAP_MARGIN = 0.34;
  * well inside the 3.65m grip range from the aisle. The tutorial's address is authored, so its
  * slot is authored with it.
  */
-const RESERVED_PICK_SLOTS: ReadonlySet<string> = new Set(['2:2:2']);
+const RESERVED_PICK_SLOTS: ReadonlySet<string> = new Set([
+  '1:1:2', // 1124
+  '2:2:2', // 2034 / 2046
+  '3:4:2', // 3072
+  '4:5:2', // 4088
+  '5:1:2', // 5013
+]);
 /**
  * Which shelf level a picked package stands on. Must match the level in RESERVED_PICK_SLOTS.
  *
@@ -373,6 +379,12 @@ export class WarehouseEnvironment {
   };
   public rearDoor: ENGINE.MeshNode | null = null;
   public conveyorRollers: ENGINE.SceneNode[] = [];
+  /** Single physical destination for the guided inbound-audit package loop. */
+  public readonly verifiedIntakePosition = new THREE.Vector3(
+    WAREHOUSE_LAYOUT.sortation.conveyorX[0],
+    0.86,
+    WAREHOUSE_LAYOUT.sortation.centerZ + WAREHOUSE_LAYOUT.sortation.conveyorLength * 0.5 - 0.3
+  );
   /** Slots the loader left empty, as aisle:bay:level. Flyable - see constrainDrone. */
   private readonly emptyBays = new Set<string>();
   private readonly setDressing = new WarehouseSetDressing();
@@ -398,6 +410,8 @@ export class WarehouseEnvironment {
   private rearDoorTarget = 0;
   private clock = 0;
   private conveyorRunning = false;
+  private verifiedIntakeScanner: ENGINE.MeshNode | null = null;
+  private verifiedIntakeStatus: THREE.MeshStandardMaterial | null = null;
 
   public build(): void {
     const { shell } = WAREHOUSE_LAYOUT;
@@ -797,6 +811,52 @@ export class WarehouseEnvironment {
     for (const x of [16.15, 23]) {
       this.root.add(mesh('CatwalkRail', new THREE.BoxGeometry(0.08, 0.08, 12), AMBER, new THREE.Vector3(x, 7.35, -1.2)));
     }
+
+    const intake = ENGINE.SceneNode.create({
+      name: 'VerifiedInboundIntake',
+      position: new THREE.Vector3(this.verifiedIntakePosition.x, 0, this.verifiedIntakePosition.z),
+    });
+    const status = new THREE.MeshStandardMaterial({
+      color: '#365c4a',
+      emissive: '#1c5f3a',
+      emissiveIntensity: 1.35,
+      roughness: 0.42,
+    });
+    this.verifiedIntakeStatus = status;
+    intake.add(
+      mesh('VerifiedIntakeApron', new THREE.BoxGeometry(2.7, 0.16, 2.5), DARK_STEEL, new THREE.Vector3(0, 0.08, 0.25)),
+      mesh('VerifiedIntakeGuideLeft', new THREE.BoxGeometry(0.12, 0.48, 2.2), GUIDE, new THREE.Vector3(-1.02, 0.69, 0.12)),
+      mesh('VerifiedIntakeGuideRight', new THREE.BoxGeometry(0.12, 0.48, 2.2), GUIDE, new THREE.Vector3(1.02, 0.69, 0.12)),
+      mesh('VerifiedIntakeClampLeft', new THREE.BoxGeometry(0.18, 0.22, 0.74), STEEL, new THREE.Vector3(-0.62, 0.9, 0)),
+      mesh('VerifiedIntakeClampRight', new THREE.BoxGeometry(0.18, 0.22, 0.74), STEEL, new THREE.Vector3(0.62, 0.9, 0)),
+      mesh('VerifiedIntakeStatusLeft', new THREE.BoxGeometry(0.08, 0.1, 1.9), status, new THREE.Vector3(-1.14, 0.55, 0.1)),
+      mesh('VerifiedIntakeStatusRight', new THREE.BoxGeometry(0.08, 0.1, 1.9), status, new THREE.Vector3(1.14, 0.55, 0.1))
+    );
+    const scanner = mesh(
+      'VerifiedIntakeScanner',
+      new THREE.BoxGeometry(2.1, 0.035, 0.08),
+      new THREE.MeshStandardMaterial({
+        color: '#91d4c4',
+        emissive: '#4fc3a0',
+        emissiveIntensity: 2.4,
+        transparent: true,
+        opacity: 0.78,
+        roughness: 0.3,
+      }),
+      new THREE.Vector3(0, 1.34, 0.1)
+    );
+    this.verifiedIntakeScanner = scanner;
+    intake.add(scanner);
+    const intakeLabel = readableLabelPanel(
+      'VerifiedIntakeLabel',
+      'VERIFIED INTAKE',
+      2.35,
+      0.48,
+      '#d8ffb0',
+      new THREE.Vector3(0, 1.68, 0.62)
+    );
+    intake.add(intakeLabel.root);
+    this.root.add(intake);
   }
 
   private buildSecurityZones(): void {
@@ -1279,6 +1339,35 @@ export class WarehouseEnvironment {
       mesh('CompactorBeacon', new THREE.CylinderGeometry(0.12, 0.12, 0.18, 10), RED, new THREE.Vector3(1.2, 2.9, 0))
     );
     this.root.add(compactor);
+
+    /*
+     * Authored cover for the inbound fugitive. Each silhouette hides the torso from one
+     * approach while leaving helmet, shoes or reflected vest readable from another; a search
+     * target must be concealed without becoming a pixel hunt. The same props also break the
+     * long, generated-looking rack corridors during ordinary play.
+     */
+    const coverSteel = new THREE.MeshStandardMaterial({ color: '#263532', roughness: 0.73, metalness: 0.42 });
+    const coverAmber = new THREE.MeshStandardMaterial({ color: '#a8732f', roughness: 0.78, metalness: 0.12 });
+    const palletCover = ENGINE.SceneNode.create({ name: 'FugitiveCover-Receiving', position: new THREE.Vector3(-5.4, 0, -21.2) });
+    palletCover.add(
+      mesh('PalletCoverBase', new THREE.BoxGeometry(2.2, 0.16, 1.35), PALLET, new THREE.Vector3(0, 0.08, 0)),
+      mesh('PalletCoverLoadA', new THREE.BoxGeometry(0.92, 1.2, 1.05), coverAmber, new THREE.Vector3(-0.5, 0.72, 0)),
+      mesh('PalletCoverLoadB', new THREE.BoxGeometry(0.92, 0.82, 1.05), coverAmber, new THREE.Vector3(0.52, 0.53, 0))
+    );
+    const maintenance = ENGINE.SceneNode.create({ name: 'FugitiveCover-StorageWest', position: new THREE.Vector3(-20.1, 0, -7.2) });
+    maintenance.add(
+      mesh('MaintenanceCabinet', new THREE.BoxGeometry(1.45, 2.05, 0.72), coverSteel, new THREE.Vector3(0, 1.03, 0)),
+      mesh('MaintenanceDoorSeam', new THREE.BoxGeometry(0.025, 1.72, 0.05), DARK_STEEL, new THREE.Vector3(0, 1.05, 0.385)),
+      mesh('MaintenanceHandle', new THREE.BoxGeometry(0.08, 0.28, 0.08), AMBER, new THREE.Vector3(0.46, 1.08, 0.42))
+    );
+    const sortCover = ENGINE.SceneNode.create({ name: 'FugitiveCover-Sortation', position: new THREE.Vector3(18.2, 0, -7.6) });
+    sortCover.add(
+      mesh('SortPumpTank', new THREE.CylinderGeometry(0.62, 0.68, 1.45, 12), coverSteel, new THREE.Vector3(0, 0.74, 0)),
+      mesh('SortPumpGuard', new THREE.TorusGeometry(0.76, 0.055, 8, 18), AMBER, new THREE.Vector3(0, 0.9, 0)),
+      mesh('SortPumpPipe', new THREE.CylinderGeometry(0.11, 0.11, 1.55, 10), coverSteel, new THREE.Vector3(0.54, 1.36, 0))
+    );
+    sortCover.getObjectByName('SortPumpGuard')?.rotateX(Math.PI / 2);
+    this.root.add(palletCover, maintenance, sortCover);
   }
 
   public aisleX(aisle: number): number {
@@ -1435,6 +1524,19 @@ export class WarehouseEnvironment {
     this.conveyorRunning = running;
   }
 
+  public setVerifiedIntakeState(state: 'idle' | 'ready' | 'processing' | 'evidence'): void {
+    if (this.verifiedIntakeStatus) {
+      const colour = state === 'evidence' ? '#a34136' : state === 'processing' ? '#d99a35' : '#365c4a';
+      const emissive = state === 'evidence' ? '#7f1710' : state === 'processing' ? '#a95f13' : '#1c5f3a';
+      this.verifiedIntakeStatus.color.set(colour);
+      this.verifiedIntakeStatus.emissive.set(emissive);
+      this.verifiedIntakeStatus.emissiveIntensity = state === 'idle' ? 0.7 : 1.8;
+    }
+    if (this.verifiedIntakeScanner) {
+      this.verifiedIntakeScanner.visible = state !== 'idle';
+    }
+  }
+
   public setServiceDoorStatus(id: WarehouseDoorId, status: WarehouseDoorStatus): void {
     this.serviceDoors.get(id)?.setStatus(status);
   }
@@ -1544,6 +1646,11 @@ export class WarehouseEnvironment {
 
   public tick(deltaTime: number): void {
     this.clock += deltaTime;
+    if (this.verifiedIntakeScanner?.visible) {
+      this.verifiedIntakeScanner.position.z = 0.1 + Math.sin(this.clock * 3.1) * 0.72;
+      const material = this.verifiedIntakeScanner.material as THREE.MeshStandardMaterial;
+      material.opacity = 0.58 + Math.sin(this.clock * 6.2) * 0.18;
+    }
     const targetEmergency = this.lightingMode === 'normal' || this.lightingMode === 'recovery' ? 0 : 1;
     this.emergencyLevel = THREE.MathUtils.damp(this.emergencyLevel, targetEmergency, 2.8, deltaTime);
     const emergency = this.emergencyLevel;

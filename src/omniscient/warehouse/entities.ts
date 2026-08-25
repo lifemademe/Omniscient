@@ -8,7 +8,7 @@ import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
 import type { Blackboard, BehaviorStatus as BehaviorStatusType } from '@gnsx/genesys.js';
 import type { RiggedContact } from '../view/riggedContact.js';
 import { createWarehouseLabelGeometry } from './labelGeometry.js';
-import type { GeneratedWarehouseCase, WarehouseDecision, WarehouseDoorId } from './types.js';
+import type { GeneratedWarehouseCase, WarehouseDecision, WarehouseDoorId, WarehouseSecurityZoneId } from './types.js';
 
 export const WAREHOUSE_CARGO_SIZE = Object.freeze({ width: 0.86, height: 0.58, depth: 0.72 });
 export const WAREHOUSE_CARGO_HORIZONTAL_RADIUS = Math.hypot(
@@ -124,25 +124,92 @@ class WorkerRouteAction extends ENGINE.BehaviorAction {
   }
 }
 
+class WorkerFugitiveAction extends ENGINE.BehaviorAction {
+  protected override onInitialize(_blackboard: Blackboard): void {}
+
+  protected override async onUpdate(blackboard: Blackboard, deltaTime: number): Promise<BehaviorStatusType> {
+    const owner = blackboard.getOwner();
+    if (!(owner instanceof WarehouseWorkerNode) || !owner.isFugitiveActive()) {
+      return ENGINE.BehaviorStatus.Failure;
+    }
+    owner.advanceFugitive(deltaTime);
+    return ENGINE.BehaviorStatus.Running;
+  }
+}
+
+export interface WarehouseWorkerStyle {
+  displayName?: string;
+  packageId?: string;
+  helmet?: string;
+  gloves?: string;
+  equipmentIndex?: number;
+}
+
+export interface WarehouseWorkerFugitiveWaypoint {
+  zone: WarehouseSecurityZoneId;
+  position: THREE.Vector3;
+  concealed: boolean;
+}
+
+export interface WarehouseWorkerFugitiveCallbacks {
+  onZoneChanged?: (zone: WarehouseSecurityZoneId) => void;
+  onEscapeWarning?: () => void;
+  onEscaped?: () => void;
+}
+
+export type WarehouseWorkerState =
+  | 'routine'
+  | 'inspection'
+  | 'alerted'
+  | 'flee'
+  | 'seek-cover'
+  | 'crouch-hide'
+  | 'react-observed'
+  | 'relocate'
+  | 'final-escape'
+  | 'contained';
+
 @ENGINE.GameClass()
 export class WarehouseWorkerNode extends ENGINE.SceneNode {
   public workerId = '';
+  public displayName = '';
+  public packageId = '';
   public authorized = true;
   public held = false;
+  public state: WarehouseWorkerState = 'routine';
+  public fugitiveZone: WarehouseSecurityZoneId = 'receiving';
+  public escapeSeconds: number | null = null;
   private rig: RiggedContact | null = null;
   private route: THREE.Vector3[] = [];
   private routeIndex = 0;
   private dwell = 0;
   private musterTarget: THREE.Vector3 | null = null;
   private musterLocalTarget: THREE.Vector3 | null = null;
+  private fugitiveRoute: WarehouseWorkerFugitiveWaypoint[] = [];
+  private fugitiveIndex = 0;
+  private fugitiveTarget: THREE.Vector3 | null = null;
+  private fugitiveLocalTarget: THREE.Vector3 | null = null;
+  private hideSeconds = 0;
+  private observedSeconds = 0;
+  private fugitivePaused = false;
+  private fugitiveCallbacks: WarehouseWorkerFugitiveCallbacks = {};
 
   public constructor() {
     super();
     this.isRoot = false;
   }
 
-  public configure(id: string, position: THREE.Vector3, route: readonly THREE.Vector3[], vest: string, authorized = true): void {
+  public configure(
+    id: string,
+    position: THREE.Vector3,
+    route: readonly THREE.Vector3[],
+    vest: string,
+    authorized = true,
+    style: WarehouseWorkerStyle = {}
+  ): void {
     this.workerId = id;
+    this.displayName = style.displayName ?? id;
+    this.packageId = style.packageId ?? '';
     this.authorized = authorized;
     this.position.copy(position);
     this.route = route.map((point) => point.clone());
@@ -191,7 +258,7 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
     const helmet = ENGINE.MeshNode.create({
       name: 'ProceduralHelmet',
       geometry: new THREE.SphereGeometry(0.15, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.58),
-      material: new THREE.MeshStandardMaterial({ color: '#d8b84f', roughness: 0.55 }),
+      material: new THREE.MeshStandardMaterial({ color: style.helmet ?? '#d8b84f', roughness: 0.55 }),
     });
     helmet.position.set(0, 1.72, 0);
     const badge = ENGINE.MeshNode.create({
@@ -200,18 +267,54 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
       material: makeLabel(id.slice(-4), '#e0a24c'),
     });
     badge.position.set(0.13, 1.25, 0.155);
-    this.add(rig.root, vestRoot, helmet, badge);
+    const contactShadow = ENGINE.MeshNode.create({
+      name: 'WorkerContactShadow',
+      geometry: new THREE.CircleGeometry(0.42, 20),
+      material: new THREE.MeshBasicMaterial({
+        color: '#020504',
+        transparent: true,
+        opacity: 0.28,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    });
+    contactShadow.rotation.x = -Math.PI / 2;
+    contactShadow.position.y = 0.012;
+    const gloves = new THREE.MeshStandardMaterial({ color: style.gloves ?? '#263532', roughness: 0.9 });
+    const equipment = ENGINE.SceneNode.create({ name: `WorkerEquipment-${style.equipmentIndex ?? 0}` });
+    for (const side of [-1, 1]) {
+      const glove = ENGINE.MeshNode.create({
+        name: 'ProtectiveGlove',
+        geometry: new THREE.BoxGeometry(0.09, 0.14, 0.08),
+        material: gloves,
+      });
+      glove.position.set(side * 0.38, 0.88, 0.02);
+      equipment.add(glove);
+    }
+    if ((style.equipmentIndex ?? 0) % 2 === 0) {
+      const pouch = ENGINE.MeshNode.create({
+        name: 'ScannerPouch',
+        geometry: new THREE.BoxGeometry(0.18, 0.24, 0.11),
+        material: new THREE.MeshStandardMaterial({ color: '#202b2a', roughness: 0.84 }),
+      });
+      pouch.position.set(-0.26, 0.86, -0.12);
+      equipment.add(pouch);
+    }
+    this.add(rig.root, vestRoot, helmet, badge, equipment, contactShadow);
     const tree = ENGINE.BehaviorTreeNode.create({
       name: 'WarehouseWorkerBehavior',
       tickInterval: 0.05,
-      rootNode: new ENGINE.SelectorNode({ children: [new WorkerRouteAction({ name: 'Follow warehouse route' })] }),
+      rootNode: new ENGINE.SelectorNode({ children: [
+        new WorkerFugitiveAction({ name: 'Inbound audit fugitive response' }),
+        new WorkerRouteAction({ name: 'Follow warehouse route' }),
+      ] }),
     });
     this.add(tree);
     this.setTickEnabled(true);
   }
 
   public advanceRoute(deltaTime: number): void {
-    if (this.held || this.route.length === 0) return;
+    if (this.state !== 'routine' || this.held || this.route.length === 0) return;
     if (this.dwell > 0) {
       this.dwell -= deltaTime;
       return;
@@ -228,6 +331,150 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
     delta.normalize();
     this.position.addScaledVector(delta, step);
     this.rotation.y = Math.atan2(delta.x, delta.z);
+  }
+
+  public setInspectionPosition(position: THREE.Vector3): void {
+    this.resumeRoute();
+    this.state = 'inspection';
+    this.held = true;
+    this.position.copy(position);
+    this.rotation.y = 0;
+    if (this.rig) {
+      this.rig.root.position.set(0, 0, 0);
+      this.rig.setStance('stand');
+    }
+    this.visible = true;
+  }
+
+  public isFugitiveActive(): boolean {
+    return !['routine', 'inspection', 'contained'].includes(this.state);
+  }
+
+  public startFugitive(
+    waypoints: readonly WarehouseWorkerFugitiveWaypoint[],
+    callbacks: WarehouseWorkerFugitiveCallbacks = {}
+  ): void {
+    this.fugitiveRoute = waypoints.map((entry) => ({ ...entry, position: entry.position.clone() }));
+    this.fugitiveCallbacks = callbacks;
+    this.fugitiveIndex = 0;
+    this.fugitiveTarget = null;
+    this.fugitiveLocalTarget = null;
+    this.hideSeconds = 0;
+    this.observedSeconds = 0;
+    this.escapeSeconds = null;
+    this.held = true;
+    this.state = 'alerted';
+    this.rig?.setStance('stand');
+  }
+
+  public setFugitivePaused(paused: boolean): void {
+    this.fugitivePaused = paused;
+  }
+
+  public contain(): void {
+    this.foldRigTravel();
+    this.state = 'contained';
+    this.escapeSeconds = null;
+    this.rig?.setStance('crouch');
+  }
+
+  public resetFugitiveAtReceiving(position: THREE.Vector3): void {
+    this.position.copy(position);
+    if (this.rig) this.rig.root.position.set(0, 0, 0);
+    this.state = 'alerted';
+    this.fugitiveIndex = 0;
+    this.fugitiveTarget = null;
+    this.fugitiveLocalTarget = null;
+    this.escapeSeconds = null;
+    this.observedSeconds = 0;
+  }
+
+  public subjectPosition(): THREE.Vector3 {
+    return this.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 1.05, 0));
+  }
+
+  private foldRigTravel(): void {
+    if (!this.rig) return;
+    this.position.add(this.rig.root.position);
+    this.rig.root.position.set(0, 0, 0);
+    this.fugitiveTarget = null;
+    this.fugitiveLocalTarget = null;
+  }
+
+  private beginFugitiveLeg(index: number): void {
+    const point = this.fugitiveRoute[index];
+    if (!point || !this.rig) return;
+    this.fugitiveIndex = index;
+    this.fugitiveZone = point.zone;
+    this.fugitiveCallbacks.onZoneChanged?.(point.zone);
+    this.fugitiveTarget = point.position.clone();
+    this.fugitiveLocalTarget = point.position.clone().sub(this.position);
+    const final = index === this.fugitiveRoute.length - 1;
+    this.state = final ? 'final-escape' : point.concealed ? 'seek-cover' : 'flee';
+    this.rig.setStance(point.concealed ? 'crouch' : 'stand');
+    this.rig.walk(this.fugitiveLocalTarget, {
+      facing: Math.atan2(this.fugitiveLocalTarget.x, this.fugitiveLocalTarget.z),
+      locomotion: final || !point.concealed ? 'run' : 'crouchWalk',
+      pace: final ? 0.96 : point.concealed ? 1.06 : 0.92,
+      interrupt: true,
+    });
+  }
+
+  /**
+   * Being visible is not the same as being scanned. A concealed impostor waits until the
+   * optical camera has held them clearly in frame, then reacts and relocates; a quick LMB
+   * still records the target before they can run. This makes the search player-driven
+   * instead of moving the suspect around the warehouse on an invisible timer.
+   */
+  public setClearlyObserved(observed: boolean, deltaTime: number): void {
+    if (this.state !== 'crouch-hide') {
+      this.observedSeconds = 0;
+      return;
+    }
+    this.observedSeconds = observed
+      ? this.observedSeconds + deltaTime
+      : Math.max(0, this.observedSeconds - deltaTime * 1.5);
+    if (this.observedSeconds < 0.55) return;
+    this.observedSeconds = 0;
+    this.state = 'react-observed';
+    this.hideSeconds = 0.24;
+    this.rig?.setStance('stand');
+  }
+
+  public advanceFugitive(deltaTime: number): void {
+    if (this.fugitivePaused || this.state === 'contained') return;
+    if (this.state === 'alerted') {
+      this.beginFugitiveLeg(0);
+      return;
+    }
+    if (this.fugitiveTarget && this.fugitiveLocalTarget && this.rig) {
+      if (this.rig.root.position.distanceTo(this.fugitiveLocalTarget) > 0.13) return;
+      this.position.copy(this.fugitiveTarget);
+      this.rig.root.position.set(0, 0, 0);
+      this.fugitiveTarget = null;
+      this.fugitiveLocalTarget = null;
+      const point = this.fugitiveRoute[this.fugitiveIndex];
+      if (this.fugitiveIndex === this.fugitiveRoute.length - 1) {
+        this.escapeSeconds = 8;
+        this.fugitiveCallbacks.onEscapeWarning?.();
+        return;
+      }
+      this.state = point?.concealed ? 'crouch-hide' : 'relocate';
+      this.rig.setStance(point?.concealed ? 'crouch' : 'stand');
+      this.observedSeconds = 0;
+      this.hideSeconds = point?.concealed ? Number.POSITIVE_INFINITY : 0.45;
+      return;
+    }
+    if (this.state === 'final-escape' && this.escapeSeconds !== null) {
+      this.escapeSeconds = Math.max(0, this.escapeSeconds - deltaTime);
+      if (this.escapeSeconds <= 0) this.fugitiveCallbacks.onEscaped?.();
+      return;
+    }
+    this.hideSeconds -= deltaTime;
+    if (this.hideSeconds <= 0) {
+      this.state = 'relocate';
+      this.beginFugitiveLeg(Math.min(this.fugitiveRoute.length - 1, this.fugitiveIndex + 1));
+    }
   }
 
   public moveToMuster(position: THREE.Vector3): void {
@@ -251,6 +498,9 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
     this.musterTarget = null;
     this.musterLocalTarget = null;
     this.held = false;
+    this.state = 'routine';
+    this.escapeSeconds = null;
+    this.rig?.setStance('stand');
   }
 
   public resetToInbound(): void {
@@ -258,6 +508,7 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
     this.musterTarget = null;
     this.musterLocalTarget = null;
     this.held = false;
+    this.state = 'routine';
     this.dwell = 0;
     this.routeIndex = this.route.length > 1 ? 1 : 0;
     if (this.route[0]) this.position.copy(this.route[0]);

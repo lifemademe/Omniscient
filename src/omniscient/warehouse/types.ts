@@ -2,16 +2,18 @@ export type WarehouseMode = 'story' | 'endless' | 'daily';
 
 export type WarehouseTool = 'optical' | 'history' | 'thermal' | 'uv' | 'xray' | 'acoustic';
 
-export type CargoDecision = 'release' | 'quarantine' | 'return';
+export type CargoDecision = 'release' | 'quarantine';
 export type WorkerDecision = 'clear' | 'hold' | 'verify';
 export type VisitorDecision = 'deny-lockdown';
 export type SecurityDecision = 'sector-lockdown';
 export type WarehouseDecision = CargoDecision | WorkerDecision | VisitorDecision | SecurityDecision;
+/** A reversible console command, deliberately separate from case verdicts. */
+export type WarehouseConsoleAction = WarehouseDecision | 'return';
 
 export type WarehouseDoorId = 'service-a' | 'service-b' | 'service-c';
 export type WarehouseDoorStatus = 'unseen' | 'clear' | 'contact' | 'tamper' | 'locked';
 export type WarehouseVisitorIntent = 'collection' | 'intrusion';
-export type WarehouseInboundStatus = 'valid' | 'recalled' | 'voided' | 'misrouted';
+export type WarehouseInboundStatus = 'valid';
 export type WarehouseDoorDockState = 'empty' | 'staged' | 'releasing' | 'quarantined' | 'returning' | 'locked';
 
 export interface WarehouseDockSnapshot {
@@ -101,7 +103,7 @@ export interface WarehouseCaseDefinition {
   requiredTools: readonly WarehouseTool[];
   correctDecision: WarehouseDecision;
   critical?: boolean;
-  anomaly?: 'none' | 'identity' | 'inbound' | 'mass' | 'camera' | 'thermal' | 'seal' | 'internal' | 'resonance' | 'tamper' | 'breach';
+  anomaly?: 'none' | 'identity' | 'mass' | 'camera' | 'thermal' | 'seal' | 'internal' | 'resonance' | 'tamper' | 'breach';
   baseSeconds: number;
 }
 

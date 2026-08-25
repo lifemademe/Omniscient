@@ -76,6 +76,10 @@ const GESTURES = {
   open: '@project/assets/animations/Opening.fbx',
   /** A pursuit loop. Root travel remains authored by riggedContact so paths stay deterministic. */
   run: '@project/assets/animations/Slow Run.fbx',
+  /** Concealed warehouse-worker stance. Horizontal FBX root motion is removed below. */
+  crouchIdle: '@project/assets/animations/Crouch Idle.fbx',
+  /** Low relocation cycle used while the inbound impostor moves between cover points. */
+  crouchWalk: '@project/assets/animations/Crouched Walking.fbx',
 } as const;
 
 export type GestureName = keyof typeof GESTURES;
@@ -114,7 +118,21 @@ function asDelta(track: THREE.KeyframeTrack): THREE.KeyframeTrack {
   return new THREE.QuaternionKeyframeTrack(track.name, Array.from(track.times), values);
 }
 
-function retarget(clip: THREE.AnimationClip): THREE.AnimationClip {
+const HIPS_POSITION = /Hips\.position$/;
+
+function crouchPosition(track: THREE.KeyframeTrack): THREE.KeyframeTrack {
+  const values = Array.from(track.values);
+  if (values.length < 3) return track.clone();
+  const x = values[0];
+  const z = values[2];
+  for (let i = 0; i < values.length; i += 3) {
+    values[i] = x;
+    values[i + 2] = z;
+  }
+  return new THREE.VectorKeyframeTrack(track.name, Array.from(track.times), values);
+}
+
+function retarget(clip: THREE.AnimationClip, name: GestureName): THREE.AnimationClip {
   const copy = clip.clone();
   for (const track of copy.tracks) {
     track.name = track.name.replace('mixamorig:', 'mixamorig');
@@ -171,9 +189,14 @@ function retarget(clip: THREE.AnimationClip): THREE.AnimationClip {
    * per rig - Mirela's hips sit at -90 degrees about X, so writing the raw delta
    * would fold every character in the game face down at the floor.
    */
+  const crouching = name === 'crouchIdle' || name === 'crouchWalk';
   copy.tracks = copy.tracks
-    .filter((track) => !track.name.endsWith('.position'))
-    .map((track) => (HIPS.test(track.name) ? asDelta(track) : track));
+    .filter((track) => !track.name.endsWith('.position') || (crouching && HIPS_POSITION.test(track.name)))
+    .map((track) => {
+      if (HIPS.test(track.name)) return asDelta(track);
+      if (crouching && HIPS_POSITION.test(track.name)) return crouchPosition(track);
+      return track;
+    });
   return copy;
 }
 
@@ -217,7 +240,7 @@ export function loadGesture(name: GestureName): Promise<THREE.AnimationClip | nu
               return;
             }
             devLog(`[gesture] ${name}: ${clip.duration.toFixed(2)}s, ${clip.tracks.length} tracks`);
-            resolve(retarget(clip));
+            resolve(retarget(clip, name));
           },
           undefined,
           (error) => {

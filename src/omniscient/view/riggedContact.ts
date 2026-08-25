@@ -325,6 +325,8 @@ export interface RiggedContact {
    * is exactly what it looked like on Sanda.
    */
   rest: Record<string, THREE.Quaternion>;
+  /** Rest translations used to fit crouch pelvis tracks to each GLB without sinking. */
+  restPositions: Record<string, THREE.Vector3>;
   /**
    * Advance the clip, then put the hands back.
    *
@@ -342,6 +344,8 @@ export interface RiggedContact {
    * the bench.
    */
   gesture: (name: GestureName) => void;
+  /** Blend the base loop between the shipped standing idle and authored crouch idle. */
+  setStance: (stance: 'stand' | 'crouch') => void;
   /**
    * Walk somewhere, in the same space `options.position` was given in.
    *
@@ -393,7 +397,7 @@ export interface WalkOptions {
    */
   pace?: number;
   /** Locomotion cycle. Pursuit actors use the faster in-place run clip. */
-  locomotion?: 'walk' | 'run';
+  locomotion?: 'walk' | 'run' | 'crouchWalk';
   /**
    * Abandon a walk already in progress rather than being ignored.
    *
@@ -510,6 +514,9 @@ const RELEASE = 0.5;
 const WALK_PACE = 0.971;
 /** Tuned world travel for the in-place Slow Run clip, in statures per second. */
 const RUN_PACE = 2.05;
+const CROUCH_WALK_PACE = 0.58;
+/** Standing Mixamo hips height measured from Walking.fbx; crouch clips are compared to it. */
+const MIXAMO_STANDING_HIPS_Y = 0.5061758160591125;
 
 /**
  * Radians per second the body comes round onto a new heading.
@@ -559,7 +566,7 @@ const ARRIVE = 0.06;
   let walkAction: THREE.AnimationAction | null = null;
   /** Current walk's speed multiplier. One walk runs at a time, so one value is enough. */
   let pace = 1;
-  let locomotion: 'walk' | 'run' = 'walk';
+  let locomotion: 'walk' | 'run' | 'crouchWalk' = 'walk';
   /** Seconds since this leg began, for easing the root up to speed. See WALK_TAKE. */
   let legAge = 0;
   let leg: Leg | null = null;
@@ -583,6 +590,8 @@ const ARRIVE = 0.06;
    * rather than nothing driving them.
    */
   let baseAction: THREE.AnimationAction | null = null;
+  let standingAction: THREE.AnimationAction | null = null;
+  let stance: 'stand' | 'crouch' = 'stand';
   /**
    * Put the idle back, without asking three.js nicely.
    *
@@ -657,9 +666,27 @@ const ARRIVE = 0.06;
     if (already) return already;
 
     const rest = contact.rest.hips;
+    const restPosition = contact.restPositions.hips;
     const copy = clip.clone();
-    if (rest) {
+    if (rest || restPosition) {
       copy.tracks = copy.tracks.map((track) => {
+        if (track.name.endsWith('Hips.position') && restPosition) {
+          const values = Array.from(track.values);
+          if (values.length >= 3) {
+            const dx = restPosition.x - values[0];
+            // Do not zero the first crouch frame. Crouch Idle begins at 0.302m while the
+            // standing reference is 0.506m; that 20cm authored drop is the stance. Anchoring
+            // the first key to rest erased it and made bent legs lift both feet off the floor.
+            const dy = restPosition.y - MIXAMO_STANDING_HIPS_Y;
+            const dz = restPosition.z - values[2];
+            for (let i = 0; i < values.length; i += 3) {
+              values[i] += dx;
+              values[i + 1] += dy;
+              values[i + 2] += dz;
+            }
+          }
+          return new THREE.VectorKeyframeTrack(track.name, Array.from(track.times), values);
+        }
         if (!HIPS.test(track.name)) return track;
         const values = Array.from(track.values);
         const q = new THREE.Quaternion();
@@ -820,7 +847,11 @@ const ARRIVE = 0.06;
      */
     const closing = Math.min(1, distance / 0.34);
     const settle = closing * closing * (3 - 2 * closing);
-    const basePace = locomotion === 'run' ? RUN_PACE : WALK_PACE;
+    const basePace = locomotion === 'run'
+      ? RUN_PACE
+      : locomotion === 'crouchWalk'
+        ? CROUCH_WALK_PACE
+        : WALK_PACE;
     const speed = basePace * options.height * pace * eased * Math.max(0.25, settle);
     if (distance > ARRIVE) {
       const error = turnToward(Math.atan2(dx, dz), deltaTime);
@@ -857,6 +888,7 @@ const ARRIVE = 0.06;
     root,
     bones: {},
     rest: {},
+    restPositions: {},
 
     /**
      * Play a one-shot over the idle.
@@ -907,6 +939,35 @@ const ARRIVE = 0.06;
         else action.fadeIn(TAKE);
         gestureAction = action;
         gestureLeft = clip.duration;
+      });
+    },
+
+    setStance: (next) => {
+      if (stance === next) return;
+      stance = next;
+      if (next === 'stand') {
+        if (!standingAction) return;
+        const previous = baseAction;
+        standingAction.enabled = true;
+        standingAction.weight = 1;
+        standingAction.play();
+        if (previous && previous !== standingAction) previous.crossFadeTo(standingAction, WALK_TAKE, false);
+        baseAction = standingAction;
+        return;
+      }
+      void loadGesture('crouchIdle').then((clip) => {
+        if (!clip || !mixer || stance !== 'crouch') return;
+        const action = mixer.clipAction(fitHips(clip));
+        if (baseAction === action && action.isRunning()) return;
+        const previous = baseAction;
+        action.reset();
+        action.setLoop(THREE.LoopRepeat, Infinity);
+        action.clampWhenFinished = false;
+        action.enabled = true;
+        action.weight = 1;
+        action.play();
+        if (previous) previous.crossFadeTo(action, WALK_TAKE, false);
+        baseAction = action;
       });
     },
 
@@ -1102,6 +1163,7 @@ const ARRIVE = 0.06;
         contact.bones[key] = child;
         // Before the mixer exists, so this is the file's own rest pose.
         contact.rest[key] = child.quaternion.clone();
+        contact.restPositions[key] = child.position.clone();
       }
     });
 
@@ -1184,6 +1246,7 @@ const ARRIVE = 0.06;
          * outward to somewhere neither clip ever goes.
          */
         baseAction = mixer.clipAction(wanted);
+        standingAction = baseAction;
         baseAction.play();
       }
       devLog(`[rigged] ${name} clips: ${clips.map((c) => c.name).join(', ') || 'none'}`);
