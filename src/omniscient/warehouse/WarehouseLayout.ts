@@ -165,9 +165,30 @@ export function warehouseAisleX(aisle: number): number {
   return AISLE_CENTERS[Math.max(0, Math.min(AISLE_CENTERS.length - 1, Math.round(aisle) - 1))];
 }
 
+/** The rear end of the bay run, and how far it reaches. The label strip shares both. */
+export const WAREHOUSE_BAY_Z0 = -11.4;
+export const WAREHOUSE_BAY_RUN = 24.8;
+/** Bays are numbered from 1, so a package id reads 2001..2100 rather than 2000..2099. */
+export const WAREHOUSE_BAY_MIN = 1;
+export const WAREHOUSE_BAY_MAX = 100;
+
+/**
+ * Where an address lives, in metres.
+ *
+ * The address is the whole navigation loop of this mission: 2034 is aisle 2, bay 34, and the
+ * player is expected to fly to it. So this and the label strip drawn along the rack have to
+ * be the same function - if they drift, every sign in the building is lying, and the failure
+ * is a player searching an aisle that genuinely does not contain the package.
+ *
+ * Bay 1 sits at the rear end of the run and bay 100 at the front, evenly spaced.
+ */
 export function warehousePackagePosition(aisle: number, bay: number): THREE.Vector3 {
-  const z = -11.4 + (Math.max(0, Math.min(99, bay)) / 99) * 24.8;
-  return new THREE.Vector3(warehouseAisleX(aisle) + 1.12, 0, z);
+  return new THREE.Vector3(warehouseAisleX(aisle) + 1.12, 0, warehouseBayZ(bay));
+}
+
+export function warehouseBayZ(bay: number): number {
+  const clamped = Math.max(WAREHOUSE_BAY_MIN, Math.min(WAREHOUSE_BAY_MAX, bay));
+  return WAREHOUSE_BAY_Z0 + ((clamped - WAREHOUSE_BAY_MIN) / (WAREHOUSE_BAY_MAX - WAREHOUSE_BAY_MIN)) * WAREHOUSE_BAY_RUN;
 }
 
 export function warehouseZoneLabel(id: WarehouseSecurityZoneId): string {

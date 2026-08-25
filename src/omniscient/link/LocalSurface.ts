@@ -611,6 +611,10 @@ export const TERMINAL_CSS = `
   cursor: pointer;
   text-align: left;
 }
+.omni-suggest__chip[data-spent] {
+  opacity: 0.45;
+  border-style: dashed;
+}
 .omni-suggest__chip:hover {
   background: rgba(72, 160, 92, 0.55);
   border-color: #7fe08a;

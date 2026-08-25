@@ -11,6 +11,10 @@ import {
   WAREHOUSE_SECURITY_ZONES,
   warehouseAisleX,
   warehousePackagePosition,
+  WAREHOUSE_BAY_MAX,
+  WAREHOUSE_BAY_MIN,
+  WAREHOUSE_BAY_RUN,
+  WAREHOUSE_BAY_Z0,
 } from './WarehouseLayout.js';
 import { WAREHOUSE_DOOR_IDS, WAREHOUSE_DOORS, WarehouseServiceDoor } from './WarehouseServiceDoors.js';
 import { WarehouseAutomation } from './WarehouseAutomation.js';
@@ -179,6 +183,91 @@ function buildRain(root: ENGINE.SceneNode): void {
  * handed to HemisphereLightNode.create was never live. Two numbers, one of them a lie.
  * There is now one, and the constructor reads it too.
  */
+/**
+ * The security shutters: where the drum sits, how far the curtain reaches when it closes, and
+ * how much of it stays showing when it is open. 5.8 puts the drum below the aisle signs at
+ * 8.55 rather than in front of them, and 0.03 of 5.8m is a 17cm lip - enough to read as a
+ * shutter, far too little to hide anything. See addGate.
+ */
+/**
+ * The bay ruler's proportions, and the one texture behind every copy of it.
+ *
+ * 4096 pixels across 24.8 metres is 165 a metre, enough for a six character range to stay
+ * sharp with a drone a metre off the rack. The height follows from keeping the texels square
+ * rather than from a round number, because a stretched monospace digit is the single loudest
+ * signal that a sign was made by a computer.
+ */
+const BAY_RULER_PIXELS = 4096;
+const BAY_RULER_ROWS = 88;
+const BAY_RULER_HEIGHT = (WAREHOUSE_BAY_RUN * BAY_RULER_ROWS) / BAY_RULER_PIXELS;
+const bayRulerCache = new Map<boolean, THREE.MeshBasicMaterial>();
+
+/**
+ * Every bay range in one texture, laid out by the same mapping that places the packages.
+ *
+ * `mirrored` lays the cells out back to front, for the rack face whose rotation would
+ * otherwise run the numbers from 100 down to 1. Doing it in the CANVAS rather than in the
+ * mesh is deliberate, and was learned on the zone floor plates: a negative scale culls the
+ * quad, and a 180 degree rotation makes the text read correctly while reversing the direction
+ * it runs in - the same bug wearing a hat.
+ */
+function bayRulerMaterial(mirrored: boolean): THREE.MeshBasicMaterial {
+  const cached = bayRulerCache.get(mirrored);
+  if (cached) return cached;
+  const canvas = document.createElement('canvas');
+  canvas.width = BAY_RULER_PIXELS;
+  canvas.height = BAY_RULER_ROWS;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#140f07';
+    ctx.fillRect(0, 0, BAY_RULER_PIXELS, BAY_RULER_ROWS);
+    ctx.font = 'bold ' + String(Math.round(BAY_RULER_ROWS * 0.6)) + 'px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const at = (bay: number): number =>
+      ((bay - WAREHOUSE_BAY_MIN) / (WAREHOUSE_BAY_MAX - WAREHOUSE_BAY_MIN)) * BAY_RULER_PIXELS;
+    for (let decade = 0; decade < 10; decade++) {
+      const first = decade * 10 + 1;
+      const last = decade * 10 + 10;
+      /*
+       * `mirrored` reverses the ORDER of the cells and nothing else.
+       *
+       * The obvious implementation - flip the whole canvas with a negative scale - was tried
+       * and is wrong in a way that takes a capture to see: it reverses the cell order, which
+       * is what is wanted, and mirrors every glyph with it, which is not. The strip then read
+       * a perfectly positioned back-to-front `01-10`. Reversing the cell RANGE while drawing
+       * the text normally separates the two.
+       */
+      const x0 = mirrored ? BAY_RULER_PIXELS - at(last) : at(first);
+      const x1 = mirrored ? BAY_RULER_PIXELS - at(first) : at(last);
+      /*
+       * Alternating cells, because the BOUNDARY between two ranges carries further than the
+       * digits do. Flying an aisle at speed you count blocks and only read the one you are
+       * slowing down for; a strip of evenly spaced numbers with no banding gives you nothing
+       * to count.
+       */
+      ctx.fillStyle = decade % 2 === 0 ? '#241806' : '#140f07';
+      ctx.fillRect(x0, 0, x1 - x0, BAY_RULER_ROWS);
+      ctx.fillStyle = '#e0a24c';
+      ctx.fillRect(x0, BAY_RULER_ROWS - 6, x1 - x0, 3);
+      ctx.fillText(
+        String(first).padStart(2, '0') + '-' + String(last).padStart(2, '0'),
+        (x0 + x1) / 2,
+        BAY_RULER_ROWS / 2 - 3
+      );
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.FrontSide, toneMapped: false });
+  bayRulerCache.set(mirrored, material);
+  return material;
+}
+
+const GATE_HEAD_Y = 5.8;
+const GATE_DROP = 5.8;
+const GATE_OPEN_SCALE = 0.03;
 const WAREHOUSE_SKY_FILL = 1.8;
 
 /** Mirrors ZONE_ACCENT in WarehouseFacilities so signage and floor read as one code. */
@@ -229,7 +318,7 @@ export class WarehouseEnvironment {
   private duplicateAisleSigns: [ENGINE.MeshNode, ENGINE.MeshNode] | null = null;
   private inboundPackages: ENGINE.MeshNode[] = [];
   private quarantineGate: ENGINE.MeshNode | null = null;
-  private readonly securityGates = new Map<WarehouseSecurityZoneId, Array<{ node: ENGINE.MeshNode; openY: number; closedY: number }>>();
+  private readonly securityGates = new Map<WarehouseSecurityZoneId, Array<{ node: ENGINE.MeshNode }>>();
   private readonly lockedSecurityZones = new Set<WarehouseSecurityZoneId>();
   private readonly workLights: ENGINE.PointLightNode[] = [];
   private readonly emergencyLights: ENGINE.PointLightNode[] = [];
@@ -500,33 +589,49 @@ export class WarehouseEnvironment {
         const geometry = mergeGeometries(pieces, false);
         if (geometry) this.root.add(mesh(name, geometry, material));
       }
-      for (const [index, z] of [-10.4, -4.2, 2, 8.2].entries()) {
-        const rangeEnd = index === 3 ? 99 : (index + 1) * 25;
-        const rangeLabel = `${String(index * 25 + 1).padStart(2, '0')}-${String(rangeEnd).padStart(2, '0')}`;
-        for (const side of [-1, 1]) {
-          /*
-           * Bigger, warmer, and lower.
-           *
-           * A package address in this mission is spatial - 2034 is aisle 2, bay 34 - so these
-           * four panels per aisle are the only thing standing between the player and the
-           * whole navigation loop. They were 0.76 by 0.24 metres in a muted green at 2.5m,
-           * which is a sticker: unreadable from the aisle mouth, which is exactly where
-           * somebody stands when they are deciding which way to fly.
-           *
-           * 1.34 by 0.42 in the amber this game uses for wayfinding, dropped to 1.95 so it is
-           * nearer eye level for a drone. Same information, legible from the end of the run.
-           */
-          const bay = readableLabelPanel(
-            `BayRange-${aisle}-${index + 1}-${side < 0 ? 'L' : 'R'}`,
-            rangeLabel,
-            1.34,
-            0.42,
-            '#e0a24c',
-            new THREE.Vector3(x + side * 0.79, 1.95, z)
-          );
-          bay.root.rotation.y = side < 0 ? -Math.PI / 2 : Math.PI / 2;
-          this.root.add(bay.root);
-        }
+      /*
+       * A continuous location strip down each rack face, numbered in tens.
+       *
+       * A package address in this mission is spatial - 2034 is aisle 2, bay 34 - so the bay
+       * markings ARE the navigation loop. They were four panels per aisle reading 01-25,
+       * 26-50, 51-75 and 76-99: a quarter of a twenty-five metre run per sign, so "bay 34"
+       * narrowed the search to six metres of rack and left the player to guess inside it.
+       * Reported as not being able to tell where 2034 actually was.
+       *
+       * Tens rather than quarters, which is how a real aisle is marked, and at 2.5m a marker
+       * the carton is the only thing left in front of you. But ten markers a side is forty
+       * label panels an aisle, each with its own canvas and its own draw call, against racks
+       * that were deliberately merged down to six - so this is not forty signs. It is ONE
+       * sign twenty-five metres long with all ten ranges drawn along it: two meshes an aisle,
+       * and one texture shared by the whole building.
+       *
+       * The bay-to-metres mapping comes from `warehouseBayZ`, the same function that places
+       * the package, so the strip cannot drift from what it is labelling. If it ever did,
+       * every sign in the building would be lying at once and the bug would present as a
+       * package that is not where the manifest says.
+       */
+      for (const side of [-1, 1]) {
+        /*
+         * `createWarehouseLabelGeometry`, not a bare PlaneGeometry: the engine uploads
+         * textures with flipY disabled, so a runtime canvas label has to reverse its own V
+         * axis or every glyph on it comes out upside down. Caught on the first close capture
+         * of this strip, reading a perfectly correct "01-10" inverted.
+         *
+         * Rotating a plane +90 degrees about Y sends its local +x to world -z, and -90
+         * degrees sends it to +z. Only one of those runs the numbers the same way the bays
+         * do, so the other face takes a MIRRORED texture rather than a flipped mesh. Flipping
+         * the mesh was tried on the zone floor plates and cost four builds: a negative scale
+         * culls the quad, and a 180 degree rotation fixes the reading order while reversing
+         * the direction, which is the same bug wearing a hat.
+         */
+        const ruler = mesh(
+          `BayRuler-${aisle}-${side < 0 ? 'L' : 'R'}`,
+          createWarehouseLabelGeometry(WAREHOUSE_BAY_RUN, BAY_RULER_HEIGHT),
+          bayRulerMaterial(side > 0),
+          new THREE.Vector3(x + side * 0.79, 1.95, WAREHOUSE_BAY_Z0 + WAREHOUSE_BAY_RUN / 2)
+        );
+        ruler.rotation.y = side < 0 ? -Math.PI / 2 : Math.PI / 2;
+        this.root.add(ruler);
       }
       for (const z of [-12.2, 14.2]) {
         const guard = mesh(
@@ -653,11 +758,40 @@ export class WarehouseEnvironment {
 
   private buildSecurityZones(): void {
     const gateMaterial = new THREE.MeshStandardMaterial({ color: '#18211f', roughness: 0.58, metalness: 0.78 });
+    /*
+     * The security shutters ROLL UP. They used to park.
+     *
+     * Reported as a black rectangle covering the aisle numbers, and the geometry was blunt
+     * about it: each gate is up to 19.4m wide and 5.8m tall, and "open" moved its CENTRE to
+     * y 9.2 - so the open state hung from 6.3 to 12.1, four metres of solid dark slab below a
+     * ceiling at 10.35, permanently, across the whole building. The aisle signs sit at y 8.55
+     * and z 16.2; `StorageWestSecurityGate-Front` parked at z 15.55. It was parked 65cm in
+     * front of the one thing the player is asked to navigate by.
+     *
+     * Sliding the whole curtain further up cannot fix it, because the curtain is taller than
+     * the space above the opening. A real roller shutter does not move out of the way, it
+     * stops existing: it winds onto a drum. So the geometry is anchored at its TOP edge and
+     * the open state is a SCALE, which collapses the curtain into its housing and leaves a
+     * 17cm lip. `Box3.setFromObject` respects scale, so containment collision follows for
+     * free rather than needing a case of its own.
+     */
     const addGate = (zone: WarehouseSecurityZoneId, name: string, width: number, x: number, z: number): void => {
-      const node = mesh(name, new THREE.BoxGeometry(width, 5.8, 0.16), gateMaterial, new THREE.Vector3(x, 9.2, z));
+      const curtain = new THREE.BoxGeometry(width, GATE_DROP, 0.16);
+      // Origin at the top edge, so scaling y grows the curtain downward out of the drum.
+      curtain.translate(0, -GATE_DROP / 2, 0);
+      const node = mesh(name, curtain, gateMaterial, new THREE.Vector3(x, GATE_HEAD_Y, z));
+      node.scale.y = GATE_OPEN_SCALE;
       this.root.add(node);
+      // The drum it winds onto. Without it the shutter vanishes into nothing when it opens,
+      // which reads as a missing object rather than as a door that is open.
+      this.root.add(mesh(
+        `${name}-Drum`,
+        new THREE.BoxGeometry(width + 0.26, 0.44, 0.36),
+        gateMaterial,
+        new THREE.Vector3(x, GATE_HEAD_Y + 0.22, z)
+      ));
       const gates = this.securityGates.get(zone) ?? [];
-      gates.push({ node, openY: 9.2, closedY: 2.9 });
+      gates.push({ node });
       this.securityGates.set(zone, gates);
     };
     addGate('receiving', 'ReceivingSecurityGate-West', 17.2, -13.5, -14.45);
@@ -1347,7 +1481,9 @@ export class WarehouseEnvironment {
     }
     for (const [id, gates] of this.securityGates) {
       const locked = this.lockedSecurityZones.has(id);
-      for (const gate of gates) gate.node.position.y = THREE.MathUtils.damp(gate.node.position.y, locked ? gate.closedY : gate.openY, 5.2, deltaTime);
+      for (const gate of gates) {
+        gate.node.scale.y = THREE.MathUtils.damp(gate.node.scale.y, locked ? 1 : GATE_OPEN_SCALE, 5.2, deltaTime);
+      }
     }
     if (this.conveyorRunning) {
       for (const roller of this.conveyorRollers) roller.rotation.x -= deltaTime * 4.5;

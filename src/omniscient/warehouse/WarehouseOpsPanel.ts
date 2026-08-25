@@ -46,6 +46,9 @@ export class WarehouseOpsPanel {
   private readonly chatLog: HTMLElement;
   private readonly consolePane: HTMLElement;
   private readonly recordsPane: HTMLElement;
+  /** The last answer each query produced, so an unchanged repeat can be suppressed. */
+  private readonly lastReplies = new Map<string, string>();
+  private readonly suggestionChips = new Map<string, HTMLButtonElement>();
   private readonly input: HTMLInputElement;
   private activeCaseKey = '';
   private scanAnnounced = false;
@@ -129,6 +132,7 @@ export class WarehouseOpsPanel {
       button.className = 'omni-suggest__chip';
       button.textContent = query;
       button.addEventListener('click', () => this.send(query));
+      this.suggestionChips.set(query, button);
       suggestions.appendChild(button);
     }
     const hint = document.createElement('div');
@@ -203,6 +207,14 @@ export class WarehouseOpsPanel {
       this.activeCaseKey = caseKey;
       this.scanAnnounced = false;
       this.contactAnnounced = false;
+      /*
+       * The log is about to be emptied, so every answer that was standing in it is gone and
+       * every chip is worth asking again. Forgetting this is how a dedupe becomes a bug: the
+       * chips would stay dim into a case they have never answered, and clicking one would do
+       * nothing because its reply from the PREVIOUS visitor still matched.
+       */
+      this.lastReplies.clear();
+      for (const query of this.suggestionChips.keys()) this.markChipSpent(query, false);
       this.chatLog.replaceChildren();
       this.appendChat(
         'system',
@@ -503,10 +515,60 @@ export class WarehouseOpsPanel {
     for (const [id, pane] of this.panes) pane.dataset.active = String(id === tab);
   }
 
+  /**
+   * Ask, but do not ask the same question twice for the same answer.
+   *
+   * Reported as the hint chips pasting their details into the chat over and over: they called
+   * `send` unconditionally, so four chips could fill the log with four repeating paragraphs
+   * and push the actual conversation off the top. The log is the mission's evidence trail and
+   * a duplicate in it is worse than noise, because a second identical reply reads like a
+   * second confirmation.
+   *
+   * Suppressing by QUERY alone would be wrong: several of these answers change as the case
+   * advances - door telemetry says something different once a door has been observed - and a
+   * chip that silently stops working is its own bug. So the test is the ANSWER. Ask again and
+   * you get the reply only if it differs from the one already standing; otherwise the chip
+   * marks itself spent and the existing line is pulsed, which points at the answer already on
+   * screen rather than pretending nothing happened.
+   */
   private send(text: string): void {
-    this.appendChat('operator', 'OMNISCIENT_', text);
+    const key = text.trim().toLowerCase();
     const reply = this.transmit(text);
+    const body = reply ? `${reply.name}::${reply.body}` : '';
+    if (body && this.lastReplies.get(key) === body) {
+      this.pulseLastReply();
+      return;
+    }
+    this.appendChat('operator', 'OMNISCIENT_', text);
     if (reply) this.appendChat(reply.source ?? 'system', reply.name, reply.body);
+    if (body) this.lastReplies.set(key, body);
+    this.markChipSpent(key, Boolean(body));
+  }
+
+  /**
+   * Dim the chip whose answer is now in the log.
+   *
+   * Cosmetic only - the chip stays clickable. A control that vanishes when you use it teaches
+   * the player they broke something, and these questions can become worth asking again as the
+   * case advances, at which point `send` un-dims this on its own by producing a new answer.
+   */
+  private markChipSpent(key: string, spent: boolean): void {
+    const chip = this.suggestionChips.get(key);
+    if (!chip) return;
+    if (spent) chip.dataset.spent = 'true';
+    else delete chip.dataset.spent;
+  }
+
+  /** Draw the eye to the reply that is already there, so a suppressed repeat is not silence. */
+  private pulseLastReply(): void {
+    const last = this.chatLog.lastElementChild as HTMLElement | null;
+    if (!last) return;
+    last.classList.remove('omni-line--arriving');
+    // Reading offsetWidth restarts the animation; without it a second click does nothing at
+    // all, which is the very complaint this method exists to answer.
+    void last.offsetWidth;
+    last.classList.add('omni-line--arriving');
+    this.chatLog.scrollTop = this.chatLog.scrollHeight;
   }
 
   private appendChat(source: 'visitor' | 'operator' | 'system', name: string, body: string): void {

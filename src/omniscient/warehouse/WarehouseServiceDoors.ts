@@ -256,6 +256,43 @@ function signMaterial(layout: WarehouseDoorLayout): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({ map: texture, side: THREE.FrontSide, toneMapped: false });
 }
 
+const wallLetterCache = new Map<string, THREE.MeshBasicMaterial>();
+
+/**
+ * The door's letter, at a size a camera six metres away can actually read.
+ *
+ * `signMaterial` above is the fascia board: glyph on the left, letter on the right, plenty of
+ * margin, meant to be read by somebody standing at the door. This is the other job - being
+ * identifiable from the one fixed camera that watches this door - and it wants the opposite
+ * treatment: one character, no glyph, filling its plate.
+ */
+function wallLetterMaterial(letter: string): THREE.MeshBasicMaterial {
+  const cached = wallLetterCache.get(letter);
+  if (cached) return cached;
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#0b1410';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.strokeStyle = '#d8ffb0';
+    ctx.lineWidth = 9;
+    ctx.strokeRect(7, 7, 242, 242);
+    ctx.fillStyle = '#d8ffb0';
+    ctx.font = 'bold 188px monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(letter, 128, 140);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.FrontSide, toneMapped: false });
+  wallLetterCache.set(letter, material);
+  return material;
+}
+
 /** Runtime-built remote service entrance. It is never a proximity/player door. */
 export class WarehouseServiceDoor {
   public readonly root: ENGINE.SceneNode;
@@ -304,6 +341,31 @@ export class WarehouseServiceDoor {
     const sign = mesh('ServiceDoorSign-Exterior', createWarehouseLabelGeometry(2.2, 1.08), doorSignMaterial, new THREE.Vector3(0, 4.45, 0.16));
     const interiorSign = mesh('ServiceDoorSign-Interior', createWarehouseLabelGeometry(2.2, 1.08), doorSignMaterial, new THREE.Vector3(0, 4.45, -0.16));
     interiorSign.rotation.y = Math.PI;
+    /*
+     * The letter, put where the CAMERA can see it.
+     *
+     * Reported as not being able to tell which door is which, and the building genuinely did
+     * not say: there IS an exterior sign, at y 4.45, and the canopy is a 4.2 by 2.7 metre
+     * slab at y 3.66 that reaches out to z 2.47. The camera watches from y 3.5 and z 5.27,
+     * BELOW the canopy and outside it, so the sign it was meant to read has been behind a
+     * roof the whole time. Three door feeds, and not one letter visible in any of them.
+     *
+     * So a second pair, at 2.32 metres on the wall either side of the frame - above a
+     * standing visitor's head, below the canopy, and proud of the cladding. The ray from each
+     * door camera to these passes under the canopy's outer edge with about seventy
+     * centimetres to spare, and there are two of them because the three cameras approach from
+     * different sides and a single plate would be edge-on to one of them.
+     *
+     * The old high sign stays. It is the right sign for a person standing at the door, and
+     * this mission is played through a camera - both readers exist.
+     */
+    const letterMaterial = wallLetterMaterial(layout.letter);
+    const letters = [-2.16, 2.16].map((x) => mesh(
+      `ServiceDoorLetter-${layout.letter}`,
+      createWarehouseLabelGeometry(1.12, 1.12),
+      letterMaterial,
+      new THREE.Vector3(x, 2.32, 0.21)
+    ));
     const pad = mesh('ServiceExteriorPad', new THREE.BoxGeometry(4.5, 0.16, 4.4), CONCRETE, new THREE.Vector3(0, -0.07, 1.65));
     const wetPad = mesh('ServiceExteriorWet', new THREE.PlaneGeometry(4.2, 3.8), WET, new THREE.Vector3(0, 0.02, 1.82));
     wetPad.rotation.x = -Math.PI / 2;
@@ -387,6 +449,7 @@ export class WarehouseServiceDoor {
       canopyLight,
       sign,
       interiorSign,
+      ...letters,
       pad,
       wetPad,
       drain,

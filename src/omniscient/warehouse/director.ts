@@ -59,7 +59,9 @@ export class WarehouseDirector {
         ? CASE_DECK.find((entry) => entry.id === 'internal-breach') ?? CASE_DECK[0]
         : pick(rng, candidates.length > 0 ? candidates : CASE_DECK.slice(0, 3));
     const aisle = stage === 30 ? 5 : 1 + Math.floor(rng() * WAREHOUSE_AISLE_COUNT);
-    const bay = stage === 30 ? 18 : Math.floor(rng() * 100);
+    // 1..100, not 0..99: bay zero has no marker on the rack and no meaning to a picker,
+    // and the id it produced (`2000`) reads as a rounder number than it is.
+    const bay = stage === 30 ? 18 : 1 + Math.floor(rng() * 100);
     const packageId = definition.id === 'internal-breach'
       ? 'UNLISTED'
       : stage === 30
