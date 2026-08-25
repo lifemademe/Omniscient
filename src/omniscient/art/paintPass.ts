@@ -26,6 +26,8 @@ class PaintPass implements ComposerPass {
   public renderToScreen = false;
   public needsDepthTexture = false;
   public renderer: THREE.WebGLRenderer | null = null;
+  /** Meshes hidden for the geometry prepass and restored the same frame. See renderGeometry. */
+  private readonly prepassHidden: THREE.Mesh[] = [];
   public mainScene: THREE.Scene | null = null;
   public mainCamera: THREE.Camera | null = null;
 
@@ -84,6 +86,9 @@ class PaintPass implements ComposerPass {
         uOutlineStrength: { value: 0 },
         uProtectSignals: { value: 0 },
         uBrightness: { value: 1 },
+        uPosterize: { value: 0 },
+        uPosterizeSoft: { value: 0 },
+        uSaturation: { value: 1 },
         uProtectedA: { value: new THREE.Vector2() },
         uProtectedB: { value: new THREE.Vector2() },
         uProtectedC: { value: new THREE.Vector2() },
@@ -190,6 +195,48 @@ class PaintPass implements ComposerPass {
     const previousAlpha = renderer.getClearAlpha();
     renderer.getClearColor(this.clearColor);
 
+    /*
+     * See-through things must not cast a contour.
+     *
+     * `overrideMaterial` replaces every material in the scene with an opaque normal write,
+     * which means glass, stretch wrap, scan beams, wireframe fences and anything mid-fade
+     * all stamp a full silhouette into the prepass - and then get a hard ink line drawn
+     * round something the player can see straight through. On an aisle shot the workstation
+     * desk and its monitor appeared as a floating wireframe over the floor: no fill, because
+     * the beauty pass barely draws them, but a complete outline, because the prepass drew
+     * them at full strength.
+     *
+     * Hidden for the prepass and restored immediately after. One traversal a frame against
+     * a full scene render is not the expensive half of this pass, and the alternative -
+     * layer masks - needs every transparent material in the game to remember to opt out.
+     */
+    for (const object of scene.children) object.traverseVisible((node) => {
+      const mesh = node as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const material = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+      if (!material) return;
+      /*
+       * Four separate ways a material hides itself, and overrideMaterial defeats all of
+       * them: it swaps in an opaque normal write and the object reappears in the prepass
+       * with a full silhouette. Transparency was only the first one found - a workstation
+       * desk that the beauty pass does not draw was still handing the contour a crisp
+       * outline, and it drew as a wireframe floating over the aisle floor.
+       *
+       * `visible` and `colorWrite` are the two the renderer honours on the material rather
+       * than on the object, so `traverseVisible` walks straight past them. `depthWrite`
+       * false marks beams, decals and scan sweeps - things drawn ON other surfaces, which
+       * should never own an edge of their own.
+       */
+      const hidden = !material.visible
+        || material.colorWrite === false
+        || material.depthWrite === false
+        || (material.transparent && material.opacity < 0.95);
+      if (hidden) {
+        mesh.visible = false;
+        this.prepassHidden.push(mesh);
+      }
+    });
+
     try {
       scene.overrideMaterial = this.normalMaterial;
       renderer.autoClear = true;
@@ -198,6 +245,8 @@ class PaintPass implements ComposerPass {
       renderer.clear(true, true, false);
       renderer.render(scene, camera);
     } finally {
+      for (const mesh of this.prepassHidden) mesh.visible = true;
+      this.prepassHidden.length = 0;
       scene.overrideMaterial = previousOverride;
       renderer.autoClear = previousAutoClear;
       renderer.setClearColor(this.clearColor, previousAlpha);
@@ -230,6 +279,11 @@ class PaintPass implements ComposerPass {
     this.now.normalScale += (this.target.normalScale - this.now.normalScale) * k;
     this.now.protectSignals += (this.target.protectSignals - this.now.protectSignals) * k;
     this.now.brightness += (this.target.brightness - this.now.brightness) * k;
+    this.now.posterizeSoft += (this.target.posterizeSoft - this.now.posterizeSoft) * k;
+    this.now.saturation += (this.target.saturation - this.now.saturation) * k;
+    // Step COUNT is snapped rather than eased. Interpolating it walks the image through
+    // 3.4 and 3.7 steps on the way, and a fractional band count is a moving moire.
+    this.now.posterize = this.target.posterize;
     this.now.inkColor = [
       this.now.inkColor[0] + (this.target.inkColor[0] - this.now.inkColor[0]) * k,
       this.now.inkColor[1] + (this.target.inkColor[1] - this.now.inkColor[1]) * k,
@@ -250,6 +304,9 @@ class PaintPass implements ComposerPass {
     u.uOutlineStrength.value = this.now.outlineStrength;
     u.uProtectSignals.value = this.now.protectSignals;
     u.uBrightness.value = this.now.brightness;
+    u.uPosterize.value = this.now.posterize;
+    u.uPosterizeSoft.value = this.now.posterizeSoft;
+    u.uSaturation.value = this.now.saturation;
     (u.uInkColor.value as THREE.Color).setRGB(...this.now.inkColor);
     u.uEncode.value = this.renderToScreen ? 1 : 0;
 
@@ -318,6 +375,38 @@ export function installPaint(post: PaintHost): boolean {
     effect.pass.enabled = activeLook !== 'off';
   }
   return mounted;
+}
+
+/**
+ * Hand the pass the scene and camera its geometry prepass needs.
+ *
+ * ## Why the outlines never appeared
+ *
+ * `renderGeometry` opens with `if (!scene || !camera ... ) return false`, and NOTHING in
+ * this project ever assigned either one. The engine's WebGLPipeline does set them - but
+ * only on `this.renderPass`, the pipeline's own built-in pass, never on a custom effect
+ * registered through `registerEffect`. So the guard failed on its first line, every frame,
+ * since the day the contour was written.
+ *
+ * The consequence is bigger than a subtle look problem: `uHasGeometry` was pinned at 0, so
+ * the entire outline branch was unreachable. Every knob feeding it - outlineWidth,
+ * depthInk, normalInk, outlineStrength, normalScale - was dead, along with the normal and
+ * depth prepass they drive. Tuning them at the F8 panel moved nothing, which is exactly
+ * what "the cel shading does not produce the lines" describes.
+ *
+ * It hid for as long as it did because the failure is silent and its symptom is plausible:
+ * a cel pass with no contour still bands and tints, so it looks like a look that needs more
+ * tuning rather than a feature that is switched off. There is no way to tell those apart
+ * from the image alone, which is why the fix came from reading the guard rather than from
+ * pushing the width up again.
+ *
+ * Called every frame rather than once at mount, because the active camera changes with the
+ * shot and a stale one would prepass the room from where the lens used to be.
+ */
+export function setPaintView(scene: THREE.Scene | null, camera: THREE.Camera | null): void {
+  if (!effect) return;
+  effect.pass.mainScene = scene;
+  effect.pass.mainCamera = camera;
 }
 
 export function setPaintLook(name: PaintLookName, immediate = false): void {

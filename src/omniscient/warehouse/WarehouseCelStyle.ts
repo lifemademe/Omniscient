@@ -24,7 +24,7 @@ interface MaterialSnapshot {
  * Kept as a named constant because it is the one number that answers "the colours do not
  * pop": a toon ramp flattens value, so hue is left carrying the picture on its own.
  */
-const CEL_CHROMA_GAIN = 1.4;
+const CEL_CHROMA_GAIN = 1.22;
 
 function beveledRail(width: number, height: number, length: number): THREE.ExtrudeGeometry {
   const radius = Math.min(width, height) * 0.22;

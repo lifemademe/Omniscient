@@ -34,6 +34,28 @@ export interface PaintLook {
   /** Preserve saturated semantic scan, evidence, and door-state colours. */
   protectSignals: number;
   /**
+   * Value steps in the post pass. 0 disables it.
+   *
+   * The material injection in painterly.ts bands the DIRECT LIGHT term and leaves the
+   * hemisphere fill smooth, which is right for a painted look and wrong for a cel one - a
+   * surface lit mostly by fill still slides through a gradient, and in a night interior
+   * that is most of the frame. This quantises the finished pixel instead, so a surface is
+   * flat regardless of which light drew it. The two stack: bands shape the form, this
+   * flattens what is left.
+   */
+  posterize: number;
+  /** Width of the soft edge between posterised steps, 0..1 of a step. 0 is a hard cel step. */
+  posterizeSoft: number;
+  /**
+   * Chroma gain on the finished pixel, 1 = unchanged.
+   *
+   * Posterising VALUE makes hue carry more of the picture, because there is less value
+   * variation left to carry it. This is the knob for that, and it is separate from the
+   * material-level chroma in WarehouseCelStyle so the look can be pushed without editing
+   * the palette underneath it.
+   */
+  saturation: number;
+  /**
    * Gain on the shaded image, 1 = unchanged.
    *
    * Applied after the edge-preserving filter and BEFORE ink, outline and tooth, which is the
@@ -53,7 +75,7 @@ export const PAINT_LOOKS = {
     radius: 0, strength: 0, ink: 0, tint: 0, tooth: 0,
     outlineWidth: 0, depthInk: 0, normalInk: 0, outlineStrength: 0,
     normalScale: 0.5, protectSignals: 0, inkColor: [0.025, 0.035, 0.04],
-    brightness: 1,
+    brightness: 1, posterize: 0, posterizeSoft: 0, saturation: 1,
   },
   /**
    * The one to look at first.
@@ -65,14 +87,14 @@ export const PAINT_LOOKS = {
     radius: 1.2, strength: 0.18, ink: 0.24, tint: 0.4, tooth: 0.04,
     outlineWidth: 0, depthInk: 0, normalInk: 0, outlineStrength: 0,
     normalScale: 0.5, protectSignals: 0.3, inkColor: [0.025, 0.035, 0.04],
-    brightness: 1,
+    brightness: 1, posterize: 0, posterizeSoft: 0, saturation: 1,
   },
   /** Pushed, for judging the direction rather than for shipping. */
   heavy: {
     radius: 1.8, strength: 0.34, ink: 0.48, tint: 0.65, tooth: 0.08,
     outlineWidth: 1.5, depthInk: 1, normalInk: 0.7, outlineStrength: 0.8,
     normalScale: 0.85, protectSignals: 0.55, inkColor: [0.018, 0.025, 0.03],
-    brightness: 1,
+    brightness: 1, posterize: 0, posterizeSoft: 0, saturation: 1,
   },
   /** Warehouse prototype: clean value bands, occluded contours, no canvas or oil smearing. */
   warehouseCel: {
@@ -87,8 +109,24 @@ export const PAINT_LOOKS = {
      * Lifting inside the pass rather than at the tone mapper is what keeps the ink black
      * while the surfaces come up; see PaintLook.brightness.
      */
-    outlineWidth: 1.35, depthInk: 2, normalInk: 2, outlineStrength: 1,
-    normalScale: 1, protectSignals: 1,
+    /*
+     * 2.6px, up from 1.35, and the reason it now reads at all is the ORDER it is drawn in
+     * rather than the width - see the signal restore in main(). At 1.35 with the contour
+     * being wiped off every saturated surface afterwards, widening it was pushing on a
+     * rope.
+     */
+    outlineWidth: 1.7, depthInk: 2, normalInk: 2, outlineStrength: 1,
+    /*
+     * 0.55, down from 1.
+     *
+     * This decides how much of the cel treatment is handed back to "signal" colours, and at
+     * 1 it meant ALL of it. That was survivable while the warehouse palette was grey and
+     * almost nothing tripped the test; with the palette repainted, a tan carton now scores
+     * two thirds of the way to "signal" and was getting two thirds of its banding and ink
+     * returned. The test has been tightened as well, but this is the honest number for how
+     * much a scan line should be allowed to opt out.
+     */
+    normalScale: 1, protectSignals: 0.55,
     inkColor: [0.025186859622305935, 0.035601314869097636, 0.03954623527052923],
     /*
      * 1.42, down from 2.17, settled alongside dropping the tone mapper to 0.62.
@@ -99,13 +137,23 @@ export const PAINT_LOOKS = {
      * mid-range with more headroom left at the top, which is where the banding lives.
      */
     brightness: 1.42,
+    /*
+     * Four value steps with a nearly hard edge, and 1.3x chroma.
+     *
+     * Three steps is a comic and reads too coarse on a 26-metre aisle, where the run has to
+     * describe distance with value alone. Four keeps the near/mid/far read while still
+     * being unmistakably flat. Softness at 0.08 rather than 0 because a perfectly hard step
+     * crawls along a slowly curving surface as the drone moves - a few percent of ramp costs
+     * nothing visible and kills the crawl.
+     */
+    posterize: 4, posterizeSoft: 0.08, saturation: 1.14,
   },
   /** Lower-cost depth-led contour for high-DPI or constrained GPUs. */
   warehouseCelLow: {
     radius: 0, strength: 0, ink: 0.06, tint: 0.24, tooth: 0,
-    outlineWidth: 1, depthInk: 1, normalInk: 0.38, outlineStrength: 0.58,
-    normalScale: 0.48, protectSignals: 0.92, inkColor: [0.025, 0.035, 0.04],
-    brightness: 1,
+    outlineWidth: 1.8, depthInk: 1, normalInk: 0.38, outlineStrength: 0.58,
+    normalScale: 0.48, protectSignals: 0.55, inkColor: [0.025, 0.035, 0.04],
+    brightness: 1, posterize: 3, posterizeSoft: 0.14, saturation: 1.2,
   },
 } as const satisfies Record<string, PaintLook>;
 
@@ -143,6 +191,9 @@ uniform float uNormalInk;
 uniform float uOutlineStrength;
 uniform float uProtectSignals;
 uniform float uBrightness;
+uniform float uPosterize;
+uniform float uPosterizeSoft;
+uniform float uSaturation;
 uniform vec2 uProtectedA;
 uniform vec2 uProtectedB;
 uniform vec2 uProtectedC;
@@ -233,6 +284,66 @@ void main() {
   // lifting the room never lifts its ink. See PaintLook.brightness.
   colour *= uBrightness;
 
+  /*
+   * Chroma, then value steps. This order matters.
+   *
+   * Saturating first means the posteriser quantises a colour that already has its final
+   * hue strength, so the flat blocks come out at full chroma. Doing it the other way round
+   * saturates the seams between steps as much as the steps themselves and puts a coloured
+   * fringe on every band edge.
+   */
+  if ( uSaturation != 1.0 ) {
+    colour = mix( vec3( luma( colour ) ), colour, uSaturation );
+  }
+
+  /*
+   * Flat blocks, which is the half of "cel shading" the material injection cannot do.
+   *
+   * painterly.ts bands the DIRECT light term inside the per-light loop and deliberately
+   * leaves the hemisphere fill smooth. That is the right call for a painted look, but it
+   * means a surface lit mostly by fill still slides through a gradient - and in a night
+   * interior that is most of the frame, which is why the result read as soft shading rather
+   * than as cel. Quantising the finished pixel catches everything, whatever drew it.
+   *
+   * Scaled rather than replaced, so hue and chroma survive: only the value is stepped.
+   */
+  if ( uPosterize > 0.5 ) {
+    /*
+     * Rounded to the nearest step, not raised to the next one.
+     *
+     * The obvious form - floor, then ramp up across the bottom of the cell - moves almost
+     * every pixel UP by nearly a whole step, because anything past the ramp has already
+     * arrived at the top. Measured on an aisle capture it lifted mean luma from 61 to 104
+     * and turned a night interior into an overcast afternoon, which would have quietly
+     * undone the exposure settled at the F8 panel.
+     *
+     * Transitioning across the MIDDLE of each cell is the same flat-block result with no
+     * bias: as many pixels step down as step up, so the frame keeps the mean it had.
+     */
+    float value = max( luma( colour ), 0.0001 );
+    /*
+     * Stepped in PERCEPTUAL space, not linear.
+     *
+     * Quantising linear luminance spends almost every step in the highlights, where a night
+     * interior has nothing, and lays one enormous step across the entire shadow range, where
+     * it has everything. At four bands the bottom step swallowed each pixel below 0.125 and
+     * flattened it to absolute black - the roof trusses, the far end of the aisle and most
+     * of the ceiling went out together, and the frame lost half its mean.
+     *
+     * A gamma curve is roughly how the eye spaces value, and it is how a painter picks the
+     * steps between shadow and light. Banding there puts the four steps where the picture
+     * actually lives: the darkest band now ends at 0.008 linear instead of 0.125.
+     */
+    float perceptual = pow( value, 0.4545 );
+    float scaled = perceptual * uPosterize;
+    float base = floor( scaled );
+    float within = fract( scaled );
+    float halfSoft = max( uPosterizeSoft, 0.0001 ) * 0.5;
+    float steppedPerceptual = ( base + smoothstep( 0.5 - halfSoft, 0.5 + halfSoft, within ) ) / uPosterize;
+    float banded = pow( steppedPerceptual, 2.2 );
+    colour *= banded / value;
+  }
+
   if ( uInk > 0.0 ) {
     // Compact luminance derivative. Geometry contours are supplied separately below.
     float r = uRadius > 0.0 ? uRadius : 1.0;
@@ -258,18 +369,88 @@ void main() {
     colour *= mix( vec3( 1.0 ), mix( cool, warm, smoothstep( 0.10, 0.62, l ) ), uTint );
   }
 
+  /*
+   * The signal restore, and it USED TO RUN LAST.
+   *
+   * This hands saturated pixels back their original colour so a scan sweep, an evidence
+   * highlight or a door-state lamp is not banded into something else. Running it after the
+   * contour meant it also handed back the pixels the contour had just been drawn on: every
+   * outline that happened to fall on a coloured surface was erased, by design, one line of
+   * code later. That is the whole "the cel shading does not produce the lines" report - the
+   * lines were being drawn and then painted over.
+   *
+   * It runs here now, and the contour is the last thing that touches the image. A signal
+   * colour still opts out of the banding and the ink; it no longer opts out of its own
+   * silhouette, which was never the intent.
+   *
+   * The test is tightened too. Chroma alone calls anything colourful a signal, which was
+   * harmless while the warehouse palette was grey and describes half the room now that it
+   * is not. Requiring real brightness as well as real chroma is what separates an
+   * emissive UI colour from a cardboard box that is merely brown.
+   */
+  float high = max( src.r, max( src.g, src.b ) );
+  float low = min( src.r, min( src.g, src.b ) );
+  float semanticSignal = smoothstep( 0.22, 0.5, high - low ) * smoothstep( 0.42, 0.74, high );
+  vec3 signalColour = src.rgb * uBrightness;
+  signalColour = mix( vec3( luma( signalColour ) ), signalColour, uSaturation );
+  colour = mix( colour, signalColour, semanticSignal * uProtectSignals );
+
   if ( uHasGeometry > 0.5 && uOutlineStrength > 0.0 ) {
     float centreDepth = texture2D( tSceneDepth, vUv ).x;
     vec3 centreNormal = readNormal( vUv );
+    /*
+     * Eight taps, not four.
+     *
+     * A cross-shaped kernel only ever measures across a horizontal or a vertical, so an
+     * edge running at forty-five degrees is sampled along its own length and reads as
+     * barely an edge at all. A warehouse is diagonals: every rack, beam and floor line runs
+     * to a vanishing point, which is the worst possible case for a four-tap contour and
+     * exactly the geometry this game is made of.
+     *
+     * The corners sit at 0.7071 of the step so all eight are the same distance out, and the
+     * line comes out one weight the whole way round instead of thinning on the diagonals.
+     */
     vec2 outlineStep = uOutlineTexel * max( 1.0, uOutlineWidth );
+    vec2 diagonal = outlineStep * 0.7071;
     vec2 edge = vec2( 0.0 );
     edge = max( edge, geometryDifference( vUv + vec2( outlineStep.x, 0.0 ), centreDepth, centreNormal ) );
     edge = max( edge, geometryDifference( vUv - vec2( outlineStep.x, 0.0 ), centreDepth, centreNormal ) );
     edge = max( edge, geometryDifference( vUv + vec2( 0.0, outlineStep.y ), centreDepth, centreNormal ) );
     edge = max( edge, geometryDifference( vUv - vec2( 0.0, outlineStep.y ), centreDepth, centreNormal ) );
+    edge = max( edge, geometryDifference( vUv + diagonal, centreDepth, centreNormal ) );
+    edge = max( edge, geometryDifference( vUv - diagonal, centreDepth, centreNormal ) );
+    edge = max( edge, geometryDifference( vUv + vec2( diagonal.x, -diagonal.y ), centreDepth, centreNormal ) );
+    edge = max( edge, geometryDifference( vUv + vec2( -diagonal.x, diagonal.y ), centreDepth, centreNormal ) );
+    /*
+     * Both windows come down by roughly half.
+     *
+     * The old ranges only ever fully fired on a near silhouette against a far background.
+     * A crease between two faces of the same rack twenty metres down an aisle - which is
+     * most of the lines in the reference the look is aimed at - landed in the bottom tenth
+     * of the ramp and drew nothing. The gains stay as the tuning knobs; these are the
+     * windows they act on.
+     */
+    /*
+     * The depth test has to know how OBLIQUE the surface is.
+     *
+     * A raw depth difference between neighbouring pixels is large on any surface receding
+     * from the lens, whether or not there is an edge there - a floor seen at a glancing
+     * angle changes depth faster across one pixel than a genuine step does. Down a
+     * twenty-six metre aisle almost every surface is oblique, so with the prepass finally
+     * feeding it, a plain threshold inked the entire room solid: measured at 70% of the
+     * frame below luma 0.10, against 14% before.
+     *
+     * MeshNormalMaterial writes VIEW-space normals, so the z component is the cosine
+     * between the surface and the lens. Dividing the tolerance by it asks the right
+     * question - "is this step bigger than the slope alone would explain" - instead of "is
+     * this step big". Clamped at 0.12 so a surface seen edge-on does not divide by nearly
+     * nothing and disable the test where silhouettes actually live.
+     */
+    float facing = max( abs( centreNormal.z ), 0.12 );
+    float slopeTolerance = 1.0 / facing;
     float contour = max(
-      smoothstep( 0.018, 0.12, edge.x * uDepthInk ),
-      smoothstep( 0.08, 0.42, edge.y * uNormalInk )
+      smoothstep( 0.05 * slopeTolerance, 0.17 * slopeTolerance, edge.x * uDepthInk ),
+      smoothstep( 0.12, 0.45, edge.y * uNormalInk )
     );
     colour = mix( colour, uInkColor, contour * uOutlineStrength );
   }
@@ -279,11 +460,6 @@ void main() {
     colour *= 1.0 - grain * uTooth;
   }
 
-
-  float high = max( src.r, max( src.g, src.b ) );
-  float low = min( src.r, min( src.g, src.b ) );
-  float semanticSignal = smoothstep( 0.14, 0.38, high - low ) * smoothstep( 0.2, 0.55, high );
-  colour = mix( colour, src.rgb * uBrightness, semanticSignal * uProtectSignals );
 
   gl_FragColor = vec4( colour, src.a );
   // Only the pass that reaches the canvas owes it an encode - same rule as the CRT.

@@ -44,13 +44,7 @@ import { setRoomTone, stopRoomTone } from './audio/RoomTone.js';
 import { showBoot } from './link/BootScreen.js';
 
 import type { BootScreen } from './link/BootScreen.js';
-import {
-  installPaint,
-  PAINT_LOOKS,
-  setPaintLook,
-  setPaintProtectedQuad,
-  setPaintValues,
-} from './art/paintPass.js';
+import { installPaint, PAINT_LOOKS, setPaintLook, setPaintProtectedQuad, setPaintValues, setPaintView } from './art/paintPass.js';
 import type { PaintLook } from './art/paintPass.js';
 import type { RetroLookName } from './art/retro.js';
 import { ScanTargets } from './link/ScanTargets.js';
@@ -1307,13 +1301,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
     celSlider('luma ink', 'ink', 0, 1, 0.01);
     celSlider('warm/cool', 'tint', 0, 1, 0.01);
     celSlider('surface', 'tooth', 0, 0.25, 0.005);
-    celSlider('outline px', 'outlineWidth', 0.25, 3, 0.05);
+    celSlider('outline px', 'outlineWidth', 0.25, 6, 0.05);
     celSlider('depth edge', 'depthInk', 0, 2, 0.02);
     celSlider('normal edge', 'normalInk', 0, 2, 0.02);
     celSlider('outline mix', 'outlineStrength', 0, 1, 0.01);
     celSlider('outline res', 'normalScale', 0.25, 1, 0.01);
     celSlider('signal keep', 'protectSignals', 0, 1, 0.01);
     celSlider('brightness', 'brightness', 0.3, 2.5, 0.01);
+    celSlider('value steps', 'posterize', 0, 8, 1);
+    celSlider('step edge', 'posterizeSoft', 0, 0.6, 0.01);
+    celSlider('saturation', 'saturation', 0.4, 2.2, 0.01);
     tune.color({
       label: 'ink colour',
       get: () => {
@@ -4333,6 +4330,19 @@ export class OmniscientRig extends ENGINE.SceneNode {
         if (this.warehouse) this.applyWarehouseCelPost(true);
         else this.applyCelPost(true);
       }
+    }
+    /*
+     * The pass cannot see the scene unless something shows it to it.
+     *
+     * The engine hands mainScene and mainCamera to its own built-in render pass and to
+     * nothing else, so a custom effect registered through registerEffect gets neither - and
+     * the paint pass needs both to run the normal/depth prepass its contour is drawn from.
+     * Without this line the outline branch is unreachable. See setPaintView.
+     *
+     * Every frame, because the active camera changes with the shot.
+     */
+    if (this.paintMounted) {
+      setPaintView(this.getWorld() ?? null, this.camera?.getCamera() ?? null);
     }
 
     this.cameraTweener.update(deltaTime);
