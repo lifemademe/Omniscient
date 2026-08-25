@@ -2595,14 +2595,42 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.lastInboundScanSubject.copy(cargoAt);
     audit.delivererMatches = delivery.packageDelivererName === delivery.workerName;
     audit.sealIntact = !delivery.sealCompromised;
+    /*
+     * A broken seal is a QUESTION, not a verdict.
+     *
+     * One legitimate delivery arrives with its seal open and a logged reseal against it, so
+     * "tampered" no longer separates the impostor from an honest worker who dropped a pallet.
+     * What separates them is the name on the carton against the name on the badge. A player
+     * who rejects on the seal alone false-alarms somebody innocent and pays an integrity for
+     * it, which is the lesson the quest exists to teach and could not teach while the two
+     * tells always arrived together.
+     */
+    const sealExplained = Boolean(delivery.sealNote);
+    audit.sealAccounted = audit.sealIntact || sealExplained;
+    /*
+     * The gate opens on ANY anomaly, including one that turns out to be accounted for.
+     *
+     * Gating it on `sealAccounted` was tried and is subtly wrong: it makes the console refuse
+     * to reject a delivery whose paperwork explains itself, which prevents the mistake
+     * instead of teaching it. The player never learns that a broken seal is not a verdict,
+     * because the game quietly refuses to let them act on one. Both actions stay available
+     * whenever there is something to point at, and being wrong costs an integrity.
+     */
     audit.phase = audit.delivererMatches && audit.sealIntact ? 'sort-ready' : 'alarm-ready';
     this.evidence.cargo = true;
     this.evidence.authorization = audit.delivererMatches;
-    this.evidence.tamper = !audit.sealIntact;
+    this.evidence.tamper = !audit.sealIntact && !sealExplained;
     this.scannedCargo.add(cargo);
+    if (delivery.sealNote) {
+      // Printed BEFORE the verdict, so the explanation is on screen when the judgement is
+      // made rather than discoverable afterwards in a records tab.
+      this.hud?.appendSystem('SEAL RECORD', `${delivery.packageId} // ${delivery.sealNote}`);
+    }
     const comparison = [
       audit.delivererMatches ? 'DELIVERER MATCH' : 'IDENTITY CONTRADICTION',
-      audit.sealIntact ? 'SEAL INTACT' : 'PACKAGE TAMPERED',
+      audit.sealIntact
+        ? 'SEAL INTACT'
+        : sealExplained ? 'SEAL OPEN // RESEAL ON RECORD' : 'PACKAGE TAMPERED',
       audit.phase === 'sort-ready' ? 'SORT AUTHORIZED' : 'REJECT + EMERGENCY ENABLED',
     ].join(' // ');
     this.hud?.appendSystem('PACKAGE COMPARISON', `${delivery.packageId} // ${comparison}`);
@@ -2636,8 +2664,11 @@ export class WarehouseRig extends ENGINE.SceneNode {
       line = `${step}: records agree. Grip package ${delivery.packageId} with F and carry it `
         + 'to the VERIFIED INTAKE on the sorting line, east side.';
     } else if (audit.phase === 'alarm-ready') {
-      line = `${step}: package ${delivery.packageId} contradicts its record. `
-        + 'Reject it from the console, or sort it anyway and answer for it.';
+      line = audit.delivererMatches
+        ? `${step}: package ${delivery.packageId} is open, and a reseal is on record against `
+          + 'it. Sort it, or reject it from the console and answer for the alarm.'
+        : `${step}: the name on package ${delivery.packageId} is not the name on the badge. `
+          + 'Reject it from the console, or sort it anyway and answer for it.';
     } else {
       return;
     }
@@ -2821,7 +2852,12 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.decisionCommitted = true;
       this.sound.play('reject');
       this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
-      this.hud?.flash(`FALSE ALARM // ${delivery.workerName} + ${delivery.packageId} RECORDS AGREE // DELIVERY RESET`, 3.2);
+      this.hud?.flash(
+        delivery.sealNote
+          ? `FALSE ALARM // ${delivery.packageId} SEAL WAS LOGGED // BADGE AND CARTON AGREE // DELIVERY RESET`
+          : `FALSE ALARM // ${delivery.workerName} + ${delivery.packageId} RECORDS AGREE // DELIVERY RESET`,
+        3.4
+      );
       updateWarehouseSave((save) => {
         save.totalDecisions += 1;
         save.storyMistakes += 1;

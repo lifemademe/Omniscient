@@ -27,6 +27,22 @@ export interface InboundAuditDelivery {
   suspicious: boolean;
   sealCompromised: boolean;
   /**
+   * Why this seal is broken, when there is an innocent reason on record.
+   *
+   * The point of the audit is comparing a worker against their paperwork, and the impostor
+   * carries two tells - a name that does not match and a seal that is open. With every other
+   * delivery sealed, the seal alone convicted: a player could reject the right person for the
+   * wrong reason and never once read a name, which is the mechanic the quest is built on.
+   *
+   * So one legitimate delivery arrives with a broken seal and a logged explanation. A seal
+   * now raises a question rather than answering one, and the only tell that separates the
+   * impostor from an honest worker having a bad night is the identity comparison. Rejecting
+   * on the seal alone is a false alarm against somebody innocent, and costs integrity.
+   *
+   * Undefined means no explanation exists, which is what makes the third delivery damning.
+   */
+  sealNote?: string;
+  /**
    * Where the worker waits, and it is deliberately the head of their OWN aisle.
    *
    * They stood in a row across the receiving dock at z -17.8, which is behind the racking and
@@ -57,6 +73,8 @@ export interface InboundAuditSnapshot {
   packageScanned: boolean;
   delivererMatches: boolean | null;
   sealIntact: boolean | null;
+  /** Seal either unbroken or broken with a logged reason. See sealNote. */
+  sealAccounted: boolean | null;
   resolutions: InboundDeliveryResolution[];
   fugitiveZone: WarehouseSecurityZoneId | null;
   escapeSeconds: number | null;
@@ -99,7 +117,10 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     helmet: '#f0d468',
     gloves: '#20383c',
     suspicious: false,
-    sealCompromised: false,
+    // Broken, and accounted for. This is the delivery that stops a broken seal from being
+    // a verdict on its own - see sealNote.
+    sealCompromised: true,
+    sealNote: 'RESEAL LOGGED 03:14 // DOCK SUPERVISOR // CARTON RE-TAPED AFTER PALLET SLIP',
     inspectionPosition: new THREE.Vector3(-11.4, 0, 17.8),
     station: 'the front of Aisle 2',
   },
@@ -167,6 +188,7 @@ export function createInboundAuditSnapshot(resolved = 0): InboundAuditSnapshot {
     packageScanned: false,
     delivererMatches: null,
     sealIntact: null,
+    sealAccounted: null,
     resolutions: INBOUND_AUDIT_DELIVERIES.map((delivery, index) => (
       index < safeResolved ? delivery.suspicious ? 'evidence' : 'sorted' : 'pending'
     )),

@@ -102,6 +102,49 @@ for (const delivery of INBOUND_AUDIT_DELIVERIES) {
   );
 }
 
+/*
+ * The audit's evidence has to require BOTH tells, and that is a property of the table rather
+ * than of any one entry - so it is asserted here rather than trusted to stay true while the
+ * table is edited.
+ */
+console.log('');
+console.log('--- the two tells actually require each other ---');
+const suspicious = INBOUND_AUDIT_DELIVERIES.filter((d) => d.suspicious);
+check('exactly one delivery is the impostor', suspicious.length === 1, `${suspicious.length} marked suspicious`);
+for (const impostor of suspicious) {
+  check(
+    `${impostor.packageId} has an identity contradiction`,
+    impostor.packageDelivererName !== impostor.workerName,
+    `carton says ${impostor.packageDelivererName}, badge says ${impostor.workerName}`
+  );
+  check(
+    `${impostor.packageId} has no innocent explanation on record`,
+    impostor.sealCompromised && !impostor.sealNote
+  );
+}
+/*
+ * The decisive one. If every broken seal belonged to the impostor, a player could convict on
+ * the seal alone and never read a name - which is the comparison the whole quest is about.
+ */
+const innocentBrokenSeal = INBOUND_AUDIT_DELIVERIES.filter(
+  (d) => !d.suspicious && d.sealCompromised && d.sealNote
+);
+check(
+  'a legitimate delivery also arrives with a broken seal',
+  innocentBrokenSeal.length >= 1,
+  innocentBrokenSeal.length
+    ? innocentBrokenSeal.map((d) => d.packageId).join(', ')
+    : 'a broken seal would convict on its own'
+);
+check(
+  'every legitimate broken seal carries its explanation',
+  INBOUND_AUDIT_DELIVERIES.every((d) => d.suspicious || !d.sealCompromised || Boolean(d.sealNote))
+);
+check(
+  'no legitimate delivery contradicts its own badge',
+  INBOUND_AUDIT_DELIVERIES.every((d) => d.suspicious || d.packageDelivererName === d.workerName)
+);
+
 console.log(
   failures === 0
     ? '\nALL CHECKS PASSED'
