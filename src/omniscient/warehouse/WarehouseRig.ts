@@ -649,6 +649,22 @@ export class WarehouseRig extends ENGINE.SceneNode {
      * contaminated texel of a coarse mip, drawn back over the frame, exactly as described.
      *
      * The cap below is therefore part of the setting, not an optional quality increase.
+     *
+     * ## The state it was never proven against, now proven
+     *
+     * The objection to levels 2 was never that it measured dirty - it measured clean over 88
+     * steps. It was that the sweep had only ever visited ORDINARY lighting while the source
+     * pixel remained unfound, so nothing covered "containment red, the pursuit rig, the
+     * emergency ramp". The inbound audit puts an emergency state on the critical path, so
+     * that gap stopped being theoretical.
+     *
+     * Tested 2026-08-25: lighting mode forced to `emergency`, 90 steps of spin-plus-pitch,
+     * 0 dark blobs, worst dark fraction 3.1% against 11.5% when the fault was live. The
+     * forced state was confirmed rather than assumed - same drone pose, same build, the
+     * emergency frame measured luma 57.5 and R-B -23.5 against normal's 83.5 and -13.7, so
+     * the fixtures had genuinely dropped and the cool half had genuinely taken over.
+     *
+     * Still a blast-radius cap rather than a fix. The pixel has not been found.
      */
     post.configureEffect(ENGINE.PostProcessPass.Bloom, {
       enabled: true,
