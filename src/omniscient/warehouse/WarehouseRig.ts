@@ -1225,8 +1225,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.environment.setConveyorsRunning(false);
     this.hud?.setCase(
       'QUEST 04 // INBOUND AUDIT',
-      `Delivery ${index + 1} of ${audit.total}: scan ${delivery.workerName}, then inspect package ${delivery.packageId} at Aisle ${delivery.aisle} // Bay ${String(delivery.bay).padStart(2, '0')}.`
+      `Delivery ${index + 1} of ${audit.total}: scan ${delivery.workerName} at ${delivery.station}, `
+      + `then inspect package ${delivery.packageId} in the same aisle at Bay ${String(delivery.bay).padStart(2, '0')}.`
     );
+    audit.station = delivery.station;
     this.hud?.setSecurityAlert(`DELIVERIES RESOLVED ${audit.resolved}/${audit.total} // ACTIVE BADGE ${delivery.workerId}`);
     this.refreshCaseHud();
   }

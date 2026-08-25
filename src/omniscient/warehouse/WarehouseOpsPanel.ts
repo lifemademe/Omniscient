@@ -310,7 +310,14 @@ export class WarehouseOpsPanel {
       ]
       : data.definition.id === 'freight-sort' && inboundAudit
         ? [
-          [inboundAudit.workerScanned ? `Worker ${data.workerName} scanned` : `Scan worker ${data.workerName}`, 'visitor identity', inboundAudit.workerScanned],
+          [
+            inboundAudit.workerScanned
+              ? `Worker ${data.workerName} scanned`
+              // Says WHERE, because a name alone sent the player looking down a 58m building.
+              : `Scan ${data.workerName} // ${inboundAudit.station}`,
+            'visitor identity',
+            inboundAudit.workerScanned,
+          ],
           [inboundAudit.packageScanned ? `Package ${data.packageId} scanned` : `Package ${data.packageId} // Aisle ${data.aisle} Bay ${String(data.bay).padStart(2, '0')}`, 'package', inboundAudit.packageScanned],
           [`Deliveries resolved ${inboundAudit.resolved}/${inboundAudit.total}`, 'manifest', inboundAudit.resolved >= inboundAudit.total],
         ]

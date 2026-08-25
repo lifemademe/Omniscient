@@ -26,7 +26,26 @@ export interface InboundAuditDelivery {
   gloves: string;
   suspicious: boolean;
   sealCompromised: boolean;
+  /**
+   * Where the worker waits, and it is deliberately the head of their OWN aisle.
+   *
+   * They stood in a row across the receiving dock at z -17.8, which is behind the racking and
+   * roughly forty metres from where the drone spawns. Nothing on screen said so. Every
+   * delivery therefore opened with a blind search the length of the building for a figure
+   * that is a few pixels tall at that range, and only then began the part the quest is about.
+   *
+   * At the front of their own aisle they are visible from the launch pad, and scanning the
+   * worker and flying to their bay becomes one continuous movement down one aisle instead of
+   * two unrelated journeys. It also teaches the relationship the audit runs on - this person
+   * and that package belong to the same aisle - by putting them in the same place.
+   *
+   * Staggered in z rather than aligned, because five deliveries that each park a figure on
+   * the identical line read as a spawn point rather than as somebody standing where they
+   * happen to be. Racks end at z 14.35, so 15.9 to 17.8 is clear of the end guards.
+   */
   inspectionPosition: THREE.Vector3;
+  /** Human-readable station, for the objective line. */
+  station: string;
 }
 
 export interface InboundAuditSnapshot {
@@ -41,6 +60,8 @@ export interface InboundAuditSnapshot {
   resolutions: InboundDeliveryResolution[];
   fugitiveZone: WarehouseSecurityZoneId | null;
   escapeSeconds: number | null;
+  /** Where the active worker is standing, for the console to say out loud. */
+  station: string;
 }
 
 /**
@@ -63,7 +84,8 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     gloves: '#263532',
     suspicious: false,
     sealCompromised: false,
-    inspectionPosition: new THREE.Vector3(-18.2, 0, -17.8),
+    inspectionPosition: new THREE.Vector3(-18.6, 0, 16.4),
+    station: 'the front of Aisle 1',
   },
   {
     index: 1,
@@ -78,7 +100,8 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     gloves: '#20383c',
     suspicious: false,
     sealCompromised: false,
-    inspectionPosition: new THREE.Vector3(-10.8, 0, -17.8),
+    inspectionPosition: new THREE.Vector3(-11.4, 0, 17.8),
+    station: 'the front of Aisle 2',
   },
   {
     index: 2,
@@ -93,7 +116,8 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     gloves: '#182c2d',
     suspicious: true,
     sealCompromised: true,
-    inspectionPosition: new THREE.Vector3(-3.8, 0, -17.8),
+    inspectionPosition: new THREE.Vector3(-4.6, 0, 15.9),
+    station: 'the front of Aisle 3',
   },
   {
     index: 3,
@@ -110,7 +134,8 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     gloves: '#34403c',
     suspicious: false,
     sealCompromised: false,
-    inspectionPosition: new THREE.Vector3(3.2, 0, -17.8),
+    inspectionPosition: new THREE.Vector3(2.6, 0, 17.4),
+    station: 'the front of Aisle 4',
   },
   {
     index: 4,
@@ -126,7 +151,8 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     gloves: '#243b38',
     suspicious: false,
     sealCompromised: false,
-    inspectionPosition: new THREE.Vector3(10.2, 0, -17.8),
+    inspectionPosition: new THREE.Vector3(9.4, 0, 16.2),
+    station: 'the front of Aisle 5',
   },
 ] as const;
 
@@ -146,6 +172,7 @@ export function createInboundAuditSnapshot(resolved = 0): InboundAuditSnapshot {
     )),
     fugitiveZone: null,
     escapeSeconds: null,
+    station: INBOUND_AUDIT_DELIVERIES[safeResolved]?.station ?? '',
   };
 }
 
