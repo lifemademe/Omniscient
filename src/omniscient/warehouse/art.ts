@@ -189,14 +189,86 @@ function boxGeometry(size: THREE.Vector3, position: THREE.Vector3): THREE.BoxGeo
   return geometry;
 }
 
+/**
+ * A strut between two points, for rack bracing. Thickness is square in section.
+ *
+ * Built along X and then rotated about Z, so it only spans within one frame's plane - which
+ * is all rack bracing ever does. A general two-point solve would be more code for a case that
+ * does not occur here.
+ */
+function strutGeometry(
+  from: THREE.Vector2,
+  to: THREE.Vector2,
+  z: number,
+  thickness = 0.05
+): THREE.BufferGeometry {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const geometry = new THREE.BoxGeometry(Math.hypot(dx, dy), thickness, thickness);
+  geometry.rotateZ(Math.atan2(dy, dx));
+  geometry.translate((from.x + to.x) / 2, (from.y + to.y) / 2, z);
+  return geometry;
+}
+
+/**
+ * Pallet racking that looks like pallet racking.
+ *
+ * It was eight square posts and five flat slabs. That is a shelf unit, not a rack, and it is
+ * the single most repeated object in the mission - five of them, twenty-six metres long, in
+ * the background of every shot the player takes. Whatever it reads as, the warehouse reads
+ * as.
+ *
+ * Three things were missing, and all three are what makes racking recognisable at a glance:
+ *
+ *  - BRACING. A rack frame is two posts joined by a zigzag of diagonals, and that zigzag is
+ *    the silhouette people actually recognise. Without it an empty bay showed clear through
+ *    to the next aisle with nothing in the gap, which is why the racks read as scaffolding.
+ *  - FOOTPLATES. Uprights bolt to the slab through a plate wider than the post. Without them
+ *    the posts met the floor at a point and looked balanced rather than fixed.
+ *  - BEAM FACES. Real beams are box section with a lip catching light along the top edge, not
+ *    a slab with a single flat face. One thin highlight strip per beam gives the horizontal
+ *    lines the eye reads depth from down a twenty-six metre aisle.
+ *
+ * All of it merges into the one geometry the aisle already paid for, so the cost is triangles
+ * rather than draw calls - which is the whole reason the racks were merged in the first place.
+ */
 function rackGeometry(height = WAREHOUSE_LAYOUT.rack.height, length = WAREHOUSE_LAYOUT.rack.length): THREE.BufferGeometry {
   const pieces: THREE.BufferGeometry[] = [];
-  for (const z of [-length / 2, -length / 6, length / 6, length / 2]) {
-    pieces.push(boxGeometry(new THREE.Vector3(0.11, height, 0.11), new THREE.Vector3(-0.72, height / 2, z)));
-    pieces.push(boxGeometry(new THREE.Vector3(0.11, height, 0.11), new THREE.Vector3(0.72, height / 2, z)));
+  const frameZ = [-length / 2, -length / 6, length / 6, length / 2];
+  const deckY = [0.18, 1.55, 2.9, 4.25, 5.48];
+  const postX = 0.72;
+  for (const z of frameZ) {
+    for (const x of [-postX, postX]) {
+      pieces.push(boxGeometry(new THREE.Vector3(0.11, height, 0.11), new THREE.Vector3(x, height / 2, z)));
+      // Footplate, wider than the post and barely proud of the slab.
+      pieces.push(boxGeometry(new THREE.Vector3(0.26, 0.035, 0.26), new THREE.Vector3(x, 0.018, z)));
+    }
+    /*
+     * The zigzag, one diagonal per lift, alternating so the runs meet at the posts rather
+     * than crossing mid-air. Inset from the post centres so the ends land on the post face
+     * instead of hanging past it.
+     */
+    const braceX = postX - 0.055;
+    for (let level = 0; level < deckY.length - 1; level++) {
+      const low = deckY[level] + 0.09;
+      const high = deckY[level + 1] - 0.09;
+      const leftToRight = level % 2 === 0;
+      pieces.push(strutGeometry(
+        new THREE.Vector2(leftToRight ? -braceX : braceX, low),
+        new THREE.Vector2(leftToRight ? braceX : -braceX, high),
+        z
+      ));
+      // A horizontal tie at each lift, which is what the diagonals actually land on.
+      pieces.push(boxGeometry(new THREE.Vector3(braceX * 2, 0.045, 0.045), new THREE.Vector3(0, low, z)));
+    }
   }
-  for (const y of [0.18, 1.55, 2.9, 4.25, 5.48]) {
+  for (const y of deckY) {
     pieces.push(boxGeometry(new THREE.Vector3(1.58, 0.11, length), new THREE.Vector3(0, y, 0)));
+    // The beam lip. Two thin strips at the deck edges, proud of the face, so each level
+    // carries a highlight line down the aisle instead of one flat band.
+    for (const x of [-0.79, 0.79]) {
+      pieces.push(boxGeometry(new THREE.Vector3(0.05, 0.16, length), new THREE.Vector3(x, y + 0.02, 0)));
+    }
   }
   return mergeGeometries(pieces, false) ?? new THREE.BoxGeometry(1, 1, 1);
 }
