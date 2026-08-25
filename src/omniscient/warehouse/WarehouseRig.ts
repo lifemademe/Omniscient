@@ -3051,8 +3051,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.hud?.tick(deltaTime);
     this.environment.tick(deltaTime);
     this.visitor?.rig.idle(deltaTime);
-    // The rig breathes bones nobody sees; this breathes the body that is actually on screen.
-    this.visitor?.figure?.idle(deltaTime);
     this.updatePursuit(deltaTime);
     this.updateContainmentResponse(deltaTime);
     this.updateInbound(deltaTime);

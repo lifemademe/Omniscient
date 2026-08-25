@@ -202,8 +202,38 @@ const WORKSTATION_ORIGIN = new THREE.Vector3(0, 0, -60);
 
 /** M4SS's own patch of empty world - see enterM4SS. Well clear of every diorama. */
 const M4SS_ORIGIN = new THREE.Vector3(0, 400, 0);
-/** The bonus facility is a separate runtime world, well outside every authored diorama. */
-const WAREHOUSE_ORIGIN = new THREE.Vector3(0, 800, 0);
+/**
+ * The bonus facility is a separate runtime world, well outside every authored diorama.
+ *
+ * ## Why this is 1200 along Z and not 800 up
+ *
+ * A rigged GLB character will not render in a world that is offset along Y. Not the visitor
+ * the mission tells you to find, not the workers, not the intruder - for as long as this
+ * constant read `(0, 800, 0)`, every character in Warehouse 07 was invisible, and the mission
+ * asked the player to locate somebody who was never drawn.
+ *
+ * It presents as an art bug and is not one. The node is perfect every time: visible,
+ * parented, correctly placed, correctly sized, with a loaded mesh. What goes wrong is one
+ * axis of the draw. Measured inside `onBeforeRender`, where three.js has finished updating
+ * every matrix in the graph - the only place these numbers can be trusted, as three separate
+ * readings taken during the game tick proved by disagreeing with each other - the mesh draws
+ * at `(0, 0, 30.9)` while its own root sits at `(0, 800, 30.9)`. X and Z are inherited from
+ * the parent. Y is dropped. The character is drawn 800 metres under the building, and then
+ * frustum culling correctly removes it, which is why nothing appeared even with culling
+ * forced off: it was being drawn, 396 times, in a field below the floor.
+ *
+ * The root cause is inside the engine's model load path and is not fixed here. What IS fixed
+ * is the thing this project controls: the separation between worlds does not have to be
+ * vertical. Moving it to Z keeps the bonus facility just as far from every diorama - the
+ * workstation is at z -60 and nothing authored reaches a tenth of this - while leaving Y at
+ * zero, where there is nothing left to drop. Verified by moving it and watching the GLB
+ * appear at the door, twice: once at the origin and once here.
+ *
+ * If a character ever goes missing again, check this axis before checking the art. And note
+ * M4SS_ORIGIN above still sits 400 up: it has no rigged characters today, and the day it
+ * gets one it will have this same bug.
+ */
+const WAREHOUSE_ORIGIN = new THREE.Vector3(0, 0, 1200);
 
 /**
  * The machine, three-quarter on. §129 wants this to be the shot a player screenshots at

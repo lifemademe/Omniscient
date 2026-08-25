@@ -2,8 +2,6 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
 import { placeRigged } from '../view/riggedContact.js';
-import { placeCharacter } from '../view/character-node.js';
-import type { PlacedCharacter } from '../view/character-node.js';
 import { WAREHOUSE_DOORS } from './WarehouseServiceDoors.js';
 import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
 
@@ -274,10 +272,7 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
 
 export interface WarehouseVisitor {
   root: ENGINE.SceneNode;
-  /** Motion only - in Warehouse 07 this draws nothing. See createWarehouseVisitor. */
   rig: RiggedContact;
-  /** The visible body, when there is one. Officers do not have one yet. */
-  figure?: PlacedCharacter;
 }
 
 const VISITOR_MODELS = [
@@ -300,44 +295,7 @@ export function createWarehouseVisitor(index: number, name: string, doorId: Ware
     clip: true,
     settleWrists: 0.3,
   });
-  /*
-   * The BODY is procedural. The rig is kept only for motion.
-   *
-   * ## Why there are two of these
-   *
-   * No `placeRigged` character has ever rendered in Warehouse 07 - not this visitor, not the
-   * workers, not the intruder. The node is real every time: visible, parented, at exactly the
-   * right position, with a loaded mesh measuring 1.85 x 1.72 metres. It simply never draws.
-   * Reported as "no one is there", which was the literal truth on screen while every property
-   * you can print said otherwise.
-   *
-   * It is not the 800m world offset, not frustum culling, and not load timing - all three were
-   * tested and cleared, and a plain `THREE.Mesh` parented to this very root renders perfectly.
-   * What fails is specifically a `ModelMeshNode` nested under a `SceneNode`; the same node
-   * added directly to the rig draws. The strongest remaining lead is that `loadModel` bakes
-   * each mesh's world pose as it reparents them, against a matrix that is not the final one.
-   * Unproven, and three confident fixes for it were wrong.
-   *
-   * So the visitor stops depending on that path. `createCharacter` builds people out of plain
-   * `BufferGeometry` - the same class of object as the marker that proved the position was
-   * fine - and it is this game's own character system, already driving every contact in
-   * `view/scenes.ts`. Seeded off the visitor's name, so the person waiting at the door is
-   * consistent for that name and different from the last one, rather than one of six GLBs on
-   * rotation.
-   *
-   * The rig stays because `WarehousePursuit` drives the suspect through it - `rig.walk` for
-   * the chase, `rig.gesture` for the recorded hatch test - and reimplementing that surface is
-   * a bigger job than this one. It contributes no pixels; it is a transform and a behaviour
-   * clock, and the figure hangs off its root so everything it moves moves the body too. When
-   * the ModelMeshNode fault is understood, this whole comment and one of these two objects
-   * goes away.
-   */
-  const figure = placeCharacter(`VisitorFigure-${name}`, {
-    seed: name,
-    position: new THREE.Vector3(0, 0, 0),
-  });
-  rig.root.add(figure.root);
-  return { root: rig.root, rig, figure };
+  return { root: rig.root, rig };
 }
 
 /** Local response officer. Lucian's police mesh is deliberately anonymized by procedural rain gear. */
