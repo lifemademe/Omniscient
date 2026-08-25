@@ -243,6 +243,10 @@ const M4SS_ORIGIN = new THREE.Vector3(0, 400, 0);
  * gets one it will have this same bug.
  */
 const WAREHOUSE_ORIGIN = new THREE.Vector3(0, 0, 1200);
+/** Warehouse-interior haze. See enterWarehouse for why it is darker than the walls. */
+const WAREHOUSE_HAZE = '#262b2f';
+const WAREHOUSE_FOG_NEAR = 15;
+const WAREHOUSE_FOG_FAR = 72;
 
 /**
  * The machine, three-quarter on. §129 wants this to be the shot a player screenshots at
@@ -3004,8 +3008,28 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.warehouseFog = this.fog
       ? { near: this.fog.getFogNear(), far: this.fog.getFogFar() }
       : null;
-    this.fog?.setFogNear(1e6);
-    this.fog?.setFogFar(1e7);
+    /*
+     * The warehouse gets its OWN haze rather than none at all.
+     *
+     * Fog was pushed to a million units here, which switches it off, and the room paid for it
+     * in depth: measured down an aisle, the far wall came out at luma 109 against the near
+     * racking's 107. Distance cost nothing at all, so a twenty-six metre aisle terminated in a
+     * flat grey plate at exactly the value of the shelf beside the camera - reported as a fog
+     * wall, and it was the opposite, an absence of one.
+     *
+     * DARKER than the surfaces, which is the part that is easy to get backwards. Haze in
+     * daylight is bright because it scatters sun; a night interior has no sun to scatter, so
+     * distance means less light reaching the lens and the far end of a building goes down, not
+     * up. A pale fog here would have washed the far wall further into the near racking.
+     *
+     * Near 15 keeps the working volume completely clear - the drone's own aisle, the rack the
+     * package is on, the worker being scanned. Far 72 puts the rear wall, about 41m from
+     * mid-aisle, at roughly 46% haze: enough to sit behind the racking rather than in line
+     * with it, not enough to hide anything the mission asks the player to read.
+     */
+    this.fog?.setFogColor(new THREE.Color(WAREHOUSE_HAZE));
+    this.fog?.setFogNear(WAREHOUSE_FOG_NEAR);
+    this.fog?.setFogFar(WAREHOUSE_FOG_FAR);
 
     const seed = mode === 'daily' ? WarehouseDirector.utcDailySeed() : undefined;
     const rig = WarehouseRig.create({

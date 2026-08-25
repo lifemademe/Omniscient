@@ -6,7 +6,24 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createRng, range, seedFrom } from '../core/rng.js';
 import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
 
-const STRUCTURE = new THREE.MeshStandardMaterial({ color: '#253331', roughness: 0.72, metalness: 0.58 });
+/**
+ * Roof structure, and it is the reason the ceiling read as a pale band.
+ *
+ * Eleven trusses run the full 47m width at y 9.74 with braces just under them. Seen from a
+ * drone at working height they stack up in perspective, and at 0.58 metalness in a room with
+ * no reflection probe they took the high bay light straight back at the camera - so the
+ * separate bars merged into one continuous field filling the upper frame, with the deck
+ * behind them contributing almost nothing.
+ *
+ * That field is why three earlier attempts missed. Easing the clerestory lights made the room
+ * flatter, halving the window emissive measured as nothing, and darkening the roof DECK did
+ * nothing either - because the deck was barely visible behind its own trusses. A ray fired
+ * into the band came back RoofTruss at twelve metres, which ended the guessing.
+ *
+ * Darker and matte. Metalness 0.58 was buying brightness rather than a look: painted
+ * structural steel is not polished, and there is nothing in this room for it to reflect.
+ */
+const STRUCTURE = new THREE.MeshStandardMaterial({ color: '#171e1d', roughness: 0.9, metalness: 0.08 });
 const DUCT = new THREE.MeshStandardMaterial({ color: '#51615f', roughness: 0.48, metalness: 0.72 });
 const RUBBER = new THREE.MeshStandardMaterial({ color: '#0b0f0e', roughness: 0.92, metalness: 0.08 });
 const PALLET = new THREE.MeshStandardMaterial({ color: '#66523a', roughness: 0.96, metalness: 0.01 });

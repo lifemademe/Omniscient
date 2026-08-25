@@ -95,6 +95,13 @@ export class WarehouseDaylight {
     const emergency = THREE.MathUtils.clamp(emergencyLevel, 0, 1);
     const sun = this.celStyleEnabled ? 1.22 : 0.9;
     const bounce = this.celStyleEnabled ? 3.6 : 4.6;
+    /*
+     * Do NOT reach for these to darken the ceiling. Measured: dropping them from 28 to 19 made
+     * the room FLATTER, not deeper - top 99 to 97 while the bottom fell 110 to 107 and the
+     * working plane lost four levels. Despite sitting at the glazing they are mostly a floor
+     * light, so leaning on them dims the part of the picture the player works in and barely
+     * touches the roof. The bright band up there is the glazing itself; see windowMaterials.
+     */
     const night = this.celStyleEnabled ? 28 : CLERESTORY_NIGHT;
     if (this.sunLight) this.sunLight.intensity = THREE.MathUtils.lerp(sun, 0.52, emergency);
     for (const light of this.bounceLights) light.intensity = THREE.MathUtils.lerp(bounce, 1.45, emergency);
@@ -107,6 +114,8 @@ export class WarehouseDaylight {
       material.opacity = THREE.MathUtils.lerp(normalOpacity * breathing, 0.009, emergency);
     }
     for (const material of this.windowMaterials) {
+      // Halving this to 0.06 was tried against the bright upper band and measured as nothing
+      // at all - the changed pixels were animation variance. The band is the roof deck.
       material.emissiveIntensity = THREE.MathUtils.lerp(0.12, 0.05, emergency);
     }
   }

@@ -53,6 +53,24 @@ import type {
 const WALL = new THREE.MeshStandardMaterial({ color: '#3a3937', roughness: 0.88, metalness: 0.1 });
 const STEEL = new THREE.MeshStandardMaterial({ color: '#5a5f63', roughness: 0.6, metalness: 0.58 });
 const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#23262a', roughness: 0.76, metalness: 0.42 });
+/**
+ * The roof deck, dark and matte, and it needs its own material rather than DARK_STEEL.
+ *
+ * The ceiling was the brightest large surface in the building: a pale warm field across the
+ * whole upper frame with nothing in it but three truss lines, lit from below by the high bays
+ * and then multiplied by the cel pass. Measured across a wide interior shot, the top third
+ * came out within nine levels of the floor, which is not a lit room but a flat one.
+ *
+ * Two levers were tried first and both measured worse or nothing. Easing the clerestory
+ * lights made the room FLATTER, because despite sitting at the glazing they are mostly a
+ * floor light. Halving the window emissive did nothing measurable at all.
+ *
+ * So the surface itself. Lower albedo, matte, and almost no metalness - a painted steel deck
+ * is not a mirror, and 0.42 metalness with no reflection probe in the room was buying
+ * nothing but brightness. The trusses stay DARK_STEEL, so they now read AGAINST the deck
+ * instead of disappearing into it.
+ */
+const ROOF_DECK = new THREE.MeshStandardMaterial({ color: '#15171a', roughness: 0.94, metalness: 0.05 });
 /* Stock that is not cardboard - see the tote and drum buckets in buildRacks. The drums
    carry the only saturated colour on the racking and it is cool on purpose. */
 const TOTE = new THREE.MeshStandardMaterial({ color: '#3f4a4d', roughness: 0.72, metalness: 0.06 });
@@ -438,7 +456,7 @@ export class WarehouseEnvironment {
     this.daylight.build();
     this.root.add(
       this.daylight.root,
-      mesh('Roof', new THREE.BoxGeometry(shell.width, 0.3, shell.length), DARK_STEEL, new THREE.Vector3(0, shell.roofY, 0))
+      mesh('Roof', new THREE.BoxGeometry(shell.width, 0.3, shell.length), ROOF_DECK, new THREE.Vector3(0, shell.roofY, 0))
     );
 
     const rearDoor = mesh('RearLoadingDoor', new THREE.BoxGeometry(11.2, 6, 0.22), STEEL, new THREE.Vector3(0, 3, shell.rearZ + 0.2));
