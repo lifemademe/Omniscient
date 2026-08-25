@@ -32,8 +32,9 @@ function eligible(definition: WarehouseCaseDefinition, stage: number): boolean {
   if (definition.id === 'package-5018') return stage === 30;
   if (definition.id === 'internal-breach') return false;
   if (definition.id === 'door-tamper') return stage >= 6;
+  if (definition.id === 'identity-impostor') return stage >= 11;
   const tier = tierFor(stage);
-  if (tier === 0) return definition.anomaly === 'none' || definition.id === 'wrong-route';
+  if (tier === 0) return definition.anomaly === 'none' || definition.id === 'invalid-inbound-record';
   if (tier === 1) return definition.subjectType !== 'mixed' && definition.anomaly !== 'mass';
   if (tier === 2) return definition.anomaly !== 'mass';
   return true;
@@ -68,25 +69,28 @@ export class WarehouseDirector {
         ? '5018'
         : `${aisle}${String(bay).padStart(3, '0')}`;
     const expectedWeight = Math.round((2.5 + rng() * 16) * 10) / 10;
-    const mismatch = definition.correctDecision === 'release' || definition.id === 'door-tamper'
-      ? 0
-      : 2 + Math.round(rng() * 40) / 10;
-    const visitorDoorId = stage === 30 || definition.id === 'internal-breach' ? 'service-c' : pick(rng, DOORS);
-    const authorizedDoorId = definition.id === 'door-tamper' || definition.id === 'wrong-route'
-      ? DOORS[(DOORS.indexOf(visitorDoorId) + 1) % DOORS.length]
-      : visitorDoorId;
+    const mismatch = definition.id === 'weight-mismatch' ? 2 + Math.round(rng() * 40) / 10 : 0;
+    const assignedDoorId = stage === 30 || definition.id === 'internal-breach' ? 'service-c' : pick(rng, DOORS);
+    const visitorName = pick(rng, VISITORS);
+    const packageRecipientName = definition.id === 'door-tamper' || definition.id === 'identity-impostor'
+      ? pick(rng, VISITORS.filter((name) => name !== visitorName))
+      : visitorName;
+    const inboundStatus = definition.id === 'invalid-inbound-record'
+      ? pick(rng, ['recalled', 'voided', 'misrouted'] as const)
+      : 'valid';
     return {
       definition,
       packageId,
       aisle,
       bay,
-      visitorName: pick(rng, VISITORS),
+      visitorName,
       workerName: pick(rng, WORKERS),
+      packageRecipientName,
+      inboundStatus,
       expectedWeight,
       measuredWeight: Math.round((expectedWeight + mismatch) * 10) / 10,
-      visitorDoorId,
-      authorizedDoorId,
-      visitorIntent: definition.id === 'door-tamper' || definition.id === 'internal-breach' ? 'intrusion' : 'collection',
+      assignedDoorId,
+      visitorIntent: definition.id === 'door-tamper' || definition.id === 'identity-impostor' || definition.id === 'internal-breach' ? 'intrusion' : 'collection',
       doorTamper: definition.id === 'door-tamper',
     };
   }

@@ -4,6 +4,7 @@ import type {
   GeneratedWarehouseCase,
   WarehouseArchiveRecord,
   WarehouseDecision,
+  WarehouseDockSnapshot,
   WarehouseEvidenceState,
   WarehouseIntrusionSnapshot,
   WarehouseMode,
@@ -179,9 +180,10 @@ export class WarehouseOpsPanel {
   public showCase(
     data: GeneratedWarehouseCase,
     evidence: WarehouseEvidenceState,
-    intrusion: WarehouseIntrusionSnapshot | null = null
+    intrusion: WarehouseIntrusionSnapshot | null = null,
+    dock: WarehouseDockSnapshot | null = null
   ): void {
-    const caseKey = `${data.definition.id}:${data.packageId}:${data.visitorName}:${data.visitorDoorId}`;
+    const caseKey = `${data.definition.id}:${data.packageId}:${data.visitorName}:${data.assignedDoorId}`;
     const newCase = caseKey !== this.activeCaseKey;
     const internalCase = data.definition.id === 'internal-breach';
     const perimeterCase = data.definition.subjectType !== 'worker' && data.definition.id !== 'freight-sort' && !internalCase;
@@ -199,7 +201,7 @@ export class WarehouseOpsPanel {
       : data.definition.id === 'freight-sort'
         ? 'WAREHOUSE 07 // REAR FREIGHT ENTRY'
         : evidence.located
-          ? `WAREHOUSE 07 // ${this.doorName(data.visitorDoorId)}`
+          ? `WAREHOUSE 07 // ${this.doorName(data.assignedDoorId)}`
           : 'WAREHOUSE 07 // SOURCE UNRESOLVED';
     this.renderObserved(data, evidence, intrusion);
 
@@ -242,11 +244,11 @@ export class WarehouseOpsPanel {
         data.visitorName,
         data.visitorIntent === 'intrusion'
           ? 'No response. The subject continues testing the secured cargo hatch.'
-          : `Collection request submitted for package ${data.packageId} at ${this.doorName(data.visitorDoorId)}.`
+          : `Collection request submitted for package ${data.packageId} at ${this.doorName(data.assignedDoorId)}.`
       );
     }
 
-    this.renderConsole(data, evidence, intrusion);
+    this.renderConsole(data, evidence, intrusion, dock);
     if ((evidence.visitor || evidence.cargo) && !this.scanAnnounced) {
       this.scanAnnounced = true;
       this.appendChat('system', 'WAREHOUSE 07', 'Optical evidence recorded. Console comparison is ready.');
@@ -311,7 +313,7 @@ export class WarehouseOpsPanel {
           [evidence.cargo ? 'Load record acquired' : 'Load record required', 'package', evidence.cargo],
         ]
         : [
-          [evidence.located ? this.doorName(data.visitorDoorId) : 'Entrance source unresolved', 'door telemetry', evidence.located],
+          [evidence.located ? this.doorName(data.assignedDoorId) : 'Entrance source unresolved', 'door telemetry', evidence.located],
           [`Package ${data.packageId}`, 'package', evidence.cargo],
           [evidence.visitor ? 'Visitor record acquired' : 'Visitor record required', 'visitor identity', evidence.visitor],
         ];
@@ -328,14 +330,15 @@ export class WarehouseOpsPanel {
   private renderConsole(
     data: GeneratedWarehouseCase,
     evidence: WarehouseEvidenceState,
-    intrusion: WarehouseIntrusionSnapshot | null
+    intrusion: WarehouseIntrusionSnapshot | null,
+    dock: WarehouseDockSnapshot | null
   ): void {
     this.consolePane.replaceChildren();
     const heading = document.createElement('div');
     heading.className = 'omni-empty';
     heading.textContent = 'ACTIVE MANIFEST // EVIDENCE COMPARISON';
     this.consolePane.appendChild(heading);
-    const rows = this.consoleRows(data, evidence, intrusion);
+    const rows = this.consoleRows(data, evidence, intrusion, dock);
     for (const [label, value, state] of rows) {
       const row = document.createElement('div');
       row.className = 'warehouse-ops__readout';
@@ -359,7 +362,7 @@ export class WarehouseOpsPanel {
     briefText.className = 'omni-item__detail';
     briefText.textContent = data.definition.id === 'internal-breach'
       ? 'Contain the tagged person inside the matching security sector. The drone never confronts the subject.'
-      : evidence.visitor || evidence.cargo
+      : evidence.visitor && evidence.cargo
       ? data.definition.briefing
       : data.definition.subjectType === 'worker' || data.definition.id === 'freight-sort'
         ? 'Acquire an optical record before committing a decision.'
@@ -371,7 +374,31 @@ export class WarehouseOpsPanel {
     actions.className = 'omni-confirm warehouse-ops__actions';
     const prompt = document.createElement('span');
     prompt.className = 'omni-confirm__q';
-    prompt.textContent = 'Commit handling decision';
+    const staged = dock?.stagedPackageIds.length ?? 0;
+    const required = dock?.requiredCount ?? 0;
+    const evidenceReady = evidence.visitor && evidence.cargo;
+    const dockCommitted = dock && dock.state !== 'empty' && dock.state !== 'staged';
+    prompt.textContent = dockCommitted
+      ? `TRANSFER COMMITTED // ${dock.state.toUpperCase()}`
+      : data.definition.id === 'door-tamper'
+      ? evidence.action && evidence.authorization && evidence.tamper
+        ? 'IDENTITY + TAMPER STACK CONFIRMED // DENY REQUIRES NO CARGO STAGING'
+        : 'DECISIONS LOCKED // COMPLETE ACTION, IDENTITY, AND TAMPER EVIDENCE'
+      : data.definition.correctDecision === 'deny-lockdown' && evidenceReady
+        ? 'RECIPIENT IDENTITY MISMATCH // DENY REQUIRES NO CARGO STAGING'
+        : !evidenceReady && dock
+          ? data.definition.id === 'package-5018'
+            ? 'DECISIONS LOCKED // INSPECT VISITOR FEED + SCAN OR DOCK BOTH PHYSICAL 5018 LOADS'
+            : !evidence.visitor && !evidence.cargo
+              ? 'DECISIONS LOCKED // INSPECT VISITOR FEED + SCAN OR DOCK PACKAGE'
+              : !evidence.visitor
+                ? `VISITOR RECORD REQUIRED // INSPECT ${this.doorName(data.assignedDoorId)} FEED`
+                : 'PACKAGE RECORD REQUIRED // RMB + LMB SCAN OR F // DOCK LOAD'
+          : dock && staged < required
+            ? `STAGE LOAD AT ${this.doorName(dock.doorId)} // LOADS SECURED ${staged}/${required}`
+            : dock && staged > 0
+              ? `LOADS SECURED ${staged}/${required} // F // RETRIEVE LOAD BEFORE COMMITMENT`
+              : 'Commit handling decision';
     const actionRow = document.createElement('div');
     actionRow.className = 'omni-confirm__row';
     if (data.definition.id === 'internal-breach' && intrusion) {
@@ -415,7 +442,7 @@ export class WarehouseOpsPanel {
       button.textContent = data.definition.id === 'freight-sort'
         ? decision === 'verify' ? 'VERIFY LOAD' : 'START SORT'
         : labels[decision] ?? decision.toUpperCase();
-      button.disabled = !this.decisionReady(data, evidence, decision);
+      button.disabled = !this.decisionReady(data, evidence, decision, dock);
       button.addEventListener('click', () => this.decide(decision));
       actionRow.appendChild(button);
     }
@@ -426,7 +453,8 @@ export class WarehouseOpsPanel {
   private consoleRows(
     data: GeneratedWarehouseCase,
     evidence: WarehouseEvidenceState,
-    intrusion: WarehouseIntrusionSnapshot | null
+    intrusion: WarehouseIntrusionSnapshot | null,
+    dock: WarehouseDockSnapshot | null
   ): Array<[string, string, 'good' | 'bad' | null]> {
     if (data.definition.id === 'internal-breach' && intrusion) {
       const evidenceCount = Number(intrusion.evidence.rearHistory)
@@ -458,31 +486,44 @@ export class WarehouseOpsPanel {
     if (data.definition.id === 'door-tamper') {
       return [
         ['SUBJECT', evidence.located ? data.visitorName : 'SOURCE UNRESOLVED', null],
-        ['ENTRANCE', evidence.located ? this.doorName(data.visitorDoorId) : 'CAMERA SEARCH REQUIRED', evidence.located ? 'bad' : null],
+        ['ASSIGNED DOOR', evidence.located ? this.doorName(data.assignedDoorId) : 'CAMERA SEARCH REQUIRED', evidence.located ? 'good' : null],
         ['ACTION TIMING', evidence.action ? 'PRE-AUTHORIZATION HATCH TEST' : 'REPLAY EVENT REQUIRED', evidence.action ? 'bad' : null],
-        ['AUTHORIZATION', evidence.authorization ? `MISMATCH // ASSIGNED ${this.doorName(data.authorizedDoorId)}` : 'VISITOR SCAN REQUIRED', evidence.authorization ? 'bad' : null],
+        ['PACKAGE RECIPIENT', evidence.authorization ? `${data.packageRecipientName} // VISITOR MISMATCH` : 'SCAN VISITOR + PACKAGE', evidence.authorization ? 'bad' : null],
         ['TAMPER TELEMETRY', evidence.tamper ? 'RECORDED // SENSOR TRIPPED' : 'TELEMETRY REQUIRED', evidence.tamper ? 'bad' : null],
         ['EVIDENCE STACK', evidence.action && evidence.authorization && evidence.tamper ? '3 / 3 CONFIRMED' : `${Number(evidence.action) + Number(evidence.authorization) + Number(evidence.tamper)} / 3`, evidence.action && evidence.authorization && evidence.tamper ? 'good' : null],
       ];
     }
     const massMatch = Math.abs(data.expectedWeight - data.measuredWeight) < 0.01;
+    const identityMatch = data.packageRecipientName === data.visitorName;
+    const inboundValid = data.inboundStatus === 'valid';
+    const secured = dock?.stagedPackageIds.length ?? 0;
+    const required = dock?.requiredCount ?? 1;
     return [
       ['SUBJECT', data.packageId, null],
       ['VISITOR', evidence.located ? data.visitorName : 'SOURCE UNRESOLVED', null],
-      ['ENTRANCE', evidence.located ? this.doorName(data.visitorDoorId) : 'CAMERA SEARCH REQUIRED', evidence.located ? 'good' : null],
-      ['AUTHORIZED HANDOFF', evidence.visitor ? this.doorName(data.authorizedDoorId) : 'VISITOR SCAN REQUIRED', evidence.visitor ? data.authorizedDoorId === data.visitorDoorId ? 'good' : 'bad' : null],
-      ['LOCATION', `AISLE ${data.aisle} // BAY ${String(data.bay).padStart(2, '0')}`, null],
-      ['EXPECTED MASS', `${data.expectedWeight.toFixed(1)} KG`, null],
-      ['MEASURED MASS', evidence.cargo ? `${data.measuredWeight.toFixed(1)} KG` : 'PACKAGE SCAN REQUIRED', evidence.cargo ? massMatch ? 'good' : 'bad' : null],
+      ['ASSIGNED DOOR', evidence.visitor ? this.doorName(data.assignedDoorId) : 'VISITOR SCAN REQUIRED', evidence.visitor ? 'good' : null],
+      ['PACKAGE RECIPIENT', evidence.cargo ? data.packageRecipientName : 'PACKAGE SCAN REQUIRED', evidence.cargo ? identityMatch ? 'good' : 'bad' : null],
+      ['INBOUND RECORD', evidence.cargo ? data.inboundStatus.toUpperCase() : 'PACKAGE SCAN REQUIRED', evidence.cargo ? inboundValid ? 'good' : 'bad' : null],
+      ['LOCATION', data.definition.id === 'package-5018'
+        ? `TWO PHYSICAL AISLE 5 CLAIMS // BAY ${String(data.bay).padStart(2, '0')}`
+        : `AISLE ${data.aisle} // BAY ${String(data.bay).padStart(2, '0')}`, data.definition.id === 'package-5018' ? 'bad' : null],
+      ['DECLARED MASS', evidence.visitor ? `${data.expectedWeight.toFixed(1)} KG` : 'VISITOR SCAN REQUIRED', null],
+      ['MEASURED MASS', evidence.cargo
+        ? data.definition.id === 'package-5018' ? '30.0 + 50.0 = 80.0 KG // ONE 40.0 KG RECORD' : `${data.measuredWeight.toFixed(1)} KG`
+        : data.definition.id === 'package-5018' ? 'SCAN BOTH PHYSICAL LOADS' : 'PACKAGE SCAN REQUIRED', evidence.cargo ? data.definition.id === 'package-5018' ? 'bad' : massMatch ? 'good' : 'bad' : null],
       ['SECURITY', evidence.cargo ? (data.definition.anomaly === 'seal' ? 'SEAL DISCONTINUITY' : 'SEAL VALID') : 'PACKAGE SCAN REQUIRED', evidence.cargo ? data.definition.anomaly !== 'seal' ? 'good' : 'bad' : null],
+      ['SECURE TRANSFER', dock ? `${this.doorName(dock.doorId)} // ${dock.state.toUpperCase()} // LOADS ${secured}/${required}` : 'NOT REQUIRED', dock && secured >= required ? 'good' : null],
+      ['DOCK CONTROL', dock && dock.state === 'staged' ? 'F // RETRIEVE LOAD' : dock && dock.state !== 'empty' ? 'COMMITMENT LOCKED' : `F // DOCK AT ${data.assignedDoorId.slice(-1).toUpperCase()}`, null],
     ];
   }
 
   private decisionReady(
     data: GeneratedWarehouseCase,
     evidence: WarehouseEvidenceState,
-    decision: WarehouseDecision
+    decision: WarehouseDecision,
+    dock: WarehouseDockSnapshot | null
   ): boolean {
+    if (dock && dock.state !== 'empty' && dock.state !== 'staged') return false;
     if (decision === 'deny-lockdown') {
       return data.definition.id === 'door-tamper'
         ? evidence.visitor && evidence.action && evidence.authorization && evidence.tamper
@@ -491,10 +532,13 @@ export class WarehouseOpsPanel {
     if (data.definition.subjectType === 'worker') return evidence.visitor;
     if (data.definition.id === 'freight-sort') return evidence.cargo;
     if (decision === 'verify') return evidence.visitor || evidence.cargo;
-    return evidence.visitor && evidence.cargo;
+    const cargoDecision = decision === 'release' || decision === 'quarantine' || decision === 'return';
+    const staged = dock?.stagedPackageIds.length ?? 0;
+    const required = dock?.requiredCount ?? 1;
+    return evidence.visitor && evidence.cargo && (!cargoDecision || staged >= required);
   }
 
-  private doorName(id: GeneratedWarehouseCase['visitorDoorId']): string {
+  private doorName(id: GeneratedWarehouseCase['assignedDoorId']): string {
     if (id === 'service-a') return 'SERVICE A // WEST // TRIANGLE';
     if (id === 'service-b') return 'SERVICE B // FRONT // DOUBLE BAR';
     return 'SERVICE C // EAST // CIRCLE';

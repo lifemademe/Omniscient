@@ -428,6 +428,10 @@ export function setRetroLook(name: RetroLookName, immediate = false): void {
   effect?.pass.setLook(accessibleLook(name), immediate);
 }
 
+export function getRetroLookName(): RetroLookName {
+  return activeLook;
+}
+
 let acquireToken = 0;
 
 /**

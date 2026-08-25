@@ -3,11 +3,13 @@ import { WAREHOUSE_DECK_VERSION } from './content.js';
 import type { WarehouseArchiveRecord, WarehouseRank, WarehouseRunResult, WarehouseTool } from './types.js';
 
 const KEY = 'omniscient.warehouse.v1';
-const VERSION = 3;
+const VERSION = 4;
 const LEGACY_MOVEMENT_IDS = ['orientation', 'judgement', 'freight', 'overlap', 'package-5018'] as const;
 
 function currentCaseId(id: string): string {
-  return id === 'package-7018' ? 'package-5018' : id;
+  if (id === 'package-7018') return 'package-5018';
+  if (id === 'wrong-route') return 'invalid-inbound-record';
+  return id;
 }
 
 function currentPackageId(id: string): string {
@@ -66,7 +68,7 @@ export function loadWarehouseSave(): WarehouseSaveData {
     const raw = window.localStorage?.getItem(KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as Partial<WarehouseSaveData>;
-    if (parsed.version !== VERSION && parsed.version !== 2 && parsed.version !== 1) return fallback;
+    if (parsed.version !== VERSION && parsed.version !== 3 && parsed.version !== 2 && parsed.version !== 1) return fallback;
     const legacyIndex = typeof parsed.storyMovement === 'number'
       ? Math.max(0, Math.min(LEGACY_MOVEMENT_IDS.length - 1, Math.floor(parsed.storyMovement)))
       : 0;

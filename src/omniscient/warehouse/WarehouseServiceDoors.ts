@@ -40,6 +40,14 @@ export const WAREHOUSE_DOOR_IDS: readonly WarehouseDoorId[] = [
   'service-c',
 ];
 
+/** Outer frame dimensions shared with the procedural shell that closes around Service B. */
+export const WAREHOUSE_SERVICE_DOOR_FRAME = {
+  width: 2.94,
+  height: 3.69,
+  sideThickness: 0.22,
+  topThickness: 0.22,
+} as const;
+
 /**
  * The three service doors, and the cameras that watch them.
  *
@@ -338,9 +346,26 @@ export class WarehouseServiceDoor {
     });
     this.root = root;
 
-    const frameLeft = mesh('ServiceDoorFrame', new THREE.BoxGeometry(0.22, 3.7, 0.38), FRAME, new THREE.Vector3(-1.36, 1.85, 0));
-    const frameRight = mesh('ServiceDoorFrame', new THREE.BoxGeometry(0.22, 3.7, 0.38), FRAME, new THREE.Vector3(1.36, 1.85, 0));
-    const frameTop = mesh('ServiceDoorFrame', new THREE.BoxGeometry(2.94, 0.22, 0.38), FRAME, new THREE.Vector3(0, 3.58, 0));
+    const frameSideX = (WAREHOUSE_SERVICE_DOOR_FRAME.width - WAREHOUSE_SERVICE_DOOR_FRAME.sideThickness) / 2;
+    const frameTopY = WAREHOUSE_SERVICE_DOOR_FRAME.height - WAREHOUSE_SERVICE_DOOR_FRAME.topThickness / 2;
+    const frameLeft = mesh(
+      'ServiceDoorFrame',
+      new THREE.BoxGeometry(WAREHOUSE_SERVICE_DOOR_FRAME.sideThickness, WAREHOUSE_SERVICE_DOOR_FRAME.height, 0.38),
+      FRAME,
+      new THREE.Vector3(-frameSideX, WAREHOUSE_SERVICE_DOOR_FRAME.height / 2, 0)
+    );
+    const frameRight = mesh(
+      'ServiceDoorFrame',
+      new THREE.BoxGeometry(WAREHOUSE_SERVICE_DOOR_FRAME.sideThickness, WAREHOUSE_SERVICE_DOOR_FRAME.height, 0.38),
+      FRAME,
+      new THREE.Vector3(frameSideX, WAREHOUSE_SERVICE_DOOR_FRAME.height / 2, 0)
+    );
+    const frameTop = mesh(
+      'ServiceDoorFrame',
+      new THREE.BoxGeometry(WAREHOUSE_SERVICE_DOOR_FRAME.width, WAREHOUSE_SERVICE_DOOR_FRAME.topThickness, 0.38),
+      FRAME,
+      new THREE.Vector3(0, frameTopY, 0)
+    );
     const inner = mesh('ServiceDoorInner', new THREE.BoxGeometry(2.52, 3.25, 0.22), DARK, new THREE.Vector3(0, 1.73, 0.02));
     /*
      * A personnel door, set into the goods opening, because the people were the wrong size.
@@ -445,8 +470,15 @@ export class WarehouseServiceDoor {
     );
     camera.getObjectByName('CameraLens')?.rotateX(Math.PI / 2);
 
-    for (const x of [-1.8, 1.8]) {
-      root.add(mesh('ServiceBollard', new THREE.CylinderGeometry(0.12, 0.12, 1.05, 10), FRAME, new THREE.Vector3(x, 0.52, 2.75)));
+    /*
+     * Service B faces directly into the launch camera and its canopy key turns these narrow
+     * metal bollards into two featureless white pills. They add no navigation information at
+     * the front entrance, so omit that pair; A and C retain theirs as side-door protection.
+     */
+    if (layout.id !== 'service-b') {
+      for (const x of [-1.8, 1.8]) {
+        root.add(mesh('ServiceBollard', new THREE.CylinderGeometry(0.12, 0.12, 1.05, 10), FRAME, new THREE.Vector3(x, 0.52, 2.75)));
+      }
     }
     for (const x of [-0.88, 0.88]) {
       const bolt = mesh('ServiceLockBolt', new THREE.BoxGeometry(0.62, 0.14, 0.24), this.statusMaterial, new THREE.Vector3(x, 2.25, 0.48));

@@ -13,6 +13,7 @@ import type {
   GeneratedWarehouseCase,
   WarehouseArchiveRecord,
   WarehouseDecision,
+  WarehouseDockSnapshot,
   WarehouseDoorId,
   WarehouseDoorSnapshot,
   WarehouseEvidenceState,
@@ -406,7 +407,7 @@ const CSS = `
  */
 const WAREHOUSE_KEYMAP: readonly [string, string] = [
   'WASD move // QE altitude // TAB console // C cameras',
-  'LMB scan // RMB optical // F grip',
+  'LMB scan // RMB optical // F grip / dock',
 ];
 const WAREHOUSE_KEYMAP_INTRUSION: readonly [string, string] = [
   'WASD move // QE altitude // TAB console // C cameras',
@@ -881,9 +882,10 @@ export class WarehouseHUD {
   public showCase(
     data: GeneratedWarehouseCase,
     evidence: WarehouseEvidenceState,
-    intrusion: WarehouseIntrusionSnapshot | null = null
+    intrusion: WarehouseIntrusionSnapshot | null = null,
+    dock: WarehouseDockSnapshot | null = null
   ): void {
-    this.ops.showCase(data, evidence, intrusion);
+    this.ops.showCase(data, evidence, intrusion, dock);
   }
 
   public appendSystem(name: string, body: string): void {

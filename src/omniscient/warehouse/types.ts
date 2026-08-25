@@ -11,6 +11,16 @@ export type WarehouseDecision = CargoDecision | WorkerDecision | VisitorDecision
 export type WarehouseDoorId = 'service-a' | 'service-b' | 'service-c';
 export type WarehouseDoorStatus = 'unseen' | 'clear' | 'contact' | 'tamper' | 'locked';
 export type WarehouseVisitorIntent = 'collection' | 'intrusion';
+export type WarehouseInboundStatus = 'valid' | 'recalled' | 'voided' | 'misrouted';
+export type WarehouseDoorDockState = 'empty' | 'staged' | 'releasing' | 'quarantined' | 'returning' | 'locked';
+
+export interface WarehouseDockSnapshot {
+  doorId: WarehouseDoorId;
+  state: WarehouseDoorDockState;
+  stagedPackageIds: readonly string[];
+  capacity: number;
+  requiredCount: number;
+}
 
 export type WarehouseSecurityZoneId = 'receiving' | 'storage-west' | 'storage-east' | 'sortation';
 export type WarehouseSecurityZoneStatus = 'unseen' | 'clear' | 'motion' | 'contact' | 'locked';
@@ -91,7 +101,7 @@ export interface WarehouseCaseDefinition {
   requiredTools: readonly WarehouseTool[];
   correctDecision: WarehouseDecision;
   critical?: boolean;
-  anomaly?: 'none' | 'identity' | 'mass' | 'camera' | 'thermal' | 'seal' | 'internal' | 'resonance' | 'tamper' | 'breach';
+  anomaly?: 'none' | 'identity' | 'inbound' | 'mass' | 'camera' | 'thermal' | 'seal' | 'internal' | 'resonance' | 'tamper' | 'breach';
   baseSeconds: number;
 }
 
@@ -119,10 +129,11 @@ export interface GeneratedWarehouseCase {
   bay: number;
   visitorName: string;
   workerName: string;
+  packageRecipientName: string;
+  inboundStatus: WarehouseInboundStatus;
   expectedWeight: number;
   measuredWeight: number;
-  visitorDoorId: WarehouseDoorId;
-  authorizedDoorId: WarehouseDoorId;
+  assignedDoorId: WarehouseDoorId;
   visitorIntent: WarehouseVisitorIntent;
   doorTamper: boolean;
 }

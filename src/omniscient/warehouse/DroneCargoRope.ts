@@ -1,6 +1,9 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
+import { WAREHOUSE_CARGO_HORIZONTAL_RADIUS } from './entities.js';
+import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
+
 import type { WarehouseCargoNode } from './entities.js';
 
 const DOWN = new THREE.Vector3(0, -1, 0);
@@ -141,8 +144,23 @@ export class DroneCargoRope {
     }
 
     const end = this.points[SEGMENT_COUNT];
-    end.x = THREE.MathUtils.clamp(end.x, -15.1, 15.1);
-    end.z = THREE.MathUtils.clamp(end.z, -16.5, 17);
+    /*
+     * The expanded warehouse moved Service B to z 25.6 and A/C to x +/-21.7, but this
+     * tether still clamped its load to the old 32 x 40 metre shell at x +/-15.1, z 17.
+     * The drone could reach a release pad while the carton hit an invisible wall eight
+     * metres behind it. Derive the cargo envelope from the same layout that owns the drone,
+     * doors and shell so another expansion cannot strand delivery points again.
+     */
+    end.x = THREE.MathUtils.clamp(
+      end.x,
+      WAREHOUSE_LAYOUT.drone.minX + WAREHOUSE_CARGO_HORIZONTAL_RADIUS,
+      WAREHOUSE_LAYOUT.drone.maxX - WAREHOUSE_CARGO_HORIZONTAL_RADIUS
+    );
+    end.z = THREE.MathUtils.clamp(
+      end.z,
+      WAREHOUSE_LAYOUT.drone.minZ + WAREHOUSE_CARGO_HORIZONTAL_RADIUS,
+      WAREHOUSE_LAYOUT.drone.maxZ - WAREHOUSE_CARGO_HORIZONTAL_RADIUS
+    );
 
     if (this.cargo) {
       this.delta.subVectors(this.points[SEGMENT_COUNT - 1], end).normalize();

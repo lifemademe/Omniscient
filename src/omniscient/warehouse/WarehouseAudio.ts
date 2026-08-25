@@ -5,7 +5,9 @@ export type WarehouseCue =
   | 'bell'
   | 'scan'
   | 'grip'
+  | 'dock'
   | 'release'
+  | 'return'
   | 'reject'
   | 'shutter'
   | 'warning'
@@ -29,7 +31,9 @@ const CAPTIONS: Readonly<Record<WarehouseCue, { text: string; kind: 'machine' | 
   bell: { text: 'perimeter collection bell rings once', kind: 'world' },
   scan: { text: 'scanner sweeps target', kind: 'machine' },
   grip: { text: 'magnetic gripper locks', kind: 'world' },
-  release: { text: 'cargo lock accepts package', kind: 'success' },
+  dock: { text: 'secure transfer clamp locks around the load', kind: 'machine' },
+  release: { text: 'transfer rollers move outward; cargo hatch opens', kind: 'success' },
+  return: { text: 'transfer rollers reverse toward receiving', kind: 'machine' },
   reject: { text: 'verification rejects decision', kind: 'warning' },
   shutter: { text: 'loading shutter rolls open', kind: 'world' },
   warning: { text: 'inbound freight warning', kind: 'warning' },
@@ -54,7 +58,9 @@ const PITCH: Readonly<Record<WarehouseCue, readonly [number, number, number]>> =
   bell: [740, 555, 0.42],
   scan: [920, 1260, 0.18],
   grip: [180, 120, 0.12],
+  dock: [310, 96, 0.34],
   release: [420, 630, 0.28],
+  return: [360, 112, 0.46],
   reject: [180, 92, 0.34],
   shutter: [95, 62, 0.56],
   warning: [260, 260, 0.32],

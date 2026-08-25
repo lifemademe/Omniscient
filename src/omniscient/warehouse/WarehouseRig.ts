@@ -14,6 +14,7 @@ import { WarehouseDirector } from './director.js';
 import { createWarehouseVisitor, WarehouseCargoNode, WarehouseWorkerNode } from './entities.js';
 import { loadWarehouseSave, updateWarehouseSave } from './persistence.js';
 import { WarehouseAudio } from './WarehouseAudio.js';
+import { WarehouseCelStyle } from './WarehouseCelStyle.js';
 import { DroneCargoRope } from './DroneCargoRope.js';
 import { WarehouseDroneFeedback } from './WarehouseDroneFeedback.js';
 import { WarehouseHUD } from './WarehouseHUD.js';
@@ -35,6 +36,7 @@ import type {
   GeneratedWarehouseCase,
   WarehouseDecision,
   WarehouseDoorId,
+  WarehouseDockSnapshot,
   WarehouseDoorSnapshot,
   WarehouseDoorStatus,
   WarehouseEvidenceState,
@@ -264,6 +266,8 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private seed = 'story-warehouse-07';
   private director: WarehouseDirector | null = null;
   private environment = new WarehouseEnvironment();
+  private readonly celStyle = new WarehouseCelStyle();
+  private celVisualsEnabled = true;
   private camera: ENGINE.ViewTargetCameraNode | null = null;
   private drone = ENGINE.SceneNode.create({ name: 'WarehouseDrone', position: DRONE_START.clone() });
   private droneVisual = ENGINE.SceneNode.create({ name: 'WarehouseDroneVisual' });
@@ -325,6 +329,8 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private cargo: WarehouseCargoNode | null = null;
   private duplicateCargo: WarehouseCargoNode | null = null;
   private carried: WarehouseCargoNode | null = null;
+  private readonly dockedCargo: Array<{ node: WarehouseCargoNode; doorId: WarehouseDoorId; slot: number }> = [];
+  private readonly scannedCargo = new Set<WarehouseCargoNode>();
   private deliveredCargo: {
     node: WarehouseCargoNode;
     from: THREE.Vector3;
@@ -462,6 +468,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.director = new WarehouseDirector(config);
     this.environment.build();
     this.add(this.environment.root);
+    this.add(this.celStyle.accents);
     this.buildDrone();
     this.add(this.cargoRope.root);
     this.buildCamera();
@@ -549,6 +556,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     setRoomTone(null);
     adaptiveScore.setState('warehouse', 0);
     this.configurePost();
+    this.setCelVisualsEnabled(this.celVisualsEnabled, false);
     this.keepActive();
     this.beginCurrent();
   }
@@ -1046,24 +1054,33 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const base = this.director?.caseForStage(this.storyMovement * 5 + this.storyCase + 1, this.tools);
     if (!base) return;
     const data: GeneratedWarehouseCase = { ...base, definition };
+    data.packageRecipientName = definition.id === 'door-tamper' || definition.id === 'identity-impostor'
+      ? data.visitorName === 'Ana Reis' ? 'Lia Costa' : 'Ana Reis'
+      : data.visitorName;
+    data.inboundStatus = definition.id === 'invalid-inbound-record' ? 'recalled' : 'valid';
+    data.measuredWeight = definition.id === 'weight-mismatch'
+      ? Math.round((data.expectedWeight + 3.2) * 10) / 10
+      : data.expectedWeight;
+    data.visitorIntent = definition.id === 'door-tamper' || definition.id === 'identity-impostor' ? 'intrusion' : 'collection';
+    data.doorTamper = definition.id === 'door-tamper';
     if (definition.id === 'valid-collection' && this.storyMovement === 0) {
       data.packageId = '2034'; data.aisle = 2; data.bay = 34; data.expectedWeight = 8.4; data.measuredWeight = 8.4;
-      data.visitorDoorId = 'service-b'; data.authorizedDoorId = 'service-b';
+      data.assignedDoorId = 'service-b'; data.packageRecipientName = data.visitorName; data.inboundStatus = 'valid';
       data.visitorIntent = 'collection'; data.doorTamper = false;
     }
     if (definition.id === 'door-tamper') {
-      data.visitorDoorId = 'service-a'; data.authorizedDoorId = 'service-c';
+      data.assignedDoorId = 'service-a'; data.packageRecipientName = data.visitorName === 'Ana Reis' ? 'Lia Costa' : 'Ana Reis';
       data.visitorIntent = 'intrusion'; data.doorTamper = true;
     }
     if (definition.id === 'package-5018') {
       data.packageId = '5018'; data.aisle = 5; data.bay = 18; data.expectedWeight = 40; data.measuredWeight = 30;
-      data.visitorDoorId = 'service-c'; data.authorizedDoorId = 'service-c';
+      data.assignedDoorId = 'service-c'; data.packageRecipientName = data.visitorName; data.inboundStatus = 'valid';
       data.visitorIntent = 'collection'; data.doorTamper = false;
     }
     if (definition.id === 'internal-breach') {
       data.packageId = 'UNLISTED'; data.aisle = 1; data.bay = 0; data.expectedWeight = 0; data.measuredWeight = 0;
       data.visitorName = 'UNLISTED PERSON'; data.visitorIntent = 'intrusion'; data.doorTamper = false;
-      data.visitorDoorId = 'service-c'; data.authorizedDoorId = 'service-c';
+      data.assignedDoorId = 'service-c'; data.packageRecipientName = data.visitorName; data.inboundStatus = 'valid';
     }
     this.spawnCase(data);
   }
@@ -1077,6 +1094,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.visitorVerified = false;
     this.freightVerified = false;
     this.workerVerificationRequested = false;
+    this.dockedCargo.length = 0;
+    this.scannedCargo.clear();
+    this.environment.resetTransferDocks();
+    this.environment.configureTransferDock(data.assignedDoorId, data.definition.id === 'package-5018' ? 2 : 1);
     const internalBreach = data.definition.id === 'internal-breach';
     if (!internalBreach) {
       const cargo = WarehouseCargoNode.create({ name: `Cargo-${data.packageId}` });
@@ -1098,10 +1119,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
       && data.definition.id !== 'freight-sort'
       && !internalBreach;
     if (hasVisitor) {
-      this.visitor = createWarehouseVisitor(seedFrom(data.visitorName), data.visitorName, data.visitorDoorId);
+      this.visitor = createWarehouseVisitor(seedFrom(data.visitorName), data.visitorName, data.assignedDoorId);
       this.add(this.visitor.root);
     }
-    const occupiedIndex = WAREHOUSE_DOOR_IDS.indexOf(data.visitorDoorId);
+    const occupiedIndex = WAREHOUSE_DOOR_IDS.indexOf(data.assignedDoorId);
     this.selectedDoor = WAREHOUSE_DOOR_IDS[(occupiedIndex + 1) % WAREHOUSE_DOOR_IDS.length];
     this.doorStatuses = { 'service-a': 'unseen', 'service-b': 'unseen', 'service-c': 'unseen' };
     this.doorEventAvailable = false;
@@ -1118,7 +1139,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.prepareBreach();
     }
     else this.hud?.setIntrusion(null);
-    this.hud?.showCase(data, this.evidence, this.intrusion);
+    this.refreshCaseHud();
     this.syncDoorHud();
     this.hud?.setBell(hasVisitor, hasVisitor ? 1 : 0);
     this.bellReminder = hasVisitor ? 20 : -1;
@@ -1149,7 +1170,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.sound.setEmergency(false);
     for (const worker of this.workers) worker.resumeRoute();
     this.hud?.setIntrusion(null);
-    this.environment.setPursuitLights(this.activeCase?.visitorDoorId ?? 'service-a', false);
+    this.environment.setPursuitLights(this.activeCase?.assignedDoorId ?? 'service-a', false);
     this.pursuitPhase = '';
     if (this.carried) {
       this.cargoRope.detach();
@@ -1161,6 +1182,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.deliveredCargo = null;
     this.duplicateCargo?.removeFromParent();
     this.duplicateCargo = null;
+    this.dockedCargo.length = 0;
+    this.scannedCargo.clear();
+    this.environment.resetTransferDocks();
     this.environment.setDuplicateAisle(false);
     this.visitor?.root.removeFromParent();
     this.visitor = null;
@@ -1322,11 +1346,20 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (this.carried) {
       const cargo = this.carried;
       this.cargoRope.detach();
-      cargo.position.copy(this.environment.stationPositions.return).add(new THREE.Vector3(0, 0, -2));
+      cargo.position.copy(this.cargoHome(cargo));
       cargo.quaternion.identity();
       cargo.carried = false;
       this.carried = null;
     }
+    for (const staged of this.dockedCargo.splice(0)) {
+      staged.node.position.copy(this.cargoHome(staged.node));
+      staged.node.quaternion.identity();
+      staged.node.carried = false;
+    }
+    this.environment.configureTransferDock(
+      this.activeCase?.assignedDoorId ?? 'service-a',
+      this.activeCase?.definition.id === 'package-5018' ? 2 : 1
+    );
     this.drone.position.copy(DRONE_START);
     this.yaw = Math.PI;
     this.pitch = -0.04;
@@ -1336,7 +1369,8 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.cameraArmDistance = THIRD_PERSON_DISTANCE;
     this.elapsed += 12;
     this.sound.play('warning');
-    this.hud?.flash('SERVICE RECOVERY COMPLETE // +12 SECONDS', 2.2);
+    this.hud?.flash('SERVICE RECOVERY COMPLETE // UNCOMMITTED LOADS RESTORED // +12 SECONDS', 2.2);
+    this.refreshCaseHud();
   }
 
   /** Move to a view and bring the HUD and the pointer with it. */
@@ -1462,7 +1496,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const active = this.activeCase;
     if (!active) return;
     const hasVisitor = active.definition.subjectType !== 'worker' && active.definition.id !== 'freight-sort';
-    if (!hasVisitor || this.selectedDoor !== active.visitorDoorId) {
+    if (!hasVisitor || this.selectedDoor !== active.assignedDoorId) {
       if (this.doorStatuses[this.selectedDoor] === 'unseen') {
         this.doorStatuses[this.selectedDoor] = 'clear';
         this.environment.setServiceDoorStatus(this.selectedDoor, 'clear');
@@ -1472,6 +1506,16 @@ export class WarehouseRig extends ENGINE.SceneNode {
       return;
     }
     this.evidence.located = true;
+    /*
+     * A legitimate service feed includes the door's credential reader, not merely a picture
+     * of somebody standing outside. Requiring a second LMB scan after the player has found
+     * the correct feed left the console saying VISITOR RECORD REQUIRED while already naming
+     * that visitor and their assigned door. The feed inspection is the visitor record.
+     *
+     * Tamper cases deliberately keep the stronger optical requirement: locating a subject
+     * who is forcing a hatch is not the same thing as establishing their credential.
+     */
+    if (!active.doorTamper) this.evidence.visitor = true;
     const status: WarehouseDoorStatus = active.doorTamper ? 'tamper' : 'contact';
     this.doorStatuses[this.selectedDoor] = status;
     this.environment.setServiceDoorStatus(this.selectedDoor, status);
@@ -1487,15 +1531,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.hud?.setReplayAvailable(true);
       this.hud?.flash('PRE-AUTHORIZATION HATCH INTERACTION RECORDED // REPLAY AVAILABLE', 2.6);
     } else {
-      this.hud?.flash(`${this.doorLabel(this.selectedDoor)} // CONTACT LOCATED`, 1.4);
+      this.hud?.flash(`${this.doorLabel(this.selectedDoor)} // CONTACT + CREDENTIAL RECORDED`, 1.8);
     }
     this.syncDoorHud();
-    this.hud?.showCase(active, this.evidence);
+    this.refreshCaseHud();
   }
 
   private replayDoorEvent(): void {
     if (!this.doorEventAvailable || !this.visitor || this.isCinematicActive()) return;
-    this.selectedDoor = this.activeCase?.visitorDoorId ?? this.selectedDoor;
+    this.selectedDoor = this.activeCase?.assignedDoorId ?? this.selectedDoor;
     this.view = 'cctv';
     this.visitor.rig.gesture('open');
     this.sound.play('tamper');
@@ -1536,6 +1580,39 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.hud?.setDoorStates(states);
   }
 
+  /** Warehouse-only A/B hook; post-processing is switched by the owning Omniscient rig. */
+  public setCelVisualsEnabled(enabled: boolean, announce = true): void {
+    this.celVisualsEnabled = enabled;
+    this.environment.setCelStyleEnabled(enabled);
+    this.celStyle.setEnabled(this, enabled);
+    if (announce) {
+      this.hud?.flash(
+        enabled
+          ? 'VISUAL PROTOTYPE // CEL SHADE + OCCLUDED INK + SUBTLE CRT'
+          : 'VISUAL PROTOTYPE // ORIGINAL WAREHOUSE LOOK',
+        2.2
+      );
+    }
+  }
+
+  private dockSnapshot(): WarehouseDockSnapshot | null {
+    const active = this.activeCase;
+    if (!active || active.definition.subjectType === 'worker' || active.definition.id === 'freight-sort' || active.definition.id === 'internal-breach') return null;
+    const staged = this.dockedCargo.filter((entry) => entry.doorId === active.assignedDoorId);
+    return {
+      doorId: active.assignedDoorId,
+      state: this.environment.transferDockState(active.assignedDoorId),
+      stagedPackageIds: staged.map((entry) => entry.node.caseData?.packageId ?? active.packageId),
+      capacity: this.environment.transferDockCapacity(active.assignedDoorId),
+      requiredCount: active.definition.id === 'package-5018' ? 2 : 1,
+    };
+  }
+
+  private refreshCaseHud(): void {
+    if (!this.activeCase) return;
+    this.hud?.showCase(this.activeCase, this.evidence, this.intrusion, this.dockSnapshot());
+  }
+
   private syncIntrusionHud(): void {
     const intruder = this.intruder;
     const intrusion = this.intrusion;
@@ -1554,7 +1631,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       selected: id === this.selectedZone,
     }));
     this.hud?.setIntrusion(intrusion, states);
-    this.hud?.showCase(active, this.evidence, intrusion);
+    this.refreshCaseHud();
   }
 
   private isBreachCase(): boolean {
@@ -1687,15 +1764,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
       if (!this.evidence.visitor) {
         return {
           name: 'PERIMETER CONTROL',
-          body: `${this.doorLabel(active.visitorDoorId)} is occupied. Acquire the visitor credential and entrance telemetry before comparing authorization.`,
+          body: `${this.doorLabel(active.assignedDoorId)} is occupied. Acquire the visitor credential, declared load, and assigned-door record.`,
           source: 'system',
         };
       }
       return {
         name: 'PERIMETER CONTROL',
         body: active.doorTamper && this.evidence.tamper
-          ? `${this.doorLabel(active.visitorDoorId)} recorded a credential-reader bypass and cargo-hatch force event.`
-          : `${this.doorLabel(active.visitorDoorId)} is occupied. Authorized destination: ${this.doorLabel(active.authorizedDoorId)}.`,
+          ? `${this.doorLabel(active.assignedDoorId)} recorded a credential-reader bypass and cargo-hatch force event.`
+          : `${this.doorLabel(active.assignedDoorId)} is occupied. Assigned transfer: ${this.doorLabel(active.assignedDoorId)}.`,
         source: 'system',
       };
     }
@@ -1739,7 +1816,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (query.includes('package') || query.includes('manifest') || query.includes('aisle') || query.includes('bay')) {
       return {
         name: 'MANIFEST CONTROL',
-        body: `Package ${active.packageId} is listed at aisle ${active.aisle}, bay ${String(active.bay).padStart(2, '0')}. Expected mass ${active.expectedWeight.toFixed(1)} kilograms.`,
+        body: this.evidence.cargo
+          ? `Package ${active.packageId}; recipient ${active.packageRecipientName}; inbound status ${active.inboundStatus.toUpperCase()}; aisle ${active.aisle}, bay ${String(active.bay).padStart(2, '0')}.`
+          : `Package ${active.packageId} is listed at aisle ${active.aisle}, bay ${String(active.bay).padStart(2, '0')}. Scan the carton to reveal recipient and inbound status.`,
         source: 'system',
       };
     }
@@ -1788,7 +1867,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       else this.selectZone(zones[direction]);
       return;
     }
-    if (active.definition.id === 'door-tamper') {
+    if (active.definition.correctDecision === 'deny-lockdown') {
       if (direction === 'left' || direction === 'down') this.tryDecision('deny-lockdown');
       else this.tryDecision('release');
       return;
@@ -1844,19 +1923,28 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.evidence.cargo = true;
     } else if (this.view === 'cctv') {
       this.inspectSelectedDoor();
-      if (this.selectedDoor !== this.activeCase.visitorDoorId || !this.evidence.located) {
+      if (this.selectedDoor !== this.activeCase.assignedDoorId || !this.evidence.located) {
         this.hud?.flash(`${this.doorLabel(this.selectedDoor)} // NO VISITOR TARGET`);
         return;
       }
       this.evidence.visitor = true;
-      this.evidence.authorization = true;
       if (this.activeCase.doorTamper) this.evidence.tamper = true;
     } else {
       if (this.nearestCargoDistance() > 10) {
         this.hud?.flash(`TARGET DISTANT // AISLE ${this.activeCase.aisle} BAY ${String(this.activeCase.bay).padStart(2, '0')}`);
         return;
       }
-      this.evidence.cargo = true;
+      const droneAt = this.drone.getWorldPosition(new THREE.Vector3());
+      const scanned = [this.cargo, this.duplicateCargo]
+        .filter((entry): entry is WarehouseCargoNode => entry !== null)
+        .sort((a, b) => a.getWorldPosition(new THREE.Vector3()).distanceTo(droneAt) - b.getWorldPosition(new THREE.Vector3()).distanceTo(droneAt))[0];
+      if (scanned) this.scannedCargo.add(scanned);
+      this.evidence.cargo = this.activeCase.definition.id === 'package-5018'
+        ? this.scannedCargo.size >= 2
+        : this.scannedCargo.size >= 1;
+    }
+    if (this.activeCase.definition.id === 'door-tamper') {
+      this.evidence.authorization = this.evidence.visitor && this.evidence.cargo;
     }
     this.sound.play('scan');
     this.hud?.pulseScan();
@@ -1890,18 +1978,22 @@ export class WarehouseRig extends ENGINE.SceneNode {
           ...this.activeCase,
           measuredWeight: duplicateDistance < primaryDistance ? 40 - migration : 40 + migration,
         },
-        this.evidence
+        this.evidence,
+        this.intrusion,
+        this.dockSnapshot()
       );
     } else {
-      this.hud?.showCase(this.activeCase, this.evidence);
+      this.refreshCaseHud();
     }
     const toolRequired = this.activeCase.definition.requiredTools.find((tool) => !['optical', this.activeTool].includes(tool));
     if (toolRequired && this.activeTool !== toolRequired) this.hud?.flash(`${toolRequired.toUpperCase()} CHANNEL REQUIRED TO COMPLETE COMPARISON`);
     else if (this.activeCase.definition.id === 'door-tamper') {
       const count = Number(this.evidence.action) + Number(this.evidence.authorization) + Number(this.evidence.tamper);
       this.hud?.flash(`EVIDENCE STACK ${count} / 3 // ${count === 3 ? 'DENY + LOCKDOWN ENABLED' : 'CONTINUE COMPARISON'}`, 2.2);
+    } else if (this.activeCase.definition.id === 'package-5018' && !this.evidence.cargo) {
+      this.hud?.flash(`5018 OPTICAL RECORDS ${this.scannedCargo.size}/2 // SCAN BOTH PHYSICAL LOADS`, 2.2);
     } else if (this.evidence.visitor && this.evidence.cargo) {
-      this.hud?.flash(`VISITOR + PACKAGE VERIFIED // ROUTE TO ${this.doorLabel(this.activeCase.authorizedDoorId)}`, 2.1);
+      this.hud?.flash(`VISITOR + PACKAGE VERIFIED // DOCK AT ${this.doorLabel(this.activeCase.assignedDoorId)}`, 2.1);
     } else {
       this.hud?.flash('EVIDENCE RECORDED // ACQUIRE THE SECOND SUBJECT RECORD', 1.8);
     }
@@ -2060,8 +2152,52 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
 
   public toggleGrip(): void {
-    if (this.view !== 'drone' || this.finished || this.isCinematicActive() || this.isBreachCase()) return;
+    if (this.view !== 'drone' || this.finished || this.decisionCommitted || this.isCinematicActive() || this.isBreachCase()) return;
     if (this.carried) {
+      const active = this.activeCase;
+      const nearest = this.environment.nearestDoorDock(this.carried.position);
+      if (active && nearest.distance <= 2.5) {
+        if (nearest.id !== active.assignedDoorId) {
+          this.sound.play('reject');
+          this.hud?.flash(`DOCK ASSIGNMENT MISMATCH // REQUIRED ${this.doorLabel(active.assignedDoorId)} // LOAD RETAINED`, 2.8);
+          return;
+        }
+        const capacity = this.environment.transferDockCapacity(nearest.id);
+        if (this.dockedCargo.length >= capacity) {
+          this.hud?.flash(`${this.doorLabel(nearest.id)} // ALL CLAMPS OCCUPIED`, 1.8);
+          return;
+        }
+        const cargo = this.cargoRope.detach() ?? this.carried;
+        const occupiedSlots = new Set(this.dockedCargo.filter((entry) => entry.doorId === nearest.id).map((entry) => entry.slot));
+        const slot = Array.from({ length: capacity }, (_, index) => index).find((index) => !occupiedSlots.has(index)) ?? 0;
+        cargo.position.copy(this.environment.transferDockSlot(nearest.id, slot));
+        cargo.quaternion.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, WAREHOUSE_DOORS[nearest.id].rootRotation);
+        cargo.carried = false;
+        this.carried = null;
+        this.dockedCargo.push({ node: cargo, doorId: nearest.id, slot });
+        /*
+         * The secure transfer is an instrumented scale/seal reader. Once its clamp has
+         * positively captured a load it has enough information to produce the same package
+         * record as a close optical inspection. This also makes physical staging and console
+         * state atomic: a load cannot visibly sit in a locked clamp while the console claims
+         * no package is present.
+         */
+        this.scannedCargo.add(cargo);
+        this.evidence.cargo = active.definition.id === 'package-5018'
+          ? this.scannedCargo.size >= 2
+          : true;
+        this.environment.setTransferDockState(nearest.id, 'staged');
+        this.sound.play('dock');
+        this.feedback.gripPulse(cargo.getWorldPosition(new THREE.Vector3()), true);
+        const required = active.definition.id === 'package-5018' ? 2 : 1;
+        const recordsReady = this.evidence.visitor && this.evidence.cargo;
+        this.hud?.flash(
+          `TRANSFER CLAMP LOCKED // DOCK SCAN RECORDED // LOADS SECURED ${this.dockedCargo.length}/${required}${recordsReady ? ' // DECISIONS READY' : ' // VISITOR RECORD REQUIRED'}`,
+          3
+        );
+        this.refreshCaseHud();
+        return;
+      }
       const cargo = this.cargoRope.detach() ?? this.carried;
       cargo.position.y = 0;
       cargo.quaternion.identity();
@@ -2073,8 +2209,23 @@ export class WarehouseRig extends ENGINE.SceneNode {
       return;
     }
     const droneAt = this.drone.getWorldPosition(new THREE.Vector3());
+    const staged = [...this.dockedCargo]
+      .sort((a, b) => a.node.getWorldPosition(new THREE.Vector3()).distanceTo(droneAt) - b.node.getWorldPosition(new THREE.Vector3()).distanceTo(droneAt))[0];
+    if (staged && staged.node.getWorldPosition(new THREE.Vector3()).distanceTo(droneAt) <= 3.65) {
+      this.dockedCargo.splice(this.dockedCargo.indexOf(staged), 1);
+      this.ropeAnchor.copy(this.drone.position).add(new THREE.Vector3(0, -0.48, 0));
+      this.cargoRope.attach(staged.node, this, this.ropeAnchor);
+      staged.node.carried = true;
+      this.carried = staged.node;
+      this.environment.setTransferDockState(staged.doorId, this.dockedCargo.length ? 'staged' : 'empty');
+      this.sound.play('grip');
+      this.hud?.flash(`LOAD ${staged.node.caseData?.packageId ?? ''} RETRIEVED // TRANSFER CLAMP OPEN`, 2);
+      this.refreshCaseHud();
+      return;
+    }
     const cargo = [this.cargo, this.duplicateCargo]
       .filter((entry): entry is WarehouseCargoNode => entry !== null)
+      .filter((entry) => !this.dockedCargo.some((stagedEntry) => stagedEntry.node === entry))
       .sort(
         (a, b) =>
           a.getWorldPosition(new THREE.Vector3()).distanceTo(droneAt) -
@@ -2092,7 +2243,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.carried = cargo;
     this.sound.play('grip');
     this.feedback.gripPulse(cargoAt, true);
-    this.hud?.flash(`LOAD ${this.activeCase?.packageId ?? ''} SECURED`);
+    const active = this.activeCase;
+    const route = active ? ` // DOCK ${this.doorLabel(active.assignedDoorId)} // F TO CLAMP` : '';
+    this.hud?.flash(`LOAD ${active?.packageId ?? ''} SECURED${route}`, route ? 2.8 : 1.5);
+  }
+
+  private cargoHome(cargo: WarehouseCargoNode): THREE.Vector3 {
+    const active = cargo.caseData ?? this.activeCase;
+    if (!active) return this.drone.position.clone();
+    return this.environment.packagePosition(cargo === this.duplicateCargo ? 4 : active.aisle, active.bay);
   }
 
   public tryContainZone(zone: WarehouseSecurityZoneId): void {
@@ -2247,7 +2406,17 @@ export class WarehouseRig extends ENGINE.SceneNode {
             ? this.evidence.visitor && this.evidence.cargo
             : this.evidence.visitor && this.evidence.cargo;
     if (!evidenceReady) {
-      this.hud?.flash('SCAN AND CROSS-CHECK BEFORE DECISION');
+      if (active.definition.subjectType === 'worker') {
+        this.hud?.flash('PERSONNEL RECORD REQUIRED // ACQUIRE AN OPTICAL SCAN', 2.2);
+      } else if (active.definition.id === 'freight-sort') {
+        this.hud?.flash('FREIGHT RECORD REQUIRED // ACQUIRE AN OPTICAL SCAN', 2.2);
+      } else if (!this.evidence.visitor && !this.evidence.cargo) {
+        this.hud?.flash('VISITOR + PACKAGE RECORDS REQUIRED // INSPECT CCTV + SCAN OR DOCK LOAD', 2.6);
+      } else if (!this.evidence.visitor) {
+        this.hud?.flash(`VISITOR RECORD REQUIRED // INSPECT ${this.doorLabel(active.assignedDoorId)} CCTV`, 2.6);
+      } else {
+        this.hud?.flash('PACKAGE RECORD REQUIRED // RMB + LMB SCAN OR CLAMP LOAD AT THE ASSIGNED DOCK', 2.6);
+      }
       return;
     }
     if (!active.definition.requiredTools.every((tool) => this.tools.includes(tool))) {
@@ -2262,7 +2431,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (active.definition.id === 'package-5018' && decision === 'verify') {
       this.visitorVerified = true;
       this.sound.play('resolved');
-      this.hud?.flash(`HUMAN VERIFICATION REQUESTED // ${this.doorLabel(active.visitorDoorId)} HELD`, 2.8);
+      this.hud?.flash(`HUMAN VERIFICATION REQUESTED // ${this.doorLabel(active.assignedDoorId)} HELD`, 2.8);
       return;
     }
     if (active.definition.id === 'freight-sort' && !this.inboundOpened) {
@@ -2295,29 +2464,11 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     const cargoDecision = active.definition.id !== 'freight-sort' && ['release', 'quarantine', 'return'].includes(decision);
     if (cargoDecision) {
-      if (!this.carried) {
-        this.hud?.flash('SECURE THE PACKAGE WITH THE GRIPPER');
+      const required = active.definition.id === 'package-5018' ? 2 : 1;
+      const secured = this.dockedCargo.filter((entry) => entry.doorId === active.assignedDoorId).length;
+      if (secured < required) {
+        this.hud?.flash(`DOCK REQUIRED AT ${this.doorLabel(active.assignedDoorId)} // LOADS SECURED ${secured}/${required} // F TO CLAMP`, 2.7);
         return;
-      }
-      if (decision === 'release') {
-        const nearest = this.environment.nearestDoorHandoff(this.drone.position);
-        const requiredDoor = active.visitorIntent === 'intrusion' ? active.visitorDoorId : active.authorizedDoorId;
-        if (nearest.distance > 4.4) {
-          this.hud?.flash(`MOVE LOAD TO ${this.doorLabel(requiredDoor)} CARGO HANDOFF`);
-          return;
-        }
-        if (nearest.id !== requiredDoor) {
-          this.sound.play('reject');
-          this.elapsed += 3;
-          this.hud?.flash(`DESTINATION LOCK MISMATCH // AUTHORIZED ${this.doorLabel(requiredDoor)} // LOAD RETAINED`, 2.7);
-          return;
-        }
-      } else {
-        const station = this.environment.stationPositions[decision as 'quarantine' | 'return'];
-        if (this.drone.position.distanceTo(station) > 4.4) {
-          this.hud?.flash(`MOVE LOAD TO ${decision.toUpperCase()} STATION`);
-          return;
-        }
       }
     }
     this.resolveDecision(decision);
@@ -2341,12 +2492,16 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.feedback.verdictPulse(this.scanSubjectPosition(), correct);
     this.hud?.flashVerdict(correct);
     if (decision === 'release') this.performCargoHandoff();
+    else if (decision === 'quarantine') this.environment.setTransferDockState(active.assignedDoorId, 'quarantined');
+    else if (decision === 'return') this.performCargoReturn();
     if (decision === 'deny-lockdown') {
-      this.environment.lockdownServiceDoor(active.visitorDoorId);
-      this.doorStatuses[active.visitorDoorId] = 'locked';
+      this.environment.lockdownServiceDoor(active.assignedDoorId);
+      this.environment.setTransferDockState(active.assignedDoorId, 'locked');
+      this.doorStatuses[active.assignedDoorId] = 'locked';
       this.syncDoorHud();
       this.sound.play('lockdown');
     }
+    this.refreshCaseHud();
     updateWarehouseSave((save) => {
       save.totalDecisions += 1;
       if (correct) save.correctDecisions += 1;
@@ -2374,7 +2529,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.cleanChain += 1;
     if (decision === 'quarantine') this.sound.play('quarantine');
     else if (decision === 'release') this.sound.play('release');
-    else this.sound.play('resolved');
+    else if (decision !== 'return') this.sound.play('resolved');
     this.environment.setConveyorsRunning(active.definition.id === 'freight-sort');
     if (active.definition.id === 'freight-sort') this.sound.play('conveyor');
     this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
@@ -2390,42 +2545,41 @@ export class WarehouseRig extends ENGINE.SceneNode {
       return;
     }
     const is5018 = active.definition.id === 'package-5018';
-    this.hud?.flash(is5018 ? '5018 QUARANTINED // OUTBOUND LOCK CYCLING EMPTY' : 'CASE RESOLVED', is5018 ? 4 : 1.5);
+    this.hud?.flash(is5018 ? '5018 LOADS SEALED // SERVICE C CONTAINMENT COVER LOCKED' : 'CASE RESOLVED', is5018 ? 4 : 1.5);
     if (is5018) this.sound.play('anomaly');
-    if (decision === 'quarantine') this.environment.sealQuarantine();
     const deliveryDelay = decision === 'release'
       ? getAccessibilityPreferences().reducedMotion ? 900 : 5200
-      : is5018 ? 3500 : 850;
+      : decision === 'return' ? getAccessibilityPreferences().reducedMotion ? 500 : 2200
+      : is5018 ? 3500 : 1200;
     window.setTimeout(() => this.advance(), deliveryDelay);
   }
 
   private performCargoHandoff(): void {
     const active = this.activeCase;
-    const cargo = this.cargoRope.detach() ?? this.carried;
-    if (!active || !cargo) return;
-    const nearest = this.environment.nearestDoorHandoff(this.drone.position);
+    if (!active) return;
+    const handoffDoor = active.assignedDoorId;
+    const staged = this.dockedCargo.filter((entry) => entry.doorId === handoffDoor);
+    const cargo = staged[0]?.node;
+    if (!cargo) return;
+    this.environment.setTransferDockState(handoffDoor, 'releasing');
     cargo.carried = false;
-    cargo.position.copy(WAREHOUSE_DOORS[nearest.id].handoffPosition);
-    cargo.position.y = 0;
-    cargo.quaternion.identity();
     const reducedMotion = getAccessibilityPreferences().reducedMotion;
     this.deliveredCargo = {
       node: cargo,
       from: cargo.position.clone(),
-      to: WAREHOUSE_DOORS[nearest.id].visitorPosition.clone().add(new THREE.Vector3(0, 0.08, 0)),
+      to: WAREHOUSE_DOORS[handoffDoor].visitorPosition.clone().add(new THREE.Vector3(0, 0.08, 0)),
       elapsed: 0,
       duration: reducedMotion ? 0.08 : 3.2,
     };
-    this.carried = null;
-    this.environment.cycleServiceDoor(nearest.id);
+    this.environment.cycleServiceDoor(handoffDoor);
     this.hud?.setBell(false, 0);
-    this.selectedDoor = nearest.id;
+    this.selectedDoor = handoffDoor;
     this.view = 'cctv';
-    if (nearest.id === active.visitorDoorId) {
+    if (handoffDoor === active.assignedDoorId) {
       const receiver = this.visitor;
       receiver?.rig.gesture('open');
       if (receiver && active.visitorIntent === 'collection') {
-        const exit = WAREHOUSE_DOORS[nearest.id].pursuit.officerStart.clone();
+        const exit = WAREHOUSE_DOORS[handoffDoor].pursuit.officerStart.clone();
         window.setTimeout(() => {
           if (this.activeCase !== active || this.visitor !== receiver || this.pursuit) return;
           receiver.rig.walk(exit, { interrupt: true, locomotion: 'walk', pace: 1.1 });
@@ -2436,6 +2590,30 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.syncDoorHud();
     this.hud?.setView(this.view);
     this.syncPointerMode();
+  }
+
+  private performCargoReturn(): void {
+    const active = this.activeCase;
+    if (!active) return;
+    this.environment.setTransferDockState(active.assignedDoorId, 'returning');
+    this.sound.play('return');
+    const direction = new THREE.Vector3(0, 0, -3.2)
+      .applyAxisAngle(THREE.Object3D.DEFAULT_UP, WAREHOUSE_DOORS[active.assignedDoorId].rootRotation);
+    const reducedMotion = getAccessibilityPreferences().reducedMotion;
+    for (const staged of this.dockedCargo.filter((entry) => entry.doorId === active.assignedDoorId)) {
+      const from = staged.node.position.clone();
+      const to = from.clone().add(direction);
+      const started = performance.now();
+      const duration = reducedMotion ? 80 : 1500;
+      const animate = (): void => {
+        if (this.activeCase !== active) return;
+        const progress = THREE.MathUtils.clamp((performance.now() - started) / duration, 0, 1);
+        staged.node.position.lerpVectors(from, to, THREE.MathUtils.smoothstep(progress, 0, 1));
+        if (progress < 1) requestAnimationFrame(animate);
+        else staged.node.visible = false;
+      };
+      animate();
+    }
   }
 
   private beginPoliceResponse(): void {
@@ -2451,10 +2629,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
       window.setTimeout(() => this.advance(), 1500);
       return;
     }
-    this.pursuit = new WarehousePursuit(active.visitorDoorId, this.visitor, authored);
+    this.pursuit = new WarehousePursuit(active.assignedDoorId, this.visitor, authored);
     this.add(this.pursuit.officer.root);
     this.pursuitPhase = 'lockdown';
-    this.selectedDoor = active.visitorDoorId;
+    this.selectedDoor = active.assignedDoorId;
     this.view = 'cctv';
     this.syncDoorHud();
     this.hud?.setView(this.view);
@@ -2478,7 +2656,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       if (frame.phase === 'suspect') {
         this.hud?.flash('SURVEILLANCE TIMESTAMP +04:07 // SUBJECT FLEEING', 2.1);
       } else if (frame.phase === 'response') {
-        if (!getAccessibilityPreferences().reducedMotion) this.environment.setPursuitLights(active.visitorDoorId, true);
+        if (!getAccessibilityPreferences().reducedMotion) this.environment.setPursuitLights(active.assignedDoorId, true);
         this.sound.play('siren');
         this.hud?.flash('LOCAL UNIT VISUAL // EXTERIOR CORNER CAMERA', 2.2);
       }
@@ -2500,7 +2678,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private finishPoliceResponse(): void {
     const active = this.activeCase;
     if (!this.pursuit || !active) return;
-    this.environment.setPursuitLights(active.visitorDoorId, false);
+    this.environment.setPursuitLights(active.assignedDoorId, false);
     this.pursuit.destroy();
     this.pursuit = null;
     this.pursuitPhase = '';
@@ -3064,10 +3242,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.cargoRope.tick(deltaTime, this.ropeAnchor);
     this.feedback.setOpticalHeld(this.opticalAimHeld && this.view === 'drone');
     this.feedback.setTargets(this.opticalAimHeld ? this.opticalTargets() : []);
-    this.feedback.tick(deltaTime, this.camera ? this.camera.getCamera().quaternion : FEEDBACK_FACING);
     this.updateDeliveredCargo(deltaTime);
     this.hud?.tick(deltaTime);
     this.environment.tick(deltaTime);
+    this.celStyle.tick(this, deltaTime);
     this.visitor?.rig.idle(deltaTime);
     this.updatePursuit(deltaTime);
     this.updateContainmentResponse(deltaTime);
@@ -3095,6 +3273,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
       }
     }
     this.applyCamera(deltaTime);
+    /*
+     * ViewTargetCameraNode owns the rotation while its THREE.Camera child stays at identity.
+     * Passing the child's local quaternion left scan rings, sweeps and brackets world-aligned
+     * and edge-on after the player turned. Read the composed world rotation only after this
+     * frame's camera has been positioned, so the feedback is a true billboard with no yaw lag.
+     */
+    if (this.camera) this.camera.getCamera().getWorldQuaternion(FEEDBACK_FACING);
+    else FEEDBACK_FACING.identity();
+    this.feedback.tick(deltaTime, FEEDBACK_FACING);
     this.keepActive();
   }
 
@@ -3125,6 +3312,8 @@ export class WarehouseRig extends ENGINE.SceneNode {
     world?.inputManager?.exitPointerLock();
     setPointerLockAllowed(false);
     setCursorVisible(true);
+    this.celStyle.setEnabled(this, false);
+    this.environment.setCelStyleEnabled(false);
     const post = world?.postProcessManager;
     if (post && this.savedPost) {
       if (this.savedPost.tone) post.configureEffect(ENGINE.PostProcessPass.ToneMapping, this.savedPost.tone as Record<string, unknown>);

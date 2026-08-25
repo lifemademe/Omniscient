@@ -2,6 +2,7 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
 import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
+import { WAREHOUSE_SERVICE_DOOR_FRAME } from './WarehouseServiceDoors.js';
 
 const LOWER_WALL = new THREE.MeshStandardMaterial({ color: '#3b4744', roughness: 0.9, metalness: 0.08 });
 const UPPER_WALL = new THREE.MeshStandardMaterial({ color: '#263331', roughness: 0.82, metalness: 0.16 });
@@ -77,6 +78,7 @@ export class WarehouseDaylight {
   private readonly windowMaterials: THREE.MeshStandardMaterial[] = [];
   private sunLight: ENGINE.DirectionalLightNode | null = null;
   private clock = 0;
+  private celStyleEnabled = false;
 
   public build(): void {
     this.buildExteriorContext();
@@ -84,17 +86,25 @@ export class WarehouseDaylight {
     this.buildSunlight();
   }
 
+  public setCelStyleEnabled(enabled: boolean): void {
+    this.celStyleEnabled = enabled;
+  }
+
   public tick(deltaTime: number, emergencyLevel: number, contained: boolean, reducedMotion: boolean): void {
     this.clock += deltaTime;
     const emergency = THREE.MathUtils.clamp(emergencyLevel, 0, 1);
-    if (this.sunLight) this.sunLight.intensity = THREE.MathUtils.lerp(0.9, 0.45, emergency);
-    for (const light of this.bounceLights) light.intensity = THREE.MathUtils.lerp(4.6, 1.6, emergency);
+    const sun = this.celStyleEnabled ? 1.22 : 0.9;
+    const bounce = this.celStyleEnabled ? 3.6 : 4.6;
+    const night = this.celStyleEnabled ? 28 : CLERESTORY_NIGHT;
+    if (this.sunLight) this.sunLight.intensity = THREE.MathUtils.lerp(sun, 0.52, emergency);
+    for (const light of this.bounceLights) light.intensity = THREE.MathUtils.lerp(bounce, 1.45, emergency);
     // The night side barely dims. When the work lights drop it is most of what is left, and
     // an emergency that goes black is a scene the player cannot act in.
-    for (const light of this.nightLights) light.intensity = THREE.MathUtils.lerp(CLERESTORY_NIGHT, 14, emergency);
+    for (const light of this.nightLights) light.intensity = THREE.MathUtils.lerp(night, 14, emergency);
     const breathing = reducedMotion || contained ? 1 : 0.94 + Math.sin(this.clock * 0.24) * 0.06;
     for (const material of this.shaftMaterials) {
-      material.opacity = THREE.MathUtils.lerp(0.036 * breathing, 0.009, emergency);
+      const normalOpacity = this.celStyleEnabled ? 0.028 : 0.036;
+      material.opacity = THREE.MathUtils.lerp(normalOpacity * breathing, 0.009, emergency);
     }
     for (const material of this.windowMaterials) {
       material.emissiveIntensity = THREE.MathUtils.lerp(0.12, 0.05, emergency);
@@ -124,6 +134,11 @@ export class WarehouseDaylight {
 
   private buildClerestoryShell(): void {
     const { shell } = WAREHOUSE_LAYOUT;
+    const frontCutoutWidth = 5.8;
+    const frontCutoutTop = 5;
+    const frontSideInfillWidth = (frontCutoutWidth - WAREHOUSE_SERVICE_DOOR_FRAME.width) / 2;
+    const frontSideInfillX = WAREHOUSE_SERVICE_DOOR_FRAME.width / 2 + frontSideInfillWidth / 2;
+    const frontHeaderHeight = frontCutoutTop - WAREHOUSE_SERVICE_DOOR_FRAME.height;
     const segments: WallSegment[] = [
       { name: 'WestRear', axis: 'z', centerX: -shell.wallX, centerZ: -5.35, length: 47.7 },
       { name: 'WestFront', axis: 'z', centerX: -shell.wallX, centerZ: 25.35, length: 7.7 },
@@ -157,7 +172,31 @@ export class WarehouseDaylight {
         UPPER_WALL,
         new THREE.Vector3(shell.wallX, 7.1, WAREHOUSE_LAYOUT.service.sideZ)
       ),
-      mesh('FrontGateLintel', new THREE.BoxGeometry(5.8, 5.5, 0.35), UPPER_WALL, new THREE.Vector3(0, 7.75, shell.frontZ)),
+      /*
+       * The front shell is split around a 5.8m construction cutout, while Service B's real
+       * outer frame is only 2.94m wide and 3.69m high. Leaving the remainder empty exposed
+       * the exterior sky on both sides and above the door. These three panels close the
+       * cladding exactly to the frame instead of disguising the gap with another prop.
+       */
+      mesh(
+        'FrontServiceWestInfill',
+        new THREE.BoxGeometry(frontSideInfillWidth, frontCutoutTop, 0.35),
+        LOWER_WALL,
+        new THREE.Vector3(-frontSideInfillX, frontCutoutTop / 2, shell.frontZ)
+      ),
+      mesh(
+        'FrontServiceEastInfill',
+        new THREE.BoxGeometry(frontSideInfillWidth, frontCutoutTop, 0.35),
+        LOWER_WALL,
+        new THREE.Vector3(frontSideInfillX, frontCutoutTop / 2, shell.frontZ)
+      ),
+      mesh(
+        'FrontServiceHeaderInfill',
+        new THREE.BoxGeometry(WAREHOUSE_SERVICE_DOOR_FRAME.width, frontHeaderHeight, 0.35),
+        LOWER_WALL,
+        new THREE.Vector3(0, WAREHOUSE_SERVICE_DOOR_FRAME.height + frontHeaderHeight / 2, shell.frontZ)
+      ),
+      mesh('FrontGateLintel', new THREE.BoxGeometry(frontCutoutWidth, 5.5, 0.35), UPPER_WALL, new THREE.Vector3(0, 7.75, shell.frontZ)),
       mesh('RearFreightLintel', new THREE.BoxGeometry(11.6, 4.5, 0.35), UPPER_WALL, new THREE.Vector3(0, 8.25, shell.rearZ))
     );
   }

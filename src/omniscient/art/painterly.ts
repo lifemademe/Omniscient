@@ -94,6 +94,17 @@ export interface BandingOptions {
   softness?: number;
 }
 
+export const PAINT_BANDING_LOOKS = {
+  /** The established house look used by the contact dioramas. */
+  house: { bands: 3, softness: 0.45 },
+  /** Three readable warehouse value groups without the brittle edge of a hard comic ramp. */
+  warehouseCel: { bands: 3, softness: 0.32 },
+  /** Lower-contrast fallback for dense or low-resolution captures. */
+  warehouseCelSoft: { bands: 4, softness: 0.5 },
+} as const satisfies Record<string, Required<BandingOptions>>;
+
+export type PaintBandingLookName = keyof typeof PAINT_BANDING_LOOKS;
+
 /**
  * ONE uniform object, shared by every banded material in the game.
  *
@@ -138,6 +149,24 @@ export const PAINT_UNIFORMS = {
   uPaintSoft: { value: 0.45 },
 };
 
+interface PaintBandingState {
+  onBeforeCompile: THREE.Material['onBeforeCompile'];
+  customProgramCacheKey: THREE.Material['customProgramCacheKey'];
+}
+
+/** Materials are weakly tracked so an isolated mission can restore its exact prior shader. */
+const BANDED_MATERIALS = new WeakMap<THREE.MeshStandardMaterial, PaintBandingState>();
+
+export function setPaintBandingLook(name: PaintBandingLookName): void {
+  const look = PAINT_BANDING_LOOKS[name];
+  PAINT_UNIFORMS.uPaintBands.value = look.bands;
+  PAINT_UNIFORMS.uPaintSoft.value = look.softness;
+}
+
+export function isPaintBanded(material: THREE.MeshStandardMaterial): boolean {
+  return BANDED_MATERIALS.has(material);
+}
+
 /**
  * Banded light on a material that stays PBR.
  *
@@ -164,7 +193,17 @@ export function applyPaintBanding(
   if (options.bands !== undefined) PAINT_UNIFORMS.uPaintBands.value = options.bands;
   if (options.softness !== undefined) PAINT_UNIFORMS.uPaintSoft.value = options.softness;
 
-  material.onBeforeCompile = (shader) => {
+  if (BANDED_MATERIALS.has(material)) return material;
+
+  const originalOnBeforeCompile = material.onBeforeCompile;
+  const originalProgramCacheKey = material.customProgramCacheKey;
+  BANDED_MATERIALS.set(material, {
+    onBeforeCompile: originalOnBeforeCompile,
+    customProgramCacheKey: originalProgramCacheKey,
+  });
+
+  material.onBeforeCompile = (shader, renderer) => {
+    originalOnBeforeCompile.call(material, shader, renderer);
     shader.uniforms.uPaintBands = PAINT_UNIFORMS.uPaintBands;
     shader.uniforms.uPaintSoft = PAINT_UNIFORMS.uPaintSoft;
 
@@ -193,7 +232,17 @@ export function applyPaintBanding(
 
   // Materials sharing the injection must share a program: without a stable key, three
   // compiles one program per material and the cache thrashes.
-  material.customProgramCacheKey = () => `paint-band`;
+  material.customProgramCacheKey = () => `${originalProgramCacheKey.call(material)}|paint-band`;
   material.needsUpdate = true;
   return material;
+}
+
+/** Restore a material that was banded by an isolated runtime presentation. */
+export function removePaintBanding(material: THREE.MeshStandardMaterial): void {
+  const original = BANDED_MATERIALS.get(material);
+  if (!original) return;
+  material.onBeforeCompile = original.onBeforeCompile;
+  material.customProgramCacheKey = original.customProgramCacheKey;
+  BANDED_MATERIALS.delete(material);
+  material.needsUpdate = true;
 }

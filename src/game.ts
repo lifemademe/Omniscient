@@ -9,6 +9,7 @@ import * as THREE from 'three';
 
 import { isPhoneRequested, PhoneClient } from './omniscient/link/PhoneClient.js';
 import { M4SSRig } from './m4ss/M4SSRig.js';
+import { MirelaProceduralTestRig } from './omniscient/experimental/mirela-procedural/MirelaProceduralTestRig.js';
 import { OmniscientRig } from './omniscient/OmniscientRig.js';
 
 /**
@@ -27,9 +28,15 @@ function wantsM4SS(): boolean {
   return new URLSearchParams(location.search).get('game') === 'm4ss';
 }
 
+/** Isolated img2threejs review route. Never selected by the campaign or published default. */
+function wantsMirelaProceduralTest(): boolean {
+  if (typeof location === 'undefined') return false;
+  return new URLSearchParams(location.search).get('game') === 'mirela-procedural';
+}
+
 @ENGINE.GameClass()
 class MyGameMode extends ENGINE.GameMode {
-  private rig: OmniscientRig | M4SSRig | null = null;
+  private rig: OmniscientRig | M4SSRig | MirelaProceduralTestRig | null = null;
 
   constructor() {
     super();
@@ -48,9 +55,19 @@ class MyGameMode extends ENGINE.GameMode {
 
     const world = this.getWorld();
     if (world) {
-      this.rig = wantsM4SS()
-        ? M4SSRig.create({ name: 'M4SSRig', position: new THREE.Vector3(0, 0, 0) })
-        : OmniscientRig.create({ name: 'OmniscientRig', position: new THREE.Vector3(0, 0, 0) });
+      if (wantsMirelaProceduralTest()) {
+        this.rig = MirelaProceduralTestRig.create({
+          name: 'MirelaProceduralTestRig',
+          position: new THREE.Vector3(0, 0, 0),
+        });
+      } else if (wantsM4SS()) {
+        this.rig = M4SSRig.create({ name: 'M4SSRig', position: new THREE.Vector3(0, 0, 0) });
+      } else {
+        this.rig = OmniscientRig.create({
+          name: 'OmniscientRig',
+          position: new THREE.Vector3(0, 0, 0),
+        });
+      }
       world.add(this.rig);
     }
 

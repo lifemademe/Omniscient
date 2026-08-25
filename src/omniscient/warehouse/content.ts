@@ -1,21 +1,21 @@
 import type { WarehouseCaseDefinition, WarehouseMovementDefinition, WarehouseTool } from './types.js';
 
 export const WAREHOUSE_COORDINATES = { latitude: -11.5, longitude: -57.0 } as const;
-export const WAREHOUSE_DECK_VERSION = 4;
+export const WAREHOUSE_DECK_VERSION = 5;
 
 export const STORY_MOVEMENTS: readonly WarehouseMovementDefinition[] = [
   {
     id: 'orientation',
     title: 'MOVEMENT 01 // COLLECTION',
-    objective: 'Locate the visitor, verify both records, and route package 2034 to the authorized cargo handoff.',
+    objective: 'Locate the visitor, verify both records, and dock package 2034 at the assigned secure transfer platform.',
     caseIds: ['valid-collection'],
     tutorial: true,
   },
   {
     id: 'judgement',
     title: 'MOVEMENT 02 // JUDGEMENT',
-    objective: 'Resolve a routing error and isolate a compromised seal.',
-    caseIds: ['wrong-route', 'broken-seal'],
+    objective: 'Return an invalid inbound record, quarantine a mass anomaly, and isolate a compromised seal.',
+    caseIds: ['invalid-inbound-record', 'weight-mismatch', 'broken-seal'],
   },
   {
     id: 'freight',
@@ -28,7 +28,7 @@ export const STORY_MOVEMENTS: readonly WarehouseMovementDefinition[] = [
     id: 'overlap',
     title: 'MOVEMENT 04 // OVERLAP',
     objective: 'Maintain collections, verify personnel, and contain an unauthorized door attempt.',
-    caseIds: ['valid-collection', 'temporary-worker', 'wrong-route', 'door-tamper'],
+    caseIds: ['valid-collection', 'temporary-worker', 'invalid-inbound-record', 'door-tamper'],
     inboundIn: 9,
   },
   {
@@ -41,7 +41,7 @@ export const STORY_MOVEMENTS: readonly WarehouseMovementDefinition[] = [
   {
     id: 'package-5018',
     title: 'MOVEMENT 06 // 5018',
-    objective: 'Trace the Service C request for package 5018. Preserve both records. Do not release either package.',
+    objective: 'One warehouse record produced two physical packages claiming identity 5018. Scan and secure both at Service C.',
     caseIds: ['package-5018'],
     finale: true,
   },
@@ -51,7 +51,7 @@ export const CASE_DECK: readonly WarehouseCaseDefinition[] = [
   {
     id: 'valid-collection',
     title: 'Authorized collection',
-    briefing: 'Identity, destination, mass, and seal agree with the collection record.',
+    briefing: 'Recipient identity, inbound record, mass, and seal agree with the visitor record.',
     subjectType: 'cargo',
     requiredTools: ['optical'],
     correctDecision: 'release',
@@ -59,14 +59,24 @@ export const CASE_DECK: readonly WarehouseCaseDefinition[] = [
     baseSeconds: 35,
   },
   {
-    id: 'wrong-route',
-    title: 'Routing mismatch',
-    briefing: 'The package is intact, but the collection destination does not match the manifest.',
+    id: 'invalid-inbound-record',
+    title: 'Invalid inbound record',
+    briefing: 'Recipient identity matches, but the package inbound record is recalled, voided, or misrouted.',
     subjectType: 'cargo',
     requiredTools: ['optical'],
     correctDecision: 'return',
-    anomaly: 'identity',
+    anomaly: 'inbound',
     baseSeconds: 38,
+  },
+  {
+    id: 'weight-mismatch',
+    title: 'Mass discrepancy',
+    briefing: 'Recipient identity and inbound record match, but measured mass contradicts the declaration.',
+    subjectType: 'cargo',
+    requiredTools: ['optical'],
+    correctDecision: 'quarantine',
+    anomaly: 'mass',
+    baseSeconds: 40,
   },
   {
     id: 'broken-seal',
@@ -107,6 +117,17 @@ export const CASE_DECK: readonly WarehouseCaseDefinition[] = [
     correctDecision: 'deny-lockdown',
     anomaly: 'tamper',
     baseSeconds: 48,
+    critical: true,
+  },
+  {
+    id: 'identity-impostor',
+    title: 'Recipient identity mismatch',
+    briefing: 'The visitor claims the package identifier, but the recipient identity belongs to somebody else.',
+    subjectType: 'visitor',
+    requiredTools: ['optical'],
+    correctDecision: 'deny-lockdown',
+    anomaly: 'identity',
+    baseSeconds: 46,
     critical: true,
   },
   {
@@ -173,7 +194,7 @@ export const CASE_DECK: readonly WarehouseCaseDefinition[] = [
   {
     id: 'package-5018',
     title: 'Duplicate identity',
-    briefing: 'Two locations report one identifier. Their combined mass is conserved.',
+    briefing: 'One warehouse record produced two physical packages claiming identity 5018. Their combined mass is conserved.',
     subjectType: 'mixed',
     requiredTools: ['optical', 'history'],
     correctDecision: 'quarantine',

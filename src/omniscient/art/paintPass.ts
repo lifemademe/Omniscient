@@ -1,47 +1,10 @@
 /**
- * The painterly pass. A real one, with neighbours.
+ * Warehouse stylisation pass.
  *
- * ## Why the last attempt failed
- *
- * The first try injected noise into every material through onBeforeCompile. It was rejected
- * on sight as "smudged textures", and that was the correct verdict: a per-material shader
- * can only multiply the colour it already has. It cannot look sideways. Everything that
- * makes Arcane, Tears of the Kingdom or Disco Elysium read as painted needs to know what is
- * NEXT to a pixel - where an edge is, which direction a shape runs, which neighbours belong
- * to the same region. None of that is reachable from inside a surface shader.
- *
- * I then said a real pass was impossible on this pipeline, and that was wrong. `retro.ts`
- * has been one all along: `WebGLEffectData.passes` is `any[]` and goes straight to
- * `composer.addPass()`, so a hand-rolled object with the right shape gets full screen-space
- * access on WebGL with no engine change and no WebGPU migration. This is that, again.
- *
- * ## What actually makes a frame look painted
- *
- * Four things, in the order they matter:
- *
- * 1. **Kuwahara.** The one that does the heavy lifting. For each pixel it looks at four
- *    overlapping quadrants and takes the mean of whichever has the LOWEST variance. Flat
- *    regions get flatter; edges stay razor sharp instead of blurring. That combination -
- *    smooth interiors, hard boundaries - is the signature of a brush loaded with paint, and
- *    no amount of blurring or noise gets near it. It is also the reason this has to be a
- *    pass: it is sixteen taps per pixel of the neighbourhood.
- *
- * 2. **Ink on the silhouettes.** A Sobel edge on luminance, darkened rather than drawn, so
- *    it reads as a line the painter left rather than a filter's outline. Arcane's is heavy
- *    and coloured; this one is restrained because the game underneath it is not a comic.
- *
- * 3. **Cold shadow, warm light.** A renderer darkens a surface towards black as it turns
- *    from the light; a painter turns it BLUE, because that is what the sky is doing to it,
- *    and puts warmth back only where light lands.
- *
- * 4. **Canvas tooth.** Quietest of the four and the one that stops the other three reading
- *    as a filter.
- *
- * ## Where it sits
- *
- * Order 70, ahead of the CRT at 80. Paint first, then the screen it is being displayed on -
- * the other way round would put brush strokes on top of the scanlines, which is a picture of
- * a monitor rather than a picture on one.
+ * It performs restrained, edge-preserving colour simplification and a camera-matched
+ * depth/normal prepass. That prepass supplies silhouette and crease ink with ordinary depth
+ * testing, so outlines cannot show through shelves or walls. It runs at order 70, before the
+ * subtle CRT pass at order 80, keeping scanlines crisp and interface overlays untouched.
  */
 
 import * as ENGINE from '@gnsx/genesys.js';
@@ -69,12 +32,35 @@ class PaintPass implements ComposerPass {
   private readonly camera = new THREE.Camera();
   private readonly material: THREE.ShaderMaterial;
   private readonly quad: THREE.Mesh;
+  private readonly normalMaterial = new THREE.MeshNormalMaterial({
+    blending: THREE.NoBlending,
+    depthTest: true,
+    depthWrite: true,
+  });
+  private readonly normalTarget: THREE.WebGLRenderTarget;
+  private readonly clearColor = new THREE.Color();
+  private width = 1920;
+  private height = 1080;
+  private normalWidth = 1;
+  private normalHeight = 1;
 
   /** Live values, and where they are heading. Eased, so a switch is not a cut. */
   private now: PaintLook = { ...PAINT_LOOKS.off };
   private target: PaintLook = { ...PAINT_LOOKS.off };
 
   constructor() {
+    this.normalTarget = new THREE.WebGLRenderTarget(1, 1, {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      format: THREE.RGBAFormat,
+      type: THREE.UnsignedByteType,
+      depthBuffer: true,
+      stencilBuffer: false,
+    });
+    this.normalTarget.texture.name = 'OmniscientPaint.Normal';
+    this.normalTarget.depthTexture = new THREE.DepthTexture(1, 1, THREE.UnsignedShortType);
+    this.normalTarget.depthTexture.name = 'OmniscientPaint.Depth';
+    this.normalTarget.depthTexture.format = THREE.DepthFormat;
     this.material = new THREE.ShaderMaterial({
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT,
@@ -82,12 +68,24 @@ class PaintPass implements ComposerPass {
       depthWrite: false,
       uniforms: {
         tDiffuse: { value: null },
+        tNormal: { value: this.normalTarget.texture },
+        tSceneDepth: { value: this.normalTarget.depthTexture },
         uResolution: { value: new THREE.Vector2(1920, 1080) },
+        uOutlineTexel: { value: new THREE.Vector2(1, 1) },
         uRadius: { value: 0 },
         uStrength: { value: 0 },
         uInk: { value: 0 },
         uTint: { value: 0 },
         uTooth: { value: 0 },
+        uOutlineWidth: { value: 0 },
+        uDepthInk: { value: 0 },
+        uNormalInk: { value: 0 },
+        uOutlineStrength: { value: 0 },
+        uProtectSignals: { value: 0 },
+        uHasGeometry: { value: 0 },
+        uCameraNear: { value: 0.05 },
+        uCameraFar: { value: 180 },
+        uInkColor: { value: new THREE.Color(0.025, 0.035, 0.04) },
         uEncode: { value: 0 },
       },
     });
@@ -107,7 +105,24 @@ class PaintPass implements ComposerPass {
   }
 
   public setSize(width: number, height: number): void {
+    this.width = width;
+    this.height = height;
     (this.material.uniforms.uResolution.value as THREE.Vector2).set(width, height);
+    if (this.target.outlineStrength > 0) {
+      this.resizeGeometryTarget(this.target.normalScale);
+    }
+  }
+
+  private resizeGeometryTarget(scale: number): void {
+    if (scale <= 0) return;
+    const boundedScale = THREE.MathUtils.clamp(scale, 0.25, 1);
+    const width = Math.max(1, Math.min(1600, Math.round(this.width * boundedScale)));
+    const height = Math.max(1, Math.min(900, Math.round(this.height * boundedScale)));
+    if (width === this.normalWidth && height === this.normalHeight) return;
+    this.normalWidth = width;
+    this.normalHeight = height;
+    this.normalTarget.setSize(width, height);
+    (this.material.uniforms.uOutlineTexel.value as THREE.Vector2).set(1 / width, 1 / height);
   }
 
   public initialize(): void {
@@ -135,6 +150,46 @@ class PaintPass implements ComposerPass {
     return null;
   }
 
+  /**
+   * Render the visible scene once with view normals and its own depth attachment.
+   *
+   * This is the important distinction from the engine's selected-object outline: the
+   * normal/depth target is produced by the active camera with ordinary depth testing, so a
+   * rack in front of a visitor wins the pixel and no contour can leak through it.
+   */
+  private renderGeometry(renderer: THREE.WebGLRenderer): boolean {
+    const scene = this.mainScene;
+    const camera = this.mainCamera;
+    if (!scene || !camera || this.now.outlineStrength <= 0.001) return false;
+
+    this.resizeGeometryTarget(this.target.normalScale);
+    const previousTarget = renderer.getRenderTarget();
+    const previousOverride = scene.overrideMaterial;
+    const previousAutoClear = renderer.autoClear;
+    const previousAlpha = renderer.getClearAlpha();
+    renderer.getClearColor(this.clearColor);
+
+    try {
+      scene.overrideMaterial = this.normalMaterial;
+      renderer.autoClear = true;
+      renderer.setRenderTarget(this.normalTarget);
+      renderer.setClearColor(0x000000, 0);
+      renderer.clear(true, true, false);
+      renderer.render(scene, camera);
+    } finally {
+      scene.overrideMaterial = previousOverride;
+      renderer.autoClear = previousAutoClear;
+      renderer.setClearColor(this.clearColor, previousAlpha);
+      renderer.setRenderTarget(previousTarget);
+    }
+
+    const perspective = camera as THREE.PerspectiveCamera;
+    const u = this.material.uniforms;
+    u.uCameraNear.value = perspective.near ?? 0.05;
+    u.uCameraFar.value = perspective.far ?? 180;
+    return true;
+  }
+
   public render(
     renderer: THREE.WebGLRenderer,
     inputBuffer: THREE.WebGLRenderTarget,
@@ -147,14 +202,32 @@ class PaintPass implements ComposerPass {
     this.now.ink += (this.target.ink - this.now.ink) * k;
     this.now.tint += (this.target.tint - this.now.tint) * k;
     this.now.tooth += (this.target.tooth - this.now.tooth) * k;
+    this.now.outlineWidth += (this.target.outlineWidth - this.now.outlineWidth) * k;
+    this.now.depthInk += (this.target.depthInk - this.now.depthInk) * k;
+    this.now.normalInk += (this.target.normalInk - this.now.normalInk) * k;
+    this.now.outlineStrength += (this.target.outlineStrength - this.now.outlineStrength) * k;
+    this.now.normalScale += (this.target.normalScale - this.now.normalScale) * k;
+    this.now.protectSignals += (this.target.protectSignals - this.now.protectSignals) * k;
+    this.now.inkColor = [
+      this.now.inkColor[0] + (this.target.inkColor[0] - this.now.inkColor[0]) * k,
+      this.now.inkColor[1] + (this.target.inkColor[1] - this.now.inkColor[1]) * k,
+      this.now.inkColor[2] + (this.target.inkColor[2] - this.now.inkColor[2]) * k,
+    ];
 
     const u = this.material.uniforms;
     u.tDiffuse.value = inputBuffer.texture;
+    u.uHasGeometry.value = this.renderGeometry(renderer) ? 1 : 0;
     u.uRadius.value = this.now.radius;
     u.uStrength.value = this.now.strength;
     u.uInk.value = this.now.ink;
     u.uTint.value = this.now.tint;
     u.uTooth.value = this.now.tooth;
+    u.uOutlineWidth.value = this.now.outlineWidth;
+    u.uDepthInk.value = this.now.depthInk;
+    u.uNormalInk.value = this.now.normalInk;
+    u.uOutlineStrength.value = this.now.outlineStrength;
+    u.uProtectSignals.value = this.now.protectSignals;
+    (u.uInkColor.value as THREE.Color).setRGB(...this.now.inkColor);
     u.uEncode.value = this.renderToScreen ? 1 : 0;
 
     renderer.setRenderTarget(this.renderToScreen ? null : outputBuffer);
@@ -164,6 +237,8 @@ class PaintPass implements ComposerPass {
   public dispose(): void {
     this.quad.geometry.dispose();
     this.material.dispose();
+    this.normalMaterial.dispose();
+    this.normalTarget.dispose();
   }
 }
 
@@ -179,7 +254,7 @@ class OmniscientPaintEffect extends ENGINE.IPostProcessEffect<PaintConfig> {
   public readonly pass = new PaintPass();
 
   public override getDefaultConfig(): PaintConfig {
-    return { type: this.type, enabled: true, order: this.order, look: 'painted' };
+    return { type: this.type, enabled: true, order: this.order, look: 'off' };
   }
 
   public override createWebGLEffect(): ENGINE.WebGLEffectData {
@@ -202,6 +277,7 @@ interface PaintHost {
 
 let effect: OmniscientPaintEffect | null = null;
 let mounted = false;
+let activeLook: PaintLookName = 'off';
 
 /** Mount the pass. Returns false until the pipeline exists - same contract as installRetro. */
 export function installPaint(post: PaintHost): boolean {
@@ -209,11 +285,24 @@ export function installPaint(post: PaintHost): boolean {
   effect ??= new OmniscientPaintEffect();
   post.registerEffect(effect as unknown as ENGINE.IPostProcessEffect);
   mounted = post.getEffect('omniscient-paint') !== null;
+  if (mounted) {
+    effect.pass.setLook(PAINT_LOOKS[activeLook], true);
+    effect.pass.enabled = activeLook !== 'off';
+  }
   return mounted;
 }
 
 export function setPaintLook(name: PaintLookName, immediate = false): void {
-  effect?.pass.setLook(PAINT_LOOKS[name], immediate);
+  activeLook = name;
+  if (!effect) return;
+  if (name === 'off') {
+    // Other missions should not pay for a neutral full-screen blit.
+    effect.pass.setLook(PAINT_LOOKS.off, true);
+    effect.pass.enabled = false;
+    return;
+  }
+  effect.pass.enabled = true;
+  effect.pass.setLook(PAINT_LOOKS[name], immediate);
 }
 
 /** The live values, for the F8 panel. Null before the pass is mounted. */

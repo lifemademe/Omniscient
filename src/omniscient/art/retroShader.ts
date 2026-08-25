@@ -86,6 +86,27 @@ export const RETRO_LOOKS = {
     saturation: 1.16,
     tint: new THREE.Color(1, 1, 1),
   },
+  /**
+   * Warehouse cel prototype.
+   *
+   * The picture is still a remote feed, but the raster sits behind the line art instead of
+   * competing with it: near-native resolution, a shallow scan trough, no temporal roll, and
+   * only enough convergence error to keep the surveillance fiction alive.
+   */
+  warehouseCel: {
+    pixel: 1.18,
+    curve: 0.003,
+    aberration: 0.00045,
+    scanline: 0.032,
+    scanPitch: 4,
+    grille: 0.06,
+    bleed: 0.05,
+    vignette: 0.17,
+    roll: 0,
+    flicker: 0,
+    saturation: 1.07,
+    tint: new THREE.Color(0.985, 1.0, 1.025),
+  },
   console: {
     /*
      * 3, the same as everywhere else, and it took removing a piece of the menu to get here.

@@ -37,13 +37,14 @@ import {
   saveGame,
 } from './session/persistence.js';
 import { installCursor, setCursorVisible } from './art/cursor.js';
-import { installRetro, retroAcquire, setRetroLook, setRetroScreenQuad } from './art/retro.js';
+import { getRetroLookName, installRetro, retroAcquire, setRetroLook, setRetroScreenQuad } from './art/retro.js';
 import { projectScreenQuad } from './art/screenQuad.js';
 import { setRoomTone, stopRoomTone } from './audio/RoomTone.js';
 import { showBoot } from './link/BootScreen.js';
 
 import type { BootScreen } from './link/BootScreen.js';
 import { installPaint, setPaintLook } from './art/paintPass.js';
+import type { RetroLookName } from './art/retro.js';
 import { ScanTargets } from './link/ScanTargets.js';
 import { MowerPlot } from './link/MowerPlot.js';
 import { playM4SSHandoff } from './link/M4SSHandoff.js';
@@ -496,6 +497,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private warehouse: WarehouseRig | null = null;
   private warehouseFog: { near: number; far: number } | null = null;
   private warehouseArchiveDisplay: ENGINE.SceneNode | null = null;
+  private warehouseCelEnabled = true;
+  private warehousePreviousRetroLook: RetroLookName = 'console';
   private readonly cameraPosition = new THREE.Vector3(0.5, 1.35, 1.5);
   private readonly cameraTarget = new THREE.Vector3(0, 0.85, -0.5);
 
@@ -855,6 +858,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
       };
       window.addEventListener('keydown', openWarehouse);
       this.onWarehouseDevKey = openWarehouse;
+      const toggleWarehouseCel = (event: KeyboardEvent): void => {
+        if (event.code !== 'F10' || !this.warehouse) return;
+        event.preventDefault();
+        this.warehouseCelEnabled = !this.warehouseCelEnabled;
+        this.warehouse.setCelVisualsEnabled(this.warehouseCelEnabled);
+        setPaintLook(this.warehouseCelEnabled ? 'warehouseCel' : 'off');
+        setRetroLook(this.warehouseCelEnabled ? 'warehouseCel' : this.warehousePreviousRetroLook);
+      };
+      window.addEventListener('keydown', toggleWarehouseCel);
+      this.onWarehouseCelKey = toggleWarehouseCel;
       /*
        * Any click in an editor session starts the audio context.
        *
@@ -2851,6 +2864,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     setCursorVisible(false);
     audio.play('connect');
     audio.setOnAir(true);
+    this.warehousePreviousRetroLook = getRetroLookName();
 
     this.warehouseFog = this.fog
       ? { near: this.fog.getFogNear(), far: this.fog.getFogFar() }
@@ -2874,6 +2888,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
     rig.onExit = (result) => this.exitWarehouse(result);
     this.add(rig);
     this.warehouse = rig;
+    rig.setCelVisualsEnabled(this.warehouseCelEnabled, false);
+    setPaintLook(this.warehouseCelEnabled ? 'warehouseCel' : 'off', true);
+    setRetroLook(this.warehouseCelEnabled ? 'warehouseCel' : this.warehousePreviousRetroLook, true);
     rig.mount();
   }
 
@@ -2883,6 +2900,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.warehouse.unmount();
     this.warehouse.removeFromParent();
     this.warehouse = null;
+    setPaintLook('off');
+    setRetroLook(this.warehousePreviousRetroLook);
     if (this.warehouseFog && this.fog) {
       // Colour too, not just the distances - see mountScene: a room that retunes the global
       // fog owes the next room every part of it back, and the colour was the part this
@@ -3553,6 +3572,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private disposeSceneJump: (() => void) | null = null;
   /** Editor-only F9 route to the runtime bonus world; never registered in published builds. */
   private onWarehouseDevKey: ((event: KeyboardEvent) => void) | null = null;
+  /** Editor-only F10 A/B for the warehouse cel-shaded prototype. */
+  private onWarehouseCelKey: ((event: KeyboardEvent) => void) | null = null;
   /** Editor-only: starts the audio context on the first click. See where it is registered. */
   private onDevAudioUnlock: (() => void) | null = null;
 
@@ -4145,23 +4166,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
        */
       if (this.retroMounted) setRetroLook('console', true);
     }
-    /*
-     * The painterly pass, built and not mounted.
-     *
-     * Judged in the game twice and rejected twice - as smudged textures in its per-material
-     * form, and as not what this game is in its Kuwahara form. The look this project is
-     * actually going for is the pixel/PS1 one the CRT pass gives it, and a painterly filter
-     * over pixel art is two art directions arguing rather than either of them working.
-     *
-     * Not mounted rather than mounted-at-zero, because a zeroed pass is still a full-screen
-     * blit and still a second entry in the composer - and it was adding a second pass that
-     * detonated the latent getDepthTexture fault in the CRT. Nothing gained, a rebuild
-     * risked. Flip this to true to look at it again; the F8 sliders come back with it.
-     */
-    const PAINT_PASS = false;
+    /* Warehouse cel treatment. Other missions keep the pass in its neutral off preset. */
+    const PAINT_PASS = true;
     if (PAINT_PASS && !this.paintMounted && this.post) {
       this.paintMounted = installPaint(this.post);
-      if (this.paintMounted) setPaintLook('painted', true);
+      if (this.paintMounted) {
+        setPaintLook(this.warehouse && this.warehouseCelEnabled ? 'warehouseCel' : 'off', true);
+      }
     }
 
     this.cameraTweener.update(deltaTime);
@@ -4299,6 +4310,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.onM4SSKey = null;
     if (this.onWarehouseDevKey) window.removeEventListener('keydown', this.onWarehouseDevKey);
     this.onWarehouseDevKey = null;
+    if (this.onWarehouseCelKey) window.removeEventListener('keydown', this.onWarehouseCelKey);
+    this.onWarehouseCelKey = null;
     if (this.onDevAudioUnlock) window.removeEventListener('pointerdown', this.onDevAudioUnlock);
     this.onDevAudioUnlock = null;
     /*

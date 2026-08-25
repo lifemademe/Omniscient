@@ -21,9 +21,11 @@ import { WarehouseAutomation } from './WarehouseAutomation.js';
 import { WarehouseDaylight } from './WarehouseDaylight.js';
 import { WarehouseSetDressing } from './WarehouseSetDressing.js';
 import { MEZZANINE_BOUNDS, WarehouseFacilities } from './WarehouseFacilities.js';
+import { WarehouseTransferDock } from './WarehouseTransferDock.js';
 
 import type {
   WarehouseDoorId,
+  WarehouseDoorDockState,
   WarehouseDoorStatus,
   WarehouseLightingMode,
   WarehouseSecurityZoneId,
@@ -56,7 +58,6 @@ const DRUM_BAND = new THREE.MeshStandardMaterial({ color: '#8d949a', roughness: 
 const FLOOR = new THREE.MeshStandardMaterial({ color: '#3d3b38', roughness: 0.91, metalness: 0.04 });
 const AMBER = new THREE.MeshStandardMaterial({ color: '#8d6c31', emissive: '#39250b', emissiveIntensity: 0.55, roughness: 0.58 });
 const RED = new THREE.MeshStandardMaterial({ color: '#6e2d2d', emissive: '#2c0909', emissiveIntensity: 0.6, roughness: 0.62 });
-const GREEN = new THREE.MeshStandardMaterial({ color: '#315c42', emissive: '#102b18', emissiveIntensity: 0.45, roughness: 0.62 });
 const BELT = new THREE.MeshStandardMaterial({ color: '#151a19', roughness: 0.82, metalness: 0.25 });
 /* Softwood, and darker than the board it carries so a load reads as sitting on something. */
 const PALLET = new THREE.MeshStandardMaterial({ color: '#8a7248', roughness: 0.96 });
@@ -362,12 +363,10 @@ const PICK_LEVEL = 2;
 
 export class WarehouseEnvironment {
   public readonly root = ENGINE.SceneNode.create({ name: 'WarehouseEnvironment' });
-  public readonly stationPositions: Readonly<Record<'quarantine' | 'return' | 'hold', THREE.Vector3>> = {
-    quarantine: WAREHOUSE_LAYOUT.stations.quarantine.clone(),
-    return: WAREHOUSE_LAYOUT.stations.return.clone(),
+  public readonly stationPositions: Readonly<Record<'hold', THREE.Vector3>> = {
     hold: WAREHOUSE_LAYOUT.stations.hold.clone(),
   };
-  public readonly doorHandoffPositions: Readonly<Record<WarehouseDoorId, THREE.Vector3>> = {
+  public readonly doorDockPositions: Readonly<Record<WarehouseDoorId, THREE.Vector3>> = {
     'service-a': WAREHOUSE_DOORS['service-a'].handoffPosition.clone(),
     'service-b': WAREHOUSE_DOORS['service-b'].handoffPosition.clone(),
     'service-c': WAREHOUSE_DOORS['service-c'].handoffPosition.clone(),
@@ -381,9 +380,9 @@ export class WarehouseEnvironment {
   private readonly daylight = new WarehouseDaylight();
   private readonly automation = new WarehouseAutomation();
   private readonly serviceDoors = new Map<WarehouseDoorId, WarehouseServiceDoor>();
+  private readonly transferDocks = new Map<WarehouseDoorId, WarehouseTransferDock>();
   private duplicateAisleSigns: [ENGINE.MeshNode, ENGINE.MeshNode] | null = null;
   private inboundPackages: ENGINE.MeshNode[] = [];
-  private quarantineGate: ENGINE.MeshNode | null = null;
   private readonly securityGates = new Map<WarehouseSecurityZoneId, Array<{ node: ENGINE.MeshNode }>>();
   private readonly lockedSecurityZones = new Set<WarehouseSecurityZoneId>();
   private readonly workLights: ENGINE.PointLightNode[] = [];
@@ -395,6 +394,7 @@ export class WarehouseEnvironment {
   private fixtureLensMaterial: THREE.MeshStandardMaterial | null = null;
   private lightingMode: WarehouseLightingMode = 'normal';
   private emergencyLevel = 0;
+  private celStyleEnabled = false;
   private rearDoorTarget = 0;
   private clock = 0;
   private conveyorRunning = false;
@@ -713,40 +713,16 @@ export class WarehouseEnvironment {
   }
 
   private buildStations(): void {
-    const stationData: Array<['quarantine' | 'return' | 'hold', string, THREE.Material, number]> = [
-      ['quarantine', 'QUARANTINE', RED, Math.PI],
-      ['return', 'RETURN', AMBER, Math.PI],
-      ['hold', 'HOLD BAY', AMBER, -Math.PI / 2],
-    ];
-    for (const [id, label, material, facing] of stationData) {
-      const position = this.stationPositions[id];
-      const frame = mesh(`Station-${id}`, new THREE.BoxGeometry(id === 'hold' ? 3.4 : 4.2, 0.35, 2.6), material, position.clone().setY(0.15));
-      const plate = mesh(`StationLabel-${id}`, createWarehouseLabelGeometry(id === 'hold' ? 2.4 : 3.1, 0.52), labelMaterial(label, id === 'quarantine' ? '#e49a84' : '#d8ffb0'), new THREE.Vector3(position.x, 0.332, position.z));
-      plate.rotation.set(-Math.PI / 2, 0, facing);
-      this.root.add(frame, plate);
-      if (id === 'quarantine') {
-        for (const dx of [-2.05, 2.05]) {
-          this.root.add(mesh('QuarantinePost', new THREE.BoxGeometry(0.09, 2.8, 0.09), STEEL, new THREE.Vector3(position.x + dx, 1.4, position.z)));
-        }
-        const gate = mesh('QuarantineGate', new THREE.BoxGeometry(4.1, 0.1, 0.1), RED, new THREE.Vector3(position.x, 2.75, position.z - 1.15));
-        gate.scale.x = 0;
-        this.quarantineGate = gate;
-        this.root.add(gate);
-      }
-    }
+    const position = this.stationPositions.hold;
+    const frame = mesh('Station-hold', new THREE.BoxGeometry(3.4, 0.35, 2.6), AMBER, position.clone().setY(0.15));
+    const plate = mesh('StationLabel-hold', createWarehouseLabelGeometry(2.4, 0.52), labelMaterial('HOLD BAY', '#d8ffb0'), new THREE.Vector3(position.x, 0.332, position.z));
+    plate.rotation.set(-Math.PI / 2, 0, -Math.PI / 2);
+    this.root.add(frame, plate);
     for (const id of WAREHOUSE_DOOR_IDS) {
       const layout = WAREHOUSE_DOORS[id];
-      const position = this.doorHandoffPositions[id];
-      const platform = mesh(`DoorHandoff-${layout.letter}`, new THREE.BoxGeometry(3.35, 0.28, 2.5), GREEN, position.clone().setY(0.14));
-      const plate = mesh(
-        `DoorHandoffLabel-${layout.letter}`,
-        createWarehouseLabelGeometry(2.65, 0.5),
-        labelMaterial(`${layout.letter} RELEASE`, '#d8ffb0'),
-        new THREE.Vector3(position.x, 0.31, position.z)
-      );
-      const facing = id === 'service-a' ? Math.PI / 2 : id === 'service-b' ? Math.PI : -Math.PI / 2;
-      plate.rotation.set(-Math.PI / 2, 0, facing);
-      this.root.add(platform, plate);
+      const dock = new WarehouseTransferDock(layout);
+      this.transferDocks.set(id, dock);
+      this.root.add(dock.root);
     }
   }
 
@@ -1218,14 +1194,11 @@ export class WarehouseEnvironment {
     }
 
     /*
-     * Hatching at the stations: the one floor marking that means "do not put anything here",
-     * and the three places in this room where that is true.
+     * Hatching at the personnel hold bay. Cargo dispositions moved to the three secure
+     * transfer docks, so their former quarantine and return footprints must not survive as
+     * misleading floor graphics.
      */
-    for (const station of [
-      WAREHOUSE_LAYOUT.stations.quarantine,
-      WAREHOUSE_LAYOUT.stations.return,
-      WAREHOUSE_LAYOUT.stations.hold,
-    ]) {
+    for (const station of [WAREHOUSE_LAYOUT.stations.hold]) {
       for (let bar = -2; bar <= 2; bar++) {
         const hatch = new THREE.PlaneGeometry(0.16, 2.6);
         hatch.rotateX(-Math.PI / 2);
@@ -1357,9 +1330,17 @@ export class WarehouseEnvironment {
      * honest collision while clearing them becomes flight.
      */
     if (position.y < 6.55) {
-      for (const [aisle, rackX] of WAREHOUSE_LAYOUT.rack.centers.entries()) {
+      for (const [aisleIndex, rackX] of WAREHOUSE_LAYOUT.rack.centers.entries()) {
         if (position.z < WAREHOUSE_LAYOUT.rack.minCollisionZ || position.z > WAREHOUSE_LAYOUT.rack.maxCollisionZ) continue;
         if (Math.abs(position.x - rackX) >= WAREHOUSE_LAYOUT.rack.halfCollisionX) continue;
+        /*
+         * `emptyBays` is keyed with the player-facing aisle numbers 1-5. Array.entries()
+         * yields 0-4; passing that index directly meant every visible opening queried the
+         * neighbouring rack's occupancy (and aisle 1 queried the nonexistent aisle 0).
+         * Keep the conversion at the call site so canPassThroughRack has one numbering
+         * contract: the same aisle number used by signs, packages, and the rack loader.
+         */
+        const aisle = aisleIndex + 1;
         if (this.canPassThroughRack(aisle, position)) continue;
         position.copy(previous);
         return true;
@@ -1387,15 +1368,17 @@ export class WarehouseEnvironment {
       position.copy(previous);
       return true;
     }
-    if (position.y < 2.15) {
-      for (const station of Object.values(this.stationPositions)) {
-        const dx = position.x - station.x;
-        const dz = position.z - station.z;
-        if (dx * dx + dz * dz >= 2.4) continue;
-        position.copy(previous);
-        return true;
-      }
-    }
+    /*
+     * All three station rectangles are 35cm floor pads. The previous quarantine test was a
+     * 3.1m-wide, 2.15m-tall invisible cylinder over the centre of its pad, so it still acted
+     * like a solid crate after return and hold were fixed. Cargo routing is distance-based;
+     * the pad itself needs no blocker.
+     *
+     * Only the geometry that rises into the flight volume collides now: the two 2.8m posts,
+     * and the horizontal gate after quarantine seals. These dimensions include the drone's
+     * rotor envelope, so the machine cannot shave through steel while the open middle remains
+     * a clear aerial route.
+     */
     for (const id of this.lockedSecurityZones) {
       for (const gate of this.securityGates.get(id) ?? []) {
         gate.node.updateMatrixWorld(true);
@@ -1479,6 +1462,11 @@ export class WarehouseEnvironment {
     }
   }
 
+  public setCelStyleEnabled(enabled: boolean): void {
+    this.celStyleEnabled = enabled;
+    this.daylight.setCelStyleEnabled(enabled);
+  }
+
   public getLightingMode(): WarehouseLightingMode {
     return this.lightingMode;
   }
@@ -1492,13 +1480,13 @@ export class WarehouseEnvironment {
     this.lockedSecurityZones.clear();
   }
 
-  public nearestDoorHandoff(position: THREE.Vector3): { id: WarehouseDoorId; distance: number } {
+  public nearestDoorDock(position: THREE.Vector3): { id: WarehouseDoorId; distance: number } {
     let nearest: { id: WarehouseDoorId; distance: number } = {
       id: WAREHOUSE_DOOR_IDS[0],
       distance: Number.POSITIVE_INFINITY,
     };
     for (const id of WAREHOUSE_DOOR_IDS) {
-      const distance = position.distanceTo(this.doorHandoffPositions[id]);
+      const distance = position.distanceTo(this.doorDockPositions[id]);
       if (distance < nearest.distance) nearest = { id, distance };
     }
     return nearest;
@@ -1530,8 +1518,28 @@ export class WarehouseEnvironment {
     }
   }
 
-  public sealQuarantine(): void {
-    if (this.quarantineGate) this.quarantineGate.scale.x = 1;
+  public configureTransferDock(id: WarehouseDoorId, capacity: number): void {
+    this.transferDocks.get(id)?.reset(capacity);
+  }
+
+  public resetTransferDocks(): void {
+    for (const dock of this.transferDocks.values()) dock.reset();
+  }
+
+  public setTransferDockState(id: WarehouseDoorId, state: WarehouseDoorDockState): void {
+    this.transferDocks.get(id)?.setState(state);
+  }
+
+  public transferDockCapacity(id: WarehouseDoorId): number {
+    return this.transferDocks.get(id)?.getCapacity() ?? 1;
+  }
+
+  public transferDockState(id: WarehouseDoorId): WarehouseDoorDockState {
+    return this.transferDocks.get(id)?.getState() ?? 'empty';
+  }
+
+  public transferDockSlot(id: WarehouseDoorId, slot: number): THREE.Vector3 {
+    return this.transferDocks.get(id)?.slotPosition(slot) ?? this.doorDockPositions[id].clone();
   }
 
   public tick(deltaTime: number): void {
@@ -1544,11 +1552,16 @@ export class WarehouseEnvironment {
     const basePulse = contained || reducedMotion ? 1 : 0.64 + Math.sin(this.clock * 4.1) * 0.22;
     // Rebased on the new rig. The ratios are what the emergency mode is about, not the
     // absolute numbers, so both ends move together.
-    if (this.ambientLight) this.ambientLight.intensity = THREE.MathUtils.lerp(WAREHOUSE_SKY_FILL, 0.5, emergency);
-    if (this.moonLight) this.moonLight.intensity = THREE.MathUtils.lerp(1.7, 1.05, emergency);
-    if (this.frontLight) this.frontLight.intensity = THREE.MathUtils.lerp(35, 4, emergency);
-    if (this.fixtureLensMaterial) this.fixtureLensMaterial.emissiveIntensity = THREE.MathUtils.lerp(1.15, 0.1, emergency);
-    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(54, 4.6, emergency);
+    const skyFill = this.celStyleEnabled ? 1.28 : WAREHOUSE_SKY_FILL;
+    const moon = this.celStyleEnabled ? 2.05 : 1.7;
+    const front = this.celStyleEnabled ? 28 : 35;
+    const fixture = this.celStyleEnabled ? 0.92 : 1.15;
+    const work = this.celStyleEnabled ? 42 : 54;
+    if (this.ambientLight) this.ambientLight.intensity = THREE.MathUtils.lerp(skyFill, 0.5, emergency);
+    if (this.moonLight) this.moonLight.intensity = THREE.MathUtils.lerp(moon, 1.05, emergency);
+    if (this.frontLight) this.frontLight.intensity = THREE.MathUtils.lerp(front, 4, emergency);
+    if (this.fixtureLensMaterial) this.fixtureLensMaterial.emissiveIntensity = THREE.MathUtils.lerp(fixture, 0.1, emergency);
+    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(work, 4.6, emergency);
     for (const [index, material] of this.emergencyMaterials.entries()) {
       const sequence = contained || reducedMotion ? 1 : 0.72 + Math.sin(this.clock * 2.5 - index * 0.8) * 0.28;
       material.emissiveIntensity = emergency * (1.2 + sequence * 3.8);
@@ -1563,6 +1576,7 @@ export class WarehouseEnvironment {
     this.daylight.tick(deltaTime, emergency, contained, reducedMotion);
     this.automation.tick(deltaTime, this.conveyorRunning, emergency, contained, reducedMotion);
     for (const door of this.serviceDoors.values()) door.tick(deltaTime);
+    for (const dock of this.transferDocks.values()) dock.tick(deltaTime);
     if (this.rearDoor) {
       this.rearDoor.position.y = THREE.MathUtils.damp(this.rearDoor.position.y, 3 + this.rearDoorTarget * 6.2, 2.6, deltaTime);
     }

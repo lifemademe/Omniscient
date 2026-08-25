@@ -69,8 +69,6 @@ export const WAREHOUSE_LAYOUT = {
     maxY: 8.35,
   },
   stations: {
-    quarantine: new THREE.Vector3(-7, 0, 24),
-    return: new THREE.Vector3(7, 0, 24),
     hold: new THREE.Vector3(20.2, 0, 19),
   },
   cradle: new THREE.Vector3(0, 0, 22),

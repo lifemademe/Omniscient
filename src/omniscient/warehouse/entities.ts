@@ -10,6 +10,12 @@ import type { RiggedContact } from '../view/riggedContact.js';
 import { createWarehouseLabelGeometry } from './labelGeometry.js';
 import type { GeneratedWarehouseCase, WarehouseDecision, WarehouseDoorId } from './types.js';
 
+export const WAREHOUSE_CARGO_SIZE = Object.freeze({ width: 0.86, height: 0.58, depth: 0.72 });
+export const WAREHOUSE_CARGO_HORIZONTAL_RADIUS = Math.hypot(
+  WAREHOUSE_CARGO_SIZE.width * 0.5,
+  WAREHOUSE_CARGO_SIZE.depth * 0.5
+);
+
 function makeLabel(text: string, colour = '#d8ffb0'): THREE.MeshBasicMaterial {
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -53,7 +59,11 @@ export class WarehouseCargoNode extends ENGINE.SceneNode {
     });
     const box = ENGINE.MeshNode.create({
       name: 'Carton',
-      geometry: new THREE.BoxGeometry(0.86, 0.58, 0.72),
+      geometry: new THREE.BoxGeometry(
+        WAREHOUSE_CARGO_SIZE.width,
+        WAREHOUSE_CARGO_SIZE.height,
+        WAREHOUSE_CARGO_SIZE.depth
+      ),
       material,
       castShadow: true,
       receiveShadow: true,
