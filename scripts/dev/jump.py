@@ -14,6 +14,7 @@ which means a re-hover before every click, not just the first.
 Tab order, top to bottom, is NOT the builder registration order:
   1 repair-shop  2 cleared-house  3 beacon-mast  4 seedling-tunnel
   5 flooded-cellar  6 night-door  7 mill-road  8 wire-city
+Tab 9 is the warehouse; `intro.py` reaches it by colour rather than by index.
 """
 import ctypes
 import ctypes.wintypes
@@ -26,7 +27,12 @@ u = ctypes.windll.user32
 u.SetProcessDPIAware()
 
 LEFTDOWN, LEFTUP = 0x0002, 0x0004
-TAB1_Y, PITCH, TAB_X = 666, 33, 335
+# 648, not the 666 this held for months. The strip is `top:50%; translateY(-50%)`, so it is
+# vertically CENTRED: adding the warehouse 'W' tab as a ninth button moved every tab up by
+# half a pitch. Measured off a hover capture rather than recomputed, and it will move again
+# the next time a tab is added - so measure, do not trust this number after an edit to
+# SceneJump's tab list.
+TAB1_Y, PITCH, TAB_X = 648, 33, 335
 HOVER = (347, 780)
 
 index = int(sys.argv[1]) - 1

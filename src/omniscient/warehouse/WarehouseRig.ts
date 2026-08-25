@@ -63,6 +63,16 @@ const THIRD_PERSON_ARM = 2.8;
 const THIRD_PERSON_HEIGHT = 1.25;
 const THIRD_PERSON_DISTANCE = Math.hypot(THIRD_PERSON_ARM, THIRD_PERSON_HEIGHT);
 const TIGHT_CAMERA_THRESHOLD = 0.34;
+/**
+ * How long each door camera holds during the opening sweep.
+ *
+ * 1.6s is chosen so a shot can be read rather than merely registered: the eye needs roughly
+ * a third of a second to land, and the caption underneath is four words. The old intro ran
+ * two of its three shots at 1.3s and 1.1s, which is why the middle one could be a featureless
+ * brown wall for a week without anybody being able to say what it had shown them.
+ */
+const INTRO_BEAT_SECONDS = 1.6;
+const INTRO_HANDOFF_SECONDS = INTRO_BEAT_SECONDS * WAREHOUSE_DOOR_IDS.length;
 /** Fallback billboard facing for the feedback rings before the camera exists. */
 const FEEDBACK_FACING = new THREE.Quaternion();
 /** Scratch axes for the lens kick, so the recoil allocates nothing per frame. */
@@ -92,7 +102,7 @@ function emptyEvidence(): WarehouseEvidenceState {
   return { located: false, visitor: false, cargo: false, action: false, authorization: false, tamper: false };
 }
 
-function isTextEntry(target: EventTarget | null): boolean {
+function isTextEntry(target: EventTarget | null): target is HTMLElement {
   return target instanceof HTMLElement && (
     target.matches('input, textarea, select') || target.isContentEditable
   );
@@ -114,14 +124,38 @@ class WarehouseInput extends ENGINE.BaseInputHandler {
   }
 
   public override handleKeyDown(event: KeyboardEvent): boolean {
-    if (isTextEntry(event.target)) return false;
+    if (isTextEntry(event.target)) {
+      /*
+       * Typing owns the keyboard, with two exceptions, and they are the two keys that mean
+       * "stop typing".
+       *
+       * TAB is the mode key now, so having the transmit field eat it made the console a
+       * room with the door painted on: click the field to reply, and the one key that gets
+       * you back to the drone silently does nothing. Reported as TAB being unreliable, and
+       * it was - but only after the player had done the thing the console exists for.
+       *
+       * ESCAPE steps out of the field rather than out of the mission. A second press, now
+       * that focus is back on the game, exits as it always did.
+       */
+      if (event.code === 'Tab') {
+        event.preventDefault();
+        event.target.blur();
+        this.rig.toggleConsole();
+        return true;
+      }
+      if (event.code === 'Escape') {
+        event.target.blur();
+        return true;
+      }
+      return false;
+    }
     // Q and E join the repeat list: they nudge a continuous height now rather than stepping
     // between three bands, so holding one should climb rather than move you 85cm and stop.
     if (event.repeat && !['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyQ', 'KeyE'].includes(event.code)) return false;
     this.held.add(event.code);
     switch (event.code) {
       case 'Escape': this.rig.requestExit(); return true;
-      case 'Tab': event.preventDefault(); this.rig.cycleView(); return true;
+      case 'Tab': event.preventDefault(); this.rig.toggleConsole(); return true;
       case 'KeyC': this.rig.cycleDoor(1); return true;
       case 'KeyF': this.rig.toggleGrip(); return true;
       case 'KeyR': this.rig.recover(); return true;
@@ -191,7 +225,7 @@ class WarehouseInput extends ENGINE.BaseInputHandler {
   public override handleGamepadButtonDown(_gamepadIndex: number, buttonIndex: number): boolean {
     if (buttonIndex === 0) this.rig.scan();
     else if (buttonIndex === 1) this.rig.toggleGrip();
-    else if (buttonIndex === 3) this.rig.cycleView();
+    else if (buttonIndex === 3) this.rig.toggleConsole();
     else if (buttonIndex === 2) this.rig.recover();
     else if (buttonIndex === 4) this.rig.changeAltitude(-1);
     else if (buttonIndex === 5) this.rig.changeAltitude(1);
@@ -339,7 +373,19 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private inboundTimer = -1;
   private inboundOpened = false;
   private bellReminder = -1;
-  private handoff = 4.8;
+  private handoff = INTRO_HANDOFF_SECONDS;
+  /** Which door of the opening sweep is on screen, or -1 before it starts. */
+  private introBeat = -1;
+  /** The door selection the sweep borrowed, handed back when control passes to the drone. */
+  private introReturnDoor: WarehouseDoorId | null = null;
+  private introSweepEnabled = false;
+  /**
+   * Which shot the last frame was composed from, so a CUT can be told from a MOVE.
+   *
+   * Not simply `view`: leaving a pursuit or a containment response returns to a view that
+   * never changed, and that is still a cut.
+   */
+  private lastShot = '';
   private finished = false;
   private savedPost: { tone: unknown; bloom: unknown } | null = null;
   /** The engine's default fallback camera, held across the mount. See keepActive. */
@@ -487,7 +533,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.hud.setTools(this.tools, this.activeTool);
     this.hud.setRecords(loadWarehouseSave().archiveRecords);
     this.hud.setControlsVisible(!loadWarehouseSave().tutorialComplete);
-    this.handoff = getAccessibilityPreferences().reducedMotion ? 0.2 : 4.8;
+    /*
+     * Reduced motion gets no sweep at all, rather than a compressed one. Three cuts in a
+     * fifth of a second is worse than none: it is the same three camera jumps, delivered
+     * faster, which is exactly the thing the preference asks us not to do.
+     */
+    this.introSweepEnabled = !getAccessibilityPreferences().reducedMotion;
+    this.introBeat = -1;
+    this.introReturnDoor = null;
+    this.handoff = this.introSweepEnabled ? INTRO_HANDOFF_SECONDS : 0.2;
     this.hud.setView(this.view);
     this.hud.setOpticalAim(false);
     this.syncPointerMode();
@@ -1267,37 +1321,78 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.hud?.flash('SERVICE RECOVERY COMPLETE // +12 SECONDS', 2.2);
   }
 
-  public cycleView(): void {
-    if (this.isCinematicActive()) return;
-    this.setOpticalAim(false);
-    this.view = this.view === 'drone' ? 'cctv' : this.view === 'cctv' ? 'console' : 'drone';
-    this.hud?.setView(this.view);
-    this.hud?.flash(`${this.view.toUpperCase()} VIEW`, 1.1);
+  /** Move to a view and bring the HUD and the pointer with it. */
+  private applyView(view: WarehouseView): void {
+    this.view = view;
+    this.hud?.setView(view);
     this.syncPointerMode();
-    if (this.view === 'cctv') {
-      if (this.isBreachCase()) this.inspectSelectedZone();
-      else this.inspectSelectedDoor();
-    }
   }
 
+  /**
+   * TAB: the console, on or off.
+   *
+   * ## Why this is a toggle and not a cycle
+   *
+   * It used to run `drone -> cctv -> console -> drone`, one key for three views, and the
+   * cost of that was reported as a question nobody should have to ask: "which button do I
+   * press to get back to my drone?" There was no answer, because the answer depended on
+   * where you were standing - two presses from the drone to the console, one press back,
+   * two presses from a camera. A cycle makes every transition cost a different, invisible
+   * number of presses, and the player has to hold the ring in their head to plan a move.
+   *
+   * There are really two questions being asked, and they are independent: am I flying or
+   * talking, and which camera am I watching. So they get a key each. TAB owns the first -
+   * one press, either direction, from anywhere. `cycleDoor` owns the second.
+   *
+   * From a door camera TAB goes to the console rather than the drone, which keeps the rule
+   * simple: TAB always means "the console, or away from it". Getting back to the drone from
+   * a camera is C's job, because C is the key that put you there.
+   */
+  public toggleConsole(): void {
+    if (this.isCinematicActive()) return;
+    this.setOpticalAim(false);
+    const next: WarehouseView = this.view === 'console' ? 'drone' : 'console';
+    this.applyView(next);
+    this.sound.play('camera');
+    this.hud?.flash(next === 'console' ? 'CONSOLE // RECORDS AND CHAT' : 'DRONE 07 // LIVE', 1.1);
+  }
+
+  /**
+   * C: step through the feeds, with the drone as the last stop.
+   *
+   * The ring is the three service cameras and then the drone - A, B, C, drone, A - so the
+   * key that takes you out to the doors is also the key that brings you home, and holding C
+   * walks the whole loop back to where it started. Before this it cycled the three cameras
+   * forever with no exit, which is why leaving a camera meant reaching for TAB and pressing
+   * it a number of times that depended on which view you had left.
+   *
+   * The drone counts as a position in the ring rather than a special case, so stepping
+   * backwards off door A lands on the drone exactly as stepping forwards off door C does.
+   * The breach case rings its four security zones the same way.
+   */
   public cycleDoor(direction: number): void {
     if (this.isCinematicActive() || this.finished) return;
-    if (this.isBreachCase()) {
-      const current = Math.max(0, WAREHOUSE_SECURITY_ZONE_IDS.indexOf(this.selectedZone));
-      const step = Math.sign(direction) || 1;
-      this.selectZone(
-        WAREHOUSE_SECURITY_ZONE_IDS[(current + WAREHOUSE_SECURITY_ZONE_IDS.length + step) % WAREHOUSE_SECURITY_ZONE_IDS.length]
-      );
+    const step = Math.sign(direction) || 1;
+    const ring = this.isBreachCase() ? WAREHOUSE_SECURITY_ZONE_IDS : WAREHOUSE_DOOR_IDS;
+    // Anywhere that is not a camera counts as the drone slot: pressing C from the console
+    // should reach the first feed, not do nothing.
+    const current = this.view === 'cctv'
+      ? Math.max(0, (ring as readonly string[]).indexOf(this.isBreachCase() ? this.selectedZone : this.selectedDoor))
+      : ring.length;
+    const next = (current + step + ring.length + 1) % (ring.length + 1);
+    if (next === ring.length) {
+      this.setOpticalAim(false);
+      this.applyView('drone');
+      this.sound.play('camera');
+      this.hud?.flash('DRONE 07 // LIVE', 1.1);
       return;
     }
-    if (this.view !== 'cctv') {
-      this.view = 'cctv';
-      this.hud?.setView(this.view);
-      this.syncPointerMode();
+    if (this.isBreachCase()) {
+      this.selectZone(WAREHOUSE_SECURITY_ZONE_IDS[next]);
+      return;
     }
-    const current = Math.max(0, WAREHOUSE_DOOR_IDS.indexOf(this.selectedDoor));
-    const step = Math.sign(direction) || 1;
-    this.selectedDoor = WAREHOUSE_DOOR_IDS[(current + WAREHOUSE_DOOR_IDS.length + step) % WAREHOUSE_DOOR_IDS.length];
+    this.selectedDoor = WAREHOUSE_DOOR_IDS[next];
+    if (this.view !== 'cctv') this.applyView('cctv');
     this.sound.play('camera');
     this.inspectSelectedDoor();
   }
@@ -1390,6 +1485,28 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.hud?.setView(this.view);
     this.hud?.flash('RECORDED EVENT // PRE-AUTHORIZATION HATCH TEST', 2.1);
     this.syncPointerMode();
+  }
+
+  /**
+   * Step the opening sweep along the chip row.
+   *
+   * The sweep drives `selectedDoor` rather than holding a camera of its own, so the chip
+   * row, the feed caption and the shot all agree without any of them being told about the
+   * intro. It deliberately does NOT call `inspectSelectedDoor`: inspecting marks an empty
+   * door CLEAR, and an intro that clears two of the three doors on the way past has solved
+   * the mission before the player has touched anything.
+   */
+  private updateIntroSweep(): void {
+    if (!this.introSweepEnabled || this.handoff <= 0) return;
+    const last = WAREHOUSE_DOOR_IDS.length - 1;
+    const index = THREE.MathUtils.clamp(last - Math.floor(this.handoff / INTRO_BEAT_SECONDS), 0, last);
+    if (index === this.introBeat) return;
+    if (this.introReturnDoor === null) this.introReturnDoor = this.selectedDoor;
+    this.introBeat = index;
+    this.selectedDoor = WAREHOUSE_DOOR_IDS[index];
+    this.syncDoorHud();
+    this.sound.play('camera');
+    this.hud?.flash(`${this.doorLabel(this.selectedDoor)} // FEED LIVE`, 1.1);
   }
 
   private syncDoorHud(): void {
@@ -1630,7 +1747,13 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
 
   public controllerDecision(direction: 'up' | 'down' | 'left' | 'right'): void {
-    if (this.view === 'cctv' && (direction === 'left' || direction === 'right')) {
+    /*
+     * Left and right are the camera ring wherever a camera is the thing on screen, which
+     * now includes the drone - otherwise the pad lost its only route out to the doors when
+     * Y stopped cycling views. Verdicts keep left and right on the console, which is where
+     * a verdict is actually issued, and keep up and down everywhere.
+     */
+    if (this.view !== 'console' && (direction === 'left' || direction === 'right')) {
       this.cycleDoor(direction === 'right' ? 1 : -1);
       return;
     }
@@ -2605,6 +2728,18 @@ export class WarehouseRig extends ENGINE.SceneNode {
 
   private applyCamera(deltaTime = 0): void {
     if (!this.camera) return;
+    /*
+     * A cut is a cut. The chase camera damps toward its mark, which is right while flying
+     * and wrong the instant the shot changes: coming off door C the lens was at x -30,
+     * OUTSIDE the west wall, and the first fifth of a second of drone control was spent
+     * interpolating across the building - straight through the cladding, which renders as a
+     * pale wash filling the frame. Caught on the cut frame of a capture of the opening
+     * sweep, and it was never an intro bug: every TAB back to the drone did it, from
+     * wherever the camera it left happened to be standing.
+     */
+    const shot = this.containmentResponse ? 'containment' : this.pursuit ? 'pursuit' : this.view;
+    const snap = shot !== this.lastShot;
+    this.lastShot = shot;
     if (this.containmentResponse) {
       const pose = WAREHOUSE_SECURITY_ZONES[this.containmentResponse.zone].camera;
       this.droneVisual.visible = true;
@@ -2656,7 +2791,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
           this.cameraClearanceDistance(this.cameraAnchor, this.desiredCameraPosition),
           this.cameraBoundsDistance(this.cameraAnchor, this.desiredCameraPosition)
         );
-        if (!Number.isFinite(this.cameraArmDistance) || deltaTime <= 0) {
+        if (!Number.isFinite(this.cameraArmDistance) || deltaTime <= 0 || snap) {
           this.cameraArmDistance = availableDistance;
         } else if (this.cameraArmDistance > availableDistance) {
           // Retract immediately; letting interpolation cross a rack is what caused black frames.
@@ -2672,7 +2807,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
         this.cameraDirection.copy(this.desiredCameraPosition).sub(this.cameraAnchor).normalize();
         this.desiredCameraPosition.copy(this.cameraAnchor).addScaledVector(this.cameraDirection, this.cameraArmDistance);
         this.desiredCameraTarget.copy(this.drone.position).addScaledVector(forward, 2.4).add(new THREE.Vector3(0, -0.15, 0));
-        const blend = deltaTime > 0 ? 1 - Math.exp(-7.5 * deltaTime) : 1;
+        const blend = deltaTime > 0 && !snap ? 1 - Math.exp(-7.5 * deltaTime) : 1;
         this.cameraPosition.lerp(this.desiredCameraPosition, blend);
         // The lerp path can cross a rack even when both endpoints are clear, so clamp the
         // actual rendered position as well as the destination.
@@ -2702,9 +2837,28 @@ export class WarehouseRig extends ENGINE.SceneNode {
       }
     } else if (this.view === 'cctv') {
       this.droneVisual.visible = true;
-      if (this.handoff > 2.4 && this.handoff <= 3.5) {
-        this.cameraPosition.set(0, 5.2, -14.2);
-        this.cameraTarget.set(0, 1.8, -23.2);
+      if (this.handoff > 0) {
+        /*
+         * The opening sweep is the three door cameras, in order, and nothing else.
+         *
+         * It used to be door A, then a hardcoded pose at the rear dock, then the console.
+         * The dock shot was aimed at z -23.2 while the rear door sits at z -29 and the truck
+         * beyond that, so it framed six metres of empty apron: a brown expanse with a single
+         * beacon in it. It was caught by pulling frames out of a screen recording, and it is
+         * the same fault the door cameras themselves once had - a camera named after a thing
+         * it is not pointed at.
+         *
+         * Rather than re-aim a one-off pose, the intro now reuses the door poses themselves.
+         * Three things fall out of that. The shots are the ones
+         * `scripts/warehouse-cameras.ts` already fails the build over, so the intro cannot
+         * drift out of frame without the harness saying so. The player is shown the exact
+         * three feeds they spend the mission switching between, in the same order as the
+         * chip row underneath them. And there is no bespoke camera left in this file to rot.
+         */
+        const pose = WAREHOUSE_DOORS[this.selectedDoor].camera;
+        this.cameraPosition.copy(pose.position);
+        this.cameraTarget.copy(pose.target);
+        if (this.camera.getFOV() !== pose.fov) this.camera.setFOV(pose.fov);
       } else if (this.isBreachCase()) {
         const pose = WAREHOUSE_SECURITY_ZONES[this.selectedZone].camera;
         this.cameraPosition.copy(pose.position);
@@ -2907,20 +3061,19 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     if (this.handoff > 0) {
       this.handoff -= deltaTime;
-      if (this.handoff <= 3.5 && this.handoff + deltaTime > 3.5) {
-        this.hud?.flash('REAR DOCK CAMERA ACQUIRED', 1.2);
-      }
-      if (this.handoff <= 2.4 && this.handoff + deltaTime > 2.4) {
-        this.view = 'console';
-        this.hud?.setView(this.view);
-        this.syncPointerMode();
-        this.hud?.flash('MANIFESTS SYNCHRONIZED // AISLES MAPPED', 1.2);
-      }
-      if (this.handoff <= 1.2 && this.handoff + deltaTime > 1.2) this.hud?.flash('DRONE CONTROL PASSED', 1.4);
+      this.updateIntroSweep();
       if (this.handoff <= 0) {
-        this.view = 'drone';
-        this.hud?.setView(this.view);
-        this.syncPointerMode();
+        // Hand the operator back the door `beginCurrent` chose. The sweep borrowed the
+        // selection to drive the shots, and that choice is load-bearing: it is deliberately
+        // NOT the visitor's door, so the player has to look for them. Ending the intro on
+        // service C would have quietly answered the mission's first question.
+        if (this.introReturnDoor) {
+          this.selectedDoor = this.introReturnDoor;
+          this.introReturnDoor = null;
+          this.syncDoorHud();
+        }
+        this.applyView('drone');
+        this.hud?.flash('THREE FEEDS LIVE // DRONE CONTROL PASSED', 1.6);
       }
     }
     this.applyCamera(deltaTime);

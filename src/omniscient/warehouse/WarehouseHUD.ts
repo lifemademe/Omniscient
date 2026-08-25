@@ -396,13 +396,21 @@ const CSS = `
  * glance takes groups, not lists. The wrap between them is left to the layout - see the
  * controls rule in the CSS above.
  */
+/*
+ * TAB and C are named for what they DO, not for the views they touch.
+ *
+ * The old first line said "TAB view", which is true and useless: it names a key and a noun
+ * and leaves the player to discover that the noun cycles three ways. Worse, C appeared only
+ * in the intrusion keymap, so in normal play the key that reaches the service cameras was
+ * not written down anywhere on screen.
+ */
 const WAREHOUSE_KEYMAP: readonly [string, string] = [
-  'WASD move // QE altitude // TAB view',
+  'WASD move // QE altitude // TAB console // C cameras',
   'LMB scan // RMB optical // F grip',
 ];
 const WAREHOUSE_KEYMAP_INTRUSION: readonly [string, string] = [
-  'WASD move // QE altitude // TAB view',
-  'LMB tag // RMB optical // C next feed',
+  'WASD move // QE altitude // TAB console // C cameras',
+  'LMB tag // RMB optical // F grip',
 ];
 
 export class WarehouseHUD {
