@@ -24,10 +24,10 @@ import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
  * Darker and matte. Metalness 0.58 was buying brightness rather than a look: painted
  * structural steel is not polished, and there is nothing in this room for it to reflect.
  */
-const STRUCTURE = new THREE.MeshStandardMaterial({ color: '#171e1d', roughness: 0.9, metalness: 0.08 });
-const DUCT = new THREE.MeshStandardMaterial({ color: '#51615f', roughness: 0.48, metalness: 0.72 });
-const RUBBER = new THREE.MeshStandardMaterial({ color: '#0b0f0e', roughness: 0.92, metalness: 0.08 });
-const PALLET = new THREE.MeshStandardMaterial({ color: '#66523a', roughness: 0.96, metalness: 0.01 });
+const STRUCTURE = new THREE.MeshStandardMaterial({ color: '#141a21', roughness: 0.9, metalness: 0.08 });
+const DUCT = new THREE.MeshStandardMaterial({ color: '#475f6b', roughness: 0.48, metalness: 0.72 });
+const RUBBER = new THREE.MeshStandardMaterial({ color: '#090d11', roughness: 0.92, metalness: 0.08 });
+const PALLET = new THREE.MeshStandardMaterial({ color: '#705630', roughness: 0.96, metalness: 0.01 });
 const SAFETY = new THREE.MeshStandardMaterial({ color: '#a77927', emissive: '#382307', emissiveIntensity: 0.32, roughness: 0.72 });
 const FIRE = new THREE.MeshStandardMaterial({ color: '#872f28', roughness: 0.62, metalness: 0.28 });
 

@@ -5,11 +5,11 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
 import { createWarehouseLabelGeometry } from './labelGeometry.js';
 
-const CHARCOAL = new THREE.MeshStandardMaterial({ color: '#1a2221', roughness: 0.7, metalness: 0.54 });
-const STEEL = new THREE.MeshStandardMaterial({ color: '#56635f', roughness: 0.52, metalness: 0.7 });
+const CHARCOAL = new THREE.MeshStandardMaterial({ color: '#161d26', roughness: 0.7, metalness: 0.54 });
+const STEEL = new THREE.MeshStandardMaterial({ color: '#485f71', roughness: 0.52, metalness: 0.7 });
 const ORANGE = new THREE.MeshStandardMaterial({ color: '#b96f24', emissive: '#3d1d05', emissiveIntensity: 0.34, roughness: 0.58, metalness: 0.22 });
-const BELT = new THREE.MeshStandardMaterial({ color: '#121817', roughness: 0.78, metalness: 0.2 });
-const CARTON = new THREE.MeshStandardMaterial({ color: '#71583a', roughness: 0.92, metalness: 0.02 });
+const BELT = new THREE.MeshStandardMaterial({ color: '#10151a', roughness: 0.78, metalness: 0.2 });
+const CARTON = new THREE.MeshStandardMaterial({ color: '#745c37', roughness: 0.92, metalness: 0.02 });
 const GLASS = new THREE.MeshPhysicalMaterial({ color: '#85aba7', transparent: true, opacity: 0.14, roughness: 0.18, metalness: 0.08, depthWrite: false });
 
 function mesh(

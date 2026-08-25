@@ -18,6 +18,14 @@ interface MaterialSnapshot {
   wasBanded: boolean;
 }
 
+/**
+ * How much chroma the cel look adds to every non-emissive material it captures.
+ *
+ * Kept as a named constant because it is the one number that answers "the colours do not
+ * pop": a toon ramp flattens value, so hue is left carrying the picture on its own.
+ */
+const CEL_CHROMA_GAIN = 1.4;
+
 function beveledRail(width: number, height: number, length: number): THREE.ExtrudeGeometry {
   const radius = Math.min(width, height) * 0.22;
   const halfWidth = width / 2;
@@ -125,11 +133,27 @@ export class WarehouseCelStyle {
         };
         this.snapshots.set(material, snapshot);
 
+        /*
+         * Chroma UP, where it used to go down.
+         *
+         * This multiplied every non-emissive colour by 0.8, which is a fifth of the chroma
+         * off every surface in the building at the exact moment the cel look is switched on.
+         * It was a defensible call when the materials underneath were saturated and the
+         * banding was fighting them; it is the wrong call now, because the base palette was
+         * measured at 52 of 128 colours below 0.20 saturation and the complaint about this
+         * look is that the colours do not pop.
+         *
+         * A toon ramp quantises VALUE and leaves hue alone, so flat bands only read as
+         * colour if there is colour in them to begin with - the flatter the shading, the
+         * more of the picture each surface's own hue has to carry. Boosting here rather than
+         * in the source materials keeps the un-celled image honest, which is what makes the
+         * F10 A/B worth looking at.
+         */
         const emissiveSignal = material.emissiveIntensity > 0.2 && material.emissive.getHex() !== 0;
         if (!emissiveSignal) {
           const hsl = { h: 0, s: 0, l: 0 };
           material.color.getHSL(hsl);
-          material.color.setHSL(hsl.h, hsl.s * 0.8, hsl.l);
+          material.color.setHSL(hsl.h, Math.min(1, hsl.s * CEL_CHROMA_GAIN), hsl.l);
         }
         material.roughness = Math.max(material.roughness, material.metalness > 0.45 ? 0.58 : 0.78);
         material.metalness *= 0.72;

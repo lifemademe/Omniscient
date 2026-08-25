@@ -51,9 +51,9 @@ import type {
  * throws away the only thing the lighting was doing. Cheapest colour work there is - the hex
  * codes barely move, but they stop fighting every light in the room.
  */
-const WALL = new THREE.MeshStandardMaterial({ color: '#3a3937', roughness: 0.88, metalness: 0.1 });
-const STEEL = new THREE.MeshStandardMaterial({ color: '#5a5f63', roughness: 0.6, metalness: 0.58 });
-const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#23262a', roughness: 0.76, metalness: 0.42 });
+const WALL = new THREE.MeshStandardMaterial({ color: '#2d3744', roughness: 0.88, metalness: 0.1 });
+const STEEL = new THREE.MeshStandardMaterial({ color: '#4a6173', roughness: 0.6, metalness: 0.58 });
+const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#1b2432', roughness: 0.76, metalness: 0.42 });
 /**
  * The roof deck, dark and matte, and it needs its own material rather than DARK_STEEL.
  *
@@ -71,21 +71,21 @@ const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#23262a', roughness:
  * nothing but brightness. The trusses stay DARK_STEEL, so they now read AGAINST the deck
  * instead of disappearing into it.
  */
-const ROOF_DECK = new THREE.MeshStandardMaterial({ color: '#15171a', roughness: 0.94, metalness: 0.05 });
+const ROOF_DECK = new THREE.MeshStandardMaterial({ color: '#10151f', roughness: 0.94, metalness: 0.05 });
 /* Stock that is not cardboard - see the tote and drum buckets in buildRacks. The drums
    carry the only saturated colour on the racking and it is cool on purpose. */
-const TOTE = new THREE.MeshStandardMaterial({ color: '#3f4a4d', roughness: 0.72, metalness: 0.06 });
-const TOTE_LID = new THREE.MeshStandardMaterial({ color: '#556366', roughness: 0.66, metalness: 0.08 });
-const DRUM = new THREE.MeshStandardMaterial({ color: '#41707e', roughness: 0.54, metalness: 0.12 });
-const DRUM_BAND = new THREE.MeshStandardMaterial({ color: '#8d949a', roughness: 0.44, metalness: 0.46 });
-const FLOOR = new THREE.MeshStandardMaterial({ color: '#3d3b38', roughness: 0.91, metalness: 0.04 });
+const TOTE = new THREE.MeshStandardMaterial({ color: '#31535b', roughness: 0.72, metalness: 0.06 });
+const TOTE_LID = new THREE.MeshStandardMaterial({ color: '#476b74', roughness: 0.66, metalness: 0.08 });
+const DRUM = new THREE.MeshStandardMaterial({ color: '#35778a', roughness: 0.54, metalness: 0.12 });
+const DRUM_BAND = new THREE.MeshStandardMaterial({ color: '#8097a7', roughness: 0.44, metalness: 0.46 });
+const FLOOR = new THREE.MeshStandardMaterial({ color: '#433c32', roughness: 0.91, metalness: 0.04 });
 const AMBER = new THREE.MeshStandardMaterial({ color: '#8d6c31', emissive: '#39250b', emissiveIntensity: 0.55, roughness: 0.58 });
 const RED = new THREE.MeshStandardMaterial({ color: '#6e2d2d', emissive: '#2c0909', emissiveIntensity: 0.6, roughness: 0.62 });
-const BELT = new THREE.MeshStandardMaterial({ color: '#151a19', roughness: 0.82, metalness: 0.25 });
+const BELT = new THREE.MeshStandardMaterial({ color: '#11171e', roughness: 0.82, metalness: 0.25 });
 /* Softwood, and darker than the board it carries so a load reads as sitting on something. */
-const PALLET = new THREE.MeshStandardMaterial({ color: '#8a7248', roughness: 0.96 });
-const TAPE_LIGHT = new THREE.MeshStandardMaterial({ color: '#d8c9a4', roughness: 0.72 });
-const TAPE_DARK = new THREE.MeshStandardMaterial({ color: '#c3b085', roughness: 0.72 });
+const PALLET = new THREE.MeshStandardMaterial({ color: '#93713f', roughness: 0.96 });
+const TAPE_LIGHT = new THREE.MeshStandardMaterial({ color: '#d4c5a8', roughness: 0.72 });
+const TAPE_DARK = new THREE.MeshStandardMaterial({ color: '#c1ae87', roughness: 0.72 });
 /*
  * Stretch wrap. Nearly clear, slightly cool, and it must not write depth - a dozen
  * transparent boxes that do will sort against each other and flicker as the drone moves.
@@ -101,7 +101,7 @@ const WRAP = new THREE.MeshPhysicalMaterial({
 /* The guide rails down a conveyor. The strongest readable line in the sortation bay. */
 const GUIDE = new THREE.MeshStandardMaterial({ color: '#c8862e', emissive: '#3a2408', emissiveIntensity: 0.5, roughness: 0.62 });
 /* The high-bay shades. Double-sided, because an open cone drawn on one side is a hole. */
-const SHADE = new THREE.MeshStandardMaterial({ color: '#23262a', roughness: 0.76, metalness: 0.42, side: THREE.DoubleSide });
+const SHADE = new THREE.MeshStandardMaterial({ color: '#1c2431', roughness: 0.76, metalness: 0.42, side: THREE.DoubleSide });
 
 function mesh(name: string, geometry: THREE.BufferGeometry, material: THREE.Material, position?: THREE.Vector3): ENGINE.MeshNode {
   const node = ENGINE.MeshNode.create({ name, geometry, material, castShadow: true, receiveShadow: true });
