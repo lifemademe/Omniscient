@@ -89,17 +89,69 @@ export class WarehouseCargoNode extends ENGINE.SceneNode {
     });
     rearLabel.position.set(0, 0.34, -0.365);
     rearLabel.rotation.y = Math.PI;
-    const seal = ENGINE.MeshNode.create({
-      name: 'SecuritySeal',
-      geometry: new THREE.CylinderGeometry(0.045, 0.045, 0.018, 12),
-      material: new THREE.MeshStandardMaterial({
-        color: data.definition.anomaly === 'seal' ? '#b54236' : '#4e8d64',
-        emissive: data.definition.anomaly === 'seal' ? '#67130c' : '#153c24',
-        emissiveIntensity: 1.15,
-        roughness: 0.38,
-      }),
+    /*
+     * The seal, at a size the mission can actually be played through.
+     *
+     * "Seal intact" is one of the two things the audit asks the player to judge, and it was a
+     * 4.5cm disc lying flat on the lid - a coloured dot, invisible edge-on, and readable only
+     * by flying the drone directly over the carton and looking straight down. A mechanic the
+     * player has to fight the camera to perceive is not a mechanic.
+     *
+     * It is a tamper strip now: a band across the lid seam and down the front face, which is
+     * what a security seal on a carton actually looks like and which reads from anywhere in
+     * front of the box. Broken is expressed as GEOMETRY rather than as colour - the band is
+     * built in two pieces with a gap, and the front tail hangs at an angle. That matters for
+     * the colour-blind gate on the acceptance list: intact and broken differ in shape, not
+     * just in red versus green.
+     */
+    const compromised = data.definition.anomaly === 'seal';
+    const sealMaterial = new THREE.MeshStandardMaterial({
+      color: compromised ? '#b54236' : '#4e8d64',
+      emissive: compromised ? '#67130c' : '#153c24',
+      emissiveIntensity: 1.15,
+      roughness: 0.38,
     });
-    seal.position.set(0.15, 0.61, 0);
+    const sealParts: ENGINE.MeshNode[] = [];
+    const addSeal = (
+      name: string,
+      geometry: THREE.BufferGeometry,
+      position: THREE.Vector3,
+      rotationX = 0
+    ): void => {
+      const node = ENGINE.MeshNode.create({ name, geometry, material: sealMaterial });
+      node.position.copy(position);
+      node.rotation.x = rotationX;
+      sealParts.push(node);
+    };
+    if (compromised) {
+      // Two stubs and a gap where the band was cut, plus a tail peeled off the front.
+      addSeal('SecuritySeal', new THREE.BoxGeometry(0.052, 0.014, 0.22), new THREE.Vector3(0.27, 0.605, -0.24));
+      addSeal('SecuritySeal', new THREE.BoxGeometry(0.052, 0.014, 0.13), new THREE.Vector3(0.27, 0.605, 0.29));
+      addSeal('SecuritySealTail', new THREE.BoxGeometry(0.052, 0.19, 0.012), new THREE.Vector3(0.27, 0.5, 0.44), -0.7);
+    } else {
+      addSeal('SecuritySeal', new THREE.BoxGeometry(0.052, 0.014, 0.74), new THREE.Vector3(0.27, 0.605, 0));
+      addSeal('SecuritySeal', new THREE.BoxGeometry(0.052, 0.2, 0.012), new THREE.Vector3(0.27, 0.5, 0.367));
+    }
+
+    /*
+     * A lid, so the carton is a closed box rather than a solid one.
+     *
+     * Two flaps meeting just off centre with a seam between them, inset a few millimetres so
+     * the top edge catches light separately from the sides. It is the difference between a
+     * cardboard box and a cube the colour of cardboard, and this prop is held up in front of
+     * the camera on every successful delivery.
+     */
+    for (const [name, width, offset] of [['CartonFlapLeft', 0.34, -0.185], ['CartonFlapRight', 0.34, 0.185]] as const) {
+      const flap = ENGINE.MeshNode.create({
+        name,
+        geometry: new THREE.BoxGeometry(0.83, 0.022, width),
+        material: new THREE.MeshStandardMaterial({ color: '#7d6845', roughness: 0.95 }),
+        castShadow: true,
+      });
+      flap.position.set(0, 0.606, offset);
+      this.add(flap);
+    }
+
     for (const x of [-0.39, 0.39]) {
       const edge = ENGINE.MeshNode.create({
         name: 'CartonEdge',
@@ -109,7 +161,7 @@ export class WarehouseCargoNode extends ENGINE.SceneNode {
       edge.position.set(x, 0.31, 0);
       this.add(edge);
     }
-    this.add(box, tape, label, rearLabel, seal);
+    this.add(box, tape, label, rearLabel, ...sealParts);
   }
 }
 
