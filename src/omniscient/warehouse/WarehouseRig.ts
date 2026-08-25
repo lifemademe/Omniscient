@@ -1223,12 +1223,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.inboundIntakeElapsed = 0;
     this.environment.setVerifiedIntakeState('ready');
     this.environment.setConveyorsRunning(false);
-    this.hud?.setCase(
-      'QUEST 04 // INBOUND AUDIT',
-      `Delivery ${index + 1} of ${audit.total}: scan ${delivery.workerName} at ${delivery.station}, `
-      + `then inspect package ${delivery.packageId} in the same aisle at Bay ${String(delivery.bay).padStart(2, '0')}.`
-    );
+    /*
+     * The objective line is composed in one place and refreshed at every phase change - see
+     * refreshInboundObjective. It used to be written once here and never again, so it said
+     * "scan the worker, then inspect the package" for the whole delivery: after the
+     * comparison came back the player was told the VERDICT and never the next action, and
+     * the banner still described a step they had finished two minutes earlier.
+     */
     audit.station = delivery.station;
+    this.refreshInboundObjective();
     this.hud?.setSecurityAlert(`DELIVERIES RESOLVED ${audit.resolved}/${audit.total} // ACTIVE BADGE ${delivery.workerId}`);
     this.refreshCaseHud();
   }
@@ -2573,6 +2576,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       audit.workerScanned = true;
       this.lastInboundScanSubject.copy(worker.subjectPosition());
       audit.phase = 'scan-package';
+      this.refreshInboundObjective();
       this.evidence.visitor = true;
       this.hud?.appendSystem(
         'OPTICAL PERSONNEL RECORD',
@@ -2603,7 +2607,41 @@ export class WarehouseRig extends ENGINE.SceneNode {
     ].join(' // ');
     this.hud?.appendSystem('PACKAGE COMPARISON', `${delivery.packageId} // ${comparison}`);
     this.hud?.flash(comparison, 3.4);
+    this.refreshInboundObjective();
     return true;
+  }
+
+  /**
+   * What to do next, in one sentence, kept current.
+   *
+   * Every step of this quest happens somewhere else in a 48 by 58 metre building, so the
+   * objective has to carry a PLACE and not only a verdict. Each branch names one: the
+   * worker's station, the package's aisle and bay, or the intake on the sorting line.
+   */
+  private refreshInboundObjective(): void {
+    const audit = this.inboundAudit;
+    if (!audit) return;
+    const delivery = INBOUND_AUDIT_DELIVERIES[audit.activeIndex];
+    if (!delivery) return;
+    const step = `Delivery ${audit.activeIndex + 1} of ${audit.total}`;
+    const bay = String(delivery.bay).padStart(2, '0');
+    let line: string;
+    if (!audit.workerScanned) {
+      line = `${step}: scan ${delivery.workerName} at ${delivery.station}, `
+        + `then inspect package ${delivery.packageId} in the same aisle at Bay ${bay}.`;
+    } else if (!audit.packageScanned) {
+      line = `${step}: ${delivery.workerName} logged. Inspect package ${delivery.packageId} `
+        + `on the rack at Aisle ${delivery.aisle} // Bay ${bay}.`;
+    } else if (audit.phase === 'sort-ready') {
+      line = `${step}: records agree. Grip package ${delivery.packageId} with F and carry it `
+        + 'to the VERIFIED INTAKE on the sorting line, east side.';
+    } else if (audit.phase === 'alarm-ready') {
+      line = `${step}: package ${delivery.packageId} contradicts its record. `
+        + 'Reject it from the console, or sort it anyway and answer for it.';
+    } else {
+      return;
+    }
+    this.hud?.setCase('QUEST 04 // INBOUND AUDIT', line);
   }
 
   private cargoHome(cargo: WarehouseCargoNode): THREE.Vector3 {
