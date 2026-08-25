@@ -25,6 +25,31 @@ function mesh(
   return node;
 }
 
+/**
+ * A sign with a readable BACK.
+ *
+ * Front and rear quads with the rear turned 180 degrees about Y, which is the arrangement
+ * that reads correctly from behind: the turn reverses which way the viewer's right hand
+ * points, and the texture's own left-to-right goes with it, so the two cancel. Proven on the
+ * hanging zone signs, where adding a mirror to "fix" it broke a face that was already right.
+ */
+function displayPanel(
+  name: string,
+  text: string,
+  width: number,
+  height: number,
+  position: THREE.Vector3,
+  accent = '#e0a24c'
+): ENGINE.SceneNode {
+  const root = ENGINE.SceneNode.create({ name, position });
+  const material = displayMaterial(text, accent);
+  const front = mesh(`${name}-Front`, createWarehouseLabelGeometry(width, height), material, new THREE.Vector3(0, 0, 0.01), false, false);
+  const back = mesh(`${name}-Back`, createWarehouseLabelGeometry(width, height), material, new THREE.Vector3(0, 0, -0.01), false, false);
+  back.rotation.y = Math.PI;
+  root.add(front, back);
+  return root;
+}
+
 function displayMaterial(text: string, accent = '#e0a24c'): THREE.MeshBasicMaterial {
   const canvas = document.createElement('canvas');
   canvas.width = 768;
@@ -45,7 +70,18 @@ function displayMaterial(text: string, accent = '#e0a24c'): THREE.MeshBasicMater
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
-  return new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide, toneMapped: false });
+  /*
+   * FrontSide, and the sign gets a second face instead.
+   *
+   * DoubleSide on a texture-mapped quad is not "readable from both sides", it is "readable
+   * from one side and MIRRORED from the other" - you are looking through the back of the
+   * image. The sortation portal read VOLUMETRIC SCAN backwards for exactly this reason, and
+   * so did the three section identity signs once you flew past them and turned around.
+   *
+   * Culling the back and building a real rear face costs one more two-triangle quad per sign
+   * and is the only arrangement where both sides say the same thing. See displayPanel.
+   */
+  return new THREE.MeshBasicMaterial({ map: texture, side: THREE.FrontSide, toneMapped: false });
 }
 
 function transformedBox(
@@ -166,14 +202,7 @@ export class WarehouseAutomation {
       ['STORE // AISLES 1-5', -5, 15.45, 0],
       ['SORT // S', 19.6, 14.18, Math.PI],
     ] as const) {
-      const panel = mesh(
-        `SectionIdentity-${label}`,
-        createWarehouseLabelGeometry(4.5, 0.72),
-        displayMaterial(label),
-        new THREE.Vector3(x, 7.8, z),
-        false,
-        false
-      );
+      const panel = displayPanel(`SectionIdentity-${label}`, label, 4.5, 0.72, new THREE.Vector3(x, 7.8, z));
       panel.rotation.y = rotationY;
       this.root.add(panel);
     }
@@ -227,15 +256,14 @@ export class WarehouseAutomation {
       mesh('PortalAmberWest', new THREE.BoxGeometry(0.11, 4.1, 1.26), ORANGE, new THREE.Vector3(centerX - 3.82, 2.48, z)),
       mesh('PortalAmberEast', new THREE.BoxGeometry(0.11, 4.1, 1.26), ORANGE, new THREE.Vector3(centerX + 3.82, 2.48, z))
     );
-    const label = mesh(
+    // Both sides: packages pass THROUGH this portal, so it is read from either end of the line.
+    portal.add(displayPanel(
       'PortalDisplay',
-      new THREE.PlaneGeometry(3.65, 0.68),
-      displayMaterial('VOLUMETRIC SCAN'),
-      new THREE.Vector3(centerX, 4.68, z + 0.602),
-      false,
-      false
-    );
-    portal.add(label);
+      'VOLUMETRIC SCAN',
+      3.65,
+      0.68,
+      new THREE.Vector3(centerX, 4.68, z + 0.602)
+    ));
     this.scannerBeam = mesh(
       'SortationScanField',
       new THREE.PlaneGeometry(6.25, 3.25),
