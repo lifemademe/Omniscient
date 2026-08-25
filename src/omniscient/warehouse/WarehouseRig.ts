@@ -604,8 +604,26 @@ export class WarehouseRig extends ENGINE.SceneNode {
      * on this player more times than any other bug in the project.
      *
      * Re-enabling means finding the source pixel first, not shortening the blur.
+     *
+     * ## And then it was on anyway
+     *
+     * Everything above was written, argued and then contradicted by the line underneath it,
+     * which read `enabled: true ... levels: 4` - the exact row of the table above that
+     * produces one hard-edged black square. The comment said OFF and the code said ON, and
+     * the code wins, so the square came back and was reported again as "there is a black box
+     * when i turn the camera".
+     *
+     * Re-measured before touching it, because a claim this specific should not be inherited
+     * on trust: `scripts/dev/blackbox.py` reproduced it on 11 of 60 spin steps, and the blob
+     * is 231 pixels wide in EVERY frame while sliding a uniform 72 pixels per step. Constant
+     * size under camera rotation is not something a world object does, and a ray fired
+     * through it reports `WarehouseFloor` at 20.9m - it is not an object. Its colour is
+     * exactly (0,0,0) across 200 by 200 pixels with no gradient at all. That is a
+     * contaminated texel of a coarse mip, drawn back over the frame, exactly as described.
+     *
+     * So the decision above is applied rather than merely written down.
      */
-    post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: true, strength: 0.2, threshold: 0.85, radius: 0.5, levels: 4 });
+    post.configureEffect(ENGINE.PostProcessPass.Bloom, { enabled: false, strength: 0.2, threshold: 0.85, radius: 0.5, levels: 2 });
   }
 
   private buildDrone(): void {

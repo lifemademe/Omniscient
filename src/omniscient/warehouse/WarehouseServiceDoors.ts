@@ -261,6 +261,16 @@ function signMaterial(layout: WarehouseDoorLayout, mirrored = false): THREE.Mesh
   return new THREE.MeshBasicMaterial({ map: texture, side: THREE.FrontSide, toneMapped: false });
 }
 
+/**
+ * The lockdown shutter's drum height, how far it reaches, and how much shows when open.
+ *
+ * 3.32 clears the opening (which tops out at 3.355) and tucks the drum under the canopy at
+ * 3.55 rather than through it. Closed, the curtain reaches y 0.02 and covers the door.
+ */
+const SHUTTER_HEAD_Y = 3.32;
+const SHUTTER_DROP = 3.3;
+const SHUTTER_OPEN = 0.03;
+
 const wallLetterCache = new Map<string, THREE.MeshBasicMaterial>();
 
 /**
@@ -315,7 +325,7 @@ export class WarehouseServiceDoor {
   private readonly blueLight: ENGINE.PointLightNode;
   private hatchTimer = 0;
   private hatchTarget = 1.35;
-  private shutterTarget = 5.15;
+  private shutterTarget = SHUTTER_OPEN;
   private pursuitLights = false;
   private locked = false;
   private clock = 0;
@@ -364,7 +374,28 @@ export class WarehouseServiceDoor {
      * across the middle is what makes the two read as separate things doing separate jobs.
      */
     this.hatch = mesh('ServiceCargoHatch', new THREE.BoxGeometry(1.02, 0.82, 0.14), FRAME, new THREE.Vector3(0.64, 1.28, 0.19));
-    this.shutter = mesh('ServiceLockdownShutter', new THREE.BoxGeometry(2.68, 3.3, 0.16), DARK, new THREE.Vector3(0, 5.15, 0.34));
+    /*
+     * The lockdown shutter ROLLS UP. It used to park in mid-air.
+     *
+     * Reported as a black box that appears when you turn the camera, and it is the same fault
+     * the zone security gates had: 2.68 by 3.3 metres of DARK panel whose "open" state simply
+     * moved its centre to y 5.15, leaving it hanging between 3.5 and 6.8 metres with nothing
+     * holding it up. Unlit on its inward face it renders as a hard-edged black rectangle, and
+     * door B sits 7.4m in front of the drone's spawn - so it is the first thing you meet when
+     * you look toward the front wall.
+     *
+     * Found by spinning the camera with `scripts/dev/blackbox.py`, which reproduced it on 11
+     * of 60 steps and showed the blob's column span shrinking steadily as the camera turned -
+     * a world-locked object rotating out of view, not a post-process artefact.
+     *
+     * Same treatment as the gates: the curtain hangs from its top edge and opening is a SCALE,
+     * so it winds into a drum instead of levitating. See addGate in art.ts.
+     */
+    const curtain = new THREE.BoxGeometry(2.68, SHUTTER_DROP, 0.16);
+    curtain.translate(0, -SHUTTER_DROP / 2, 0);
+    this.shutter = mesh('ServiceLockdownShutter', curtain, DARK, new THREE.Vector3(0, SHUTTER_HEAD_Y, 0.34));
+    this.shutter.scale.y = SHUTTER_OPEN;
+    const shutterDrum = mesh('ServiceLockdownDrum', new THREE.BoxGeometry(2.86, 0.26, 0.3), FRAME, new THREE.Vector3(0, SHUTTER_HEAD_Y + 0.13, 0.34));
     const window = mesh('ServiceHatchWindow', new THREE.BoxGeometry(0.78, 0.24, 0.06), GLASS, new THREE.Vector3(0.64, 1.42, 0.29));
     const scanner = mesh('ServiceCargoScanner', new THREE.BoxGeometry(2.12, 0.16, 1.35), this.statusMaterial, new THREE.Vector3(0, 0.18, -1.05));
     const reader = mesh('ServiceCredentialReader', new THREE.BoxGeometry(0.14, 0.24, 0.08), DARK, new THREE.Vector3(leafX - 0.72, 1.32, 0.24));
@@ -480,6 +511,7 @@ export class WarehouseServiceDoor {
       personnelKick,
       this.hatch,
       this.shutter,
+      shutterDrum,
       window,
       scanner,
       reader,
@@ -522,7 +554,7 @@ export class WarehouseServiceDoor {
   public lockdown(): void {
     this.locked = true;
     this.setStatus('locked');
-    this.shutterTarget = 1.72;
+    this.shutterTarget = 1;
     this.redLight.intensity = 18;
     for (const bolt of this.bolts) bolt.scale.x = 1;
   }
@@ -530,7 +562,7 @@ export class WarehouseServiceDoor {
   public reset(): void {
     this.hatchTimer = 0;
     this.hatchTarget = 1.35;
-    this.shutterTarget = 5.15;
+    this.shutterTarget = SHUTTER_OPEN;
     this.pursuitLights = false;
     this.locked = false;
     this.redLight.intensity = 0;
@@ -554,7 +586,7 @@ export class WarehouseServiceDoor {
       if (this.hatchTimer <= 0) this.hatchTarget = 1.35;
     }
     this.hatch.position.y = THREE.MathUtils.damp(this.hatch.position.y, this.hatchTarget, 3.6, deltaTime);
-    this.shutter.position.y = THREE.MathUtils.damp(this.shutter.position.y, this.shutterTarget, 4.6, deltaTime);
+    this.shutter.scale.y = THREE.MathUtils.damp(this.shutter.scale.y, this.shutterTarget, 4.6, deltaTime);
     if (!this.pursuitLights) {
       this.redLight.intensity = this.locked ? 18 : 0;
       return;
