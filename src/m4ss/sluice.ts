@@ -148,7 +148,7 @@ export const THE_SLUICE: World = {
       * the shutter's parked position starts at 150 - so the way down and the way back up
       * share a shaft without ever sharing a pixel.
       */
-     { x: 130, y: 640, w: 200, h: SHELF },
+     { x: 130, y: 650, w: 200, h: SHELF },
 
     // -- 5/6. the deck at the top of the column -------------------------------------------
     /*
@@ -211,11 +211,31 @@ export const THE_SLUICE: World = {
    * lip first gets a short one and sails over. Nothing announces this. The rope's length is
    * visible the instant it takes hold, and there is a floor with something on it underneath.
    *
-   * `t1` and `t2` are the trap. They hang a hundred and sixty below their neighbours, which
+   * `t1` and `t2` are the trap. They hang a hundred and fifty below their neighbours, which
    * makes them the nearer, easier-looking grab from every standing position on the route - and
    * a growth that is lower has its whole circle lower, so the easy grab is the one that drags
    * the body through the patrol. It is the only lie this stage tells and it is told twice, so
    * the second time is a decision rather than a surprise.
+   *
+   * ## The zigzag, and why the spacing is 60
+   *
+   * The first version put all five inside a two-hundred-pixel pocket, two of them 22px apart,
+   * and the playtest called it scattered - correctly: five things that close are not a route,
+   * they are a pile. The pocket was an artefact of the harness testing a growth's bounding
+   * SQUARE against the level instead of its disc, which reports collisions on four corners the
+   * arc never reaches and walled off four hundred pixels of usable space.
+   *
+   * With the room back, they alternate: 60px apart in x, on two rows 150 apart. Consecutive
+   * growths are therefore 162px apart on the diagonal and never at the same height, which is
+   * what makes it read as a pattern rather than a scatter - the eye gets high, low, high, low,
+   * and the two lows are visibly the odd ones out before anybody has touched them.
+   *
+   * FOUR, not five. The fifth had to go west of 525 to keep the spacing even, and at 480 its
+   * own circle reached the breach plate - a swing on the patrol could have opened the last
+   * door in the level during the second beat. That is the second time this stage has caught
+   * that exact fault, and the second time the answer was to move something rather than to
+   * argue about how unlikely the shot is. The run now ends on a TRAP, which is the better
+   * shape anyway: the last growth before the landing is the one you must not take.
    *
    * The gallery's three do state their ropes, because the climb is a chain and a chain's
    * geometry has to be the designer's - stage two's note on 165px spacing is the reason.
@@ -225,11 +245,10 @@ export const THE_SLUICE: World = {
     { id: 'd1', x: 900, y: 310, rope: 130 },
 
     // 2. The patrol. No rope on any of them.
-    { id: 'p1', x: 680, y: 470 },
-    { id: 't1', x: 690, y: 610 },
-    { id: 'p2', x: 560, y: 460 },
-    { id: 't2', x: 600, y: 610 },
-    { id: 'p3', x: 540, y: 470 },
+    { id: 'p1', x: 720, y: 420 },
+    { id: 't1', x: 660, y: 570 },
+    { id: 'p2', x: 600, y: 420 },
+    { id: 't2', x: 560, y: 570 },
 
     /*
      * 7. The gallery, west, going up. All three RED until the column's plate is pressed.
@@ -252,9 +271,18 @@ export const THE_SLUICE: World = {
      * release adds roughly another 80, and the slow motion on release is what turns the
      * remainder into something a person can click on.
      */
-    { id: 'g1', x: 420, y: 860, rope: 70, live: false },
-    { id: 'g2', x: 470, y: 670, rope: 70, live: false },
-    { id: 'g3', x: 420, y: 480, rope: 70, live: false },
+    /*
+     * Held against the west wall as a COLUMN, clear of the crossing above it.
+     *
+     * The climb and the patrol used to interleave - g3 sat 60px from a patrol growth on the
+     * same row, so the top of the level read as one heap of nine plants with no way to tell
+     * which belonged to which route. They are now two shapes: a zigzag running east-west at
+     * 420 and 570, and a vertical stack at 400 and 450. The reds being visibly out (see
+     * bushTexture's ember) does the rest.
+     */
+    { id: 'g1', x: 400, y: 880, rope: 70, live: false },
+    { id: 'g2', x: 450, y: 680, rope: 70, live: false },
+    { id: 'g3', x: 400, y: 500, rope: 70, live: false },
   ],
 
   gates: [
@@ -382,7 +410,7 @@ export const THE_SLUICE: World = {
   crushers: [
     { x: 500, y: 1130, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0, at: 0 },
     { x: 800, y: 1130, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0.5, at: 0 },
-    { x: 130, y: 746, w: 210, h: 40, travel: 160, axis: 'x', period: 3.2, phase: 0.3, at: 0 },
+    { x: 130, y: 756, w: 190, h: 40, travel: 180, axis: 'x', period: 3.2, phase: 0.3, at: 0 },
   ],
 
   /**

@@ -60,9 +60,29 @@ function overlap(a: Tile, b: Tile): boolean {
   return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 }
 
-/** The square the growth's whole circle lives in. A disc-vs-rect test that errs solid. */
+/** The square the growth's whole circle lives in. Kept for the plate test, which wants it. */
 function sweepBox(a: Anchor, rope: number): Tile {
   return { x: a.x - rope, y: a.y - rope, w: rope * 2, h: rope * 2 };
+}
+
+/**
+ * Does the growth's sweep actually reach this rectangle?
+ *
+ * A pendulum sweeps a DISC and this used to test its bounding square, which is 27% larger and
+ * wrong in the one direction that matters - it reports a hit on all four corners, where the
+ * arc never goes. That is not a conservative approximation, it is a fictional one, and it cost
+ * this level twice: the first time it forced two exemptions to be written by hand, and the
+ * second time it squeezed five patrol growths into a two-hundred-pixel pocket because
+ * everything outside it "collided" with a corner. The playtest called the result scattered,
+ * which is what five things 22 pixels apart look like.
+ *
+ * Closest point on the rect to the centre, against the radius. Six lines, and the level got
+ * four hundred pixels of room back.
+ */
+function sweepHits(a: Anchor, rope: number, t: Tile): boolean {
+  const cx = Math.max(t.x, Math.min(a.x, t.x + t.w));
+  const cy = Math.max(t.y, Math.min(a.y, t.y + t.h));
+  return Math.hypot(a.x - cx, a.y - cy) < rope;
 }
 
 /**
@@ -145,8 +165,8 @@ console.log('\nlayout - every sweep, every press, every plate');
 for (const a of W.anchors) {
   if (a.rope === undefined) continue;
   const box = sweepBox(a, a.rope);
-  // The shell is allowed - the level is inside it and every box is inside the level.
-  const real = W.tiles.filter((t) => !isShell(t) && overlap(box, core(t)));
+  // The shell is allowed - the level is inside it and every sweep is inside the level.
+  const real = W.tiles.filter((t) => !isShell(t) && sweepHits(a, a.rope!, core(t)));
   check(`${a.id} sweep is clear of the architecture`, real.length === 0, real.map((t) => `(${t.x},${t.y})`).join(' '));
 }
 
@@ -173,7 +193,7 @@ for (const a of W.anchors) {
   const patrol = W.tiles.find((t) => t.y === 760)!;
   const catchLedge = W.tiles.find((t) => t.x === 800 && t.y === 460)!;
   const wrong = W.tiles.filter(
-    (t) => !isShell(t) && t !== patrol && t !== catchLedge && overlap(box, core(t))
+    (t) => !isShell(t) && t !== patrol && t !== catchLedge && sweepHits(a, MAX_REACH, core(t))
   );
   check(
     `${a.id} widest sweep touches only the patrol floor`,
@@ -194,7 +214,7 @@ for (const a of W.anchors) {
     const a = named(id);
     check(`${id} at full reach sweeps into the patrol`, a.y + MAX_REACH > headY, `bottom ${a.y + MAX_REACH}`);
   }
-  for (const id of ['p1', 'p2', 'p3']) {
+  for (const id of ['p1', 'p2']) {
     const a = named(id);
     check(`${id} at full reach still clears the patrol`, a.y + MAX_REACH < headY, `bottom ${a.y + MAX_REACH}`);
   }
@@ -227,7 +247,7 @@ for (const c of W.crushers ?? []) {
     if (a.rope === undefined) continue;
     check(
       `press at (${c.x},${c.y}) is clear of ${a.id}'s sweep`,
-      !overlap(swept, sweepBox(a, a.rope)),
+      !sweepHits(a, a.rope, swept),
       `press ${swept.x}..${swept.x + swept.w} x ${swept.y}..${swept.y + swept.h}`
     );
   }
