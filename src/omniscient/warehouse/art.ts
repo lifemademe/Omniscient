@@ -1129,26 +1129,55 @@ export class WarehouseEnvironment {
      * again within a minute.
      */
     const guide = ENGINE.SceneNode.create({ name: 'VerifiedIntakeGuide' });
-    const beamMaterial = new THREE.MeshStandardMaterial({
-      color: '#8ff0c8',
-      emissive: '#4fc3a0',
-      emissiveIntensity: 2.6,
+    /*
+     * UNLIT, additive, and not tone-mapped. All three matter.
+     *
+     * The first version was a MeshStandardMaterial at 0.34 opacity, and it was invisible in
+     * play - "I don't see the indicator". A standard material is lit by the room and then run
+     * through the same ACES curve as everything else, so a pale green cylinder in a warehouse
+     * full of pale green sodium light is exactly as bright as the wall behind it. A beacon
+     * cannot be a surface; it has to be a light.
+     *
+     * MeshBasicMaterial ignores the lighting, toneMapped:false keeps it off the grade curve,
+     * and additive blending means it can only ever ADD to what is behind it - so it reads
+     * against dark racking and against the lit floor equally.
+     */
+    const beamMaterial = new THREE.MeshBasicMaterial({
+      color: '#9dffd8',
       transparent: true,
       opacity: 0,
       depthWrite: false,
-      roughness: 0.4,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      toneMapped: false,
     });
     /*
-     * A column rather than a marker on the floor. The drone flies at head height between racks
-     * four metres tall, so anything drawn on the deck is behind the racking from everywhere
-     * that matters; the column is visible down an aisle and over the tops.
+     * A column, a ring at its foot, and a wide disc on the deck.
+     *
+     * The column is for looking down an aisle - the drone flies at head height between racks
+     * four metres tall and anything drawn only on the floor is behind the racking from
+     * everywhere that matters. The disc is for the opposite case, which is most of the time:
+     * the drone looks DOWN, and from above a vertical column is a dot.
      */
-    guide.add(
-      mesh('VerifiedIntakeBeam', new THREE.CylinderGeometry(0.16, 0.42, 7.2, 12, 1, true), beamMaterial, new THREE.Vector3(0, 3.7, 0.25)),
-      mesh('VerifiedIntakeHalo', new THREE.TorusGeometry(1.32, 0.05, 8, 28), beamMaterial, new THREE.Vector3(0, 0.2, 0.25))
-    );
-    const halo = guide.children[guide.children.length - 1] as ENGINE.MeshNode;
+    const beacon = (name: string, geometry: THREE.BufferGeometry, at: THREE.Vector3): ENGINE.MeshNode => {
+      const node = ENGINE.MeshNode.create({
+        name,
+        geometry,
+        material: beamMaterial,
+        castShadow: false,
+        receiveShadow: false,
+      });
+      node.position.copy(at);
+      // Drawn after the room, so nothing solid in front is depth-sorted over the top of it.
+      node.renderOrder = 6;
+      return node;
+    };
+    const beam = beacon('VerifiedIntakeBeam', new THREE.CylinderGeometry(0.22, 0.6, 7.6, 14, 1, true), new THREE.Vector3(0, 3.9, 0.25));
+    const halo = beacon('VerifiedIntakeHalo', new THREE.TorusGeometry(1.34, 0.07, 8, 32), new THREE.Vector3(0, 0.22, 0.25));
+    const pad = beacon('VerifiedIntakePad', new THREE.CircleGeometry(1.5, 32), new THREE.Vector3(0, 0.19, 0.25));
     halo.rotation.x = Math.PI / 2;
+    pad.rotation.x = -Math.PI / 2;
+    guide.add(beam, halo, pad);
     guide.visible = false;
     this.verifiedIntakeGuide = guide;
     intake.add(guide);
@@ -2374,11 +2403,10 @@ export class WarehouseEnvironment {
       this.verifiedIntakeGuide.visible = lit;
       if (lit) {
         // A slow breath rather than a strobe: it is a destination, not an alarm.
-        const pulse = reduced ? 0.78 : 0.62 + Math.sin(this.clock * 2.2) * 0.2;
+        const pulse = reduced ? 0.86 : 0.72 + Math.sin(this.clock * 2.2) * 0.22;
         const beam = this.verifiedIntakeGuide.children[0] as ENGINE.MeshNode;
-        const material = beam.material as THREE.MeshStandardMaterial;
-        material.opacity = this.verifiedIntakeGuideLevel * pulse * 0.42;
-        material.emissiveIntensity = 1.6 + pulse * 1.4;
+        const material = beam.material as THREE.MeshBasicMaterial;
+        material.opacity = this.verifiedIntakeGuideLevel * pulse;
       }
     }
     if (this.verifiedIntakeScanner?.visible) {
