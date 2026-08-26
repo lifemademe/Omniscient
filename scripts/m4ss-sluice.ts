@@ -356,6 +356,70 @@ for (const c of W.critters ?? []) {
 }
 
 /*
+ * A designed swing does not hang inside a creature.
+ *
+ * g1 hung 140 above the landing and something walked that landing with its head six pixels
+ * under the bottom of the arc, so being ON the growth was a contact - not swinging into the
+ * creature, just hanging there. "The growth above that platform is too low, the mass will hit
+ * the sporeling while hanging or swinging."
+ *
+ * Only the growths that STATE a rope. The patrol's are ropeless and one of them is supposed to
+ * sweep into the floor the creatures walk - that is the trap, and it has its own check above.
+ * This is for the chains, where an overlap is never anything but an accident.
+ */
+for (const a of W.anchors) {
+  if (a.rope === undefined) continue;
+  for (const c of W.critters ?? []) {
+    /*
+     * How deep the arc gets WHERE THE CREATURE IS, not at the bottom of the circle.
+     *
+     * The first version compared the lowest point of the disc against any creature whose beat
+     * the disc's x-range touched, and reported a hit whenever a circle grazed a patrol's far
+     * end - the deepest part of a swing is under the growth, and the graze is at the edge
+     * where the arc is nearly level. Chord depth at the nearest point of the beat is the
+     * honest number: sqrt(r^2 - dx^2) below the anchor.
+     */
+    const span = { from: c.from - c.w / 2, to: c.to + c.w / 2 };
+    const dx = Math.max(0, Math.max(span.from - a.x, a.x - span.to));
+    if (dx >= a.rope) continue;
+    const arc = a.y + Math.sqrt(a.rope * a.rope - dx * dx) + 23;
+    check(
+      `${a.id} hangs clear of the creature at ${c.from}..${c.to}`,
+      arc < c.y - c.h,
+      `arc ${Math.round(arc)} vs head ${c.y - c.h}`
+    );
+  }
+}
+
+/*
+ * Two surfaces that meet do not meet at different heights.
+ *
+ * "The platforms where the sporelings are are not the same height" has been reported twice, and
+ * the second time it was already fixed - the report was written against a build two commits
+ * old. That is a good reason to write the rule down rather than to keep eyeballing it: a step
+ * of twenty pixels between two slabs that touch is invisible in a coordinate list, and on
+ * screen it is unmistakable and reads as broken geometry rather than as a step.
+ *
+ * Either they line up or they are far enough apart to be two things. A body stands about 46,
+ * so anything under that is a lip nobody meant to draw.
+ */
+{
+  const BODY = 46;
+  for (const a of W.tiles) {
+    for (const b of W.tiles) {
+      if (a === b || isShell(a) || isShell(b)) continue;
+      if (Math.abs(a.x + a.w - b.x) > 6) continue;
+      const step = Math.abs(a.y - b.y);
+      check(
+        `(${a.x},${a.y}) meets (${b.x},${b.y}) squarely`,
+        step === 0 || step >= BODY,
+        `${step}px step`
+      );
+    }
+  }
+}
+
+/*
  * Nowhere you can stand is a place you cannot leave.
  *
  * The catch shelf sat flush under the ledge above it, so a body that landed on it met the

@@ -315,7 +315,7 @@ export const THE_SLUICE: World = {
      * bushTexture's ember) does the rest.
      */
     { id: 'g1', x: 400, y: 880, rope: 70, live: false },
-    { id: 'g2', x: 450, y: 680, rope: 70, live: false },
+    { id: 'g2', x: 420, y: 680, rope: 70, live: false },
     { id: 'g3', x: 400, y: 500, rope: 70, live: false },
 
     /*
@@ -334,10 +334,16 @@ export const THE_SLUICE: World = {
      *
      * They sit west of the landing rather than under it, so the whole chain is in open air -
      * the presses swing at 500 and 800 and none of these circles reaches either.
+     *
+     * `n3` is at 215 rather than 250, and the thirty-five pixels are the difference between a
+     * swing and a wall. Its circle reaches 305; the landing starts at 360; a hanging body is
+     * about seventy across. At 250 the gap was twenty pixels and the report was the obvious
+     * one - "it is hard to swing right". A sweep that clears an obstacle by less than the
+     * body's own width does not clear it.
      */
     { id: 'n1', x: 250, y: 1420, rope: 90 },
     { id: 'n2', x: 300, y: 1220, rope: 90 },
-    { id: 'n3', x: 250, y: 1040, rope: 90 },
+    { id: 'n3', x: 215, y: 1040, rope: 90 },
   ],
 
   gates: [
@@ -485,10 +491,19 @@ export const THE_SLUICE: World = {
    * all - it drops the rope, kills the spin, stuns for 1.2s and hands the body back to its last
    * safe footing - which is the right price for a lesson that needs repeating.
    *
-   * The third stands on the far end of the bridge's landing, and it is the hard one: you arrive
-   * there at fourteen grams with seventy-four pixels of reach and no growth inside it, so it
-   * has to be got past on foot with nothing. Under you, beside you, and between you and the way
-   * on. That is worth more than three creatures.
+   * There used to be a third, on the landing, and it went with the bridge.
+   *
+   * Its whole beat was "you arrive here at fourteen grams and have to get past it on foot with
+   * no growth in reach" - and that arrival does not exist any more. The bulkhead lifts, the
+   * player drops back to their own mass, and they come to this landing by SWINGING up out of
+   * the sump at forty grams. A hazard standing exactly where you have to release onto is not
+   * the same beat with the same creature in it; it is a different and worse one.
+   *
+   * It was also making the growth above the landing unusable. g1 hangs 140 above the deck and
+   * the creature's head reached to within six pixels of the bottom of its arc, so hanging there
+   * at all was a contact - "the growth above that platform is too low, the mass will hit the
+   * sporeling while hanging or swinging". Both readings have the same answer: the creature was
+   * left behind by a beat that changed underneath it.
    *
    * 46px/s against a crawl of 92, so a player already past one can always outrun it and a
    * player who is not can never quite walk through it.
@@ -496,7 +511,6 @@ export const THE_SLUICE: World = {
   critters: [
     { from: 520, to: 700, y: 760, speed: 46, w: 26, h: 42, x: 520, facing: 1, wait: 0, phase: 0 },
     { from: 690, to: 880, y: 760, speed: 44, w: 26, h: 42, x: 880, facing: -1, wait: 0, phase: 0 },
-    { from: 380, to: 600, y: 1020, speed: 42, w: 26, h: 42, x: 380, facing: 1, wait: 0, phase: 0 },
   ],
 
   /**
