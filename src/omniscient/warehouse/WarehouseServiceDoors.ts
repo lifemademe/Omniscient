@@ -595,10 +595,24 @@ export class WarehouseServiceDoor {
       mesh('ServiceDownpipeShoe', new THREE.CylinderGeometry(0.085, 0.11, 0.3, 8), PIPE, new THREE.Vector3(pipeX, 0.15, WALL_FACE_Z + 0.13)),
       mesh('ServiceDownpipeBracketLow', new THREE.BoxGeometry(0.24, 0.05, 0.16), FRAME, new THREE.Vector3(pipeX, 0.95, WALL_FACE_Z + 0.05)),
       mesh('ServiceDownpipeBracketHigh', new THREE.BoxGeometry(0.24, 0.05, 0.16), FRAME, new THREE.Vector3(pipeX, 2.7, WALL_FACE_Z + 0.05)),
-      mesh('ServiceJunctionBox', new THREE.BoxGeometry(0.3, 0.4, 0.16), DARK, new THREE.Vector3(1.92, 1.62, WALL_FACE_Z + 0.09)),
-      mesh('ServiceConduit', new THREE.CylinderGeometry(0.035, 0.035, 1.9, 6), PIPE, new THREE.Vector3(1.92, 2.6, WALL_FACE_Z + 0.08)),
-      mesh('ServiceNoticePlate', new THREE.BoxGeometry(0.44, 0.6, 0.03), PLATE, new THREE.Vector3(1.28, 1.78, 0.23)),
-      mesh('ServiceNoticeBand', new THREE.BoxGeometry(0.44, 0.11, 0.035), FRAME, new THREE.Vector3(1.28, 2.0, 0.235))
+      /*
+       * ## Spread across the wall, and wired to something
+       *
+       * Everything on this side had piled into forty centimetres: junction box at 1.92, wall
+       * pack at 2.05, downpipe at 2.35 - three separate objects overlapping in projection at
+       * six metres, reading as one lump of hardware with a pole through it. The pipe is the
+       * one that has to stay outboard, because it is the only full-height vertical and it is
+       * what cuts the blank cladding in two.
+       *
+       * So the other two move IN, and they move in together: the box now sits directly below
+       * the wall pack with the conduit running between them, so the run explains the light
+       * instead of vanishing up behind the canopy. Across the wall it now reads notice plate,
+       * then that assembly, then pipe - three stops with air between them.
+       */
+      mesh('ServiceJunctionBox', new THREE.BoxGeometry(0.3, 0.4, 0.16), DARK, new THREE.Vector3(1.68, 2.15, WALL_FACE_Z + 0.09)),
+      mesh('ServiceConduit', new THREE.CylinderGeometry(0.045, 0.045, 0.66, 6), PIPE, new THREE.Vector3(1.68, 2.66, WALL_FACE_Z + 0.08)),
+      mesh('ServiceNoticePlate', new THREE.BoxGeometry(0.44, 0.6, 0.03), PLATE, new THREE.Vector3(1.2, 1.78, 0.23)),
+      mesh('ServiceNoticeBand', new THREE.BoxGeometry(0.44, 0.11, 0.035), FRAME, new THREE.Vector3(1.2, 2.0, 0.235))
     );
 
     /*
@@ -750,9 +764,22 @@ export class WarehouseServiceDoor {
      * that faces straight down the camera's axis flattens everything it touches, and one
      * that rakes gives the bollards, the bin and the pallets each a shadow to stand on.
      */
+    /*
+     * A back-plate, because without one it was a street lamp.
+     *
+     * The hood is a slab reaching 0.3m out from the cladding, and the conduit feeding it is a
+     * rod - so from six metres the two read as a lamp head on a pole standing in front of the
+     * wall rather than a fixture bolted to it. What was missing is the thing every wall pack
+     * has and nobody draws: the plate it is screwed to.
+     *
+     * With the plate in, the run also shortens - the junction box comes up to shoulder height
+     * so the conduit is a hand's length of trunking between two pieces of hardware instead of
+     * a metre and a half of bare stalk.
+     */
     root.add(
-      mesh('ServiceWallPackHood', new THREE.BoxGeometry(0.42, 0.14, 0.3), DARK, new THREE.Vector3(2.05, 3.05, WALL_FACE_Z + 0.17)),
-      mesh('ServiceWallPackLens', new THREE.BoxGeometry(0.34, 0.05, 0.22), WALLPACK, new THREE.Vector3(2.05, 2.96, WALL_FACE_Z + 0.21))
+      mesh('ServiceWallPackBack', new THREE.BoxGeometry(0.3, 0.36, 0.1), DARK, new THREE.Vector3(1.68, 2.99, WALL_FACE_Z + 0.05)),
+      mesh('ServiceWallPackHood', new THREE.BoxGeometry(0.42, 0.14, 0.3), DARK, new THREE.Vector3(1.68, 3.05, WALL_FACE_Z + 0.17)),
+      mesh('ServiceWallPackLens', new THREE.BoxGeometry(0.34, 0.05, 0.22), WALLPACK, new THREE.Vector3(1.68, 2.96, WALL_FACE_Z + 0.21))
     );
     root.add(ENGINE.PointLightNode.create({
       name: 'ServiceWallPackLight',
@@ -766,7 +793,7 @@ export class WarehouseServiceDoor {
       intensity: 5,
       distance: 9,
       decay: 1.5,
-      position: new THREE.Vector3(2.05, 2.9, WALL_FACE_Z + 0.4),
+      position: new THREE.Vector3(1.68, 2.9, WALL_FACE_Z + 0.4),
     }));
 
     if (layout.id !== 'service-b') {
