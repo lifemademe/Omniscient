@@ -1,5 +1,6 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { TUNED_BLOOM } from '../art/postTuning.js';
 
@@ -981,8 +982,106 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.droneRotorTransform.updateMatrix();
       blades.setMatrixAt(index, this.droneRotorTransform.matrix);
     }
+    /*
+     * ## What was missing was the MECHANISM
+     *
+     * Every albedo on this machine is near-black and the pale read in captures was purely
+     * light, so the fix was never paint - it was that the drone had no visible way of
+     * working. Four boxes reached out from the hull and four rings floated at the end of
+     * them with nothing between: no motors, so nothing was driving the blades, and no
+     * spokes, so the guards were unattached hoops.
+     *
+     * Three additions, all instanced four times off the existing rotor table, all in
+     * materials already on the airframe. At the size this thing occupies - roughly a
+     * seventh of frame height, seen from behind, through a pixelating pass - chunky and
+     * few beats fine and many.
+     */
+    const nacelles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.072, 0.09, 0.09, 10), boom, 4);
+    nacelles.name = 'DroneRotorNacelles';
+    nacelles.castShadow = true;
+
+    /*
+     * Guard spokes: three per ring, at 120 degrees.
+     *
+     * A prop guard is a hoop held off the motor by spokes, and the spokes are most of what
+     * says "guard" rather than "ring". Built flat in XZ so they need no rotation - the
+     * torus above already lies in that plane - and merged into one geometry so all four
+     * rotors are a single instanced draw.
+     */
+    const spokePieces: THREE.BufferGeometry[] = [];
+    for (let index = 0; index < 3; index++) {
+      const spoke = new THREE.BoxGeometry(0.23, 0.013, 0.02);
+      spoke.translate(0.13, 0, 0);
+      spoke.rotateY((index * Math.PI * 2) / 3);
+      spokePieces.push(spoke);
+    }
+    const spokes = new THREE.InstancedMesh(
+      mergeGeometries(spokePieces, false) ?? new THREE.BoxGeometry(0.1, 0.01, 0.01),
+      boom,
+      4
+    );
+    spokes.name = 'DroneGuardSpokes';
+
+    for (const [index, [x, z]] of DRONE_ROTOR_POSITIONS.entries()) {
+      this.droneRotorTransform.rotation.set(0, 0, 0);
+      this.droneRotorTransform.position.set(x, -0.032, z);
+      this.droneRotorTransform.updateMatrix();
+      nacelles.setMatrixAt(index, this.droneRotorTransform.matrix);
+      this.droneRotorTransform.position.set(x, 0.019, z);
+      this.droneRotorTransform.updateMatrix();
+      spokes.setMatrixAt(index, this.droneRotorTransform.matrix);
+    }
+
+    /*
+     * And the upper deck stops being one smooth wedge.
+     *
+     * It is a plain hexagonal frustum, and from the chase camera it is the largest single
+     * surface on the machine - so a spine along its length and two vent slots either side
+     * are the cheapest way to give the top of the drone a direction and a scale. The spine
+     * runs fore-and-aft on purpose: this is a craft the player steers, and every line that
+     * agrees with the heading helps them read where it is pointing.
+     */
+    const deckTop = 0.202;
+    const spine = ENGINE.MeshNode.create({
+      name: 'DroneAvionicsSpine',
+      /*
+       * A ridge, not a block, and it stops short of the tail fin.
+       *
+       * The first build ran it 0.46 long through z 0.02, which put its rear end straight
+       * through the base of DroneTailFin at z 0.24 - the two stacked into one tall pale mass
+       * on the deck and read as a lump rather than as structure. Shortened to 0.30 and moved
+       * forward so it runs nose-to-midships with clear air behind it, and flattened to 32mm
+       * so it catches a highlight along its top edge instead of presenting a face.
+       */
+      geometry: new THREE.BoxGeometry(0.1, 0.032, 0.3),
+      material: dark,
+      castShadow: true,
+    });
+    spine.position.set(0, deckTop - 0.006, -0.06);
+    /*
+     * Vents as ONE instanced mesh rather than four nodes.
+     *
+     * Four MeshNode.create calls in a loop need four distinct names, and a template literal
+     * is not a name as far as the initialize-graph rule is concerned - it flags the lot as
+     * one repeated default. Instancing sidesteps that and is the right shape anyway: the
+     * rotors, guards, blades and lamps on this machine are all instanced for exactly the
+     * same reason.
+     */
+    const vents = new THREE.InstancedMesh(new THREE.BoxGeometry(0.075, 0.016, 0.1), dark, 4);
+    vents.name = 'DroneDeckVents';
+    let ventIndex = 0;
+    for (const side of [-0.155, 0.155]) {
+      for (const offset of [-0.09, 0.05]) {
+        this.droneRotorTransform.rotation.set(0, 0, 0);
+        this.droneRotorTransform.position.set(side, deckTop - 0.012, offset);
+        this.droneRotorTransform.updateMatrix();
+        vents.setMatrixAt(ventIndex, this.droneRotorTransform.matrix);
+        ventIndex += 1;
+      }
+    }
+
     this.droneRotorBlades = blades;
-    this.droneVisual.add(arms, guards, blades);
+    this.droneVisual.add(arms, guards, blades, nacelles, spokes, spine, vents);
 
     this.droneStatusMaterial = new THREE.MeshStandardMaterial({
       color: '#8fe7c8',
