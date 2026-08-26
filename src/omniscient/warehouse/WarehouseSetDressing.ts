@@ -241,7 +241,9 @@ export class WarehouseSetDressing {
         for (let tier = 0; tier < stack; tier++) {
           const height = 0.5 + looseRng() * 0.24;
           const box = new THREE.BoxGeometry(1.16 + looseRng() * 0.2, height, 1.06 + looseRng() * 0.16);
-          box.translate(range(looseRng, -0.08, 0.08), 0.13 + tier * 0.78 + height * 0.5, 0);
+          // 0.14 is the pallet deck top from palletGeometries above; 0.13 put every bottom
+          // box a centimetre inside the pallet it stands on. Same fault as the racks.
+          box.translate(range(looseRng, -0.08, 0.08), 0.14 + tier * 0.78 + height * 0.5, 0);
           box.rotateY(turn);
           box.translate(px, 0, pz);
           boxes.push(box);

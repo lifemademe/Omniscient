@@ -155,6 +155,32 @@ function boxXZ(
   box(bucket, w, h, d, xz[0], y, xz[1], rotY);
 }
 
+/** The axis a fresh CylinderGeometry points down, for `rod` below. */
+const ROD_UP = new THREE.Vector3(0, 1, 0);
+
+/**
+ * A cylinder between two points, at whatever angle that turns out to be.
+ *
+ * Everything sloped in this file was being faked with a fixed rotation and a hand-typed
+ * midpoint, which is why the pallet truck's handle ended up twenty centimetres off the top of
+ * its own tiller and why the stair had posts but no rail. Given both ends, neither can drift.
+ */
+function rod(
+  bucket: THREE.BufferGeometry[],
+  radius: number,
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  segments = 8
+): void {
+  const delta = to.clone().sub(from);
+  const length = delta.length();
+  if (length < 1e-4) return;
+  const g = new THREE.CylinderGeometry(radius, radius, length, segments);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(ROD_UP, delta.clone().normalize()));
+  g.translate((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2);
+  bucket.push(g);
+}
+
 function cyl(
   bucket: THREE.BufferGeometry[],
   radius: number,
@@ -193,7 +219,12 @@ export class WarehouseFacilities {
     };
 
     this.buildForklift(bucket, -16.5, 20.4, Math.PI * 0.92, true);
-    this.buildForklift(bucket, 12.6, 19.2, -Math.PI * 0.34, false);
+    /*
+     * Off the stair. It was parked at (12.6, 19.2) and the flight runs down x 13.13..14.38
+     * between z 18.38 and 21.4 - so the machine's overhead guard stood in the treads. Round to
+     * the far side of the mezzanine, where it faces the floor it works instead of the wall.
+     */
+    this.buildForklift(bucket, 9.4, 17.1, -Math.PI * 0.34, false);
     this.buildForklift(bucket, -21.4, -21.6, Math.PI * 0.5, true);
     this.buildPalletTruck(bucket, 4.6, 20.9, 0.22);
     this.buildPalletTruck(bucket, -10.2, -20.4, -0.6);
@@ -510,14 +541,24 @@ export class WarehouseFacilities {
     const s = Math.sin(rotY);
     const c = Math.cos(rotY);
     const at = (lx: number, lz: number): [number, number] => [x + lx * c + lz * s, z - lx * s + lz * c];
+    /*
+     * ## The floating yellow handle
+     *
+     * The tiller was a cylinder rotated 0.42 about WORLD x and then dropped at the truck's
+     * plan position, while the handle bar was placed at that same plan position 44cm higher.
+     * Two things went wrong at once: the lean moved the shaft's top twenty centimetres in z
+     * away from the bar, so the bar hung in space beside it - and because the lean ignored
+     * rotY, a truck parked at any angle leaned sideways instead of backwards.
+     *
+     * Both ends of the shaft are now real points in the truck's own frame, and the bar sits on
+     * the end of it. See `rod`.
+     */
     for (const lx of [-0.24, 0.24]) boxXZ(bucket.bodyDark, 0.16, 0.09, 1.14, at(lx, 0.3), 0.11, rotY);
     boxXZ(bucket.body, 0.56, 0.26, 0.34, at(0, -0.42), 0.25, rotY);
-    const [tx, tz] = at(0, -0.5);
-    const tiller = new THREE.CylinderGeometry(0.045, 0.045, 1.02, 8);
-    tiller.applyMatrix4(new THREE.Matrix4().makeRotationX(0.42));
-    tiller.translate(tx, 0.76, tz);
-    bucket.steel.push(tiller);
-    box(bucket.rail, 0.34, 0.05, 0.05, tx, 1.2, tz, rotY);
+    const [footX, footZ] = at(0, -0.46);
+    const [gripX, gripZ] = at(0, -0.9);
+    rod(bucket.steel, 0.045, new THREE.Vector3(footX, 0.3, footZ), new THREE.Vector3(gripX, 1.22, gripZ));
+    box(bucket.rail, 0.34, 0.05, 0.05, gripX, 1.24, gripZ, rotY);
   }
 
   /** Where the trucks live overnight, which is the reason there are batteries in a warehouse. */
@@ -561,14 +602,57 @@ export class WarehouseFacilities {
       box(bucket.rail, 0.05, 1.05, 0.05, px, deckY + 0.62, z0 + 0.06);
     }
 
-    // Stair down to the apron, west end, with its own rail.
+    /*
+     * ## The stair, finished
+     *
+     * It was nine treads and nine posts. The posts held nothing - there was no rail between
+     * them, so the flight read as a row of yellow sticks beside some floating planks - and the
+     * top tread stopped 0.3m short of the deck edge and 0.39m below it, so the stair did not
+     * actually arrive anywhere. Reported as incomplete handrails, and it was both halves.
+     *
+     * What a stair needs to read as one, all of it missing here:
+     *
+     *  - RISERS. Open treads are a fire escape; a working stair to an office is closed.
+     *  - STRINGERS, the two sloped beams the treads sit in. This is what makes a flight a
+     *    single object instead of a stack of separate boards.
+     *  - A HANDRAIL on both sides, following the pitch, with a mid rail under it - the two
+     *    lines that read as "stair" from across a building even when the treads do not.
+     *  - NEWELS at top and bottom, so the rails begin and end on something.
+     *  - A LANDING closing the gap onto the deck.
+     */
     const steps = 9;
+    const rise = deckY / steps;
+    const going = 0.34;
+    const stairX = x0 + 0.35;
+    const railX = [stairX - 0.6, stairX + 0.6];
+    const topZ = z0 - 0.3;
+    const stepAt = (i: number): [number, number] => [deckY - (i + 1) * rise, topZ - i * going];
     for (let i = 0; i < steps; i++) {
-      const y = deckY - (i + 1) * (deckY / steps);
-      const z = z0 - 0.3 - i * 0.34;
-      box(bucket.deck, 1.25, 0.06, 0.34, x0 + 0.35, y, z);
-      box(bucket.rail, 0.05, 0.9, 0.05, x0 + 0.95, y + 0.5, z);
+      const [y, z] = stepAt(i);
+      box(bucket.deck, 1.25, 0.06, going, stairX, y, z);
+      // The riser closing the front of each tread.
+      box(bucket.bodyDark, 1.25, rise - 0.06, 0.04, stairX, y + rise / 2, z - going / 2);
     }
+    const [topY, topStepZ] = stepAt(0);
+    const [botY, botStepZ] = stepAt(steps - 1);
+    for (const rx of railX) {
+      // Stringer: the sloped beam under the treads, from the deck edge to the floor.
+      rod(bucket.steel, 0.07, new THREE.Vector3(rx, topY - 0.1, topStepZ + 0.2), new THREE.Vector3(rx, botY - 0.1, botStepZ - 0.2));
+      // Newels, then the two rails they carry.
+      for (const [ny, nz] of [[topY, topStepZ], [botY, botStepZ]] as const) {
+        box(bucket.rail, 0.06, 1.0, 0.06, rx, ny + 0.5, nz);
+      }
+      for (const lift of [0.98, 0.52]) {
+        rod(bucket.rail, 0.035, new THREE.Vector3(rx, topY + lift, topStepZ), new THREE.Vector3(rx, botY + lift, botStepZ));
+      }
+      // Two intermediate posts, so a four-metre rail is not spanning unsupported.
+      for (const i of [3, 6]) {
+        const [py, pz] = stepAt(i);
+        box(bucket.rail, 0.05, 0.98, 0.05, rx, py + 0.49, pz);
+      }
+    }
+    // The landing that puts the top tread onto the deck it is there to reach.
+    box(bucket.deck, 1.25, 0.08, (z0 - topStepZ) + 0.34, stairX, deckY - 0.05, (z0 + topStepZ) / 2 + 0.17);
 
     // The office: three walls, a glazed front, a roof.
     const oz0 = z0 + 1.6;

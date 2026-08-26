@@ -497,7 +497,16 @@ export class WarehouseServiceDoor {
     curtain.translate(0, -SHUTTER_DROP / 2, 0);
     this.shutter = mesh('ServiceLockdownShutter', curtain, DARK, new THREE.Vector3(0, SHUTTER_HEAD_Y, 0.34));
     this.shutter.scale.y = SHUTTER_OPEN;
-    const shutterDrum = mesh('ServiceLockdownDrum', new THREE.BoxGeometry(2.86, 0.26, 0.3), FRAME, new THREE.Vector3(0, SHUTTER_HEAD_Y + 0.13, 0.34));
+    /*
+     * The drum sits OVER the parked curtain, not above it.
+     *
+     * `SHUTTER_OPEN` is 0.03, so an open shutter is not nothing - it is a 10cm sliver of dark
+     * panel still hanging from the head. The drum was centred at head + 0.13, which put it
+     * entirely ABOVE that sliver and left a thin black bar visible across the opening on every
+     * door. Dropped to head - 0.05 it spans head - 0.18 to head + 0.08, which swallows the
+     * parked curtain whole and still reads as the roll the thing winds onto.
+     */
+    const shutterDrum = mesh('ServiceLockdownDrum', new THREE.BoxGeometry(2.86, 0.26, 0.34), FRAME, new THREE.Vector3(0, SHUTTER_HEAD_Y - 0.05, 0.34));
     const window = mesh('ServiceHatchWindow', new THREE.BoxGeometry(0.78, 0.24, 0.06), GLASS, new THREE.Vector3(0.64, 1.42, 0.29));
     const scanner = mesh('ServiceCargoScanner', new THREE.BoxGeometry(2.12, 0.16, 1.35), this.statusMaterial, new THREE.Vector3(0, 0.18, -1.05));
     const reader = mesh('ServiceCredentialReader', new THREE.BoxGeometry(0.14, 0.24, 0.08), DARK, new THREE.Vector3(leafX - 0.72, 1.32, 0.24));

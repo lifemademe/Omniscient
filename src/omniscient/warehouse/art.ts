@@ -937,8 +937,19 @@ export class WarehouseEnvironment {
      * the console names the hold bay in words when the decision is offered, which is the
      * moment the player needs to know which platform it is.
      */
-    const frame = mesh('Station-hold', new THREE.BoxGeometry(3.4, 0.35, 2.6), AMBER, position.clone().setY(0.15));
-    this.root.add(frame);
+    /*
+     * The amber plinth is gone too, and it was clipping.
+     *
+     * It spanned x 18.5..21.9 by z 17.7..20.3; door C's transfer dock, rotated a quarter turn
+     * onto the east wall, occupies 20.33..23.08 by 18.13..21.88. That is 1.58m of overlap in x
+     * and 2.18m in z - the yellow box sitting through the drop point, reported as exactly that.
+     *
+     * Removed rather than moved, which follows the label going last pass: the hold decision is
+     * a console action, not a place the drone flies to. The floor hatching stays as the mark,
+     * and `stationPositions` still drives the optical bracket in WarehouseRig - so the station
+     * is still findable through the one instrument that was ever pointing at it.
+     */
+    void position;
     for (const id of WAREHOUSE_DOOR_IDS) {
       const layout = WAREHOUSE_DOORS[id];
       const dock = new WarehouseTransferDock(layout);
@@ -1092,13 +1103,24 @@ export class WarehouseEnvironment {
       const node = mesh(name, curtain, gateMaterial, new THREE.Vector3(x, GATE_HEAD_Y, z));
       node.scale.y = GATE_OPEN_SCALE;
       this.root.add(node);
-      // The drum it winds onto. Without it the shutter vanishes into nothing when it opens,
-      // which reads as a missing object rather than as a door that is open.
+      /*
+       * The drum it winds onto - and it has to COVER the parked curtain, not perch above it.
+       *
+       * GATE_OPEN_SCALE is 0.03 of a 5.8m drop, so an open gate leaves 17cm of dark panel
+       * hanging from the head. With the drum centred at head + 0.22 that sliver was below it
+       * and in plain view: three of these across the building at y 5.7, each up to nineteen
+       * metres wide, reading as long thin bars ruled across everything behind them - the
+       * wireframe rectangle reported as crossing the conveyor.
+       *
+       * At head - 0.09 the drum spans head - 0.31 to head + 0.13, which contains the parked
+       * curtain completely, and it is 0.36 deep against the curtain's 0.16 so it hides it from
+       * the side as well.
+       */
       this.root.add(mesh(
         `${name}-Drum`,
         new THREE.BoxGeometry(width + 0.26, 0.44, 0.36),
         gateMaterial,
-        new THREE.Vector3(x, GATE_HEAD_Y + 0.22, z)
+        new THREE.Vector3(x, GATE_HEAD_Y - 0.09, z)
       ));
       const gates = this.securityGates.get(zone) ?? [];
       gates.push({ node });
