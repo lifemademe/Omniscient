@@ -139,6 +139,18 @@ export class ContactScene extends ENGINE.SceneNode {
 
   private readonly props = new Map<string, RegisteredProp>();
   private readonly shots = new Map<string, CameraShot>();
+  /**
+   * Named lighting beats, addressed as `light.<action>:<id>` from a mission transition.
+   *
+   * F10: the whole game is graded once, globally, and light never moves when the story does.
+   * The cue grammar already carried camera moves and prop animations per beat and nothing was
+   * using it for the room's own light - so the missing piece was a verb, not a system.
+   *
+   * A beat is a function of one number: 0 at the start of the transition, 1 at the end. The
+   * scene owns its own lights and decides what that number means, which is the same division
+   * of labour `registerProp` uses - a mission says WHEN, a room says WHAT.
+   */
+  private readonly lightBeats = new Map<string, (t: number) => void>();
   private readonly tweener = new Tweener();
   private built = false;
 
@@ -688,6 +700,21 @@ export class ContactScene extends ENGINE.SceneNode {
     this.shots.set(id, shot);
   }
 
+  /**
+   * A lighting beat this room can be told to play. See `lightBeats`.
+   *
+   * `apply` is called with 0 through 1 across `seconds`, and once more with exactly 1 at the
+   * end - so a beat can be written as a plain interpolation without worrying about whether it
+   * quite arrived. Registering the same id twice replaces it, deliberately: the beats are
+   * built during scene construction and a duplicate is a mistake, not a second beat.
+   */
+  public registerLightBeat(id: string, apply: (t: number) => void, seconds = 2.4): void {
+    this.lightBeats.set(id, apply);
+    this.lightBeatSeconds.set(id, seconds);
+  }
+
+  private readonly lightBeatSeconds = new Map<string, number>();
+
   /** Whether this room has a shot under that name, so a caller can offer it or not. */
   public hasShot(id: string): boolean {
     return this.shots.has(id);
@@ -767,6 +794,29 @@ export class ContactScene extends ENGINE.SceneNode {
 
     if (domain === 'prop') {
       return { effectPosition: this.runPropAction(target, action) ?? undefined };
+    }
+
+    /*
+     * `light.<action>:<id>` - the room's own light, moved by the beat that earned it.
+     *
+     * The action is not read. It is there so a mission reads as English at the call site -
+     * `light.dim:cellar` and `light.warm:beacon` say what is about to happen, and a beat that
+     * does the opposite of its own verb is a bug a reader can see. The id is what dispatches.
+     */
+    if (domain === 'light') {
+      const beat = this.lightBeats.get(target);
+      if (!beat) {
+        console.warn(`[contact-view] no light beat registered for "${target}"`);
+        return {};
+      }
+      const seconds = this.lightBeatSeconds.get(target) ?? 2.4;
+      this.tweener.add((t) => beat(t), {
+        duration: seconds,
+        // By id, so a beat retriggered mid-run restarts rather than fighting itself.
+        channel: `light:${target}`,
+        onComplete: () => beat(1),
+      });
+      return {};
     }
 
     console.warn(`[contact-view] unknown cue domain "${domain}"`);

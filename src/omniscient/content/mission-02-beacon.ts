@@ -600,7 +600,14 @@ export const MISSION_02: MissionDefinition = {
            *
            * The `@` suffix is general; see applyEnvironmentCue.
            */
-          environment: 'prop.steady:beacon@2.8',
+          /*
+           * F10: and the sea goes quiet under it, half a second after the lamp holds.
+           *
+           * 3.3 rather than 2.8 so the light is the event and the frame settling around it is
+           * the consequence - both on the same tick would read as one switch being thrown.
+           * See registerLightBeat('beacon').
+           */
+          environment: 'prop.steady:beacon@2.8,light.hold:beacon@3.3',
         },
         // A wrong part is fitted and the request is lost with it. See `fitted-wrong`.
         onWrong: { to: 'fitted-wrong' },

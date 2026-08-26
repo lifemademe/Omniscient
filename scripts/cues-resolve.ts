@@ -63,6 +63,14 @@ function templatePrefixes(source: string, call: string): string[] {
 }
 
 const props = literalIds(scenes, 'scene\\.registerProp');
+/*
+ * Lighting beats, registered the same way props and shots are.
+ *
+ * Added with the `light` domain - and added HERE at the same time, because the header of this
+ * file says a new verb in the grammar has to be taught to the checker in the same change. A
+ * verb the harness does not know is a verb it silently passes.
+ */
+const lightBeats = literalIds(scenes, 'scene\\.registerLightBeat');
 const shots = literalIds(scenes, 'scene\\.registerShot');
 const propPrefixes = templatePrefixes(scenes, 'scene\\.registerProp');
 
@@ -103,7 +111,7 @@ for (const name of readdirSync(CONTENT).filter((f) => f.endsWith('.ts'))) {
    * catches them all without having to know which field it came from.
    */
   for (const match of source.matchAll(
-    /'((?:camera|prop)\.[a-z-]+:[a-z0-9-]+(?:@[\d.]+)?(?:\s*,\s*[a-z]+\.[a-z-]+:[a-z0-9-]+(?:@[\d.]+)?)*)'/g
+    /'((?:camera|prop|light)\.[a-z-]+:[a-z0-9-]+(?:@[\d.]+)?(?:\s*,\s*[a-z]+\.[a-z-]+:[a-z0-9-]+(?:@[\d.]+)?)*)'/g
   )) {
     for (const raw of match[1].split(',').map((c) => c.trim())) {
       checked += 1;
@@ -142,6 +150,18 @@ for (const name of readdirSync(CONTENT).filter((f) => f.endsWith('.ts'))) {
        * about a thing or it should not be checking it.
        */
       if (domain === 'unit' || domain === 'game') continue;
+
+      /*
+       * `light.<action>:<id>` - the room's own light, moved by a beat. The action is not
+       * checked because ContactScene does not read it either: it is there so the call site
+       * reads as English, and the id is what dispatches.
+       */
+      if (domain === 'light') {
+        if (!lightBeats.has(target)) {
+          problems.push({ file: name, cue, why: `no light beat '${target}'` });
+        }
+        continue;
+      }
 
       /*
        * Props are addressed as `propId` or `propId-actionSuffix` - `runPropAction` falls

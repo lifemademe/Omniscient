@@ -340,7 +340,9 @@ export const MISSION_05: MissionDefinition = {
         onSolved: {
           to: 'solved',
           environment:
-            'camera.push:valve,prop.turn:valve,prop.clear:water,prop.release:outfall@1.35',
+            'camera.push:valve,prop.turn:valve,prop.clear:water,prop.release:outfall@1.35,' +
+            // F10: the room comes up as the water goes. See registerLightBeat('cellar').
+            'light.settle:cellar@1.35',
         },
         onWrong: { to: 'covers', environment: 'camera.push:valve,prop.burst:valve' },
         wrongSay:

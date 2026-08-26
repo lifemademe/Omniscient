@@ -350,7 +350,9 @@ export const MISSION_06: MissionDefinition = {
         kind: 'lock',
         prompt: 'Name the order the pins bind in.',
         lock: HER_DOOR,
-        onSolved: { to: 'solved', environment: 'prop.open:door' },
+        // F10: the bounce on the step warms with the door, so the light reaching him is the
+        // house's. See registerLightBeat('threshold').
+        onSolved: { to: 'solved', environment: 'prop.open:door,light.open:threshold' },
         onWrong: { to: 'working' },
         /*
          * Points at the report rather than just announcing the failure.

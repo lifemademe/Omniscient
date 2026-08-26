@@ -3067,16 +3067,37 @@ function buildBeaconMast(scene: ContactScene): void {
    * player could not see the thing they were being asked about. This keeps a floor under
    * the dark phase without ever competing with the beacon's amber when it is lit.
    */
-  scene.registerProp(
-    'sea-glow',
-    ENGINE.PointLightNode.create({
-      name: 'SeaGlow',
-      position: new THREE.Vector3(3.6, 1.4, -3.2),
-      intensity: 11,
-      color: new THREE.Color('#5f7f9e'),
-      distance: 24,
-      decay: 1.0,
-    })
+  const seaGlow = ENGINE.PointLightNode.create({
+    name: 'SeaGlow',
+    position: new THREE.Vector3(3.6, 1.4, -3.2),
+    intensity: 11,
+    color: new THREE.Color('#5f7f9e'),
+    distance: 24,
+    decay: 1.0,
+  });
+  scene.registerProp('sea-glow', seaGlow);
+
+  /*
+   * ## F10's second beat: the sea gives the frame to the beacon
+   *
+   * "The beacon room warming on solve" - and the way to warm it is NOT to push the beacon up.
+   * It is already at 15 over 14 metres and amber emissives in this game clip to white the
+   * moment they are asked for more; the lamp would go from a light to a chip.
+   *
+   * So the cold half comes down instead. The sea glow is what keeps the dark phase readable,
+   * and at the moment the beacon holds it is also the only thing competing with it - dropping
+   * it a third hands the frame over without touching a value that is already at its ceiling.
+   *
+   * Four seconds, which is slower than the others on purpose: this one runs under the beat
+   * where Ileana says the light is holding, and a fast change there would read as a switch
+   * rather than as the sea going quiet behind her.
+   */
+  scene.registerLightBeat(
+    'beacon',
+    (t) => {
+      seaGlow.intensity = 11 - t * 3.5;
+    },
+    4
   );
 
   // -- Shots ----------------------------------------------------------------
@@ -7579,18 +7600,40 @@ function buildFloodedCellar(scene: ContactScene): void {
   shade.translate(lampAt.x, lampAt.y, lampAt.z + 0.085);
   scene.registerProp('bulkhead', meshOf('Bulkhead', shade, MAT.lamp));
 
-  scene.registerProp(
-    'lamp',
-    ENGINE.PointLightNode.create({
-      name: 'Bulkhead',
-      position: lampAt.clone().add(new THREE.Vector3(0, 0, 0.2)),
-      // 11 down to 9.5. It is still the key and still the brightest thing in the room; the
-      // run no longer needs it to reach six metres, so it can go back to being a lamp.
-      intensity: 9.5,
-      color: new THREE.Color('#ffdcae'),
-      distance: 7,
-      decay: 1.3,
-    })
+  const bulkheadLamp = ENGINE.PointLightNode.create({
+    name: 'Bulkhead',
+    position: lampAt.clone().add(new THREE.Vector3(0, 0, 0.2)),
+    // 11 down to 9.5. It is still the key and still the brightest thing in the room; the
+    // run no longer needs it to reach six metres, so it can go back to being a lamp.
+    intensity: 9.5,
+    color: new THREE.Color('#ffdcae'),
+    distance: 7,
+    decay: 1.3,
+  });
+  scene.registerProp('lamp', bulkheadLamp);
+
+  /*
+   * ## F10's first beat: the cellar comes up when the water goes
+   *
+   * The lighting in this game is graded once and never moves, and the cue grammar has carried
+   * camera moves and prop animations per beat for months with nothing using it for light. This
+   * is the smallest honest use of it: one lamp, one number, on the transition the whole mission
+   * has been working toward.
+   *
+   * It goes UP rather than down, and that is deliberate. Every version of this beat that
+   * darkens something also makes something harder to see, and a room that gets harder to read
+   * at the moment the player wins is a punishment for winning. A cellar with the flood gone is
+   * a cellar somebody can work in; the lamp reaching further is the whole idea.
+   *
+   * 9.5 to 11.2 is under twenty per cent - enough to feel as a change, not enough to blow the
+   * pipe run's highlights, which sit close to clipping already.
+   */
+  scene.registerLightBeat(
+    'cellar',
+    (t) => {
+      bulkheadLamp.intensity = 9.5 + t * 1.7;
+    },
+    3.2
   );
 
   /*
@@ -9742,20 +9785,42 @@ function buildNightDoor(scene: ContactScene): void {
    * porch light is actually landing. Short reach, warm, and low enough to lift a face
    * looking down at a lock.
    */
-  scene.registerProp(
-    'step-bounce',
-    ENGINE.PointLightNode.create({
-      name: 'StepBounce',
+  const stepBounce = ENGINE.PointLightNode.create({
+    name: 'StepBounce',
       // Dropped to 1.15 and widened to 2.1 on the second pass: at chest height with a
       // 1.75 reach his coat and face read and his legs sat at 9 against a path at 12, so
       // he faded into the ground he was standing on. A bounce off a step comes from low
       // down anyway - it was at the wrong height as well as the wrong radius.
-      position: new THREE.Vector3(0.12, 1.15, 1.18),
-      intensity: 3.4,
-      color: new THREE.Color('#ffc98d'),
-      distance: 2.1,
-      decay: 1.3,
-    })
+    position: new THREE.Vector3(0.12, 1.15, 1.18),
+    intensity: 3.4,
+    color: new THREE.Color('#ffc98d'),
+    distance: 2.1,
+    decay: 1.3,
+  });
+  scene.registerProp('step-bounce', stepBounce);
+
+  /*
+   * ## F10's third beat: the light on the step comes from inside the house
+   *
+   * The door opening already raises `hallLight` in lockstep with the door angle, so the
+   * threshold changes - but the man standing on the step does not. He is lit by a bounce off
+   * the path that has no idea a door just opened behind him.
+   *
+   * This is the half that was missing. As the door goes, the bounce warms and reaches further,
+   * so the light arriving on Dorin is the house's light. It is the difference between a door
+   * opening in the same picture he is standing in and a door opening ONTO him.
+   *
+   * 2.4 seconds against the door's own swing, and the distance moves with the intensity -
+   * a source that gets brighter without getting bigger reads as a lamp being turned up rather
+   * than as a room being opened.
+   */
+  scene.registerLightBeat(
+    'threshold',
+    (t) => {
+      stepBounce.intensity = 3.4 + t * 1.2;
+      stepBounce.distance = 2.1 + t * 0.9;
+    },
+    2.4
   );
 
   // A cold spill from the landing window above - the only other light on the street, and
