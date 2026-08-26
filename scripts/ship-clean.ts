@@ -20,6 +20,7 @@
  *     npx tsx scripts/ship-clean.ts
  */
 
+import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -130,16 +131,64 @@ console.log('\nno credentials in anything tracked');
  * project's conversation before, and the cost of finding out after a push is not
  * recoverable - a key in git history is a key that has to be rotated, whatever is done to
  * the branch afterwards.
+ *
+ * ## It said "anything tracked" and read two directories
+ *
+ * This check passed for months while a live bearer token sat in a tracked file, and it did
+ * so for two independent reasons, either of which was enough:
+ *
+ *   1. It read `read`, which is src/ and scripts/ filtered to .ts and .tsx. The token was in
+ *      `.codex/config.toml` - not either root, not either extension.
+ *   2. Its pattern wanted the word BEARER in the NAME: `SOMETHING_BEARER = "..."`. The line
+ *      was `Authorization = "Bearer fc37..."`, where the word is in the VALUE. So even
+ *      pointed at the file it would have found nothing.
+ *
+ * The heading claimed the whole tracked tree and the code checked a fraction of it, which is
+ * the worst kind of green: it is not that nobody looked, it is that something reported having
+ * looked. So the list now comes from `git ls-files` - the actual definition of "tracked" -
+ * and the patterns match the shapes a credential takes in a value rather than in a name.
  */
+const tracked = execSync('git ls-files', { encoding: 'utf8' })
+  .split(/\r?\n/)
+  .filter(Boolean)
+  // Binaries cannot hold a pasted token in a form this would find, and reading the asset
+  // tree as UTF-8 is slow enough to make people delete the check.
+  .filter((path) => !/\.(png|jpg|jpeg|webp|gif|fbx|glb|gltf|mp3|wav|ogg|ttf|otf|woff2?|ktx2|bin|zip)$/i.test(path));
+
 const secrets: string[] = [];
-for (const [path, text] of read) {
+for (const path of tracked) {
   if (path.includes('ship-clean')) continue;
+  let text = '';
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch {
+    continue;
+  }
   if (/\bsk_[a-f0-9]{24,}/i.test(text)) secrets.push(`${path} (sk_ token)`);
-  if (/[A-Za-z_]*(?:API_KEY|SECRET|BEARER)[A-Za-z_]*\s*=\s*['"][^'"]{16,}/.test(text)) {
+  /*
+   * A credential in the NAME: SOMETHING_API_KEY = "...".
+   *
+   * The value has to look like a secret and not like source. A regex character class is the
+   * commonest false positive by a distance - `const PATH_TOKEN_CHARACTER = '[A-Za-z0-9_./-]'`
+   * matched the first version of this - so anything carrying regex or path punctuation is not
+   * a key. A real one is letters, digits, dashes and underscores.
+   */
+  if (/[A-Za-z_]*(?:API_KEY|SECRET|BEARER|TOKEN|PASSWORD)[A-Za-z_]*\s*[:=]\s*['"][A-Za-z0-9_-]{16,}['"]/i.test(text)) {
     secrets.push(`${path} (inline key)`);
   }
+  // A credential in the VALUE: Authorization = "Bearer ...", or a bare UUID against any
+  // authorisation-shaped key. This is the shape that got through.
+  if (/["'\s]Bearer\s+[A-Za-z0-9._-]{16,}/i.test(text)) secrets.push(`${path} (bearer value)`);
+  if (/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i.test(text)
+    && /author|token|secret|key|credential/i.test(text)) {
+    secrets.push(`${path} (uuid beside an auth word)`);
+  }
 }
-check('no keys or tokens in source', secrets.length === 0, secrets.join(', '));
+check(
+  'no keys or tokens in any tracked file',
+  secrets.length === 0,
+  [...new Set(secrets)].join(', ')
+);
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);
