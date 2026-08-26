@@ -169,8 +169,21 @@ export const THE_SLUICE: World = {
      * The column runs up the east wall and stops under a cap; the only opening is west, onto
      * this. So the ride ends the way it should - the air runs out, and there is exactly one
      * ledge in reach of where it left you.
+     *
+     * ## Why it is 130 lower than it was
+     *
+     * A lift gate needs its own height of clear air above it - the rig raises a slab by its
+     * height plus four and there is nowhere else for it to go. At the old height this pocket
+     * was 170 tall, which bought a door 76 high: ninety wide and seventy-six tall is not a
+     * door, it is a hatch, and the playtest said so - "the door for the fan is stretched wide,
+     * make it the same as the other doors".
+     *
+     * Dropping the platform buys the pocket 300, which is a 150-tall bulkhead - within ten of
+     * the grate's own 140, so the three doors in this level finally look like three doors. The
+     * cost is that the ride ends 290 above its landing instead of 170, and that is not a cost:
+     * falling out of a column of air onto a gantry is the better arrival.
      */
-    { x: 900, y: 1020, w: 180, h: SHELF },
+    { x: 900, y: 1150, w: 180, h: SHELF },
     /*
      * The pocket's ceiling, west half - and it is level with the patrol floor beside it.
      *
@@ -181,9 +194,9 @@ export const THE_SLUICE: World = {
      *
      * Surfaces that are meant to be one surface should share a number.
      */
-    { x: 900, y: 760, w: 180, h: SHELF },
+    { x: 900, y: 760, w: 180, h: 70 },
     /** The column's cap, east half. Air stops here; the way out is sideways. */
-    { x: 1080, y: 760, w: 180, h: SHELF },
+    { x: 1080, y: 760, w: 180, h: 70 },
     /*
      * The landing, and where the west climb begins.
      *
@@ -199,7 +212,7 @@ export const THE_SLUICE: World = {
      * The pier the grate hangs under. It runs from the patrol floor's underside down to the
      * grate itself, so there is no way round the wall except the gap the wall is for.
      */
-    { x: 990, y: 1110, w: 90, h: 300 },
+    { x: 990, y: 1250, w: 90, h: 160 },
 
     // -- 8. the alcove behind the cracked wall --------------------------------------------
     /*
@@ -355,12 +368,13 @@ export const THE_SLUICE: World = {
      * sentence and a better beat: the reward for the top of the column is not a walkway, it is
      * being let out.
      *
-     * 76 tall, which is a step over rather than a doorway, because the lift travels the slab's
-     * own height plus four and the pocket's ceiling is only 170 above the deck - a taller
-     * bulkhead would rise into it. Small is also honest here: this is a sluice gate on a
-     * gantry, not a gate in a wall.
+     * 90 by 150, which is the grate's own shape and a door rather than a hatch. It was 76 tall
+     * for a while because the lift travels the slab's height plus four and the pocket above it
+     * was not deep enough - the answer to that was to move the platform down rather than to
+     * keep a squashed door, since the pocket is dead space and the arrival is better for the
+     * extra fall.
      */
-    { id: 'b1', x: 900, y: 944, w: 90, h: 76, open: false, lift: 0 },
+    { id: 'b1', x: 900, y: 1000, w: 90, h: 150, open: false, lift: 0 },
     /*
      * The cracked wall at the top of the climb. Only the force plate opens it.
      *
@@ -389,7 +403,7 @@ export const THE_SLUICE: World = {
     {
       id: 'drop',
       x: 1000,
-      y: 1004,
+      y: 1134,
       radius: 26,
       pressed: false,
       opens: ['s1', 'b1'],
@@ -499,7 +513,7 @@ export const THE_SLUICE: World = {
    * to line up with the patrol floor, so the column follows it - a shaft that stops short of
    * its own lid is a shaft with a silent dead zone at the top of the ride.
    */
-  updrafts: [{ x: 1090, y: 850, w: 160, h: FLOOR - 850, force: 2050, liftMass: 14, feather: 45 }],
+  updrafts: [{ x: 1090, y: 830, w: 160, h: FLOOR - 830, force: 2050, liftMass: 14, feather: 45 }],
 
   /**
    * The giant mushrooms, placed rather than derived.

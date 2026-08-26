@@ -2771,12 +2771,22 @@ export function sporelingSprite(): {
 export function draughtTexture(seed: string, w = 160, h = 320): THREE.CanvasTexture {
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(w, h);
-  const near = mixHex(PAL.hazeNear, PAL.lampCore, 0.35);
-  const far = mixHex(PAL.hazeFar, PAL.lampWarm, 0.25);
-  for (let i = 0; i < 150; i++) {
+  /*
+   * Lit to the LAMP's values rather than the haze's.
+   *
+   * The first version mixed a third of a lamp colour into the background haze, which is the
+   * recipe for something that reads as slightly paler fog - and that is exactly what shipped:
+   * "make the fan more noticeable". The column is the only thing in this game that lifts you
+   * and it was quieter than the moss. Mixed the other way round now, so the streaks are lamp
+   * light with a little haze in them, which is what a shaft of moving air lit from below is.
+   */
+  const near = mixHex(PAL.lampCore, PAL.hazeNear, 0.2);
+  const far = mixHex(PAL.lampWarm, PAL.hazeFar, 0.3);
+  // Three times the streaks, and a fifth of them two pixels wide - see the wide pass below.
+  for (let i = 0; i < 440; i++) {
     const x = Math.round(range(rng, 0, w - 1));
     const y = Math.round(range(rng, 0, h - 1));
-    const len = [3, 7, 13][Math.floor(range(rng, 0, 3)) % 3];
+    const len = [4, 9, 17][Math.floor(range(rng, 0, 3)) % 3];
     /*
      * The margin, in alpha rather than in geometry.
      *
@@ -2787,11 +2797,24 @@ export function draughtTexture(seed: string, w = 160, h = 320): THREE.CanvasText
      * wrong for every column but the first.
      */
     const edge = Math.min(1, Math.min(x, w - 1 - x) / (w * 0.2));
-    g.globalAlpha = (0.18 + range(rng, 0, 0.5)) * edge;
-    g.fillStyle = rng() > 0.6 ? near : far;
+    g.globalAlpha = (0.34 + range(rng, 0, 0.5)) * edge;
+    g.fillStyle = rng() > 0.55 ? near : far;
     g.fillRect(x, y, 1, len);
-    // The occasional two-wide streak, so the column has a foreground as well as a haze.
-    if (rng() > 0.88) g.fillRect(x + 1, y + Math.round(len * 0.3), 1, Math.round(len * 0.6));
+    // Two-wide streaks for a fifth of them, so the column has a foreground and not only a haze.
+    if (rng() > 0.8) g.fillRect(x + 1, y + Math.round(len * 0.3), 1, Math.round(len * 0.6));
+  }
+  /*
+   * A soft core down the middle, so the column has a shape at a glance.
+   *
+   * Streaks alone read as noise until you are looking for them; a body of light behind them
+   * says "there is something here" from across the room, which is what this needs to do. It
+   * is drawn last and at low alpha so it sits behind the streaks rather than washing them out.
+   */
+  for (let x = 0; x < w; x++) {
+    const t = Math.abs(x - (w - 1) / 2) / ((w - 1) / 2);
+    g.globalAlpha = 0.16 * (1 - t * t);
+    g.fillStyle = near;
+    g.fillRect(x, 0, 1, h);
   }
   g.globalAlpha = 1;
   return pixelTexture(c);

@@ -322,7 +322,8 @@ for (const c of W.crushers ?? []) {
   const plate = W.buttons.find((b) => b.id === 'drop')!;
   check(
     'the thing that wakes them is at the top of the column',
-    (plate.activates ?? []).length === 3 && plate.y < 1100 && plate.x > 900,
+    // At the top of the column: east of the pier and a long way above the machine floor.
+    (plate.activates ?? []).length === 3 && plate.y < FLOOR_TOP - 300 && plate.x > 900,
     `at (${plate.x}, ${plate.y})`
   );
   // A red growth is not a growth you can be handed early by a second switch.
@@ -400,7 +401,7 @@ for (const c of W.critters ?? []) {
     if (isShell(t)) continue;
     check(`the bulkhead is clear of (${t.x},${t.y})`, !overlap(slab, t));
   }
-  const platform = W.tiles.find((t) => t.x === 900 && t.y === 1020)!;
+  const platform = W.tiles.find((t) => t.x === 900 && t.y === 1150)!;
   check('the bulkhead stands on the platform', gate.y + gate.h === platform.y, `${gate.y + gate.h}`);
   check(
     'and within it, not off its end',
@@ -457,7 +458,7 @@ for (const c of W.critters ?? []) {
   check('grate leaves 30px of daylight', FLOOR_TOP - (grate.y + grate.h) === 30, `${FLOOR_TOP - (grate.y + grate.h)}`);
   const under = W.tiles.some((t) => t.y === FLOOR_TOP && t.x <= grate.x && t.x + t.w >= grate.x + grate.w);
   check('the floor runs under the grate', under);
-  const pier = W.tiles.find((t) => t.x === 990 && t.y === 1110)!;
+  const pier = W.tiles.find((t) => t.x === 990 && t.y === 1250)!;
   check('the pier meets the grate', pier.y + pier.h === grate.y, `${pier.y + pier.h} vs ${grate.y}`);
   const patrol = W.tiles.find((t) => t.y === 760)!;
   check('nothing walks over the pier', pier.x >= patrol.x && pier.x + pier.w <= 1260);
@@ -475,7 +476,7 @@ for (const c of W.critters ?? []) {
   }
   const cap = W.tiles.find((t) => t.x === 1080 && t.y === 760)!;
   check('the column is capped', cap.y + cap.h === draft.y, `${cap.y + cap.h} vs ${draft.y}`);
-  const deck = W.tiles.find((t) => t.x === 900 && t.y === 1020)!;
+  const deck = W.tiles.find((t) => t.x === 900 && t.y === 1150)!;
   check('the platform is west of the column', deck.x + deck.w === draft.x - 10 || deck.x + deck.w <= draft.x);
   check('the column reaches the machine floor', draft.y + draft.h === FLOOR_TOP, `${draft.y + draft.h}`);
 }
@@ -598,7 +599,7 @@ console.log('\nthe route - the two moves the layout cannot settle on its own');
  */
 {
   const draft = THE_SLUICE.updrafts![0];
-  const platform = THE_SLUICE.tiles.find((t) => t.x === 900 && t.y === 1020)!;
+  const platform = THE_SLUICE.tiles.find((t) => t.x === 900 && t.y === 1150)!;
   const state = makeState(freshSluice(), draft.liftMass);
   const dx = draft.x + draft.w / 2 - home(state).x;
   const dy = FLOOR_TOP - 30 - home(state).y;

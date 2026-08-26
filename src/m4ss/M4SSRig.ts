@@ -1311,12 +1311,25 @@ export class M4SSRig extends ENGINE.SceneNode {
      * cover eight hundred pixels of shaft and scroll for ever without a seam.
      */
     for (const draft of world.updrafts ?? []) {
-      const intakeH = 40;
+      /*
+       * The vent is a FITTING, not a floor panel.
+       *
+       * It used to be drawn the full width of the column and forty tall - four to one, which
+       * is the exact proportion of a door lying on its side, and that is what the playtest
+       * called it: "the door for the fan is stretched wide". Ninety by sixty matches the
+       * bulkhead and the grate, so the three pieces of machinery in this bay are the same
+       * kind of object.
+       *
+       * Narrower than the column it feeds, deliberately. Air leaves a duct and spreads; a
+       * vent as wide as its own plume reads as the floor having a hole in it.
+       */
+      const intakeW = 90;
+      const intakeH = 60;
       const intake = decorMesh(
         'DraughtIntake',
-        new THREE.PlaneGeometry(draft.w, intakeH),
+        new THREE.PlaneGeometry(intakeW, intakeH),
         this.artMaterial({
-          map: intakeTexture(`intake-${draft.x}`, draft.w, intakeH),
+          map: intakeTexture(`intake-${draft.x}`, intakeW, intakeH),
           transparent: true,
         })
       );
@@ -1331,7 +1344,7 @@ export class M4SSRig extends ENGINE.SceneNode {
         this.artMaterial({
           map,
           transparent: true,
-          opacity: 0.5,
+          opacity: 0.7,
           blending: THREE.AdditiveBlending,
           depthWrite: false,
         })
@@ -4191,6 +4204,12 @@ export class M4SSRig extends ENGINE.SceneNode {
      * (measured at 674px in 2.5s); air that moves slower than the thing it is lifting reads
      * as the body being winched rather than blown.
      *
+     * MINUS, and the sign is not obvious. Raising a texture's offset shifts the sampled
+     * coordinate up, which moves the image DOWN - and then the stage node's negative y scale
+     * flips it again. Two inversions that cancel to "the obvious sign is wrong", which is why
+     * the column shipped blowing downwards. There is no reasoning about this that is faster
+     * than looking at it.
+     *
      * The brightness asks the SIM whether the draught is doing anything, through the same
      * `draftLift` the force block uses. A column that looks like it is lifting you and is not
      * would be worse than no art at all - it is the one thing here the player has to be able
@@ -4200,12 +4219,12 @@ export class M4SSRig extends ENGINE.SceneNode {
       const body = owned(this.state);
       const at = body.length > 0 ? centroid(body) : null;
       for (const entry of this.draughtNodes) {
-        entry.map.offset.y += deltaTime * 0.9;
-        if (entry.map.offset.y > 1) entry.map.offset.y -= 1;
+        entry.map.offset.y -= deltaTime * 0.9;
+        if (entry.map.offset.y < 0) entry.map.offset.y += 1;
         const lifting = at ? draftLift(entry.draft, at, body.length) : 0;
         entry.glow += (lifting - entry.glow) * Math.min(1, deltaTime * 6);
         const mat = entry.face.material as THREE.MeshBasicMaterial;
-        mat.opacity = 0.42 + entry.glow * 0.34;
+        mat.opacity = 0.62 + entry.glow * 0.34;
       }
     }
 
