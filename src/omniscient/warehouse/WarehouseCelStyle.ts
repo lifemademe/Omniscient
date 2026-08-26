@@ -25,7 +25,7 @@ interface MaterialSnapshot {
  * Kept as a named constant because it is the one number that answers "the colours do not
  * pop": a toon ramp flattens value, so hue is left carrying the picture on its own.
  */
-const CEL_CHROMA_GAIN = 1.1;
+const CEL_CHROMA_GAIN = 1.18;
 
 /**
  * How much darker the base of the building is than the top of it.

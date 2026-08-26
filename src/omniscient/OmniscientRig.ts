@@ -1326,6 +1326,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     celSlider('brightness', 'brightness', 0.3, 2.5, 0.01);
     celSlider('value steps', 'posterize', 0, 8, 1);
     celSlider('step edge', 'posterizeSoft', 0, 0.6, 0.01);
+    celSlider('shadow gate', 'posterizeGate', 0, 0.08, 0.001);
     celSlider('saturation', 'saturation', 0.4, 2.2, 0.01);
     tune.color({
       label: 'ink colour',

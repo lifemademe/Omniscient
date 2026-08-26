@@ -109,6 +109,7 @@ class PaintPass implements ComposerPass {
         uOutlineFadeEnd: { value: 1000 },
         uPosterize: { value: 0 },
         uPosterizeSoft: { value: 0 },
+        uPosterizeGate: { value: 0 },
         uSaturation: { value: 1 },
         uProtectedA: { value: new THREE.Vector2() },
         uProtectedB: { value: new THREE.Vector2() },
@@ -309,6 +310,7 @@ class PaintPass implements ComposerPass {
     this.now.outlineFadeStart += (this.target.outlineFadeStart - this.now.outlineFadeStart) * k;
     this.now.outlineFadeEnd += (this.target.outlineFadeEnd - this.now.outlineFadeEnd) * k;
     this.now.posterizeSoft += (this.target.posterizeSoft - this.now.posterizeSoft) * k;
+    this.now.posterizeGate += (this.target.posterizeGate - this.now.posterizeGate) * k;
     this.now.saturation += (this.target.saturation - this.now.saturation) * k;
     // Step COUNT is snapped rather than eased. Interpolating it walks the image through
     // 3.4 and 3.7 steps on the way, and a fractional band count is a moving moire.
@@ -337,6 +339,7 @@ class PaintPass implements ComposerPass {
     u.uOutlineFadeEnd.value = this.now.outlineFadeEnd;
     u.uPosterize.value = this.now.posterize;
     u.uPosterizeSoft.value = this.now.posterizeSoft;
+    u.uPosterizeGate.value = this.now.posterizeGate;
     u.uSaturation.value = this.now.saturation;
     (u.uInkColor.value as THREE.Color).setRGB(...this.now.inkColor);
     u.uEncode.value = this.renderToScreen ? 1 : 0;

@@ -62,6 +62,27 @@ export interface PaintLook {
   /** Width of the soft edge between posterised steps, 0..1 of a step. 0 is a hard cel step. */
   posterizeSoft: number;
   /**
+   * Linear luminance below which the posterise fades out entirely.
+   *
+   * ## Why this exists: it blacked out a whole mission
+   *
+   * Quantising to four steps assumes the picture SPANS those steps. A high-key warehouse
+   * does; a dark scene lives inside the bottom one, and there the maths has a cliff - the
+   * lowest band rounds to exactly zero, and since the pass scales colour by `banded / value`,
+   * zero does not merely darken a pixel, it destroys its hue as well.
+   *
+   * Replayed offline, every pixel below linear 0.0092 - sRGB 24 of 255 - came out at exactly
+   * zero. The warehouse's darkest tenth sits at 47, so nothing there ever crossed the line
+   * and the fault was invisible in the only room it was tested in. M4SS is a dark shaft, most
+   * of its frame is under it, and the mission rendered black.
+   *
+   * Fading the effect out in the darks rather than clamping it is the fix, and it is this
+   * file's own idiom - the ink term already does exactly this ("only where there is light to
+   * lose"). Below the gate a pixel passes through untouched, which is also what the house
+   * ramp has always asked for: shadows dark and COLOURED, never black.
+   */
+  posterizeGate: number;
+  /**
    * Chroma gain on the finished pixel, 1 = unchanged.
    *
    * Posterising VALUE makes hue carry more of the picture, because there is less value
@@ -90,7 +111,7 @@ export const PAINT_LOOKS = {
     radius: 0, strength: 0, ink: 0, tint: 0, tooth: 0,
     outlineWidth: 0, depthInk: 0, normalInk: 0, outlineStrength: 0,
     normalScale: 0.5, protectSignals: 0, inkColor: [0.025, 0.035, 0.04],
-    brightness: 1, posterize: 0, posterizeSoft: 0, saturation: 1,
+    brightness: 1, posterize: 0, posterizeSoft: 0, posterizeGate: 0, saturation: 1,
     outlineFadeStart: 999, outlineFadeEnd: 1000,
   },
   /**
@@ -103,7 +124,7 @@ export const PAINT_LOOKS = {
     radius: 1.2, strength: 0.18, ink: 0.24, tint: 0.4, tooth: 0.04,
     outlineWidth: 0, depthInk: 0, normalInk: 0, outlineStrength: 0,
     normalScale: 0.5, protectSignals: 0.3, inkColor: [0.025, 0.035, 0.04],
-    brightness: 1, posterize: 0, posterizeSoft: 0, saturation: 1,
+    brightness: 1, posterize: 0, posterizeSoft: 0, posterizeGate: 0, saturation: 1,
     outlineFadeStart: 999, outlineFadeEnd: 1000,
   },
   /** Pushed, for judging the direction rather than for shipping. */
@@ -111,12 +132,13 @@ export const PAINT_LOOKS = {
     radius: 1.8, strength: 0.34, ink: 0.48, tint: 0.65, tooth: 0.08,
     outlineWidth: 1.5, depthInk: 1, normalInk: 0.7, outlineStrength: 0.8,
     normalScale: 0.85, protectSignals: 0.55, inkColor: [0.018, 0.025, 0.03],
-    brightness: 1, posterize: 0, posterizeSoft: 0, saturation: 1,
+    brightness: 1, posterize: 0, posterizeSoft: 0, posterizeGate: 0, saturation: 1,
     outlineFadeStart: 16, outlineFadeEnd: 46,
   },
   /** Warehouse prototype: clean value bands, occluded contours, no canvas or oil smearing. */
   warehouseCel: {
-    radius: 3, strength: 1, ink: 1, tint: 0.12, tooth: 0,
+    /* Ink 0.75, not 1: the luminance darkening is the other half of "turn the cel down". */
+    radius: 3, strength: 1, ink: 0.75, tint: 0.12, tooth: 0,
     /*
      * Settled at the F8 panel, 2026-08-25.
      *
@@ -190,7 +212,16 @@ export const PAINT_LOOKS = {
      */
     // 1.10, down from 1.26. The palette repaint and the material-level gain are both doing
     // work now, so the pass does not have to push as hard on top of them.
-    posterize: 4, posterizeSoft: 0.05, saturation: 1.1,
+    /*
+     * Eased, and gated.
+     *
+     * The step edge goes from 0.05 to 0.14 - still unmistakably banded, with enough ramp that
+     * the terraces stop crawling along slowly curving surfaces as the drone moves. The gate
+     * is what stops the bottom band swallowing a dark scene; see PaintLook.posterizeGate.
+     * 0.014 linear is well under this room's darkest tenth, so the warehouse is unaffected by
+     * it and everything darker than the warehouse gets its shadows back.
+     */
+    posterize: 4, posterizeSoft: 0.14, posterizeGate: 0.014, saturation: 1.2,
     /*
      * Full weight to 13 metres, quarter weight past 34.
      *
@@ -206,7 +237,7 @@ export const PAINT_LOOKS = {
     radius: 0, strength: 0, ink: 0.06, tint: 0.24, tooth: 0,
     outlineWidth: 1.8, depthInk: 1, normalInk: 0.38, outlineStrength: 0,
     normalScale: 0.48, protectSignals: 0.55, inkColor: [0.025, 0.035, 0.04],
-    brightness: 1, posterize: 3, posterizeSoft: 0.14, saturation: 1.2,
+    brightness: 1, posterize: 3, posterizeSoft: 0.18, posterizeGate: 0.014, saturation: 1.2,
     outlineFadeStart: 13, outlineFadeEnd: 34,
   },
 } as const satisfies Record<string, PaintLook>;
@@ -249,6 +280,7 @@ uniform float uOutlineFadeStart;
 uniform float uOutlineFadeEnd;
 uniform float uPosterize;
 uniform float uPosterizeSoft;
+uniform float uPosterizeGate;
 uniform float uSaturation;
 uniform vec2 uProtectedA;
 uniform vec2 uProtectedB;
@@ -397,7 +429,13 @@ void main() {
     float halfSoft = max( uPosterizeSoft, 0.0001 ) * 0.5;
     float steppedPerceptual = ( base + smoothstep( 0.5 - halfSoft, 0.5 + halfSoft, within ) ) / uPosterize;
     float banded = pow( steppedPerceptual, 2.2 );
-    colour *= banded / value;
+    /*
+     * Faded out in the darks rather than applied everywhere. See PaintLook.posterizeGate -
+     * without this the lowest band rounds to zero, and scaling by banded over value at zero
+     * does not just darken a pixel, it takes its hue with it.
+     */
+    float posterMix = uPosterizeGate > 0.0 ? smoothstep( 0.0, uPosterizeGate, value ) : 1.0;
+    colour *= mix( 1.0, banded / value, posterMix );
   }
 
   if ( uInk > 0.0 ) {

@@ -104,7 +104,7 @@ export const RETRO_LOOKS = {
     scanPitch: 3,
     grille: 0,
     bleed: 0,
-    vignette: 0.06,
+    vignette: 0.15,
     roll: 0,
     flicker: 0,
     /* Not a retro artefact - this is the grade ACES took off. It stays in every preset. */
