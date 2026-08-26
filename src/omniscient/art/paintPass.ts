@@ -105,6 +105,8 @@ class PaintPass implements ComposerPass {
         uOutlineStrength: { value: 0 },
         uProtectSignals: { value: 0 },
         uBrightness: { value: 1 },
+        uOutlineFadeStart: { value: 999 },
+        uOutlineFadeEnd: { value: 1000 },
         uPosterize: { value: 0 },
         uPosterizeSoft: { value: 0 },
         uSaturation: { value: 1 },
@@ -304,6 +306,8 @@ class PaintPass implements ComposerPass {
     this.now.normalScale += (this.target.normalScale - this.now.normalScale) * k;
     this.now.protectSignals += (this.target.protectSignals - this.now.protectSignals) * k;
     this.now.brightness += (this.target.brightness - this.now.brightness) * k;
+    this.now.outlineFadeStart += (this.target.outlineFadeStart - this.now.outlineFadeStart) * k;
+    this.now.outlineFadeEnd += (this.target.outlineFadeEnd - this.now.outlineFadeEnd) * k;
     this.now.posterizeSoft += (this.target.posterizeSoft - this.now.posterizeSoft) * k;
     this.now.saturation += (this.target.saturation - this.now.saturation) * k;
     // Step COUNT is snapped rather than eased. Interpolating it walks the image through
@@ -329,6 +333,8 @@ class PaintPass implements ComposerPass {
     u.uOutlineStrength.value = this.now.outlineStrength;
     u.uProtectSignals.value = this.now.protectSignals;
     u.uBrightness.value = this.now.brightness;
+    u.uOutlineFadeStart.value = this.now.outlineFadeStart;
+    u.uOutlineFadeEnd.value = this.now.outlineFadeEnd;
     u.uPosterize.value = this.now.posterize;
     u.uPosterizeSoft.value = this.now.posterizeSoft;
     u.uSaturation.value = this.now.saturation;

@@ -24,7 +24,7 @@ import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
  * Darker and matte. Metalness 0.58 was buying brightness rather than a look: painted
  * structural steel is not polished, and there is nothing in this room for it to reflect.
  */
-const STRUCTURE = new THREE.MeshStandardMaterial({ color: '#2e3c4c', roughness: 0.9, metalness: 0.08 });
+const STRUCTURE = new THREE.MeshStandardMaterial({ color: '#192129', roughness: 0.9, metalness: 0.08 });
 const DUCT = new THREE.MeshStandardMaterial({ color: '#475f6b', roughness: 0.48, metalness: 0.72 });
 const RUBBER = new THREE.MeshStandardMaterial({ color: '#090d11', roughness: 0.92, metalness: 0.08 });
 const PALLET = new THREE.MeshStandardMaterial({ color: '#705630', roughness: 0.96, metalness: 0.01 });

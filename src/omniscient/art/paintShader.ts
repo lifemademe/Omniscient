@@ -23,6 +23,21 @@ export interface PaintLook {
   tooth: number;
   /** Screen-space contour width in pixels. */
   outlineWidth: number;
+  /**
+   * Distance in metres at which the contour starts thinning out, and where it settles.
+   *
+   * A contour with no distance term draws every edge at every range, and a 26 metre aisle
+   * has several hundred rack members down it. Near the lens that is a drawing; at the far
+   * end the lines land closer together than the surfaces between them and the picture turns
+   * into a net. The reference never has this problem because its objects are large and few,
+   * so the fix is to make ink behave the way a pen does - heavy on what is in front of you,
+   * lighter on what is behind it.
+   *
+   * It does not fade to nothing. Distant forms keep a quarter weight so they still read as
+   * drawn rather than as a photograph pasted behind a drawing.
+   */
+  outlineFadeStart: number;
+  outlineFadeEnd: number;
   /** Contribution from camera-depth discontinuities. */
   depthInk: number;
   /** Contribution from view-normal discontinuities and hard creases. */
@@ -76,6 +91,7 @@ export const PAINT_LOOKS = {
     outlineWidth: 0, depthInk: 0, normalInk: 0, outlineStrength: 0,
     normalScale: 0.5, protectSignals: 0, inkColor: [0.025, 0.035, 0.04],
     brightness: 1, posterize: 0, posterizeSoft: 0, saturation: 1,
+    outlineFadeStart: 999, outlineFadeEnd: 1000,
   },
   /**
    * The one to look at first.
@@ -88,6 +104,7 @@ export const PAINT_LOOKS = {
     outlineWidth: 0, depthInk: 0, normalInk: 0, outlineStrength: 0,
     normalScale: 0.5, protectSignals: 0.3, inkColor: [0.025, 0.035, 0.04],
     brightness: 1, posterize: 0, posterizeSoft: 0, saturation: 1,
+    outlineFadeStart: 999, outlineFadeEnd: 1000,
   },
   /** Pushed, for judging the direction rather than for shipping. */
   heavy: {
@@ -95,6 +112,7 @@ export const PAINT_LOOKS = {
     outlineWidth: 1.5, depthInk: 1, normalInk: 0.7, outlineStrength: 0.8,
     normalScale: 0.85, protectSignals: 0.55, inkColor: [0.018, 0.025, 0.03],
     brightness: 1, posterize: 0, posterizeSoft: 0, saturation: 1,
+    outlineFadeStart: 16, outlineFadeEnd: 46,
   },
   /** Warehouse prototype: clean value bands, occluded contours, no canvas or oil smearing. */
   warehouseCel: {
@@ -127,7 +145,20 @@ export const PAINT_LOOKS = {
      * much a scan line should be allowed to opt out.
      */
     normalScale: 1, protectSignals: 0.55,
-    inkColor: [0.025186859622305935, 0.035601314869097636, 0.03954623527052923],
+    /*
+     * Darker, because the ink was the floor of the whole picture.
+     *
+     * At linear 0.025 the contour lands around 0.20 after tone mapping, and with the fill
+     * raised so nothing in the room is unlit, that made the INK the darkest thing in the
+     * frame - measured, the 10th percentile of an aisle shot sat within a couple of levels
+     * of it no matter what the lights did. Chasing that with the lighting was chasing the
+     * wrong number: a picture whose darkest value is 0.20 has no anchor, and the lines had
+     * nothing to separate them from the blue-grey racking they were drawn on.
+     *
+     * A deep blue-black rather than a true black, so it still belongs to the room's cold
+     * half and reads as drawn rather than as a hole cut in the image.
+     */
+    inkColor: [0.0092, 0.0125, 0.0155],
     /*
      * 1.42, down from 2.17, settled alongside dropping the tone mapper to 0.62.
      *
@@ -147,6 +178,15 @@ export const PAINT_LOOKS = {
      * nothing visible and kills the crawl.
      */
     posterize: 4, posterizeSoft: 0.05, saturation: 1.26,
+    /*
+     * Full weight to 13 metres, quarter weight past 34.
+     *
+     * An aisle run is 26m and the racking either side of it is the densest geometry in the
+     * game. 13m covers the bay the drone is working at and the one beyond it - everything
+     * the player is actually reading - and lets the far half of the run resolve into shapes
+     * instead of a mesh of lines.
+     */
+    outlineFadeStart: 13, outlineFadeEnd: 34,
   },
   /** Lower-cost depth-led contour for high-DPI or constrained GPUs. */
   warehouseCelLow: {
@@ -154,6 +194,7 @@ export const PAINT_LOOKS = {
     outlineWidth: 1.8, depthInk: 1, normalInk: 0.38, outlineStrength: 0.58,
     normalScale: 0.48, protectSignals: 0.55, inkColor: [0.025, 0.035, 0.04],
     brightness: 1, posterize: 3, posterizeSoft: 0.14, saturation: 1.2,
+    outlineFadeStart: 13, outlineFadeEnd: 34,
   },
 } as const satisfies Record<string, PaintLook>;
 
@@ -191,6 +232,8 @@ uniform float uNormalInk;
 uniform float uOutlineStrength;
 uniform float uProtectSignals;
 uniform float uBrightness;
+uniform float uOutlineFadeStart;
+uniform float uOutlineFadeEnd;
 uniform float uPosterize;
 uniform float uPosterizeSoft;
 uniform float uSaturation;
@@ -397,6 +440,7 @@ void main() {
 
   if ( uHasGeometry > 0.5 && uOutlineStrength > 0.0 ) {
     float centreDepth = texture2D( tSceneDepth, vUv ).x;
+    float centreView = viewDepth( centreDepth );
     vec3 centreNormal = readNormal( vUv );
     /*
      * Eight taps, not four.
@@ -458,23 +502,32 @@ void main() {
      * with a hard silhouette behind them.
      */
     /*
-     * Retuned once the prepass was pointed at the right camera.
+     * Boundaries, not facets.
      *
-     * Every number here before this had been chosen against a contour that was never drawn -
-     * the prepass was rendering the workstation from the workstation's lens, so widening the
-     * line and lowering the windows changed an image nobody was looking at. With it live,
-     * the same values inked the racking solid: a rack upright is four to eight pixels wide
-     * down an aisle and a three-pixel contour on both sides of it leaves no member in the
-     * middle, only a dark bar where one used to be.
+     * The two terms do different jobs and were being asked to do the same one. DEPTH finds
+     * where one object stops and another begins - a silhouette - and that is the line the
+     * reference draws. NORMAL finds creases, and at a low threshold it finds every one of
+     * them: the chamfer on a carton, the curve of a roller, each rung of a rack brace. Inked
+     * together they stop reading as a drawing of the room and start reading as a wireframe
+     * of it, which is what "lines over the whole object" is.
      *
-     * These are set so the line reads on the SILHOUETTE and lets the surface keep its own
-     * colour, which is what the reference does - the ink there is a boundary, not a fill.
+     * So the crease window is now set where a real fold is. With the gain at 2, ink starts
+     * at about 43 degrees and reaches full at about 60: a box corner draws, a shallow bevel
+     * or a cylinder's own curvature does not. Depth keeps its window - silhouettes are the
+     * point.
      */
     float contour = max(
       smoothstep( 0.05 * slopeTolerance, 0.18 * slopeTolerance, edge.x * uDepthInk ),
-      smoothstep( 0.14, 0.42, edge.y * uNormalInk )
+      smoothstep( 0.55, 1.15, edge.y * uNormalInk )
     );
-    colour = mix( colour, uInkColor, contour * uOutlineStrength );
+    /*
+     * And it thins with distance. See PaintLook.outlineFadeStart - a fixed-weight contour
+     * turns a deep aisle into a net, because the lines stay the same size while the things
+     * between them shrink. Held at a quarter rather than taken to nothing so the far end of
+     * the room still reads as drawn.
+     */
+    float inkFade = mix( 1.0, 0.25, smoothstep( uOutlineFadeStart, uOutlineFadeEnd, centreView ) );
+    colour = mix( colour, uInkColor, contour * uOutlineStrength * inkFade );
   }
 
   if ( uTooth > 0.0 ) {

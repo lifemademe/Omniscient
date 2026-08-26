@@ -247,9 +247,9 @@ const WAREHOUSE_ORIGIN = new THREE.Vector3(0, 0, 1200);
  * dark. Near pushed out from 15 so the middle distance is unaffected, far pushed to 105 so
  * the whole 58m building sits inside the ramp instead of ending in a wall of it.
  */
-const WAREHOUSE_HAZE = '#6b7a85';
-const WAREHOUSE_FOG_NEAR = 24;
-const WAREHOUSE_FOG_FAR = 105;
+const WAREHOUSE_HAZE = '#5d6b77';
+const WAREHOUSE_FOG_NEAR = 32;
+const WAREHOUSE_FOG_FAR = 120;
 
 /**
  * The machine, three-quarter on. §129 wants this to be the shot a player screenshots at
@@ -1319,6 +1319,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
     celSlider('depth edge', 'depthInk', 0, 2, 0.02);
     celSlider('normal edge', 'normalInk', 0, 2, 0.02);
     celSlider('outline mix', 'outlineStrength', 0, 1, 0.01);
+    celSlider('ink near m', 'outlineFadeStart', 2, 60, 1);
+    celSlider('ink far m', 'outlineFadeEnd', 4, 120, 1);
     celSlider('outline res', 'normalScale', 0.25, 1, 0.01);
     celSlider('signal keep', 'protectSignals', 0, 1, 0.01);
     celSlider('brightness', 'brightness', 0.3, 2.5, 0.01);

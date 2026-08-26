@@ -52,8 +52,8 @@ import type {
  * codes barely move, but they stop fighting every light in the room.
  */
 const WALL = new THREE.MeshStandardMaterial({ color: '#4d5e75', roughness: 0.88, metalness: 0.1 });
-const STEEL = new THREE.MeshStandardMaterial({ color: '#5c788f', roughness: 0.6, metalness: 0.58 });
-const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#32435d', roughness: 0.76, metalness: 0.42 });
+const STEEL = new THREE.MeshStandardMaterial({ color: '#42617b', roughness: 0.6, metalness: 0.58 });
+const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#1b2432', roughness: 0.76, metalness: 0.42 });
 /**
  * The roof deck, dark and matte, and it needs its own material rather than DARK_STEEL.
  *
@@ -71,7 +71,7 @@ const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#32435d', roughness:
  * nothing but brightness. The trusses stay DARK_STEEL, so they now read AGAINST the deck
  * instead of disappearing into it.
  */
-const ROOF_DECK = new THREE.MeshStandardMaterial({ color: '#26324a', roughness: 0.94, metalness: 0.05 });
+const ROOF_DECK = new THREE.MeshStandardMaterial({ color: '#151b28', roughness: 0.94, metalness: 0.05 });
 /* Stock that is not cardboard - see the tote and drum buckets in buildRacks. The drums
    carry the only saturated colour on the racking and it is cool on purpose. */
 const TOTE = new THREE.MeshStandardMaterial({ color: '#31535b', roughness: 0.72, metalness: 0.06 });
@@ -101,7 +101,7 @@ const WRAP = new THREE.MeshPhysicalMaterial({
 /* The guide rails down a conveyor. The strongest readable line in the sortation bay. */
 const GUIDE = new THREE.MeshStandardMaterial({ color: '#c8862e', emissive: '#3a2408', emissiveIntensity: 0.5, roughness: 0.62 });
 /* The high-bay shades. Double-sided, because an open cone drawn on one side is a hole. */
-const SHADE = new THREE.MeshStandardMaterial({ color: '#1c2431', roughness: 0.76, metalness: 0.42, side: THREE.DoubleSide });
+const SHADE = new THREE.MeshStandardMaterial({ color: '#181f2a', roughness: 0.76, metalness: 0.42, side: THREE.DoubleSide });
 
 function mesh(name: string, geometry: THREE.BufferGeometry, material: THREE.Material, position?: THREE.Vector3): ENGINE.MeshNode {
   const node = ENGINE.MeshNode.create({ name, geometry, material, castShadow: true, receiveShadow: true });
@@ -1205,7 +1205,7 @@ export class WarehouseEnvironment {
      */
     // Ground colour lifted with it: the fill bounces off the slab, and a near-black ground
     // term cancels most of what the sky term is being raised to deliver.
-    this.ambientLight = ENGINE.HemisphereLightNode.create({ name: 'WarehouseAmbient', color: '#9fc2d6', groundColor: '#7a6a52', intensity: WAREHOUSE_SKY_FILL });
+    this.ambientLight = ENGINE.HemisphereLightNode.create({ name: 'WarehouseAmbient', color: '#9fc2d6', groundColor: '#4f4536', intensity: WAREHOUSE_SKY_FILL });
     this.moonLight = ENGINE.DirectionalLightNode.create({
       name: 'WarehouseMoon',
       color: '#a9d0d7',
@@ -1343,9 +1343,9 @@ export class WarehouseEnvironment {
              * bay with a reflector physically does, which is why it looks right rather than
              * merely brighter: the fitting exists to stop the light behaving like a bare bulb.
              */
-            intensity: 64,
+            intensity: 95,
             distance: 30,
-            decay: 1.12,
+            decay: 1.25,
             /*
              * ## Out of the shade, and below the lens
              *
@@ -1913,7 +1913,22 @@ export class WarehouseEnvironment {
      * cel look readable: the four value steps land across the objects instead of spending
      * two of them inside a shadow.
      */
-    const skyFill = this.celStyleEnabled ? 4.4 : WAREHOUSE_SKY_FILL;
+    /*
+     * 2.5, back down from 4.4.
+     *
+     * 4.4 answered "everything must be visible" and overshot into "everything is the same".
+     * Measured on an aisle capture: half the frame sat inside a 70-level band and the
+     * ceiling came out DARKER than the floor, which is backwards for a building lit from
+     * its roof. A hemisphere has no direction, so past a certain strength it stops being
+     * fill and starts being a flat coat of paint over the modelling the work lights are
+     * doing.
+     *
+     * The shaping now comes from the high bays, which have gone up to compensate; this
+     * keeps its original job of putting a coloured floor under the shadows so nothing goes
+     * black. Fill sets the BOTTOM of the range, key sets the top - raising the fill to reach
+     * the top is what flattens a picture.
+     */
+    const skyFill = this.celStyleEnabled ? 2.5 : WAREHOUSE_SKY_FILL;
     const moon = this.celStyleEnabled ? 2.05 : 1.7;
     const front = this.celStyleEnabled ? 28 : 35;
     const fixture = this.celStyleEnabled ? 0.92 : 1.15;

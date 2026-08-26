@@ -5,7 +5,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
 import { createWarehouseLabelGeometry } from './labelGeometry.js';
 
-const CHARCOAL = new THREE.MeshStandardMaterial({ color: '#161d26', roughness: 0.7, metalness: 0.54 });
+const CHARCOAL = new THREE.MeshStandardMaterial({ color: '#1a232d', roughness: 0.7, metalness: 0.54 });
 const STEEL = new THREE.MeshStandardMaterial({ color: '#485f71', roughness: 0.52, metalness: 0.7 });
 const ORANGE = new THREE.MeshStandardMaterial({ color: '#b96f24', emissive: '#3d1d05', emissiveIntensity: 0.34, roughness: 0.58, metalness: 0.22 });
 const BELT = new THREE.MeshStandardMaterial({ color: '#10151a', roughness: 0.78, metalness: 0.2 });

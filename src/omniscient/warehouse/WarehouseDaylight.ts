@@ -2,6 +2,7 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
 import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
+import { WarehouseYard } from './WarehouseYard.js';
 import { WAREHOUSE_SERVICE_DOOR_FRAME } from './WarehouseServiceDoors.js';
 
 const LOWER_WALL = new THREE.MeshStandardMaterial({ color: '#3b4744', roughness: 0.9, metalness: 0.08 });
@@ -74,6 +75,7 @@ export class WarehouseDaylight {
    * intensities need two lists.
    */
   private readonly nightLights: ENGINE.PointLightNode[] = [];
+  private readonly yard = new WarehouseYard();
   private readonly shaftMaterials: THREE.MeshBasicMaterial[] = [];
   private readonly windowMaterials: THREE.MeshStandardMaterial[] = [];
   private sunLight: ENGINE.DirectionalLightNode | null = null;
@@ -95,8 +97,10 @@ export class WarehouseDaylight {
     const emergency = THREE.MathUtils.clamp(emergencyLevel, 0, 1);
     // Pushed together with the hemisphere fill - see WAREHOUSE_SKY_FILL in art.ts for why
     // the fill leads and these follow rather than the other way round.
-    const sun = this.celStyleEnabled ? 2.35 : 0.9;
-    const bounce = this.celStyleEnabled ? 6.2 : 4.6;
+    // Key up, bounce down: the ratio between them is the modelling, and pushing both
+    // together was the reason the room went flat while getting brighter.
+    const sun = this.celStyleEnabled ? 2.8 : 0.9;
+    const bounce = this.celStyleEnabled ? 4.2 : 4.6;
     /*
      * Do NOT reach for these to darken the ceiling. Measured: dropping them from 28 to 19 made
      * the room FLATTER, not deeper - top 99 to 97 while the bottom fell 110 to 107 and the
@@ -104,7 +108,7 @@ export class WarehouseDaylight {
      * light, so leaning on them dims the part of the picture the player works in and barely
      * touches the roof. The bright band up there is the glazing itself; see windowMaterials.
      */
-    const night = this.celStyleEnabled ? 36 : CLERESTORY_NIGHT;
+    const night = this.celStyleEnabled ? 30 : CLERESTORY_NIGHT;
     if (this.sunLight) this.sunLight.intensity = THREE.MathUtils.lerp(sun, 0.52, emergency);
     for (const light of this.bounceLights) light.intensity = THREE.MathUtils.lerp(bounce, 1.45, emergency);
     // The night side barely dims. When the work lights drop it is most of what is left, and
@@ -122,11 +126,20 @@ export class WarehouseDaylight {
     }
   }
 
+  /**
+   * The world outside, which was a dark box and a dark plane.
+   *
+   * Both values were chosen for a night interior nobody looked out of. Three of the four
+   * camera feeds point straight at this, so it is lifted to sit under the same high-key
+   * grade as the room - a sky that reads as overcast rather than as an absence, and a yard
+   * surface a working value below the aprons laid on it. The yard itself is
+   * WarehouseYard: aprons, kerbs, road, fence, lamp columns and clutter.
+   */
   private buildExteriorContext(): void {
     const sky = mesh(
       'RainbreakSkyVolume',
       new THREE.BoxGeometry(104, 48, 116),
-      new THREE.MeshBasicMaterial({ color: '#1b2733', side: THREE.BackSide, toneMapped: false }),
+      new THREE.MeshBasicMaterial({ color: '#7c93a6', side: THREE.BackSide, toneMapped: false }),
       new THREE.Vector3(0, 13, 0),
       false,
       false
@@ -134,13 +147,15 @@ export class WarehouseDaylight {
     const ground = mesh(
       'ExteriorWetGround',
       new THREE.PlaneGeometry(104, 116),
-      new THREE.MeshStandardMaterial({ color: '#1c2929', roughness: 0.38, metalness: 0.12 }),
+      new THREE.MeshStandardMaterial({ color: '#414a4c', roughness: 0.62, metalness: 0.08 }),
       new THREE.Vector3(0, -0.285, 0),
       false,
       true
     );
     ground.rotation.x = -Math.PI / 2;
     this.root.add(sky, ground);
+    this.yard.build();
+    this.root.add(this.yard.root);
   }
 
   private buildClerestoryShell(): void {

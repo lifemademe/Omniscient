@@ -173,3 +173,4 @@ import './omniscient/warehouse/WarehouseRig.js';
 import './omniscient/warehouse/WarehouseServiceDoors.js';
 import './omniscient/warehouse/WarehouseSetDressing.js';
 import './omniscient/warehouse/WarehouseTransferDock.js';
+import './omniscient/warehouse/WarehouseYard.js';
