@@ -1080,8 +1080,35 @@ export class WarehouseRig extends ENGINE.SceneNode {
       }
     }
 
+    /*
+     * An identity marking, because a working machine carries one.
+     *
+     * The airframe reads as a machine now but it reads as an anonymous one, and it is the
+     * object the player looks at for the whole mission. Two amber bands along the flanks of
+     * the hull do three things at once: they are the only saturated colour on the body, they
+     * run fore-and-aft so they agree with the heading like the deck ridge does, and they
+     * make this drone THIS drone rather than a shape.
+     *
+     * Amber to match the building's own safety language - the floor lines, the rack guards,
+     * the conveyor rails - so the machine belongs to the warehouse it works in.
+     */
+    const liveryMaterial = new THREE.MeshStandardMaterial({
+      color: '#c8862e',
+      emissive: '#33200a',
+      emissiveIntensity: 0.4,
+      roughness: 0.58,
+    });
+    const livery = new THREE.InstancedMesh(new THREE.BoxGeometry(0.035, 0.05, 0.34), liveryMaterial, 2);
+    livery.name = 'DroneLivery';
+    for (const [index, side] of [-0.363, 0.363].entries()) {
+      this.droneRotorTransform.rotation.set(0, 0, 0);
+      this.droneRotorTransform.position.set(side, 0.055, -0.04);
+      this.droneRotorTransform.updateMatrix();
+      livery.setMatrixAt(index, this.droneRotorTransform.matrix);
+    }
+
     this.droneRotorBlades = blades;
-    this.droneVisual.add(arms, guards, blades, nacelles, spokes, spine, vents);
+    this.droneVisual.add(arms, guards, blades, nacelles, spokes, spine, vents, livery);
 
     this.droneStatusMaterial = new THREE.MeshStandardMaterial({
       color: '#8fe7c8',

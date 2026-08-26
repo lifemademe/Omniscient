@@ -212,6 +212,15 @@ const GLASS = new THREE.MeshPhysicalMaterial({
 });
 const CONCRETE = new THREE.MeshStandardMaterial({ color: '#6a7672', roughness: 0.94, metalness: 0.02 });
 const WET = new THREE.MeshPhysicalMaterial({ color: '#202a28', roughness: 0.16, metalness: 0.18 });
+/* The approach: rainwater goods, a bin, a stack of pallets and the plate beside the door. */
+const PIPE = new THREE.MeshStandardMaterial({ color: '#3d4a48', roughness: 0.7, metalness: 0.42 });
+const BIN = new THREE.MeshStandardMaterial({ color: '#4a5a3c', roughness: 0.86, metalness: 0.12 });
+const TIMBER = new THREE.MeshStandardMaterial({ color: '#6b5433', roughness: 0.95, metalness: 0.01 });
+const PLATE = new THREE.MeshStandardMaterial({ color: '#8d9a92', roughness: 0.7, metalness: 0.3 });
+const SCUFF = new THREE.MeshStandardMaterial({ color: '#4b524f', roughness: 0.95, metalness: 0.02 });
+const WALLPACK = new THREE.MeshStandardMaterial({
+  color: '#d8c79c', emissive: '#f0b263', emissiveIntensity: 1.3, roughness: 0.3,
+});
 
 function mesh(
   name: string,
@@ -475,6 +484,158 @@ export class WarehouseServiceDoor {
      * metal bollards into two featureless white pills. They add no navigation information at
      * the front entrance, so omit that pair; A and C retain theirs as side-door protection.
      */
+    /*
+     * ## The approach, which is two thirds of every door camera's frame
+     *
+     * Critiqued off an actual feed capture rather than from the editor: the door itself is
+     * well built - leaf, vision panel, kick plate, reader, canopy, hatch - and it occupies
+     * the left third of the shot. The other two thirds were blank cladding above and blank
+     * apron below, and the yard beyond never reached the frame. Measured, those feeds ran at
+     * saturation 0.17-0.20 and a 90th percentile of 122: flat, grey and empty.
+     *
+     * Three of the four camera feeds the player cycles are this shot, and the opening sweep
+     * is those three in order, so it is the first thing anybody sees of the mission.
+     *
+     * What goes in is chosen for where the emptiness IS, which is the right of frame and the
+     * wall above the apron:
+     *
+     *  - A DOWNPIPE with brackets and a shoe. The only tall vertical available, and it cuts
+     *    the blank cladding into two readable panels instead of one field.
+     *  - CONDUIT and a junction box feeding the canopy light, because the light has to come
+     *    from somewhere and a run of pipe explains it.
+     *  - A NOTICE PLATE beside the leaf. Every service door in the world has one.
+     *  - A BIN and a leaning PALLET STACK in the mid-ground, which is the part of the frame
+     *    with no object in it at any depth - the eye had nothing between the door and the
+     *    horizon.
+     *  - A SCUFF BAND across the apron where trolleys turn, so the slab reads as used.
+     *  - A WALL PACK with a real light, so the frame has a pool and a falloff rather than one
+     *    even wash. This is the biggest of the six: value structure does more for a shot than
+     *    any amount of geometry.
+     *
+     * Everything sits clear of the leaf, the reader, the visitor's standing position and the
+     * camera's sight line to all three - dressing that blocks the thing the camera exists to
+     * show is worse than no dressing.
+     */
+    const pipeX = 2.62;
+    root.add(
+      mesh('ServiceDownpipe', new THREE.CylinderGeometry(0.075, 0.075, 3.5, 8), PIPE, new THREE.Vector3(pipeX, 1.75, 0.26)),
+      mesh('ServiceDownpipeShoe', new THREE.CylinderGeometry(0.085, 0.11, 0.3, 8), PIPE, new THREE.Vector3(pipeX, 0.15, 0.34)),
+      mesh('ServiceDownpipeBracketLow', new THREE.BoxGeometry(0.24, 0.05, 0.16), FRAME, new THREE.Vector3(pipeX, 0.95, 0.2)),
+      mesh('ServiceDownpipeBracketHigh', new THREE.BoxGeometry(0.24, 0.05, 0.16), FRAME, new THREE.Vector3(pipeX, 2.7, 0.2)),
+      mesh('ServiceJunctionBox', new THREE.BoxGeometry(0.3, 0.4, 0.16), DARK, new THREE.Vector3(1.92, 1.62, 0.24)),
+      mesh('ServiceConduit', new THREE.CylinderGeometry(0.035, 0.035, 1.9, 6), PIPE, new THREE.Vector3(1.92, 2.6, 0.22)),
+      mesh('ServiceNoticePlate', new THREE.BoxGeometry(0.44, 0.6, 0.03), PLATE, new THREE.Vector3(1.28, 1.78, 0.23)),
+      mesh('ServiceNoticeBand', new THREE.BoxGeometry(0.44, 0.11, 0.035), FRAME, new THREE.Vector3(1.28, 2.0, 0.235))
+    );
+
+    // A wheelie bin, lid slightly proud, and the pallets nobody has taken back inside.
+    root.add(
+      mesh('ServiceBinBody', new THREE.BoxGeometry(0.66, 0.92, 0.6), BIN, new THREE.Vector3(2.15, 0.46, 1.5)),
+      mesh('ServiceBinLid', new THREE.BoxGeometry(0.7, 0.08, 0.64), DARK, new THREE.Vector3(2.15, 0.95, 1.52)),
+      mesh('ServiceBinWheelL', new THREE.CylinderGeometry(0.09, 0.09, 0.07, 8), DARK, new THREE.Vector3(1.9, 0.09, 1.72)),
+      mesh('ServiceBinWheelR', new THREE.CylinderGeometry(0.09, 0.09, 0.07, 8), DARK, new THREE.Vector3(2.4, 0.09, 1.72))
+    );
+    /*
+     * The pallets moved, and the first placement is worth recording as a mistake.
+     *
+     * They were at x -2.35, z 0.62 - which is a metre from the door camera at x -1.65, z
+     * 1.24. On paper that is "beside the door"; through the lens it was a tan slab filling
+     * the bottom-left corner and cutting across the threshold, so it read as a plank jammed
+     * in the doorway rather than as pallets stacked out of the way. Dressing has to be
+     * placed from the SHOT, not from the plan.
+     *
+     * Out to the far side and back in depth, past the bin, where the mid-ground was still
+     * empty. Leaning at 24 degrees rather than 42 so the stack reads as propped rather than
+     * as falling over.
+     */
+    for (const [index, lift] of [0, 1, 2].entries()) {
+      const slab = mesh('ServicePalletLean', new THREE.BoxGeometry(1.3, 0.11, 0.9), TIMBER,
+        new THREE.Vector3(3.05 + index * 0.05, 0.5 + lift * 0.15, 2.75 + index * 0.06));
+      slab.rotation.x = -0.24;
+      slab.rotation.y = -0.34;
+      root.add(slab);
+    }
+
+    /*
+     * Three objects spread ACROSS the apron, because one bin does not furnish a yard.
+     *
+     * Second critique off a feed capture: with the pallets moved and the wall pack eased the
+     * shot was better but the bottom-right of frame was still a single pale slab with nothing
+     * at any depth in it. A cable drum, a crate stack and a puddle at different distances
+     * give the eye three stops between the door and the frame edge, and the drum in
+     * particular is a silhouette that reads instantly at any size - a disc on its edge is
+     * unmistakable where another box is not.
+     *
+     * Spread rather than grouped, and all inside the 4.5m pad so nothing floats off its own
+     * slab.
+     */
+    /*
+     * Depth reads BACKWARDS to the plan out here, and it cost two placements to learn.
+     *
+     * The view camera is not the ServiceDoorCamera prop at local z 1.24 - it is defined in
+     * world space and sits well outside it, looking back at the wall. So larger local z is
+     * CLOSER to the lens, not further. Both the pallets and then the crates were positioned
+     * as though the opposite were true and both ended up at the front of frame: the crate
+     * stack came out a metre from the glass, dead centre, with the door behind it.
+     *
+     * These distances are now set from captures. The drum stays forward as a framing
+     * element - a foreground object at the edge is useful, one in the middle is a wall - and
+     * the crates go back and out to the left where the mid-ground was still empty.
+     */
+    const drum = ENGINE.SceneNode.create({ name: 'ServiceCableDrum', position: new THREE.Vector3(1.95, 0, 2.85) });
+    drum.rotation.y = 0.4;
+    for (const side of [-0.24, 0.24]) {
+      drum.add(mesh('ServiceDrumFlange', new THREE.CylinderGeometry(0.52, 0.52, 0.06, 16), TIMBER, new THREE.Vector3(side, 0.52, 0)));
+    }
+    drum.add(
+      mesh('ServiceDrumHub', new THREE.CylinderGeometry(0.3, 0.3, 0.44, 14), DARK, new THREE.Vector3(0, 0.52, 0)),
+      mesh('ServiceDrumAxle', new THREE.CylinderGeometry(0.05, 0.05, 0.62, 8), FRAME, new THREE.Vector3(0, 0.52, 0))
+    );
+    for (const child of drum.children) child.rotation.z = Math.PI / 2;
+    root.add(drum);
+
+    for (const [index, tier] of [0, 1].entries()) {
+      root.add(mesh('ServiceCrateStack', new THREE.BoxGeometry(0.66, 0.55, 0.6), TIMBER,
+        new THREE.Vector3(-1.95 + index * 0.07, 0.28 + tier * 0.57, 1.95 + index * 0.05)));
+    }
+
+    const puddle = mesh('ServiceApronPuddle', new THREE.PlaneGeometry(1.5, 1.0), WET, new THREE.Vector3(0.55, 0.021, 2.35));
+    puddle.rotation.x = -Math.PI / 2;
+    puddle.rotation.z = 0.3;
+    root.add(puddle);
+
+    // Trolley wear where the turn happens, off the door and across the apron.
+    const scuff = mesh('ServiceApronScuff', new THREE.PlaneGeometry(3.4, 1.5), SCUFF, new THREE.Vector3(0.5, 0.025, 2.5));
+    scuff.rotation.x = -Math.PI / 2;
+    scuff.rotation.z = 0.22;
+    root.add(scuff);
+
+    /*
+     * The wall pack, and the pool it makes.
+     *
+     * Mounted high and out to the side so its cone crosses the apron diagonally: a light
+     * that faces straight down the camera's axis flattens everything it touches, and one
+     * that rakes gives the bollards, the bin and the pallets each a shadow to stand on.
+     */
+    root.add(
+      mesh('ServiceWallPackHood', new THREE.BoxGeometry(0.42, 0.14, 0.3), DARK, new THREE.Vector3(2.05, 3.05, 0.38)),
+      mesh('ServiceWallPackLens', new THREE.BoxGeometry(0.34, 0.05, 0.22), WALLPACK, new THREE.Vector3(2.05, 2.96, 0.42))
+    );
+    root.add(ENGINE.PointLightNode.create({
+      name: 'ServiceWallPackLight',
+      color: '#f4c07e',
+      /*
+       * 5, down from 12. The first pass measured the feed's 90th percentile jumping 131 to
+       * 233 - the pool stopped being a pool and became a blown patch, which is the opposite
+       * of the value structure it was added for. A wall pack should shape the frame, not
+       * take it over.
+       */
+      intensity: 5,
+      distance: 9,
+      decay: 1.5,
+      position: new THREE.Vector3(2.05, 2.9, 0.6),
+    }));
+
     if (layout.id !== 'service-b') {
       for (const x of [-1.8, 1.8]) {
         root.add(mesh('ServiceBollard', new THREE.CylinderGeometry(0.12, 0.12, 1.05, 10), FRAME, new THREE.Vector3(x, 0.52, 2.75)));

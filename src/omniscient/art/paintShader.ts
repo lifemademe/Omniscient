@@ -221,8 +221,16 @@ export const PAINT_LOOKS = {
      * already lifting. Taking the exposure down and easing the gain gets to the same
      * mid-range with more headroom left at the top, which is where the banding lives.
      */
-    /* 2.5, the top of the F8 range, against a tone mapper sitting at 0.9. */
-    brightness: 2.5,
+    /*
+     * 1.95, down from 2.5.
+     *
+     * 2.5 was the top of the F8 range and it put the room at mean luma 129 with a 90th
+     * percentile of 225 - measurably brighter than anything else in the game and reported as
+     * too bright. This is the lever to move rather than the lamps: the lamps are what make
+     * the pools and the falloff, and pulling them flattens the modelling, while this is a
+     * flat gain sitting on top of all of it.
+     */
+    brightness: 1.95,
     /*
      * Four value steps with a nearly hard edge, and 1.3x chroma.
      *
