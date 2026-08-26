@@ -169,7 +169,7 @@ for (const a of W.anchors) {
  * A press must not stand in a swing. Stage two removed one for exactly this reason: a hazard
  * in the flight path turns a shot the player aimed into a shot the timer took.
  */
-for (const c of W.crushers) {
+for (const c of W.crushers ?? []) {
   const lo = crusherRect({ ...c, at: 0 });
   const hi = crusherRect({ ...c, at: c.travel });
   const swept: Tile = {

@@ -280,6 +280,48 @@ const STACK_RAW: Partial<Record<keyof typeof PAL_RAW, string>> = {
 };
 
 /**
+ * The Sluice - the bottom of the machine, where the water and the spores collect.
+ *
+ * The Gallery is warm and overgrown and the Stack is cold and industrial, so the third place
+ * cannot be a third temperature - it has to be a third CONDITION. This one is wet: brass gone
+ * green, stone gone dark with standing water, and rust as a primary rather than an accent,
+ * because the only thing down here that has been touched in a century is corroding.
+ *
+ * The forest is the thinnest of the three and the moss is the thickest, which is the read the
+ * level wants: nothing grows tall this far down, and everything grows low.
+ */
+const SLUICE_RAW: Partial<Record<keyof typeof PAL_RAW, string>> = {
+  voidDeep: '#080a06',
+  voidMid: '#12180e',
+  hazeFar: '#1c2816',
+  hazeNear: '#28381c',
+  stoneDark: '#181812',
+  stoneMid: '#2a291d',
+  stoneLit: '#3c3927',
+  stoneEdge: '#524c33',
+  mossDark: '#2f3a18',
+  mossMid: '#4a5a22',
+  mossLit: '#6d8034',
+  leafDark: '#2a3a1c',
+  leafMid: '#3d5626',
+  leafLit: '#5a7c3a',
+  vineDark: '#241c12',
+  vineMid: '#3e301a',
+  rustDark: '#402214',
+  rustMid: '#7a4018',
+  rustLit: '#b06a24',
+  /*
+   * Sodium rather than the Stack's cold arc, and deliberately short of the top.
+   *
+   * Amber emissives in this game clip to a white chip the moment they are asked for much -
+   * the beacon's lamp had to be left alone for exactly this reason - so the sump's lights are
+   * a muted olive-gold that has somewhere to go when a glow is laid over it.
+   */
+  lampWarm: '#a8c060',
+  lampCore: '#d8e8a0',
+};
+
+/**
  * Everything that makes one stage look like ITSELF, in one object.
  *
  * The bible (M4SS-ART-BIBLE.md section 5) specifies the two stages as different places:
@@ -289,7 +331,7 @@ const STACK_RAW: Partial<Record<keyof typeof PAL_RAW, string>> = {
  * reading PAL and get the right world without knowing themes exist.
  */
 export interface StageTheme {
-  name: 'gallery' | 'stack';
+  name: 'gallery' | 'stack' | 'sluice';
   pal: Record<keyof typeof PAL_RAW, string>;
   /** Where the light falls from: god rays on a diagonal, or shaft light straight down. */
   light: 'diagonal' | 'vertical';
@@ -301,6 +343,17 @@ export interface StageTheme {
   flora: number;
   /** Final (post-grade) colours for the three parallax forest layers, far to near. */
   forest: [string, string, string];
+  /**
+   * The haze plane that sinks the background a step behind the play plane.
+   *
+   * Data rather than a switch on `name`, and that is the point of this object: the rig used to
+   * ask `name === 'gallery' ? A : B` for this and for the motes, which is a conditional that
+   * silently picks the WRONG branch the moment a third stage exists rather than failing. A
+   * theme that has to answer a question should carry the answer.
+   */
+  fog: string;
+  /** The drifting specks. Pollen in the Gallery, dust in the Stack, spores in the Sluice. */
+  mote: string;
 }
 
 export const THEME_GALLERY: StageTheme = {
@@ -311,6 +364,8 @@ export const THEME_GALLERY: StageTheme = {
   occluders: 'leaves',
   flora: 1,
   forest: ['#22332e', '#18271f', '#0e1a13'],
+  fog: '#3d7a6c',
+  mote: '#9fd86a',
 };
 
 export const THEME_STACK: StageTheme = {
@@ -321,6 +376,30 @@ export const THEME_STACK: StageTheme = {
   occluders: 'pipes',
   flora: 0.4,
   forest: ['#20303a', '#141f29', '#0a121a'],
+  fog: '#2f5f70',
+  mote: '#7fc8d8',
+};
+
+export const THEME_SLUICE: StageTheme = {
+  name: 'sluice',
+  pal: buildPal(SLUICE_RAW),
+  /*
+   * Vertical, like the Stack: this is the inside of a machine and the light arrives down a
+   * shaft. It is also the only honest reading of a room whose ceiling the player spends the
+   * first beat falling away from.
+   */
+  light: 'vertical',
+  midground: 'pipes',
+  occluders: 'pipes',
+  /*
+   * 0.75 - thicker than the Stack and thinner than the Gallery, which is the opposite of where
+   * you would put it if depth meant less life. Nothing grows TALL at the bottom of a sump and
+   * everything grows low, so the flora count goes up while the forest layers go nearly black.
+   */
+  flora: 0.75,
+  forest: ['#243020', '#18220f', '#0d1408'],
+  fog: '#46602c',
+  mote: '#d8c070',
 };
 
 let activeTheme: StageTheme = THEME_GALLERY;
@@ -2645,6 +2724,95 @@ export function sporelingSprite(): {
  * bars explain both halves of it at a glance: small things pass between bars, big things
  * do not. Paint only; the sieve clamp in the sim already does the physics.
  */
+/**
+ * The column of air, as a tile that scrolls upward for ever.
+ *
+ * ## Why it is one tiling strip and not a particle system
+ *
+ * The column is eight hundred pixels tall and on screen for the whole of two beats, so
+ * whatever draws it is drawing it constantly. A strip whose `offset.y` is decremented every
+ * frame costs one number per frame and reads as continuous motion at any speed, which is
+ * exactly what rising air is; a few hundred sprites would cost a few hundred matrix updates
+ * to say the same sentence less clearly. VFXNode was the other candidate and is worse here
+ * for a specific reason - `visible` on one is one-way (a flag cleared before beginPlay kills
+ * it permanently), and this is a thing that has to fade in and out with what it is carrying.
+ *
+ * ## The alpha does the shape
+ *
+ * Drawn with a soft left and right margin, because the sim's edge is feathered and an art that
+ * ends in a hard line would be promising a hard edge the physics does not have. Vertically it
+ * is uniform: the sim's top and bottom ARE hard, and the ceiling is drawn by the cap that
+ * stops it.
+ *
+ * The streaks are quantised to whole pixels at three lengths, so at the scroll speeds the ride
+ * uses they beat against each other instead of marching in step - a single length reads as a
+ * barber's pole the moment it moves.
+ */
+export function draughtTexture(seed: string, w = 160, h = 320): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+  const near = mixHex(PAL.hazeNear, PAL.lampCore, 0.35);
+  const far = mixHex(PAL.hazeFar, PAL.lampWarm, 0.25);
+  for (let i = 0; i < 150; i++) {
+    const x = Math.round(range(rng, 0, w - 1));
+    const y = Math.round(range(rng, 0, h - 1));
+    const len = [3, 7, 13][Math.floor(range(rng, 0, 3)) % 3];
+    /*
+     * The margin, in alpha rather than in geometry.
+     *
+     * `edge` is how far into the strip this streak is as a 0..1 ramp over the outer fifth,
+     * which is the same shape the sim's `feather` makes - 45px of a 160px column. Matching it
+     * by eye rather than by import is deliberate: the texture is authored at a fixed size and
+     * stretched to whatever the level asks for, so a number copied from the level would be
+     * wrong for every column but the first.
+     */
+    const edge = Math.min(1, Math.min(x, w - 1 - x) / (w * 0.2));
+    g.globalAlpha = (0.18 + range(rng, 0, 0.5)) * edge;
+    g.fillStyle = rng() > 0.6 ? near : far;
+    g.fillRect(x, y, 1, len);
+    // The occasional two-wide streak, so the column has a foreground as well as a haze.
+    if (rng() > 0.88) g.fillRect(x + 1, y + Math.round(len * 0.3), 1, Math.round(len * 0.6));
+  }
+  g.globalAlpha = 1;
+  return pixelTexture(c);
+}
+
+/**
+ * The intake the air comes out of: a plate of louvres set into the floor.
+ *
+ * Air rising from nothing is the single thing most likely to read as a bug rather than as a
+ * mechanic, and it is the same fault the warehouse's lamps had - a light source hanging off
+ * no fitting. The column gets a mouth.
+ */
+export function intakeTexture(seed: string, w = 160, h = 40): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+  g.fillStyle = mixHex(PAL.stoneDark, PAL.voidDeep, 0.4);
+  g.fillRect(0, 0, w, h);
+  const slats = 5;
+  for (let i = 0; i < slats; i++) {
+    const y = Math.round(4 + i * ((h - 8) / slats));
+    g.fillStyle = ramp(PAL.rustDark, PAL.rustMid, slats, i);
+    g.fillRect(3, y, w - 6, 3);
+    // The lit lip of each louvre, and the dark under it. Two rows is a bevel.
+    g.fillStyle = mixHex(PAL.rustLit, PAL.lampWarm, 0.3);
+    g.fillRect(3, y, w - 6, 1);
+    g.fillStyle = PAL.voidDeep;
+    g.fillRect(3, y + 3, w - 6, 1);
+    for (let b = 0; b < 3; b++) {
+      g.fillStyle = PAL.rustMid;
+      g.fillRect(Math.round(range(rng, 4, w - 6)), y + 1, 2, 1);
+    }
+  }
+  // The frame.
+  g.fillStyle = mixHex(PAL.stoneEdge, PAL.rustDark, 0.5);
+  g.fillRect(0, 0, w, 2);
+  g.fillRect(0, h - 2, w, 2);
+  g.fillRect(0, 0, 2, h);
+  g.fillRect(w - 2, 0, 2, h);
+  return pixelTexture(c);
+}
+
 export function grateTexture(seed: string, w = 40, h = 30): THREE.CanvasTexture {
   const rng = createRng(seedFrom(seed));
   const { c, g } = surface(w, h);

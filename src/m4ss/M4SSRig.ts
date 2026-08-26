@@ -32,6 +32,7 @@ import { buildSurface } from './surface.js';
 import { teardrop } from './swingShape.js';
 import { freshLab } from './lab.js';
 import { freshShaft } from './shaft.js';
+import { freshSluice } from './sluice.js';
 import { loadM4ssStage, saveM4ssContained, saveM4ssStage } from '../omniscient/session/persistence.js';
 import { audio } from '../omniscient/audio/ConsoleAudio.js';
 import { SlimeAudio } from './SlimeAudio.js';
@@ -68,13 +69,16 @@ import {
   SPORELING_H,
   SPORELING_W,
   THEME_GALLERY,
+  THEME_SLUICE,
   THEME_STACK,
   vignetteTexture,
   bushTexture,
   PAL,
   portalTexture,
   wallTexture,
+  draughtTexture,
   grateTexture,
+  intakeTexture,
   sillTexture,
   vineTexture,
 } from './stageArt.js';
@@ -83,6 +87,8 @@ import {
   absorbTouching,
   centroid,
   components,
+  draftLift,
+  draftOn,
   loose,
   makeState,
   mass,
@@ -95,7 +101,7 @@ import {
   step,
 } from './mass.js';
 
-import type { Anchor, Button, Critter, Crusher, Gate, MassState } from './mass.js';
+import type { Anchor, Button, Critter, Crusher, Gate, MassState, Updraft } from './mass.js';
 
 /**
  * How far the drawn body has to be lifted to stand ON the ground rather than in it.
@@ -207,7 +213,18 @@ const TRAIL_MAX = 90;
  * open, buttons latch, growths wake - and replaying a stage has to start from the authored
  * numbers rather than from however the last attempt left them.
  */
-const STAGES = [freshLab, freshShaft];
+const STAGES = [freshLab, freshShaft, freshSluice];
+
+/**
+ * One theme per stage, in the same order.
+ *
+ * A parallel array rather than a field on the world, because a StageTheme is a rig concern -
+ * mass.ts has never heard of a colour and should not start. Indexed rather than branched: the
+ * line this replaced was `stageIndex === 0 ? GALLERY : STACK`, which would have quietly drawn
+ * stage three as stage two rather than failing, and a wrong palette is the one art bug that
+ * looks exactly like an intentional decision.
+ */
+const STAGE_THEMES = [THEME_GALLERY, THEME_STACK, THEME_SLUICE];
 
 /**
  * Level units are pixels; the engine works in metres. One node reconciles them.
@@ -384,6 +401,20 @@ export class M4SSRig extends ENGINE.SceneNode {
   /** The growth the pointer is over and the body could actually reach, if any. */
   private hovered: Anchor | null = null;
   private crusherNodes: Array<{ node: ENGINE.MeshNode; crusher: Crusher; prevAt: number }> = [];
+  /**
+   * The air columns, and how brightly each is currently reading.
+   *
+   * `glow` is eased rather than set, because the thing it is reporting - whether the draught
+   * is carrying the body - is a boolean that can flip in one frame when the player steps over
+   * the feathered edge, and a column that snaps between two brightnesses reads as a light
+   * being switched rather than as air picking something up.
+   */
+  private draughtNodes: Array<{
+    face: ENGINE.MeshNode;
+    map: THREE.CanvasTexture;
+    draft: Updraft;
+    glow: number;
+  }> = [];
   /**
    * The trail: where the creature has been, oldest first.
    *
@@ -881,7 +912,7 @@ export class M4SSRig extends ENGINE.SceneNode {
      * setStageTheme swaps that palette wholesale - so the one rule that keeps the two
      * stages from bleeding into each other is that nothing draws before this line.
      */
-    this.theme = this.stageIndex === 0 ? THEME_GALLERY : THEME_STACK;
+    this.theme = STAGE_THEMES[this.stageIndex] ?? THEME_GALLERY;
     setStageTheme(this.theme);
 
     this.buildBackdrop(world);
@@ -1272,6 +1303,49 @@ export class M4SSRig extends ENGINE.SceneNode {
     }
 
     /*
+     * The columns of air.
+     *
+     * Two pieces, because a force with no source is the fault the warehouse's fluorescents
+     * shipped with: an intake plate set into the floor where the air comes from, and the strip
+     * of rising motes above it. The strip sits at z -8 - behind the player, in front of the
+     * scenery - so the body is IN the column rather than behind a pane of it, and the intake
+     * goes at -14 so the plate reads as recessed into the floor rather than stuck onto it.
+     *
+     * The map repeats vertically at its authored height, which is what lets one 160x320 canvas
+     * cover eight hundred pixels of shaft and scroll for ever without a seam.
+     */
+    for (const draft of world.updrafts ?? []) {
+      const intakeH = 40;
+      const intake = decorMesh(
+        'DraughtIntake',
+        new THREE.PlaneGeometry(draft.w, intakeH),
+        this.artMaterial({
+          map: intakeTexture(`intake-${draft.x}`, draft.w, intakeH),
+          transparent: true,
+        })
+      );
+      intake.position.set(draft.x + draft.w / 2, draft.y + draft.h - intakeH / 2, -14);
+      this.stage?.add(intake);
+
+      const map = draughtTexture(`draught-${draft.x}`, 160, 320);
+      map.repeat.set(1, draft.h / 320);
+      const face = decorMesh(
+        'Draught',
+        new THREE.PlaneGeometry(draft.w, draft.h),
+        this.artMaterial({
+          map,
+          transparent: true,
+          opacity: 0.5,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false,
+        })
+      );
+      face.position.set(draft.x + draft.w / 2, draft.y + draft.h / 2, -8);
+      this.stage?.add(face);
+      this.draughtNodes.push({ face, map, draft, glow: 0 });
+    }
+
+    /*
      * The critters.
      *
      * z -6 puts the creature BEHIND the player and in front of the scenery. It is the one
@@ -1480,9 +1554,7 @@ export class M4SSRig extends ENGINE.SceneNode {
         'DepthFog',
         new THREE.PlaneGeometry(world.width * 2, world.height * 2),
         this.artMaterial({
-          color: new THREE.Color(
-            this.theme.name === 'gallery' ? '#3d7a6c' : '#2f5f70'
-          ),
+          color: new THREE.Color(this.theme.fog),
           transparent: true,
           // 0.35: enough haze to sink the background a full step behind the play plane,
           // little enough that the forest keeps its shapes. 0.46 separated the layers and
@@ -1577,7 +1649,7 @@ export class M4SSRig extends ENGINE.SceneNode {
         return seed / 0x7fffffff;
       })(world.width * 31 + world.height);
       const count = 46;
-      const mote = moteTexture(this.theme.name === 'gallery' ? '#9fd86a' : '#7fc8d8');
+      const mote = moteTexture(this.theme.mote);
       for (let i = 0; i < count; i++) {
         const size = seedRng() > 0.75 ? 5 : 3;
         const node = decorMesh(
@@ -2876,6 +2948,22 @@ export class M4SSRig extends ENGINE.SceneNode {
             break;
           }
         }
+        /*
+         * And the column says its number the same way, for the same reason.
+         *
+         * A mass ceiling is invisible by nature - a body standing in a draught that will not
+         * carry it looks exactly like a body standing in a draught that is broken. The sieve
+         * learned this the hard way and the line above is the fix; the air needs its own or it
+         * ships the identical fault one stage later.
+         *
+         * `draftOn` returns the column WITH a lift of zero when the body is too heavy, which
+         * is the whole reason it returns the pair rather than a boolean: this is the only
+         * caller that needs to tell "not in the draught" from "in it and being refused".
+         */
+        const draught = draftOn(state);
+        if (draught && draught.lift === 0) {
+          note = `too heavy for the draught - hold SPACE to shed below ${draught.draft.liftMass + 1}`;
+        }
       }
       this.hudNote.textContent = note;
     }
@@ -3416,6 +3504,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.buttonNodes.length = 0;
     this.buttonFlags.length = 0;
     this.crusherNodes = [];
+    this.draughtNodes = [];
     this.critterNodes = [];
     this.trail.length = 0;
     this.trailNode = null;
@@ -3952,6 +4041,33 @@ export class M4SSRig extends ENGINE.SceneNode {
         this.shake = Math.max(this.shake, 0.22);
       }
       entry.prevAt = crusher.at;
+    }
+
+    /*
+     * The columns scroll, and brighten while they are carrying something.
+     *
+     * The scroll is in TEXTURE space, so the speed on screen is the same whatever height the
+     * level gave the shaft - offset is in repeats, and one repeat is 320 level pixels. 0.9
+     * repeats a second is roughly 290px/s, which is the rise the column actually delivers
+     * (measured at 674px in 2.5s); air that moves slower than the thing it is lifting reads
+     * as the body being winched rather than blown.
+     *
+     * The brightness asks the SIM whether the draught is doing anything, through the same
+     * `draftLift` the force block uses. A column that looks like it is lifting you and is not
+     * would be worse than no art at all - it is the one thing here the player has to be able
+     * to trust, because the rule it is reporting has no other visible form.
+     */
+    if (this.draughtNodes.length > 0 && this.state) {
+      const body = owned(this.state);
+      const at = body.length > 0 ? centroid(body) : null;
+      for (const entry of this.draughtNodes) {
+        entry.map.offset.y += deltaTime * 0.9;
+        if (entry.map.offset.y > 1) entry.map.offset.y -= 1;
+        const lifting = at ? draftLift(entry.draft, at, body.length) : 0;
+        entry.glow += (lifting - entry.glow) * Math.min(1, deltaTime * 6);
+        const mat = entry.face.material as THREE.MeshBasicMaterial;
+        mat.opacity = 0.42 + entry.glow * 0.34;
+      }
     }
 
     /*
