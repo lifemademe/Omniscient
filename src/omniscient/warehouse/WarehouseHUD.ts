@@ -426,6 +426,16 @@ const CSS = `
  */
 .warehouse-hud__help {
   position: absolute;
+  /*
+   * pointer-events: auto, and it is not optional.
+   *
+   * The stage is pointer-events: none so the world underneath stays clickable - scan, grip,
+   * optical all go to the canvas through the HUD. Every control that lives on the stage has
+   * to opt back IN, which is why the tool row above does it too. Without this the button
+   * looked correct, hovered nothing, and its click fell straight through to the drone;
+   * caught by clicking it in play and getting a scan tip instead of the sheet.
+   */
+  pointer-events: auto;
   left: 13px;
   bottom: 92px;
   padding: 5px 13px;
