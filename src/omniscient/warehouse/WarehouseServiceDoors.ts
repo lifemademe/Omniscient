@@ -570,7 +570,15 @@ export class WarehouseServiceDoor {
       `ServiceDoorLetter-${layout.letter}`,
       createWarehouseLabelGeometry(0.78, 0.78),
       letterMaterial,
-      new THREE.Vector3(-2.16, 2.36, WALL_FACE_Z + 0.05)
+      /*
+       * In to -1.95, to open the gap the plant riser needs.
+       *
+       * The plate is 0.78 wide, so at -2.16 it reached -2.55 and the extract louvre reaches
+       * -2.74 - leaving nineteen centimetres of wall between them, which is not enough for a
+       * pipe to climb without touching one of them. At -1.95 the gap is forty, and the plate
+       * still clears the door frame edge at -1.47 by nine centimetres.
+       */
+      new THREE.Vector3(-1.95, 2.36, WALL_FACE_Z + 0.05)
     )];
     const pad = mesh('ServiceExteriorPad', new THREE.BoxGeometry(4.5, 0.16, 4.4), CONCRETE, new THREE.Vector3(0, -0.07, 1.65));
     const wetPad = mesh('ServiceExteriorWet', new THREE.PlaneGeometry(4.2, 3.8), WET, new THREE.Vector3(0, 0.02, 1.82));
@@ -1079,9 +1087,15 @@ export class WarehouseServiceDoor {
       }
       // A height gauge over the opening - the bar that tells a driver what will fit.
       root.add(
-        mesh('ServiceHeightBar', new THREE.BoxGeometry(3.3, 0.12, 0.1), HAZARD, new THREE.Vector3(0, 3.42, 1.55)),
-        mesh('ServiceHeightHangerL', new THREE.BoxGeometry(0.05, 0.28, 0.05), FRAME, new THREE.Vector3(-1.5, 3.6, 1.55)),
-        mesh('ServiceHeightHangerR', new THREE.BoxGeometry(0.05, 0.28, 0.05), FRAME, new THREE.Vector3(1.5, 3.6, 1.55))
+        /*
+         * Down to 3.28. At 3.42 the bar sat hard against the objective plate at the top of the
+         * stage - the brightest object in the shot, pressed into the HUD text. Fourteen
+         * centimetres puts it clearly under the canopy line with air above it, and the hangers
+         * lengthen to keep reaching the soffit at 3.55.
+         */
+        mesh('ServiceHeightBar', new THREE.BoxGeometry(3.3, 0.12, 0.1), HAZARD, new THREE.Vector3(0, 3.28, 1.55)),
+        mesh('ServiceHeightHangerL', new THREE.BoxGeometry(0.05, 0.42, 0.05), FRAME, new THREE.Vector3(-1.5, 3.55, 1.55)),
+        mesh('ServiceHeightHangerR', new THREE.BoxGeometry(0.05, 0.42, 0.05), FRAME, new THREE.Vector3(1.5, 3.55, 1.55))
       );
       // PASS 4: the near-left group. Empty pallets stacked flat, and the cage they feed.
       for (let index = 0; index < 6; index++) {
@@ -1200,13 +1214,47 @@ export class WarehouseServiceDoor {
       }
       root.add(unit);
     }
-    // The pipework that ties them to the building, which is what turns two boxes into plant.
+    /*
+     * ## The pipework, rebuilt as a circuit rather than as three sticks
+     *
+     * First attempt ran a pair at y 1.18 and 1.32 straight through both condenser bodies -
+     * those sit y 0.245 to 1.195 - and stood the riser out at z 0.72, well clear of the wall,
+     * so from door C's feed it read as a long tan plank leaning diagonally through the
+     * machines. Caught on the first capture of the finished door.
+     *
+     * A refrigerant run has a shape, and following it fixes the geometry for free: the units
+     * take short DROPS off a HEADER carried above them, the header runs back to the building,
+     * and a RISER climbs the wall. Every part is now clear of every other, and the whole thing
+     * reads as one system instead of three unrelated bars.
+     */
+    const headerY = 1.46;
+    /*
+     * The whole run threads the gap between the letter plate and the louvre.
+     *
+     * At -2.47 the riser climbed six centimetres in front of the C plate - the same overlap
+     * the louvre itself had two passes ago, and just as visible: a tan bar crossing the one
+     * sign that says which door this is. With the plate moved in to -1.95 the clear wall runs
+     * -2.74 to -2.34, and -2.54 sits in the middle of it with twenty centimetres either side.
+     *
+     * The cable tray is gone rather than moved. It occupied -2.11..-1.89, which is inside the
+     * plate wherever the plate goes, and the condensers, the pipework, the gas cage, the
+     * louvre and the bulkhead already say plant without it. A prop that can only be placed by
+     * displacing something more important is not worth the wall.
+     */
     root.add(
-      mesh('ServiceRefrigPipeA', new THREE.BoxGeometry(0.07, 0.07, 2.0), COPPER, new THREE.Vector3(-2.72, 1.32, 1.7)),
-      mesh('ServiceRefrigPipeB', new THREE.BoxGeometry(0.07, 0.07, 2.0), COPPER, new THREE.Vector3(-2.72, 1.18, 1.7)),
-      mesh('ServiceRefrigRiser', new THREE.BoxGeometry(0.07, 1.6, 0.07), COPPER, new THREE.Vector3(-2.72, 2.1, 0.72)),
-      mesh('ServiceCableTray', new THREE.BoxGeometry(0.22, 2.6, 0.09), FRAME, new THREE.Vector3(-2.0, 1.9, WALL_FACE_Z + 0.06))
+      // Header, above both units, running back to the wall.
+      mesh('ServiceRefrigHeaderA', new THREE.BoxGeometry(0.07, 0.07, 1.95), COPPER, new THREE.Vector3(-2.54, headerY, 1.45)),
+      mesh('ServiceRefrigHeaderB', new THREE.BoxGeometry(0.07, 0.07, 1.95), COPPER, new THREE.Vector3(-2.7, headerY, 1.45)),
+      // The riser up the cladding, tight to it.
+      mesh('ServiceRefrigRiser', new THREE.BoxGeometry(0.07, 1.5, 0.07), COPPER, new THREE.Vector3(-2.54, 2.18, WALL_FACE_Z + 0.11)),
+      mesh('ServiceRefrigElbow', new THREE.BoxGeometry(0.07, 0.07, 0.62), COPPER, new THREE.Vector3(-2.54, headerY, 0.61))
     );
+    // Short drops from the header into the top of each unit.
+    for (const cz of [1.15, 2.25]) {
+      for (const [index, cx] of [-2.54, -2.7].entries()) {
+        root.add(mesh(`ServiceRefrigDrop-${index}`, new THREE.BoxGeometry(0.06, 0.32, 0.06), COPPER, new THREE.Vector3(cx, 1.3, cz)));
+      }
+    }
     // PASS 4: the gas cage, on the RIGHT, so this shot is weighted opposite to A's.
     const gasCage = ENGINE.SceneNode.create({ name: 'ServiceGasCage', position: new THREE.Vector3(2.15, 0, 2.5) });
     gasCage.add(mesh('GasCageBase', new THREE.BoxGeometry(1.1, 0.09, 0.75), FRAME, new THREE.Vector3(0, 0.05, 0)));

@@ -50,7 +50,7 @@ const PROPS: Array<[string, THREE.Vector3]> = [
   ['bollard left', new THREE.Vector3(-1.8, 0.52, 2.75)],
   ['bollard right', new THREE.Vector3(1.8, 0.52, 2.75)],
   ['extract louvre', new THREE.Vector3(-2.55, 2.92, 0.415)],
-  ['door letter', new THREE.Vector3(-2.16, 2.36, 0.395)],
+  ['door letter', new THREE.Vector3(-1.95, 2.36, 0.395)],
   /* Deliberately off frame: the fascia board is for a person at the door, not the camera -
      which is exactly why the letter plate below it exists. Listed so it stays deliberate. */
   ['high sign (expect off)', new THREE.Vector3(0, 4.45, 0.16)],
@@ -73,7 +73,7 @@ const PROPS: Array<[string, THREE.Vector3]> = [
   ['C condenser far', new THREE.Vector3(-2.55, 0.72, 1.15)],
   ['C condenser near', new THREE.Vector3(-2.55, 0.72, 2.25)],
   ['C gas cage', new THREE.Vector3(2.15, 0.78, 2.5)],
-  ['C cable tray', new THREE.Vector3(-2.0, 1.9, 0.405)],
+  ['C refrig riser', new THREE.Vector3(-2.54, 2.18, 0.455)],
   ['C bulkhead', new THREE.Vector3(1.62, 2.25, 0.415)],
 ];
 
