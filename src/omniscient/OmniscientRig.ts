@@ -247,6 +247,27 @@ const WAREHOUSE_ORIGIN = new THREE.Vector3(0, 0, 1200);
  * dark. Near pushed out from 15 so the middle distance is unaffected, far pushed to 105 so
  * the whole 58m building sits inside the ramp instead of ending in a wall of it.
  */
+/**
+ * Every post-processing pass, off.
+ *
+ * There are seven in play. Five are the engine's, configured from this project - tone
+ * mapping, bloom, ambient occlusion, object outline and colour grading - and two are ours,
+ * registered as custom passes: the painterly/cel conversion at order 70 and the CRT at 80.
+ * The engine offers ten; the three this game never touches are anti-aliasing, depth of
+ * field and screen-space reflections, plus its own Retro and Pixelation, which we replaced
+ * with our own.
+ *
+ * One switch rather than seven, because `setPostProcessingEnabled(false)` disables the
+ * PIPELINE - the composer is bypassed entirely and the renderer draws straight to the
+ * canvas. Turning the passes off one at a time would still pay for the composer, the render
+ * targets and the full-screen blits between them, and would leave seven things to remember
+ * to turn back on.
+ *
+ * Nothing is deleted or retuned. Every look, slider and value is exactly where it was, so
+ * flipping this back to `false` restores the game as it stands.
+ */
+const HIDE_ALL_POST = true;
+
 const WAREHOUSE_HAZE = '#5d6b77';
 const WAREHOUSE_FOG_NEAR = 32;
 const WAREHOUSE_FOG_FAR = 120;
@@ -3741,6 +3762,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private retroMounted = false;
   /** Same, for the painterly pass. Mounted ahead of the CRT - see paintPass's header. */
   private paintMounted = false;
+  /** Latch so the master post switch is written once rather than every frame. */
+  private postHidden = false;
 
   private disposeSceneJump: (() => void) | null = null;
   /** Editor-only F9 route to the runtime bonus world; never registered in published builds. */
@@ -4358,6 +4381,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
      *
      * Every frame, because the active camera changes with the shot.
      */
+    if (HIDE_ALL_POST && this.post && !this.postHidden) {
+      this.postHidden = true;
+      this.post.setPostProcessingEnabled(false);
+    }
     if (this.paintMounted) {
       // The mission root, so the contour cannot ink a scene the beauty pass has dropped.
       /*
