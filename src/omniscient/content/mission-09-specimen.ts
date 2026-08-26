@@ -297,13 +297,29 @@ export const MISSION_09: MissionDefinition = {
       learn: [FACT_SPECIMEN_MASS],
       suggest: ['it is deliberate', 'it is only physics'],
       on: {
-        // The chips lead here. Whichever side of the argument the player takes, Keller's
-        // answer is the same thanks - she asked for a second observer, not agreement.
+        /*
+         * ONLY the verdict is a verdict.
+         *
+         * Every intent used to land here on `verdict`, which closes the request - the note
+         * said "whichever side of the argument the player takes, Keller's answer is the same
+         * thanks", and that is true of the two verdict chips and of nothing else. It was
+         * written when leaving M4SS meant you were finished with it.
+         *
+         * It stopped being true the moment the game got a pause menu. A player who pauses to
+         * ask Dana a question, or to go back into the file, was ending the mission by talking
+         * to her - the playtest said "selecting any option in the chat completes the mission",
+         * and it was doing exactly that.
+         *
+         * So the questions go where questions go, and OPEN_FILE puts the player back INSIDE
+         * the specimen rather than past it, which is the one thing somebody who just paused is
+         * most likely to want. The three question beats all offer OPEN_FILE themselves, so
+         * there is no way to get stranded in the conversation.
+         */
         GIVE_VERDICT: { to: 'verdict' },
-        ASK_SPECIMEN: { to: 'verdict' },
-        ASK_CONTAINMENT: { to: 'verdict' },
-        OPEN_FILE: { to: 'verdict' },
-        ASK_STATION: { to: 'verdict' },
+        OPEN_FILE: { to: 'watching', environment: 'game.launch:m4ss' },
+        ASK_SPECIMEN: { to: 'specimen' },
+        ASK_CONTAINMENT: { to: 'containment' },
+        ASK_STATION: { to: 'station' },
       },
     },
 

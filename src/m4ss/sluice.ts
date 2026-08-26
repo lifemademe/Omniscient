@@ -114,11 +114,19 @@ export const THE_SLUICE: World = {
      * to the corridor - beats one and two, skippable by walking east. The floor plan found it;
      * no amount of arithmetic was ever going to.
      *
-     * y 550 rather than 560, flush with the catch ledge's underside. Ten pixels apart they
-     * left a slot a hundred and thirty wide and ten tall, and a crawling body is about fifteen
-     * - close enough to be worth not finding out. Two surfaces that meet should meet.
+     * ## It is a shelf, not a shelf you are stuck on
+     *
+     * It sat at 550, flush with the catch ledge's underside, and that made it a cell: a body
+     * standing on it could not walk west because the ledge's east face was in the way at
+     * exactly standing height, and east is the wall. The playtest landed there and could not
+     * get out, which is what a two-hundred-and-fifty-pixel pocket with a wall at each end is.
+     *
+     * At 640 there is ninety pixels of clear air between its floor and the ledge above, so the
+     * way off is a walk west and a drop into the patrol - which is what this shelf was always
+     * described as doing. A catch that cannot be left is a trap, and the difference between
+     * the two was one number.
      */
-    { x: 880, y: 550, w: 380, h: SHELF },
+    { x: 880, y: 640, w: 380, h: SHELF },
 
     // -- 2. the patrol --------------------------------------------------------------------
     /*
@@ -225,17 +233,24 @@ export const THE_SLUICE: World = {
    * SQUARE against the level instead of its disc, which reports collisions on four corners the
    * arc never reaches and walled off four hundred pixels of usable space.
    *
-   * With the room back, they alternate: 60px apart in x, on two rows 150 apart. Consecutive
-   * growths are therefore 162px apart on the diagonal and never at the same height, which is
-   * what makes it read as a pattern rather than a scatter - the eye gets high, low, high, low,
-   * and the two lows are visibly the odd ones out before anybody has touched them.
+   * ## Three, and they are far apart
    *
-   * FOUR, not five. The fifth had to go west of 525 to keep the spacing even, and at 480 its
-   * own circle reached the breach plate - a swing on the patrol could have opened the last
-   * door in the level during the second beat. That is the second time this stage has caught
-   * that exact fault, and the second time the answer was to move something rather than to
-   * argue about how unlikely the shot is. The run now ends on a TRAP, which is the better
-   * shape anyway: the last growth before the landing is the one you must not take.
+   * Five became four became three, and every cut came from the same playtest note: too close
+   * together. Four at 60px spacing still read as a cluster, and the honest reading of that is
+   * that the beat never needed four. What it needs is one crossing and one lie:
+   *
+   *   p1   the grab from the ledge
+   *   t1   the trap, hanging a hundred and seventy lower and directly between the other two,
+   *        which is what makes it the obvious next hold and the wrong one
+   *   p2   the one that gets you to the landing
+   *
+   * 180 apart in x now, against a lantern about thirty wide - so they read as three separate
+   * objects rather than as a row of hanging lamps. The lie is told once and clearly. Telling
+   * it twice was a plan written before anybody had looked at the room.
+   *
+   * The fifth also had to sit west of 525 to keep its spacing even, and at 480 its own circle
+   * reached the breach plate - a patrol swing could have opened the last door in the level
+   * during the second beat.
    *
    * The gallery's three do state their ropes, because the climb is a chain and a chain's
    * geometry has to be the designer's - stage two's note on 165px spacing is the reason.
@@ -246,9 +261,8 @@ export const THE_SLUICE: World = {
 
     // 2. The patrol. No rope on any of them.
     { id: 'p1', x: 720, y: 420 },
-    { id: 't1', x: 660, y: 570 },
-    { id: 'p2', x: 600, y: 420 },
-    { id: 't2', x: 560, y: 570 },
+    { id: 't1', x: 630, y: 590 },
+    { id: 'p2', x: 540, y: 420 },
 
     /*
      * 7. The gallery, west, going up. All three RED until the column's plate is pressed.
@@ -417,7 +431,9 @@ export const THE_SLUICE: World = {
    * Three sporelings, and the same creature asked three different questions.
    *
    * Two walk the patrol on overlapping beats, so the middle of that floor is covered twice and
-   * neither end is ever safe for long. They are what the rope is for. Contact costs no mass at
+   * neither end is ever safe for long. Both beats stay inside 500..900 with half a sporeling
+   * to spare at each end - the second one used to walk to 970 against a floor that stops at
+   * 900, so it spent a third of its patrol standing on air. The harness checks this now. They are what the rope is for. Contact costs no mass at
    * all - it drops the rope, kills the spin, stuns for 1.2s and hands the body back to its last
    * safe footing - which is the right price for a lesson that needs repeating.
    *
@@ -430,8 +446,8 @@ export const THE_SLUICE: World = {
    * player who is not can never quite walk through it.
    */
   critters: [
-    { from: 520, to: 760, y: 760, speed: 46, w: 26, h: 42, x: 520, facing: 1, wait: 0, phase: 0 },
-    { from: 700, to: 970, y: 760, speed: 44, w: 26, h: 42, x: 970, facing: -1, wait: 0, phase: 0 },
+    { from: 520, to: 700, y: 760, speed: 46, w: 26, h: 42, x: 520, facing: 1, wait: 0, phase: 0 },
+    { from: 690, to: 880, y: 760, speed: 44, w: 26, h: 42, x: 880, facing: -1, wait: 0, phase: 0 },
     { from: 380, to: 600, y: 1020, speed: 42, w: 26, h: 42, x: 380, facing: 1, wait: 0, phase: 0 },
   ],
 

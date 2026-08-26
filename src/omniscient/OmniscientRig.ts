@@ -3269,17 +3269,21 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.m4ss = rig;
 
     /*
-     * Escape is the way out, and it is the ONLY way out.
+     * Escape opens the pause menu, and closes it again.
      *
-     * M4SS owns the keyboard and the mouse while it runs - A/D, space, Q and every click go
-     * to the slime - so there is no room for an on-screen control that the game around it
-     * would have to keep out of the way of. One key, held on window so it fires wherever the
-     * focus went.
+     * It used to leave outright, which was the same mistake the PAUSE button made and worse
+     * for being a reflex: Escape is the key people press when they want a game to stop, not
+     * when they want to end a conversation with somebody. It now does what the button does,
+     * and the menu is where the decision gets made.
+     *
+     * Held on window so it fires wherever the focus went - M4SS owns the keyboard and the
+     * mouse while it runs, so there is nowhere else for a key to land.
      */
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      this.exitM4SS();
+      const m4ss = this.m4ss;
+      if (m4ss) m4ss.setPaused(!m4ss.isPaused());
     };
     window.addEventListener('keydown', onKey);
     this.onM4SSKey = onKey;

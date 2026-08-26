@@ -210,7 +210,7 @@ for (const a of W.anchors) {
  */
 {
   const headY = 760 - 42;
-  for (const id of ['t1', 't2']) {
+  for (const id of ['t1']) {
     const a = named(id);
     check(`${id} at full reach sweeps into the patrol`, a.y + MAX_REACH > headY, `bottom ${a.y + MAX_REACH}`);
   }
@@ -329,6 +329,55 @@ for (const c of W.crushers ?? []) {
   for (const b of W.buttons) {
     if (b.id === 'drop') continue;
     check(`${b.id} wakes nothing`, (b.activates ?? []).length === 0);
+  }
+}
+
+/*
+ * A creature has to have something to walk on for the whole of its beat.
+ *
+ * The second sporeling's patrol ran to 970 against a floor that stops at 900, so a third of
+ * its round trip was spent standing on air - and the report was the one you would expect:
+ * "the second sporeling walks on air". It was a leftover, the floor having been trimmed after
+ * the beat was written, and nothing connected the two numbers.
+ *
+ * Half a body of margin at each end, which is the same rule stage two's ledge uses: a creature
+ * that turns with part of itself hanging over the lip reads as sliding off it.
+ */
+for (const c of W.critters ?? []) {
+  const floor = W.tiles.find(
+    (t) => t.y === c.y && c.from - c.w / 2 >= t.x && c.to + c.w / 2 <= t.x + t.w
+  );
+  check(
+    `the creature at ${c.from}..${c.to} has a floor under all of it`,
+    floor !== undefined,
+    `y ${c.y}`
+  );
+}
+
+/*
+ * Nowhere you can stand is a place you cannot leave.
+ *
+ * The catch shelf sat flush under the ledge above it, so a body that landed on it met the
+ * ledge's east face at exactly standing height going west and the world's wall going east -
+ * two hundred and fifty pixels with a wall at each end. The playtest landed there and stayed
+ * there, and no assertion in this file had anything to say about it.
+ *
+ * Tested as: at least one end of every standable surface has open air beside it at standing
+ * height. That is not a proof the level is fully connected - a real reachability graph is a
+ * different job - but it is exactly the fault that shipped, and it is four lines.
+ */
+{
+  const STAND = 24;
+  const solidAt = (x: number, y: number): boolean =>
+    W.tiles.some((t) => x >= t.x && x <= t.x + t.w && y >= t.y && y <= t.y + t.h);
+  for (const t of W.tiles) {
+    // The ground reaches the bottom of the world; you leave it by climbing, not by walking
+    // off an end, so being walled at both ends is what it is FOR.
+    if (isShell(t) || t.y + t.h >= W.height) continue;
+    const y = t.y - STAND;
+    const west = solidAt(t.x - 2, y);
+    const east = solidAt(t.x + t.w + 2, y);
+    check(`(${t.x},${t.y}) can be left`, !(west && east), west && east ? 'walled at both ends' : '');
   }
 }
 

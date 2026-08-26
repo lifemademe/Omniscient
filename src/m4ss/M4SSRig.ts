@@ -345,6 +345,15 @@ export class M4SSRig extends ENGINE.SceneNode {
    * mistaken for completing the mission.
    */
   public onQuit: (() => void) | null = null;
+  /**
+   * True while the pause menu is up. The sim does not step and no input reaches the creature.
+   *
+   * A pause that only stops the drawing is not a pause - the presses keep cycling, the
+   * sporelings keep walking, and a player who steps away comes back to a room that has moved
+   * without them. This gates the whole of tickPrePhysics below the HUD.
+   */
+  private paused = false;
+  private pauseVeil: HTMLElement | null = null;
   public onContained: (() => void) | null = null;
   /** Seconds until onContained fires. -1 is disarmed. See contain(). */
   private containedDelay = -1;
@@ -2848,7 +2857,7 @@ export class M4SSRig extends ENGINE.SceneNode {
     const quit = document.createElement('button');
     quit.type = 'button';
     quit.textContent = 'PAUSE';
-    quit.setAttribute('aria-label', 'Pause and return to the globe');
+    quit.setAttribute('aria-label', 'Pause');
     quit.style.cssText = [
       'position:absolute',
       'right:4px',
@@ -2871,9 +2880,10 @@ export class M4SSRig extends ENGINE.SceneNode {
     quit.addEventListener('mousedown', swallow);
     quit.addEventListener('click', (event) => {
       swallow(event);
-      this.onQuit?.();
+      this.setPaused(true);
     });
     hud.appendChild(quit);
+    this.buildPauseMenu(container, swallow);
 
     container.appendChild(hud);
     this.hud = hud;
@@ -2882,6 +2892,126 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.hudLabel = hud.querySelector('[data-role="label"]');
     this.hudNote = hud.querySelector('[data-role="note"]');
     this.detach.push(() => hud.remove());
+  }
+
+  /**
+   * The pause menu, and why PAUSE stopped being a synonym for QUIT.
+   *
+   * The button said PAUSE and left the game. That is a defensible shorthand right up until the
+   * thing you return to is a conversation with state in it - and it is: leaving M4SS puts the
+   * player back in the middle of Dana Keller's request, where every chip used to be read as an
+   * answer. So the one control the game offers for "hang on a moment" was spending the mission.
+   *
+   * Two choices, stated plainly, because they are genuinely different things to want. RESUME
+   * is the default and comes first. BACK TO DANA names the person rather than the screen,
+   * which is what the player is actually going back to.
+   *
+   * Built once with the HUD and parked at display:none rather than created on demand - the
+   * frame this opens on is a frame in which the world stops, and building a panel in it is the
+   * one moment in the run when a hitch is guaranteed to be noticed.
+   */
+  private buildPauseMenu(container: HTMLElement, swallow: (event: Event) => void): void {
+    const veil = document.createElement('div');
+    veil.style.cssText = [
+      'position:absolute',
+      'inset:0',
+      'display:none',
+      'align-items:center',
+      'justify-content:center',
+      // The stage is transparent to the mouse; this one thing is not, and it takes the lot -
+      // a click that lands on the canvas behind an open menu tells the specimen to latch.
+      'pointer-events:auto',
+      'background:rgba(6,10,14,0.72)',
+      'z-index:40',
+    ].join(';');
+    veil.addEventListener('pointerdown', swallow);
+    veil.addEventListener('mousedown', swallow);
+
+    const panel = document.createElement('div');
+    panel.style.cssText = [
+      'min-width:210px',
+      'padding:16px 18px 14px',
+      'background:#101823',
+      'border:1px solid #7fb2e0',
+      'box-shadow:0 0 0 1px rgba(0,0,0,0.6)',
+      'font:11px/16px "Courier New",monospace',
+      'color:#dce8f6',
+      'text-align:center',
+    ].join(';');
+
+    const title = document.createElement('div');
+    title.textContent = 'PAUSED';
+    title.style.cssText = 'letter-spacing:3px;margin-bottom:12px;color:#7fb2e0';
+    panel.appendChild(title);
+
+    const make = (label: string, onPick: () => void): HTMLButtonElement => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.style.cssText = [
+        'display:block',
+        'width:100%',
+        'margin:0 0 8px',
+        'padding:7px 10px',
+        'background:#1b2331',
+        'border:1px solid #46617e',
+        'color:#dce8f6',
+        'font:11px/14px "Courier New",monospace',
+        'letter-spacing:2px',
+        'cursor:pointer',
+        'pointer-events:auto',
+      ].join(';');
+      button.addEventListener('pointerdown', swallow);
+      button.addEventListener('mousedown', swallow);
+      button.addEventListener('click', (event) => {
+        swallow(event);
+        onPick();
+      });
+      button.addEventListener('mouseenter', () => {
+        button.style.background = '#26374b';
+      });
+      button.addEventListener('mouseleave', () => {
+        button.style.background = '#1b2331';
+      });
+      panel.appendChild(button);
+      return button;
+    };
+
+    make('RESUME', () => this.setPaused(false));
+    make('BACK TO DANA', () => {
+      // Unpause FIRST. The rig is torn down by what onQuit does, and a flag left true on a
+      // dead object is a flag that outlives the thing it was describing.
+      this.setPaused(false);
+      this.onQuit?.();
+    });
+
+    veil.appendChild(panel);
+    container.appendChild(veil);
+    this.pauseVeil = veil;
+    this.detach.push(() => veil.remove());
+  }
+
+  /**
+   * Open or close the pause menu.
+   *
+   * `held` is cleared on the way in, and that is not tidiness: the keys are tracked by keydown
+   * and keyup, and a keyup that happens while the menu is up still arrives, but a key held
+   * across the pause would otherwise have the creature crawling the instant play resumes,
+   * driven by a press the player made before they stopped.
+   */
+  public setPaused(paused: boolean): void {
+    if (this.paused === paused) return;
+    this.paused = paused;
+    if (this.pauseVeil) this.pauseVeil.style.display = paused ? 'flex' : 'none';
+    if (paused) {
+      this.held.clear();
+      this.recalling = false;
+      this.splitHold = 0;
+    }
+  }
+
+  public isPaused(): boolean {
+    return this.paused;
   }
 
   /** What the bar is promising, and what release will actually hand over. One source. */
@@ -3182,6 +3312,15 @@ export class M4SSRig extends ENGINE.SceneNode {
     super.tickPrePhysics(deltaTime);
     const state = this.state;
     if (!state) return;
+    /*
+     * Everything below this line is the world moving, so pausing is one return.
+     *
+     * Above it is only the engine's own tick. The camera is deliberately NOT re-asserted while
+     * paused either - it is re-asserted from here - which is safe because nothing else claims
+     * the view-target stack while M4SS is mounted, and it means the frame behind the menu is
+     * the frame the player stopped on rather than one that keeps drifting.
+     */
+    if (this.paused) return;
 
     if (this.held.has('Space')) {
       this.splitHold = Math.min(SPLIT_MAX, this.splitHold + deltaTime * SPLIT_RATE);
