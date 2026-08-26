@@ -3186,9 +3186,26 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * fogged and reads cold, and the back wall is gone. It costs two numbers, it cannot fail
      * to reach anything, and unlike a lamp it gets stronger exactly where the room is emptiest.
      */
-    this.fog?.setFogColor(new THREE.Color('#18202c'));
-    this.fog?.setFogNear(9);
-    this.fog?.setFogFar(62);
+    /*
+     * ## M4SS wants NO fog, and for a while it was getting the warehouse's
+     *
+     * The three lines that used to be here set near 9, far 62 and the warehouse haze colour,
+     * under a comment about aisles, high bays and the drone. They arrived in b3cea29 - a
+     * warehouse lighting change - and landed in this method instead of, or as well as,
+     * enterWarehouse. Nothing caught it: both methods configure the same shared FogNode, and
+     * the warehouse looked right because it sets its own values on the way in.
+     *
+     * The effect on M4SS is total. Its camera sits 68.5 units back from a room 26 wide, so
+     * every surface in the level is past a far plane of 62 and takes the fog colour at full
+     * strength - geometry correct, HUD correct, and the entire world a flat blue-grey
+     * silhouette. That is verbatim the failure the comment at the top of this method already
+     * describes and already solved once.
+     *
+     * Back to what it was. There is no "off" on FogNode, so the range goes far enough away
+     * to be nothing, and exitM4SS restores the caller's values from m4ssFog.
+     */
+    this.fog?.setFogNear(1e6);
+    this.fog?.setFogFar(1e7);
 
     const rig = M4SSRig.create({ name: 'M4SSRig', position: M4SS_ORIGIN });
     this.add(rig);
