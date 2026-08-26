@@ -558,6 +558,10 @@ export class WarehouseEnvironment {
   /** Which x columns carry a run of ceiling fixtures. See buildCeilingServices. */
   private readonly ceilingFixtureColumns = new Set<number>();
   private verifiedIntakeScanner: ENGINE.MeshNode | null = null;
+  /** The beacon over the intake, lit only while the player is carrying something to it. */
+  private verifiedIntakeGuide: ENGINE.SceneNode | null = null;
+  private verifiedIntakeGuideOn = false;
+  private verifiedIntakeGuideLevel = 0;
   private verifiedIntakeStatus: THREE.MeshStandardMaterial | null = null;
 
   public build(): void {
@@ -1105,6 +1109,49 @@ export class WarehouseEnvironment {
     );
     this.verifiedIntakeScanner = scanner;
     intake.add(scanner);
+
+    /*
+     * The one thing in this room that says WHERE TO PUT IT.
+     *
+     * The intake is a well-made object - apron, guides, clamps, a moving scanner bar - and it
+     * is one of about forty well-made objects along that wall. Its floating VERIFIED INTAKE
+     * legend was removed with the other three, correctly: a sign is a caption on a machine and
+     * this game's rule is that machines say what they are by being shaped like themselves.
+     *
+     * That rule works when the player is looking at the thing. It does nothing at all when the
+     * player is holding a package at the other end of a building and does not know which of
+     * forty machines is the one - "there is no indicator where the verified intake to drop the
+     * box is". A shape can identify a thing; only light can locate it.
+     *
+     * So this is not a label coming back. It is a landing aid, on the same terms the rest of
+     * the room already uses: it exists only while the drone is carrying something that belongs
+     * here, and it goes out the moment the load lands. A beacon that is always on is scenery
+     * again within a minute.
+     */
+    const guide = ENGINE.SceneNode.create({ name: 'VerifiedIntakeGuide' });
+    const beamMaterial = new THREE.MeshStandardMaterial({
+      color: '#8ff0c8',
+      emissive: '#4fc3a0',
+      emissiveIntensity: 2.6,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      roughness: 0.4,
+    });
+    /*
+     * A column rather than a marker on the floor. The drone flies at head height between racks
+     * four metres tall, so anything drawn on the deck is behind the racking from everywhere
+     * that matters; the column is visible down an aisle and over the tops.
+     */
+    guide.add(
+      mesh('VerifiedIntakeBeam', new THREE.CylinderGeometry(0.16, 0.42, 7.2, 12, 1, true), beamMaterial, new THREE.Vector3(0, 3.7, 0.25)),
+      mesh('VerifiedIntakeHalo', new THREE.TorusGeometry(1.32, 0.05, 8, 28), beamMaterial, new THREE.Vector3(0, 0.2, 0.25))
+    );
+    const halo = guide.children[guide.children.length - 1] as ENGINE.MeshNode;
+    halo.rotation.x = Math.PI / 2;
+    guide.visible = false;
+    this.verifiedIntakeGuide = guide;
+    intake.add(guide);
     /*
      * The VERIFIED INTAKE sign is removed, and it is the third floating legend to go.
      *
@@ -2182,6 +2229,17 @@ export class WarehouseEnvironment {
     this.conveyorRunning = running;
   }
 
+  /**
+   * Light the intake, or let it go dark. See the beacon's own note for why it is not a sign.
+   *
+   * The fade lives in `tick` rather than here so a switch flicked twice in one frame - which
+   * happens when a load is swapped - cannot leave the opacity halfway up with nothing driving
+   * it back.
+   */
+  public setVerifiedIntakeGuide(active: boolean): void {
+    this.verifiedIntakeGuideOn = active;
+  }
+
   public setVerifiedIntakeState(state: 'idle' | 'ready' | 'processing' | 'evidence'): void {
     if (this.verifiedIntakeStatus) {
       const colour = state === 'evidence' ? '#a34136' : state === 'processing' ? '#d99a35' : '#365c4a';
@@ -2304,6 +2362,25 @@ export class WarehouseEnvironment {
 
   public tick(deltaTime: number): void {
     this.clock += deltaTime;
+    if (this.verifiedIntakeGuide) {
+      const reduced = getAccessibilityPreferences().reducedMotion;
+      this.verifiedIntakeGuideLevel = THREE.MathUtils.damp(
+        this.verifiedIntakeGuideLevel,
+        this.verifiedIntakeGuideOn ? 1 : 0,
+        4.5,
+        deltaTime
+      );
+      const lit = this.verifiedIntakeGuideLevel > 0.01;
+      this.verifiedIntakeGuide.visible = lit;
+      if (lit) {
+        // A slow breath rather than a strobe: it is a destination, not an alarm.
+        const pulse = reduced ? 0.78 : 0.62 + Math.sin(this.clock * 2.2) * 0.2;
+        const beam = this.verifiedIntakeGuide.children[0] as ENGINE.MeshNode;
+        const material = beam.material as THREE.MeshStandardMaterial;
+        material.opacity = this.verifiedIntakeGuideLevel * pulse * 0.42;
+        material.emissiveIntensity = 1.6 + pulse * 1.4;
+      }
+    }
     if (this.verifiedIntakeScanner?.visible) {
       this.verifiedIntakeScanner.position.z = 0.1 + Math.sin(this.clock * 3.1) * 0.72;
       const material = this.verifiedIntakeScanner.material as THREE.MeshStandardMaterial;

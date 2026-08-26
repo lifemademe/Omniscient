@@ -2693,6 +2693,14 @@ export class WarehouseRig extends ENGINE.SceneNode {
       marks.push(bracket(station.clone().setY(1.35), 1));
     }
     marks.push(bracket(WAREHOUSE_LAYOUT.cradle.clone().setY(0.9), 0.8));
+    /*
+     * And the intake, whenever the drone is carrying something. It is the destination for
+     * every audited package and the brackets marked every other fixture in the building
+     * except the one the player is being sent to.
+     */
+    if (this.carried) {
+      marks.push(bracket(this.environment.verifiedIntakePosition.clone().setY(1.5), 1.1));
+    }
 
     /*
      * The subject joins the list only after it has been scanned. `evidence.cargo` and
@@ -4463,6 +4471,17 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.feedback.setOpticalHeld(this.opticalAimHeld && this.view === 'drone');
     this.feedback.setTargets(this.opticalAimHeld ? this.opticalTargets() : []);
     this.updateDeliveredCargo(deltaTime);
+    /*
+     * The intake lights while there is something to bring it, and only then.
+     *
+     * Driven from state every frame rather than switched at the grip and the drop. Those are
+     * the two obvious call sites and there are five more that end a carry - a recover, a
+     * checkpoint restart, a containment, a decision taken with the load still in the claw, and
+     * the audit advancing - so a pair of switches would have left the beacon burning over an
+     * empty apron on whichever one somebody forgot. A light that reports a condition should
+     * read the condition.
+     */
+    this.environment.setVerifiedIntakeGuide(this.inboundAudit !== null && this.carried !== null);
     this.hud?.tick(deltaTime);
     this.environment.tick(deltaTime);
     this.celStyle.tick(this, deltaTime);
