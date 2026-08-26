@@ -846,6 +846,13 @@ export const TUNING = {
   attachAt: 14,
   snapAfter: 0.55,
   recall: 900,
+  /**
+   * How hard a creature bats a stray piece of you back toward the body, in px/s.
+   *
+   * Fast enough to be a visible shove and slow enough that the piece does not arrive as a
+   * projectile - the rejoin force does the actual travelling, this only starts it.
+   */
+  strayKick: 260,
 };
 
 let nextId = 1;
@@ -2359,6 +2366,24 @@ export function step(state: MassState, input: Input): MassState {
    * never appeared on screen.
    */
   if (state.stunned > 0) state.stunned = Math.max(0, state.stunned - dt);
+  /*
+   * Which part of you is YOU, for the purposes of being caught.
+   *
+   * The body is allowed to be in several pieces - see the note below on why collision never
+   * splits it - and a corner can scrape a few particles off at any time. Those pieces are
+   * still owned, still take input, and are already being hauled home by the rejoin force. But
+   * the contact test asked every owned particle, so a fragment the player did not know they
+   * had, drifting into a creature on the far side of a platform, sent the whole creature back
+   * to its last footing. The playtest read it exactly as it happened: a piece splits off on
+   * its own, something touches it, and the run resets.
+   *
+   * Contact is the MAIN component only. Everything else about a fragment is unchanged - it
+   * comes home the way it always did - and the creature now shoves it on its way instead.
+   */
+  const myParts = (world.critters ?? []).length > 0 ? components(owned(state)) : [];
+  let mainPart: Particle[] = myParts[0] ?? [];
+  for (const part of myParts) if (part.length > mainPart.length) mainPart = part;
+  const mainIds = new Set(mainPart.map((p) => p.id));
   for (const critter of world.critters ?? []) {
     if (critter.wait > 0) {
       critter.wait = Math.max(0, critter.wait - dt);
@@ -2389,9 +2414,39 @@ export function step(state: MassState, input: Input): MassState {
     const left = critter.x - critter.w / 2;
     const right = critter.x + critter.w / 2;
     const top = critter.y - critter.h;
+    const inside = (p: Particle): boolean =>
+      p.x >= left && p.x <= right && p.y >= top && p.y <= critter.y;
+
+    /*
+     * A stray piece gets pushed home rather than ignored.
+     *
+     * Doing nothing at all would be correct and would look broken - a lump of the creature
+     * walking through a sporeling while the sporeling ignores it. So the fragment is kicked
+     * toward the body it belongs to and the creature flinches, which reads as the thing being
+     * batted away and costs the player nothing.
+     *
+     * Written as a velocity rather than a force because this block runs AFTER the integrator:
+     * px is "where I was", so moving it is the only way to change a speed from down here. See
+     * the rejoin force for the other half of the rule and for what happens if you forget.
+     */
+    if (mainPart.length > 0) {
+      const home = centroid(mainPart);
+      let shoved = false;
+      for (const p of particles) {
+        if (!state.owned.has(p.id) || mainIds.has(p.id) || !inside(p)) continue;
+        const dx = home.x - p.x;
+        const dy = home.y - p.y;
+        const d = Math.hypot(dx, dy) || 1;
+        p.px = p.x - (dx / d) * T.strayKick * dt;
+        p.py = p.y - (dy / d) * T.strayKick * dt;
+        shoved = true;
+      }
+      if (shoved) critter.wait = Math.max(critter.wait, T.critterPause);
+    }
+
     let touched = false;
-    for (const p of owned(state)) {
-      if (p.x < left || p.x > right || p.y < top || p.y > critter.y) continue;
+    for (const p of mainPart) {
+      if (!inside(p)) continue;
       touched = true;
       break;
     }

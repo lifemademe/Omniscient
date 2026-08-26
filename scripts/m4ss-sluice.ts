@@ -382,47 +382,72 @@ for (const c of W.critters ?? []) {
 }
 
 /*
- * The bridge, in both of its states.
+ * The bulkhead, and the drop it lets you take.
  *
- * Standing, it must sit on the platform rather than in it. Down, its deck must not overlap
- * anything - a bridge that lands inside a tile is a bridge that lands inside the player.
+ * It used to be a drawbridge and the checks here used to be about a deck. Both are gone: what
+ * the player needs at the top of the column is a way DOWN to the mass they left, not a floor
+ * at deck height leading to a climb they cannot start. See the gate's own note.
+ *
+ * What has to be true now is smaller and easier to get wrong. The slab has to stand ON the
+ * platform rather than in it, and it has to have somewhere to go: the lift travels its own
+ * height plus four, so a slab taller than the pocket above it rises into the ceiling and the
+ * open state is a door buried in stone.
  */
 {
-  const bridge = W.gates.find((g) => g.id === 'b1')!;
-  const slab = gateSolid(bridge)!;
-  const deck = bridge.span!;
+  const gate = W.gates.find((g) => g.id === 'b1')!;
+  const slab = gateSolid(gate)!;
   for (const t of W.tiles) {
     if (isShell(t)) continue;
-    check(`standing bridge is clear of (${t.x},${t.y})`, !overlap(slab, t));
-    check(`bridge deck is clear of (${t.x},${t.y})`, !overlap(deck, t));
+    check(`the bulkhead is clear of (${t.x},${t.y})`, !overlap(slab, t));
   }
-  check('bridge deck is thick enough to stand on', deck.h > 60, `${deck.h}`);
-  /*
-   * The deck has to BE the slab, turned on its side.
-   *
-   * This is the check that was missing and the fault it would have caught shipped to a
-   * playtest: the rig animates a bridge by rotating its own mesh, so what is drawn when it
-   * lands is always the slab's rectangle with its axes swapped. `span` is stated separately -
-   * deliberately, because deriving it from the pivot was wrong every time - and nothing made
-   * the two agree. The deck was 280 wide and the slab could only ever draw 150 of it, so a
-   * hundred and thirty pixels of walkway were solid and invisible and the report was "I can
-   * just move over nothing to the other side".
-   *
-   * Stated as an equality rather than a tolerance. A bridge whose drawn shape and walkable
-   * shape differ by ANY amount is a bridge with a lie in it, and the size of the lie only
-   * decides how long it takes somebody to fall through it.
-   */
-  check(
-    'the deck is the slab turned on its side',
-    deck.w === bridge.h && deck.h === bridge.w,
-    `deck ${deck.w}x${deck.h}, slab ${bridge.w}x${bridge.h}`
-  );
-  const landing = W.tiles.find((t) => t.x === 360 && t.y === 1020)!;
-  check('bridge deck meets its west landing', deck.x === landing.x + landing.w, `${deck.x}`);
   const platform = W.tiles.find((t) => t.x === 900 && t.y === 1020)!;
-  check('bridge deck meets the column platform', deck.x + deck.w === platform.x, `${deck.x + deck.w}`);
+  check('the bulkhead stands on the platform', gate.y + gate.h === platform.y, `${gate.y + gate.h}`);
+  check(
+    'and within it, not off its end',
+    gate.x >= platform.x && gate.x + gate.w <= platform.x + platform.w
+  );
+  /*
+   * The rig lifts a gate by `h + 4` (see the gateNodes loop). Everything above the slab has to
+   * be further away than that, or the open door is inside the ceiling.
+   */
+  const ceiling = W.tiles.find((t) => t.x === 900 && t.y === 760)!;
+  const headroom = gate.y - (ceiling.y + ceiling.h);
+  check(
+    'the bulkhead has somewhere to lift into',
+    headroom > gate.h + 4,
+    `${headroom}px of pocket for a ${gate.h}px slab`
+  );
+  // And once it is up, a body has to fit through where it stood.
+  check('and the gap it leaves is passable', gate.h >= 60, `${gate.h}`);
 }
 
+/*
+ * The way out of the sump.
+ *
+ * The stage's second half assumed the player could get from the machine floor back to the
+ * gallery and nothing carried them - seven hundred pixels of wall. Checked as a chain: every
+ * link within a full reach of the last, the first within reach of the floor, and the last
+ * within reach of the landing the gallery starts from.
+ */
+{
+  const climb = ['n1', 'n2', 'n3'].map((id) => named(id));
+  const landing = W.tiles.find((t) => t.x === 360 && t.y === 1020)!;
+  check(
+    'the first rise is reachable from the machine floor',
+    Math.hypot(climb[0].x - climb[0].x, FLOOR_TOP - 20 - climb[0].y) < MAX_REACH,
+    `${Math.round(FLOOR_TOP - 20 - climb[0].y)}px up`
+  );
+  for (let i = 1; i < climb.length; i++) {
+    const d = Math.hypot(climb[i].x - climb[i - 1].x, climb[i].y - climb[i - 1].y);
+    check(`${climb[i - 1].id} reaches ${climb[i].id}`, d < MAX_REACH, `${Math.round(d)}px`);
+  }
+  const top = climb[climb.length - 1];
+  const onto = Math.hypot(landing.x + 40 - top.x, landing.y - 20 - top.y);
+  check('the last rise reaches the landing', onto < MAX_REACH, `${Math.round(onto)}px`);
+  const first = W.anchors.find((a) => a.id === 'g1')!;
+  const up = Math.hypot(first.x - (landing.x + 40), first.y - (landing.y - 20));
+  check('and the landing reaches the gallery', up < MAX_REACH, `${Math.round(up)}px`);
+}
 /*
  * The grate has to have a gap, the floor has to run under it, and the pier above it has to
  * reach something. Stage one and stage two both shipped a gate mistaken for a floor.
@@ -448,7 +473,7 @@ for (const c of W.critters ?? []) {
     if (isShell(t) || t.y === FLOOR_TOP) continue;
     check(`column shaft is clear of (${t.x},${t.y})`, !overlap(shaft, t));
   }
-  const cap = W.tiles.find((t) => t.x === 1080 && t.y === 780)!;
+  const cap = W.tiles.find((t) => t.x === 1080 && t.y === 760)!;
   check('the column is capped', cap.y + cap.h === draft.y, `${cap.y + cap.h} vs ${draft.y}`);
   const deck = W.tiles.find((t) => t.x === 900 && t.y === 1020)!;
   check('the platform is west of the column', deck.x + deck.w === draft.x - 10 || deck.x + deck.w <= draft.x);
@@ -697,6 +722,77 @@ console.log('\nthe route - the two moves the layout cannot settle on its own');
     shutter.y >= above && shutter.y + shutter.h <= below,
     `shutter ${shutter.y}..${shutter.y + shutter.h} in ${above}..${below}`
   );
+}
+
+// --------------------------------------------------------------------- 4. the creatures
+
+console.log(`\nthe sporelings - what counts as touching you`);
+
+/*
+ * A piece torn off the body is not the body.
+ *
+ * The contact test asked every OWNED particle, and the body is allowed to be in several
+ * pieces - collision never splits it on purpose, but a corner can scrape a few off, and those
+ * fragments are still owned while the rejoin force hauls them home. So a lump the player did
+ * not know they had, drifting into a creature, sent the whole run back to its last footing.
+ *
+ * Both directions are checked, because the fix is one that can pass by doing nothing at all:
+ * if the main body stopped registering too, the first check would go green and the creature
+ * would be furniture.
+ */
+{
+  /*
+   * Read from the LIVE world, not the template.
+   *
+   * The first version of this test took the creature's position from THE_SLUICE and dropped
+   * the fragment there - but freshSluice() copies the critters and half a second of stepping
+   * walks them away from where they were authored, so the fragment was being placed at an
+   * empty patch of floor. It passed, and it passed with the fault still in the sim: the canary
+   * that was supposed to prove it could fail did not fail either. A test that places a hazard
+   * by hand has to ask the simulation where the hazard actually is.
+   */
+  const at = (state: MassState): { x: number; y: number } => {
+    const c = state.world.critters![0];
+    return { x: c.x, y: c.y - c.h / 2 };
+  };
+
+  const place = (state: MassState, x: number, y: number): void => {
+    const at = home(state);
+    const dx = x - at.x;
+    const dy = y - at.y;
+    for (const p of state.particles) {
+      p.x += dx;
+      p.px += dx;
+      p.y += dy;
+      p.py += dy;
+    }
+  };
+
+  // A fragment, on its own, standing in the creature.
+  const stray = makeState(freshSluice(), 40);
+  place(stray, 800, 700);
+  run(stray, 0.5, () => IDLE);
+  const before = home(stray);
+  const strayAt = at(stray);
+  for (const p of owned(stray).slice(0, 3)) {
+    p.x = strayAt.x;
+    p.y = strayAt.y;
+    p.px = p.x;
+    p.py = p.y;
+  }
+  step(stray, IDLE);
+  const drift = Math.hypot(home(stray).x - before.x, home(stray).y - before.y);
+  check('a stray piece touching a creature does not reset the run', stray.stunned === 0);
+  check('and the body stays where it was', drift < 60, `${Math.round(drift)}px`);
+
+  // The body itself, in the same place. This one must still be caught.
+  const body = makeState(freshSluice(), 40);
+  place(body, 800, 700);
+  run(body, 0.5, () => IDLE);
+  const bodyAt = at(body);
+  place(body, bodyAt.x, bodyAt.y);
+  step(body, IDLE);
+  check('but the body itself still is', body.stunned > 0, `stunned ${body.stunned.toFixed(2)}s`);
 }
 
 console.log(failures === 0 ? '\nall clear\n' : `\n${failures} failed\n`);

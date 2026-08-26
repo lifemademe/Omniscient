@@ -15,8 +15,8 @@
  *   4. a grate at 24                               ->  split, crawl, leave the rest behind
  *   5. a column of air that lifts 14               ->  the wall and the air disagree, so the
  *                                                      shedding has to happen twice
- *   6. a wall that lies down                       ->  and becomes the walkway back west, over
- *                                                      the mass you abandoned to get here
+ *   6. a bulkhead that lifts                       ->  and lets you drop back to the mass you
+ *                                                      abandoned to get up here
  *   7. a shutter between two growths               ->  the climb has a gate in the middle of it
  *   8. a plate at 460, dressed as masonry          ->  build the circle, let go, go through it
  *
@@ -37,11 +37,15 @@
  *
  * ## Getting your mass back
  *
- * Both sheds land on the machine floor, and the bridge crosses two hundred pixels above it in
- * open air. Q calls the nearest lump home from any distance (mass.ts's recall block), so the
- * deck is where the stage hands you back what it took: stand over it and press Q twice. That
- * is why the deck is clear air all the way down and why the plate at the top of the column
- * opens the grate as well as the bridge - the same bargain stage two makes with its wall.
+ * Both sheds land on the machine floor, and the plate at the top of the column is what lets
+ * you get back to them: it lifts the bulkhead on the platform's west lip, and behind that is
+ * the drop. Q calls the nearest lump home from any distance (mass.ts's recall block), so a
+ * player who would rather not fall can stand at the lip and call both up instead.
+ *
+ * The plate also opens the grate - the same bargain stage two's waking button makes - and
+ * wakes the climb. Coming back up out of the sump is `n1`..`n3`, three growths that were the
+ * whole thing this stage was missing: the second half assumed a route from the machine floor
+ * to the gallery and there was seven hundred pixels of wall where it should have been.
  *
  * Authored with y DOWN, like the others.
  */
@@ -167,23 +171,26 @@ export const THE_SLUICE: World = {
      * ledge in reach of where it left you.
      */
     { x: 900, y: 1020, w: 180, h: SHELF },
-    /** The pocket's ceiling, west half. */
-    { x: 900, y: 780, w: 180, h: SHELF },
-    /** The column's cap, east half. Air stops here; the way out is sideways. */
-    { x: 1080, y: 780, w: 180, h: SHELF },
     /*
-     * Where the bridge lands, and where the west climb begins.
+     * The pocket's ceiling, west half - and it is level with the patrol floor beside it.
      *
-     * It reaches east to 750 rather than 620, and the 130 pixels are a bug being paid for.
-     * The rig animates a bridge by ROTATING its slab, so what the player sees is always the
-     * slab's own rectangle turned on its side - and `span` is stated independently of that.
-     * A 90x150 slab lying down is a 150x90 deck; the span said 280 wide, so a hundred and
-     * thirty pixels of the walkway were solid and not drawn. Paul walked over nothing.
+     * It sat twenty pixels lower, which is the worst possible amount: far enough to see and
+     * not far enough to read as a step, so the join at x 900 looked like two platforms that
+     * had failed to meet. Twenty pixels is also about half a sporeling, which is what made it
+     * look like the creature beyond it was walking on air.
      *
-     * Fixed on the level's side rather than the rig's: a bridge you can see fall and then
-     * land somewhere its own shape does not reach is dishonest whatever draws it. The landing
-     * grew to meet the deck the slab can actually become. See the harness check that now
-     * requires the two to agree.
+     * Surfaces that are meant to be one surface should share a number.
+     */
+    { x: 900, y: 760, w: 180, h: SHELF },
+    /** The column's cap, east half. Air stops here; the way out is sideways. */
+    { x: 1080, y: 760, w: 180, h: SHELF },
+    /*
+     * The landing, and where the west climb begins.
+     *
+     * It was the far end of a drawbridge and is now the top of a ladder - `n3` swings onto it
+     * from the sump below and `g1` hangs a hundred and twenty above it. Its 390 width is a
+     * leftover from the bridge and it is kept: an arrival you reach by releasing off a swing
+     * wants to be wide, and this is the one platform in the level a player lands on twice.
      */
     { x: 360, y: 1020, w: 390, h: SHELF },
 
@@ -297,6 +304,27 @@ export const THE_SLUICE: World = {
     { id: 'g1', x: 400, y: 880, rope: 70, live: false },
     { id: 'g2', x: 450, y: 680, rope: 70, live: false },
     { id: 'g3', x: 400, y: 500, rope: 70, live: false },
+
+    /*
+     * 6b. The rise out of the sump, and the beat that had no way back.
+     *
+     * Everything about the second half of this stage assumed the player could get from the
+     * machine floor to the gallery, and nothing carried them: the floor is at 1580, the
+     * gallery's lowest growth is at 880, and seven hundred pixels of wet stone is not a route.
+     * The drawbridge was supposed to hide that by walking them across at deck height, and all
+     * it really did was move the dead end.
+     *
+     * Three growths, ninety-pixel ropes, about two hundred apart - the same chain arithmetic
+     * as the gallery above them. They are LIVE from the start, and that costs nothing: a
+     * player who climbs them during the corridor arrives on the landing beside a gallery that
+     * is still red, which is the same view the descent already gave them from further away.
+     *
+     * They sit west of the landing rather than under it, so the whole chain is in open air -
+     * the presses swing at 500 and 800 and none of these circles reaches either.
+     */
+    { id: 'n1', x: 250, y: 1420, rope: 90 },
+    { id: 'n2', x: 300, y: 1220, rope: 90 },
+    { id: 'n3', x: 250, y: 1040, rope: 90 },
   ],
 
   gates: [
@@ -308,25 +336,31 @@ export const THE_SLUICE: World = {
      */
     { id: 's1', x: 990, y: 1410, w: 90, h: 140, open: false, lift: 0, sieve: 24 },
     /*
-     * The bridge, and the first one in this game.
+     * The bulkhead on the platform's west lip. It goes UP, and it used to be a drawbridge.
      *
-     * It stands on the west lip of the column's platform as a slab you cannot pass and can see
-     * from the drop, four beats earlier. Down, it is a floor: `span` is where it lies, stated
-     * rather than derived, and it is 90 thick for the reason every walked surface here is -
-     * a deck thinner than the body sinks posts the walker out through its own underside.
+     * ## Why the bridge went
+     *
+     * The plan's best trick was `Gate.mode: 'bridge'` - implemented, animated, and used by no
+     * stage - and beat six was built on it: a wall that lies down and becomes the walkway
+     * back. It read well on paper and it did not survive contact.
+     *
+     * What it gave the player was a floor at deck height, and what the player NEEDS at that
+     * moment is to go DOWN. They arrive at fourteen grams with seventy-four pixels of reach,
+     * two lumps of themselves on the machine floor seven hundred pixels below, and a climb
+     * whose lowest growth is a hundred and forty above the deck. The bridge walked them west
+     * to the foot of a ladder they could not climb. The playtest put it plainly: "I used the
+     * wind to reach the button, but I don't have enough mass to use a growth."
+     *
+     * So the door lifts, and what is behind it is the drop back to yourself. That is a worse
+     * sentence and a better beat: the reward for the top of the column is not a walkway, it is
+     * being let out.
+     *
+     * 76 tall, which is a step over rather than a doorway, because the lift travels the slab's
+     * own height plus four and the pocket's ceiling is only 170 above the deck - a taller
+     * bulkhead would rise into it. Small is also honest here: this is a sluice gate on a
+     * gantry, not a gate in a wall.
      */
-    {
-      id: 'b1',
-      x: 900,
-      y: 870,
-      w: 90,
-      h: 150,
-      open: false,
-      lift: 0,
-      mode: 'bridge',
-      // 150x90 - the slab's own 90x150 turned on its side, which is what the fall draws.
-      span: { x: 750, y: 1020, w: 150, h: SHELF },
-    },
+    { id: 'b1', x: 900, y: 944, w: 90, h: 76, open: false, lift: 0 },
     /*
      * The cracked wall at the top of the climb. Only the force plate opens it.
      *
@@ -461,9 +495,11 @@ export const THE_SLUICE: World = {
    * two seconds. A ride, not a launch.
    *
    * It runs from the machine floor to the underside of its own cap, so the top of the ride is
-   * the ceiling and the only opening is the ledge to the west.
+   * the ceiling and the only opening is the ledge to the west. The cap moved up twenty pixels
+   * to line up with the patrol floor, so the column follows it - a shaft that stops short of
+   * its own lid is a shaft with a silent dead zone at the top of the ride.
    */
-  updrafts: [{ x: 1090, y: 870, w: 160, h: FLOOR - 870, force: 2050, liftMass: 14, feather: 45 }],
+  updrafts: [{ x: 1090, y: 850, w: 160, h: FLOOR - 850, force: 2050, liftMass: 14, feather: 45 }],
 
   /**
    * The giant mushrooms, placed rather than derived.
