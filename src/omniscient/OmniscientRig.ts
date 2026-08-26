@@ -53,7 +53,7 @@ import { playM4SSHandoff } from './link/M4SSHandoff.js';
 import { DriveKeys } from './view/mowing.js';
 import { installSceneJump } from './dev/SceneJump.js';
 import { playWarp } from './art/warp.js';
-import { applyShadowPolicy } from './art/shadows.js';
+import { applyShadowPolicy, castShadows } from './art/shadows.js';
 import { SystemPanel } from './menu/SystemPanel.js';
 import { createSeaLife } from './geometry/seaLife.js';
 import { WINDOW_VIEW } from './geometry/room.js';
@@ -1564,7 +1564,25 @@ export class OmniscientRig extends ENGINE.SceneNode {
         distance: 2.4,
         decay: 1.7,
       });
-    lamp.castShadow = false;
+    /*
+     * ## Shadows go on the SPOTS, not on the key
+     *
+     * The key above cannot cast: this rig spans sixty units, workstation at one end and
+     * dioramas at the other, and one orthographic shadow map cannot cover both - whichever
+     * set falls outside its bounds renders fully shadowed. That reasoning is still correct
+     * and the key stays off.
+     *
+     * It does not apply to a spot light. A spot's shadow camera is a perspective frustum
+     * bounded by its own cone and range, so this one covers the half-metre of desk it lights
+     * and nothing else - no span problem to have. And the desk is exactly where a shadow
+     * earns its cost: the home shot is a close-up of clutter under a shade, and contact
+     * shadows are most of what makes small objects sit ON a surface rather than float above
+     * it.
+     *
+     * Small map, because the cone is small. 1024 across half a metre is finer than 2048
+     * across the warehouse.
+     */
+    castShadows(lamp as unknown as THREE.Object3D, { mapSize: 1024, radius: 3, normalBias: 0.02, bias: -0.0004 });
     lamp.lookAt(lampAt.clone().add(new THREE.Vector3(0.16, -1, 0.22)));
     this.add(lamp);
 
@@ -1636,7 +1654,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
       distance: 8,
       decay: 1.25,
     });
-    windowKey.castShadow = false;
+    /*
+     * The window casts too, softly. Same argument as the lamp - a spot is self-bounding -
+     * and this is the light that puts the frame's shape across the desk. A window that
+     * throws no bar of shadow is a bright patch, not a window.
+     */
+    castShadows(windowKey as unknown as THREE.Object3D, { mapSize: 1024, radius: 4.5, normalBias: 0.03, bias: -0.0005 });
     // Aim across the desk rather than straight at the wall opposite, so the beam travels
     // along the desk surface and the near clutter picks up a rim.
     windowKey.lookAt(WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(-0.6, 0.1, 0.2)));

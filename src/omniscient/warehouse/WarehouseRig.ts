@@ -902,7 +902,17 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const lamp = ENGINE.PointLightNode.create({
       name: 'DroneLandingLight',
       color: '#ffd0a0',
-      intensity: 10,
+      /*
+       * 4.5, down from 10.
+       *
+       * Both onboard lights were set when this machine measured median luma 23 against a
+       * frame median of 24 - the darkest thing on screen in a night interior. The room is
+       * high-key now and the cel pass lifts it further, and a lamp bolted to the airframe
+       * lights the airframe first: measured, 9.35% of the drone's own body clipped to pure
+       * white and its 95th percentile was 255. The hull is authored at #16191c, a
+       * near-black, so that was never albedo - it was the drone bleaching itself.
+       */
+      intensity: 4.5,
       distance: 11,
       decay: 1.35,
       position: new THREE.Vector3(0, -0.3, -0.5),
@@ -1032,7 +1042,8 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const inspectionFill = ENGINE.PointLightNode.create({
       name: 'DroneInspectionFill',
       color: '#a8d9c8',
-      intensity: 8,
+      // Same correction as the landing light, and this one sits closer to the body still.
+      intensity: 2.8,
       distance: 6.5,
       decay: 1.85,
       // Clear of the hull. Inside it, the fill was a hot spot on its own airframe - the same

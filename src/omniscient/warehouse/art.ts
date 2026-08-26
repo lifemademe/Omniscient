@@ -94,8 +94,8 @@ const FLOOR_PAINT = new THREE.MeshStandardMaterial({ color: '#b58a34', roughness
 
 /* Softwood, and darker than the board it carries so a load reads as sitting on something. */
 const PALLET = new THREE.MeshStandardMaterial({ color: '#816337', roughness: 0.96 });
-const TAPE_LIGHT = new THREE.MeshStandardMaterial({ color: '#d4c5a8', roughness: 0.72 });
-const TAPE_DARK = new THREE.MeshStandardMaterial({ color: '#c1ae87', roughness: 0.72 });
+const TAPE_LIGHT = new THREE.MeshStandardMaterial({ color: '#c6b28b', roughness: 0.72 });
+const TAPE_DARK = new THREE.MeshStandardMaterial({ color: '#b6a072', roughness: 0.72 });
 /*
  * Stretch wrap. Nearly clear, slightly cool, and it must not write depth - a dozen
  * transparent boxes that do will sort against each other and flicker as the drone moves.
@@ -810,9 +810,9 @@ export class WarehouseEnvironment {
        * band.
        */
       const CARTONS = [
-        new THREE.MeshStandardMaterial({ color: '#d9bb87', roughness: 0.95 }),
-        new THREE.MeshStandardMaterial({ color: '#bda070', roughness: 0.95 }),
-        new THREE.MeshStandardMaterial({ color: '#cbad7c', roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: '#cea764', roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: '#b29058', roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: '#bf9a5e', roughness: 0.95 }),
       ];
       const merged: Array<[string, THREE.BufferGeometry[], THREE.Material]> = [
         [`RackPallets-${aisle}`, bucket.pallet, PALLET],
@@ -1614,7 +1614,17 @@ export class WarehouseEnvironment {
              * bay with a reflector physically does, which is why it looks right rather than
              * merely brighter: the fitting exists to stop the light behaving like a bare bulb.
              */
-            intensity: 95,
+            /*
+             * 78, down from 95.
+             *
+             * Measured against the other rooms rather than in isolation, which is the only
+             * way "balanced" means anything: the warehouse was clipping 3.11% of frame at a
+             * 90th percentile of 230 while the workstation clipped 1.04% at 181. A shed lit
+             * brighter than a bedsit is correct; a shed throwing away three percent of its
+             * highlights is just over-exposed, and the drone - the one object always on
+             * screen - was the worst of it.
+             */
+            intensity: 78,
             distance: 30,
             decay: 1.25,
             /*
@@ -2199,7 +2209,7 @@ export class WarehouseEnvironment {
      * black. Fill sets the BOTTOM of the range, key sets the top - raising the fill to reach
      * the top is what flattens a picture.
      */
-    const skyFill = this.celStyleEnabled ? 2.5 : WAREHOUSE_SKY_FILL;
+    const skyFill = this.celStyleEnabled ? 2.2 : WAREHOUSE_SKY_FILL;
     const moon = this.celStyleEnabled ? 2.05 : 1.7;
     const front = this.celStyleEnabled ? 28 : 35;
     const fixture = this.celStyleEnabled ? 0.92 : 1.15;

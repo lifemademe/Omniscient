@@ -23,6 +23,7 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
 import { decorMesh } from '../omniscient/art/mesh.js';
+import { castShadows } from '../omniscient/art/shadows.js';
 import {
   accessibleScreenShakeScale,
   getAccessibilityPreferences,
@@ -785,7 +786,15 @@ export class M4SSRig extends ENGINE.SceneNode {
       intensity: 6.5,
       color: new THREE.Color('#ffe9c9'),
     });
-    key.castShadow = false;
+    /*
+     * The key casts now. M4SS is one room 26 units across, so a single orthographic map
+     * covers all of it at useful density - the constraint that keeps the workstation key
+     * from casting simply is not present here.
+     *
+     * Generous softness and a large normal bias, because this scene is flat-shaded low-poly
+     * with big coplanar faces, which is the worst case for acne. See castShadows.
+     */
+    castShadows(key as unknown as THREE.Object3D, { extent: 20, mapSize: 2048, radius: 3.5, normalBias: 0.05 });
     this.add(key);
     // Must follow add(): lookAt resolves against the parent, and before it has one there is
     // nothing to resolve against.
