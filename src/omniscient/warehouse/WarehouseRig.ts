@@ -9,6 +9,7 @@ import { getAccessibilityPreferences } from '../accessibility/preferences.js';
 import { setCursorVisible, setPointerLockAllowed } from '../art/cursor.js';
 import { setRetroLook } from '../art/retro.js';
 import { setRoomTone } from '../audio/RoomTone.js';
+import { RotorWashVFX } from '../vfx/library.js';
 import { seedFrom } from '../core/rng.js';
 
 import { WarehouseEnvironment } from './art.js';
@@ -72,6 +73,22 @@ type DronePerspective = 'first' | 'third';
 const CAMERA_MATRIX = new THREE.Matrix4();
 const DRONE_START = WAREHOUSE_LAYOUT.drone.start;
 const ALTITUDES = [1.8, 3.2, 6.8] as const;
+/**
+ * Where the rotor wash lives and when it runs.
+ *
+ * The drone bottoms out at 0.85m, so WASH_FULL_Y sits just above that - the wash is at full
+ * strength through the whole hovering band a player works a bay from. It is gone by 2.6m,
+ * which is under the lowest authored altitude preset but well above the floor: high enough
+ * that crossing an aisle at cruise does not drag a dust trail behind it.
+ *
+ * The floor is y 0 in rig space. It is emphatically NOT y 0 in world space - this whole
+ * warehouse sits 800 metres up - so anything written here has to stay in the rig's own
+ * coordinates or it lands in the sky.
+ */
+const WAREHOUSE_FLOOR_Y = 0.02;
+const WASH_FULL_Y = 1.1;
+const WASH_FADE_Y = 2.6;
+const WASH_PARKED = new THREE.Vector3(0, -1000, 0);
 const THIRD_PERSON_ARM = 2.8;
 const THIRD_PERSON_HEIGHT = 1.25;
 const THIRD_PERSON_DISTANCE = Math.hypot(THIRD_PERSON_ARM, THIRD_PERSON_HEIGHT);
@@ -300,6 +317,9 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
   private drone = ENGINE.SceneNode.create({ name: 'WarehouseDrone', position: DRONE_START.clone() });
   private droneVisual = ENGINE.SceneNode.create({ name: 'WarehouseDroneVisual' });
+  /** The dust the rotors lift off the slab. Null until buildDrone runs. See updateRotorWash. */
+  private droneWash: ENGINE.VFXNode | null = null;
+  private droneWashOn = false;
   /** World-space acknowledgement for scan and grip. See WarehouseDroneFeedback. */
   private readonly feedback = new WarehouseDroneFeedback();
   private droneRotorBlades: THREE.InstancedMesh | null = null;
@@ -1184,6 +1204,90 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.add(this.feedback.root);
     this.drone.add(inspectionFill);
     this.add(this.drone);
+
+    /*
+     * ## The wash is NOT parented to the drone
+     *
+     * It belongs to the floor. Hung off the airframe it would ride up with the drone and
+     * keep blowing dust at six metres, and it would tilt with the hull - so the puff would
+     * lean over every time the machine banked, which is the one thing a column of air coming
+     * off a slab never does. It lives on the rig and updateRotorWash walks it to the point on
+     * the floor underneath the drone each frame, upright.
+     *
+     * Parked below the world until it is wanted, for the reason OmniscientRig.buildVfx
+     * documents at length: clearing `visible` on a VFXNode does not reliably reach the
+     * renderables it owns, so a non-emitting effect can sit in full view where it was built.
+     * A kilometre under the floor is not a flag anything can argue with.
+     */
+    const wash = ENGINE.VFXNode.create({
+      name: 'DroneRotorWash',
+      vfxDefinition: ENGINE.VFXDefinition.fromJSON(RotorWashVFX),
+      autoStart: false,
+      position: WASH_PARKED.clone(),
+    });
+    wash.visible = false;
+    this.droneWash = wash;
+    this.add(wash);
+  }
+
+  /*
+   * ## Dust, and what decides there is any
+   *
+   * Two conditions, and both have to be true, because either alone gets it wrong.
+   *
+   * HEIGHT is the obvious one. Rotor wash is a near-field effect: it reaches the floor and
+   * matters at a metre and stops mattering by three. The drone's floor is 0.85m and its
+   * ceiling is many times that, so the ramp runs from WASH_FULL_Y to WASH_FADE_Y and the
+   * effect is simply off above.
+   *
+   * VIEW is the one that is easy to miss. The three fixed cameras and the console all render
+   * the same world, and a dust plume under a drone parked in an aisle - seen from a door
+   * camera forty metres away, while the player is reading a manifest - is a puff of nothing
+   * happening in the corner of an unrelated shot. It runs while the player is flying.
+   *
+   * There is deliberately no speed term. A helicopter sitting still on its skids still moves
+   * air, and gating on movement made the effect blink on and off during the small corrections
+   * a player makes while lining up a scan, which is worse than either state.
+   *
+   * ## The fade is the DISC, because the emitter has no runtime dial
+   *
+   * VFXEmitterCore keeps its rate on a private `settings` object with no setter, so emission
+   * strength is on or off and nothing else. Reaching into the private to ramp it would work
+   * today and break on an engine bump.
+   *
+   * The node's scale is public and does the job better anyway: wash spreads as it climbs, so
+   * the disc grows from the width of the airframe to about two and a bit of it while the same
+   * budget of particles covers it. Thinner, wider, fainter with height - which is what the
+   * air actually does, and it means the cut at WASH_FADE_Y lands on an effect that has
+   * already dispersed rather than on one at full strength. The 0.3m of hysteresis on the way
+   * back off is there so a drone held exactly at the threshold does not stutter.
+   */
+  private updateRotorWash(): void {
+    const wash = this.droneWash;
+    if (!wash) return;
+    const height = this.drone.position.y;
+    const flying = this.view === 'drone' && this.handoff <= 0 && this.droneVisual.visible;
+    const ceiling = this.droneWashOn ? WASH_FADE_Y + 0.3 : WASH_FADE_Y;
+    if (flying && height < ceiling && !getAccessibilityPreferences().reducedMotion) {
+      const spread = THREE.MathUtils.clamp(
+        (height - WASH_FULL_Y) / (WASH_FADE_Y - WASH_FULL_Y),
+        0,
+        1
+      );
+      wash.position.set(this.drone.position.x, WAREHOUSE_FLOOR_Y, this.drone.position.z);
+      wash.scale.setScalar(1 + spread * 1.15);
+      wash.visible = true;
+      if (!this.droneWashOn) {
+        wash.startEmitting(true);
+        this.droneWashOn = true;
+      }
+      return;
+    }
+    if (!this.droneWashOn) return;
+    wash.stopEmitting();
+    wash.visible = false;
+    wash.position.copy(WASH_PARKED);
+    this.droneWashOn = false;
   }
 
   private buildCamera(): void {
@@ -4143,6 +4247,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (this.droneStatusMaterial) {
       this.droneStatusMaterial.emissiveIntensity = 1.7 + Math.sin(this.elapsed * 4.2) * 0.45;
     }
+    this.updateRotorWash();
     this.ropeAnchor.copy(this.drone.position).add(new THREE.Vector3(0, -0.48, 0));
     this.cargoRope.tick(deltaTime, this.ropeAnchor);
     this.feedback.setOpticalHeld(this.opticalAimHeld && this.view === 'drone');

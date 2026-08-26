@@ -215,6 +215,69 @@ export const DustVFX: VFXDefinitionJSON = {
   ],
 };
 
+/**
+ * RotorWashVFX - the floor answering the drone.
+ *
+ * Four rotors a metre off a concrete slab move air, and the only thing in this game that
+ * ever said so was the drone's own shadow. Downwash is what sells altitude: a machine at
+ * 0.85m and the same machine at three metres look nearly identical from the chase camera
+ * until one of them is kicking dust and the other is not.
+ *
+ * Built against the rotor wash it depicts rather than as generic dust, which decides every
+ * value here:
+ *
+ *  - It goes OUTWARD and barely upward. `directionMin/Max` is a flat annulus with a slight
+ *    lift - air hitting a floor and running sideways. Dust that rises reads as smoke.
+ *  - It is SHORT. 0.5 to 1.1 seconds, so the puff dies about where the drone left it and
+ *    the trail behind a moving drone stays a trail rather than a fog bank.
+ *  - It is DIM and normal-blended. This is a lit interior; additive dust over a pale slab
+ *    would glow. DustVFX above is the reference for value - this is a touch lighter than
+ *    the floor it comes off, not brighter than the lamps.
+ *  - It is BILLBOARD, not stretchBillboard. The library header's own warning: stretch
+ *    multiplies with velocity, and these particles are fast at spawn.
+ *
+ * Emission is driven from WarehouseRig - see updateRotorWash - which parks the node when
+ * the drone is too high for it to make sense.
+ */
+export const RotorWashVFX: VFXDefinitionJSON = {
+  version: 1,
+  name: 'RotorWashVFX',
+  particles: [
+    {
+      nbParticles: 96,
+      intensity: 0.75,
+      renderMode: 'billboard',
+      fadeSize: [0.0, 0.55],
+      fadeAlpha: [0.12, 0.5],
+      // Almost none. The wash throws it out, it does not throw it up, and it settles.
+      gravity: [0, -0.35, 0],
+      appearance: 'circular',
+      easeFunction: 'easeOutQuad',
+      blendingMode: 'normal',
+      depthTest: true,
+    },
+  ],
+  emitters: [
+    {
+      particlesIndex: 0,
+      loop: true,
+      duration: 0.5,
+      nbParticles: 26,
+      spawnMode: 'time',
+      particlesLifetime: [0.5, 1.1],
+      // A disc on the floor about the width of the airframe, and flat.
+      startPositionMin: [-0.34, 0.02, -0.34],
+      startPositionMax: [0.34, 0.1, 0.34],
+      directionMin: [-1, 0.05, -1],
+      directionMax: [1, 0.35, 1],
+      size: [0.05, 0.14],
+      speed: [0.55, 1.5],
+      colorStart: ['#cbbfa6', '#b9ad95'],
+      colorEnd: ['#7d7767', '#6a6558'],
+    },
+  ],
+};
+
 /** Every P0 effect, keyed by name, for registration and lookup. */
 export const VFX_LIBRARY = {
   SparkVFX,

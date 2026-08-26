@@ -617,6 +617,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * Nothing else is deleted. mission-07-torch.ts, her contact record, her scene and her
        * signal entry all stay exactly where they are, and putting the line below back is the
        * whole of restoring her.
+       *
+       * SETTLED 2026-08-26: she stays cut for this release, by decision rather than by
+       * schedule. GAME-REVIEW.md item 17 is marked declined and restoring her now sits among
+       * the scope traps. Nothing about the code changes - this is a queue entry, not a
+       * deletion, and everything it points at stays exactly where it is.
        */
       // { mission: MISSION_07, contact: SANDA },
       /**

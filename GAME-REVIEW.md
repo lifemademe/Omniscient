@@ -285,13 +285,17 @@ stay green on every pass; `preview-stuck.ts` guards the console.
 ### Phase 2 — if time remains / post-jam
 
 14. Lighting beats in missions 2/5/6 (F10). 15. Two gesture clips (F11). 16. Music bed:
-one adaptive drone per Tempo, same synth instrument family. 17. Mission 07 (Sanda)
-restore. 18. M4SS stage 3 (the verbs exist; the sim is ready). 19. Settings panel: text
+one adaptive drone per Tempo, same synth instrument family. 17. ~~Mission 07 (Sanda)
+restore.~~ **[DECLINED 2026-08-26 - Paul: "keep sanda mission hidden, i dont need it". She
+stays cut. The queue entry in `OmniscientRig` stays commented out; her mission file, contact
+record, scene and signal entry stay where they are, unreferenced but intact.]**
+18. M4SS stage 3 (the verbs exist; the sim is ready). 19. Settings panel: text
 speed, shake toggle, volume (exists), colourblind note.
 
 ### Scope traps — refuse these before Sept 11
 
-New missions. New M4SS mechanics. Rebuilding any art that already passed the audit.
+New missions - and restoring Sanda counts as one, decided 2026-08-26. New M4SS
+mechanics. Rebuilding any art that already passed the audit.
 Multiplayer/photo modes/anything with a server. A dialogue rewrite pass ("better" is the
 enemy of "recorded"). Porting the HUD to engine UI-kit (CSS is fine; coherence is the goal,
 not the toolkit).

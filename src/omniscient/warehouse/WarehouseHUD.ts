@@ -939,7 +939,7 @@ export class WarehouseHUD {
       Math.round((seals / 3) * 8),
       seals <= 1 ? 'omni-meter--warn' : ''
     );
-    this.integrityCard.value.textContent = `${seals} of 3`;
+    this.integrityCard.value.textContent = `${seals} / 3`;
     this.integrityCard.sub.textContent =
       seals === 3 ? 'unbroken' : seals === 0 ? 'run over' : 'seal broken';
 
@@ -947,12 +947,30 @@ export class WarehouseHUD {
      * Story counts individual playable cases (quests), while Night Shift counts procedural
      * stages. The movement/chapter index is intentionally absent from this progress card.
      */
+    /*
+     * ## The total belongs on the VALUE line
+     *
+     * The card read `01` with `of 09` on the caption under it, and that was survivable while
+     * the caption was on screen. It is not on screen any more: the readouts run compact so
+     * they stop covering the world, and compact hides the meter and the sub - so the card
+     * had been reduced to a bare `01`, a number with nothing to measure it against. A player
+     * could not tell whether they were near the end or nowhere near it.
+     *
+     * `1 / 9` says it on one line, in the space compact actually gives, and it is the number
+     * the player asked the card for. Integrity gets the same treatment above so the two do
+     * not sit in a row using different notation for the same idea.
+     *
+     * Nine, not six: nine is the count of playable quests, which is what this card counts and
+     * what STORY_QUEST_COUNT derives from the deck. Six is the number of MOVEMENTS - the
+     * chapters those quests are grouped into - and it is deliberately absent here, because
+     * the objective plate across the top of the stage already names the current movement.
+     */
     const total = this.mode === 'story' ? STORY_QUEST_COUNT : 30;
     fillMeter(this.stageCard.meter, Math.max(0, Math.min(8, Math.round((stage / total) * 8))));
-    this.stageCard.value.textContent = String(Math.max(0, stage)).padStart(2, '0');
+    this.stageCard.value.textContent = `${Math.max(0, stage)} / ${total}`;
     this.stageCard.sub.textContent = stage >= total
       ? this.mode === 'story' ? 'final quest' : 'final stage'
-      : `of ${String(total).padStart(2, '0')}`;
+      : `${total - Math.max(0, stage)} to go`;
 
     fillMeter(this.chainCard.meter, Math.max(0, Math.min(8, chain)));
     this.chainCard.value.textContent = String(Math.max(0, chain));
