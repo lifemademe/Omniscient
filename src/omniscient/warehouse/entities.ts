@@ -38,6 +38,79 @@ function makeLabel(text: string, colour = '#d8ffb0'): THREE.MeshBasicMaterial {
   return new THREE.MeshBasicMaterial({ map, transparent: false, toneMapped: false });
 }
 
+const STRAP = new THREE.MeshStandardMaterial({ color: '#2b3038', roughness: 0.58, metalness: 0.3 });
+const PROTECTOR = new THREE.MeshStandardMaterial({ color: '#b9b19c', roughness: 0.9 });
+const HANDLING = new THREE.MeshStandardMaterial({ color: '#b8452f', roughness: 0.8 });
+const WALLET = new THREE.MeshStandardMaterial({ color: '#c9c3ae', roughness: 0.88 });
+
+/**
+ * A different package per delivery, without a different package SIZE.
+ *
+ * Five inbound deliveries and every one of them was the same carton - same dimensions, same
+ * two colours, distinguishable only by the code printed on the label. The mission asks the
+ * player to hold packages apart in their head across a forty-metre round trip, and gave them
+ * nothing to do it with except reading. A thing you can recognise across a room beats a thing
+ * you have to walk up to and read, and this prop is held in front of the camera on every
+ * successful delivery.
+ *
+ * The ENVELOPE stays fixed on purpose. WAREHOUSE_CARGO_SIZE sets the grip radius, and the
+ * verified intake clamps at plus and minus 0.62 with guides at 1.02 - a carton that varied in
+ * width would either miss the clamps or foul the guides, and "the big one does not dock" is a
+ * far worse bug than five identical boxes. So the variation is all dressing: straps, corner
+ * protectors, a handling mark, a document wallet. Silhouette without geometry.
+ *
+ * Keyed off the package id rather than a counter, so a given package looks the same every
+ * time it is seen - on the rack, in the gripper, and at the intake.
+ */
+function cartonDressing(packageId: string): ENGINE.MeshNode[] {
+  const parts: ENGINE.MeshNode[] = [];
+  const add = (name: string, geometry: THREE.BufferGeometry, material: THREE.Material, x: number, y: number, z: number, turn = 0): void => {
+    const node = ENGINE.MeshNode.create({ name, geometry, material, castShadow: true });
+    node.position.set(x, y, z);
+    if (turn) node.rotation.z = turn;
+    parts.push(node);
+  };
+
+  let hash = 0;
+  for (const character of String(packageId)) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+
+  switch (hash % 4) {
+    case 0:
+      // Strapped. Two bands over the top and down both sides, across the seal rather than
+      // along it, so the two never read as the same feature.
+      for (const z of [-0.19, 0.19]) {
+        add('CartonStrapTop', new THREE.BoxGeometry(0.89, 0.016, 0.05), STRAP, 0, 0.617, z);
+        for (const x of [-0.438, 0.438]) {
+          add('CartonStrapSide', new THREE.BoxGeometry(0.016, 0.6, 0.05), STRAP, x, 0.31, z);
+        }
+      }
+      break;
+    case 1:
+      // Corner protectors on the top four corners, the way a fragile load is actually shipped.
+      for (const x of [-0.4, 0.4]) {
+        for (const z of [-0.33, 0.33]) {
+          add('CartonProtectorTop', new THREE.BoxGeometry(0.15, 0.02, 0.15), PROTECTOR, x, 0.612, z);
+          add('CartonProtectorFace', new THREE.BoxGeometry(0.02, 0.14, 0.15), PROTECTOR, x + (x > 0 ? 0.055 : -0.055), 0.54, z);
+        }
+      }
+      break;
+    case 2:
+      // A handling mark: a band across the front with two uprights, which reads as a stencil
+      // at any distance without needing a second canvas texture.
+      add('CartonHandlingBand', new THREE.BoxGeometry(0.5, 0.045, 0.012), HANDLING, -0.16, 0.47, 0.367);
+      for (const offset of [-0.08, 0.08]) {
+        add('CartonHandlingTick', new THREE.BoxGeometry(0.045, 0.17, 0.012), HANDLING, -0.16 + offset, 0.38, 0.367, offset > 0 ? -0.5 : 0.5);
+      }
+      break;
+    default:
+      // A document wallet taped to the lid, and a shallow overpack tray under it.
+      add('CartonOverpack', new THREE.BoxGeometry(0.72, 0.05, 0.6), PROTECTOR, 0, 0.638, 0);
+      add('CartonWallet', new THREE.BoxGeometry(0.26, 0.012, 0.19), WALLET, -0.2, 0.667, 0.06);
+      break;
+  }
+  return parts;
+}
+
 @ENGINE.GameClass()
 export class WarehouseCargoNode extends ENGINE.SceneNode {
   public caseData: GeneratedWarehouseCase | null = null;
@@ -161,7 +234,7 @@ export class WarehouseCargoNode extends ENGINE.SceneNode {
       edge.position.set(x, 0.31, 0);
       this.add(edge);
     }
-    this.add(box, tape, label, rearLabel, ...sealParts);
+    this.add(box, tape, label, rearLabel, ...sealParts, ...cartonDressing(data.packageId));
   }
 }
 

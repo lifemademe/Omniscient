@@ -221,7 +221,7 @@ export const PAINT_LOOKS = {
      * 0.014 linear is well under this room's darkest tenth, so the warehouse is unaffected by
      * it and everything darker than the warehouse gets its shadows back.
      */
-    posterize: 4, posterizeSoft: 0.14, posterizeGate: 0.014, saturation: 1.2,
+    posterize: 4, posterizeSoft: 0.14, posterizeGate: 0.014, saturation: 1.1,
     /*
      * Full weight to 13 metres, quarter weight past 34.
      *
