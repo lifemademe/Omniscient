@@ -30,6 +30,7 @@ import {
   INBOUND_AUDIT_DELIVERIES,
 } from '../src/omniscient/warehouse/WarehouseInboundAudit.js';
 import {
+  WAREHOUSE_SECURITY_ZONES,
   WAREHOUSE_ADDRESSABLE_BAYS,
   WAREHOUSE_AISLE_COUNT,
   WAREHOUSE_BAY_MAX,
@@ -144,6 +145,30 @@ check(
   'no legitimate delivery contradicts its own badge',
   INBOUND_AUDIT_DELIVERIES.every((d) => d.suspicious || d.packageDelivererName === d.workerName)
 );
+
+/*
+ * And is the person standing where the objective says they are?
+ *
+ * The objective calls each spot "the front of Aisle N", and the front of an aisle is the end
+ * you walk into it from - which in this building is the end with the freight door in it. All
+ * five inspection positions were authored on the far side of the racks, as far from the
+ * loading bay as the floor allows, while the console opened the beat with "unloading
+ * complete". Five crews who had just carried five packages in off a truck were standing the
+ * length of the building past where the truck was.
+ *
+ * Checked against the RECEIVING zone rather than a constant, because that is what the layout
+ * already calls the door end - a bound that moves with the room instead of a number that goes
+ * stale the first time somebody lengthens the racks.
+ */
+for (const delivery of INBOUND_AUDIT_DELIVERIES) {
+  const at = delivery.inspectionPosition;
+  const r = WAREHOUSE_SECURITY_ZONES.receiving.bounds;
+  check(
+    `${delivery.station} is on the freight-door side of the racks`,
+    at.x >= r.minX && at.x <= r.maxX && at.z >= r.minZ && at.z <= r.maxZ,
+    `(${at.x}, ${at.z}) against receiving x ${r.minX}..${r.maxX} z ${r.minZ}..${r.maxZ}`
+  );
+}
 
 console.log(
   failures === 0

@@ -57,7 +57,19 @@ export interface InboundAuditDelivery {
    *
    * Staggered in z rather than aligned, because five deliveries that each park a figure on
    * the identical line read as a spawn point rather than as somebody standing where they
-   * happen to be. Racks end at z 14.35, so 15.9 to 17.8 is clear of the end guards.
+   * happen to be. Racks end at 14.35 either way, so 15.9 to 17.8 clears the end guards.
+   *
+   * NEGATIVE z: the aisle mouth that faces the freight door, not the far end.
+   *
+   * They were at +16 to +18 - the closed end of the building, as far from the loading bay as
+   * the floor allows - while the console said "unloading complete" and the objective called
+   * the spot "the front of Aisle 1". The front of an aisle is the end you walk into it from,
+   * and in this building that is the end with the door in it. Five crews who had just carried
+   * five packages in off a truck were standing sixty metres past where the truck was.
+   *
+   * The receiving zone runs to z -14.3, so this row sits inside it with the racks behind them
+   * and the open bay behind that - which is also what makes the row read: the freight door is
+   * the brightest thing in the room and they are standing in front of it.
    */
   inspectionPosition: THREE.Vector3;
   /** Human-readable station, for the objective line. */
@@ -102,7 +114,7 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     gloves: '#263532',
     suspicious: false,
     sealCompromised: false,
-    inspectionPosition: new THREE.Vector3(-18.6, 0, 16.4),
+    inspectionPosition: new THREE.Vector3(-18.6, 0, -16.4),
     station: 'the front of Aisle 1',
   },
   {
@@ -121,7 +133,7 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     // a verdict on its own - see sealNote.
     sealCompromised: true,
     sealNote: 'RESEAL LOGGED 03:14 // DOCK SUPERVISOR // CARTON RE-TAPED AFTER PALLET SLIP',
-    inspectionPosition: new THREE.Vector3(-11.4, 0, 17.8),
+    inspectionPosition: new THREE.Vector3(-11.4, 0, -17.8),
     station: 'the front of Aisle 2',
   },
   {
@@ -137,7 +149,7 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     gloves: '#182c2d',
     suspicious: true,
     sealCompromised: true,
-    inspectionPosition: new THREE.Vector3(-4.6, 0, 15.9),
+    inspectionPosition: new THREE.Vector3(-4.6, 0, -15.9),
     station: 'the front of Aisle 3',
   },
   {
@@ -155,7 +167,7 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     gloves: '#34403c',
     suspicious: false,
     sealCompromised: false,
-    inspectionPosition: new THREE.Vector3(2.6, 0, 17.4),
+    inspectionPosition: new THREE.Vector3(2.6, 0, -17.4),
     station: 'the front of Aisle 4',
   },
   {
@@ -172,7 +184,7 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     gloves: '#243b38',
     suspicious: false,
     sealCompromised: false,
-    inspectionPosition: new THREE.Vector3(9.4, 0, 16.2),
+    inspectionPosition: new THREE.Vector3(9.4, 0, -16.2),
     station: 'the front of Aisle 5',
   },
 ] as const;

@@ -1540,7 +1540,19 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.hud?.setIntegrity(this.integrity, this.stage, this.cleanChain);
     this.hud?.setInbound(null);
     this.hud?.setBell(false, 0);
-    this.environment.setRearDoorOpen(0);
+    /*
+     * The freight door stays OPEN for the audit, and it is the reason the audit exists.
+     *
+     * The first line the console says here is "unloading complete" - five crews have just
+     * carried five packages in off a truck, and the shutter was being shut behind them before
+     * the player was even shown the room. So the beat opened on a sealed building full of
+     * people who could not have got in, and there was nothing on screen that said where any of
+     * this came from.
+     *
+     * It is one call and it does more than the geometry: the open bay is the only light source
+     * behind the workers, so the row of them reads against it.
+     */
+    this.environment.setRearDoorOpen(1);
     this.environment.setConveyorsRunning(false);
     this.environment.setVerifiedIntakeState('ready');
 
