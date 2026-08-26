@@ -56,6 +56,25 @@ const PROPS: Array<[string, THREE.Vector3]> = [
   ['high sign (expect off)', new THREE.Vector3(0, 4.45, 0.16)],
   ['canopy edge', new THREE.Vector3(0, 3.55, 2.47)],
   ['upper wall centre', new THREE.Vector3(-0.6, 3.1, 0.2)],
+  /*
+   * Per-door character props - see WarehouseServiceDoor.addApproachCharacter. Each row is
+   * only built on the door whose trade it belongs to, so a row reading "behind the panel" on
+   * a door that never builds it is not a fault; the trade is named in the label.
+   */
+  ['A stillage', new THREE.Vector3(2.5, 0.78, 3.3)],
+  ['A pallet stack', new THREE.Vector3(-2.5, 0.5, 2.4)],
+  ['A jamb guard R', new THREE.Vector3(1.56, 0.58, 0.55)],
+  ['A height bar', new THREE.Vector3(0, 3.42, 1.55)],
+  ['A floodlight', new THREE.Vector3(-1.15, 3.44, 1.9)],
+  ['B planter', new THREE.Vector3(2.85, 0.5, 2.45)],
+  ['B cycle hoops', new THREE.Vector3(-2.5, 0.4, 2.75)],
+  ['B intercom', new THREE.Vector3(1.42, 1.5, 1.79)],
+  ['B fascia band', new THREE.Vector3(0, 3.05, 0.395)],
+  ['C condenser far', new THREE.Vector3(-2.55, 0.72, 1.15)],
+  ['C condenser near', new THREE.Vector3(-2.55, 0.72, 2.25)],
+  ['C gas cage', new THREE.Vector3(2.15, 0.78, 2.5)],
+  ['C cable tray', new THREE.Vector3(-2.0, 1.9, 0.405)],
+  ['C bulkhead', new THREE.Vector3(1.62, 2.25, 0.415)],
 ];
 
 function project(cam: THREE.Vector3, tgt: THREE.Vector3, fov: number, point: THREE.Vector3, aspect = 16 / 9) {
@@ -78,6 +97,12 @@ for (const id of WAREHOUSE_DOOR_IDS) {
   const visitor = project(cam, tgt, fov, door.visitorPosition.clone().setY(1.2));
   console.log(`  visitor            x ${visitor.x.toFixed(3)}  y ${visitor.y.toFixed(3)}  ${visitor.d.toFixed(2)}m`);
   for (const [name, local] of PROPS) {
+    /*
+     * A row labelled "A ..." only exists on door A. Reporting it against B and C printed
+     * three false failures a run, which is how a harness teaches you to stop reading it.
+     */
+    const only = /^([ABC]) /.exec(name)?.[1];
+    if (only && !id.endsWith(only.toLowerCase())) continue;
     const world = local.clone().applyEuler(new THREE.Euler(0, door.rootRotation, 0)).add(door.rootPosition);
     const s = project(cam, tgt, fov, world);
     let state = 'ok';

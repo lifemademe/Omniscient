@@ -253,6 +253,13 @@ const TIMBER = new THREE.MeshStandardMaterial({ color: '#6b5433', roughness: 0.9
  */
 const PLATE = new THREE.MeshStandardMaterial({ color: '#5c6864', roughness: 0.78, metalness: 0.22 });
 const SCUFF = new THREE.MeshStandardMaterial({ color: '#4b524f', roughness: 0.95, metalness: 0.02 });
+/* Pass 1's palette: the three approaches want materials the others do not have. */
+const TARMAC = new THREE.MeshStandardMaterial({ color: '#2f3335', roughness: 0.97, metalness: 0.02 });
+const KERB = new THREE.MeshStandardMaterial({ color: '#8b8c85', roughness: 0.92, metalness: 0.02 });
+const LEAF = new THREE.MeshStandardMaterial({ color: '#3f6b46', roughness: 0.9, metalness: 0.01 });
+const GAS = new THREE.MeshStandardMaterial({ color: '#7d8a6c', roughness: 0.55, metalness: 0.45 });
+const COPPER = new THREE.MeshStandardMaterial({ color: '#8a6446', roughness: 0.5, metalness: 0.6 });
+const HAZARD = new THREE.MeshStandardMaterial({ color: '#c08a32', roughness: 0.9, metalness: 0.04 });
 const WALLPACK = new THREE.MeshStandardMaterial({
   color: '#d8c79c', emissive: '#f0b263', emissiveIntensity: 1.3, roughness: 0.3,
 });
@@ -667,12 +674,37 @@ export class WarehouseServiceDoor {
      * two sit side by side at different depths rather than stacked on top of each other -
      * measured, they now share no screen column on any of the three doors.
      */
-    root.add(
-      mesh('ServiceBinBody', new THREE.BoxGeometry(0.66, 0.92, 0.6), BIN, new THREE.Vector3(2.05, 0.46, 2.25)),
-      mesh('ServiceBinLid', new THREE.BoxGeometry(0.7, 0.08, 0.64), DARK, new THREE.Vector3(2.05, 0.95, 2.27)),
-      mesh('ServiceBinWheelL', new THREE.CylinderGeometry(0.09, 0.09, 0.07, 8), DARK, new THREE.Vector3(1.8, 0.09, 2.47)),
-      mesh('ServiceBinWheelR', new THREE.CylinderGeometry(0.09, 0.09, 0.07, 8), DARK, new THREE.Vector3(2.3, 0.09, 2.47))
-    );
+    /*
+     * ## PASS 1 - the three doors stop being the same door three times
+     *
+     * Everything below this point used to be built identically for A, B and C, and the letter
+     * plate was the only thing telling them apart. Three feeds the player cycles, and the only
+     * way to know which one you were looking at was to read a sign - which is a failure of the
+     * set, not of the player.
+     *
+     * So each door gets a JOB, and the dressing follows from the job rather than from a list
+     * of props:
+     *
+     *   A // WEST  - GOODS IN. Pallet traffic. Chevrons, a dock ramp, empty pallets, chocks.
+     *   B // FRONT - RECEPTION. The public face. Path, kerbs, planter, cycle hoops, a mat.
+     *   C // EAST  - PLANT. Back of house. Condensers, a gas cage, cable tray, a gully.
+     *
+     * `trade` is that job, and the shared props below are gated on it: a wheelie bin belongs
+     * at a front door and nowhere else, timber crates belong at goods-in, and the extract
+     * louvre belongs on the plant wall. Everything that is genuinely common to a service door
+     * - leaf, canopy, letter, notice plate, wall pack, downpipe, camera - stays shared.
+     */
+    const trade = layout.id === 'service-a' ? 'goods' : layout.id === 'service-b' ? 'front' : 'plant';
+
+    if (trade === 'front') {
+      // A wheelie bin is a front-of-house object: it is what a visitor walks past.
+      root.add(
+        mesh('ServiceBinBody', new THREE.BoxGeometry(0.66, 0.92, 0.6), BIN, new THREE.Vector3(2.05, 0.46, 2.25)),
+        mesh('ServiceBinLid', new THREE.BoxGeometry(0.7, 0.08, 0.64), DARK, new THREE.Vector3(2.05, 0.95, 2.27)),
+        mesh('ServiceBinWheelL', new THREE.CylinderGeometry(0.09, 0.09, 0.07, 8), DARK, new THREE.Vector3(1.8, 0.09, 2.47)),
+        mesh('ServiceBinWheelR', new THREE.CylinderGeometry(0.09, 0.09, 0.07, 8), DARK, new THREE.Vector3(2.3, 0.09, 2.47))
+      );
+    }
     /*
      * The pallets moved, and the first placement is worth recording as a mistake.
      *
@@ -686,12 +718,14 @@ export class WarehouseServiceDoor {
      * empty. Leaning at 24 degrees rather than 42 so the stack reads as propped rather than
      * as falling over.
      */
-    for (const [index, lift] of [0, 1, 2].entries()) {
-      const slab = mesh('ServicePalletLean', new THREE.BoxGeometry(1.3, 0.11, 0.9), TIMBER,
-        new THREE.Vector3(3.05 + index * 0.05, 0.5 + lift * 0.15, 2.75 + index * 0.06));
-      slab.rotation.x = -0.24;
-      slab.rotation.y = -0.34;
-      root.add(slab);
+    if (trade === 'goods') {
+      for (const [index, lift] of [0, 1, 2].entries()) {
+        const slab = mesh('ServicePalletLean', new THREE.BoxGeometry(1.3, 0.11, 0.9), TIMBER,
+          new THREE.Vector3(3.05 + index * 0.05, 0.5 + lift * 0.15, 2.75 + index * 0.06));
+        slab.rotation.x = -0.24;
+        slab.rotation.y = -0.34;
+        root.add(slab);
+      }
     }
 
     /*
@@ -760,7 +794,7 @@ export class WarehouseServiceDoor {
       [0.72, 0.58, 0.64, 0.26, -0.14],
       [0.58, 0.5, 0.54, 0.11, 0.21],
     ];
-    for (const [index, [width, height, depth, turn, shift]] of crates.entries()) {
+    for (const [index, [width, height, depth, turn, shift]] of trade === 'goods' ? crates.entries() : []) {
       const crate = mesh(`ServiceCrate-${index}`, new THREE.BoxGeometry(width, height, depth), TIMBER,
         new THREE.Vector3(-2.6 + shift * 0.4, index === 0 ? 0.29 : 0.83, 1.6 + index * 0.12));
       crate.rotation.y = turn;
@@ -811,7 +845,9 @@ export class WarehouseServiceDoor {
       blade.rotation.x = -0.5;
       louvre.add(blade);
     }
-    root.add(louvre);
+    // Not flagged invisible - simply not built. The extract belongs on the plant wall, where
+    // the machinery it vents actually is.
+    if (trade === 'plant') root.add(louvre);
 
     // Trolley wear where the turn happens, off the door and across the apron.
     const scuff = mesh('ServiceApronScuff', new THREE.PlaneGeometry(3.4, 1.5), SCUFF, new THREE.Vector3(0.5, 0.025, 2.5));
@@ -857,6 +893,8 @@ export class WarehouseServiceDoor {
       decay: 1.5,
       position: new THREE.Vector3(1.68, 2.9, WALL_FACE_Z + 0.4),
     }));
+
+    this.addApproachCharacter(root, trade);
 
     if (layout.id !== 'service-b') {
       /*
@@ -988,6 +1026,221 @@ export class WarehouseServiceDoor {
       this.blueLight
     );
     this.setStatus('unseen');
+  }
+
+  /**
+   * ## PASSES 2 to 5 - what makes each approach its own place
+   *
+   * Called once per door with the job from pass 1. The four passes after the split, in the
+   * order they were made and for the reason each was needed:
+   *
+   * PASS 2 - THE GROUND. All three aprons were one slab, one puddle and one scuff band, and
+   * the floor is a third of every one of these shots. Goods-in gets chevrons and tyre wear
+   * because pallet trucks turn on it; reception gets a made path with kerbs because people
+   * walk on it; plant gets a drainage channel and a gully because condensate has to go
+   * somewhere. Three floors that were laid for three different reasons.
+   *
+   * PASS 3 - THE WALL ABOVE. The upper half is where a frame runs out of things, and it is
+   * also where a building says what it does. Goods-in takes steel jamb protectors and a
+   * height gauge; reception takes a fascia band; plant takes the condensers and their
+   * pipework, which is the single most recognisable "back of house" silhouette there is.
+   *
+   * PASS 4 - DEPTH, AND ON DIFFERENT SIDES. Each door now has a near object, a mid object and
+   * a far object, and crucially they are on DIFFERENT SIDES of frame per door - pallets and a
+   * stillage left on A, hoops and a planter split on B, a gas cage right on C. Three shots
+   * that are composed differently, not three shots with different props in the same places.
+   *
+   * PASS 5 - VALUE. Each gets one distinguishing light rather than the same wall pack: a cold
+   * floodlight over the goods door, because that is what a night shift loads under; nothing
+   * extra at reception, so the warm pack over the leaf is the only source and the approach
+   * falls away into the dark; a single caged bulkhead at plant, low and mean. The shared wall
+   * pack stays on all three as the base, so no feed loses its exposure.
+   *
+   * Everything here is placed in the door's LOCAL frame, where +z is outward, and everything
+   * on cladding is placed from WALL_FACE_Z. Positions are checked with
+   * `scripts/dev/probe-approach.ts` against the visible band, because the console panel eats
+   * the right third of every one of these feeds.
+   */
+  private addApproachCharacter(root: ENGINE.SceneNode, trade: 'goods' | 'front' | 'plant'): void {
+    if (trade === 'goods') {
+      // PASS 2: chevrons where the trucks turn in, and a wear band under them.
+      for (let index = 0; index < 5; index++) {
+        const bar = mesh('ServiceChevron', new THREE.BoxGeometry(0.22, 0.014, 1.5), HAZARD,
+          new THREE.Vector3(-1.5 + index * 0.62, 0.024, 3.15));
+        bar.rotation.y = 0.72;
+        root.add(bar);
+      }
+      // PASS 3: jamb protectors. Every goods door that has met a pallet truck has these.
+      for (const side of [-1, 1]) {
+        root.add(
+          mesh('ServiceJambGuard', new THREE.BoxGeometry(0.16, 1.15, 0.16), HAZARD, new THREE.Vector3(side * 1.56, 0.58, 0.55)),
+          mesh('ServiceJambGuardFoot', new THREE.BoxGeometry(0.3, 0.06, 0.3), FRAME, new THREE.Vector3(side * 1.56, 0.03, 0.55))
+        );
+      }
+      // A height gauge over the opening - the bar that tells a driver what will fit.
+      root.add(
+        mesh('ServiceHeightBar', new THREE.BoxGeometry(3.3, 0.12, 0.1), HAZARD, new THREE.Vector3(0, 3.42, 1.55)),
+        mesh('ServiceHeightHangerL', new THREE.BoxGeometry(0.05, 0.28, 0.05), FRAME, new THREE.Vector3(-1.5, 3.6, 1.55)),
+        mesh('ServiceHeightHangerR', new THREE.BoxGeometry(0.05, 0.28, 0.05), FRAME, new THREE.Vector3(1.5, 3.6, 1.55))
+      );
+      // PASS 4: the near-left group. Empty pallets stacked flat, and the cage they feed.
+      for (let index = 0; index < 6; index++) {
+        root.add(mesh('ServiceEmptyPallet', new THREE.BoxGeometry(1.24, 0.1, 1.04), TIMBER,
+          new THREE.Vector3(-2.55 + index * 0.02, 0.06 + index * 0.15, 2.35 + index * 0.015)));
+      }
+      /*
+       * Right of frame, not left, and the probe is why.
+       *
+       * At (-3.1, 3.35) it projected to screen x -0.04 on door A - off the picture entirely,
+       * because the left side of that shot runs out fast. Moved across to 2.5, which puts it
+       * at 0.45 and gives the goods approach a near object on each side: pallets low left,
+       * stillage low right, with the door between them. Clear of the right bollard by 0.89m
+       * against a 0.72m combined half-width.
+       */
+      const cage = ENGINE.SceneNode.create({ name: 'ServiceStillage', position: new THREE.Vector3(2.5, 0, 3.3) });
+      cage.add(mesh('StillageDeck', new THREE.BoxGeometry(1.15, 0.1, 0.95), FRAME, new THREE.Vector3(0, 0.28, 0)));
+      for (const [cx, cz] of [[-0.53, -0.43], [0.53, -0.43], [-0.53, 0.43], [0.53, 0.43]] as const) {
+        cage.add(mesh('StillagePost', new THREE.BoxGeometry(0.06, 1.0, 0.06), FRAME, new THREE.Vector3(cx, 0.78, cz)));
+      }
+      for (const cy of [0.62, 0.98, 1.24]) {
+        cage.add(mesh('StillageRail', new THREE.BoxGeometry(1.12, 0.04, 0.04), FRAME, new THREE.Vector3(0, cy, -0.43)));
+      }
+      cage.rotation.y = -0.22;
+      root.add(cage);
+      // PASS 5: a cold floodlight on the canopy. Goods-in is a night-shift door.
+      root.add(
+        mesh('ServiceFloodBody', new THREE.BoxGeometry(0.46, 0.2, 0.3), DARK, new THREE.Vector3(-1.15, 3.44, 1.9)),
+        mesh('ServiceFloodLens', new THREE.BoxGeometry(0.38, 0.05, 0.24), WALLPACK, new THREE.Vector3(-1.15, 3.33, 1.94))
+      );
+      root.add(ENGINE.PointLightNode.create({
+        name: 'ServiceGoodsFlood',
+        color: '#cfe3ee',
+        intensity: 4.2,
+        distance: 8,
+        decay: 1.6,
+        position: new THREE.Vector3(-1.15, 3.15, 2.1),
+      }));
+      return;
+    }
+
+    if (trade === 'front') {
+      // PASS 2: a made path with kerbs, because people walk to a reception door.
+      const path = mesh('ServiceEntryPath', new THREE.PlaneGeometry(2.3, 4.4), TARMAC, new THREE.Vector3(0, 0.023, 3.3));
+      path.rotation.x = -Math.PI / 2;
+      root.add(path);
+      for (const side of [-1, 1]) {
+        root.add(mesh('ServiceEntryKerb', new THREE.BoxGeometry(0.16, 0.12, 4.4), KERB, new THREE.Vector3(side * 1.22, 0.06, 3.3)));
+      }
+      // The mat at the threshold - the one object that says "come in here".
+      const mat = mesh('ServiceEntryMat', new THREE.PlaneGeometry(1.5, 0.9), SCUFF, new THREE.Vector3(0, 0.026, 1.05));
+      mat.rotation.x = -Math.PI / 2;
+      root.add(mat);
+      // PASS 3: a fascia band over the leaf, which is what a public entrance has instead of
+      // a height gauge.
+      root.add(
+        mesh('ServiceFasciaBand', new THREE.BoxGeometry(3.5, 0.42, 0.09), FRAME, new THREE.Vector3(0, 3.05, WALL_FACE_Z + 0.05)),
+        mesh('ServiceFasciaTrim', new THREE.BoxGeometry(3.5, 0.06, 0.12), PLATE, new THREE.Vector3(0, 2.82, WALL_FACE_Z + 0.06))
+      );
+      // PASS 4: hoops on one side, a planter on the other. Split, so the frame is not
+      // weighted the way the goods door's is.
+      for (const [index, hz] of [2.35, 3.15].entries()) {
+        const hoop = ENGINE.SceneNode.create({ name: `ServiceCycleHoop-${index}`, position: new THREE.Vector3(-2.5, 0, hz) });
+        hoop.add(
+          mesh('HoopLeft', new THREE.BoxGeometry(0.07, 0.78, 0.07), FRAME, new THREE.Vector3(-0.32, 0.39, 0)),
+          mesh('HoopRight', new THREE.BoxGeometry(0.07, 0.78, 0.07), FRAME, new THREE.Vector3(0.32, 0.39, 0)),
+          mesh('HoopTop', new THREE.BoxGeometry(0.71, 0.07, 0.07), FRAME, new THREE.Vector3(0, 0.78, 0))
+        );
+        root.add(hoop);
+      }
+      /*
+       * Back and out. At (2.3, 3.05) the planter sat 3.5m from the lens and projected to y
+       * 0.99 - cut in half by the bottom edge on door B. At (2.85, 2.45) it reads whole, and
+       * it clears the wheelie bin at 2.05 rather than growing out of it.
+       */
+      const planter = ENGINE.SceneNode.create({ name: 'ServicePlanter', position: new THREE.Vector3(2.85, 0, 2.45) });
+      planter.add(
+        mesh('PlanterBox', new THREE.BoxGeometry(0.95, 0.6, 0.8), KERB, new THREE.Vector3(0, 0.3, 0)),
+        mesh('PlanterRim', new THREE.BoxGeometry(1.02, 0.07, 0.87), PLATE, new THREE.Vector3(0, 0.63, 0)),
+        mesh('PlanterSoil', new THREE.BoxGeometry(0.86, 0.05, 0.71), DARK, new THREE.Vector3(0, 0.62, 0))
+      );
+      for (const [bx, by, bz, size] of [[0, 0.98, 0, 0.62], [-0.24, 0.8, 0.14, 0.44], [0.22, 0.84, -0.12, 0.4]] as const) {
+        planter.add(mesh('PlanterShrub', new THREE.BoxGeometry(size, size * 0.8, size), LEAF, new THREE.Vector3(bx, by, bz)));
+      }
+      root.add(planter);
+      // An intercom post beside the path, clear of the reader on the leaf.
+      root.add(
+        mesh('ServiceIntercomPost', new THREE.BoxGeometry(0.14, 1.4, 0.14), FRAME, new THREE.Vector3(1.42, 0.7, 1.75)),
+        mesh('ServiceIntercomHead', new THREE.BoxGeometry(0.24, 0.34, 0.16), DARK, new THREE.Vector3(1.42, 1.5, 1.79)),
+        mesh('ServiceIntercomLens', new THREE.BoxGeometry(0.16, 0.1, 0.04), this.statusMaterial, new THREE.Vector3(1.42, 1.58, 1.88))
+      );
+      // PASS 5: nothing extra. The warm pack over the leaf is the only source here, so the
+      // approach falls away into the dark - which is what a closed reception looks like.
+      return;
+    }
+
+    // PASS 2: plant. A drainage channel across the apron and the gully it runs to.
+    const channel = mesh('ServiceChannel', new THREE.BoxGeometry(3.6, 0.05, 0.26), DARK, new THREE.Vector3(0.2, 0.012, 2.6));
+    channel.rotation.y = 0.1;
+    root.add(
+      channel,
+      mesh('ServiceGully', new THREE.BoxGeometry(0.44, 0.06, 0.44), FRAME, new THREE.Vector3(1.85, 0.014, 2.75))
+    );
+    // PASS 3 and 4: the condensers. This is the silhouette that says back-of-house, and it
+    // takes the left of frame the way the pallets take it on A.
+    for (const [index, cz] of [1.15, 2.25].entries()) {
+      const unit = ENGINE.SceneNode.create({ name: `ServiceCondenser-${index}`, position: new THREE.Vector3(-2.55, 0, cz) });
+      unit.add(
+        mesh('CondenserBody', new THREE.BoxGeometry(0.85, 0.95, 0.55), PIPE, new THREE.Vector3(0, 0.72, 0)),
+        mesh('CondenserFrameL', new THREE.BoxGeometry(0.08, 0.25, 0.5), FRAME, new THREE.Vector3(-0.36, 0.12, 0)),
+        mesh('CondenserFrameR', new THREE.BoxGeometry(0.08, 0.25, 0.5), FRAME, new THREE.Vector3(0.36, 0.12, 0)),
+        mesh('CondenserGrille', new THREE.BoxGeometry(0.6, 0.6, 0.04), DARK, new THREE.Vector3(0, 0.78, 0.29))
+      );
+      for (const blade of [-0.18, 0, 0.18]) {
+        unit.add(mesh('CondenserBlade', new THREE.BoxGeometry(0.56, 0.05, 0.05), FRAME, new THREE.Vector3(0, 0.78 + blade, 0.32)));
+      }
+      root.add(unit);
+    }
+    // The pipework that ties them to the building, which is what turns two boxes into plant.
+    root.add(
+      mesh('ServiceRefrigPipeA', new THREE.BoxGeometry(0.07, 0.07, 2.0), COPPER, new THREE.Vector3(-2.72, 1.32, 1.7)),
+      mesh('ServiceRefrigPipeB', new THREE.BoxGeometry(0.07, 0.07, 2.0), COPPER, new THREE.Vector3(-2.72, 1.18, 1.7)),
+      mesh('ServiceRefrigRiser', new THREE.BoxGeometry(0.07, 1.6, 0.07), COPPER, new THREE.Vector3(-2.72, 2.1, 0.72)),
+      mesh('ServiceCableTray', new THREE.BoxGeometry(0.22, 2.6, 0.09), FRAME, new THREE.Vector3(-2.0, 1.9, WALL_FACE_Z + 0.06))
+    );
+    // PASS 4: the gas cage, on the RIGHT, so this shot is weighted opposite to A's.
+    const gasCage = ENGINE.SceneNode.create({ name: 'ServiceGasCage', position: new THREE.Vector3(2.15, 0, 2.5) });
+    gasCage.add(mesh('GasCageBase', new THREE.BoxGeometry(1.1, 0.09, 0.75), FRAME, new THREE.Vector3(0, 0.05, 0)));
+    for (const [px, pz] of [[-0.5, -0.32], [0.5, -0.32], [-0.5, 0.32], [0.5, 0.32]] as const) {
+      gasCage.add(mesh('GasCagePost', new THREE.BoxGeometry(0.06, 1.55, 0.06), FRAME, new THREE.Vector3(px, 0.78, pz)));
+    }
+    for (const ry of [0.42, 0.92, 1.42]) {
+      gasCage.add(mesh('GasCageRail', new THREE.BoxGeometry(1.06, 0.04, 0.04), FRAME, new THREE.Vector3(0, ry, 0.32)));
+    }
+    for (const [gx, gz] of [[-0.28, 0], [0, 0.08], [0.28, -0.04]] as const) {
+      gasCage.add(
+        mesh('GasCylinder', new THREE.CylinderGeometry(0.13, 0.13, 1.15, 10), GAS, new THREE.Vector3(gx, 0.67, gz)),
+        mesh('GasCylinderNeck', new THREE.CylinderGeometry(0.05, 0.05, 0.16, 8), FRAME, new THREE.Vector3(gx, 1.32, gz))
+      );
+    }
+    gasCage.rotation.y = 0.18;
+    root.add(gasCage);
+    // PASS 5: one caged bulkhead, low and mean, instead of a second flood.
+    root.add(
+      mesh('ServiceBulkheadBody', new THREE.BoxGeometry(0.3, 0.3, 0.14), DARK, new THREE.Vector3(1.62, 2.25, WALL_FACE_Z + 0.07)),
+      mesh('ServiceBulkheadLens', new THREE.CylinderGeometry(0.11, 0.11, 0.06, 12), WALLPACK, new THREE.Vector3(1.62, 2.25, WALL_FACE_Z + 0.16))
+    );
+    root.getObjectByName('ServiceBulkheadLens')?.rotateX(Math.PI / 2);
+    for (const bar of [-0.07, 0.07]) {
+      root.add(mesh('ServiceBulkheadCage', new THREE.BoxGeometry(0.02, 0.28, 0.02), FRAME, new THREE.Vector3(1.62 + bar, 2.25, WALL_FACE_Z + 0.2)));
+    }
+    root.add(ENGINE.PointLightNode.create({
+      name: 'ServicePlantBulkhead',
+      color: '#f0d9a8',
+      intensity: 2.6,
+      distance: 5.5,
+      decay: 1.7,
+      position: new THREE.Vector3(1.62, 2.2, WALL_FACE_Z + 0.5),
+    }));
   }
 
   public setStatus(status: WarehouseDoorStatus): void {
