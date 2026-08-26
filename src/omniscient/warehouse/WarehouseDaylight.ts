@@ -62,6 +62,58 @@ function orientedBox(axis: 'x' | 'z', length: number, height: number, depth: num
  */
 const CLERESTORY_NIGHT = 34;
 
+/**
+ * A light shaft as a grid with soft edges, from its four corners.
+ *
+ * `window0`/`window1` are the two corners at the source and `floor1`/`floor0` the two it
+ * lands on - ordered so window0-floor0 is one side and window1-floor1 the other. Alpha is
+ * `sin(pi u)` across, which is zero on both side edges and one down the middle, times a
+ * falloff along the run so the shaft is strongest at the window and gone before the slab.
+ *
+ * Colour is white so `material.color` decides the hue; only the alpha channel varies. Three
+ * reads a four-component `color` attribute as RGBA, which is what carries the taper.
+ */
+function softShaftGeometry(
+  window0: THREE.Vector3,
+  window1: THREE.Vector3,
+  floor1: THREE.Vector3,
+  floor0: THREE.Vector3
+): THREE.BufferGeometry {
+  const across = 7;
+  const along = 9;
+  const positions: number[] = [];
+  const colours: number[] = [];
+  const indices: number[] = [];
+  const top = new THREE.Vector3();
+  const bottom = new THREE.Vector3();
+  const point = new THREE.Vector3();
+  for (let iv = 0; iv <= along; iv++) {
+    const v = iv / along;
+    for (let iu = 0; iu <= across; iu++) {
+      const u = iu / across;
+      top.copy(window0).lerp(window1, u);
+      bottom.copy(floor0).lerp(floor1, u);
+      point.copy(top).lerp(bottom, v);
+      positions.push(point.x, point.y, point.z);
+      colours.push(1, 1, 1, Math.sin(Math.PI * u) * Math.pow(1 - v, 1.15));
+    }
+  }
+  for (let iv = 0; iv < along; iv++) {
+    for (let iu = 0; iu < across; iu++) {
+      const a = iv * (across + 1) + iu;
+      const b = a + 1;
+      const c = a + across + 1;
+      const d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('color', new THREE.Float32BufferAttribute(colours, 4));
+  geometry.setIndex(indices);
+  return geometry;
+}
+
 export class WarehouseDaylight {
   public readonly root = ENGINE.SceneNode.create({ name: 'WarehouseDaylightArchitecture' });
 
@@ -421,6 +473,34 @@ export class WarehouseDaylight {
       this.root.add(nightSide);
       }
 
+      /*
+       * ## The shaft had a HARD EDGE, and a hard edge is not a light
+       *
+       * Reported twice as a wireframe or glass rectangle passing through the conveyor belt,
+       * and both times it was this. The shaft was two triangles: a single flat quad running
+       * from the clerestory at x -23.85 down to the floor at x 5.5 - twenty-nine metres wide,
+       * nine metres tall, additive, double-sided, depthWrite off. Three things followed from
+       * that and all three are what the player was seeing:
+       *
+       *  - ITS RIM READ AS A DRAWN LINE. Additive alpha accumulates along a silhouette, so the
+       *    one part of a flat translucent polygon you always see is its edge. From the drone
+       *    that is a bright cyan line ruled across the building - the "wireframe".
+       *  - IT PASSED THROUGH EVERYTHING. A sheet from the roof to the floor crosses the racks,
+       *    the transfer belt and the sortation lanes on the way down, and with depthWrite off
+       *    and additive blending it draws OVER them rather than being hidden by them.
+       *  - IT ENDED AT THE SLAB. The floor end sat at y 0.06 at full strength, so the sheet
+       *    terminated in a hard line where it met the concrete.
+       *
+       * A shaft of light has no edges at all - it fades out in every direction. So it is built
+       * as a grid now with per-vertex alpha rather than as a quad with uniform alpha: zero
+       * across both side edges, peaking down the middle, and fading to nothing before it
+       * reaches the floor. There is no rim left to read as a line, and where it crosses the
+       * conveyors it is already transparent.
+       *
+       * The four corners are unchanged, so the shaft lands exactly where it did and the floor
+       * patch below still marks where it arrives. `material.opacity` stays the global
+       * multiplier the day/night driver animates; the vertex alpha is a 0-1 shape on top.
+       */
       const material = new THREE.MeshBasicMaterial({
         color: '#a9c8e4',
         transparent: true,
@@ -429,23 +509,23 @@ export class WarehouseDaylight {
         side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
         toneMapped: false,
+        vertexColors: true,
       });
       this.shaftMaterials.push(material);
       const endZ = z - 7.5;
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute(
-        'position',
-        new THREE.Float32BufferAttribute([
-          -23.85, 9.35, z - 1.1,
-          -23.85, 7.25, z + 1.1,
-          5.5, 0.06, endZ + 3.1,
-          -23.85, 9.35, z - 1.1,
-          5.5, 0.06, endZ + 3.1,
-          2.5, 0.06, endZ - 2.2,
-        ], 3)
-      );
-      geometry.computeVertexNormals();
-      this.root.add(mesh(`SunShaft-${index + 1}`, geometry, material, undefined, false, false));
+      this.root.add(mesh(
+        `SunShaft-${index + 1}`,
+        softShaftGeometry(
+          new THREE.Vector3(-23.85, 9.35, z - 1.1),
+          new THREE.Vector3(-23.85, 7.25, z + 1.1),
+          new THREE.Vector3(5.5, 0.06, endZ + 3.1),
+          new THREE.Vector3(2.5, 0.06, endZ - 2.2)
+        ),
+        material,
+        undefined,
+        false,
+        false
+      ));
 
       const patch = mesh(
         `SunPatch-${index + 1}`,
