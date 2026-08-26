@@ -106,8 +106,27 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
        * beside them, and the approach is visible. That is what a door camera is for and what
        * every real one does.
        */
+      /*
+       * ## Panned, because a third of every one of these frames is a telephone
+       *
+       * The console panel covers the right of the screen in every warehouse view - it is the
+       * same panel the contact views use, and `warehouse-cameras.ts` has treated x 0.645 as
+       * the right-hand limit of the picture since it was written. These three shots were
+       * composed as though the whole frame were available, so on A and B the door sat at the
+       * right edge of what a player can see and everything dressed to its right - the notice
+       * plate, the junction box, the downpipe, the wall pack, the bin - projected BEHIND the
+       * panel. Five objects, on two of the three doors, built and lit and never once visible.
+       *
+       * Measured with `scripts/dev/probe-approach.ts`, which projects every prop into every
+       * feed rather than asking an eye to judge it off a capture. Before: four of seven test
+       * points past the panel edge on A and on B. After: none, on any door.
+       *
+       * The fix is a lateral pan of the aim point - 1.6m on A, 1.9m on B, 0.8m on C - which
+       * rotates each camera about its own mounting so the visible band holds the door, the
+       * visitor and the whole approach. Nothing moved on the building; the lens turned.
+       */
       position: new THREE.Vector3(-30, 3.5, 23.4),
-      target: new THREE.Vector3(-25.9, 1.4, WAREHOUSE_LAYOUT.service.sideZ + 0.3),
+      target: new THREE.Vector3(-24.94, 1.4, WAREHOUSE_LAYOUT.service.sideZ + 1.58),
       fov: 54,
     },
     pursuit: {
@@ -145,8 +164,9 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
       // facade. 3.5m up, 22 degrees down, subject 5.9m out.
       /* Same correction as service-a: off the building and back at the door, rather than
          hard against the cladding looking along it. */
+      /* Panned 1.9m off the panel - see service-a above. */
       position: new THREE.Vector3(3.6, 3.5, WAREHOUSE_LAYOUT.shell.frontZ + 5.1),
-      target: new THREE.Vector3(0.1, 1.4, WAREHOUSE_LAYOUT.shell.frontZ + 1.9),
+      target: new THREE.Vector3(1.38, 1.4, WAREHOUSE_LAYOUT.shell.frontZ + 0.7),
       fov: 54,
     },
     pursuit: {
@@ -182,8 +202,9 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
     camera: {
       // The mirror of A, on the east wall.
       /* The mirror of service-a, and corrected for the same reason. */
+      /* Panned 0.8m. C already cleared the panel; this centres it. See service-a above. */
       position: new THREE.Vector3(30, 3.5, 23.4),
-      target: new THREE.Vector3(25.9, 1.4, WAREHOUSE_LAYOUT.service.sideZ + 0.3),
+      target: new THREE.Vector3(26.38, 1.4, WAREHOUSE_LAYOUT.service.sideZ - 0.34),
       fov: 54,
     },
     pursuit: {
@@ -516,7 +537,13 @@ export class WarehouseServiceDoor {
      * camera's sight line to all three - dressing that blocks the thing the camera exists to
      * show is worse than no dressing.
      */
-    const pipeX = 2.62;
+    /*
+     * 2.45, in from 2.62. The pipe is the outermost thing on the wall and door B's camera
+     * stands closest, so the head of it was the single remaining test point past the panel
+     * edge after the pan. Seventeen centimetres buys 0.02 of screen width, which is the whole
+     * difference between a full-height vertical and a truncated one.
+     */
+    const pipeX = 2.35;
     root.add(
       mesh('ServiceDownpipe', new THREE.CylinderGeometry(0.075, 0.075, 3.5, 8), PIPE, new THREE.Vector3(pipeX, 1.75, 0.26)),
       mesh('ServiceDownpipeShoe', new THREE.CylinderGeometry(0.085, 0.11, 0.3, 8), PIPE, new THREE.Vector3(pipeX, 0.15, 0.34)),
@@ -582,7 +609,15 @@ export class WarehouseServiceDoor {
      * element - a foreground object at the edge is useful, one in the middle is a wall - and
      * the crates go back and out to the left where the mid-ground was still empty.
      */
-    const drum = ENGINE.SceneNode.create({ name: 'ServiceCableDrum', position: new THREE.Vector3(1.95, 0, 2.85) });
+    /*
+     * Back half a metre, off the bottom edge.
+     *
+     * At z 2.85 the drum projected to y 0.93 on door B - a foreground object hard against
+     * the frame edge, which is not a framing element, it is a thing that has been cut in
+     * half. At 2.3 it sits at 0.85 with the whole disc inside the picture and still reads as
+     * the nearest object on the apron, which is the job it was put there to do.
+     */
+    const drum = ENGINE.SceneNode.create({ name: 'ServiceCableDrum', position: new THREE.Vector3(1.95, 0, 2.3) });
     drum.rotation.y = 0.4;
     for (const side of [-0.24, 0.24]) {
       drum.add(mesh('ServiceDrumFlange', new THREE.CylinderGeometry(0.52, 0.52, 0.06, 16), TIMBER, new THREE.Vector3(side, 0.52, 0)));
@@ -594,15 +629,55 @@ export class WarehouseServiceDoor {
     for (const child of drum.children) child.rotation.z = Math.PI / 2;
     root.add(drum);
 
+    /*
+     * Out to x -2.85, clear of the bollard.
+     *
+     * The stack sat at -1.95 and the left bollard stands at -1.8, seven tenths of a metre
+     * nearer the lens - so from every door camera the crates were behind a post, two screen
+     * widths apart and reading as one confused mass. Depth separation is not separation when
+     * the objects overlap in projection; they have to be apart ACROSS the frame as well.
+     */
     for (const [index, tier] of [0, 1].entries()) {
       root.add(mesh('ServiceCrateStack', new THREE.BoxGeometry(0.66, 0.55, 0.6), TIMBER,
-        new THREE.Vector3(-1.95 + index * 0.07, 0.28 + tier * 0.57, 1.95 + index * 0.05)));
+        new THREE.Vector3(-2.6 + index * 0.07, 0.28 + tier * 0.57, 1.6 + index * 0.05)));
     }
 
     const puddle = mesh('ServiceApronPuddle', new THREE.PlaneGeometry(1.5, 1.0), WET, new THREE.Vector3(0.55, 0.021, 2.35));
     puddle.rotation.x = -Math.PI / 2;
     puddle.rotation.z = 0.3;
     root.add(puddle);
+
+    /*
+     * ## The upper left was the last empty field, and it needed a VERTICAL
+     *
+     * Third critique, and the one the previous two passes kept deferring. Everything added so
+     * far went to the right of the leaf or onto the apron; above and left of the door there
+     * was the letter plate at 2.32m and then a metre and a half of blank cladding running up
+     * to the canopy. On door C - which the camera approaches from the other side - that blank
+     * is the FIRST thing in frame, at x 0.26.
+     *
+     * An extract louvre is what actually hangs there on a building like this: warehouses vent
+     * their service lobbies, and the grille is always high, always outboard of the canopy, and
+     * always has a weather hood over it. It answers the downpipe on the far side of the door -
+     * one vertical element each side, at different heights and made of different things - so
+     * the wall reads as a wall with equipment on it rather than a flat panel with one sign.
+     *
+     * Outboard of the canopy on purpose: the canopy spans 4.2m, so x -2.55 is a quarter of a
+     * metre clear of its edge and the camera's ray reaches it. The same mistake put the
+     * exterior door sign behind that roof for the whole of development.
+     */
+    const louvre = ENGINE.SceneNode.create({ name: 'ServiceExtractLouvre', position: new THREE.Vector3(-2.55, 2.92, 0.2) });
+    louvre.add(
+      mesh('LouvreHousing', new THREE.BoxGeometry(0.82, 0.96, 0.14), FRAME, new THREE.Vector3(0, 0, 0)),
+      mesh('LouvreThroat', new THREE.BoxGeometry(0.68, 0.8, 0.06), DARK, new THREE.Vector3(0, 0, 0.09)),
+      mesh('LouvreHood', new THREE.BoxGeometry(0.94, 0.09, 0.3), FRAME, new THREE.Vector3(0, 0.56, 0.14))
+    );
+    for (const [index, y] of [0.28, 0.09, -0.1, -0.29].entries()) {
+      const blade = mesh(`LouvreBlade-${index}`, new THREE.BoxGeometry(0.68, 0.11, 0.13), PIPE, new THREE.Vector3(0, y, 0.12));
+      blade.rotation.x = -0.5;
+      louvre.add(blade);
+    }
+    root.add(louvre);
 
     // Trolley wear where the turn happens, off the door and across the apron.
     const scuff = mesh('ServiceApronScuff', new THREE.PlaneGeometry(3.4, 1.5), SCUFF, new THREE.Vector3(0.5, 0.025, 2.5));
