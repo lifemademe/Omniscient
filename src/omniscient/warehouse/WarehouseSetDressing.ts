@@ -351,9 +351,22 @@ export class WarehouseSetDressing {
      * and the rear's at -29.02, so the front beacon hangs at a smaller z and the rear at a
      * larger one.
      */
+    /*
+     * ## Neither of them is at x 0, and both reasons are the wall
+     *
+     * FRONT: the door's own interior sign is a 2.2m plate at (0, 4.45, 28.84). A beacon at
+     * x 0 and y 4.42 would have landed sixteen centimetres in front of it at the same height -
+     * trading one floating prop for one embedded in a sign. Out to 1.9, clear of the plate's
+     * 1.1m half-width and still on the side infill panel.
+     *
+     * REAR: there is no wall at x 0 back there at all. The rear freight opening runs x -5.8
+     * to 5.8 - the RearWest and RearEast segments start outside that - so a beacon on the
+     * centreline would have been mounted to fresh air, which is the fault being fixed. 7.2
+     * puts it on RearEast cladding beside the opening.
+     */
     for (const [index, [x, wallZ, standoff, color]] of ([
-      [0, 29.02, -1, '#e0a24c'],
-      [0, -29.02, 1, '#d65a42'],
+      [1.9, 29.02, -1, '#e0a24c'],
+      [7.2, -29.02, 1, '#d65a42'],
     ] as const).entries()) {
       const material = new THREE.MeshStandardMaterial({
         color,
