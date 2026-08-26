@@ -97,7 +97,18 @@ export const RETRO_LOOKS = {
      * Vignette stays, low. It is a lens artefact everywhere else in the game and taking it
      * to zero made the frame edges read as a cut-out.
      */
-    pixel: 0,
+    /*
+     * Pixelation ON, raster OFF.
+     *
+     * The engine's own Pixelation pass extends WebGPUOnlyEffect, so on the WebGL path this
+     * project forces it registers and then does nothing - the same trap as ColorGrading and
+     * the engine Retro pass. The only pixelation that can reach a frame here is this one.
+     *
+     * So the pass is mounted again for its quantiser alone: scanline, grille, bleed, roll
+     * and flicker all stay at zero. The three-register structure is intact underneath - see
+     * warehouseFeed - and every one of those numbers is one edit from returning.
+     */
+    pixel: 2.4,
     curve: 0,
     aberration: 0,
     scanline: 0,
@@ -123,12 +134,12 @@ export const RETRO_LOOKS = {
    */
   warehouseCel: {
     pixel: 1.5,
-    curve: 0.007,
-    aberration: 0.0009,
-    scanline: 0.07,
+    curve: 0,
+    aberration: 0,
+    scanline: 0,
     scanPitch: 4,
-    grille: 0.1,
-    bleed: 0.085,
+    grille: 0,
+    bleed: 0,
     vignette: 0.2,
     roll: 0,
     flicker: 0,
@@ -150,16 +161,16 @@ export const RETRO_LOOKS = {
    * accessibleLook.
    */
   warehouseFeed: {
-    pixel: 2.1,
-    curve: 0.013,
-    aberration: 0.0017,
-    scanline: 0.105,
+    pixel: 2.6,
+    curve: 0,
+    aberration: 0,
+    scanline: 0,
     scanPitch: 3,
-    grille: 0.14,
-    bleed: 0.13,
+    grille: 0,
+    bleed: 0,
     vignette: 0.27,
-    roll: 0.014,
-    flicker: 0.0012,
+    roll: 0,
+    flicker: 0,
     saturation: 1.02,
     tint: new THREE.Color(0.96, 1.0, 1.03),
   },

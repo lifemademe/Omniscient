@@ -634,21 +634,27 @@ export const TERMINAL_CSS = `
 }
 .omni-terminal__input::placeholder { color: #3f6b48; }
 .omni-terminal__input:disabled { opacity: 0.4; }
-/* CRT treatment - §221. Post-process is unavailable on WebGL, so this does the work. */
-.omni-terminal::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0) 0px,
-    rgba(0, 0, 0, 0) 1px,
-    rgba(0, 0, 0, 0.22) 2px,
-    rgba(0, 0, 0, 0.22) 3px
-  );
-  mix-blend-mode: multiply;
-}
+/*
+ * ## The horizontal lines were HERE, and they were CSS
+ *
+ * A repeating-linear-gradient every 3px at 22% black, multiply-blended over every element
+ * carrying the omni-terminal class - which includes the warehouse ops console. At the window's 1.5x
+ * scale that is a 4.5px period on screen, and 4.5px is exactly what a frequency analysis of
+ * the captures kept reporting.
+ *
+ * It survived every attempt to switch it off from the render side because it was never in
+ * the renderer. Measured: with all seven post-processing passes disabled the periodicity was
+ * unchanged at 9-12x the scene's own frequency content; with the DOM hidden and the canvas
+ * left alone it dropped to 0.8, which is noise. A live probe of computed styles then found
+ * exactly two elements in the document with a repeating background, and both were this rule.
+ *
+ * Its original justification was sound and is now out of date: §221 added it because the
+ * engine's Retro pass is WebGPU-only and does nothing on the WebGL path this project forces.
+ * That gap is filled by our own retro pass now, which does scanlines properly, per view, and
+ * can be switched off - none of which a blend-mode overlay can do.
+ *
+ * The ::before glow below stays; it is a vignette, not a raster.
+ */
 .omni-terminal::before {
   content: "";
   position: absolute;

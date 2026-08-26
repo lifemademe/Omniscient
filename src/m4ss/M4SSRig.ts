@@ -320,6 +320,14 @@ export class M4SSRig extends ENGINE.SceneNode {
    * `?game=m4ss` boot - the end state simply holds on screen, which is the right ending
    * for a build with no console to return to.
    */
+  /**
+   * The player asked to leave. Wired to exitM4SS, which returns them to the globe.
+   *
+   * Separate from onContained: that fires when the specimen is finished and the file closes
+   * itself. This is somebody deciding to stop, which is a different event and must not be
+   * mistaken for completing the mission.
+   */
+  public onQuit: (() => void) | null = null;
   public onContained: (() => void) | null = null;
   /** Seconds until onContained fires. -1 is disarmed. See contain(). */
   private containedDelay = -1;
@@ -2706,7 +2714,9 @@ export class M4SSRig extends ENGINE.SceneNode {
     ].join(';');
     hud.innerHTML = [
       // The title bar, straight off the specimen window on her desktop.
-      '<div style="background:#2f5f8f;color:#ffffff;padding:3px 8px;font-size:10px;',
+      // Right padding leaves this row space for the PAUSE button, which is positioned
+      // absolutely over it - without it the button sits on top of the LIVE indicator.
+      '<div style="background:#2f5f8f;color:#ffffff;padding:3px 58px 3px 8px;font-size:10px;',
       'letter-spacing:1px;display:flex;justify-content:space-between">',
       '<span>specimen M4SS</span><span style="color:#8fe0a2">LIVE</span></div>',
       '<div style="padding:8px 10px 10px">',
@@ -2753,6 +2763,49 @@ export class M4SSRig extends ENGINE.SceneNode {
     container.appendChild(veil);
     this.slowmoVeil = veil;
     this.detach.push(() => veil.remove());
+
+    /*
+     * A way OUT, on the title bar where an OS window keeps one.
+     *
+     * The header above argues there is no room for an on-screen control because M4SS owns
+     * the keyboard and the mouse, and that was true of a control sitting in the play area. A
+     * title-bar button on a window that is already drawn is a different proposition: it costs
+     * no new furniture, it is where anyone would look for it, and it is DISCOVERABLE, which
+     * Escape is not. A player who does not know the key exists is a player who cannot leave.
+     *
+     * pointer-events are re-enabled for this one element - the panel stays transparent to the
+     * mouse - and the press is stopped dead, so the click that leaves the game does not also
+     * tell the specimen to latch on the way out.
+     */
+    const quit = document.createElement('button');
+    quit.type = 'button';
+    quit.textContent = 'PAUSE';
+    quit.setAttribute('aria-label', 'Pause and return to the globe');
+    quit.style.cssText = [
+      'position:absolute',
+      'right:4px',
+      'top:2px',
+      'padding:0 7px',
+      'height:15px',
+      'background:#1b2331',
+      'border:1px solid #7fb2e0',
+      'color:#dce8f6',
+      'font:9px/13px "Courier New",monospace',
+      'letter-spacing:1px',
+      'cursor:pointer',
+      'pointer-events:auto',
+    ].join(';');
+    const swallow = (event: Event): void => {
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    quit.addEventListener('pointerdown', swallow);
+    quit.addEventListener('mousedown', swallow);
+    quit.addEventListener('click', (event) => {
+      swallow(event);
+      this.onQuit?.();
+    });
+    hud.appendChild(quit);
 
     container.appendChild(hud);
     this.hud = hud;

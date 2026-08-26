@@ -275,7 +275,7 @@ const HIDE_CEL_POST = false;
  * roll bar - and its three registers (clean dioramas, drone link, fixed camera) are intact
  * and tuned; nothing here throws that work away. Flip to false to bring it back.
  */
-const HIDE_CRT_POST = true;
+const HIDE_CRT_POST = false;
 
 const WAREHOUSE_HAZE = '#5d6b77';
 const WAREHOUSE_FOG_NEAR = 32;
@@ -3226,6 +3226,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * place - Keller's conversation - with the desktop file flipped to CONTAINED behind
      * it, because the flag was written before the handback.
      */
+    // The title-bar PAUSE button. Same destination as Escape, but discoverable.
+    rig.onQuit = () => this.exitM4SS();
     rig.onContained = () => {
       this.exitM4SS();
       /*
