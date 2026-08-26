@@ -82,6 +82,16 @@ const FLOOR = new THREE.MeshStandardMaterial({ color: '#948671', roughness: 0.91
 const AMBER = new THREE.MeshStandardMaterial({ color: '#8d6c31', emissive: '#39250b', emissiveIntensity: 0.55, roughness: 0.58 });
 const RED = new THREE.MeshStandardMaterial({ color: '#6e2d2d', emissive: '#2c0909', emissiveIntensity: 0.6, roughness: 0.62 });
 const BELT = new THREE.MeshStandardMaterial({ color: '#11171e', roughness: 0.82, metalness: 0.25 });
+/*
+ * Floor paint. Worn amber, and it takes the light rather than glowing.
+ *
+ * A marking that ignores the lighting reads as a decal laid over the picture; one that is lit
+ * by the same lamps as the slab reads as paint on it. It is also the reason these are
+ * MeshStandard rather than MeshBasic like the older lane stripes - those were authored before
+ * the room had a lighting model worth responding to.
+ */
+const FLOOR_PAINT = new THREE.MeshStandardMaterial({ color: '#b58a34', roughness: 0.88, metalness: 0.02 });
+
 /* Softwood, and darker than the board it carries so a load reads as sitting on something. */
 const PALLET = new THREE.MeshStandardMaterial({ color: '#816337', roughness: 0.96 });
 const TAPE_LIGHT = new THREE.MeshStandardMaterial({ color: '#d4c5a8', roughness: 0.72 });
@@ -159,6 +169,39 @@ function labelMaterial(
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
   return new THREE.MeshBasicMaterial({ map: texture, side: THREE.FrontSide, toneMapped: false });
+}
+
+/**
+ * A numeral painted onto the floor, on a transparent plate.
+ *
+ * Transparent rather than a filled panel because a painted number IS the floor showing
+ * through around it; a plate reads as a sign someone dropped. depthWrite off so the alpha
+ * edge cannot punch a hole in whatever the drone is carrying over it, and it sits 1.4cm up
+ * so it never fights the slab for the same pixel.
+ */
+function floorPaintMaterial(text: string): THREE.MeshStandardMaterial {
+  const canvas = document.createElement('canvas');
+  canvas.width = 320;
+  canvas.height = 256;
+  const context = canvas.getContext('2d');
+  if (context) {
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = '#c89a3c';
+    context.font = 'bold 230px monospace';
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(text, canvas.width / 2, canvas.height / 2 + 8);
+  }
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
+  map.anisotropy = 4;
+  return new THREE.MeshStandardMaterial({
+    map,
+    transparent: true,
+    depthWrite: false,
+    roughness: 0.88,
+    metalness: 0.02,
+  });
 }
 
 function readableLabelPanel(
@@ -545,6 +588,7 @@ export class WarehouseEnvironment {
     this.buildStations();
     this.buildConveyors();
     this.buildSecurityZones();
+    this.buildFloorNavigation();
     this.buildCeilingServices();
     this.buildTruck();
     this.buildLights();
@@ -1095,6 +1139,94 @@ export class WarehouseEnvironment {
    * Merged into two meshes. Six conduit runs, four mains and fifty-odd drop heads as
    * individual nodes would be another sixty draw calls on scenery that never moves.
    */
+  /**
+   * Navigation painted on the floor, which is where the player is actually looking.
+   *
+   * The aisle numbers hang at y 8.55. A drone at working height is two metres up with racking
+   * six metres tall on both sides, so for most of a run those signs are outside the frustum
+   * or behind a rack - the player is flying down a corridor reading the floor and the bay
+   * strips. The one piece of information the mission asks for constantly, "which aisle is
+   * this", was the one piece that lived somewhere they could not see.
+   *
+   * It is also the largest undressed surface left. The slab is 48 by 58 metres and carried
+   * four guide lines, some chevrons and a few stains, so it read as a large tan plane with
+   * marks on it rather than as a floor somebody laid out.
+   *
+   * Painted rather than signposted: big numerals at both ends of every run, a hatched
+   * keep-clear at each aisle mouth, and a pedestrian walkway across the front. All of it is
+   * information the building would really carry, which is the test for set dressing - if it
+   * would not be there in life it is decoration, and decoration is what makes a place look
+   * like a set.
+   *
+   * The aisle COUNT is read from the layout, never written. See WAREHOUSE_AISLE_COUNT.
+   */
+  private buildFloorNavigation(): void {
+    const markings: THREE.BufferGeometry[] = [];
+    const runFront = WAREHOUSE_BAY_Z0 + WAREHOUSE_BAY_RUN;
+    const runRear = WAREHOUSE_BAY_Z0;
+
+    for (const [index, rackX] of WAREHOUSE_LAYOUT.rack.centers.entries()) {
+      const aisle = index + 1;
+      // In the working lane beside the rack face, not under the rack itself.
+      const x = rackX + 1.95;
+      for (const [z, facing] of [[runFront + 2.1, 0], [runRear - 2.1, Math.PI]] as const) {
+        /*
+         * mirrorU, and it is the OPPOSITE of what a wall sign needs.
+         *
+         * Established by looking, not by deriving - a numeral laid flat and rotated -90
+         * about X came out reversed with the same geometry that reads correctly on a
+         * vertical panel. Two earlier attempts in this file to reason about sign handedness
+         * from first principles were both wrong and both broke a face that was already
+         * right, so this one was settled with a capture: without the flip the 3 had its
+         * bowls on the left.
+         */
+        const plate = mesh(
+          `AisleFloorNumber-${aisle}`,
+          createWarehouseLabelGeometry(2.6, 2.0, true),
+          floorPaintMaterial(String(aisle)),
+          new THREE.Vector3(x, 0.014, z)
+        );
+        plate.rotation.x = -Math.PI / 2;
+        plate.rotation.z = facing;
+        this.root.add(plate);
+      }
+
+      /*
+       * A hatched keep-clear across each aisle mouth.
+       *
+       * Diagonal bars, which is the marking every warehouse uses for "do not stand here" and
+       * which the eye reads as a threshold. It also gives the entrance to a run a hard edge,
+       * so flying into an aisle is an event rather than a gradual change of surroundings.
+       */
+      for (const zEnd of [runFront + 0.4, runRear - 0.4]) {
+        for (let i = 0; i < 7; i++) {
+          const offset = -1.5 + i * 0.5;
+          const bar = new THREE.BoxGeometry(0.16, 0.012, 1.5);
+          bar.rotateY(Math.PI * 0.25);
+          bar.translate(x + offset, 0.012, zEnd);
+          markings.push(bar);
+        }
+      }
+    }
+
+    /*
+     * A pedestrian walkway across the front of the racking, edged both sides.
+     *
+     * The one long unbroken line on the floor, and it does for the ground what the conveyor
+     * guides do for the sortation bay: gives a surface of repeated objects a single
+     * continuous element to be measured against.
+     */
+    for (const z of [16.9, 17.9]) {
+      markings.push(boxGeometry(new THREE.Vector3(WAREHOUSE_LAYOUT.shell.width - 6, 0.012, 0.14), new THREE.Vector3(0, 0.012, z)));
+    }
+    for (let x = -20; x <= 20; x += 1.6) {
+      markings.push(boxGeometry(new THREE.Vector3(0.1, 0.012, 0.9), new THREE.Vector3(x, 0.012, 17.4)));
+    }
+
+    const merged = mergeGeometries(markings, false);
+    if (merged) this.root.add(mesh('FloorMarkings', merged, FLOOR_PAINT));
+  }
+
   private buildCeilingServices(): void {
     const conduit: THREE.BufferGeometry[] = [];
     const sprinkler: THREE.BufferGeometry[] = [];
