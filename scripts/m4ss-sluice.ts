@@ -392,5 +392,149 @@ console.log('\nthe column - the one new force in the sim');
   check('the column cannot pump a swing', Math.abs(held - 90) < 26, `radius ${Math.round(held)}`);
 }
 
+// ------------------------------------------------------------------------------ 3. the route
+
+console.log('\nthe route - the two moves the layout cannot settle on its own');
+
+/*
+ * Does the column actually put you on the platform?
+ *
+ * This is the beat with the most uncertainty in it and the least visible failure mode. The
+ * ride ends at a ceiling rather than at a ledge - the air runs out under the cap and the only
+ * opening is sideways - so "it works" is a claim about three things at once: that the rise
+ * clears the platform's surface, that steering west while still in the draught is possible at
+ * all, and that leaving the column drops the body onto 180px of stone rather than back down
+ * eight hundred pixels of shaft. None of those is readable off the coordinates.
+ *
+ * Driven the way a player would: hold nothing until the body is near the top, then hold west.
+ */
+{
+  const draft = THE_SLUICE.updrafts![0];
+  const platform = THE_SLUICE.tiles.find((t) => t.x === 900 && t.y === 1020)!;
+  const state = makeState(freshSluice(), draft.liftMass);
+  const dx = draft.x + draft.w / 2 - home(state).x;
+  const dy = FLOOR_TOP - 30 - home(state).y;
+  for (const p of state.particles) {
+    p.x += dx;
+    p.px += dx;
+    p.y += dy;
+    p.py += dy;
+  }
+  run(state, 6, (st) => ({
+    // Steer west once the body is within a body-height of the cap, and keep steering.
+    move: home(st).y < draft.y + 90 ? -1 : 0,
+    anchor: null,
+    recall: false,
+  }));
+  const at = home(state);
+  const onPlatform =
+    at.x > platform.x && at.x < platform.x + platform.w && Math.abs(at.y - (platform.y - 22)) < 34;
+  check('the column delivers the body onto the platform', onPlatform, `landed (${Math.round(at.x)}, ${Math.round(at.y)})`);
+  check('and it arrives whole', mass(state) === draft.liftMass, `${mass(state)}g`);
+
+  // The plate has to be somewhere the body that just landed can walk to.
+  const plate = THE_SLUICE.buttons.find((b) => b.id === 'drop')!;
+  check(
+    'the plate is on the platform it landed on',
+    plate.x > platform.x && plate.x < platform.x + platform.w,
+    `plate at ${plate.x}, platform ${platform.x}..${platform.x + platform.w}`
+  );
+}
+
+/*
+ * The presses' claim, checked rather than asserted - and it caught the claim being wrong.
+ *
+ * The level's comment used to say there is no moment when both heads are up. That is false and
+ * cannot be made true: the cycle is 55% winch, 30% hang, 15% drop, so a press is clear for
+ * about 85% of its life and no phase offset gets two of them out of each other's way. Sampled
+ * here at 250 frames of overlap per four seconds, which is what sent the beat back to the
+ * drawing board rather than into a playtest.
+ *
+ * What is true, and is what makes two presses a different lesson from one, is that the window
+ * is shorter than the corridor. Both checks below are that sentence: how long the pair is open
+ * together, against how long the crossing takes at a crawl.
+ */
+{
+  const presses = (THE_SLUICE.crushers ?? []).filter((c) => c.axis !== 'x');
+  check('there are two of them', presses.length === 2);
+  const state = makeState(freshSluice(), 40);
+  const steps = Math.round(4 / TUNING.dt);
+  let bothFor = 0;
+  let bothLongest = 0;
+  const openFor = presses.map(() => 0);
+  const longest = presses.map(() => 0);
+  for (let i = 0; i < steps; i++) {
+    step(state, IDLE);
+    const live = state.world.crushers!.filter((c) => c.axis !== 'x');
+    // "Up" means the head has lifted a body-height clear of where it closes.
+    const up = live.map((c) => c.travel - c.at > 46);
+    bothFor = up.every(Boolean) ? bothFor + 1 : 0;
+    bothLongest = Math.max(bothLongest, bothFor);
+    up.forEach((o, k) => {
+      openFor[k] = o ? openFor[k] + 1 : 0;
+      longest[k] = Math.max(longest[k], openFor[k]);
+    });
+  }
+
+  /*
+   * The crawl is 92px/s and the crossing runs from safe ground a body's width west of the
+   * first head to the same east of the second. If that takes longer than the pair stay open
+   * together, the pocket between them is mandatory and the corridor is two commitments. If it
+   * does not, the whole thing is stage two's one press with a longer walk.
+   */
+  const CRAWL = 92;
+  const west = presses[0].x - 40;
+  const east = presses[1].x + presses[1].w + 40;
+  const crossing = (east - west) / CRAWL;
+  const window = bothLongest * TUNING.dt;
+  check(
+    'the window is shorter than the corridor',
+    crossing > window + 1.2,
+    `crossing ${crossing.toFixed(1)}s vs window ${window.toFixed(1)}s`
+  );
+
+  /*
+   * And the fairness half, per press. A window that exists and is too short to walk is not a
+   * window. Clearing a 60px head from a standing start at a crawl is about three quarters of
+   * a second, so each has to beat that with something in hand.
+   */
+  for (let k = 0; k < longest.length; k++) {
+    const seconds = longest[k] * TUNING.dt;
+    check(`press ${k + 1} holds its window long enough to walk`, seconds > 0.9, `${seconds.toFixed(2)}s`);
+  }
+}
+
+/*
+ * And the shutter's window, which is the same question asked of the climb.
+ *
+ * The gap it slides across is the only air between g1's sweep and g2's, so if the parked
+ * position does not clear that lane the second link of the gallery is impossible rather than
+ * timed. Measured as a lane at the x the flight actually uses - between the two growths.
+ */
+{
+  const shutter = (THE_SLUICE.crushers ?? []).find((c) => c.axis === 'x')!;
+  const g1 = named('g1');
+  const g2 = named('g2');
+  const lane = (g1.x + g2.x) / 2;
+  check(
+    'the parked shutter is clear of the flight lane',
+    shutter.x + shutter.w < lane - 20,
+    `parks at ${shutter.x + shutter.w}, lane ${lane}`
+  );
+  check(
+    'and closes it when it runs out',
+    shutter.x + shutter.travel + shutter.w > lane + 20,
+    `reaches ${shutter.x + shutter.travel + shutter.w}`
+  );
+  // It has to fit between the two sweeps, or it is a wall rather than a shutter.
+  const above = g2.y + g2.rope!;
+  const below = g1.y - g1.rope!;
+  check(
+    'the shutter fits between the two sweeps',
+    shutter.y >= above && shutter.y + shutter.h <= below,
+    `shutter ${shutter.y}..${shutter.y + shutter.h} in ${above}..${below}`
+  );
+}
+
 console.log(failures === 0 ? '\nall clear\n' : `\n${failures} failed\n`);
 process.exitCode = failures === 0 ? 0 : 1;

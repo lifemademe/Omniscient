@@ -280,11 +280,23 @@ export const THE_SLUICE: World = {
   /**
    * Two presses over the corridor, half a cycle apart, and one shutter in the climb.
    *
-   * The presses are the beat stage two has one of. Out of phase there is no moment when both
-   * are up, so the corridor is crossed in two commitments with a standing pocket between them
-   * - the pause is inside the machine rather than outside it. The cycle is 55% winch, 30%
-   * hang, 15% drop, so the window is the longest part of it, which is what makes two of them
-   * fair. Being caught costs 45% of the body onto the floor, recoverable with Q.
+   * The presses are the beat stage two has one of, and what makes two of them a different
+   * lesson is NOT that the corridor is never open - it is that the corridor is never open
+   * long enough.
+   *
+   * That distinction was measured rather than assumed, and the first version of this comment
+   * had it backwards. The cycle is 55% winch, 30% hang, 15% drop (see mass.ts), so a press
+   * spends most of its life UP, and there is no phase offset that gets two of them out of
+   * each other's way. What the offset buys is that the two drops alternate, which leaves the
+   * pair clear together for about a second at a time.
+   *
+   * So the beat is a distance problem. From safe ground west of the first head to safe ground
+   * east of the second is 440px, and a body crawls at 92px/s - nearly five seconds against a
+   * one-second window. You cannot run it, and the 240px between the heads is where you stop.
+   * The pause is inside the machine rather than outside it, which is the whole idea, and it is
+   * now true for a reason the harness can check.
+   *
+   * Being caught costs 45% of the body onto the floor, recoverable with Q. Nothing dies.
    *
    * The shutter is the other kind entirely: `axis: 'x'`, which the sim has supported since it
    * was written and no stage has ever authored. It slides across the only gap between g1's
@@ -294,7 +306,7 @@ export const THE_SLUICE: World = {
    */
   crushers: [
     { x: 500, y: 1130, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0, at: 0 },
-    { x: 740, y: 1130, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0.5, at: 0 },
+    { x: 800, y: 1130, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0.5, at: 0 },
     { x: 150, y: 756, w: 210, h: 48, travel: 200, axis: 'x', period: 3.2, phase: 0.3, at: 0 },
   ],
 
