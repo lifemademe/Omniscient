@@ -102,6 +102,8 @@ const WRAP = new THREE.MeshPhysicalMaterial({
 const GUIDE = new THREE.MeshStandardMaterial({ color: '#c8862e', emissive: '#3a2408', emissiveIntensity: 0.5, roughness: 0.62 });
 /* The high-bay shades. Double-sided, because an open cone drawn on one side is a hole. */
 const SHADE = new THREE.MeshStandardMaterial({ color: '#181f2a', roughness: 0.76, metalness: 0.42, side: THREE.DoubleSide });
+/* Sprinkler pipework. Muted, but the only saturated thing above head height in the room. */
+const SPRINKLER = new THREE.MeshStandardMaterial({ color: '#8c3a30', roughness: 0.66, metalness: 0.24 });
 
 function mesh(name: string, geometry: THREE.BufferGeometry, material: THREE.Material, position?: THREE.Vector3): ENGINE.MeshNode {
   const node = ENGINE.MeshNode.create({ name, geometry, material, castShadow: true, receiveShadow: true });
@@ -510,6 +512,8 @@ export class WarehouseEnvironment {
   private rearDoorTarget = 0;
   private clock = 0;
   private conveyorRunning = false;
+  /** Which x columns carry a run of ceiling fixtures. See buildCeilingServices. */
+  private readonly ceilingFixtureColumns = new Set<number>();
   private verifiedIntakeScanner: ENGINE.MeshNode | null = null;
   private verifiedIntakeStatus: THREE.MeshStandardMaterial | null = null;
 
@@ -541,6 +545,7 @@ export class WarehouseEnvironment {
     this.buildStations();
     this.buildConveyors();
     this.buildSecurityZones();
+    this.buildCeilingServices();
     this.buildTruck();
     this.buildLights();
     this.buildFloorWear();
@@ -1058,6 +1063,83 @@ export class WarehouseEnvironment {
    * narrowing one without the other opens a gap in the one place in this building where a gap
    * would read as a hole in the wall.
    */
+  /**
+   * Conduit, sprinkler main and cable tray - what the fixtures are hanging FROM.
+   *
+   * The lamps were on stems into nothing. A stem that stops in mid-air reads as a prop
+   * hanging in a room rather than as a fitting installed in a building, and the ceiling is
+   * the emptiest part of the frame - it measured as the darkest third even after the
+   * lighting rebalance, because there is genuinely nothing up there to catch light.
+   *
+   * Services are what real ceilings are made of, and they are also the right shape for this
+   * problem: long unbroken runs. They give the upper third the one thing it has none of -
+   * lines going somewhere - and because they run the length of the building they describe
+   * its depth from any angle, which thirty separate lamps cannot do.
+   *
+   * The sprinkler main is red because sprinkler mains are, and it is the only saturated
+   * thing above head height in the whole room.
+   *
+   * Merged into two meshes. Six conduit runs, four mains and fifty-odd drop heads as
+   * individual nodes would be another sixty draw calls on scenery that never moves.
+   */
+  private buildCeilingServices(): void {
+    const conduit: THREE.BufferGeometry[] = [];
+    const sprinkler: THREE.BufferGeometry[] = [];
+    const runZ = WAREHOUSE_LAYOUT.shell.length / 2 - 2.4;
+    const runX = WAREHOUSE_LAYOUT.shell.width / 2 - 2.2;
+
+    const pipe = (
+      bucket: THREE.BufferGeometry[],
+      radius: number,
+      length: number,
+      position: THREE.Vector3,
+      alongX: boolean
+    ): void => {
+      const geometry = new THREE.CylinderGeometry(radius, radius, length, 8);
+      geometry.rotateZ(alongX ? Math.PI / 2 : 0);
+      if (!alongX) geometry.rotateX(Math.PI / 2);
+      geometry.translate(position.x, position.y, position.z);
+      bucket.push(geometry);
+    };
+
+    // A conduit run down each column of fixtures, with a hanger every eight metres.
+    for (const x of this.ceilingFixtureColumns) {
+      pipe(conduit, 0.055, runZ * 2, new THREE.Vector3(x, 10.06, 0), false);
+      for (let z = -runZ + 2; z < runZ; z += 8) {
+        conduit.push(boxGeometry(new THREE.Vector3(0.06, 0.34, 0.06), new THREE.Vector3(x, 10.22, z)));
+      }
+    }
+
+    // A cable tray beside the centre run: an open channel, which reads at a glance.
+    for (const side of [-0.42, 0.42]) {
+      conduit.push(boxGeometry(new THREE.Vector3(0.04, 0.16, runZ * 2), new THREE.Vector3(-4 + side, 10.24, 0)));
+    }
+    conduit.push(boxGeometry(new THREE.Vector3(0.88, 0.04, runZ * 2), new THREE.Vector3(-4, 10.17, 0)));
+
+    /*
+     * The sprinkler grid: mains across the building, drops hanging off them.
+     *
+     * Crossing the conduit rather than following it, so the ceiling reads as a lattice from
+     * below instead of as six parallel lines - which is what stops it looking like corduroy
+     * when the drone turns.
+     */
+    for (const z of [-19, -9.5, 0, 9.5, 19]) {
+      pipe(sprinkler, 0.085, runX * 2, new THREE.Vector3(0, 9.92, z), true);
+      for (let x = -runX + 2.4; x < runX; x += 4.2) {
+        pipe(sprinkler, 0.028, 0.42, new THREE.Vector3(x, 9.7, z), false);
+        sprinkler.push(boxGeometry(new THREE.Vector3(0.11, 0.07, 0.11), new THREE.Vector3(x, 9.47, z)));
+      }
+      for (let x = -runX + 5; x < runX; x += 10) {
+        sprinkler.push(boxGeometry(new THREE.Vector3(0.07, 0.5, 0.07), new THREE.Vector3(x, 10.16, z)));
+      }
+    }
+
+    this.root.add(
+      mesh('CeilingConduit', mergeGeometries(conduit, false) ?? new THREE.BoxGeometry(0.1, 0.1, 0.1), STEEL),
+      mesh('CeilingSprinkler', mergeGeometries(sprinkler, false) ?? new THREE.BoxGeometry(0.1, 0.1, 0.1), SPRINKLER)
+    );
+  }
+
   private buildTruck(): void {
     const truck = ENGINE.SceneNode.create({ name: 'InboundTruck', position: WAREHOUSE_LAYOUT.truck.clone() });
     const BODY = new THREE.MeshStandardMaterial({ color: '#273538', roughness: 0.78, metalness: 0.3 });
@@ -1297,6 +1379,7 @@ export class WarehouseEnvironment {
         );
         const lens = mesh('CeilingFixtureLens', new THREE.CylinderGeometry(0.56, 0.56, 0.05, 12), fixtureLens, new THREE.Vector3(x, 9.16, z));
         this.root.add(stem, shade, lens);
+        this.ceilingFixtureColumns.add(x);
         /*
          * Nine lamps, not fifteen.
          *

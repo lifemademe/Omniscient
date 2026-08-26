@@ -133,7 +133,18 @@ export const PAINT_LOOKS = {
      * being wiped off every saturated surface afterwards, widening it was pushing on a
      * rope.
      */
-    outlineWidth: 1.4, depthInk: 2, normalInk: 2, outlineStrength: 1,
+    /*
+     * The geometry contour is OFF.
+     *
+     * Everything that draws it is left in place and tuned - width, the two gains, the
+     * distance fade - because the work behind those numbers is worth keeping and the F8
+     * panel can bring it back with one slider. Only the mix is zero.
+     *
+     * That also makes it free rather than merely invisible: renderGeometry returns early
+     * when outlineStrength is at zero, so the normal/depth prepass and its whole-scene
+     * render stop happening at all.
+     */
+    outlineWidth: 1.4, depthInk: 2, normalInk: 2, outlineStrength: 0,
     /*
      * 0.55, down from 1.
      *
@@ -177,7 +188,9 @@ export const PAINT_LOOKS = {
      * crawls along a slowly curving surface as the drone moves - a few percent of ramp costs
      * nothing visible and kills the crawl.
      */
-    posterize: 4, posterizeSoft: 0.05, saturation: 1.26,
+    // 1.10, down from 1.26. The palette repaint and the material-level gain are both doing
+    // work now, so the pass does not have to push as hard on top of them.
+    posterize: 4, posterizeSoft: 0.05, saturation: 1.1,
     /*
      * Full weight to 13 metres, quarter weight past 34.
      *
@@ -191,7 +204,7 @@ export const PAINT_LOOKS = {
   /** Lower-cost depth-led contour for high-DPI or constrained GPUs. */
   warehouseCelLow: {
     radius: 0, strength: 0, ink: 0.06, tint: 0.24, tooth: 0,
-    outlineWidth: 1.8, depthInk: 1, normalInk: 0.38, outlineStrength: 0.58,
+    outlineWidth: 1.8, depthInk: 1, normalInk: 0.38, outlineStrength: 0,
     normalScale: 0.48, protectSignals: 0.55, inkColor: [0.025, 0.035, 0.04],
     brightness: 1, posterize: 3, posterizeSoft: 0.14, saturation: 1.2,
     outlineFadeStart: 13, outlineFadeEnd: 34,
