@@ -180,7 +180,12 @@ export class WarehouseSetDressing {
     for (const [index, [x, z]] of [
       [-20.8, -20.8],
       [-14.5, -21.4],
-      [10.8, -20.6],
+      /*
+       * Off the transfer belt. At (10.8, -20.6) this stack spanned x 10.02..11.58 and the belt
+       * leaves receiving at (10.2, -20.7) occupying roughly 9.4..11.0 - so a wrapped pallet
+       * stood inside the conveyor, its legs and its rails. Found by the audit sweep.
+       */
+      [7.8, -21.4],
       /*
        * Out of door C's drop point.
        *

@@ -1036,14 +1036,38 @@ export class WarehouseEnvironment {
       mesh('SortationTableShelf', new THREE.BoxGeometry(5.4, 0.12, 1.35), DARK_STEEL, new THREE.Vector3(19.6, 0.42, 12.35)),
       mesh('SortationCatwalk', new THREE.BoxGeometry(7.6, 0.22, 12), DARK_STEEL, new THREE.Vector3(19.55, 6.4, -1.2))
     );
-    for (const z of [-6.3, -1.2, 3.9]) {
+    /*
+     * The third leg moves off the portal.
+     *
+     * The inspection portal stands at z 4.2 and is 1.18 deep, so it occupies 3.61 to 4.79; a
+     * catwalk leg at 3.9 ran floor-to-catwalk straight through its crown and its west upright.
+     * Two structures put up in different files, neither able to see the other. 2.6 keeps the
+     * spacing even enough and clears the portal by a metre.
+     */
+    for (const z of [-6.3, -1.2, 2.6]) {
       this.root.add(
         mesh('CatwalkSupport', new THREE.BoxGeometry(0.16, 6.3, 0.16), STEEL, new THREE.Vector3(16.05, 3.15, z)),
         mesh('CatwalkSupport', new THREE.BoxGeometry(0.16, 6.3, 0.16), STEEL, new THREE.Vector3(23.05, 3.15, z))
       );
     }
+    /*
+     * The catwalk rail gets its stanchions.
+     *
+     * Two amber rails ran the twelve-metre catwalk at y 7.35 with the deck at 6.4 - nearly a
+     * metre of clear air under each, held up by nothing. The last finding of the audit sweep
+     * and the same fault the mezzanine stair had: a handrail is two lines and the posts that
+     * carry them, and the posts are the half nobody draws.
+     */
     for (const x of [16.15, 23]) {
       this.root.add(mesh('CatwalkRail', new THREE.BoxGeometry(0.08, 0.08, 12), AMBER, new THREE.Vector3(x, 7.35, -1.2)));
+      for (let post = 0; post < 9; post++) {
+        this.root.add(mesh(
+          'CatwalkStanchion',
+          new THREE.BoxGeometry(0.06, 0.95, 0.06),
+          AMBER,
+          new THREE.Vector3(x, 6.88, -6.9 + post * 1.42)
+        ));
+      }
     }
 
     const intake = ENGINE.SceneNode.create({
@@ -1984,7 +2008,17 @@ export class WarehouseEnvironment {
       mesh('MaintenanceDoorSeam', new THREE.BoxGeometry(0.025, 1.72, 0.05), DARK_STEEL, new THREE.Vector3(0, 1.05, 0.385)),
       mesh('MaintenanceHandle', new THREE.BoxGeometry(0.08, 0.28, 0.08), AMBER, new THREE.Vector3(0.46, 1.08, 0.42))
     );
-    const sortCover = ENGINE.SceneNode.create({ name: 'FugitiveCover-Sortation', position: new THREE.Vector3(18.2, 0, -7.6) });
+    /*
+     * West of lane one, not inside it.
+     *
+     * At x 18.2 the pump tank's 0.68 radius reached 18.88 and the near sortation belt occupies
+     * 16.39 to 18.11 for its whole run - so half a metre of pump was inside a conveyor. Found
+     * by `scripts/warehouse-audit.ts` rather than by anyone looking at it.
+     *
+     * 15.4 puts it clear of the belt by 0.31 and clear of the catwalk leg at 16.05, on the
+     * open strip between the sortation hall and the storage boundary.
+     */
+    const sortCover = ENGINE.SceneNode.create({ name: 'FugitiveCover-Sortation', position: new THREE.Vector3(15.4, 0, -7.6) });
     sortCover.add(
       mesh('SortPumpTank', new THREE.CylinderGeometry(0.62, 0.68, 1.45, 12), coverSteel, new THREE.Vector3(0, 0.74, 0)),
       mesh('SortPumpGuard', new THREE.TorusGeometry(0.76, 0.055, 8, 18), AMBER, new THREE.Vector3(0, 0.9, 0)),

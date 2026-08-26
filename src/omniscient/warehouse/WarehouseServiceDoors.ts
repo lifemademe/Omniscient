@@ -256,7 +256,15 @@ const SCUFF = new THREE.MeshStandardMaterial({ color: '#4b524f', roughness: 0.95
 /* Pass 1's palette: the three approaches want materials the others do not have. */
 const TARMAC = new THREE.MeshStandardMaterial({ color: '#2f3335', roughness: 0.97, metalness: 0.02 });
 const KERB = new THREE.MeshStandardMaterial({ color: '#8b8c85', roughness: 0.92, metalness: 0.02 });
-const LEAF = new THREE.MeshStandardMaterial({ color: '#3f6b46', roughness: 0.9, metalness: 0.01 });
+/*
+ * Planting, at a value that does not out-shout the visitor.
+ *
+ * #3f6b46 came back as the most saturated object in door B's feed - the cel pass runs
+ * brightness 2.5 against a saturation of 0.89, so a mid green lands vivid, and the eye went
+ * to a shrub rather than to the person at the door. Same fault the notice plate had two
+ * passes ago and the same test: nothing in a shot should be louder than its subject.
+ */
+const LEAF = new THREE.MeshStandardMaterial({ color: '#3d5744', roughness: 0.92, metalness: 0.01 });
 const GAS = new THREE.MeshStandardMaterial({ color: '#7d8a6c', roughness: 0.55, metalness: 0.45 });
 const COPPER = new THREE.MeshStandardMaterial({ color: '#8a6446', roughness: 0.5, metalness: 0.6 });
 const HAZARD = new THREE.MeshStandardMaterial({ color: '#c08a32', roughness: 0.9, metalness: 0.04 });
@@ -515,7 +523,15 @@ export class WarehouseServiceDoor {
      */
     const shutterDrum = mesh('ServiceLockdownDrum', new THREE.BoxGeometry(2.86, 0.26, 0.34), FRAME, new THREE.Vector3(0, SHUTTER_HEAD_Y - 0.05, 0.34));
     const window = mesh('ServiceHatchWindow', new THREE.BoxGeometry(0.78, 0.24, 0.06), GLASS, new THREE.Vector3(0.64, 1.42, 0.29));
-    const scanner = mesh('ServiceCargoScanner', new THREE.BoxGeometry(2.12, 0.16, 1.35), this.statusMaterial, new THREE.Vector3(0, 0.18, -1.05));
+    /*
+     * Shorter and closer to the threshold, so it stops before the dock.
+     *
+     * The scan plate ran 1.35m into the building from local z -1.05, reaching 1.73 inside the
+     * wall, and the transfer dock's plinth starts at 1.13 - so the plate was inside the dock by
+     * six tenths, on doors A and C both. It is the plate a package is scanned on as it comes
+     * through the door, so it belongs at the threshold rather than halfway to the dock.
+     */
+    const scanner = mesh('ServiceCargoScanner', new THREE.BoxGeometry(2.12, 0.16, 0.7), this.statusMaterial, new THREE.Vector3(0, 0.18, -0.58));
     const reader = mesh('ServiceCredentialReader', new THREE.BoxGeometry(0.14, 0.24, 0.08), DARK, new THREE.Vector3(leafX - 0.72, 1.32, 0.24));
     const readerLamp = mesh('ServiceReaderLamp', new THREE.SphereGeometry(0.038, 10, 6), this.statusMaterial, new THREE.Vector3(leafX - 0.72, 1.40, 0.29));
     /*
@@ -943,6 +959,18 @@ export class WarehouseServiceDoor {
      * Ordered outboard-to-inboard, the pair now reads housing, bolt, gap, keeper: hardware
      * that is obviously part of the door.
      */
+    /*
+     * A backing rail, so four blocks read as one piece of hardware.
+     *
+     * Housings, bolts and keepers made each part legible on its own, and the capture showed
+     * the cost of that: six separate dark chips spaced across the header with clear cladding
+     * between them, on all three doors. Individually correct, collectively a rash.
+     *
+     * One thin rail behind them at the same height ties them into a single locking bar - the
+     * eye reads the line first and the fittings on it second, which is the order it should
+     * read in.
+     */
+    root.add(mesh('ServiceLockRail', new THREE.BoxGeometry(2.9, 0.08, 0.09), DARK, new THREE.Vector3(0, 2.25, WALL_FACE_Z - 0.06)));
     for (const side of [-1, 1]) {
       const root_x = side * 1.28;
       const shaft = new THREE.BoxGeometry(0.62, 0.13, 0.16);
@@ -1273,13 +1301,26 @@ export class WarehouseServiceDoor {
     gasCage.rotation.y = 0.18;
     root.add(gasCage);
     // PASS 5: one caged bulkhead, low and mean, instead of a second flood.
+    /*
+     * Down and out, off the junction box.
+     *
+     * Added last pass at (1.62, 2.25) without checking what was already on that patch of wall:
+     * the junction box sits at (1.52, 2.15) and is 0.3 by 0.4, so the two were inside each
+     * other by thirteen centimetres. Exactly the fault this pass exists to remove, introduced
+     * by the pass that removed it - which is the argument for the audit rather than against it.
+     *
+     * (2.05, 1.55) is clear of the box in both axes, clear of the notice plate at 1.2, and
+     * clear of the downpipe at 2.35 by seven centimetres.
+     */
+    const bulkX = 2.05;
+    const bulkY = 1.55;
     root.add(
-      mesh('ServiceBulkheadBody', new THREE.BoxGeometry(0.3, 0.3, 0.14), DARK, new THREE.Vector3(1.62, 2.25, WALL_FACE_Z + 0.07)),
-      mesh('ServiceBulkheadLens', new THREE.CylinderGeometry(0.11, 0.11, 0.06, 12), WALLPACK, new THREE.Vector3(1.62, 2.25, WALL_FACE_Z + 0.16))
+      mesh('ServiceBulkheadBody', new THREE.BoxGeometry(0.3, 0.3, 0.14), DARK, new THREE.Vector3(bulkX, bulkY, WALL_FACE_Z + 0.07)),
+      mesh('ServiceBulkheadLens', new THREE.CylinderGeometry(0.11, 0.11, 0.06, 12), WALLPACK, new THREE.Vector3(bulkX, bulkY, WALL_FACE_Z + 0.16))
     );
     root.getObjectByName('ServiceBulkheadLens')?.rotateX(Math.PI / 2);
     for (const bar of [-0.07, 0.07]) {
-      root.add(mesh('ServiceBulkheadCage', new THREE.BoxGeometry(0.02, 0.28, 0.02), FRAME, new THREE.Vector3(1.62 + bar, 2.25, WALL_FACE_Z + 0.2)));
+      root.add(mesh('ServiceBulkheadCage', new THREE.BoxGeometry(0.02, 0.28, 0.02), FRAME, new THREE.Vector3(bulkX + bar, bulkY, WALL_FACE_Z + 0.2)));
     }
     root.add(ENGINE.PointLightNode.create({
       name: 'ServicePlantBulkhead',
@@ -1287,7 +1328,7 @@ export class WarehouseServiceDoor {
       intensity: 2.6,
       distance: 5.5,
       decay: 1.7,
-      position: new THREE.Vector3(1.62, 2.2, WALL_FACE_Z + 0.5),
+      position: new THREE.Vector3(bulkX, bulkY, WALL_FACE_Z + 0.5),
     }));
   }
 
