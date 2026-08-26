@@ -412,6 +412,49 @@ const CSS = `
   text-shadow: 0 1px 2px rgba(3, 8, 6, 0.95);
 }
 .warehouse-hud__opticalhint:empty { display: none; }
+/*
+ * H // HELP, and the sheet it opens.
+ *
+ * The keymap used to live in two places at once: a strip under the stage restating every
+ * binding forever, and a legend saying which mouse button holds optical. Both were on screen
+ * permanently for information a player needs twice - once when they start and once when they
+ * forget - and permanent UI for occasional information is how a frame fills up with things
+ * nobody reads.
+ *
+ * One button, one key, one sheet. It replaces the tool row's slot while there is only one
+ * tool to choose between, which is not a choice.
+ */
+.warehouse-hud__help {
+  position: absolute;
+  left: 13px;
+  bottom: 92px;
+  padding: 5px 13px;
+  background: rgba(9, 20, 14, 0.82);
+  border: 1px solid rgba(127, 224, 138, 0.4);
+  color: #d8ffb0;
+  font: 11px/1.5 var(--omni-mono, ui-monospace, monospace);
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+.warehouse-hud__help:hover { border-color: #d8ffb0; }
+.warehouse-hud__helpsheet {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 18px 26px;
+  background: rgba(6, 14, 10, 0.93);
+  border: 1px solid rgba(127, 224, 138, 0.5);
+  color: #b9d6c1;
+  font: 12px/1.85 var(--omni-mono, ui-monospace, monospace);
+  letter-spacing: 1px;
+  white-space: pre;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+.warehouse-hud__helpsheet[data-shown=true] { opacity: 1; }
+.warehouse-hud__helpsheet b { color: #d8ffb0; font-weight: 400; }
 /* Held: the legend brightens to the console's live-value colour, and still does not become a
    button. State is carried by the tool plate above it, which IS one. */
 .warehouse-hud[data-optical=true] .warehouse-hud__opticalhint { color: #d8ffb0; }
@@ -440,6 +483,51 @@ const CSS = `
  * in the intrusion keymap, so in normal play the key that reaches the service cameras was
  * not written down anywhere on screen.
  */
+/**
+ * Every binding, in one place, shown on H.
+ *
+ * Ordered by when a player needs it rather than by keyboard layout: move, then look, then
+ * the two things that change what they are looking THROUGH, then the actions. TAB is called
+ * out as switching between the drone and the console because that is the one binding the
+ * game cannot be played without and the one nothing else on screen mentions.
+ *
+ * Authored markup, not player text - see the safe-UI rule. Nothing here comes from the
+ * network or from a save.
+ */
+/**
+ * The line between a notification and a readout, and it is already in the call sites.
+ *
+ * Every flash carries a duration, and whoever wrote them picked it honestly: consequential
+ * things - a refused dock, a seal mismatch, a tamper alarm, an objective - were given two to
+ * four seconds, and pure telemetry - ALTITUDE 2.4M, DRONE 07 // LIVE, the name of the camera
+ * just cut to - was given one. Eight of the ninety-seven sit below this line and every one of
+ * them restates something the HUD is already displaying at that moment.
+ *
+ * So the duration becomes the routing. At or above the threshold it is a notification and
+ * goes to the chat, where it can be re-read. Below it, it is a readout that has been said
+ * twice, and it is dropped rather than being given a second home.
+ */
+const FLASH_TO_CHAT_SECONDS = 1.5;
+
+const WAREHOUSE_HELP_SHEET = [
+  '<b>CONTROLS</b>',
+  '',
+  '  W A S D    move the drone',
+  '  Q / E      altitude, down and up',
+  '  MOUSE      look',
+  '',
+  '  TAB        switch between the drone and the console',
+  '  C          next camera feed, then back to the drone',
+  '',
+  '  LMB        scan what is in front of you',
+  '  RMB        hold optical',
+  '  F          grip a package, and dock it',
+  '  R          recover the drone',
+  '',
+  '  H          this sheet',
+  '  ESC        end the link',
+].join('\n');
+
 const WAREHOUSE_KEYMAP: readonly [string, string] = [
   'WASD move // QE altitude // TAB console // C cameras',
   'LMB scan // RMB optical // F grip / dock',
@@ -483,6 +571,8 @@ export class WarehouseHUD {
   private skipButton: HTMLButtonElement;
   private ops: WarehouseOpsPanel;
   private opticalHint: HTMLElement;
+  private helpButton: HTMLButtonElement;
+  private helpSheet: HTMLElement;
   private verdict: HTMLDivElement;
   private opticalAim = false;
   private messageTimer = 0;
@@ -694,6 +784,24 @@ export class WarehouseHUD {
      * the frame handed back. Nothing is appended to the shell directly any more, which is
      * what guarantees no overlay can cross into the panel again.
      */
+    this.helpButton = document.createElement('button');
+    this.helpButton.className = 'warehouse-hud__help';
+    this.helpButton.type = 'button';
+    this.helpButton.textContent = 'H // HELP';
+    this.helpButton.addEventListener('click', () => this.toggleHelp());
+    this.helpSheet = document.createElement('div');
+    this.helpSheet.className = 'warehouse-hud__helpsheet';
+    this.helpSheet.dataset.shown = 'false';
+    this.helpSheet.innerHTML = WAREHOUSE_HELP_SHEET;
+
+    /*
+     * The permanent keymap strip and the optical legend are no longer appended.
+     *
+     * They are still BUILT - setKeymap still writes to the strip, and the optical hint still
+     * tracks the mode - so nothing that talks to them had to change, and either can be put
+     * back by adding it to this list. They simply are not on screen: the help sheet says the
+     * same things on demand, and a frame is worth more than a legend that is read twice.
+     */
     frame.stage.append(
       this.speedLines,
       optical,
@@ -704,8 +812,8 @@ export class WarehouseHUD {
       this.message,
       this.tools,
       this.doors,
-      this.opticalHint,
-      this.controls,
+      this.helpButton,
+      this.helpSheet,
       this.feed
     );
     frame.column.appendChild(this.ops.root);
@@ -949,7 +1057,22 @@ export class WarehouseHUD {
     this.ops.setRecords(records);
   }
 
+  /** Show the sheet, or hide it. Wired to the H key and to the button that names it. */
+  public toggleHelp(force?: boolean): void {
+    const shown = force ?? this.helpSheet.dataset.shown !== 'true';
+    this.helpSheet.dataset.shown = String(shown);
+  }
+
+  /*
+   * A one-item selector is not a selector.
+   *
+   * Optical is the only tool until the later ones unlock, so until then this row was a single
+   * button that switched to the mode already active. It hides itself in that case and comes
+   * back the moment there is an actual choice to make - which is also the moment a player has
+   * a reason to look at it.
+   */
   public setTools(available: readonly WarehouseTool[], active: WarehouseTool): void {
+    this.tools.hidden = available.length <= 1;
     this.tools.replaceChildren();
     for (const tool of available) {
       const button = document.createElement('button');
@@ -961,10 +1084,21 @@ export class WarehouseHUD {
     }
   }
 
+  /**
+   * Notifications go to the CHAT now, not across the picture.
+   *
+   * These fire on rejected actions, comparisons, releases and dock results - the things a
+   * player most wants to re-read - and a banner that covers the stage for two seconds and
+   * then erases itself is the worst possible home for them. Reported as flashing over the
+   * game; the fix is not to make it subtler but to put it where the record already lives,
+   * beside the observations and hints the player clicks for exactly the same reason.
+   *
+   * The signature is unchanged so all the call sites keep working, and `seconds` is accepted
+   * and ignored: the chat does not expire.
+   */
   public flash(text: string, seconds = 2.4): void {
-    this.message.textContent = text;
-    this.message.classList.add('warehouse-hud__message--shown');
-    this.messageTimer = seconds;
+    if (seconds < FLASH_TO_CHAT_SECONDS) return;
+    this.ops.appendSystem('SYSTEM', text);
   }
 
   public setSpeedLines(active: boolean, intensity = 1): void {

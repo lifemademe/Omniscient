@@ -177,6 +177,7 @@ class WarehouseInput extends ENGINE.BaseInputHandler {
       case 'KeyC': this.rig.cycleDoor(1); return true;
       case 'KeyF': this.rig.toggleGrip(); return true;
       case 'KeyR': this.rig.recover(); return true;
+      case 'KeyH': this.rig.toggleHelp(); return true;
       case 'KeyQ': this.rig.changeAltitude(-1); return true;
       case 'KeyE': this.rig.changeAltitude(1); return true;
       case 'Digit1': this.rig.activateNumber(0); return true;
@@ -1744,6 +1745,11 @@ export class WarehouseRig extends ENGINE.SceneNode {
    * simple: TAB always means "the console, or away from it". Getting back to the drone from
    * a camera is C's job, because C is the key that put you there.
    */
+  /** H, and the button that names it. See WarehouseHUD.toggleHelp. */
+  public toggleHelp(): void {
+    this.hud?.toggleHelp();
+  }
+
   public toggleConsole(): void {
     if (this.isCinematicActive()) return;
     this.setOpticalAim(false);
