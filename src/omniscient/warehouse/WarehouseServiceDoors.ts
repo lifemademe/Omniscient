@@ -609,8 +609,16 @@ export class WarehouseServiceDoor {
        * instead of vanishing up behind the canopy. Across the wall it now reads notice plate,
        * then that assembly, then pipe - three stops with air between them.
        */
-      mesh('ServiceJunctionBox', new THREE.BoxGeometry(0.3, 0.4, 0.16), DARK, new THREE.Vector3(1.68, 2.15, WALL_FACE_Z + 0.09)),
-      mesh('ServiceConduit', new THREE.CylinderGeometry(0.045, 0.045, 0.66, 6), PIPE, new THREE.Vector3(1.68, 2.66, WALL_FACE_Z + 0.08)),
+      /*
+       * The box and its trunking sit BESIDE the light, not under it.
+       *
+       * Centred, the conduit came down out of the middle of the hood and read as the stem of
+       * a lamp standard - the back-plate fixed the fixture and the rod undid it. Sixteen
+       * centimetres to the side is enough that the run arrives at the plate's edge, which is
+       * where a real one is glanded, and the lamp stops appearing to stand on it.
+       */
+      mesh('ServiceJunctionBox', new THREE.BoxGeometry(0.3, 0.4, 0.16), DARK, new THREE.Vector3(1.52, 2.15, WALL_FACE_Z + 0.09)),
+      mesh('ServiceConduit', new THREE.CylinderGeometry(0.045, 0.045, 0.66, 6), PIPE, new THREE.Vector3(1.52, 2.66, WALL_FACE_Z + 0.08)),
       mesh('ServiceNoticePlate', new THREE.BoxGeometry(0.44, 0.6, 0.03), PLATE, new THREE.Vector3(1.2, 1.78, 0.23)),
       mesh('ServiceNoticeBand', new THREE.BoxGeometry(0.44, 0.11, 0.035), FRAME, new THREE.Vector3(1.2, 2.0, 0.235))
     );
@@ -709,9 +717,23 @@ export class WarehouseServiceDoor {
      * widths apart and reading as one confused mass. Depth separation is not separation when
      * the objects overlap in projection; they have to be apart ACROSS the frame as well.
      */
-    for (const [index, tier] of [0, 1].entries()) {
-      root.add(mesh('ServiceCrateStack', new THREE.BoxGeometry(0.66, 0.55, 0.6), TIMBER,
-        new THREE.Vector3(-2.6 + index * 0.07, 0.28 + tier * 0.57, 1.6 + index * 0.05)));
+    /*
+     * Two crates, and they have to look like two.
+     *
+     * Identical boxes stacked square with a 7cm offset merged into one tall carton at six
+     * metres - the seam between them fell on a face that was lit the same on both sides, so
+     * there was nothing to read it by. Different footprints and a few degrees of yaw each way
+     * put a corner and a shadow line between them, which is all a stack needs.
+     */
+    const crates: Array<[number, number, number, number, number]> = [
+      [0.72, 0.58, 0.64, 0.26, -0.14],
+      [0.58, 0.5, 0.54, 0.11, 0.21],
+    ];
+    for (const [index, [width, height, depth, turn, shift]] of crates.entries()) {
+      const crate = mesh(`ServiceCrate-${index}`, new THREE.BoxGeometry(width, height, depth), TIMBER,
+        new THREE.Vector3(-2.6 + shift * 0.4, index === 0 ? 0.29 : 0.83, 1.6 + index * 0.12));
+      crate.rotation.y = turn;
+      root.add(crate);
     }
 
     const puddle = mesh('ServiceApronPuddle', new THREE.PlaneGeometry(1.5, 1.0), WET, new THREE.Vector3(0.55, 0.021, 2.35));
@@ -797,6 +819,15 @@ export class WarehouseServiceDoor {
     }));
 
     if (layout.id !== 'service-b') {
+      /*
+       * Left at 1.8, and that is a decision rather than an omission.
+       *
+       * Bringing them in to 1.35 was tried, to get the left one off the crate stack it sits
+       * near on door A. Measured, it made things worse in the way that matters: the RIGHT
+       * bollard landed at screen x 0.389 on A against a visitor at 0.384 - a post through the
+       * one person the camera exists to show. The crates are two objects of different sizes at
+       * different angles now, so the post beside them reads as a post beside them.
+       */
       for (const x of [-1.8, 1.8]) {
         root.add(mesh('ServiceBollard', new THREE.CylinderGeometry(0.12, 0.12, 1.05, 10), FRAME, new THREE.Vector3(x, 0.52, 2.75)));
       }

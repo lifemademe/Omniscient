@@ -39,7 +39,7 @@ const PROPS: Array<[string, THREE.Vector3]> = [
   ['door head', new THREE.Vector3(0, 2.3, 0.2)],
   ['reader', new THREE.Vector3(0.95, 1.15, 0.24)],
   ['notice plate', new THREE.Vector3(1.2, 1.78, 0.23)],
-  ['junction box', new THREE.Vector3(1.68, 1.62, 0.435)],
+  ['junction box', new THREE.Vector3(1.52, 2.15, 0.435)],
   ['downpipe mid', new THREE.Vector3(2.35, 1.75, 0.455)],
   ['downpipe top', new THREE.Vector3(2.35, 3.45, 0.455)],
   ['wall pack', new THREE.Vector3(1.68, 3.0, 0.515)],
