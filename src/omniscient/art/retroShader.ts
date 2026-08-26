@@ -256,7 +256,18 @@ void main() {
 }
 `;
 
+/**
+ * How many surfaces can be spared the pixel grid at once.
+ *
+ * Six main-menu plates and their six painted labels is twelve; sixteen leaves room for a
+ * seventh module without a shader edit. It is a compile-time constant because GLSL ES 1.0
+ * needs a constant loop bound and a constant-index-expression into a uniform array, and the
+ * cost of the headroom is four unused vec2 uniforms, which is nothing.
+ */
+export const SHARP_MAX = 16;
+
 export const FRAGMENT = /* glsl */ `
+#define SHARP_MAX ${SHARP_MAX}
 uniform sampler2D tDiffuse;
 uniform vec2 uResolution;
 uniform float uTime;
@@ -273,6 +284,8 @@ uniform vec2 uScreenB;
 uniform vec2 uScreenC;
 uniform vec2 uScreenD;
 uniform float uScreenOn;
+uniform vec2 uSharp[SHARP_MAX * 4];
+uniform int uSharpCount;
 uniform float uCurve;
 uniform float uAberration;
 uniform float uScanline;
@@ -298,6 +311,22 @@ float sideOf(vec2 a, vec2 b, vec2 p) {
 }
 
 /**
+ * Is p inside the convex quad abcd?
+ *
+ * Consistent sign against all four edges. Accepts either winding, because a quad's corner
+ * order flips as the camera crosses its plane and a test that only handled one would silently
+ * invert - exempting the whole room and gridding the one thing it was asked to spare.
+ */
+bool inQuad(vec2 a, vec2 b, vec2 c, vec2 d, vec2 p) {
+  float s0 = sideOf(a, b, p);
+  float s1 = sideOf(b, c, p);
+  float s2 = sideOf(c, d, p);
+  float s3 = sideOf(d, a, p);
+  return (s0 >= 0.0 && s1 >= 0.0 && s2 >= 0.0 && s3 >= 0.0)
+      || (s0 <= 0.0 && s1 <= 0.0 && s2 <= 0.0 && s3 <= 0.0);
+}
+
+/**
  * Is this fragment on the tube's face?
  *
  * Consistent sign against all four edges. Accepts either winding, because the quad's corner
@@ -305,12 +334,29 @@ float sideOf(vec2 a, vec2 b, vec2 p) {
  * would silently invert - exempting the whole room and sparing the screen.
  */
 bool onScreen(vec2 p) {
-  float s0 = sideOf(uScreenA, uScreenB, p);
-  float s1 = sideOf(uScreenB, uScreenC, p);
-  float s2 = sideOf(uScreenC, uScreenD, p);
-  float s3 = sideOf(uScreenD, uScreenA, p);
-  return (s0 >= 0.0 && s1 >= 0.0 && s2 >= 0.0 && s3 >= 0.0)
-      || (s0 <= 0.0 && s1 <= 0.0 && s2 <= 0.0 && s3 <= 0.0);
+  return inQuad(uScreenA, uScreenB, uScreenC, uScreenD, p);
+}
+
+/**
+ * Is this fragment on a surface the caller has asked to keep its own resolution?
+ *
+ * Same test, several quads, and a different reason. The tube above is exempt because it IS a
+ * raster display and a second grid over it beats against the first. These are exempt because
+ * somebody decided a particular surface has to stay readable - see setSharpQuads for the one
+ * caller and the argument against it, which is real and was overruled deliberately.
+ *
+ * The loop bound is the constant SHARP_MAX with a uniform early-out, because GLSL ES 1.0 will
+ * not accept a loop whose limit is a uniform, and every index into uSharp is an expression in
+ * the loop counter, which is the only kind of index a uniform array accepts there.
+ */
+bool onSharp(vec2 p) {
+  for (int i = 0; i < SHARP_MAX; i++) {
+    if (i >= uSharpCount) break;
+    if (inQuad(uSharp[i * 4], uSharp[i * 4 + 1], uSharp[i * 4 + 2], uSharp[i * 4 + 3], p)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 void main() {
@@ -352,7 +398,9 @@ void main() {
    * picture IS the screen, the screen's resolution is the picture's.
    */
   vec2 pv = vUv;
-  if (uPixel > 1.0 && !(uScreenOn > 0.5 && onScreen(vUv * 2.0 - 1.0))) {
+  vec2 ndc = vUv * 2.0 - 1.0;
+  bool exempt = (uScreenOn > 0.5 && onScreen(ndc)) || (uSharpCount > 0 && onSharp(ndc));
+  if (uPixel > 1.0 && !exempt) {
     vec2 grid = uResolution / uPixel;
     pv = (floor(vUv * grid) + 0.5) / grid;
   }

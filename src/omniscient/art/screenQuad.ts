@@ -42,11 +42,14 @@ const corners = [
  * room and grid the screen. Refusing is the only safe answer, and the case is real - the
  * camera flies past the tube on its way home from a call.
  *
- * The returned vectors are reused between calls. Copy them if they need to outlive the frame.
+ * The returned vectors are reused between calls unless `out` is given. Copy them, or pass an
+ * `out`, if they need to outlive the frame - which is exactly what projecting SEVERAL quads in
+ * one frame needs, since the second call would otherwise overwrite the first's answer.
  */
 export function projectScreenQuad(
   mesh: THREE.Object3D | null | undefined,
-  camera: THREE.Camera | null | undefined
+  camera: THREE.Camera | null | undefined,
+  out?: THREE.Vector2[]
 ): readonly THREE.Vector2[] | null {
   if (!mesh || !camera || mesh.visible === false) return null;
 
@@ -83,8 +86,8 @@ export function projectScreenQuad(
     local.set(xyz[0], xyz[1], xyz[2]).applyMatrix4(mesh.matrixWorld).project(camera);
     // Behind the lens. See the note above - an inverted quad is worse than no quad.
     if (local.z > 1) return null;
-    corners[i].set(local.x, local.y);
+    (out ?? corners)[i].set(local.x, local.y);
   }
 
-  return corners;
+  return out ?? corners;
 }

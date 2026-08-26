@@ -173,6 +173,15 @@ interface MenuModule {
   labelLit: THREE.MeshBasicMaterial;
   labelIdle: THREE.MeshBasicMaterial;
   labelMesh: ENGINE.MeshNode;
+  /**
+   * The painted face itself, kept rather than added and forgotten.
+   *
+   * The only thing that reads it is the rig, which projects it every frame so the pixel pass
+   * can spare it - see RetroPass.setSharpQuads. Held here because a plate that is hovered
+   * pushes toward the player, so where it is on screen is a per-frame fact and the mesh is
+   * the only thing that knows it.
+   */
+  plateMesh: ENGINE.MeshNode;
   socketUnavailableCore: ENGINE.MeshNode;
   socketUnavailableGlow: ENGINE.MeshNode;
   /** Where the socket sits ON the plate. Add the plate's position to place it. */
@@ -238,7 +247,8 @@ export class MainMenu {
     });
     node.setName(`Module-${spec.id}`);
 
-    node.add(decorMesh('Plate', build.plate, MAT.plastic));
+    const plateMesh = decorMesh('Plate', build.plate, MAT.plastic);
+    node.add(plateMesh);
 
     for (const part of build.details) {
       node.add(decorMesh('Detail', part.geometry, MAT[part.material]));
@@ -280,6 +290,7 @@ export class MainMenu {
       labelIdle,
       labelLit,
       labelMesh,
+      plateMesh,
       socketUnavailableCore,
       socketUnavailableGlow,
       /**
@@ -300,6 +311,24 @@ export class MainMenu {
   }
 
   /** Wire up hover and click. The picker is owned by the rig and shared with the globe. */
+  /**
+   * The flat faces the pixel grid is asked to leave alone, plate and painted label per module.
+   *
+   * Both, because they are not the same rectangle: the label is drawn on a plane that overhangs
+   * its plate by about two centimetres and stands six in front of it, so the plate's silhouette
+   * does not contain it and a plate-only exemption would grid the ends of the longest words -
+   * which is the two that most needed the help. Twelve quads for six modules.
+   *
+   * Order is not meaningful; the shader tests them all.
+   */
+  public sharpFaces(): ENGINE.MeshNode[] {
+    const faces: ENGINE.MeshNode[] = [];
+    for (const module of this.modules.values()) {
+      faces.push(module.plateMesh, module.labelMesh);
+    }
+    return faces;
+  }
+
   /**
    * Be told which plate is under the pointer, or null for none and for a disabled one.
    *

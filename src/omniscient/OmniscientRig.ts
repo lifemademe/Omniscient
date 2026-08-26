@@ -38,7 +38,7 @@ import {
   saveGame,
 } from './session/persistence.js';
 import { installCursor, setCursorVisible } from './art/cursor.js';
-import { getRetroLookName, installRetro, retroAcquire, setRetroLook, setRetroScreenQuad } from './art/retro.js';
+import { getRetroLookName, installRetro, retroAcquire, setRetroLook, setRetroScreenQuad, setRetroSharpQuads } from './art/retro.js';
 import { projectScreenQuad } from './art/screenQuad.js';
 import { setRoomTone, stopRoomTone } from './audio/RoomTone.js';
 import { showBoot } from './link/BootScreen.js';
@@ -3836,6 +3836,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * name and an overlay on the wall was not.
    */
   private menuLabel: string | null = null;
+  /**
+   * Reusable corner buffers for the menu plates' screen quads, one per face.
+   *
+   * Allocated on first use and never again: this is projected every frame for the whole time
+   * the menu is up, and twelve fresh Vector2s a frame is twelve fresh Vector2s a frame.
+   */
+  private readonly sharpQuadPool: THREE.Vector2[][] = [];
 
   /**
    * The CRT's face, once the terminal model has been dressed.
@@ -4512,6 +4519,38 @@ export class OmniscientRig extends ENGINE.SceneNode {
         : projectScreenQuad(this.screenMesh, this.camera?.getCamera());
     setRetroScreenQuad(protectedScreen);
     setPaintProtectedQuad(protectedScreen);
+
+    /*
+     * The main menu's plates keep their own resolution.
+     *
+     * Only in the menu, and only while it is on screen: this is a per-frame projection of six
+     * physical objects that move (a hovered plate pushes 4.5cm toward the player), so it cannot
+     * be set once at build time. Everywhere else the list is cleared, or the exemption would
+     * outlive the plates and leave twelve sharp holes in whatever the camera looked at next.
+     *
+     * `projectScreenQuad` refuses a quad with a corner behind the lens rather than guessing,
+     * and an inverted quad here would exempt most of the room - so a refusal drops that plate
+     * from the list and the rest keep working, which is the right failure.
+     *
+     * See RetroPass.setSharpQuads for what this is for and for the argument it overrules.
+     */
+    if (this.phase === Phase.Menu && this.menu) {
+      const camera = this.camera?.getCamera();
+      const quads: THREE.Vector2[][] = [];
+      const faces = this.menu.sharpFaces();
+      for (let i = 0; i < faces.length; i++) {
+        // One buffer per slot, allocated once and reused - this runs every frame.
+        let slot = this.sharpQuadPool[i];
+        if (!slot) {
+          slot = [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()];
+          this.sharpQuadPool[i] = slot;
+        }
+        if (projectScreenQuad(faces[i], camera, slot)) quads.push(slot);
+      }
+      setRetroSharpQuads(quads);
+    } else {
+      setRetroSharpQuads(null);
+    }
 
 
     this.globeScreen?.update(deltaTime);

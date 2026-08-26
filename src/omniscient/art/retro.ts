@@ -83,7 +83,7 @@ import type { ComposerPass } from './composerPass.js';
  * can import them - see retroShader.ts. Re-exported here because every caller in the game
  * has always got them from this module and there is no reason to move that.
  */
-import { FRAGMENT, RETRO_LOOKS, VERTEX } from './retroShader.js';
+import { FRAGMENT, RETRO_LOOKS, SHARP_MAX, VERTEX } from './retroShader.js';
 import {
   getAccessibilityPreferences,
   onAccessibilityPreferencesChanged,
@@ -140,6 +140,12 @@ class RetroPass implements ComposerPass {
         uScreenC: { value: new THREE.Vector2() },
         uScreenD: { value: new THREE.Vector2() },
         uScreenOn: { value: 0 },
+        /*
+         * Flat, not an array of arrays: THREE uploads a vec2[] from one contiguous list, and
+         * four entries per quad indexed as i*4+n is what the shader's loop reads.
+         */
+        uSharp: { value: Array.from({ length: SHARP_MAX * 4 }, () => new THREE.Vector2()) },
+        uSharpCount: { value: 0 },
         uCurve: { value: this.target.curve },
         uAberration: { value: this.target.aberration },
         uScanline: { value: this.target.scanline },
@@ -252,6 +258,45 @@ class RetroPass implements ComposerPass {
    */
   public getDepthTexture(): THREE.DepthTexture | null {
     return null;
+  }
+
+  /**
+   * Surfaces to spare the pixel grid this frame, each as four NDC corners in order.
+   *
+   * ## The argument against this, which is real
+   *
+   * crt/menuLabel.ts refused exactly this and gave the reason: "a menu plate that stays sharp
+   * while the desk it hangs over goes coarse is an object that has left the room", and this
+   * game's opening move is eight seconds of boot screen proving the console is a thing standing
+   * in a place. The workaround built instead was the tube naming whichever plate you hover.
+   *
+   * It is overruled deliberately. The plate labels are Courier antialiased into a texture and
+   * the grid runs at 2.4, which that file's own capture pass put between "chunky and readable"
+   * at 2 and "mush" at 3 - so the first screen of the game asks the player to read six words
+   * that are sitting on the wrong side of legible. A stylistic argument does not outrank that.
+   *
+   * The plates and their painted labels go in together, so what stays sharp is a whole object
+   * rather than a rectangle of text floating on a coarse one. The label overhangs its plate by
+   * about two centimetres and stands six in front of it, so it needs its own quad - the plate's
+   * silhouette does not contain it.
+   *
+   * Anything past SHARP_MAX is dropped, and dropped loudly: silence here would look like the
+   * grid coming back for one plate, which reads as a rendering fault rather than as a limit.
+   */
+  public setSharpQuads(quads: readonly (readonly THREE.Vector2[])[] | null): void {
+    const u = this.material.uniforms;
+    const slots = u.uSharp.value as THREE.Vector2[];
+    let n = 0;
+    for (const quad of quads ?? []) {
+      if (quad.length !== 4) continue;
+      if (n >= SHARP_MAX) {
+        console.warn(`[retro] more than ${SHARP_MAX} sharp quads; the rest keep the grid`);
+        break;
+      }
+      for (let i = 0; i < 4; i++) slots[n * 4 + i].copy(quad[i]);
+      n += 1;
+    }
+    u.uSharpCount.value = n;
   }
 
   /** Four NDC corners in order, or null to grid the whole frame. */
@@ -514,4 +559,15 @@ export function retroAcquire(seconds = 0.55): void {
  */
 export function setRetroScreenQuad(corners: readonly THREE.Vector2[] | null): void {
   effect?.pass.setScreenQuad(corners);
+}
+
+/**
+ * Tell the pass which surfaces keep their own resolution this frame.
+ *
+ * Per-frame like the screen quad and for the same reason: these are physical objects and the
+ * camera moves, and the main menu's plates push toward the player when they are hovered. See
+ * RetroPass.setSharpQuads for what this is for and for the argument it overrules.
+ */
+export function setRetroSharpQuads(quads: readonly (readonly THREE.Vector2[])[] | null): void {
+  effect?.pass.setSharpQuads(quads);
 }
