@@ -42,6 +42,13 @@ const CANDIDATES: Array<[string, number, number, number, number, number]> = [
   ['StorageWestSecurityGate-Rear', -12.2, 19.4, -14.15, 0.02, 4.4],
   ['StorageEastSecurityGate-Rear', 5.45, 15.1, -14.15, 0.02, 4.4],
   ['SortationSecurityGate-Rear', 19.75, 7.3, -14.25, 0.02, 4.4],
+  /*
+   * The vertical buffers. Their z band is -12.78..-11.53, which is inside the transfer
+   * curve's run, and their first shelf carton hangs from y 0.78 - right through a belt deck
+   * that tops out at 0.84. Sampled at the near edge, where the belt is furthest east.
+   */
+  ['VerticalBuffer-1', 18.65, 1.7, -11.53, 0.01, 4.31],
+  ['VerticalBuffer-2', 21.85, 1.7, -11.53, 0.01, 4.31],
 ];
 
 /** The belt deck sits about 0.545 to 0.84; anything spanning that at the same x collides. */

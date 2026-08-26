@@ -370,7 +370,20 @@ export class WarehouseAutomation {
   }
 
   private buildBufferTowers(): void {
-    for (const [index, x] of [17.35, 21.85].entries()) {
+    /*
+     * The west tower stood IN the transfer belt.
+     *
+     * At x 17.35 it spanned 16.50..18.20, and the transfer curve passes its z band at
+     * 15.50..17.48 - so an upright ran floor-to-crown through the deck and the bottom shelf's
+     * carton hung from y 0.78 into a belt topping out at 0.84. That is the crate reported as
+     * passing through the conveyor; measured by `scripts/dev/probe-clip.ts` at 0.98m of
+     * overlap.
+     *
+     * Out to 18.65, which clears the belt by nearly a metre. It stays off the sortation lanes
+     * for a different reason: their runs are z -10.5 to 9.5 and both towers sit at -12.15,
+     * behind the near end of every lane.
+     */
+    for (const [index, x] of [18.65, 21.85].entries()) {
       const tower = ENGINE.SceneNode.create({ name: `VerticalBuffer-${index + 1}`, position: new THREE.Vector3(x, 0, -12.15) });
       tower.add(
         mesh('BufferBack', new THREE.BoxGeometry(1.52, 4.2, 0.16), CHARCOAL, new THREE.Vector3(0, 2.2, -0.5)),
