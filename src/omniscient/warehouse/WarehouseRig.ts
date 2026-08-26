@@ -81,6 +81,35 @@ const ALTITUDES = [1.8, 3.2, 6.8] as const;
  * over the racking is not a chore.
  */
 const DRONE_CLIMB_RATE = 1.5;
+
+/**
+ * ## A dev tour, because looking at a thing should not cost a build
+ *
+ * Verifying a piece of art in this mission means getting the drone to it, and there is no way
+ * to do that from outside the game: synthetic keystrokes do not reach the window (measured -
+ * C and H each moved 0.16% of pixels, which is noise), and overriding the spawn does not hold
+ * because the opening sweep re-aims the camera when it hands control back. Every look has cost
+ * an edit, a build and a capture, and three of them produced the wrong view.
+ *
+ * So: a list of named viewpoints. When it is not empty the rig parks itself at each in turn
+ * for DEV_TOUR_HOLD seconds, which means one build and one recording answer as many questions
+ * as there are entries. It runs after the handoff and overrides the stick, so nothing the
+ * sweep or the player does can move it.
+ *
+ * Empty in every build that ships, and gated on `isPublishedGame` besides. Add entries, look,
+ * empty it again - the entries themselves are throwaway, the mechanism is not.
+ *
+ * Yaw convention, since it has been guessed wrong twice: forward is (sin y, 0, cos y). Zero
+ * looks toward +z, PI toward -z, PI/2 toward +x, -PI/2 toward -x.
+ */
+interface DevViewpoint {
+  readonly name: string;
+  readonly position: THREE.Vector3;
+  readonly yaw: number;
+  readonly pitch: number;
+}
+const DEV_TOUR: readonly DevViewpoint[] = [];
+const DEV_TOUR_HOLD = 2.5;
 /**
  * Where the rotor wash lives and when it runs.
  *
@@ -1305,6 +1334,39 @@ export class WarehouseRig extends ENGINE.SceneNode {
    * already dispersed rather than on one at full strength. The 0.3m of hysteresis on the way
    * back off is there so a drone held exactly at the threshold does not stutter.
    */
+  /**
+   * Hold each DEV_TOUR viewpoint in turn. No-op in a shipping build and whenever the list is
+   * empty, which is always except while somebody is looking at something.
+   */
+  private devTourClock = 0;
+
+  private updateDevTour(deltaTime: number): void {
+    if (!DEV_TOUR.length || ENGINE.isPublishedGame() || this.handoff > 0) return;
+    /*
+     * Its own clock, not `elapsed`.
+     *
+     * The first version indexed off mission time, and the opening sweep owns the first 4.8
+     * seconds of that - so by the time the tour could move anything it was already two stops
+     * in, and the entry at the top of the list was never shown. Counting from the first frame
+     * the tour actually runs makes every entry get its full hold.
+     */
+    /*
+     * deltaTime, not a fixed 1/60.
+     *
+     * The first version assumed sixty ticks a second and this window runs at about thirty, so
+     * every hold lasted twice as long as it said and a four-stop tour showed two of them in
+     * the time it was recorded for. A wall-clock hold has to be measured in wall clock.
+     */
+    this.devTourClock += deltaTime;
+    const index = Math.min(DEV_TOUR.length - 1, Math.floor(this.devTourClock / DEV_TOUR_HOLD));
+    const view = DEV_TOUR[index];
+    this.drone.position.copy(view.position);
+    this.droneVelocity.set(0, 0, 0);
+    this.altitude = view.position.y;
+    this.yaw = view.yaw;
+    this.pitch = view.pitch;
+  }
+
   private updateRotorWash(): void {
     const wash = this.droneWash;
     if (!wash) return;
@@ -4305,6 +4367,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (this.droneStatusMaterial) {
       this.droneStatusMaterial.emissiveIntensity = 1.7 + Math.sin(this.elapsed * 4.2) * 0.45;
     }
+    this.updateDevTour(deltaTime);
     this.updateRotorWash();
     this.ropeAnchor.copy(this.drone.position).add(new THREE.Vector3(0, -0.48, 0));
     this.cargoRope.tick(deltaTime, this.ropeAnchor);
