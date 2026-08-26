@@ -5,12 +5,12 @@ import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
 import { WarehouseYard } from './WarehouseYard.js';
 import { WAREHOUSE_SERVICE_DOOR_FRAME } from './WarehouseServiceDoors.js';
 
-const LOWER_WALL = new THREE.MeshStandardMaterial({ color: '#3b4744', roughness: 0.9, metalness: 0.08 });
-const UPPER_WALL = new THREE.MeshStandardMaterial({ color: '#263331', roughness: 0.82, metalness: 0.16 });
-const FRAME = new THREE.MeshStandardMaterial({ color: '#172321', roughness: 0.58, metalness: 0.72 });
-const WALL_RIB = new THREE.MeshStandardMaterial({ color: '#53635f', roughness: 0.62, metalness: 0.5 });
+const LOWER_WALL = new THREE.MeshStandardMaterial({ color: '#2e3835', roughness: 0.9, metalness: 0.08 });
+const UPPER_WALL = new THREE.MeshStandardMaterial({ color: '#1e2927', roughness: 0.82, metalness: 0.16 });
+const FRAME = new THREE.MeshStandardMaterial({ color: '#121c1a', roughness: 0.58, metalness: 0.72 });
+const WALL_RIB = new THREE.MeshStandardMaterial({ color: '#3c4845', roughness: 0.62, metalness: 0.5 });
 const CEILING = new THREE.MeshStandardMaterial({
-  color: '#35423f',
+  color: '#242d2b',
   emissive: '#101816',
   emissiveIntensity: 0.2,
   roughness: 0.84,

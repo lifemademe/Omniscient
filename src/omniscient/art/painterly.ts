@@ -103,6 +103,27 @@ export const PAINT_BANDING_LOOKS = {
   warehouseCelSoft: { bands: 4, softness: 0.5 },
 } as const satisfies Record<string, Required<BandingOptions>>;
 
+/**
+ * Switch the world-height gradient on over one volume, or off everywhere.
+ *
+ * `centreZ` and `radius` name the volume; see uPaintZoneZ for why this is gated by position
+ * rather than simply switched on. Passing a tint of zero disables it globally regardless of
+ * the zone, which is what a scene teardown should do.
+ */
+export function setPaintHeightGradient(
+  tint: number,
+  centreZ = 0,
+  radius = 0,
+  low = -0.6,
+  high = 4.5
+): void {
+  PAINT_UNIFORMS.uPaintHeightTint.value = tint;
+  PAINT_UNIFORMS.uPaintZoneZ.value = centreZ;
+  PAINT_UNIFORMS.uPaintZoneRadius.value = radius;
+  PAINT_UNIFORMS.uPaintHeightLow.value = low;
+  PAINT_UNIFORMS.uPaintHeightHigh.value = high;
+}
+
 export type PaintBandingLookName = keyof typeof PAINT_BANDING_LOOKS;
 
 /**
@@ -146,6 +167,37 @@ export const PAINT_UNIFORMS = {
    * and the metric had been wrong rather than the change. Diff whole frames for this.
    */
   uPaintSoft: { value: 0.32 },
+  /*
+   * The height gradient: how much darker the base of the world is than the top of it.
+   *
+   * This is the "gradient as texture" the low-poly reference frames use, and it does a job
+   * that lighting cannot. A toon ramp quantises the LIGHT on a surface, so two surfaces at
+   * different heights lit by the same lamps land in the same band and read as the same
+   * thing - which is why five levels of racking loaded with the same cartons came out as one
+   * mass. Tinting the ALBEDO by world height separates them before the ramp ever sees them,
+   * so each course of the rack sits in a different value band and the eye can count them.
+   *
+   * It also does the other thing flat shading is bad at: contact. An upright that meets the
+   * floor at the same value it has three metres up is a post standing in a room; one that
+   * darkens toward its base is a post bolted to the floor.
+   *
+   * Zero by default, so no scene gets this unless it asks.
+   */
+  uPaintHeightTint: { value: 0 },
+  uPaintHeightLow: { value: -0.6 },
+  uPaintHeightHigh: { value: 4.5 },
+  /*
+   * And it is confined to one volume.
+   *
+   * These uniforms are shared by every banded material in the game - that is the whole point
+   * of them, one write and the entire world re-bands - which means a height tint switched on
+   * for the warehouse would also darken the floor of the workstation and every diorama. The
+   * warehouse sits about 1200 units down z from everything else, so the treatment is gated
+   * on being inside a radius of a named centre. WarehouseCelStyle sets it from its own root's
+   * world position, so moving the mission does not silently move the effect off it.
+   */
+  uPaintZoneZ: { value: 0 },
+  uPaintZoneRadius: { value: 0 },
 };
 
 interface PaintBandingState {
@@ -205,6 +257,48 @@ export function applyPaintBanding(
     originalOnBeforeCompile.call(material, shader, renderer);
     shader.uniforms.uPaintBands = PAINT_UNIFORMS.uPaintBands;
     shader.uniforms.uPaintSoft = PAINT_UNIFORMS.uPaintSoft;
+    shader.uniforms.uPaintHeightTint = PAINT_UNIFORMS.uPaintHeightTint;
+    shader.uniforms.uPaintHeightLow = PAINT_UNIFORMS.uPaintHeightLow;
+    shader.uniforms.uPaintHeightHigh = PAINT_UNIFORMS.uPaintHeightHigh;
+    shader.uniforms.uPaintZoneZ = PAINT_UNIFORMS.uPaintZoneZ;
+    shader.uniforms.uPaintZoneRadius = PAINT_UNIFORMS.uPaintZoneRadius;
+
+    /*
+     * World position, carried by a varying of our own.
+     *
+     * three only defines `worldPosition` in the vertex shader under a set of conditions
+     * (envmap, shadowmap, transmission) that are none of this project's business to depend
+     * on - a material that happened not to meet them would silently lose the gradient. One
+     * varying costs nothing and cannot be switched off by someone else's feature flags.
+     */
+    shader.vertexShader = shader.vertexShader.replace(
+      '#include <common>',
+      ['#include <common>', 'varying vec3 vPaintWorld;'].join('\n')
+    ).replace(
+      '#include <begin_vertex>',
+      ['#include <begin_vertex>', 'vPaintWorld = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;'].join('\n')
+    );
+
+    /*
+     * Applied to the ALBEDO, not to the lit result.
+     *
+     * Tinting after lighting would flatten the modelling the lamps are doing and fight the
+     * ramp; tinting the diffuse colour is indistinguishable from having authored the
+     * material that value in the first place, so it bands cleanly and the highlights stay
+     * where they were.
+     */
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <color_fragment>',
+      [
+        '#include <color_fragment>',
+        '{',
+        '  float paintZone = 1.0 - step( uPaintZoneRadius, abs( vPaintWorld.z - uPaintZoneZ ) );',
+        '  float paintLift = smoothstep( uPaintHeightLow, uPaintHeightHigh, vPaintWorld.y );',
+        '  float paintTint = mix( 1.0 - uPaintHeightTint, 1.0, paintLift );',
+        '  diffuseColor.rgb *= mix( 1.0, paintTint, paintZone * step( 0.0001, uPaintHeightTint ) );',
+        '}',
+      ].join('\n')
+    );
 
     const pars = THREE.ShaderChunk.lights_physical_pars_fragment.replace(
       'float dotNL = saturate( dot( geometryNormal, directLight.direction ) );',
@@ -219,6 +313,12 @@ export function applyPaintBanding(
       [
         'uniform float uPaintBands;',
         'uniform float uPaintSoft;',
+        'uniform float uPaintHeightTint;',
+        'uniform float uPaintHeightLow;',
+        'uniform float uPaintHeightHigh;',
+        'uniform float uPaintZoneZ;',
+        'uniform float uPaintZoneRadius;',
+        'varying vec3 vPaintWorld;',
         'float paintBand( float x ) {',
         '  float q = floor( x * uPaintBands ) / uPaintBands;',
         '  float f = fract( x * uPaintBands );',

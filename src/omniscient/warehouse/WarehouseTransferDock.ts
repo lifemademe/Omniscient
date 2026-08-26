@@ -7,9 +7,9 @@ import { createWarehouseLabelGeometry } from './labelGeometry.js';
 import type { WarehouseDoorDockState } from './types.js';
 import type { WarehouseDoorLayout } from './WarehouseServiceDoors.js';
 
-const STEEL = new THREE.MeshStandardMaterial({ color: '#435868', roughness: 0.52, metalness: 0.62 });
+const STEEL = new THREE.MeshStandardMaterial({ color: '#344451', roughness: 0.52, metalness: 0.62 });
 const DARK = new THREE.MeshStandardMaterial({ color: '#131921', roughness: 0.76, metalness: 0.38 });
-const ROLLER = new THREE.MeshStandardMaterial({ color: '#698496', roughness: 0.38, metalness: 0.76 });
+const ROLLER = new THREE.MeshStandardMaterial({ color: '#586f7e', roughness: 0.38, metalness: 0.76 });
 
 function mesh(name: string, geometry: THREE.BufferGeometry, material: THREE.Material, position?: THREE.Vector3): ENGINE.MeshNode {
   const node = ENGINE.MeshNode.create({ name, geometry, material, castShadow: true, receiveShadow: true });

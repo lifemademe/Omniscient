@@ -210,7 +210,7 @@ const GLASS = new THREE.MeshPhysicalMaterial({
   roughness: 0.16,
   metalness: 0.08,
 });
-const CONCRETE = new THREE.MeshStandardMaterial({ color: '#343a38', roughness: 0.94, metalness: 0.02 });
+const CONCRETE = new THREE.MeshStandardMaterial({ color: '#6a7672', roughness: 0.94, metalness: 0.02 });
 const WET = new THREE.MeshPhysicalMaterial({ color: '#202a28', roughness: 0.16, metalness: 0.18 });
 
 function mesh(

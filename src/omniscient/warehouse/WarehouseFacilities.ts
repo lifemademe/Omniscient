@@ -53,10 +53,10 @@ export const MEZZANINE_BOUNDS = {
 } as const;
 
 const BODY = new THREE.MeshStandardMaterial({ color: '#a86f24', roughness: 0.62, metalness: 0.22 });
-const BODY_DARK = new THREE.MeshStandardMaterial({ color: '#2a2c2b', roughness: 0.74, metalness: 0.34 });
-const STEEL = new THREE.MeshStandardMaterial({ color: '#5a5f63', roughness: 0.58, metalness: 0.6 });
+const BODY_DARK = new THREE.MeshStandardMaterial({ color: '#1e1f1f', roughness: 0.74, metalness: 0.34 });
+const STEEL = new THREE.MeshStandardMaterial({ color: '#3f4345', roughness: 0.58, metalness: 0.6 });
 const RAIL = new THREE.MeshStandardMaterial({ color: '#b39329', roughness: 0.66, metalness: 0.24 });
-const DECK = new THREE.MeshStandardMaterial({ color: '#3b4145', roughness: 0.84, metalness: 0.14 });
+const DECK = new THREE.MeshStandardMaterial({ color: '#2a2f31', roughness: 0.84, metalness: 0.14 });
 const GLASS = new THREE.MeshStandardMaterial({
   color: '#8fb6bd',
   transparent: true,
@@ -65,7 +65,7 @@ const GLASS = new THREE.MeshStandardMaterial({
   metalness: 0.1,
   depthWrite: false,
 });
-const OFFICE_WALL = new THREE.MeshStandardMaterial({ color: '#43484c', roughness: 0.86, metalness: 0.08 });
+const OFFICE_WALL = new THREE.MeshStandardMaterial({ color: '#35383c', roughness: 0.86, metalness: 0.08 });
 const RUBBER = new THREE.MeshStandardMaterial({ color: '#101413', roughness: 0.95, metalness: 0.04 });
 
 /**

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 
 import {
   applyPaintBanding,
+  setPaintHeightGradient,
   isPaintBanded,
   removePaintBanding,
   setPaintBandingLook,
@@ -25,6 +26,21 @@ interface MaterialSnapshot {
  * pop": a toon ramp flattens value, so hue is left carrying the picture on its own.
  */
 const CEL_CHROMA_GAIN = 1.1;
+
+/**
+ * How much darker the base of the building is than the top of it.
+ *
+ * 0.20, and the first number tried was 0.34 - measured, that took the frame's median from 99
+ * to 60 and the mid-band from 49% to 22%. Right direction, twice as far as wanted: most of the
+ * pixels in a drone shot are at LOW height, so a tint anchored at the floor line darkens the
+ * majority of the picture rather than separating it.
+ *
+ * The ramp is also wider now, -1.5 to 5.5 rather than -0.6 to 4.5, so the floor sits a fifth
+ * of the way up it instead of at the very bottom. Rack courses at 0.55, 1.9, 3.25 and 4.6 land
+ * on four distinguishable steps of it, which is the job; the floor comes down 16% rather than
+ * 30%, which keeps the ground the lightest large surface.
+ */
+const CEL_HEIGHT_TINT = 0.2;
 
 function beveledRail(width: number, height: number, length: number): THREE.ExtrudeGeometry {
   const radius = Math.min(width, height) * 0.22;
@@ -97,11 +113,22 @@ export class WarehouseCelStyle {
     this.refreshClock = 0;
     if (enabled) {
       setPaintBandingLook('warehouseCel');
+      /*
+       * The height gradient, scoped to this building.
+       *
+       * The centre is read off the root rather than written down, because the mission has
+       * already been moved once - it used to sit 800 units UP and now sits 1200 along z -
+       * and a hardcoded number would have quietly stopped matching without failing.
+       */
+      const centre = new THREE.Vector3();
+      root.getWorldPosition(centre);
+      setPaintHeightGradient(CEL_HEIGHT_TINT, centre.z, 140, -1.5, 5.5);
       this.captureNewMaterials(root);
     } else {
       this.restoreMaterials();
       // Cel banding is now the global house treatment; only restore warehouse material edits.
       setPaintBandingLook('warehouseCel');
+      setPaintHeightGradient(0);
     }
   }
 

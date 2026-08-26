@@ -51,8 +51,8 @@ import type {
  * throws away the only thing the lighting was doing. Cheapest colour work there is - the hex
  * codes barely move, but they stop fighting every light in the room.
  */
-const WALL = new THREE.MeshStandardMaterial({ color: '#4d5e75', roughness: 0.88, metalness: 0.1 });
-const STEEL = new THREE.MeshStandardMaterial({ color: '#42617b', roughness: 0.6, metalness: 0.58 });
+const WALL = new THREE.MeshStandardMaterial({ color: '#3d4a5c', roughness: 0.88, metalness: 0.1 });
+const STEEL = new THREE.MeshStandardMaterial({ color: '#273a49', roughness: 0.6, metalness: 0.58 });
 const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#1b2432', roughness: 0.76, metalness: 0.42 });
 /**
  * The roof deck, dark and matte, and it needs its own material rather than DARK_STEEL.
@@ -74,16 +74,16 @@ const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#1b2432', roughness:
 const ROOF_DECK = new THREE.MeshStandardMaterial({ color: '#151b28', roughness: 0.94, metalness: 0.05 });
 /* Stock that is not cardboard - see the tote and drum buckets in buildRacks. The drums
    carry the only saturated colour on the racking and it is cool on purpose. */
-const TOTE = new THREE.MeshStandardMaterial({ color: '#31535b', roughness: 0.72, metalness: 0.06 });
-const TOTE_LID = new THREE.MeshStandardMaterial({ color: '#476b74', roughness: 0.66, metalness: 0.08 });
+const TOTE = new THREE.MeshStandardMaterial({ color: '#2b4950', roughness: 0.72, metalness: 0.06 });
+const TOTE_LID = new THREE.MeshStandardMaterial({ color: '#3c5a62', roughness: 0.66, metalness: 0.08 });
 const DRUM = new THREE.MeshStandardMaterial({ color: '#35778a', roughness: 0.54, metalness: 0.12 });
-const DRUM_BAND = new THREE.MeshStandardMaterial({ color: '#8097a7', roughness: 0.44, metalness: 0.46 });
-const FLOOR = new THREE.MeshStandardMaterial({ color: '#7b6e5c', roughness: 0.91, metalness: 0.04 });
+const DRUM_BAND = new THREE.MeshStandardMaterial({ color: '#688497', roughness: 0.44, metalness: 0.46 });
+const FLOOR = new THREE.MeshStandardMaterial({ color: '#948671', roughness: 0.91, metalness: 0.04 });
 const AMBER = new THREE.MeshStandardMaterial({ color: '#8d6c31', emissive: '#39250b', emissiveIntensity: 0.55, roughness: 0.58 });
 const RED = new THREE.MeshStandardMaterial({ color: '#6e2d2d', emissive: '#2c0909', emissiveIntensity: 0.6, roughness: 0.62 });
 const BELT = new THREE.MeshStandardMaterial({ color: '#11171e', roughness: 0.82, metalness: 0.25 });
 /* Softwood, and darker than the board it carries so a load reads as sitting on something. */
-const PALLET = new THREE.MeshStandardMaterial({ color: '#93713f', roughness: 0.96 });
+const PALLET = new THREE.MeshStandardMaterial({ color: '#816337', roughness: 0.96 });
 const TAPE_LIGHT = new THREE.MeshStandardMaterial({ color: '#d4c5a8', roughness: 0.72 });
 const TAPE_DARK = new THREE.MeshStandardMaterial({ color: '#c1ae87', roughness: 0.72 });
 /*
@@ -751,10 +751,23 @@ export class WarehouseEnvironment {
         }
       }
 
+      /*
+       * The light tier, and the reason the racking went dark.
+       *
+       * A rack is a dark lattice holding pale boxes. Both halves of that have to be true or
+       * neither reads: the frames were within five points of the cartons they carry, so a
+       * loaded bay came out as one mid-value mass with some texture in it. The frames are
+       * down at 0.22 now and these come up, which puts about thirty points of value between
+       * the thing and the thing it holds.
+       *
+       * Still three shades, because a hundred identical boxes is its own kind of flat - but
+       * spread wider, so the spread survives the posterise instead of collapsing into one
+       * band.
+       */
       const CARTONS = [
-        new THREE.MeshStandardMaterial({ color: '#c2a274', roughness: 0.95 }),
-        new THREE.MeshStandardMaterial({ color: '#ac9068', roughness: 0.95 }),
-        new THREE.MeshStandardMaterial({ color: '#b79b6e', roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: '#d9bb87', roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: '#bda070', roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: '#cbad7c', roughness: 0.95 }),
       ];
       const merged: Array<[string, THREE.BufferGeometry[], THREE.Material]> = [
         [`RackPallets-${aisle}`, bucket.pallet, PALLET],

@@ -23,9 +23,9 @@ import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
  * used. Everything merges by material - the whole yard is nine draw calls.
  */
 
-const CONCRETE = new THREE.MeshStandardMaterial({ color: '#6d6d67', roughness: 0.94, metalness: 0.03 });
+const CONCRETE = new THREE.MeshStandardMaterial({ color: '#83837c', roughness: 0.94, metalness: 0.03 });
 const KERB = new THREE.MeshStandardMaterial({ color: '#8a8a82', roughness: 0.9, metalness: 0.03 });
-const TARMAC = new THREE.MeshStandardMaterial({ color: '#3a3f44', roughness: 0.86, metalness: 0.05 });
+const TARMAC = new THREE.MeshStandardMaterial({ color: '#2f3337', roughness: 0.86, metalness: 0.05 });
 const PAINT = new THREE.MeshStandardMaterial({ color: '#c8a13c', roughness: 0.72, metalness: 0.02 });
 const STEEL = new THREE.MeshStandardMaterial({ color: '#3f5468', roughness: 0.62, metalness: 0.5 });
 const DARK = new THREE.MeshStandardMaterial({ color: '#1b2430', roughness: 0.78, metalness: 0.32 });
