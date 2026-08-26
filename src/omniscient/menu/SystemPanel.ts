@@ -369,6 +369,32 @@ export class SystemPanel {
       (value) => SOUND_CAPTION_LABELS[value]
     );
     this.addResetRow(frame);
+
+    /*
+     * ## The colour note, and why it says what it says
+     *
+     * There is no colourblind MODE here, because the game does not need one - and saying so is
+     * more useful to a player deciding whether to start than a toggle that changes nothing
+     * would be. Every place the game leans on colour, the same fact is also carried by a shape:
+     *
+     *  - M4SS growth. F4 flagged the stage-2 mechanic as red against green. The dead growth was
+     *    given its own silhouette and measured in greyscale at 74% against 39% above the core
+     *    line, so the two states are told apart by outline before hue.
+     *  - Warehouse zones. Each carries its letter on the floor plate and on its sign; the
+     *    accent is the second cue, not the first.
+     *  - Service doors. A, B and C each have a letter AND a glyph - triangle, bars, circle -
+     *    on the console, the feed labels and the wall.
+     *
+     * Deliberately three specific claims rather than a blanket one. A player who has been told
+     * "fully colourblind accessible" and then meets one red-on-green control has been lied to;
+     * a player who has been told which three things are doubled up can check.
+     */
+    const colour = document.createElement('div');
+    colour.className = 'omni-sys__note';
+    colour.textContent =
+      'Colour is never the only cue. Growth in M4SS is told apart by silhouette, warehouse ' +
+      'zones by their letter, and the three service doors by both a letter and a glyph.';
+    frame.appendChild(colour);
   }
 
   private addVolumeRow(frame: HTMLElement): void {

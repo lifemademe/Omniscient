@@ -289,8 +289,11 @@ one adaptive drone per Tempo, same synth instrument family. 17. ~~Mission 07 (Sa
 restore.~~ **[DECLINED 2026-08-26 - Paul: "keep sanda mission hidden, i dont need it". She
 stays cut. The queue entry in `OmniscientRig` stays commented out; her mission file, contact
 record, scene and signal entry stay where they are, unreferenced but intact.]**
-18. M4SS stage 3 (the verbs exist; the sim is ready). 19. Settings panel: text
-speed, shake toggle, volume (exists), colourblind note.
+18. M4SS stage 3 (the verbs exist; the sim is ready). 19. ~~Settings panel: text
+speed, shake toggle, volume (exists), colourblind note.~~ **[DONE 2026-08-26 - the panel
+already carried text size, text speed, display filter, screen shake, flash intensity, sound
+captions and volume; only the colourblind note was outstanding, and it is now three specific
+claims rather than a blanket one. See SystemPanel.buildSettings.]**
 
 ### Scope traps — refuse these before Sept 11
 
