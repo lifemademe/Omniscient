@@ -275,6 +275,25 @@ class WarehouseInput extends ENGINE.BaseInputHandler {
       this.rig.look(event.movementX, event.movementY);
       return true;
     }
+    /*
+     * Optical is held and the pointer lock is not there. Steer anyway.
+     *
+     * Right mouse does two things at once: it enters the optical first-person view, and it
+     * asks for the pointer lock that view is steered with. The first always succeeds and the
+     * second can quietly fail - the browser refuses a lock while the document is not focused,
+     * and Chrome refuses for about a second after any Escape-driven unlock. When it did, the
+     * player was put inside the lens with no way to turn it, and the report is the obvious
+     * one: holding right mouse freezes the game. Nothing was frozen; the camera had simply
+     * lost the only input that moved it.
+     *
+     * `movementX/Y` are delivered on ordinary moves too, so the fallback costs nothing and
+     * behaves the same until the cursor reaches the edge of the window. A view that stops at
+     * the edge of the screen is worth having; one that cannot move is not.
+     */
+    if (this.rig.isOpticalHeld()) {
+      this.rig.look(event.movementX, event.movementY);
+      return true;
+    }
     return false;
   }
 
@@ -2248,6 +2267,11 @@ export class WarehouseRig extends ENGINE.SceneNode {
     return true;
   }
 
+  /** Whether right mouse is currently holding the optical view. See handleMouseMove. */
+  public isOpticalHeld(): boolean {
+    return this.opticalAimHeld;
+  }
+
   public scanFromOpticalInput(): void {
     if (!this.opticalAimHeld || this.view !== 'drone') {
       this.hud?.flash('HOLD RIGHT MOUSE FOR OPTICAL VIEW // LEFT CLICK TO SCAN', 1.5);
@@ -2907,12 +2931,35 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.hud?.flash(`LOAD ${delivery.packageId} SECURED // ROUTE TO VERIFIED INTAKE // F TO CLAMP`, 2.8);
   }
 
+  /**
+   * The camera's true forward, from yaw and pitch.
+   *
+   * The horizontal components are scaled by cos(pitch) and there is no version of this that
+   * works without it. Two call sites built the vector as (sin yaw, sin pitch, cos yaw) and
+   * normalised - which fixes the LENGTH and not the direction, because normalising a vector
+   * whose horizontal part is already too long simply shortens everything in proportion.
+   *
+   * The error is zero looking level and grows with pitch: at the drone's full downward tilt
+   * of -0.72 rad the computed forward is 7.2 degrees off where the camera is actually
+   * pointing. The optical scan accepts a dot product of 0.94 - a cone of 19.9 degrees - so a
+   * third of the aiming budget was being spent on a systematic bias, and the accepted cone
+   * sat several degrees away from the crosshair the player was aiming with. Looking straight
+   * at the worker and being told they are not inside the brackets is exactly what that does.
+   *
+   * The drone's own movement code has always had it right (see the `flat` term in the flight
+   * block); these two were written separately and neither borrowed it.
+   */
+  private cameraForward(out = new THREE.Vector3()): THREE.Vector3 {
+    const flat = Math.cos(this.pitch);
+    return out.set(Math.sin(this.yaw) * flat, Math.sin(this.pitch), Math.cos(this.yaw) * flat).normalize();
+  }
+
   private worldTargetAcquired(position: THREE.Vector3, maxDistance = 18, threshold = 0.94): boolean {
     const toTarget = position.clone().sub(this.cameraPosition);
     const distance = toTarget.length();
     if (distance < 0.05 || distance > maxDistance) return false;
     const direction = toTarget.multiplyScalar(1 / distance);
-    const forward = new THREE.Vector3(Math.sin(this.yaw), Math.sin(this.pitch), Math.cos(this.yaw)).normalize();
+    const forward = this.cameraForward();
     if (direction.dot(forward) < threshold) return false;
     this.cameraRaycaster.set(this.cameraPosition, direction);
     this.cameraRaycaster.near = 0.05;
@@ -4093,7 +4140,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       const fovTarget = 68 + (getAccessibilityPreferences().reducedMotion ? 0 : this.throttle * 4);
       this.chaseFov = THREE.MathUtils.damp(this.chaseFov, fovTarget, 4, deltaTime > 0 ? deltaTime : 1 / 60);
       if (Math.abs(this.camera.getFOV() - this.chaseFov) > 0.01) this.camera.setFOV(this.chaseFov);
-      const forward = new THREE.Vector3(Math.sin(this.yaw), Math.sin(this.pitch), Math.cos(this.yaw)).normalize();
+      const forward = this.cameraForward();
       if (this.perspective === 'first') {
         // Hide the body and keep the lens inside the drone's collision envelope. Pushing
         // the lens forward made it enter a rack when the player turned beside shelving.

@@ -30,6 +30,7 @@
  *
  *     npx tsx scripts/warehouse-cameras.ts
  */
+import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 
 import { WAREHOUSE_DOORS, WAREHOUSE_DOOR_IDS } from '../src/omniscient/warehouse/WarehouseServiceDoors.js';
@@ -165,6 +166,34 @@ for (const id of WAREHOUSE_DOOR_IDS) {
     door.place === 'WEST' ? p.x < -wallX : door.place === 'EAST' ? p.x > wallX : p.z > frontZ;
   if (!outside) fail(`${id}: the camera is inside the shell (${p.x.toFixed(1)}, ${p.z.toFixed(1)})`);
   else console.log(`  ok    ${id} is mounted outside the ${door.place.toLowerCase()} wall`);
+}
+
+console.log(`\n--- the drone lens: where the optical scan thinks it is pointing ---`);
+
+/*
+ * A forward vector built from yaw and pitch must scale its horizontals by cos(pitch).
+ *
+ * Two places in the rig built it as (sin yaw, sin pitch, cos yaw) and normalised, which fixes
+ * the LENGTH and not the direction - normalising a vector whose horizontal part is already
+ * too long just shortens everything in proportion. The error is zero looking level and 7.2
+ * degrees at the drone's full downward tilt, against an optical scan that accepts a cone of
+ * 19.9. A third of the aiming budget spent on a bias, and the accepted cone sitting several
+ * degrees off the crosshair the player is aiming with.
+ *
+ * The flight code had it right the whole time. These two were written separately and neither
+ * borrowed it, which is why this is a rule now rather than a fix.
+ */
+{
+  const src = readFileSync('src/omniscient/warehouse/WarehouseRig.ts', 'utf8');
+  const bad = src
+    .split(/\r?\n/)
+    .map((line, i) => ({ line: line.trim(), n: i + 1 }))
+    .filter((e) => e.line.includes('Math.sin(this.yaw)') && e.line.includes('Math.sin(this.pitch)'))
+    .filter((e) => !e.line.includes('flat'));
+  for (const e of bad) fail(`WarehouseRig.ts:${e.n} builds a pitched forward without cos(pitch)`);
+  if (bad.length === 0) console.log('  ok    every pitched forward scales its horizontals by cos(pitch)');
+  if (!src.includes('private cameraForward(')) fail('cameraForward() is gone - the call sites will drift again');
+  else console.log('  ok    cameraForward() is the one place that builds it');
 }
 
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} FAILED`);
