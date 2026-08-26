@@ -10,6 +10,8 @@
  * outcome - which is the actual promise the suggestion chips make.
  */
 
+import { readFileSync } from 'node:fs';
+
 import { MIRELA } from '../src/omniscient/content/contacts.js';
 import { resolveIntent } from '../src/omniscient/mission/intent.js';
 import { MISSION_01 } from '../src/omniscient/content/mission-01-transmitter.js';
@@ -38,6 +40,7 @@ import { auditPursuit } from '../src/omniscient/mission/pursuit.js';
 import { DISTRICT_TRAIL } from '../src/omniscient/content/district-07.js';
 import { gradeDevice } from '../src/omniscient/mission/device.js';
 import { MissionRuntime } from '../src/omniscient/mission/MissionRuntime.js';
+import * as SIGNAL_IDS from '../src/omniscient/content/signals.js';
 
 const SEED = 0x0c151e;
 
@@ -339,18 +342,43 @@ function checkEveryMissionHasASignal(): void {
   /*
    * And the reverse, which is how a signal quietly becomes scenery.
    *
-   * This briefly allowed an "intercepted" exemption for M4SS, back when the station was
-   * opened by a special case in OmniscientRig.openSignal and had no mission behind it. It
-   * has one now - Keller, a scene, beats, an outcome - so the exemption is gone and the
-   * check is back to its strict form. The anomaly is the only signal that is genuinely
-   * unopenable, and that is its entire purpose: §169 wants something on this globe the
-   * player cannot have.
+   * ## Two ways a pin can be worth pressing
+   *
+   * Most of them are a request: a mission in the campaign whose contactId matches, opened
+   * through the queue. Two are not. The anomaly opens a trace view and the warehouse drops
+   * the player into Night Shift - both intercepted by name at the top of
+   * OmniscientRig.openSignal, before the queue is ever consulted.
+   *
+   * This check knew about the first kind only, so it failed the warehouse for the crime of
+   * being a bonus level. It had also carried a hardcoded skip for the anomaly, which is the
+   * shape of the same mistake: a list of exemptions maintained by hand is a list that is
+   * wrong the first time somebody adds a pin, in whichever direction hurts.
+   *
+   * So it READS the interceptions rather than being told them. Anything `openSignal` matches
+   * on counts as openable; anything else needs a mission. Add a pin with neither and this
+   * fails, which is the whole point - §169's anomaly is on the globe to be unanswerable, not
+   * to be a precedent for scenery.
    */
+  const rigSource = readFileSync('src/omniscient/OmniscientRig.ts', 'utf8');
+  const opener = rigSource.slice(rigSource.indexOf('private openSignal('));
+  const intercepted = new Set<string>();
+  // Only the block above the queue lookup. Below it, `signalId` appears in comparisons
+  // that are not interceptions.
+  const body = opener.slice(0, opener.indexOf('const index = this.queue'));
+  for (const m of body.matchAll(/signalId === ([A-Z_][A-Z0-9_]*)/g)) {
+    const value = (SIGNAL_IDS as Record<string, unknown>)[m[1]];
+    if (typeof value === 'string') intercepted.add(value);
+  }
+  check(
+    'the openSignal interceptions were readable',
+    intercepted.size >= 2,
+    `${intercepted.size} found: ${[...intercepted].join(', ') || 'none'}`
+  );
   for (const signal of signals) {
-    if (signal.id === 'anomaly') continue;
     check(
       `signal "${signal.id}" can be opened`,
-      CAMPAIGN.some((m) => m.contactId === signal.id)
+      CAMPAIGN.some((m) => m.contactId === signal.id) || intercepted.has(signal.id),
+      intercepted.has(signal.id) ? 'intercepted by openSignal' : ''
     );
   }
 
