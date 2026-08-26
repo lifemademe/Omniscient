@@ -244,7 +244,7 @@ export const RotorWashVFX: VFXDefinitionJSON = {
   name: 'RotorWashVFX',
   particles: [
     {
-      nbParticles: 96,
+      nbParticles: 150,
       intensity: 0.75,
       renderMode: 'billboard',
       fadeSize: [0.0, 0.55],
@@ -262,7 +262,7 @@ export const RotorWashVFX: VFXDefinitionJSON = {
       particlesIndex: 0,
       loop: true,
       duration: 0.5,
-      nbParticles: 26,
+      nbParticles: 44,
       spawnMode: 'time',
       particlesLifetime: [0.5, 1.1],
       // A disc on the floor about the width of the airframe, and flat.
@@ -270,7 +270,7 @@ export const RotorWashVFX: VFXDefinitionJSON = {
       startPositionMax: [0.34, 0.1, 0.34],
       directionMin: [-1, 0.05, -1],
       directionMax: [1, 0.35, 1],
-      size: [0.05, 0.14],
+      size: [0.09, 0.22],
       speed: [0.55, 1.5],
       colorStart: ['#cbbfa6', '#b9ad95'],
       colorEnd: ['#7d7767', '#6a6558'],

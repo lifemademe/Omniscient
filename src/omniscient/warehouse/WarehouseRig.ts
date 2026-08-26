@@ -76,10 +76,16 @@ const ALTITUDES = [1.8, 3.2, 6.8] as const;
 /**
  * Where the rotor wash lives and when it runs.
  *
- * The drone bottoms out at 0.85m, so WASH_FULL_Y sits just above that - the wash is at full
- * strength through the whole hovering band a player works a bay from. It is gone by 2.6m,
- * which is under the lowest authored altitude preset but well above the floor: high enough
- * that crossing an aisle at cruise does not drag a dust trail behind it.
+ * The drone's envelope is 0.85m to 8.35m and it is handed to the player at 3.2m. WASH_FULL_Y
+ * sits just above the floor of that, so the wash is at full strength through the whole
+ * hovering band a player works a bay from.
+ *
+ * WASH_FADE_Y was 2.6 first, which was wrong for a reason that only shows up in play: 2.6 is
+ * below the height the drone STARTS at, so the effect existed and nobody would ever meet it
+ * without deliberately descending. 3.4 puts the default cruise just inside the band - a wide,
+ * thin disturbance at the height you fly around at, tightening to a real kick when you drop
+ * to a bay - and it is still only the bottom third of the envelope, so it does not follow the
+ * drone up over the racking.
  *
  * The floor is y 0 in rig space. It is emphatically NOT y 0 in world space - this whole
  * warehouse sits 800 metres up - so anything written here has to stay in the rig's own
@@ -87,7 +93,7 @@ const ALTITUDES = [1.8, 3.2, 6.8] as const;
  */
 const WAREHOUSE_FLOOR_Y = 0.02;
 const WASH_FULL_Y = 1.1;
-const WASH_FADE_Y = 2.6;
+const WASH_FADE_Y = 3.4;
 const WASH_PARKED = new THREE.Vector3(0, -1000, 0);
 const THIRD_PERSON_ARM = 2.8;
 const THIRD_PERSON_HEIGHT = 1.25;
@@ -1214,10 +1220,24 @@ export class WarehouseRig extends ENGINE.SceneNode {
      * off a slab never does. It lives on the rig and updateRotorWash walks it to the point on
      * the floor underneath the drone each frame, upright.
      *
-     * Parked below the world until it is wanted, for the reason OmniscientRig.buildVfx
-     * documents at length: clearing `visible` on a VFXNode does not reliably reach the
-     * renderables it owns, so a non-emitting effect can sit in full view where it was built.
-     * A kilometre under the floor is not a flag anything can argue with.
+     * ## Parked, and NEVER touched with `visible`
+     *
+     * OmniscientRig.buildVfx already documents half of this: clearing `visible` on a VFXNode
+     * does not reliably reach the renderables it owns, so a non-emitting effect can sit in
+     * full view where it was built. Parking a kilometre under the floor is the fix, and it is
+     * what this does.
+     *
+     * The other half was learned here, and it cost a debug cycle. The flag does not work in
+     * the OTHER direction either. This node was created with `visible = false` as belt and
+     * braces on top of the parking, and setting it back to true before emitting did nothing:
+     * a probe printed `node yes // ready yes // emitters 1 // y 0.88 // view drone // on true`
+     * while the screen showed no particles at all, and colouring them magenta confirmed zero
+     * pixels. The emitters are built in beginPlay, when the node was still flagged invisible,
+     * and nothing after that re-reached them. Removing both flag writes and relying on the
+     * parking alone took it from 0.00% of the frame to 1.45%.
+     *
+     * So: position is the only switch. Do not add `visible` back as insurance - here it is
+     * not insurance, it is an off switch that cannot be turned on again.
      */
     const wash = ENGINE.VFXNode.create({
       name: 'DroneRotorWash',
@@ -1225,7 +1245,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
       autoStart: false,
       position: WASH_PARKED.clone(),
     });
-    wash.visible = false;
     this.droneWash = wash;
     this.add(wash);
   }
@@ -1276,7 +1295,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
       );
       wash.position.set(this.drone.position.x, WAREHOUSE_FLOOR_Y, this.drone.position.z);
       wash.scale.setScalar(1 + spread * 1.15);
-      wash.visible = true;
       if (!this.droneWashOn) {
         wash.startEmitting(true);
         this.droneWashOn = true;
@@ -1285,7 +1303,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     if (!this.droneWashOn) return;
     wash.stopEmitting();
-    wash.visible = false;
     wash.position.copy(WASH_PARKED);
     this.droneWashOn = false;
   }
