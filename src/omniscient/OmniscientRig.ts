@@ -248,7 +248,7 @@ const WAREHOUSE_ORIGIN = new THREE.Vector3(0, 0, 1200);
  * the whole 58m building sits inside the ramp instead of ending in a wall of it.
  */
 /**
- * OUR two passes, off. The engine's five stay on.
+ * The cel pass, on. The CRT stays off - see HIDE_CRT_POST below.
  *
  * Seven are in play. Five are the engine's - tone mapping, bloom, ambient occlusion, object
  * outline and colour grading - and two are this project's, registered as custom effects: the
@@ -265,7 +265,17 @@ const WAREHOUSE_ORIGIN = new THREE.Vector3(0, 0, 1200);
  * occlusion. Nothing is deleted or retuned either - every look, slider and tuning constant
  * is where it was, and flipping this to `false` restores the game as it stands.
  */
-const HIDE_CUSTOM_POST = true;
+const HIDE_CEL_POST = false;
+
+/**
+ * The CRT, separately.
+ *
+ * Split from the cel switch because the two are different decisions and have been asked
+ * about separately every time. This one is the raster - scanlines, grille, convergence, the
+ * roll bar - and its three registers (clean dioramas, drone link, fixed camera) are intact
+ * and tuned; nothing here throws that work away. Flip to false to bring it back.
+ */
+const HIDE_CRT_POST = true;
 
 const WAREHOUSE_HAZE = '#5d6b77';
 const WAREHOUSE_FOG_NEAR = 32;
@@ -4361,7 +4371,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * has confirmed the registration took. Retried here rather than hooked because there
      * is no pipeline object to hang a hook on until the pipeline exists.
      */
-    if (!HIDE_CUSTOM_POST && !this.retroMounted && this.post) {
+    if (!HIDE_CRT_POST && !this.retroMounted && this.post) {
       this.retroMounted = installRetro(this.post);
       /*
        * The motif used to fire here as well, and now fires only from the boot screen.
@@ -4378,7 +4388,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
     /* Global cel treatment. DOM UI is outside the composer; the CRT face is masked below. */
     const PAINT_PASS = true;
-    if (PAINT_PASS && !HIDE_CUSTOM_POST && !this.paintMounted && this.post) {
+    if (PAINT_PASS && !HIDE_CEL_POST && !this.paintMounted && this.post) {
       this.paintMounted = installPaint(this.post);
       if (this.paintMounted) {
         if (this.warehouse) this.applyWarehouseCelPost(true);
