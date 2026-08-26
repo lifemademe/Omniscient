@@ -259,7 +259,7 @@ A `breakAt?: number` on `Tile`: an owned particle striking above that speed remo
 
 **Cost:** small in the sim, real in the art — a broken state and debris, and `collide` iterates
 `world.tiles` per particle so mutation mid-step needs care. **Recommendation: don't**, at least
-not for this stage. Beat 7 delivers the *feeling* on mechanics that are already tuned, and a
+not for this stage. Beat 8 delivers the *feeling* on mechanics that are already tuned, and a
 destructible whose only use is one wall is a system built for a single sentence.
 
 ---
