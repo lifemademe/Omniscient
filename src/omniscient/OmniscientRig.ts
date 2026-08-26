@@ -378,8 +378,8 @@ const NOTE_HOLD = 11;
  * Named because they are no longer only defaults: `ContactScene.daylight` scales both per
  * room, and a scene that wants less sun needs something to be a fraction OF.
  */
-const KEY_INTENSITY = 2.07;
-const SKY_INTENSITY = 0.64;
+const KEY_INTENSITY = 1.139;
+const SKY_INTENSITY = 0.352;
 
 /** The diorama atmosphere. Tuned to a room, not to a world - see mountScene. */
 const FOG_NEAR = 3.5;

@@ -137,8 +137,7 @@ export const PAINT_LOOKS = {
   },
   /** Warehouse prototype: clean value bands, occluded contours, no canvas or oil smearing. */
   warehouseCel: {
-    /* Ink 0.75, not 1: the luminance darkening is the other half of "turn the cel down". */
-    radius: 3, strength: 1, ink: 0.75, tint: 0.12, tooth: 0,
+    radius: 3, strength: 1, ink: 1, tint: 0, tooth: 0,
     /*
      * Settled at the F8 panel, 2026-08-25.
      *
@@ -166,7 +165,23 @@ export const PAINT_LOOKS = {
      * when outlineStrength is at zero, so the normal/depth prepass and its whole-scene
      * render stop happening at all.
      */
-    outlineWidth: 1.4, depthInk: 2, normalInk: 2, outlineStrength: 0,
+    /*
+     * ## The contour is off, but it is off via the GAINS
+     *
+     * Settled at the F8 panel. Both edge gains are zero, so edge times gain is zero on every
+     * sample and the contour can never rise above zero however wide the line or however
+     * strong the mix - the outline draws nothing.
+     *
+     * That is the intended picture, and it costs a whole frame's work to produce. The mix is
+     * 1, and renderGeometry bails only when outlineStrength drops below 0.001 - so the
+     * normal/depth prepass still runs, rendering the entire scene a second time every frame
+     * with an override material, to feed a calculation whose answer is fixed at zero.
+     *
+     * Left exactly as tuned rather than quietly corrected, because the image is what was
+     * being judged and this reproduces it. Setting outlineStrength to 0 gives a
+     * pixel-identical result and skips the prepass; that is a one-word change when wanted.
+     */
+    outlineWidth: 0.25, depthInk: 0, normalInk: 0, outlineStrength: 1,
     /*
      * 0.55, down from 1.
      *
@@ -177,7 +192,13 @@ export const PAINT_LOOKS = {
      * returned. The test has been tightened as well, but this is the honest number for how
      * much a scan line should be allowed to opt out.
      */
-    normalScale: 1, protectSignals: 0.55,
+    /*
+     * Prepass at quarter resolution, and no signal opt-out at all. protectSignals 0 means
+     * scan sweeps, evidence highlights and door lamps take the same banding and ink as
+     * everything else rather than being handed their original colour back. Deliberate; the
+     * mechanism is intact and one slider from returning.
+     */
+    normalScale: 0.25, protectSignals: 0,
     /*
      * Darker, because the ink was the floor of the whole picture.
      *
@@ -200,7 +221,8 @@ export const PAINT_LOOKS = {
      * already lifting. Taking the exposure down and easing the gain gets to the same
      * mid-range with more headroom left at the top, which is where the banding lives.
      */
-    brightness: 1.42,
+    /* 2.5, the top of the F8 range, against a tone mapper sitting at 0.9. */
+    brightness: 2.5,
     /*
      * Four value steps with a nearly hard edge, and 1.3x chroma.
      *
@@ -221,7 +243,16 @@ export const PAINT_LOOKS = {
      * 0.014 linear is well under this room's darkest tenth, so the warehouse is unaffected by
      * it and everything darker than the warehouse gets its shadows back.
      */
-    posterize: 4, posterizeSoft: 0.14, posterizeGate: 0.014, saturation: 1.1,
+    /*
+     * Eight steps at a 0.6 edge, which is nearly a smooth ramp - banding present but subtle
+     * rather than graphic. Saturation drops BELOW one for the first time, so the pass now
+     * takes chroma out rather than adding it.
+     *
+     * Shadow gate up to 0.08, five times its previous value: the posterise now fades out
+     * across everything below about sRGB 80 instead of below 24, leaving a much wider band
+     * of darks untouched. Comfortably safe for the dark scenes the gate exists to protect.
+     */
+    posterize: 8, posterizeSoft: 0.6, posterizeGate: 0.08, saturation: 0.89,
     /*
      * Full weight to 13 metres, quarter weight past 34.
      *
@@ -230,7 +261,8 @@ export const PAINT_LOOKS = {
      * the player is actually reading - and lets the far half of the run resolve into shapes
      * instead of a mesh of lines.
      */
-    outlineFadeStart: 13, outlineFadeEnd: 34,
+    /* Moot while both edge gains are zero, but kept as tuned. */
+    outlineFadeStart: 2, outlineFadeEnd: 4,
   },
   /** Lower-cost depth-led contour for high-DPI or constrained GPUs. */
   warehouseCelLow: {
