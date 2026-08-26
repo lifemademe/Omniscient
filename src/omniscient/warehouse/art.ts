@@ -1070,13 +1070,26 @@ export class WarehouseEnvironment {
       gates.push({ node });
       this.securityGates.set(zone, gates);
     };
+    /*
+     * ## The east ends stop short of the transfer belt
+     *
+     * Two of these gates were built straight through the conveyor. The belt is a CatmullRom
+     * curve defined in WarehouseAutomation and the gates are widths and centres typed here,
+     * so nothing at either call site could show the collision - `scripts/dev/probe-clip.ts`
+     * samples the curve and measures it: ReceivingSecurityGate-East was through the belt by
+     * 0.60m and StorageEastSecurityGate-Rear by 1.19m, both at working height, and
+     * SortationSecurityGate-Rear cleared the other side by one centimetre.
+     *
+     * The boundary already has a deliberate gap here for the belt to pass; it was simply not
+     * wide enough. West edges are unchanged, so no zone gets shorter anywhere else.
+     */
     addGate('receiving', 'ReceivingSecurityGate-West', 17.2, -13.5, -14.45);
-    addGate('receiving', 'ReceivingSecurityGate-East', 17.2, 5.2, -14.45);
+    addGate('receiving', 'ReceivingSecurityGate-East', 16.4, 4.8, -14.45);
     addGate('storage-west', 'StorageWestSecurityGate-Rear', 19.4, -12.2, -14.15);
     addGate('storage-west', 'StorageWestSecurityGate-Front', 19.4, -12.2, 15.55);
-    addGate('storage-east', 'StorageEastSecurityGate-Rear', 16.8, 6.3, -14.15);
+    addGate('storage-east', 'StorageEastSecurityGate-Rear', 15.1, 5.45, -14.15);
     addGate('storage-east', 'StorageEastSecurityGate-Front', 16.8, 6.3, 15.55);
-    addGate('sortation', 'SortationSecurityGate-Rear', 7.7, 19.55, -14.25);
+    addGate('sortation', 'SortationSecurityGate-Rear', 7.3, 19.75, -14.25);
     addGate('sortation', 'SortationSecurityGate-Front', 7.7, 19.55, 14.25);
 
     for (const id of WAREHOUSE_SECURITY_ZONE_IDS) {

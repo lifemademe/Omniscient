@@ -292,14 +292,27 @@ export class WarehouseAutomation {
     const centerX = WAREHOUSE_LAYOUT.sortation.centerX;
     const z = 4.2;
     const portal = ENGINE.SceneNode.create({ name: 'SortationInspectionPortal' });
+    /*
+     * ## The portal legs stood IN the outer belts
+     *
+     * The three sortation lanes are at x 17.25, 19.6 and 21.95, and each belt is 1.72 wide -
+     * so the outer two occupy 16.39..18.11 and 21.09..22.81. The legs were at centreX +/- 3.45
+     * and 0.62 wide, which put them at 15.84..16.46 and 22.74..23.36: seven centimetres into
+     * the outer belt on each side, at floor level, on a structure the packages run through.
+     *
+     * Out to 3.72, which clears both by sixteen centimetres and keeps the whole portal inside
+     * the sortation zone's own east bound. The crown widens to match, because a crown narrower
+     * than its legs is a portal that has come apart.
+     */
+    const leg = 3.72;
     portal.add(
-      mesh('PortalWest', new THREE.BoxGeometry(0.62, 4.8, 1.18), STEEL, new THREE.Vector3(centerX - 3.45, 2.62, z)),
-      mesh('PortalEast', new THREE.BoxGeometry(0.62, 4.8, 1.18), STEEL, new THREE.Vector3(centerX + 3.45, 2.62, z)),
-      mesh('PortalCrown', new THREE.BoxGeometry(7.5, 0.72, 1.18), STEEL, new THREE.Vector3(centerX, 4.66, z)),
-      mesh('PortalWestGlass', new THREE.BoxGeometry(0.18, 2.9, 0.76), GLASS, new THREE.Vector3(centerX - 3.42, 2.54, z), false, false),
-      mesh('PortalEastGlass', new THREE.BoxGeometry(0.18, 2.9, 0.76), GLASS, new THREE.Vector3(centerX + 3.42, 2.54, z), false, false),
-      mesh('PortalAmberWest', new THREE.BoxGeometry(0.11, 4.1, 1.26), ORANGE, new THREE.Vector3(centerX - 3.82, 2.48, z)),
-      mesh('PortalAmberEast', new THREE.BoxGeometry(0.11, 4.1, 1.26), ORANGE, new THREE.Vector3(centerX + 3.82, 2.48, z))
+      mesh('PortalWest', new THREE.BoxGeometry(0.62, 4.8, 1.18), STEEL, new THREE.Vector3(centerX - leg, 2.62, z)),
+      mesh('PortalEast', new THREE.BoxGeometry(0.62, 4.8, 1.18), STEEL, new THREE.Vector3(centerX + leg, 2.62, z)),
+      mesh('PortalCrown', new THREE.BoxGeometry(leg * 2 + 0.62, 0.72, 1.18), STEEL, new THREE.Vector3(centerX, 4.66, z)),
+      mesh('PortalWestGlass', new THREE.BoxGeometry(0.18, 2.9, 0.76), GLASS, new THREE.Vector3(centerX - leg + 0.03, 2.54, z), false, false),
+      mesh('PortalEastGlass', new THREE.BoxGeometry(0.18, 2.9, 0.76), GLASS, new THREE.Vector3(centerX + leg - 0.03, 2.54, z), false, false),
+      mesh('PortalAmberWest', new THREE.BoxGeometry(0.11, 4.1, 1.26), ORANGE, new THREE.Vector3(centerX - leg - 0.37, 2.48, z)),
+      mesh('PortalAmberEast', new THREE.BoxGeometry(0.11, 4.1, 1.26), ORANGE, new THREE.Vector3(centerX + leg + 0.37, 2.48, z))
     );
     // Both sides: packages pass THROUGH this portal, so it is read from either end of the line.
     portal.add(displayPanel(
@@ -309,11 +322,23 @@ export class WarehouseAutomation {
       0.68,
       new THREE.Vector3(centerX, 4.68, z + 0.602)
     ));
+    /*
+     * The scan field starts ABOVE the belt it is scanning.
+     *
+     * 3.25 tall centred at 2.35 spans y 0.725 to 3.975, and the sortation belts run 0.51 to
+     * 0.955 with their rollers - so the bottom quarter-metre of a translucent teal plane was
+     * inside all three decks. Reported as a glass gate passing through the conveyor, and that
+     * is exactly how a semi-transparent plane intersecting a solid reads.
+     *
+     * Bottom edge to 1.02, six centimetres clear of the highest roller, and the top holds at
+     * 3.98 under the crown. The plane is thinner as a result, which is also more correct: a
+     * scan curtain hangs in the opening, it does not go through the machine.
+     */
     this.scannerBeam = mesh(
       'SortationScanField',
-      new THREE.PlaneGeometry(6.25, 3.25),
+      new THREE.PlaneGeometry(6.25, 2.96),
       this.scannerMaterial,
-      new THREE.Vector3(centerX, 2.35, z),
+      new THREE.Vector3(centerX, 2.5, z),
       false,
       false
     );
