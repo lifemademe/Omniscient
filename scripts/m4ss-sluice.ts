@@ -525,8 +525,33 @@ for (const a of W.anchors) {
   check('grate leaves 30px of daylight', FLOOR_TOP - (grate.y + grate.h) === 30, `${FLOOR_TOP - (grate.y + grate.h)}`);
   const under = W.tiles.some((t) => t.y === FLOOR_TOP && t.x <= grate.x && t.x + t.w >= grate.x + grate.w);
   check('the floor runs under the grate', under);
-  const pier = W.tiles.find((t) => t.x === 990 && t.y === 1250)!;
+  const pier = W.tiles.find((t) => t.x === 1020 && t.y === 1240)!;
   check('the pier meets the grate', pier.y + pier.h === grate.y, `${pier.y + pier.h} vs ${grate.y}`);
+  /*
+   * And the pier meets what is over it.
+   *
+   * A sieve is only a sieve if the ONLY way past is the gap under it. The pier stopped ten
+   * pixels below the platform above, which no check had anything to say about - the horizontal
+   * "meets squarely" rule only looks at surfaces side by side. Ten pixels is not a route for a
+   * body that crawls to fifteen, so this was luck rather than design, and the next time
+   * somebody moves that platform the luck runs out.
+   */
+  // The LOWEST thing over it, not the first one found - the shell and the lid both span this
+  // x and both are hundreds of pixels higher.
+  const above = W.tiles
+    .filter((t) => !isShell(t) && t.x <= pier.x && t.x + t.w >= pier.x + pier.w && t.y + t.h <= pier.y + 1)
+    .sort((a, b) => b.y + b.h - (a.y + a.h))[0];
+  check(
+    'and something solid sits on top of the pier',
+    above !== undefined && above.y + above.h === pier.y,
+    above ? `(${above.x},${above.y}) ends at ${above.y + above.h}, pier starts ${pier.y}` : 'nothing above it'
+  );
+  // The doorway is the gate's width, so the wall it hangs in has to be exactly that wide.
+  check(
+    `the pier is the grate's own width`,
+    pier.x === grate.x && pier.w === grate.w,
+    `pier ${pier.x}+${pier.w}, grate ${grate.x}+${grate.w}`
+  );
   const patrol = W.tiles.find((t) => t.y === 760)!;
   check('nothing walks over the pier', pier.x >= patrol.x && pier.x + pier.w <= 1260);
 }

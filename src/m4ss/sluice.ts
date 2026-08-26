@@ -209,10 +209,16 @@ export const THE_SLUICE: World = {
 
     // -- 3/4. the corridor's east wall ----------------------------------------------------
     /*
-     * The pier the grate hangs under. It runs from the patrol floor's underside down to the
-     * grate itself, so there is no way round the wall except the gap the wall is for.
+     * The pier the grate hangs under. It runs from the platform's underside down to the grate
+     * itself, so there is no way round the wall except the gap the wall is for.
+     *
+     * It is sixty wide because the grate is, and it has to be: the doorway IS the gate's width,
+     * so narrowing the door without narrowing the wall it hangs in leaves daylight beside it
+     * and the sieve stops being a sieve. Held flush against the platform's east edge at 1080,
+     * which puts the thirty pixels it gave up on the corridor side where nothing needs them -
+     * a settled body is sixty-nine across and cannot enter a thirty-wide slot.
      */
-    { x: 990, y: 1250, w: 90, h: 160 },
+    { x: 1020, y: 1240, w: 60, h: 170 },
 
     // -- 8. the alcove behind the cracked wall --------------------------------------------
     /*
@@ -365,7 +371,7 @@ export const THE_SLUICE: World = {
      * of its own, and what it teaches is only that the number it asks for is not the last
      * number the stage will ask for.
      */
-    { id: 's1', x: 990, y: 1410, w: 90, h: 140, open: false, lift: 0, sieve: 24 },
+    { id: 's1', x: 1020, y: 1410, w: 60, h: 140, open: false, lift: 0, sieve: 24 },
     /*
      * The bulkhead on the platform's west lip. It goes UP, and it used to be a drawbridge.
      *
@@ -386,13 +392,17 @@ export const THE_SLUICE: World = {
      * sentence and a better beat: the reward for the top of the column is not a walkway, it is
      * being let out.
      *
-     * 90 by 150, which is the grate's own shape and a door rather than a hatch. It was 76 tall
+     * 60 by 150 - the grate's own shape, and the presses' width. All three doors in this level
+     * and both hammers are sixty across now, which is the difference between a set of machinery
+     * and a set of props: the eye reads a repeated width as one factory having made all of it.
+     *
+     * It was 90 by 150, which was already a door rather than a hatch. It was 76 tall
      * for a while because the lift travels the slab's height plus four and the pocket above it
      * was not deep enough - the answer to that was to move the platform down rather than to
      * keep a squashed door, since the pocket is dead space and the arrival is better for the
      * extra fall.
      */
-    { id: 'b1', x: 900, y: 1000, w: 90, h: 150, open: false, lift: 0 },
+    { id: 'b1', x: 900, y: 1000, w: 60, h: 150, open: false, lift: 0 },
     /*
      * The cracked wall at the top of the climb. Only the force plate opens it.
      *
@@ -401,7 +411,7 @@ export const THE_SLUICE: World = {
      * delivered on a force plate and a gate - mechanically a button, perceptually the mass
      * going through a wall.
      */
-    { id: 'w2', x: 184, y: 120, w: 90, h: 375, open: false, lift: 0 },
+    { id: 'w2', x: 214, y: 120, w: 60, h: 375, open: false, lift: 0 },
   ],
 
   buttons: [
@@ -435,7 +445,9 @@ export const THE_SLUICE: World = {
      * says STAND ON ME about the one control in the game you are meant to hit, and a plate
      * left hanging in the air when its door goes up reads as a bug however correct it is.
      *
-     * x 280 puts it six pixels off the gate's east face and 20 above g3 - the same shape stage
+     * x 280 still puts it six pixels off the gate's east face - the wall lost its thirty pixels
+     * on the INSIDE, at 214 rather than 184, so the alcove got wider and the plate did not
+     * move. x 280 is six off the face and 20 above g3 - the same shape stage
      * two's plate has against its own growth, where a release off a built revolution landed on
      * it from 27 of 46 sampled points. g3's sweep stops at 350, so the plate is 40px outside a
      * circle that cannot reach it. What opens this wall is a release.
