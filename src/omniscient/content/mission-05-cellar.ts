@@ -363,7 +363,14 @@ export const MISSION_05: MissionDefinition = {
        * from the top of the stairs.
        */
       id: 'flooded',
-      gesture: 'prop.reacting:contact',
+      /*
+       * Dread, not a recoil. He is not startled - he has understood.
+       *
+       * "That is coming out of the wall now as well. I have to get out." The old `reacting`
+       * is a flinch at a noise, and what this beat is about is a man working out, in the
+       * middle of a sentence, that the room is filling faster than he can leave it. F11.
+       */
+      gesture: 'prop.dread:contact',
       tempo: Tempo.Act,
       say:
         'I have got the saw in it - oh. Oh, that is not - that is coming out of the wall ' +

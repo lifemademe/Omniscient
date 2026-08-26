@@ -519,7 +519,13 @@ export const MISSION_03: MissionDefinition = {
        * first one meant nothing.
        */
       id: 'lost',
-      gesture: 'prop.reacting:contact',
+      /*
+       * The fold. "I should not have done it. I knew and I did it because you said so."
+       *
+       * That is not a recoil, it is somebody stopping. She is not reacting to the seedlings;
+       * she is folding under having been the one who lifted them. F11.
+       */
+      gesture: 'prop.slump:contact',
       framing: 'camera.pan:tunnel-rows',
       tempo: Tempo.Respond,
       say:

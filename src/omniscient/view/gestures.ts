@@ -58,6 +58,33 @@ const GESTURES = {
   /** Agreement, or resignation. The cheapest way to make somebody feel listened to. */
   nod: '@project/assets/animations/Sarcastic Head Nod.fbx',
   /**
+   * The fold. For the beat where somebody stops arguing.
+   *
+   * F11: four moves across eight missions, and by mission five the point is furniture. The
+   * gap the writing kept hitting and the body could not answer was LOSS - a request that
+   * fails, a name that turns out to be the wrong one, the moment a person accepts it.
+   * `reacting` is a recoil and `nod` is agreement; neither is somebody going out of
+   * themselves.
+   *
+   * The asset is Crying.fbx and it is named for the beat rather than the file, like the rest.
+   * Used on defeats it reads as a person folding, which is what a defeat looks like from the
+   * other end of a video call - the face going first and the shoulders following.
+   */
+  slump: '@project/assets/animations/Crying.fbx',
+  /**
+   * The other missing half: the moment somebody realises they are in trouble.
+   *
+   * F11 asked for a lean-in for confessions and there is no lean-in in the asset set - the
+   * four unused clips are Crying, Terrified, Yawn and Yelling, and none of them leans. Rather
+   * than dress one of those up as intimacy, this takes the beat the library CAN play and the
+   * writing genuinely hits: Vasile when the water rises past the covers, Dorin when the lock
+   * turns out to have been opened from inside.
+   *
+   * Said plainly because it matters: this is not the clip F11 named. It is the second real
+   * emotional register the game can afford, and a confession lean-in still has no animation.
+   */
+  dread: '@project/assets/animations/Terrified.fbx',
+  /**
    * The one clip here that is not a one-shot.
    *
    * It lives in the same record because everything around it applies unchanged - the
@@ -83,6 +110,25 @@ const GESTURES = {
 } as const;
 
 export type GestureName = keyof typeof GESTURES;
+
+/**
+ * The gestures a CONTACT performs in conversation, as opposed to the locomotion and
+ * interaction clips that share this table.
+ *
+ * One list, read by three places: the prop actions every rigged contact registers, the
+ * runtime's test for "did this route already ask for a gesture", and the cue harness. Before
+ * this existed the runtime carried its own hardcoded four while its comment claimed a fifth
+ * clip would work without being added there - so adding one would have silently broken the
+ * rule that a beat's own gesture replaces the route's, for exactly the new gesture and
+ * nothing else.
+ *
+ * `walk`, `run`, `open` and the crouch pair are deliberately absent. They are not things a
+ * person does while talking, and `open` in particular collides with a real prop action -
+ * mission 02's `prop.open:splice-box` would be stripped as a gesture if it were in here.
+ */
+export const CONTACT_GESTURES = ['point', 'surprised', 'reacting', 'nod', 'slump', 'dread'] as const;
+
+export type ContactGesture = (typeof CONTACT_GESTURES)[number];
 
 const loader = new FBXLoader();
 const cache = new Map<GestureName, Promise<THREE.AnimationClip | null>>();

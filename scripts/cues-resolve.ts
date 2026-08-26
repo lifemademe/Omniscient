@@ -32,8 +32,10 @@ import { join } from 'node:path';
 
 const CONTENT = join('src', 'omniscient', 'content');
 const SCENES = join('src', 'omniscient', 'view', 'scenes.ts');
+const GESTURES = join('src', 'omniscient', 'view', 'gestures.ts');
 
 const scenes = readFileSync(SCENES, 'utf8');
+const gestures = readFileSync(GESTURES, 'utf8');
 
 /** `scene.registerProp('lids', ...)` and `scene.registerShot('covers', {`. */
 function literalIds(source: string, call: string): Set<string> {
@@ -84,6 +86,20 @@ const propPrefixes = templatePrefixes(scenes, 'scene\\.registerProp');
  * produces a name that exists nowhere.
  */
 const actions = new Set<string>(['highlight', 'point']);
+/*
+ * The contact gestures come from their own list, not from the syntax.
+ *
+ * Every rigged contact used to register these as four literal keys, which this file scraped
+ * with the pattern below - and the moment they were built from CONTACT_GESTURES instead, the
+ * scrape found nothing and thirty-odd `prop.nod:contact` cues across seven missions reported
+ * as missing. The harness was reading the SHAPE of the code rather than the fact it encodes.
+ *
+ * Reading the list is both more robust and more correct: a gesture is playable because it is
+ * in CONTACT_GESTURES, which is exactly what this now checks.
+ */
+for (const match of gestures.matchAll(/^export const CONTACT_GESTURES = \[([^\]]*)\]/gm)) {
+  for (const name of match[1].matchAll(/'([a-z][a-zA-Z0-9-]*)'/g)) actions.add(name[1]);
+}
 /*
  * Any parameter list, not just `(tweener`. The first version of this required the first
  * parameter to be named `tweener` and reported `closer: (_tweener, node) =>` as missing -

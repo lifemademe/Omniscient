@@ -11,6 +11,7 @@
  */
 
 import { Certainty } from '../knowledge/KnowledgeStore.js';
+import { CONTACT_GESTURES } from '../view/gestures.js';
 
 import { gradeDevice } from './device.js';
 import { workLock } from './lock.js';
@@ -20,11 +21,13 @@ import { HOLD_FRAMING } from './types.js';
 /**
  * A cue that moves the contact's body rather than the room.
  *
- * Only used to answer "did this route already ask for a gesture", so it matches the
- * shape rather than the four names - a fifth clip added to gestures.ts should not have
- * to be added here as well to keep working.
+ * Only used to answer "did this route already ask for a gesture". The comment here used to
+ * claim it matched the SHAPE rather than the four names, and then listed the four names - so
+ * a fifth clip would have quietly stopped being replaceable by a beat's own gesture, which is
+ * the failure the comment was written to prevent. Built from the list now, so the claim is
+ * true: adding a conversational gesture means adding it to CONTACT_GESTURES and nowhere else.
  */
-const GESTURE_CUE = /^prop\.(point|surprised|reacting|nod)/;
+const GESTURE_CUE = new RegExp(`^prop\\.(${CONTACT_GESTURES.join('|')})`);
 
 /** Marks a confirmation that belongs to a device rather than to an intent. */
 const DEVICE_PENDING = '__device__';

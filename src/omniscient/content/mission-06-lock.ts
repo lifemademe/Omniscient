@@ -372,7 +372,14 @@ export const MISSION_06: MissionDefinition = {
     },
     {
       id: 'glass',
-      gesture: 'prop.reacting:contact',
+      /*
+       * The fold, again, and this is the beat the clip was added for.
+       *
+       * The line ends on his mother having to live behind a boarded door knowing how her son
+       * got through it. A flinch is the wrong shape for that; the body has to go out of him.
+       * F11.
+       */
+      gesture: 'prop.slump:contact',
       tempo: Tempo.Act,
       say:
         'The glass. Right.\n\n...I have done it. I am in, and there is glass all through her ' +

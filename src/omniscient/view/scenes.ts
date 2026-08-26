@@ -53,6 +53,7 @@ import { createStarfield } from '../art/starfield.js';
 import { brickwork } from '../art/brickwork.js';
 import { applyWaterline } from '../art/waterline.js';
 import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
+import { CONTACT_GESTURES } from './gestures.js';
 import { placeRigged } from './riggedContact.js';
 import {
   buildStationScreen,
@@ -243,12 +244,14 @@ function addContact(
      */
     scene.registerProp('contact', rigged.root, {
       idle: rigged.idle,
-      actions: {
-        point: () => rigged.gesture('point'),
-        surprised: () => rigged.gesture('surprised'),
-        reacting: () => rigged.gesture('reacting'),
-        nod: () => rigged.gesture('nod'),
-      },
+      /*
+       * Built from CONTACT_GESTURES rather than typed out, for the reason that list exists:
+       * four names in four places is four places to forget. A clip added there is playable
+       * by every contact here without touching this line.
+       */
+      actions: Object.fromEntries(
+        CONTACT_GESTURES.map((name) => [name, () => rigged.gesture(name)])
+      ),
     });
     describeContact(scene);
     return rigged;

@@ -287,7 +287,10 @@ stay green on every pass; `preview-stuck.ts` guards the console.
 14. ~~Lighting beats in missions 2/5/6 (F10).~~ **[DONE 2026-08-26 - a `light` domain in the
 cue grammar plus one beat each: the cellar lamp reaching further as the water goes, the sea
 glow standing down as the beacon holds, the step bounce warming with the door. cues-resolve
-knows the domain and was proved to catch a bad beat id.]** 15. Two gesture clips (F11). 16. Music bed:
+knows the domain and was proved to catch a bad beat id.]** 15. ~~Two gesture clips (F11).~~ **[DONE 2026-08-26 - `slump` and `dread`, wired to three
+failure beats. F11 asked for a lean-in for confessions and no lean-in exists in the asset
+set, so the second clip is dread instead; a confession lean-in still has no animation. The
+four names were also hardcoded in three places and are now one exported list.]** 16. Music bed:
 one adaptive drone per Tempo, same synth instrument family. 17. ~~Mission 07 (Sanda)
 restore.~~ **[DECLINED 2026-08-26 - Paul: "keep sanda mission hidden, i dont need it". She
 stays cut. The queue entry in `OmniscientRig` stays commented out; her mission file, contact
