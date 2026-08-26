@@ -40,7 +40,7 @@ Every mechanic requested, checked against the sim:
 | Time passing through hammers | **Exists** | `Crusher` (`mass.ts:214-229`). Stage two has exactly one |
 | Swing on growths to cross | **Exists** | `Anchor` + the whole swing model (`mass.ts:1449-1469`) |
 | Fling after a 360 into a button | **Exists** | `Button.force`, an impact-speed gate in px/s (`mass.ts:197`). Stage two's `heavy` is 420 |
-| Avoid mushrooms | **Half** | The mushrooms are **decor** (`landmarks`, `mass.ts:294`) and cannot hurt anybody. The only hazard in the game is the sporeling `Critter` |
+| Swing over and avoid the sporeling | **Exists** | `Critter` (`mass.ts:244-263`). Stage two has one, on a ledge |
 | Fling through a breakable wall | **Does not exist** | No destructible type, no speed-vs-tile rule anywhere |
 | Split light to be lifted by an updraft | **Does not exist** | No wind, fan, or force-volume entity of any kind |
 
@@ -53,11 +53,18 @@ for "one full turn"; it can only ask for **enough energy**, which is what a dist
 already asks for. That is a better question anyway, and stage two's `heavy` plate already poses
 it. Stage three should pose it harder, not differently.
 
-**"Avoid mushrooms" needs a decision.** Either the hazard is the sporeling — which exists, walks,
-and costs a 1.2s stun and a return to `lastSafe` but **no mass** (`mass.ts:2228-2280`) — or
-mushrooms need to become a real entity, which is Tier 2 work. Tier 1 below uses critters as the
-danger and giant mushrooms as the thing the swing arc has to clear. That reads correctly and
-costs nothing, but the mushroom does not bite.
+**The sporeling is a rope-cutter, and that is the interesting part.** Contact does not cost mass.
+It drops the rope, zeroes spin and slow-motion, stuns for 1.2s and returns the body to
+`lastSafe` (`mass.ts:2228-2280`). Stage two uses it as a floor hazard on a ledge you land on — a
+thing to walk around. But a creature that takes your rope away is far more dangerous
+**underneath a swing** than on a platform, and no stage has ever used it that way. Beat 2 does.
+
+One detail that is a design tool rather than a footnote: contact is tested against the **owned**
+body only — shed lumps are scenery to it (`mass.ts:2248-2254`). Mass you leave on a patrolled
+floor is safe. The half that is still you is not.
+
+The giant mushrooms stay decor, which is correct — they are what the arcs have to clear, and the
+sporelings are what the arcs have to stay above.
 
 ---
 
@@ -84,7 +91,26 @@ than to gain distance.
 It is the same verb answering a different question, on the first screen, before anything is at
 risk. If a player only learns one new thing here, this is the one worth teaching.
 
-### Beat 2 — THE HAMMER ROW  *(teaches: read a machine's rhythm)*
+### Beat 2 — THE PATROL  *(teaches: keep the swing alive)*
+
+A floor with **two sporelings walking it on opposite phases**, and nothing worth standing on. It
+is crossed on the rope, over their heads, on a run of three growths.
+
+This is the beat the request asked for and the one the game has never built. The threat is not
+that they hit you — it is that a swing losing energy dips lower on every pass, and the floor is
+where they are. Cross briskly and their heads are never in the arc. Dither and the arc comes down
+to meet them.
+
+The sim already punishes dithering; this beat just points at it. Holding no direction for longer
+than `swingGrace` 0.55s ramps a drag of `swingIdle` 0.34 against travel (`mass.ts:1368-1375`), and
+a lazy hold goes stale in under a second — `pumpFresh` is 0.9s and stale pumping is cut to a
+quarter (`mass.ts:610`, `1449-1469`). The pump wants **rhythm, not pressure**, and nothing in
+either shipped stage makes a player feel that.
+
+Being caught is cheap — no mass, a stun, back to `lastSafe`. It should be, because this lesson
+needs repeating a few times before it lands.
+
+### Beat 3 — THE HAMMER ROW  *(teaches: read a machine's rhythm)*
 
 A corridor running east. **Two presses, alternating** — same `travel` and `period`, `phase` 0 and
 0.5, with a standing pocket between them.
@@ -99,17 +125,17 @@ Period around 3.0s.
 
 Being caught costs 45% of the body floored at 20g, shed onto the floor and recoverable with Q
 (`mass.ts:2382-2456`). Nothing dies. That is exactly the right punishment here — it costs reach,
-and reach is what beat 5 needs.
+and reach is what beat 7 needs.
 
-### Beat 3 — THE SIEVE  *(re-teaches: split, and that what you leave stays)*
+### Beat 4 — THE SIEVE  *(re-teaches: split, and that what you leave stays)*
 
 A sieve wall at `sieve: 24`, the value both other stages use. Deliberately familiar: this is the
-setup for beat 4, not a puzzle in itself.
+setup for beat 5, not a puzzle in itself.
 
 Split to 24 or under, crawl through, and **the shed half stays exactly where you left it** —
 disowned, inert, no gravity, no drift, until Q wakes it (`mass.ts:2545-2548`, `1592-1607`).
 
-### Beat 4 — THE COLUMN  *(the new toy: split light, ride the air)*
+### Beat 5 — THE COLUMN  *(the new toy: split light, ride the air)*
 
 The sump at the bottom of the east side, and above it a **vertical air column** running most of
 the level's height.
@@ -128,7 +154,7 @@ column needs the same line in its own words. Without it this beat is a guess.
 
 At the top of the column: a platform, and a plate.
 
-### Beat 5 — THE BRIDGE  *(the payoff: the wall becomes the floor)*
+### Beat 6 — THE BRIDGE  *(the payoff: the wall becomes the floor)*
 
 The plate at the top of the column opens a **bridge gate** — a gate that is solid in both states:
 a slab across the level when shut, a floor when down (`mass.ts:1051-1054`).
@@ -137,12 +163,15 @@ So the wall the player has been looking at since beat 1 lies down and becomes th
 west. They cross it at 14g, weighing nothing, to stand over the mass they abandoned two beats
 ago, and Q it back.
 
-There is a **critter on the bridge**, and at 14g there is no growth in reach to escape onto. The
-sporeling costs no mass — but it drops the rope, stuns for 1.2s and returns the body to
-`lastSafe` (`mass.ts:2228-2280`), and on a narrow span that is a long walk back. It is the right
-threat for a beat where the player is deliberately fragile.
+**There is a sporeling on the bridge**, and this is the third thing the same creature is asked to
+be: in beat 2 it was something to stay above, here it is something to get past on foot with no
+rope at all. At 14g the nearest growth would have to be within 74px, and there will not be one. A
+stun on a narrow span is a long walk back.
 
-### Beat 6 — THE PRESS GALLERY  *(the climax)*
+One creature, three readings — under you, beside you, and between you and the way on. That is
+worth more than three creatures.
+
+### Beat 7 — THE PRESS GALLERY  *(the climax)*
 
 The climb back up the west side: **four growths, ~165px apart**, the same chain shape stage two
 ends on — with one addition that changes it completely.
@@ -157,10 +186,11 @@ Every release above 2.1 rad/s of spin already buys slow motion — real time sca
 two growths is about a third of a second and *"that is not an aiming window, it is a reflex
 test"*. So the player gets the time to read the press. The mechanic is already built for this.
 
-Giant mushroom `landmarks` sit in the gallery so the arcs have to clear something. They are
-scenery and they do not bite; see the Tier 2 note.
+Giant mushroom `landmarks` sit in the gallery so the arcs have something to clear, and a
+sporeling walks the gallery floor far below — beat 2 has already taught the player to read the
+space under an arc, and here it is read at height with a press in the way as well.
 
-### Beat 7 — THE BREACH  *(the last swing)*
+### Beat 8 — THE BREACH  *(the last swing)*
 
 From the top growth: wind up past `2.0 × g × rope`, release, and hit a **vertical force plate at
 460 px/s** — harder than stage two's 420, on a plate that is out of the swing's own sweep so it
@@ -184,9 +214,9 @@ Behind it, the exit.
 Both found in the inventory. Both are free content — implemented, animated, and dead.
 
 **`Gate.mode: 'bridge'`** with its `span` rect. Implemented in the sim (`mass.ts:1052`), animated
-in the rig (`M4SSRig.ts:3876+`), used by neither stage. Beat 5 above is built on it.
+in the rig (`M4SSRig.ts:3876+`), used by neither stage. Beat 6 above is built on it.
 
-**`Crusher.axis: 'x'`.** Supported (`mass.ts:214-229`), never authored. Beat 6 is built on it.
+**`Crusher.axis: 'x'`.** Supported (`mass.ts:214-229`), never authored. Beat 7 is built on it.
 
 A third stage that uses both is not just new content — it retires two pieces of dead code by
 making them load-bearing.
@@ -200,7 +230,7 @@ Neither is required for the stage above to work. Both are genuinely good, and bo
 bible rather than the project, but the sim is also the thing stage two's play session has not
 validated yet — so these are a deliberate decision, not a detail.
 
-### 5a. The updraft — **needed by beat 4 as written**
+### 5a. The updraft — **needed by beat 5 as written**
 
 A new `World` field and entity:
 
@@ -220,10 +250,10 @@ number, the same way the sieve passes you or does not.
 floor. **Risk:** it interacts with the rope constraint (what happens if you latch inside the
 column?) and with the kill plane. Both need a harness case.
 
-**If declined:** beat 4 becomes a second sieve at 14 and beat 5's bridge is opened by a plate
+**If declined:** beat 5 becomes a second sieve at 14 and beat 6's bridge is opened by a plate
 reached some other way. The stage still works. It loses its one genuinely new toy.
 
-### 5b. The breakable wall — **not needed; beat 7 already reads as one**
+### 5b. The breakable wall — **not needed; beat 8 already reads as one**
 
 A `breakAt?: number` on `Tile`: an owned particle striking above that speed removes the tile.
 
@@ -232,12 +262,6 @@ A `breakAt?: number` on `Tile`: an owned particle striking above that speed remo
 not for this stage. Beat 7 delivers the *feeling* on mechanics that are already tuned, and a
 destructible whose only use is one wall is a system built for a single sentence.
 
-### 5c. A biting mushroom — **optional**
-
-If "avoid mushrooms" should mean the mushrooms hurt, that is a static `Hazard` entity: a rect
-that stuns on contact like the critter does. Cheaper than either of the above. Worth it only if
-the gallery's arcs want a *static* threat as well as a moving one.
-
 ---
 
 ## 6. What could go wrong
@@ -245,9 +269,9 @@ the gallery's arcs want a *static* threat as well as a moving one.
 **The stage is a re-run.** The real risk. Between them, stages one and two already use: swing
 across a pit, sieve split, recall, a red growth woken by a remote plate, a patrolling critter, a
 four-link fling chain with slow-mo, a timed press, and a speed-gated button. Stage three's claim
-to exist rests on four things only: the **descent** opening, **two presses out of phase**, the
-**air column**, and the **bridge**. If the updraft is declined, that is three — and it is worth
-asking whether three is enough before building it.
+to exist rests on five things: the **descent** opening, the **patrolled floor crossed on the
+rope**, **two presses out of phase**, the **air column**, and the **bridge**. If the updraft is
+declined, four — which is enough. It was not obviously enough before the sporeling beat.
 
 **Vertical clearance.** A body's hanging form scales as `sqrt(count) × rest` (`mass.ts:2004`) and
 crawling relaxes it to roughly 15px (`crawlRelax` 0.35). Corridor heights have to be checked
@@ -260,7 +284,7 @@ than the ejection limit and is expelled through the underside (`shaft.ts:105-113
 `DEEP = 300`.
 
 **The chain arithmetic is tight.** Rope 80 lifts about 160px over the top plus roughly 80 of
-fling; growths 200 apart are impossible (`shaft.ts:126-136`). Beat 6's press must not steal the
+fling; growths 200 apart are impossible (`shaft.ts:126-136`). Beat 7's press must not steal the
 margin — stage two removed a second press for exactly this reason, because it sat in the flight
 path of the heavy-button fling.
 
@@ -276,10 +300,10 @@ path of the heavy-button fling.
    on them. Small, but not free.
 3. **Grey-box the level.** A `sluice.ts` beside `lab.ts` (273 lines) and `shaft.ts` (369). Add to
    `STAGES`; the save clamp at `M4SSRig.ts:645` was already written for a three-stage build.
-4. **Play it before dressing it.** Beats 1, 2 and 6 are all timing, and timing cannot be
+4. **Play it before dressing it.** Beats 2, 3 and 7 are all timing, and timing cannot be
    measured off a capture.
 5. **Art pass**, against the art bible.
 
-**Before any of it: stage two still has not had its play session.** Beat 6 is stage two's
+**Before any of it: stage two still has not had its play session.** Beat 7 is stage two's
 finale with a press added to it, and if the chain's feel is wrong the fault is now in two levels
 instead of one.
