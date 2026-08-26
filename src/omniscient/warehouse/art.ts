@@ -588,6 +588,7 @@ export class WarehouseEnvironment {
     this.buildStations();
     this.buildConveyors();
     this.buildSecurityZones();
+    this.buildRackEndProtection();
     this.buildFloorNavigation();
     this.buildCeilingServices();
     this.buildTruck();
@@ -1160,6 +1161,48 @@ export class WarehouseEnvironment {
    *
    * The aisle COUNT is read from the layout, never written. See WAREHOUSE_AISLE_COUNT.
    */
+  /**
+   * Column guards and end ties, which is how a rack ends.
+   *
+   * The runs simply stopped. A rack frame ran to z +-13 and finished on an open pair of
+   * uprights, so an aisle mouth - the exact place the player enters on every trip, and the
+   * one the floor hatching now marks as a threshold - had nothing built at it.
+   *
+   * A column guard is the most recognisable object in a warehouse after the racking itself:
+   * a bright steel sleeve bolted round the base of every end upright, there because that is
+   * where forklifts hit. It is also, usefully, a saturated accent at knee height in the one
+   * spot the composition needed one - the bottom of the frame at the end of every run, which
+   * until now was floor, floor and more floor.
+   *
+   * The end ties are the other half: a pair of horizontal members closing the top and middle
+   * of the end frame so the run reads as terminated rather than cut off. Deliberately NOT a
+   * solid end panel - ten six-metre slabs would wall the aisles off from the cross-aisle and
+   * cost the room its long sight lines, which are most of what makes it read as big.
+   */
+  private buildRackEndProtection(): void {
+    const guards: THREE.BufferGeometry[] = [];
+    const ties: THREE.BufferGeometry[] = [];
+    const halfLength = WAREHOUSE_LAYOUT.rack.length / 2;
+    for (const x of WAREHOUSE_LAYOUT.rack.centers) {
+      for (const z of [-halfLength, halfLength]) {
+        for (const post of [-0.72, 0.72]) {
+          // A sleeve round the post base, proud of it on every side.
+          guards.push(boxGeometry(new THREE.Vector3(0.3, 0.46, 0.3), new THREE.Vector3(x + post, 0.23, z)));
+          // The cap, a shade narrower, so the top edge catches its own line of light.
+          guards.push(boxGeometry(new THREE.Vector3(0.34, 0.05, 0.34), new THREE.Vector3(x + post, 0.48, z)));
+        }
+        // Horizontal ties across the end frame, top and middle.
+        for (const y of [5.42, 2.95]) {
+          ties.push(boxGeometry(new THREE.Vector3(1.5, 0.09, 0.09), new THREE.Vector3(x, y, z)));
+        }
+      }
+    }
+    this.root.add(
+      mesh('RackColumnGuards', mergeGeometries(guards, false) ?? new THREE.BoxGeometry(0.1, 0.1, 0.1), AMBER),
+      mesh('RackEndTies', mergeGeometries(ties, false) ?? new THREE.BoxGeometry(0.1, 0.1, 0.1), STEEL)
+    );
+  }
+
   private buildFloorNavigation(): void {
     const markings: THREE.BufferGeometry[] = [];
     const runFront = WAREHOUSE_BAY_Z0 + WAREHOUSE_BAY_RUN;

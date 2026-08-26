@@ -73,39 +73,95 @@ export const RETRO_LOOKS = {
      * face stops being a face. 3 halves the resolution twice over and still leaves an
      * expression readable, which is the constraint this game has and a platformer does not.
      */
-    pixel: 2.4,
+    /*
+     * ## The rooms are not a screen any more
+     *
+     * This carried pixel 2.4 and a chromatic fringe on the argument above - that a contact
+     * scene is something the machine is watching through somebody else's camera, so a coarse
+     * signal suits it. The argument is sound and the image was not making it: a pixelated
+     * picture does not say "someone else's camera", it says "low resolution", and the player
+     * has to be told the rest.
+     *
+     * What it cost was specific. Every register in this game was some AMOUNT of raster -
+     * 2.4 here, 1.18 in the warehouse, 2.4 on the console - which is a gradient, and a
+     * gradient reads as a house style rather than as information. Worse, it was inverted:
+     * the mission whose HUD says REMOTE LINK and LOW BANDWIDTH was the CRISPEST thing in the
+     * game and the memories were the coarsest.
+     *
+     * So the raster becomes categorical instead. It now means one thing - you are looking
+     * through a device - and the rooms, which are the machine's reconstruction of a place
+     * rather than a feed of one, are rendered as it holds them: clean, flat and cel-shaded.
+     * The banding, the value tiers and the height gradient all live here, and all of it was
+     * being resampled away.
+     *
+     * Vignette stays, low. It is a lens artefact everywhere else in the game and taking it
+     * to zero made the frame edges read as a cut-out.
+     */
+    pixel: 0,
     curve: 0,
-    aberration: 0.0008,
+    aberration: 0,
     scanline: 0,
     scanPitch: 3,
     grille: 0,
     bleed: 0,
-    vignette: 0.16,
+    vignette: 0.06,
     roll: 0,
     flicker: 0,
+    /* Not a retro artefact - this is the grade ACES took off. It stays in every preset. */
     saturation: 1.16,
     tint: new THREE.Color(1, 1, 1),
   },
   /**
-   * Warehouse cel prototype.
+   * The drone link: a feed, and now it looks like one.
    *
-   * The picture is still a remote feed, but the raster sits behind the line art instead of
-   * competing with it: near-native resolution, a shallow scan trough, no temporal roll, and
-   * only enough convergence error to keep the surveillance fiction alive.
+   * This is the middle register. The player is piloting a machine over a remote connection -
+   * the HUD says so twice - so the picture owes some evidence of the link, and it used to
+   * carry less raster than the dioramas did. Pushed up until it reads as transmitted rather
+   * than rendered, but deliberately kept under `warehouseFeed`: the drone is the camera the
+   * player IS, and a shot you inhabit should sit closer to clean than a shot you are
+   * watching.
    */
   warehouseCel: {
-    pixel: 1.18,
-    curve: 0.003,
-    aberration: 0.00045,
-    scanline: 0.032,
+    pixel: 1.5,
+    curve: 0.007,
+    aberration: 0.0009,
+    scanline: 0.07,
     scanPitch: 4,
-    grille: 0.06,
-    bleed: 0.05,
-    vignette: 0.17,
+    grille: 0.1,
+    bleed: 0.085,
+    vignette: 0.2,
     roll: 0,
     flicker: 0,
     saturation: 1.07,
     tint: new THREE.Color(0.985, 1.0, 1.025),
+  },
+  /**
+   * A fixed camera, and the whole point of it is that cutting here is a change of MEDIUM.
+   *
+   * The three service doors, the security zones and the pursuit rig all come through
+   * cameras bolted to a wall - not through the drone. With every view carrying a similar
+   * raster, switching to one of those was a change of angle and nothing more, and the game
+   * was giving away a free piece of storytelling: the player should know they have stopped
+   * flying and started WATCHING before they have read a single label.
+   *
+   * So this is the loud register. Coarser, a deeper scan trough, real convergence error, a
+   * slow roll bar and a trace of mains flicker - the things a cheap fixed camera does and a
+   * drone downlink does not. Reduced-motion strips the roll and the flicker; see
+   * accessibleLook.
+   */
+  warehouseFeed: {
+    pixel: 2.1,
+    curve: 0.013,
+    aberration: 0.0017,
+    scanline: 0.105,
+    scanPitch: 3,
+    grille: 0.14,
+    bleed: 0.13,
+    vignette: 0.27,
+    roll: 0.014,
+    flicker: 0.0012,
+    saturation: 1.02,
+    tint: new THREE.Color(0.96, 1.0, 1.03),
   },
   console: {
     /*

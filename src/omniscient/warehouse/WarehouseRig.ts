@@ -6,6 +6,7 @@ import { TUNED_BLOOM } from '../art/postTuning.js';
 import { adaptiveScore } from '../audio/AdaptiveScore.js';
 import { getAccessibilityPreferences } from '../accessibility/preferences.js';
 import { setCursorVisible, setPointerLockAllowed } from '../art/cursor.js';
+import { setRetroLook } from '../art/retro.js';
 import { setRoomTone } from '../audio/RoomTone.js';
 import { seedFrom } from '../core/rng.js';
 
@@ -3681,6 +3682,21 @@ export class WarehouseRig extends ENGINE.SceneNode {
      */
     const shot = this.containmentResponse ? 'containment' : this.pursuit ? 'pursuit' : this.view;
     const snap = shot !== this.lastShot;
+    /*
+     * The raster changes with the DEVICE, on the same frame the camera cuts.
+     *
+     * Everything that is not the drone is a camera bolted to a wall - the three service
+     * doors, the containment zones, the pursuit rig - and those get the loud register so
+     * that arriving at one reads as a change of medium rather than a change of angle. See
+     * RETRO_LOOKS.warehouseFeed.
+     *
+     * Immediate, because this rides a cut. The pass eases between looks by default, which is
+     * right for a mode change and wrong here: a feed that fades into being a feed is a
+     * transition, and a transition says the two shots are the same picture seen differently.
+     */
+    if (snap && this.celVisualsEnabled) {
+      setRetroLook(shot === 'drone' ? 'warehouseCel' : 'warehouseFeed', true);
+    }
     this.lastShot = shot;
     if (this.containmentResponse) {
       const pose = WAREHOUSE_SECURITY_ZONES[this.containmentResponse.zone].camera;
