@@ -290,8 +290,18 @@ glow standing down as the beacon holds, the step bounce warming with the door. c
 knows the domain and was proved to catch a bad beat id.]** 15. ~~Two gesture clips (F11).~~ **[DONE 2026-08-26 - `slump` and `dread`, wired to three
 failure beats. F11 asked for a lean-in for confessions and no lean-in exists in the asset
 set, so the second clip is dread instead; a confession lean-in still has no animation. The
-four names were also hardcoded in three places and are now one exported list.]** 16. Music bed:
-one adaptive drone per Tempo, same synth instrument family. 17. ~~Mission 07 (Sanda)
+four names were also hardcoded in three places and are now one exported list.]** 16. ~~Music bed:
+one adaptive drone per Tempo, same synth instrument family.~~ **[DECLINED 2026-08-26 on
+evidence - a recommendation rather than a schedule call, so say so if you want it anyway.
+It contradicts a decision AdaptiveScore's own header states: "Contact conversations
+themselves stay scoreless. A human voice and its room are the music there." A drone per Tempo
+is a drone under every conversation beat, which is the one place the design deliberately
+keeps clear. The premise does not hold either - all ten declared score states are entered by
+something, and every state taking a detail parameter has it driven by real state: the globe
+by requests answered, the action pulse by how much of the field is cut, the warehouse bed by
+movement and stage. Tempo is already expressed twice without music, as the pressure hint and
+the action/chat mode switch. A bed under conversation is a change to the game's audio
+philosophy, not a wiring job.]** 17. ~~Mission 07 (Sanda)
 restore.~~ **[DECLINED 2026-08-26 - Paul: "keep sanda mission hidden, i dont need it". She
 stays cut. The queue entry in `OmniscientRig` stays commented out; her mission file, contact
 record, scene and signal entry stay where they are, unreferenced but intact.]**
