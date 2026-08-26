@@ -735,7 +735,32 @@ export class WarehouseEnvironment {
 
           // Eleven boxes rather than one, and see palletGeometry for why that is worth it on
           // the object the player spends the most time looking at.
-          bucket.pallet.push(...palletGeometries(px, levelY - 0.07, pz));
+          const deckTop = levelY - 0.07;
+          bucket.pallet.push(...palletGeometries(px, deckTop, pz));
+          /*
+           * ## Everything on a pallet stands ON it, and stops under the shelf above
+           *
+           * Reported as assets passing through other assets, especially the cartons, and the
+           * arithmetic was blunt about it once it was written down.
+           *
+           * SINKING: a first-tier carton was placed at `levelY + height/2 - 0.26`, so its
+           * underside sat at levelY - 0.26 while the pallet deck it stands on is at
+           * levelY - 0.07. Every bottom carton in the building was nineteen centimetres inside
+           * its own pallet. Totes were five centimetres under and drums seven, from three
+           * separately hand-typed offsets that had each been nudged until the stack looked
+           * about right from one angle.
+           *
+           * INTERPENETRATING: tiers stepped by a fixed 0.68 while carton heights range 0.52 to
+           * 0.78, so any box over 0.68 tall had the next one growing out of its lid - up to ten
+           * centimetres of overlap. Stacks now accumulate the real heights.
+           *
+           * PUNCHING THROUGH: levels are 1.35 apart and the shelf above sits 1.07 over the
+           * deck, but `load` went up to three - and three cartons is up to 2.34m. A full stack
+           * went straight through the beam above it and into the next level's pallet. HEADROOM
+           * is measured from the shelf line and tiers stop when the next will not fit, which
+           * is also what a person loading a rack does.
+           */
+          const headroom = (RACK_SHELF_Y[level + 1] ?? levelY + 1.02) - deckTop - 0.04;
 
           /*
            * Drawn per pallet, not per carton, because a pallet holds ONE kind of thing. Mixed
@@ -746,18 +771,19 @@ export class WarehouseEnvironment {
             for (const [dx, dz] of [[-0.3, -0.26], [0.3, -0.26], [-0.3, 0.26], [0.3, 0.26]] as const) {
               if (rng() < 0.22) continue;
               const drum = new THREE.CylinderGeometry(0.26, 0.26, 0.82, 12);
-              drum.translate(px + dx, levelY + 0.27, pz + dz);
+              drum.translate(px + dx, deckTop + 0.41, pz + dz);
               bucket.drum.push(drum);
               const band = new THREE.CylinderGeometry(0.268, 0.268, 0.07, 12);
-              band.translate(px + dx, levelY + 0.44, pz + dz);
+              band.translate(px + dx, deckTop + 0.58, pz + dz);
               bucket.drumBand.push(band);
             }
             continue;
           }
           if (stock < 0.19) {
-            const stack = 1 + Math.floor(rng() * 3);
+            const stack = Math.min(1 + Math.floor(rng() * 3), Math.max(1, Math.floor(headroom / 0.41)));
             for (let tier = 0; tier < stack; tier++) {
-              const y = levelY + tier * 0.4 + 0.06;
+              // 0.41 a tier: a 0.36 tote plus the 0.05 lid the next one stands on.
+              const y = deckTop + tier * 0.41 + 0.18;
               const tote = new THREE.BoxGeometry(1.02, 0.36, 0.76);
               tote.translate(px + jitter(rng, 0.04), y, pz + jitter(rng, 0.04));
               bucket.tote.push(tote);
@@ -770,10 +796,14 @@ export class WarehouseEnvironment {
 
           const load = 1 + Math.floor(rng() * 3);
           const wrapped = rng() < 0.26;
+          let stackY = deckTop;
+          let tiers = 0;
           for (let tier = 0; tier < load; tier++) {
             const height = 0.52 + rng() * 0.26;
+            // Stop rather than overflow: a loader who cannot fit another box does not add it.
+            if (tier > 0 && stackY + height - deckTop > headroom) break;
             const cx = px + jitter(rng, 0.07);
-            const cy = levelY + tier * 0.68 + height * 0.5 - 0.26;
+            const cy = stackY + height * 0.5;
             const cz = pz + jitter(rng, 0.07);
             const depth = 0.6 + rng() * 0.26;
 
@@ -787,10 +817,14 @@ export class WarehouseEnvironment {
               tape.translate(cx, cy, cz);
               (rng() < 0.5 ? bucket.tapeLight : bucket.tapeDark).push(tape);
             }
+            stackY += height;
+            tiers += 1;
           }
-          if (wrapped && load > 1) {
-            const wrap = new THREE.BoxGeometry(1.06, load * 0.68 + 0.06, 0.98);
-            wrap.translate(px, levelY + (load * 0.68) / 2 - 0.2, pz);
+          // The wrap follows the stack it is wrapping, so it cannot outgrow it either.
+          if (wrapped && tiers > 1) {
+            const wrapHeight = stackY - deckTop + 0.06;
+            const wrap = new THREE.BoxGeometry(1.06, wrapHeight, 0.98);
+            wrap.translate(px, deckTop + wrapHeight / 2 - 0.03, pz);
             bucket.wrap.push(wrap);
           }
         }
