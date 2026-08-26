@@ -419,6 +419,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private readonly droneVelocity = new THREE.Vector3();
   private readonly desiredDroneVelocity = new THREE.Vector3();
   private readonly droneVelocityDelta = new THREE.Vector3();
+  /**
+   * Where the lens is, in the RIG's own frame - never in world.
+   *
+   * The camera node is a child of this rig and takes this straight as its local position, and
+   * the rig stands at z 1200. Everything that compares this against a `getWorldPosition()`, or
+   * hands it to a raycaster, has to convert first - see cameraWorldPosition. Written down here
+   * because the same mismatch has now been found three times in this file, and it never throws:
+   * a distance simply comes back in the hundreds and whatever was being aimed at is refused.
+   */
   private cameraPosition = DRONE_START.clone();
   private cameraTarget = new THREE.Vector3(0, 2.8, 0);
   private yaw = Math.PI;
@@ -2749,12 +2758,14 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (this.view === 'cctv') {
       acquired = intruder.currentZone === this.selectedZone;
     } else {
+      // World, both sides. See cameraWorldPosition - the same 1200m mismatch was here.
+      const eye = this.cameraWorldPosition();
       const position = intruder.getWorldPosition(new THREE.Vector3());
-      const toTarget = position.sub(this.cameraPosition);
+      const toTarget = position.sub(eye);
       const distance = toTarget.length();
       const forward = this.cameraTarget.clone().sub(this.cameraPosition).normalize();
       const direction = toTarget.normalize();
-      this.cameraRaycaster.set(this.cameraPosition, direction);
+      this.cameraRaycaster.set(eye, direction);
       this.cameraRaycaster.near = 0.05;
       this.cameraRaycaster.far = distance;
       const blocked = this.cameraRaycaster.intersectObject(this.environment.root, true)
@@ -2954,14 +2965,33 @@ export class WarehouseRig extends ENGINE.SceneNode {
     return out.set(Math.sin(this.yaw) * flat, Math.sin(this.pitch), Math.cos(this.yaw) * flat).normalize();
   }
 
+  /**
+   * The lens, in WORLD space.
+   *
+   * `cameraPosition` is rig-LOCAL - the camera node is a child of this rig and its position is
+   * set from it directly - and the warehouse rig stands at z 1200. So any test that puts it up
+   * against a `getWorldPosition()` is comparing two points twelve hundred metres apart, and
+   * three.js raycasting is world-space too, so the cast was leaving the building as well.
+   *
+   * This is the trap this file already documents twice: "the whole warehouse sits 800 metres
+   * up, so anything written here has to stay in the rig's own coordinates or it lands in the
+   * sky", and the optical brackets caught it once already - "the feedback module rebases what
+   * it is handed, so the local ones were pushed a further 800m down". Third time. It is a
+   * silent failure every time because nothing throws; a number simply comes back enormous.
+   */
+  private cameraWorldPosition(out = new THREE.Vector3()): THREE.Vector3 {
+    return (this as unknown as THREE.Object3D).localToWorld(out.copy(this.cameraPosition));
+  }
+
   private worldTargetAcquired(position: THREE.Vector3, maxDistance = 18, threshold = 0.94): boolean {
-    const toTarget = position.clone().sub(this.cameraPosition);
+    const eye = this.cameraWorldPosition();
+    const toTarget = position.clone().sub(eye);
     const distance = toTarget.length();
     if (distance < 0.05 || distance > maxDistance) return false;
     const direction = toTarget.multiplyScalar(1 / distance);
     const forward = this.cameraForward();
     if (direction.dot(forward) < threshold) return false;
-    this.cameraRaycaster.set(this.cameraPosition, direction);
+    this.cameraRaycaster.set(eye, direction);
     this.cameraRaycaster.near = 0.05;
     this.cameraRaycaster.far = distance;
     return !this.cameraRaycaster.intersectObject(this.environment.root, true)

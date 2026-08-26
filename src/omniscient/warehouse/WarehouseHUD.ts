@@ -587,6 +587,8 @@ export class WarehouseHUD {
   private verdict: HTMLDivElement;
   private opticalAim = false;
   private messageTimer = 0;
+  /** The last thing said in the chat, so an unbroken run of the same refusal is not repeated. */
+  private lastFlashed = '';
   private decisionHandler: ((action: WarehouseConsoleAction) => void) | null = null;
   private toolHandler: ((tool: WarehouseTool) => void) | null = null;
   private transmitHandler: ((text: string) => WarehouseChatReply | null) | null = null;
@@ -1146,9 +1148,39 @@ export class WarehouseHUD {
    * The signature is unchanged so all the call sites keep working, and `seconds` is accepted
    * and ignored: the chat does not expire.
    */
+  /**
+   * Say it once in the chat, and after that just say it.
+   *
+   * Notifications go to the chat so they can be re-read, which is right for the first time a
+   * player is told something and wrong for the ninth: pressing scan against a target that is
+   * not acquired pasted the same refusal into the log on every click, and a log that repeats
+   * itself is a log nobody reads. The playtest put it plainly - it should appear once and then
+   * flash if the button is pressed again.
+   *
+   * So a repeat of the message that is already the most recent one goes to the banner instead.
+   * The banner still exists and was simply unused after everything moved to chat; it is the
+   * right home for "you already know this" because it costs nothing to ignore.
+   *
+   * Compared against the LAST message only, not a set. Two failures either side of a success
+   * are two different moments and the player has done something in between - it is only the
+   * unbroken run of the same refusal that is noise.
+   */
   public flash(text: string, seconds = 2.4): void {
     if (seconds < FLASH_TO_CHAT_SECONDS) return;
+    if (text === this.lastFlashed) {
+      this.showBanner(text, seconds);
+      return;
+    }
+    this.lastFlashed = text;
     this.ops.appendSystem('SYSTEM', text);
+  }
+
+  /** The banner across the feed. Used for a refusal the player has already been told once. */
+  private showBanner(text: string, seconds: number): void {
+    this.message.textContent = text;
+    this.message.classList.remove('warehouse-hud__message--shown');
+    requestAnimationFrame(() => this.message.classList.add('warehouse-hud__message--shown'));
+    this.messageTimer = seconds;
   }
 
   public setSpeedLines(active: boolean, intensity = 1): void {

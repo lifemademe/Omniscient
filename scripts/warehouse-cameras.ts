@@ -196,5 +196,33 @@ console.log(`\n--- the drone lens: where the optical scan thinks it is pointing 
   else console.log('  ok    cameraForward() is the one place that builds it');
 }
 
+/*
+ * cameraPosition is rig-local, and a raycast is not.
+ *
+ * The camera node is a child of the rig and takes this straight as a local position, while
+ * the rig stands at z 1200 - so a ray cast from it starts twelve hundred metres from the
+ * lens and leaves the building. Nothing throws: the distance comes back in the hundreds and
+ * whatever was being aimed at is quietly refused, which is what the optical scan did on every
+ * click for the whole of the inbound audit.
+ *
+ * Only the raycast is checked, and that is deliberate. Subtracting cameraPosition from
+ * cameraTarget is fine forever - both are local and a difference of two points in the same
+ * frame is a direction, which a translation cannot change. A rule that flagged those would be
+ * a rule people learn to ignore. Casting from it is wrong every single time.
+ *
+ * Third time this frame mismatch has been found in one file, per its own comments, which is
+ * enough times to make it a rule rather than a fix.
+ */
+{
+  const src = readFileSync('src/omniscient/warehouse/WarehouseRig.ts', 'utf8');
+  let mixed = 0;
+  src.split(/\r?\n/).forEach((line, i) => {
+    if (!line.split(' ').join('').includes('Raycaster.set(this.cameraPosition')) return;
+    mixed += 1;
+    fail(`WarehouseRig.ts:${i + 1} casts a world-space ray from rig-local cameraPosition`);
+  });
+  if (mixed === 0) console.log('  ok    every raycast starts from a world-space origin');
+}
+
 console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} FAILED`);
 process.exit(failures === 0 ? 0 : 1);
