@@ -331,9 +331,29 @@ export class WarehouseSetDressing {
       this.root.add(light);
     }
 
-    for (const [index, [x, z, color]] of ([
-      [0, 24.4, '#e0a24c'],
-      [0, -26.4, '#d65a42'],
+    /*
+     * ## The beacons are ON the wall now, not hanging in front of it
+     *
+     * Reported as a glowing white shape in front of door B, and that is what it was: a bare
+     * 22cm emissive cone at (0, 3.3, 24.4) - four and a half metres clear of the front wall,
+     * three and a bit up, touching nothing. Emissive amber at 1.5 clips to white through the
+     * cel pass's brightness, which is why it read as a pale blob rather than as a lamp; same
+     * family as the door lock bolts, and the same cause. An unmounted primitive with a glow on
+     * it is not a prop, it is a placeholder.
+     *
+     * Each one moves back onto the wall of the door it belongs to - the front service door and
+     * the rear freight opening - and rises above the head of that opening, which is where a
+     * door-active beacon is fitted and the only place it does not foul the shutter. It gets
+     * the three parts that make it read: a BACKPLATE screwed to the cladding, an ARM standing
+     * it off, and a CAGE over the lens.
+     *
+     * `standoff` is the inward direction for each: the front wall's inner face is at z 29.02
+     * and the rear's at -29.02, so the front beacon hangs at a smaller z and the rear at a
+     * larger one.
+     */
+    for (const [index, [x, wallZ, standoff, color]] of ([
+      [0, 29.02, -1, '#e0a24c'],
+      [0, -29.02, 1, '#d65a42'],
     ] as const).entries()) {
       const material = new THREE.MeshStandardMaterial({
         color,
@@ -341,16 +361,33 @@ export class WarehouseSetDressing {
         emissiveIntensity: 1.5,
         roughness: 0.24,
       });
-      const beacon = mesh('WarningBeacon', new THREE.CylinderGeometry(0.11, 0.14, 0.22, 12), material, new THREE.Vector3(x, 3.3, z));
+      // Above the 3.69m door head, under the lintel, on the header cladding.
+      const y = 4.42;
+      const z = wallZ + standoff * 0.34;
+      const beacon = mesh('WarningBeacon', new THREE.CylinderGeometry(0.11, 0.14, 0.22, 12), material, new THREE.Vector3(x, y, z));
+      this.root.add(
+        mesh('WarningBeaconPlate', new THREE.BoxGeometry(0.34, 0.4, 0.07), DUCT, new THREE.Vector3(x, y - 0.04, wallZ + standoff * 0.035)),
+        mesh('WarningBeaconArm', new THREE.BoxGeometry(0.09, 0.09, 0.34), DUCT, new THREE.Vector3(x, y - 0.14, wallZ + standoff * 0.19)),
+        mesh('WarningBeaconCap', new THREE.CylinderGeometry(0.13, 0.13, 0.04, 12), DUCT, new THREE.Vector3(x, y + 0.13, z))
+      );
+      // Three bars over the lens - a beacon in a working building always has a guard.
+      for (const bar of [-0.09, 0, 0.09]) {
+        this.root.add(mesh(
+          'WarningBeaconCage',
+          new THREE.BoxGeometry(0.02, 0.26, 0.02),
+          DUCT,
+          new THREE.Vector3(x + bar, y, z + standoff * 0.13)
+        ));
+      }
       const light = ENGINE.PointLightNode.create({
         name: `WarningBeaconLight-${index + 1}`,
         color,
         intensity: 5,
         distance: 6,
         decay: 1.8,
-        // Above the housing rather than buried in it, so the beacon lights the room instead
-        // of cooking its own lens.
-        position: new THREE.Vector3(x, 3.62, z),
+        // Off the lens on the room side, so the beacon lights the floor under the door
+        // instead of cooking its own housing.
+        position: new THREE.Vector3(x, y - 0.1, z + standoff * 0.42),
       });
       this.beaconMaterials.push(material);
       this.beaconLights.push(light);
