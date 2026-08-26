@@ -43,8 +43,8 @@ const PROPS: Array<[string, THREE.Vector3]> = [
   ['downpipe mid', new THREE.Vector3(2.35, 1.75, 0.455)],
   ['downpipe top', new THREE.Vector3(2.35, 3.45, 0.455)],
   ['wall pack', new THREE.Vector3(2.05, 3.0, 0.515)],
-  ['bin', new THREE.Vector3(2.15, 0.5, 1.5)],
-  ['cable drum', new THREE.Vector3(1.95, 0.52, 2.3)],
+  ['bin', new THREE.Vector3(2.05, 0.5, 2.25)],
+  ['cable drum', new THREE.Vector3(2.35, 0.52, 1.2)],
   ['crate stack', new THREE.Vector3(-2.6, 0.55, 1.6)],
   ['leaning pallets', new THREE.Vector3(-2.35, 0.6, 0.62)],
   ['bollard left', new THREE.Vector3(-1.8, 0.52, 2.75)],
@@ -52,7 +52,9 @@ const PROPS: Array<[string, THREE.Vector3]> = [
   ['extract louvre', new THREE.Vector3(-2.55, 2.92, 0.415)],
   ['door letter L', new THREE.Vector3(-2.16, 2.32, 0.405)],
   ['door letter R', new THREE.Vector3(2.16, 2.32, 0.405)],
-  ['high sign', new THREE.Vector3(0, 4.45, 0.16)],
+  /* Deliberately off frame: the fascia board is for a person at the door, not the camera -
+     which is exactly why the letter plate below it exists. Listed so it stays deliberate. */
+  ['high sign (expect off)', new THREE.Vector3(0, 4.45, 0.16)],
   ['canopy edge', new THREE.Vector3(0, 3.55, 2.47)],
   ['upper wall centre', new THREE.Vector3(-0.6, 3.1, 0.2)],
 ];

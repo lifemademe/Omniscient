@@ -601,12 +601,24 @@ export class WarehouseServiceDoor {
       mesh('ServiceNoticeBand', new THREE.BoxGeometry(0.44, 0.11, 0.035), FRAME, new THREE.Vector3(1.28, 2.0, 0.235))
     );
 
-    // A wheelie bin, lid slightly proud, and the pallets nobody has taken back inside.
+    /*
+     * The bin and the drum swap places.
+     *
+     * The drum was the near object on the right and it was the largest thing in the picture -
+     * a metre across, dead in the lower middle, and cut by the bottom edge on every feed. Its
+     * whole value is that a disc on its edge is an unmistakable silhouette, and half a disc is
+     * not one.
+     *
+     * A bin cropped at the frame edge costs nothing, because a box reads as a box from any
+     * fraction of it. So the bin takes the near slot and the drum goes back and out, where the
+     * two sit side by side at different depths rather than stacked on top of each other -
+     * measured, they now share no screen column on any of the three doors.
+     */
     root.add(
-      mesh('ServiceBinBody', new THREE.BoxGeometry(0.66, 0.92, 0.6), BIN, new THREE.Vector3(2.15, 0.46, 1.5)),
-      mesh('ServiceBinLid', new THREE.BoxGeometry(0.7, 0.08, 0.64), DARK, new THREE.Vector3(2.15, 0.95, 1.52)),
-      mesh('ServiceBinWheelL', new THREE.CylinderGeometry(0.09, 0.09, 0.07, 8), DARK, new THREE.Vector3(1.9, 0.09, 1.72)),
-      mesh('ServiceBinWheelR', new THREE.CylinderGeometry(0.09, 0.09, 0.07, 8), DARK, new THREE.Vector3(2.4, 0.09, 1.72))
+      mesh('ServiceBinBody', new THREE.BoxGeometry(0.66, 0.92, 0.6), BIN, new THREE.Vector3(2.05, 0.46, 2.25)),
+      mesh('ServiceBinLid', new THREE.BoxGeometry(0.7, 0.08, 0.64), DARK, new THREE.Vector3(2.05, 0.95, 2.27)),
+      mesh('ServiceBinWheelL', new THREE.CylinderGeometry(0.09, 0.09, 0.07, 8), DARK, new THREE.Vector3(1.8, 0.09, 2.47)),
+      mesh('ServiceBinWheelR', new THREE.CylinderGeometry(0.09, 0.09, 0.07, 8), DARK, new THREE.Vector3(2.3, 0.09, 2.47))
     );
     /*
      * The pallets moved, and the first placement is worth recording as a mistake.
@@ -656,14 +668,14 @@ export class WarehouseServiceDoor {
      * the crates go back and out to the left where the mid-ground was still empty.
      */
     /*
-     * Back half a metre, off the bottom edge.
+     * Back and out, and no longer the biggest thing in the frame.
      *
-     * At z 2.85 the drum projected to y 0.93 on door B - a foreground object hard against
-     * the frame edge, which is not a framing element, it is a thing that has been cut in
-     * half. At 2.3 it sits at 0.85 with the whole disc inside the picture and still reads as
-     * the nearest object on the apron, which is the job it was put there to do.
+     * z 2.85 put it at screen y 0.93 on door B and 2.3 only got it to 0.85 - still cut, still
+     * lower-middle, still the first thing the eye hit. From (2.35, 1.2) the whole disc sits
+     * between y 0.60 and 0.80 on every door with the bin beside it rather than behind it. See
+     * the bin above for why those two traded slots.
      */
-    const drum = ENGINE.SceneNode.create({ name: 'ServiceCableDrum', position: new THREE.Vector3(1.95, 0, 2.3) });
+    const drum = ENGINE.SceneNode.create({ name: 'ServiceCableDrum', position: new THREE.Vector3(2.35, 0, 1.2) });
     drum.rotation.y = 0.4;
     for (const side of [-0.24, 0.24]) {
       drum.add(mesh('ServiceDrumFlange', new THREE.CylinderGeometry(0.52, 0.52, 0.06, 16), TIMBER, new THREE.Vector3(side, 0.52, 0)));
