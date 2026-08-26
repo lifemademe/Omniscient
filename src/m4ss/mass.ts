@@ -262,6 +262,54 @@ export interface Critter {
   phase: number;
 }
 
+/**
+ * A column of rising air, and the only thing in this game that lifts you.
+ *
+ * ## Why it is a mass ceiling and not a force ratio
+ *
+ * The obvious version makes the draught a force and lets f = ma decide: a heavy body rises
+ * slowly, a light one fast, nobody states a threshold. That is the emergent answer, and the
+ * header of this file is thirty lines about four emergent answers that all produced the wrong
+ * game. It would produce the wrong game here too, for a reason that is specific rather than
+ * historical - a slime is a pile of particles with no rigid body, so a force that ALMOST lifts
+ * it lifts the top of it and leaves the bottom, and the player watches themselves being pulled
+ * apart by weather. There is no reading of that which says "I am too heavy".
+ *
+ * So the column states its limit in grams the way the sieve does, and for the same reason: the
+ * rule is invisible by nature, and a rule the player cannot see has to be a rule they can be
+ * TOLD. Under `liftMass` you rise; over it you stand in the draught and nothing happens. The
+ * HUD says the number at the moment it binds (see M4SSRig's hudNote) and at no other time.
+ *
+ * ## Whole-body, not per-particle
+ *
+ * The lift is decided once for the CENTROID and then applied equally to every owned particle.
+ * A per-particle test would put the body under differential force whenever it straddled an
+ * edge - half of you lifting, half of you not - and the cohesion solver would either tear or
+ * grind. Uniform force adds no internal stress at all: the column moves the creature, not its
+ * pieces.
+ *
+ * The edge is feathered horizontally so drifting out of the column eases off rather than
+ * dropping you, which is what air does and what a hard rect does not.
+ */
+export interface Updraft {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Upward acceleration in px/s^2, against gravity's 1500. See TUNING.gravity. */
+  force: number;
+  /** The most mass, in grams, the column can carry. Over this it does nothing at all. */
+  liftMass: number;
+  /**
+   * How wide the soft edge is, in px, at each side. Defaults to 40, clamped to half the width.
+   *
+   * Only the SIDES are feathered. The top and bottom are hard, because they are level design:
+   * a designer sizes the column to end where the platform is, and a column that faded out
+   * vertically would make "how high does this take me" a question with no stateable answer.
+   */
+  feather?: number;
+}
+
 export interface World {
   width: number;
   height: number;
@@ -282,6 +330,7 @@ export interface World {
   buttons: Button[];
   crushers?: Crusher[];
   critters?: Critter[];
+  updrafts?: Updraft[];
   /**
    * Set-dressing the LEVEL wants placed, rather than the renderer's derived scatter.
    *
@@ -1054,6 +1103,47 @@ export function gateSolid(gate: Gate): Tile | null {
 }
 
 /** Where a crusher's slab is this instant. */
+/**
+ * How much of `draft` is acting on a body of `grams` whose centroid is at `at`: 0 to 1.
+ *
+ * Exported because three things need the same answer and must not each have their own: the
+ * force block below, the HUD line that tells the player the number, and the rig's column art,
+ * which brightens while it is carrying something. A draught that looks like it is lifting you
+ * and is not would be worse than no art at all.
+ */
+export function draftLift(draft: Updraft, at: { x: number; y: number }, grams: number): number {
+  if (grams > draft.liftMass) return 0;
+  // y is DOWN: draft.y is the top of the column, draft.y + h its floor.
+  if (at.y < draft.y || at.y > draft.y + draft.h) return 0;
+  const inset = Math.min(at.x - draft.x, draft.x + draft.w - at.x);
+  if (inset <= 0) return 0;
+  const feather = Math.max(1, Math.min(draft.feather ?? 40, draft.w / 2));
+  return Math.min(1, inset / feather);
+}
+
+/**
+ * The column currently carrying this body, and how hard, or null.
+ *
+ * `lift` is 0 whenever the body is over the ceiling, so a caller that wants "am I standing in
+ * a draught that is refusing me" - which is exactly what the HUD wants to say - gets the
+ * draught back with a lift of zero rather than nothing at all.
+ */
+export function draftOn(state: MassState): { draft: Updraft; lift: number } | null {
+  const drafts = state.world.updrafts;
+  if (!drafts || drafts.length === 0) return null;
+  const body = owned(state);
+  if (body.length === 0) return null;
+  const at = centroid(body);
+  for (const draft of drafts) {
+    // Position first, mass second: `draftLift` folds both together and returns 0 either way,
+    // and the HUD needs to tell "outside the column" from "inside it and too heavy".
+    if (at.y < draft.y || at.y > draft.y + draft.h) continue;
+    if (at.x <= draft.x || at.x >= draft.x + draft.w) continue;
+    return { draft, lift: draftLift(draft, at, body.length) };
+  }
+  return null;
+}
+
 export function crusherRect(c: Crusher): Tile {
   return c.axis === 'x'
     ? { x: c.x + c.at, y: c.y, w: c.w, h: c.h }
@@ -1835,6 +1925,50 @@ export function step(state: MassState, input: Input): MassState {
            */
           q.ay += (dy / d) * T.rejoin - T.gravity * 0.75;
         }
+      }
+    }
+  }
+
+  /*
+   * The column lifts.
+   *
+   * ## Above the integrator, like everything else that pushes
+   *
+   * See the rejoin block directly above for the full account of why - accelerations are zeroed
+   * at the top of the step and spent by the loop below, so a force written after that loop is
+   * wiped before it is ever integrated. This is the second force in this file to be written in
+   * this exact seam and it is worth the sentence.
+   *
+   * ## Not while you are on a rope
+   *
+   * `state.attached` is a hard exclusion, and it is physics rather than policy. The rope is
+   * satisfied AFTER integration by shifting the body onto the circle and deleting radial
+   * velocity, so the radial part of an updraft is thrown away in the same frame it is applied
+   * and only the tangential part survives - which is a pump that costs the player nothing.
+   * TUNING.swingPump exists because a free-energy pump was measured to be the wrong game
+   * (see swingEnergy); a second one arriving through the weather would be the same mistake
+   * with better weather. The design reading is the same and simpler: the air is what you use
+   * when there is nothing to hold on to.
+   *
+   * ## Loose mass is untouched
+   *
+   * Not by a test here - by the inert-deposit branch below, which never reads ax or ay. Mass
+   * shed into a column falls straight down through it and settles, which is the answer the
+   * level wants: what you leave behind stays where you left it, weather or no weather.
+   *
+   * Terminal velocity comes from the existing damping rather than a clamp. At dt 1/120 and
+   * damping 0.986 a net upward accel of `a` settles at about 0.6 * a px/s, so a column of
+   * 2000 against gravity 1500 carries a body at roughly 300px/s - a ride, not a launch.
+   */
+  if (world.updrafts && world.updrafts.length > 0 && !state.attached) {
+    const body = owned(state);
+    if (body.length > 0) {
+      const at = centroid(body);
+      for (const draft of world.updrafts) {
+        const lift = draftLift(draft, at, body.length);
+        if (lift <= 0) continue;
+        // Up is negative y. Applied to every owned particle equally - see the interface.
+        for (const p of body) p.ay -= draft.force * lift;
       }
     }
   }
