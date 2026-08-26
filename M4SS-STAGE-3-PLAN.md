@@ -1,6 +1,39 @@
 # M4SS Stage 3 — THE SLUICE
 
-**Status:** a plan, not a decision. Nothing here is built. Written against an inventory of what
+**Status: BUILT, 2026-08-26.** `src/m4ss/sluice.ts`, `scripts/m4ss-sluice.ts`, and one new
+entity in `mass.ts`. Paul took the updraft, so the stage shipped with both of its new ideas.
+Commits `1801cbf` (sim + level), `3327675` (theme, art, HUD), `0b7034d` (the press rework).
+
+**It has never been played.** The harness proves the geometry and the forces; it cannot tell
+you whether any of it is fun. That is still the next thing.
+
+**What changed on the way from this plan to the file** - four things, all of them because
+something was measured:
+
+1. **Beat 2 is better than it was written.** The plan said a swing losing energy dips lower
+   into the sporelings. That is false for a fixed rope - a pendulum's lowest point does not
+   depend on its amplitude. What IS true is that `Anchor.rope` is optional and nobody has ever
+   left it off: without one the radius is the distance you reached across, so *where you latch
+   decides how low you sweep*. The patrol's four growths carry no rope, and two of them hang
+   160px lower than the others as the tempting near grab. That is the trap, and it is real.
+2. **Beat 3's premise was wrong.** "Two presses out of phase means there is no moment when
+   both are up" cannot be made true - the profile is 55% winch, 30% hang, 15% drop, so a press
+   is clear 85% of the time at any offset. The harness caught it at 250 frames of overlap in
+   four seconds. The beat that survives is a distance problem: the pair are clear together for
+   about a second, and the crossing is 440px at a 92px/s crawl. The pocket is mandatory.
+3. **Beat 7's press became a shutter.** "A press swinging across the flight path" had nowhere
+   to stand that did not foul one of the two sweeps. Sliding it through the 60px gap *between*
+   them is the same idea with better geometry: the only air in the climb, closing on a timer.
+4. **The stage is a descent and a return, but not on separate halves of the map.** 1280px does
+   not hold two independent vertical routes plus a patrol. The climb shares the shaft the
+   descent fell through; what makes it a different route is that it is flown rather than
+   fallen, and that the bridge is what lets you back into it.
+
+Original plan follows, unedited below this line.
+
+---
+
+Written against an inventory of what
 the simulation actually supports, so every Tier 1 beat below can be authored in a level file
 without touching `mass.ts`.
 

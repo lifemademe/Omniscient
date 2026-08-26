@@ -271,7 +271,9 @@ stay green on every pass; `preview-stuck.ts` guards the console.
 7. **[MACHINE HALF DONE `d1d99f2` - boot, framing, HUD, stencils, movement, pit-return,
    split bar, recall all verified in play mode. HUMAN HALF REMAINS: latch/swing feel, warp
    to stage 2, crushers/red growth live, the slime's voice, ending pacing, CONTINUE across
-   a restart - one play session, needs ears]** Burn down F13 live-verification list with record.py; fix what falls out.
+   a restart - one play session, needs ears. AND NOW STAGE 3, which has never been on a
+   screen at all: the column ride, the ropeless patrol growths, the shutter, the bridge.
+   The harness says the geometry is sound and the harness cannot hear or see it]** Burn down F13 live-verification list with record.py; fix what falls out.
 
 ### Phase 1 — feel, before freeze (target: Aug 25–Sept 2)
 
@@ -305,7 +307,16 @@ philosophy, not a wiring job.]** 17. ~~Mission 07 (Sanda)
 restore.~~ **[DECLINED 2026-08-26 - Paul: "keep sanda mission hidden, i dont need it". She
 stays cut. The queue entry in `OmniscientRig` stays commented out; her mission file, contact
 record, scene and signal entry stay where they are, unreferenced but intact.]**
-18. M4SS stage 3 (the verbs exist; the sim is ready). 19. ~~Settings panel: text
+18. ~~M4SS stage 3 (the verbs exist; the sim is ready).~~ **[BUILT 2026-08-26 `1801cbf`
+`3327675` `0b7034d` - THE SLUICE, eight beats, 1280x1760, down the east and back up the
+west. Paul asked for it and asked for the updraft with it, which knowingly spends the "new
+M4SS mechanics" scope trap below; noted rather than hidden. The sim gained one entity: an
+`Updraft` rect with a mass ceiling in grams, decided once for the centroid so a body
+straddling the edge is moved rather than torn, and off while attached because the rope
+constraint would turn it into a free-energy pump. It also retires the two capabilities that
+were implemented and dead - `Gate.mode: 'bridge'` and `Crusher.axis: 'x'` - by making both
+load-bearing. `scripts/m4ss-sluice.ts` (56 checks) joins the harness rule. STILL UNPLAYED:
+this has never been on a screen. See item 7.]** 19. ~~Settings panel: text
 speed, shake toggle, volume (exists), colourblind note.~~ **[DONE 2026-08-26 - the panel
 already carried text size, text speed, display filter, screen shake, flash intensity, sound
 captions and volume; only the colourblind note was outstanding, and it is now three specific
@@ -313,8 +324,11 @@ claims rather than a blanket one. See SystemPanel.buildSettings.]**
 
 ### Scope traps — refuse these before Sept 11
 
-New missions - and restoring Sanda counts as one, decided 2026-08-26. New M4SS
-mechanics. Rebuilding any art that already passed the audit.
+New missions - and restoring Sanda counts as one, decided 2026-08-26. ~~New M4SS
+mechanics.~~ **[SPENT 2026-08-26 on Paul's explicit call: the updraft, for stage 3. One
+entity, one force block, one harness file. The trap stands for everything after it - the
+breakable wall in particular stays declined, and stage 3's beat 8 delivers that feeling on a
+force plate and a gate instead.]** Rebuilding any art that already passed the audit.
 Multiplayer/photo modes/anything with a server. A dialogue rewrite pass ("better" is the
 enemy of "recorded"). Porting the HUD to engine UI-kit (CSS is fine; coherence is the goal,
 not the toolkit).
