@@ -88,6 +88,41 @@ function isShell(t: Tile): boolean {
   return t.w >= 1300 || t.h >= 1000;
 }
 
+/**
+ * The longest rope this growth can actually be given, which is not the same as the reach.
+ *
+ * The radius is the distance the tendril crossed, so it is bounded by where the player can BE
+ * when they latch - the top of a walkable tile, or somewhere inside another growth's sweep if
+ * they are transferring in flight. A growth 300px from every ledge in the level cannot be given
+ * a 212px rope from the ground however long the player's reach is.
+ *
+ * Deliberately generous where it is uncertain: a mid-flight latch is measured from the far side
+ * of the previous growth's circle, which is further than a body ever actually is at that moment.
+ * Wrong in the safe direction.
+ */
+function reachableRope(a: Anchor): number {
+  if (a.rope !== undefined) return a.rope;
+  let best = 0;
+  const consider = (x: number, y: number): void => {
+    const d = Math.hypot(x - a.x, y - a.y);
+    if (d <= MAX_REACH) best = Math.max(best, d);
+  };
+  for (const t of W.tiles) {
+    if (isShell(t)) continue;
+    // Along the top surface, at a settled body's centroid height.
+    for (let x = t.x; x <= t.x + t.w; x += 10) consider(x, t.y - 20);
+  }
+  for (const other of W.anchors) {
+    if (other === a) continue;
+    const r = other.rope ?? MAX_REACH;
+    for (let i = 0; i < 24; i++) {
+      const th = (i / 24) * Math.PI * 2;
+      consider(other.x + Math.cos(th) * r, other.y + Math.sin(th) * r);
+    }
+  }
+  return best;
+}
+
 /** The top of the machine floor. Read from the level so the checks cannot drift from it. */
 const FLOOR_TOP = THE_SLUICE.tiles.find((t) => t.w === 1260)!.y;
 
@@ -136,7 +171,7 @@ for (const a of W.anchors) {
    * creatures, which is the choice the beat is asking about rather than a fault in it.
    */
   const patrol = W.tiles.find((t) => t.y === 760)!;
-  const catchLedge = W.tiles.find((t) => t.x === 660 && t.y === 480)!;
+  const catchLedge = W.tiles.find((t) => t.x === 800 && t.y === 460)!;
   const wrong = W.tiles.filter(
     (t) => !isShell(t) && t !== patrol && t !== catchLedge && overlap(box, core(t))
   );
@@ -159,7 +194,7 @@ for (const a of W.anchors) {
     const a = named(id);
     check(`${id} at full reach sweeps into the patrol`, a.y + MAX_REACH > headY, `bottom ${a.y + MAX_REACH}`);
   }
-  for (const id of ['p1', 'p2']) {
+  for (const id of ['p1', 'p2', 'p3']) {
     const a = named(id);
     check(`${id} at full reach still clears the patrol`, a.y + MAX_REACH < headY, `bottom ${a.y + MAX_REACH}`);
   }
@@ -227,14 +262,53 @@ for (const c of W.crushers ?? []) {
     h: plate.radius * 2,
   };
   /*
-   * Only the growths that could actually be swung at it. The patrol's four are four hundred
-   * pixels east behind a wall the player is never on the wrong side of with a rope in hand;
-   * asking whether their theoretical 212px circle overlaps a plate on the far side of the
-   * level is asking a question about arithmetic rather than about the room.
+   * Every growth, against the widest rope it can ACTUALLY be given.
+   *
+   * For a stated growth that is its rope. For a ropeless one it is the furthest away the
+   * player can be at the moment of latching, which is not 212 - it is the greatest distance
+   * from the growth to any surface the body can stand on or any other growth's sweep it can
+   * be flying out of, capped at reach. On the patrol that number comes out around 120, because
+   * the crossing's growths are latched mid-flight from each other and the ledges are all
+   * further than 212 away.
+   *
+   * The 212 bound was what made this check useless: it says a patrol growth's circle overlaps
+   * a plate on the far side of the level, which is true of the square and false of the room.
    */
   for (const a of W.anchors) {
+    check(`breach plate is outside ${a.id}'s sweep`, !overlap(box, sweepBox(a, reachableRope(a))));
+  }
+}
+
+/*
+ * The back half of the stage cannot be entered from the front half.
+ *
+ * The skip this catches is the one the floor plan found and no coordinate list ever would:
+ * the descent's second beat passes within a hundred pixels of the gallery's lowest growth, so
+ * a player at forty grams could latch it in flight, climb, and reach the exit having done two
+ * beats out of eight. The answer is stage two's: the whole gallery is red until the plate at
+ * the top of the column wakes it.
+ *
+ * Checked as a property rather than as three ids, so a growth added to the climb later is
+ * covered by it: every growth whose sweep can put a body at the breach plate has to be dead at
+ * the start, and something has to wake it.
+ */
+{
+  const woken = new Set(W.buttons.flatMap((b) => b.activates ?? []));
+  for (const a of W.anchors) {
     if (!a.id!.startsWith('g')) continue;
-    check(`breach plate is outside ${a.id}'s sweep`, !overlap(box, sweepBox(a, a.rope!)));
+    check(`${a.id} is dead until the column is solved`, a.live === false);
+    check(`and something wakes ${a.id}`, woken.has(a.id!));
+  }
+  const plate = W.buttons.find((b) => b.id === 'drop')!;
+  check(
+    'the thing that wakes them is at the top of the column',
+    (plate.activates ?? []).length === 3 && plate.y < 1100 && plate.x > 900,
+    `at (${plate.x}, ${plate.y})`
+  );
+  // A red growth is not a growth you can be handed early by a second switch.
+  for (const b of W.buttons) {
+    if (b.id === 'drop') continue;
+    check(`${b.id} wakes nothing`, (b.activates ?? []).length === 0);
   }
 }
 

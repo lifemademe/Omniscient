@@ -28,6 +28,18 @@ something was measured:
    not hold two independent vertical routes plus a patrol. The climb shares the shaft the
    descent fell through; what makes it a different route is that it is flown rather than
    fallen, and that the bridge is what lets you back into it.
+5. **The gallery is red.** Because of 4: the climb passes within a hundred pixels of the
+   descent's second beat, so at forty grams you could latch it in flight and reach the exit
+   having played two beats out of eight. All three growths are dead until the plate at the top
+   of the column wakes them - stage two's mechanic, and it happens to *say* the thing this
+   stage's opening paragraph claims, which is that the way back up is visible from the whole
+   way down and cannot be taken.
+6. **Two skips and a false claim were found by drawing the level, not by testing it.**
+   `scripts/m4ss-map.ts` emits an SVG floor plan - tiles, every sweep at the radius it can
+   actually be given, press strokes, creature beats, both bridge states, and the camera frame.
+   The 56 assertions were all green while you could step off the start ledge and land in the
+   corridor with beats one and two unplayed. **A list of passing assertions is not a picture,
+   and adjacency is the class of fault that only a picture shows.**
 
 Original plan follows, unedited below this line.
 

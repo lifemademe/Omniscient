@@ -58,7 +58,7 @@ const SHELF = 90;
 export const THE_SLUICE: World = {
   width: 1280,
   height: 1760,
-  start: { x: 1130, y: 150 },
+  start: { x: 1150, y: 150 },
   // In the alcove behind the cracked wall, at the top of the west climb.
   exit: { x: 100, y: 433 },
 
@@ -78,28 +78,41 @@ export const THE_SLUICE: World = {
     { x: 0, y: FLOOR, w: 1260, h: DEEP },
 
     // -- 1. the drop ----------------------------------------------------------------------
-    /** The starting ledge, top east. */
-    { x: 1000, y: 200, w: 260, h: SHELF },
+    /*
+     * The starting ledge, top east.
+     *
+     * It stops at 1040, and the thirty pixels between its west lip and the catch ledge below
+     * are deliberate: a body is 69 wide and cannot fall through a 30px slot, so beat one is a
+     * swing rather than a step down. The first plan of this level had the two overlapping and
+     * the whole opening was optional.
+     */
+    { x: 1040, y: 200, w: 220, h: SHELF },
     /*
      * The landing, and the whole of beat one.
      *
      * It is BELOW the growth's circle rather than across from it - the lowest point of d1's
-     * sweep is (880, 440) and this surface is forty pixels under it, running west. So the
-     * release that reaches it is one taken at the bottom of the arc, where the body is
-     * fastest and lowest, and a release at the top drops the player straight down past the
-     * west lip into the patrol.
+     * sweep is (900, 440) and this surface is twenty pixels under it. So the release that
+     * reaches it is one taken low in the arc, where the body is fastest; a release at either
+     * top drops the player past an end of it into the patrol.
      *
      * Both stages so far open with a swing that carries you ACROSS something. Asking the same
      * verb to shed height under control, on the first screen, before anything is at risk, is
      * the one new thing worth teaching while the stage is still free.
      */
-    { x: 660, y: 480, w: 210, h: SHELF },
+    { x: 800, y: 460, w: 210, h: SHELF },
     /*
      * The lid over the east half, and the reason beat one cannot be skipped.
      *
      * Without it the start ledge looks down an open east wall onto the column's cap, and from
      * the cap the column is a two-hundred-pixel step into the bay - which is beats two, three
      * and four gone. It reads as the underside of the deck machinery, which is what it is.
+     *
+     * It catches rather than seals, and the difference matters: a player who steps off the
+     * start ledge eastward lands HERE, and the only way off is west, onto the patrol. Every
+     * way down out of the first screen ends up in beat two, which is the point. The version
+     * of this level that went to the harness had a 110px shaft beside it that dropped straight
+     * to the corridor - beats one and two, skippable by walking east. The floor plan found it;
+     * no amount of arithmetic was ever going to.
      */
     { x: 880, y: 560, w: 380, h: SHELF },
 
@@ -112,10 +125,16 @@ export const THE_SLUICE: World = {
      * small and slow is the cheapest possible way to be told there is a better way. The
      * growths are hanging in plain sight while it happens.
      *
-     * It stops at 870 so that the swing lane between the deck's west end and the gallery is
-     * open air - see the growths, whose sweeps come down beside it.
+     * It runs from 500 to 900 - under the whole of the crossing AND under the lid's west lip,
+     * which is where a player who stepped off the start ledge the wrong way arrives. Nothing
+     * that leaves the first screen misses this floor.
+     *
+     * Its west end stops ten pixels clear of g2's sweep, which is the tightest margin in the
+     * level and the price of putting the descent's floor and the ascent's chain in the same
+     * eight hundred pixels. 1280 does not hold two independent routes; what it holds is one
+     * shaft used twice, and this is where the two of them pass.
      */
-    { x: 580, y: 760, w: 290, h: 100 },
+    { x: 500, y: 760, w: 400, h: 100 },
     /*
       * The west landing, and the head of the chute.
       *
@@ -125,7 +144,7 @@ export const THE_SLUICE: World = {
       * the shutter's parked position starts at 150 - so the way down and the way back up
       * share a shaft without ever sharing a pixel.
       */
-     { x: 130, y: 660, w: 200, h: SHELF },
+     { x: 130, y: 640, w: 200, h: SHELF },
 
     // -- 5/6. the deck at the top of the column -------------------------------------------
     /*
@@ -151,7 +170,7 @@ export const THE_SLUICE: World = {
     { x: 990, y: 1110, w: 90, h: 300 },
 
     // -- 8. the alcove behind the cracked wall --------------------------------------------
-    { x: 0, y: 495, w: 290, h: 120 },
+    { x: 0, y: 495, w: 274, h: 120 },
   ],
 
   /**
@@ -174,26 +193,39 @@ export const THE_SLUICE: World = {
    */
   anchors: [
     // 1. Over the drop. Its sweep's lowest point sits 40px above the landing shelf.
-    { id: 'd1', x: 860, y: 310, rope: 130 },
+    { id: 'd1', x: 900, y: 310, rope: 130 },
 
     // 2. The patrol. No rope on any of them.
-    { id: 'p1', x: 560, y: 470 },
-    { id: 't1', x: 620, y: 610 },
-    { id: 'p2', x: 500, y: 460 },
-    { id: 't2', x: 540, y: 610 },
+    { id: 'p1', x: 680, y: 470 },
+    { id: 't1', x: 690, y: 610 },
+    { id: 'p2', x: 560, y: 460 },
+    { id: 't2', x: 600, y: 610 },
+    { id: 'p3', x: 540, y: 470 },
 
     /*
-     * 7. The gallery, west, going up.
+     * 7. The gallery, west, going up. All three RED until the column's plate is pressed.
+     *
+     * Dead rather than absent, and the floor plan is what forced it. The descent's second beat
+     * crosses within a hundred pixels of g3: at forty grams a player can latch it in flight,
+     * climb the gallery, and be at the exit having skipped everything from the presses to the
+     * bridge. Nothing in the coordinates says so and no assertion in the harness was ever going
+     * to - it is a fact about what is NEAR what, which is the one thing a list of numbers hides
+     * and a picture of the level cannot.
+     *
+     * Making them red is not damage control. It is the sentence this stage opens with: a route
+     * the descent can see the whole way down and cannot take. Stage two's red growth teaches
+     * exactly this reading, so a player arriving here already knows what a dead plant means -
+     * and this time there are three of them, hanging beside the crossing, for the whole descent.
      *
      * Rope 70 rather than stage two's 80, because the shutter needs a gap between two sweeps
-     * to close and a shorter rope opens one. Spacing is a fraction under 210 on the diagonal,
+     * to close and a shorter rope opens one. Spacing is a fraction under 200 on the diagonal,
      * which is where stage two's chain measured out: a rope of 70 lifts 140 over the top and a
      * release adds roughly another 80, and the slow motion on release is what turns the
      * remainder into something a person can click on.
      */
-    { id: 'g1', x: 450, y: 880, rope: 70 },
-    { id: 'g2', x: 500, y: 680, rope: 70 },
-    { id: 'g3', x: 460, y: 490, rope: 70 },
+    { id: 'g1', x: 420, y: 860, rope: 70, live: false },
+    { id: 'g2', x: 470, y: 670, rope: 70, live: false },
+    { id: 'g3', x: 420, y: 480, rope: 70, live: false },
   ],
 
   gates: [
@@ -231,17 +263,22 @@ export const THE_SLUICE: World = {
      * delivered on a force plate and a gate - mechanically a button, perceptually the mass
      * going through a wall.
      */
-    { id: 'w2', x: 200, y: 120, w: 90, h: 375, open: false, lift: 0 },
+    { id: 'w2', x: 184, y: 120, w: 90, h: 375, open: false, lift: 0 },
   ],
 
   buttons: [
     /*
      * The plate at the top of the column, and it does two things.
      *
-     * It drops the bridge, which is what the player came up here for. And it opens the grate,
+     * It drops the bridge, which is what the player came up here for. It opens the grate,
      * which is the bargain stage two's waking button makes: the door you crawled under opens,
      * so the mass you left on the other side of it is yours again. Without the second clause
      * this stage would end with sixteen grams walled off behind a beat that is already solved.
+     *
+     * And it wakes the gallery. Three plants that have been hanging red beside the descent
+     * since the second beat come alive at the moment the player is furthest from them and
+     * about to be handed a bridge back - so the reward for reaching the top of the column is
+     * not a door, it is the whole west wall becoming climbable at once.
      */
     {
       id: 'drop',
@@ -250,6 +287,7 @@ export const THE_SLUICE: World = {
       radius: 26,
       pressed: false,
       opens: ['s1', 'b1'],
+      activates: ['g1', 'g2', 'g3'],
     },
     /*
      * 460px/s, against stage two's 420 and a crawl of fifteen.
@@ -259,15 +297,22 @@ export const THE_SLUICE: World = {
      * says STAND ON ME about the one control in the game you are meant to hit, and a plate
      * left hanging in the air when its door goes up reads as a bug however correct it is.
      *
-     * x 296 puts it six pixels off the gate's east face, and 50 above g3 - which is the same
-     * shape stage two's plate has against its own growth, where a release off a built
-     * revolution landed on it from 27 of 46 sampled points. g3's sweep stops at 390, so the
-     * plate is 64px outside a circle that cannot reach it. What opens this wall is a release.
+     * x 280 puts it six pixels off the gate's east face and 20 above g3 - the same shape stage
+     * two's plate has against its own growth, where a release off a built revolution landed on
+     * it from 27 of 46 sampled points. g3's sweep stops at 350, so the plate is 40px outside a
+     * circle that cannot reach it. What opens this wall is a release.
+     *
+     * It moved sixteen pixels west, and the sixteen pixels are the whole of a skip. A growth
+     * with no stated rope takes the distance you latched it from, and p3 can be latched from
+     * 212px away - which puts the far side of its circle at 308, eighteen pixels short of where
+     * this plate used to be. A patrol swing could have opened the last door in the level during
+     * the second beat. The bound that hid it was the assumption that a mid-flight latch is a
+     * SHORT one; it is not, and nothing about the room says it has to be.
      */
     {
       id: 'breach',
-      x: 296,
-      y: 440,
+      x: 280,
+      y: 460,
       radius: 30,
       pressed: false,
       force: 460,
@@ -307,7 +352,7 @@ export const THE_SLUICE: World = {
   crushers: [
     { x: 500, y: 1130, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0, at: 0 },
     { x: 800, y: 1130, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0.5, at: 0 },
-    { x: 150, y: 756, w: 210, h: 48, travel: 200, axis: 'x', period: 3.2, phase: 0.3, at: 0 },
+    { x: 130, y: 746, w: 210, h: 40, travel: 160, axis: 'x', period: 3.2, phase: 0.3, at: 0 },
   ],
 
   /**
@@ -327,9 +372,9 @@ export const THE_SLUICE: World = {
    * player who is not can never quite walk through it.
    */
   critters: [
-    { from: 600, to: 790, y: 760, speed: 46, w: 26, h: 42, x: 600, facing: 1, wait: 0, phase: 0 },
-    { from: 690, to: 850, y: 760, speed: 44, w: 26, h: 42, x: 850, facing: -1, wait: 0, phase: 0 },
-    { from: 400, to: 580, y: 1020, speed: 42, w: 26, h: 42, x: 400, facing: 1, wait: 0, phase: 0 },
+    { from: 520, to: 760, y: 760, speed: 46, w: 26, h: 42, x: 520, facing: 1, wait: 0, phase: 0 },
+    { from: 700, to: 970, y: 760, speed: 44, w: 26, h: 42, x: 970, facing: -1, wait: 0, phase: 0 },
+    { from: 380, to: 600, y: 1020, speed: 42, w: 26, h: 42, x: 380, facing: 1, wait: 0, phase: 0 },
   ],
 
   /**
@@ -368,7 +413,7 @@ export const THE_SLUICE: World = {
    * the air will accept, which the HUD also says at the moment it binds.
    */
   signs: [
-    { x: 940, y: 250, lines: ['LET GO', 'AT THE', 'BOTTOM'], scale: 0.85 },
+    { x: 1000, y: 250, lines: ['LET GO', 'AT THE', 'BOTTOM'], scale: 0.85 },
     { x: 1170, y: 1480, lines: ['LIFT', 'MAX 14g'], scale: 0.9 },
   ],
 };
