@@ -502,8 +502,16 @@ export class WarehouseServiceDoor {
     const scanner = mesh('ServiceCargoScanner', new THREE.BoxGeometry(2.12, 0.16, 1.35), this.statusMaterial, new THREE.Vector3(0, 0.18, -1.05));
     const reader = mesh('ServiceCredentialReader', new THREE.BoxGeometry(0.14, 0.24, 0.08), DARK, new THREE.Vector3(leafX - 0.72, 1.32, 0.24));
     const readerLamp = mesh('ServiceReaderLamp', new THREE.SphereGeometry(0.038, 10, 6), this.statusMaterial, new THREE.Vector3(leafX - 0.72, 1.40, 0.29));
-    const tamper = mesh('ServiceTamperSensor', new THREE.CylinderGeometry(0.09, 0.09, 0.08, 12), this.statusMaterial, new THREE.Vector3(-1.6, 1.78, WALL_FACE_Z + 0.06));
+    /*
+     * The tamper sensor gets a body, for the same reason the bolts got housings.
+     *
+     * On its own it was a nine-centimetre glowing disc floating on blank cladding - the third
+     * of the "floating blue things". A door contact is a lens on the front of a box screwed to
+     * the wall, so it now has the box, and the lens sits proud of it rather than of nothing.
+     */
+    const tamper = mesh('ServiceTamperSensor', new THREE.CylinderGeometry(0.07, 0.07, 0.05, 12), this.statusMaterial, new THREE.Vector3(-1.6, 1.78, WALL_FACE_Z + 0.13));
     tamper.rotation.x = Math.PI / 2;
+    root.add(mesh('ServiceTamperBody', new THREE.BoxGeometry(0.22, 0.3, 0.12), DARK, new THREE.Vector3(-1.6, 1.78, WALL_FACE_Z + 0.05)));
     const canopy = mesh('ServiceCanopy', new THREE.BoxGeometry(4.2, 0.22, 2.7), FRAME, new THREE.Vector3(0, 3.66, 1.12));
     const canopyLamp = mesh('ServiceCanopyLamp', new THREE.BoxGeometry(2.1, 0.06, 0.34), this.statusMaterial, new THREE.Vector3(0, 3.51, 1.28));
     const doorSignMaterial = signMaterial(layout);
@@ -774,7 +782,16 @@ export class WarehouseServiceDoor {
      * metre clear of its edge and the camera's ray reaches it. The same mistake put the
      * exterior door sign behind that roof for the whole of development.
      */
-    const louvre = ENGINE.SceneNode.create({ name: 'ServiceExtractLouvre', position: new THREE.Vector3(-2.55, 2.92, WALL_FACE_Z + 0.07) });
+    /*
+     * Out to -3.15, because it was standing ON the letter.
+     *
+     * The louvre housing is 0.82 wide and the letter plate 0.78, and at -2.55 and -2.16 they
+     * spanned -2.96..-2.14 and -2.55..-1.77: forty centimetres of overlap, two flat panels
+     * intersecting in the same plane. It reads on door C's feed as a grey slab growing out of
+     * the sign. Moved outboard rather than shrinking either, because the wall is empty out
+     * there and the gap between them is what makes both read as separate fittings.
+     */
+    const louvre = ENGINE.SceneNode.create({ name: 'ServiceExtractLouvre', position: new THREE.Vector3(-3.15, 2.92, WALL_FACE_Z + 0.07) });
     louvre.add(
       mesh('LouvreHousing', new THREE.BoxGeometry(0.82, 0.96, 0.14), FRAME, new THREE.Vector3(0, 0, 0)),
       mesh('LouvreThroat', new THREE.BoxGeometry(0.68, 0.8, 0.06), DARK, new THREE.Vector3(0, 0, 0.09)),
@@ -846,11 +863,44 @@ export class WarehouseServiceDoor {
         root.add(mesh('ServiceBollard', new THREE.CylinderGeometry(0.12, 0.12, 1.05, 10), FRAME, new THREE.Vector3(x, 0.52, 2.75)));
       }
     }
-    for (const x of [-0.88, 0.88]) {
-      const bolt = mesh('ServiceLockBolt', new THREE.BoxGeometry(0.62, 0.14, 0.24), this.statusMaterial, new THREE.Vector3(x, 2.25, 0.48));
+    /*
+     * ## The lockdown bolts were two glowing chips floating in the doorway
+     *
+     * Reported as "floating blue things on the three doors", and that is exactly what they
+     * were. Each was a bare 0.62m box in the status material - a teal emissive - parked at
+     * head height at z 0.48, twenty-seven centimetres proud of the leaf, attached to nothing
+     * and explaining nothing. Scaling `x` to 0.12 made it a small bright chip hanging in mid
+     * air, and because scale works about a mesh's own centre the "retracted" state shrank it
+     * toward the middle of the opening rather than back into anything.
+     *
+     * A bolt is only legible as a bolt if you can see WHERE IT GOES. So:
+     *
+     *  - The geometry is translated so its origin is at the OUTBOARD end. Scaling x now
+     *    extends it inward from a fixed root, which is what a bolt does; retracted, the nose
+     *    sits flush with its housing instead of hovering in the middle of the gap.
+     *  - A HOUSING at that root, in the frame material, so the bolt comes out of a casting
+     *    bolted to the jamb.
+     *  - A KEEPER on the opposite side - the plate the bolt lands in - so the eye can see the
+     *    span it closes even while it is open.
+     *  - Back to z 0.30, tight against the shutter it locks rather than floating in front of
+     *    the whole opening.
+     *
+     * Ordered outboard-to-inboard, the pair now reads housing, bolt, gap, keeper: hardware
+     * that is obviously part of the door.
+     */
+    for (const side of [-1, 1]) {
+      const root_x = side * 1.28;
+      const shaft = new THREE.BoxGeometry(0.62, 0.13, 0.16);
+      // Origin at the outboard end, so scale.x extends the bolt inward from its housing.
+      shaft.translate(-side * 0.31, 0, 0);
+      const bolt = mesh('ServiceLockBolt', shaft, this.statusMaterial, new THREE.Vector3(root_x, 2.25, 0.3));
       bolt.scale.x = 0.12;
       this.bolts.push(bolt);
-      root.add(bolt);
+      root.add(
+        bolt,
+        mesh('ServiceLockHousing', new THREE.BoxGeometry(0.2, 0.28, 0.28), FRAME, new THREE.Vector3(root_x + side * 0.09, 2.25, 0.3)),
+        mesh('ServiceLockKeeper', new THREE.BoxGeometry(0.12, 0.34, 0.26), DARK, new THREE.Vector3(side * 0.5, 2.25, 0.3))
+      );
     }
 
     /*

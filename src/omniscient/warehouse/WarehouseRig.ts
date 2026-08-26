@@ -74,6 +74,14 @@ const CAMERA_MATRIX = new THREE.Matrix4();
 const DRONE_START = WAREHOUSE_LAYOUT.drone.start;
 const ALTITUDES = [1.8, 3.2, 6.8] as const;
 /**
+ * Metres a second while Q or E is held.
+ *
+ * The envelope is 0.85m to 8.35m - seven and a half metres - so at 1.5 the full sweep takes
+ * five seconds. That is slow enough to stop at a bay by eye and quick enough that getting up
+ * over the racking is not a chore.
+ */
+const DRONE_CLIMB_RATE = 1.5;
+/**
  * Where the rotor wash lives and when it runs.
  *
  * The drone's envelope is 0.85m to 8.35m and it is handed to the player at 3.2m. WASH_FULL_Y
@@ -201,8 +209,21 @@ class WarehouseInput extends ENGINE.BaseInputHandler {
       case 'KeyF': this.rig.toggleGrip(); return true;
       case 'KeyR': this.rig.recover(); return true;
       case 'KeyH': this.rig.toggleHelp(); return true;
-      case 'KeyQ': this.rig.changeAltitude(-1); return true;
-      case 'KeyE': this.rig.changeAltitude(1); return true;
+      /*
+       * Q and E are HELD, not tapped.
+       *
+       * They used to call changeAltitude on every keydown, and the repeat filter above lets
+       * Q and E through - so holding one fired the browser's key-repeat, roughly thirty
+       * 0.85m steps a second once the repeat delay elapsed, and the drone went from the
+       * floor to the roof between one blink and the next. A tap moved it 0.85m, which is
+       * most of a person's height, and there was nothing in between.
+       *
+       * Now the keydown only records that the key is down; `tick` reads the pair and feeds a
+       * rate. See WarehouseInput.tick and climb().
+       */
+      case 'KeyQ':
+      case 'KeyE':
+        return true;
       case 'Digit1': this.rig.activateNumber(0); return true;
       case 'Digit2': this.rig.activateNumber(1); return true;
       case 'Digit3': this.rig.activateNumber(2); return true;
@@ -286,6 +307,9 @@ class WarehouseInput extends ENGINE.BaseInputHandler {
   public tick(deltaTime: number): void {
     const keyboardX = Number(this.held.has('KeyD')) - Number(this.held.has('KeyA'));
     const keyboardY = Number(this.held.has('KeyS')) - Number(this.held.has('KeyW'));
+    // Held, per second, and continuous - the same shape as the WASD pair above.
+    const climb = Number(this.held.has('KeyE')) - Number(this.held.has('KeyQ'));
+    if (climb !== 0) this.rig.climb(climb, deltaTime);
     this.rig.drive(
       Math.max(-1, Math.min(1, keyboardX + this.gamepadMoveX)),
       Math.max(-1, Math.min(1, keyboardY + this.gamepadMoveY)),
@@ -1780,6 +1804,23 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (this.view !== 'drone' || this.handoff > 0 || this.isCinematicActive()) return;
     this.yaw -= dx * 0.0022;
     this.pitch = THREE.MathUtils.clamp(this.pitch - dy * 0.0018, -0.72, 0.5);
+  }
+
+  /**
+   * Hold to climb or descend, at DRONE_CLIMB_RATE metres a second.
+   *
+   * The altitude readout is deliberately NOT flashed from here. changeAltitude prints one
+   * because a step is a discrete event worth naming; a continuous climb would print thirty a
+   * second, and now that those notifications go to the chat rather than over the picture that
+   * would be thirty lines in the log for one press of a key.
+   */
+  public climb(direction: number, deltaTime: number): void {
+    if (this.isCinematicActive()) return;
+    this.altitude = THREE.MathUtils.clamp(
+      this.altitude + direction * DRONE_CLIMB_RATE * deltaTime,
+      0.85,
+      WAREHOUSE_LAYOUT.drone.maxY
+    );
   }
 
   public changeAltitude(direction: number): void {

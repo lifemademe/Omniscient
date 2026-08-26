@@ -891,10 +891,20 @@ export class WarehouseEnvironment {
 
   private buildStations(): void {
     const position = this.stationPositions.hold;
+    /*
+     * The HOLD BAY floor legend is gone; the amber plinth stays.
+     *
+     * It sat two metres off door C's dock and read badly from every angle a drone actually
+     * approaches it from - text laid flat on a platform is legible from directly above and
+     * from nowhere else, and the one view that matters here is a machine coming in low from
+     * the aisle. Removed on request.
+     *
+     * The station itself is untouched: the amber plinth is still the mark on the floor, and
+     * the console names the hold bay in words when the decision is offered, which is the
+     * moment the player needs to know which platform it is.
+     */
     const frame = mesh('Station-hold', new THREE.BoxGeometry(3.4, 0.35, 2.6), AMBER, position.clone().setY(0.15));
-    const plate = mesh('StationLabel-hold', createWarehouseLabelGeometry(2.4, 0.52), labelMaterial('HOLD BAY', '#d8ffb0'), new THREE.Vector3(position.x, 0.332, position.z));
-    plate.rotation.set(-Math.PI / 2, 0, -Math.PI / 2);
-    this.root.add(frame, plate);
+    this.root.add(frame);
     for (const id of WAREHOUSE_DOOR_IDS) {
       const layout = WAREHOUSE_DOORS[id];
       const dock = new WarehouseTransferDock(layout);
@@ -1210,22 +1220,30 @@ export class WarehouseEnvironment {
 
     for (const [index, rackX] of WAREHOUSE_LAYOUT.rack.centers.entries()) {
       const aisle = index + 1;
-      // In the working lane beside the rack face, not under the rack itself.
-      const x = rackX + 1.95;
+      /*
+       * ## Centred in the lane, and both of them readable
+       *
+       * Two faults, reported together as "not centred and not the right direction".
+       *
+       * CENTRING: the number sat at rackX + 1.95, which is not the middle of anything. The
+       * racks are 7m apart and 1.58m wide, so the clear lane between two of them runs from
+       * rackX + 0.79 to rackX + 6.21 and its centre is rackX + 3.5 - a metre and a half from
+       * where the numeral was painted. It read as a marking shoved up against the rack it
+       * was labelling rather than as the floor of the aisle it names.
+       *
+       * ORIENTATION: `mirrorU` was on, and the comment justifying it recorded a capture that
+       * had misread an upside-down plate as a mirrored one. A plane rotated -90 about X lays
+       * flat with its texture-up pointing to world -Z; the aisles run along Z, so the marking
+       * reads correctly to a drone flying INTO the aisle and is inverted to one leaving. That
+       * is what the second plate's `facing = PI` is for - and PI about the plate's own normal
+       * turns a glyph upside down, which is right, while mirrorU flips its handedness, which
+       * never is. Both plates now use the unmirrored texture.
+       */
+      const x = rackX + WAREHOUSE_LAYOUT.rack.spacing / 2;
       for (const [z, facing] of [[runFront + 2.1, 0], [runRear - 2.1, Math.PI]] as const) {
-        /*
-         * mirrorU, and it is the OPPOSITE of what a wall sign needs.
-         *
-         * Established by looking, not by deriving - a numeral laid flat and rotated -90
-         * about X came out reversed with the same geometry that reads correctly on a
-         * vertical panel. Two earlier attempts in this file to reason about sign handedness
-         * from first principles were both wrong and both broke a face that was already
-         * right, so this one was settled with a capture: without the flip the 3 had its
-         * bowls on the left.
-         */
         const plate = mesh(
           `AisleFloorNumber-${aisle}`,
-          createWarehouseLabelGeometry(2.6, 2.0, true),
+          createWarehouseLabelGeometry(2.6, 2.0),
           floorPaintMaterial(String(aisle)),
           new THREE.Vector3(x, 0.014, z)
         );

@@ -344,17 +344,61 @@ export class WarehouseFacilities {
    * building's amber high bays, which is both what a cheap tube actually looks like and another
    * place for the room's cold half to land.
    */
+  /**
+   * ## Twice as many fittings, and every one of them hangs off something
+   *
+   * Two faults, reported together as "the fluorescent bulbs are not enough to make the
+   * warehouse more detailed, and they are hanging from nothing".
+   *
+   * HANGING FROM NOTHING was literal: a fitting is a housing box and a tube box at a given
+   * height and that was the whole assembly. At 3.24m over the dock apron, with a 10.5m roof,
+   * each one floated seven metres under a ceiling it had no connection to. Now every fitting
+   * drops on a pair of rods from a channel at the roof, so the eye can follow it up.
+   *
+   * NOT ENOUGH was true as well - five fittings in a building 48 by 55 metres, all of them
+   * clustered at the front. The list is now twelve, spread over the rear half, the west run
+   * and the sortation floor, and it is deliberately a list of positions rather than a grid:
+   * a regular array of lights is the same "this was generated" tell the racking pass had to
+   * break up.
+   *
+   * Only the original five carry a PointLight. The extra seven are geometry, because twelve
+   * more point lights in a scene that already runs a fixture row per bay is a frame-rate
+   * decision rather than an art one - and the ones that light the floor a player works on
+   * were already the ones that had lights.
+   */
   private buildStripLighting(bucket: Buckets): void {
-    const strips: Array<[number, number, number, number]> = [
-      [17.9, 3.24, 20.4, 6.6],
-      [19.0, 6.16, 24.6, 4.4],
-      [-8, 6.4, 20.6, 7.2],
-      [6, 6.4, 20.6, 7.2],
-      [-19.5, 4.2, -20.2, 5.0],
+    const roof = WAREHOUSE_LAYOUT.shell.roofY - 0.28;
+    const strips: Array<[number, number, number, number, boolean]> = [
+      [17.9, 3.24, 20.4, 6.6, true],
+      [19.0, 6.16, 24.6, 4.4, true],
+      [-8, 6.4, 20.6, 7.2, true],
+      [6, 6.4, 20.6, 7.2, true],
+      [-19.5, 4.2, -20.2, 5.0, true],
+      // The rear half, which had none at all.
+      [-8, 6.4, -20.6, 7.2, false],
+      [6, 6.4, -20.6, 7.2, false],
+      [-19.5, 5.8, -6.4, 5.0, false],
+      [19.5, 5.8, -6.4, 5.0, false],
+      // The west run and the sortation floor.
+      [-19.5, 4.2, 12.6, 5.0, false],
+      [19.5, 4.6, 6.2, 5.0, false],
+      [0, 6.9, 26.4, 8.4, false],
     ];
-    for (const [x, y, z, length] of strips) {
+    for (const [x, y, z, length, lit] of strips) {
       box(bucket.steel, length + 0.2, 0.09, 0.3, x, y + 0.07, z);
       box(bucket.tube, length, 0.06, 0.14, x, y, z);
+      /*
+       * Two drop rods and the channel they hang from.
+       *
+       * Inset from the ends by a fifth of the run, which is where a real fitting is picked up
+       * - hung from the very ends it sags, and the eye knows that even if it cannot say why.
+       */
+      const drop = roof - (y + 0.11);
+      for (const lx of [-length * 0.3, length * 0.3]) {
+        box(bucket.steel, 0.05, drop, 0.05, x + lx, y + 0.11 + drop / 2, z);
+      }
+      box(bucket.steel, length * 0.6 + 0.2, 0.1, 0.12, x, roof + 0.05, z);
+      if (!lit) continue;
       this.root.add(
         ENGINE.PointLightNode.create({
           name: 'StripFluorescent',
@@ -411,6 +455,45 @@ export class WarehouseFacilities {
     }
     if (laden) {
       boxXZ(bucket.body, 0.98, 0.16, 0.86, at(0, 1.46), 0.22, rotY);
+    }
+
+    /*
+     * ## The operator station, which is what was missing
+     *
+     * The mast, the forks and the overhead guard were all here and the machine still read as
+     * an orange block on wheels, because there was nowhere for a driver to be. A forklift is
+     * recognisable from the seat outward: the step you climb, the seat you sit in, the wheel
+     * you hold and the dash it stands on. None of those existed.
+     *
+     * Six additions, all in the existing buckets and all inside the footprint already
+     * occupied, so nothing here changes where the machine can be parked:
+     *
+     *  - SEAT pan and back, set into the well behind the mast.
+     *  - STEERING COLUMN and WHEEL, canted back the way a truck's is.
+     *  - DASH cowl in front of the seat, which is what the wheel comes out of.
+     *  - STEP on the left side, the one part of a forklift that is always scuffed.
+     *  - LOAD BACKREST on the carriage - the mesh guard the load leans against. Without it a
+     *    pallet on the forks looks like it is about to slide into the driver.
+     *  - TILT RAMS between the body and the mast, which explains how the mast moves.
+     */
+    // Seat, in the well behind the mast.
+    boxXZ(bucket.bodyDark, 0.52, 0.1, 0.46, at(0, -0.1), 1.08, rotY);
+    boxXZ(bucket.bodyDark, 0.52, 0.46, 0.1, at(0, -0.36), 1.32, rotY);
+    // Dash cowl, and the column and wheel that come out of it.
+    boxXZ(bucket.body, 0.6, 0.34, 0.22, at(0, 0.34), 1.2, rotY);
+    boxXZ(bucket.steel, 0.06, 0.3, 0.06, at(0, 0.28), 1.48, rotY);
+    const [swx, swz] = at(0, 0.24);
+    cyl(bucket.bodyDark, 0.16, 0.04, swx, 1.62, swz, 'y', 12);
+    // The step up, on the left flank.
+    boxXZ(bucket.steel, 0.1, 0.05, 0.42, at(-0.56, 0.1), 0.42, rotY);
+    // Load backrest on the carriage: five uprights and a top rail.
+    for (const lx of [-0.4, -0.2, 0, 0.2, 0.4]) {
+      boxXZ(bucket.steel, 0.05, 0.72, 0.05, at(lx, 1.06), 0.5, rotY);
+    }
+    boxXZ(bucket.steel, 0.88, 0.06, 0.06, at(0, 1.06), 0.86, rotY);
+    // Tilt rams, body to mast.
+    for (const lx of [-0.3, 0.3]) {
+      boxXZ(bucket.steel, 0.09, 0.09, 0.6, at(lx, 0.72), 1.0, rotY);
     }
 
     // Wheels.
@@ -494,10 +577,75 @@ export class WarehouseFacilities {
     box(bucket.wall, x1 - ox0 - 0.3, 2.5, 0.14, (ox0 + x1) / 2 - 0.15, deckY + 1.34, z1 - 0.3);
     box(bucket.wall, 0.14, 2.5, z1 - oz0 - 0.4, x1 - 0.3, deckY + 1.34, (oz0 + z1) / 2 - 0.2);
     box(bucket.deck, x1 - ox0 - 0.16, 0.12, z1 - oz0 - 0.26, (ox0 + x1) / 2 - 0.08, deckY + 2.65, (oz0 + z1) / 2 - 0.13);
-    box(bucket.glass, x1 - ox0 - 0.3, 1.5, 0.06, (ox0 + x1) / 2 - 0.15, deckY + 1.6, oz0);
-    // A desk behind the glass, so the lit window has something in it.
-    box(bucket.bodyDark, 1.5, 0.07, 0.62, (ox0 + x1) / 2, deckY + 0.85, oz0 + 0.75);
-    box(bucket.steel, 0.5, 0.42, 0.06, (ox0 + x1) / 2 - 0.3, deckY + 1.16, oz0 + 0.95);
+    /*
+     * ## The glazed front, and what is behind it
+     *
+     * The office was five boxes: three walls, a roof and a pane, with a desk slab and an
+     * upright behind it "so the lit window has something in it". Through the glass that read
+     * as a lit empty room with a plank in it - and this is the only lit interior in the
+     * building, at height, facing the whole floor, so it is the thing the eye goes to from
+     * anywhere in the front half.
+     *
+     * A supervisor's office over a warehouse floor is a small, cluttered, over-lit room. What
+     * it needs to read as one is a mullion in the glass, a way in, and enough furniture that
+     * the silhouette is busy rather than empty.
+     */
+    const oxMid = (ox0 + x1) / 2;
+    const glassW = x1 - ox0 - 0.3;
+    /*
+     * Glazing in two panes with a mullion, not one sheet.
+     *
+     * A single 6m pane has no scale - nothing in it tells you how big the room is. Split, the
+     * frame reads as window-sized and the office reads as a room rather than a display case.
+     */
+    for (const half of [-1, 1]) {
+      box(bucket.glass, glassW / 2 - 0.05, 1.5, 0.06, oxMid + half * (glassW / 4 + 0.03), deckY + 1.6, oz0);
+    }
+    box(bucket.steel, 0.09, 1.62, 0.1, oxMid, deckY + 1.6, oz0);
+    box(bucket.steel, glassW + 0.1, 0.1, 0.1, oxMid, deckY + 2.42, oz0);
+    box(bucket.steel, glassW + 0.1, 0.09, 0.1, oxMid, deckY + 0.82, oz0);
+
+    /*
+     * A door, at the west end, opening onto the deck.
+     *
+     * A room on a mezzanine with no way in is a diorama. It is a plain slab with a handle and
+     * a small vision panel, in the wall material so it reads as part of the box.
+     */
+    const doorX = ox0 + 0.55;
+    box(bucket.bodyDark, 0.9, 2.05, 0.08, doorX, deckY + 1.11, oz0 + 0.02);
+    box(bucket.glass, 0.34, 0.44, 0.05, doorX, deckY + 1.72, oz0 + 0.04);
+    box(bucket.steel, 0.13, 0.04, 0.05, doorX + 0.3, deckY + 1.14, oz0 + 0.07);
+
+    /*
+     * The furniture, arranged as a person would use it: desk against the glass so the
+     * supervisor faces the floor, screen and keyboard on it, chair pulled out, cabinets and a
+     * whiteboard on the blind rear wall where they do not block the window.
+     */
+    box(bucket.bodyDark, 2.1, 0.07, 0.68, oxMid + 0.6, deckY + 0.85, oz0 + 0.52);
+    for (const lx of [-0.95, 0.95]) {
+      box(bucket.steel, 0.06, 0.74, 0.6, oxMid + 0.6 + lx, deckY + 0.48, oz0 + 0.52);
+    }
+    // Screen on a stand, facing into the room, and a keyboard in front of it.
+    box(bucket.bodyDark, 0.14, 0.05, 0.22, oxMid + 0.35, deckY + 0.91, oz0 + 0.66);
+    box(bucket.bodyDark, 0.08, 0.22, 0.08, oxMid + 0.35, deckY + 1.04, oz0 + 0.66);
+    box(bucket.glass, 0.62, 0.4, 0.04, oxMid + 0.35, deckY + 1.34, oz0 + 0.66);
+    box(bucket.steel, 0.44, 0.02, 0.16, oxMid + 0.35, deckY + 0.9, oz0 + 0.4);
+    // Chair: pedestal, pan, back.
+    const chairX = oxMid + 0.75;
+    cyl(bucket.steel, 0.24, 0.05, chairX, deckY + 0.11, oz0 + 1.18, 'y', 10);
+    cyl(bucket.steel, 0.05, 0.36, chairX, deckY + 0.29, oz0 + 1.18, 'y', 8);
+    box(bucket.bodyDark, 0.46, 0.09, 0.44, chairX, deckY + 0.51, oz0 + 1.18);
+    box(bucket.bodyDark, 0.44, 0.5, 0.09, chairX, deckY + 0.79, oz0 + 1.4);
+    // Two filing cabinets and a whiteboard against the blind rear wall.
+    for (const lx of [-0.75, -0.15]) {
+      box(bucket.steel, 0.52, 1.28, 0.46, oxMid + lx, deckY + 0.73, z1 - 0.58);
+      for (const dy of [0.28, 0.72, 1.16]) {
+        box(bucket.bodyDark, 0.46, 0.04, 0.03, oxMid + lx, deckY + dy, z1 - 0.36);
+      }
+    }
+    box(bucket.deck, 1.5, 0.9, 0.05, oxMid + 1.2, deckY + 1.72, z1 - 0.36);
+    // Its own ceiling light, which is why the window is lit at all.
+    box(bucket.tube, 1.6, 0.06, 0.16, oxMid, deckY + 2.5, (oz0 + z1) / 2 - 0.2);
   }
 
   /**
