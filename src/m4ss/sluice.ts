@@ -311,10 +311,22 @@ export const THE_SLUICE: World = {
      * The climb and the patrol used to interleave - g3 sat 60px from a patrol growth on the
      * same row, so the top of the level read as one heap of nine plants with no way to tell
      * which belonged to which route. They are now two shapes: a zigzag running east-west at
-     * 420 and 570, and a vertical stack at 400 and 450. The reds being visibly out (see
+     * 420 and 570, and a stack against the west wall. The reds being visibly out (see
      * bushTexture's ember) does the rest.
+     *
+     * ## g1 moved 70 left and 60 up, and the number that mattered was 201
+     *
+     * At (400, 880) it sat 201 from g2 - inside a 40g reach of 212 on paper, and measured to
+     * be nothing of the kind. Driven with a proper tangential pump, g2 first came within reach
+     * at spin 6.2, and the closest approach only happened at a full circulating revolution:
+     * the link was asking for a 360 to make a mid-chain hop. From a hang it was 271 away, and
+     * there is no way to see that in a coordinate list - the reach check compares two anchor
+     * positions and the player swings from a circle around one of them.
+     *
+     * 166 now, and 228 from the bottom of the arc, so it wants a real swing rather than a
+     * revolution - the same ask the rest of the chain makes.
      */
-    { id: 'g1', x: 400, y: 880, rope: 70, live: false },
+    { id: 'g1', x: 330, y: 820, rope: 70, live: false },
     { id: 'g2', x: 420, y: 680, rope: 70, live: false },
     { id: 'g3', x: 400, y: 500, rope: 70, live: false },
 
@@ -469,16 +481,22 @@ export const THE_SLUICE: World = {
    *
    * Being caught costs 45% of the body onto the floor, recoverable with Q. Nothing dies.
    *
-   * The shutter is the other kind entirely: `axis: 'x'`, which the sim has supported since it
-   * was written and no stage has ever authored. It slides across the only gap between g1's
-   * sweep and g2's, so the second link of the climb is a release that has to be taken on the
-   * beat. Every release above 2.1 rad/s already buys 0.9s of slow motion, which exists
-   * precisely so a flight this short is a decision - the mechanic was built for this.
+   * There was a third: a horizontal shutter on `axis: 'x'`, sliding across the gap between the
+   * gallery's first two sweeps. It was the stage's other retired dead capability and it is cut
+   * on a play call.
+   *
+   * Worth recording why rather than pretending it was always wrong. It never had room. The
+   * only place a shutter can live is the slot between two circles, which pinned it to within a
+   * few pixels vertically, and its swept band ran clean across the one shaft the descent falls
+   * down - so it dictated where the west landing could be, where the chute could be, and how
+   * far west the climb could go. Three separate beats were bent around a hazard that appeared
+   * for a second and a half at a time. `Crusher.axis: 'x'` goes back to being unauthored, which
+   * is honest: it is supported, and this level could not afford it.
    */
   crushers: [
     { x: 500, y: 1130, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0, at: 0 },
     { x: 800, y: 1130, w: 60, h: 260, travel: 190, axis: 'y', period: 3.4, phase: 0.5, at: 0 },
-    { x: 130, y: 756, w: 190, h: 40, travel: 180, axis: 'x', period: 3.2, phase: 0.3, at: 0 },
+
   ],
 
   /**
@@ -511,6 +529,18 @@ export const THE_SLUICE: World = {
   critters: [
     { from: 520, to: 700, y: 760, speed: 46, w: 26, h: 42, x: 520, facing: 1, wait: 0, phase: 0 },
     { from: 690, to: 880, y: 760, speed: 44, w: 26, h: 42, x: 880, facing: -1, wait: 0, phase: 0 },
+    /*
+     * The third, back on the landing, and it works now for the reason it did not before.
+     *
+     * It was cut because g1 hung 140 above this deck and the creature's head reached to within
+     * six pixels of the bottom of that arc - being ON the growth was a contact. g1 is 70 west
+     * and 60 up, so the arc now clears its head by ninety, and the beat it was written for is
+     * back: you release onto this landing out of the sump, and something is walking it.
+     *
+     * 400 to 710 with the landing running 360 to 750, so there is a body's width of clear
+     * ground at each end - an arrival you cannot land on safely is a coin toss, not a beat.
+     */
+    { from: 400, to: 710, y: 1020, speed: 42, w: 26, h: 42, x: 400, facing: 1, wait: 0, phase: 0 },
   ],
 
   /**

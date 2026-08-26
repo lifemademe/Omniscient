@@ -370,6 +370,9 @@ for (const c of W.critters ?? []) {
 for (const a of W.anchors) {
   if (a.rope === undefined) continue;
   for (const c of W.critters ?? []) {
+    // Only growths that hang ABOVE the creature. One below it cannot dip onto its head, and
+    // the climb out of the sump is entirely below the landing it climbs to.
+    if (a.y >= c.y) continue;
     /*
      * How deep the arc gets WHERE THE CREATURE IS, not at the bottom of the circle.
      *
@@ -755,38 +758,6 @@ console.log('\nthe route - the two moves the layout cannot settle on its own');
     const seconds = longest[k] * TUNING.dt;
     check(`press ${k + 1} holds its window long enough to walk`, seconds > 0.9, `${seconds.toFixed(2)}s`);
   }
-}
-
-/*
- * And the shutter's window, which is the same question asked of the climb.
- *
- * The gap it slides across is the only air between g1's sweep and g2's, so if the parked
- * position does not clear that lane the second link of the gallery is impossible rather than
- * timed. Measured as a lane at the x the flight actually uses - between the two growths.
- */
-{
-  const shutter = (THE_SLUICE.crushers ?? []).find((c) => c.axis === 'x')!;
-  const g1 = named('g1');
-  const g2 = named('g2');
-  const lane = (g1.x + g2.x) / 2;
-  check(
-    'the parked shutter is clear of the flight lane',
-    shutter.x + shutter.w < lane - 20,
-    `parks at ${shutter.x + shutter.w}, lane ${lane}`
-  );
-  check(
-    'and closes it when it runs out',
-    shutter.x + shutter.travel + shutter.w > lane + 20,
-    `reaches ${shutter.x + shutter.travel + shutter.w}`
-  );
-  // It has to fit between the two sweeps, or it is a wall rather than a shutter.
-  const above = g2.y + g2.rope!;
-  const below = g1.y - g1.rope!;
-  check(
-    'the shutter fits between the two sweeps',
-    shutter.y >= above && shutter.y + shutter.h <= below,
-    `shutter ${shutter.y}..${shutter.y + shutter.h} in ${above}..${below}`
-  );
 }
 
 // --------------------------------------------------------------------- 4. the creatures
