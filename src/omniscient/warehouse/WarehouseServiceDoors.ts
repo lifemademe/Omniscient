@@ -237,7 +237,21 @@ const WET = new THREE.MeshPhysicalMaterial({ color: '#202a28', roughness: 0.16, 
 const PIPE = new THREE.MeshStandardMaterial({ color: '#3d4a48', roughness: 0.7, metalness: 0.42 });
 const BIN = new THREE.MeshStandardMaterial({ color: '#4a5a3c', roughness: 0.86, metalness: 0.12 });
 const TIMBER = new THREE.MeshStandardMaterial({ color: '#6b5433', roughness: 0.95, metalness: 0.01 });
-const PLATE = new THREE.MeshStandardMaterial({ color: '#8d9a92', roughness: 0.7, metalness: 0.3 });
+/*
+ * ## The blank plate was brighter than the lamp
+ *
+ * Measured off door B's feed rather than judged: the notice plate came back at mean 173 and a
+ * 90th percentile of 250, against 154 and 242 for the wall pack's own lens. A small sign
+ * beside a door was out-shining the light fixture above it, which inverts the whole value
+ * structure the wall pack was added to create - the eye goes to the brightest thing in a
+ * frame, and it was going to a rectangle with nothing written on it.
+ *
+ * The cause is position rather than paint: it sits square in the pack's cone at 0.3 metalness,
+ * so it takes the specular the cladding either side of it does not. Down about a third in
+ * value, which leaves it clearly lighter than the wall it hangs on and clearly darker than the
+ * lamp, in that order.
+ */
+const PLATE = new THREE.MeshStandardMaterial({ color: '#5c6864', roughness: 0.78, metalness: 0.22 });
 const SCUFF = new THREE.MeshStandardMaterial({ color: '#4b524f', roughness: 0.95, metalness: 0.02 });
 const WALLPACK = new THREE.MeshStandardMaterial({
   color: '#d8c79c', emissive: '#f0b263', emissiveIntensity: 1.3, roughness: 0.3,
