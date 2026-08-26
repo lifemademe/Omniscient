@@ -248,25 +248,24 @@ const WAREHOUSE_ORIGIN = new THREE.Vector3(0, 0, 1200);
  * the whole 58m building sits inside the ramp instead of ending in a wall of it.
  */
 /**
- * Every post-processing pass, off.
+ * OUR two passes, off. The engine's five stay on.
  *
- * There are seven in play. Five are the engine's, configured from this project - tone
- * mapping, bloom, ambient occlusion, object outline and colour grading - and two are ours,
- * registered as custom passes: the painterly/cel conversion at order 70 and the CRT at 80.
- * The engine offers ten; the three this game never touches are anti-aliasing, depth of
- * field and screen-space reflections, plus its own Retro and Pixelation, which we replaced
- * with our own.
+ * Seven are in play. Five are the engine's - tone mapping, bloom, ambient occlusion, object
+ * outline and colour grading - and two are this project's, registered as custom effects: the
+ * painterly/cel conversion at order 70 and the CRT at 80.
  *
- * One switch rather than seven, because `setPostProcessingEnabled(false)` disables the
- * PIPELINE - the composer is bypassed entirely and the renderer draws straight to the
- * canvas. Turning the passes off one at a time would still pay for the composer, the render
- * targets and the full-screen blits between them, and would leave seven things to remember
- * to turn back on.
+ * This hides only the second pair, and it does it by NOT MOUNTING them rather than by
+ * disabling them after the fact. That matters because both are driven from a dozen places -
+ * every scene mount calls setPaintLook or setRetroLook - and any of those would switch a
+ * disabled pass back on. Both installers are the only route into the pipeline, and both
+ * setters no-op when their effect was never registered, so skipping the mount is the one
+ * point where this can be enforced once.
  *
- * Nothing is deleted or retuned. Every look, slider and value is exactly where it was, so
- * flipping this back to `false` restores the game as it stands.
+ * The engine's five are untouched, so the picture still gets ACES, exposure, bloom and
+ * occlusion. Nothing is deleted or retuned either - every look, slider and tuning constant
+ * is where it was, and flipping this to `false` restores the game as it stands.
  */
-const HIDE_ALL_POST = true;
+const HIDE_CUSTOM_POST = true;
 
 const WAREHOUSE_HAZE = '#5d6b77';
 const WAREHOUSE_FOG_NEAR = 32;
@@ -3762,8 +3761,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private retroMounted = false;
   /** Same, for the painterly pass. Mounted ahead of the CRT - see paintPass's header. */
   private paintMounted = false;
-  /** Latch so the master post switch is written once rather than every frame. */
-  private postHidden = false;
 
   private disposeSceneJump: (() => void) | null = null;
   /** Editor-only F9 route to the runtime bonus world; never registered in published builds. */
@@ -4347,7 +4344,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * has confirmed the registration took. Retried here rather than hooked because there
      * is no pipeline object to hang a hook on until the pipeline exists.
      */
-    if (!this.retroMounted && this.post) {
+    if (!HIDE_CUSTOM_POST && !this.retroMounted && this.post) {
       this.retroMounted = installRetro(this.post);
       /*
        * The motif used to fire here as well, and now fires only from the boot screen.
@@ -4364,7 +4361,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
     /* Global cel treatment. DOM UI is outside the composer; the CRT face is masked below. */
     const PAINT_PASS = true;
-    if (PAINT_PASS && !this.paintMounted && this.post) {
+    if (PAINT_PASS && !HIDE_CUSTOM_POST && !this.paintMounted && this.post) {
       this.paintMounted = installPaint(this.post);
       if (this.paintMounted) {
         if (this.warehouse) this.applyWarehouseCelPost(true);
@@ -4381,10 +4378,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
      *
      * Every frame, because the active camera changes with the shot.
      */
-    if (HIDE_ALL_POST && this.post && !this.postHidden) {
-      this.postHidden = true;
-      this.post.setPostProcessingEnabled(false);
-    }
     if (this.paintMounted) {
       // The mission root, so the contour cannot ink a scene the beauty pass has dropped.
       /*
