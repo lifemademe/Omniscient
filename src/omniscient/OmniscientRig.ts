@@ -2557,9 +2557,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
       if (!saved) continue;
       /*
        * Cooldown and Active both coerce to Waiting. Cooldown because deadlines are not
-       * serialised (persistence.ts says why); Active because persist() only ever runs
-       * with no request open, so an Active state in a save file is corruption, and the
-       * generous reading of a corrupt state is "still waiting to be answered".
+       * serialised (persistence.ts says why); Active because a save is written the moment a
+       * request is OPENED - openSignal marks it Active, records it as the last played
+       * contact and persists, so CONTINUE knows where the player was. An Active state in a
+       * save file is therefore routine rather than corruption, and it means "the player was
+       * inside this when they left". Either way the reading is the same and is the generous
+       * one: still waiting to be answered, and answerable.
+       *
+       * The comment here used to say persist() only ever runs with no request open. It has
+       * not been true since CONTINUE learned to reopen a contact, and a stale claim about
+       * when a state is IMPOSSIBLE is the kind that stops the next person checking.
        */
       const state =
         saved.state === SignalState.Cooldown || saved.state === SignalState.Active
@@ -2832,6 +2839,30 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // Whatever brought us here, the departure is over. A latch that only clears on its own
     // happy path is a latch that eventually sticks - and a stuck one makes END CALL dead.
     this.leaving = false;
+
+    /*
+     * Nobody is inside a contact. This IS the globe, so say so about every signal.
+     *
+     * Opening a request marks it Active and takes it out of `openable`, and the leave
+     * sequence puts both back - from inside a tweener callback 0.62s after the player asked
+     * to go. Any route to the globe that does not run that callback leaves a signal Active
+     * and unanswerable, and the tooltip then says "nobody is asking here yet" about a
+     * conversation the player is halfway through. There is no way back in: the pin is the
+     * only door and it has been quietly locked.
+     *
+     * restoreSave already carries this exact reconciliation, and its comment calls it "this
+     * codebase's oldest documented bug wearing a new entrance" - a green point that cannot
+     * be clicked. It was written for the load path and the same hole was open at runtime.
+     *
+     * Stated as an invariant rather than as a fix for whichever route caused it: while the
+     * globe is up, Active is not a state any signal can be in. That holds however the player
+     * got here, including from routes nobody has written yet.
+     */
+    for (const signal of this.signals) {
+      if (signal.state !== SignalState.Active) continue;
+      this.setSignalState(signal.id, SignalState.Waiting);
+      this.openable.add(signal.id);
+    }
     const warpContainer = this.getWorld()?.gameContainer;
     if (warpContainer) playWarp(warpContainer);
     setRetroLook('console');

@@ -389,6 +389,35 @@ function checkEveryMissionHasASignal(): void {
    * an ocean is normally a bug - so an ocean pin has to be asserted rather than tolerated, or
    * the next person to tidy the coordinates will move it onto land as a fix.
    */
+  /*
+   * A request you are halfway through can always be walked back into.
+   *
+   * Opening a signal marks it Active and takes it out of `openable`, and answerable means
+   * BOTH - the right state and membership in that set. Every route back to the globe has to
+   * put both back, or the pin sits there saying "nobody is asking here yet" about a
+   * conversation in progress, and the pin is the only door.
+   *
+   * This has now been the same bug twice in two different places: applySave carried the
+   * reconciliation and called it "this codebase's oldest documented bug wearing a new
+   * entrance", and showGlobe did not have it, so any departure that skipped the leave
+   * sequence's tweener callback stranded the request for the rest of the run.
+   *
+   * Checked by reading the rig, because there is no headless way to open a contact: both
+   * methods have to coerce Active back to answerable. A shape check rather than a behaviour
+   * one, and said plainly so nobody mistakes it for proof that the routes work.
+   */
+  {
+    const rig = readFileSync('src/omniscient/OmniscientRig.ts', 'utf8');
+    for (const method of ['private showGlobe(', 'private restoreSave(']) {
+      const at = rig.indexOf(method);
+      const body = at < 0 ? '' : rig.slice(at, at + 4000);
+      check(
+        `${method.replace('private ', '').replace('(', '')} makes an Active signal answerable again`,
+        at >= 0 && /SignalState\.Active/.test(body) && /openable\.add/.test(body),
+        at < 0 ? 'method not found - rename?' : ''
+      );
+    }
+  }
   const station = signals.find((s) => s.id === M4SS_SIGNAL);
   check('M4SS: the station is on the globe', station !== undefined);
   check(

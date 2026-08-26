@@ -1163,7 +1163,7 @@ export class GlobeScreen {
       tip.appendChild(wait);
       // Held so the countdown can be rewritten each frame without rebuilding the tip.
       this.waitEl = wait;
-    } else if (this.openable.has(signal.id)) {
+    } else if (this.openable.has(signal.id) || signal.state === SignalState.Active) {
       const button = document.createElement('button');
       button.className = 'omni-globe__answer';
       button.type = 'button';
@@ -1179,6 +1179,19 @@ export class GlobeScreen {
       // "no longer waiting" said nothing useful and read as an error - it was the branch
       // an expired cooldown wrongly fell into, and even where it was correct the player
       // could not tell whether they had missed something or nothing was there.
+      /*
+       * Active is answerable, and the second condition above is a net rather than a feature.
+       *
+       * A signal is only Active while the player is inside it, and the globe is not drawn
+       * then - so in a correct run this never fires. It fires when something has stranded a
+       * request: opened, left by a route that did not restore it, and now sitting on the map
+       * saying "nobody is asking here yet" about a conversation in progress, with the pin as
+       * the only door and no way to open it.
+       *
+       * The rig closes that hole at source (see showGlobe). This is here because the cost of
+       * being wrong is asymmetric: an extra Answer button on a pin is a click that reopens
+       * something openable, and a missing one is a save the player cannot continue.
+       */
       wait.textContent =
         signal.state === SignalState.Unknown
           ? 'carrier origin does not resolve'
