@@ -93,8 +93,24 @@ const ZONE_MARKER: Readonly<Record<string, readonly [number, number]>> = {
   receiving: [7.6, -19.4],
   'storage-west': [-15.5, 6.4],
   'storage-east': [5.5, 6.4],
-  sortation: [16.4, 7.6],
+  /*
+   * Sortation's plate is the odd one out, and the floor is why.
+   *
+   * At (16.4, 7.6) a 3.5m plate spanned x 14.65..18.15 and the near lane occupies 16.39..18.11
+   * for the whole run - so the zone's own red marker was painted under a conveyor. Reported as
+   * a red floor label under the belt.
+   *
+   * There is no 3.5m square of clear floor left in this zone: the three lanes take x
+   * 16.39..18.11, 18.74..20.46 and 21.09..22.81, the gaps between them are 63cm, and the only
+   * open band is z 9.5 to 11.5 between the lane ends and the inspection table. So this one is
+   * placed there and drawn smaller, which is honest about the room rather than pretending the
+   * space exists.
+   */
+  sortation: [19.6, 10.45],
 };
+
+/** Plate size per zone; see the sortation note in ZONE_MARKER for why one is smaller. */
+const ZONE_PLATE_SIZE: Readonly<Record<string, number>> = { sortation: 1.9 };
 /*
  * Fluorescent tube: the second fixture type this building needed.
  *
@@ -342,7 +358,7 @@ export class WarehouseFacilities {
       texture.offset.set(1, 1);
       const plate = ENGINE.MeshNode.create({
         name: `ZoneFloorPlate-${id}`,
-        geometry: new THREE.PlaneGeometry(3.5, 3.5),
+        geometry: new THREE.PlaneGeometry(ZONE_PLATE_SIZE[id] ?? 3.5, ZONE_PLATE_SIZE[id] ?? 3.5),
         material: new THREE.MeshBasicMaterial({ map: texture, toneMapped: false }),
         receiveShadow: false,
       });
@@ -593,12 +609,26 @@ export class WarehouseFacilities {
     for (const [px, pz] of [[x0 + 0.4, z0 + 0.4], [x1 - 0.4, z0 + 0.4], [x0 + 0.4, z1 - 0.4], [x1 - 0.4, z1 - 0.4], [midX, z0 + 0.4]] as const) {
       box(bucket.steel, 0.16, deckY, 0.16, px, deckY / 2, pz);
     }
-    // Handrail along the open edge. Yellow, because every mezzanine edge in a working
-    // building is, and because it is the one place a warm accent belongs at height.
+    /*
+     * Handrail along the open edge, WITH A GAP WHERE THE STAIR ARRIVES.
+     *
+     * It ran the full 13.4 to 22.6 at z 21.46, and the stair lands at x 13.75 with a landing
+     * spanning 13.13..14.38 - so two yellow rails and a baluster were drawn straight across
+     * the top of the flight. Reported as the handrail blocking the stairs, and it was: the
+     * one opening in the barrier had a barrier across it.
+     *
+     * The run starts east of the opening instead. Nothing is needed on the west side because
+     * the opening reaches the deck's own west edge, and the stair's newels already close the
+     * corner where the two meet.
+     *
+     * Yellow because every mezzanine edge in a working building is, and because it is the one
+     * place a warm accent belongs at height.
+     */
+    const railStartX = 14.5;
     for (const y of [deckY + 0.55, deckY + 1.05]) {
-      box(bucket.rail, x1 - x0, 0.05, 0.05, midX, y, z0 + 0.06);
+      box(bucket.rail, x1 - railStartX, 0.05, 0.05, (railStartX + x1) / 2, y, z0 + 0.06);
     }
-    for (let px = x0 + 0.3; px < x1; px += 1.5) {
+    for (let px = railStartX + 0.3; px < x1; px += 1.5) {
       box(bucket.rail, 0.05, 1.05, 0.05, px, deckY + 0.62, z0 + 0.06);
     }
 

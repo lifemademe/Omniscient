@@ -181,7 +181,18 @@ export class WarehouseSetDressing {
       [-20.8, -20.8],
       [-14.5, -21.4],
       [10.8, -20.6],
-      [20.7, 18.4],
+      /*
+       * Out of door C's drop point.
+       *
+       * At (20.7, 18.4) this bare pallet spanned x 19.93..21.48 by z 17.63..19.18, and door
+       * C's transfer dock - rotated a quarter turn onto the east wall - occupies 20.33..23.08
+       * by 18.13..21.88. Over a metre of overlap on both axes, so the dock stood on it.
+       * Reported as an asset clipping inside the drop point.
+       *
+       * (13.5, 18.6) is open floor between the hold area and the mezzanine's west edge at
+       * 13.4, clear of the dock, the fire point, the maintenance drum and the forklift.
+       */
+      [13.5, 18.6],
     ].entries()) {
       const pallet = ENGINE.SceneNode.create({ name: `PalletStack-${index + 1}`, position: new THREE.Vector3(x, 0, z) });
       for (const offset of [-0.55, 0, 0.55]) {

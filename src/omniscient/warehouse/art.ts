@@ -1011,11 +1011,27 @@ export class WarehouseEnvironment {
       this.root.add(laneRoot);
     }
 
-    // The sorting hall is a destination, not an obstacle immediately inside the dock.
-    const fenceMaterial = new THREE.MeshStandardMaterial({ color: '#344a48', roughness: 0.66, metalness: 0.72, wireframe: true });
+    /*
+     * ## The wireframe, and it was literally `wireframe: true`
+     *
+     * Reported three times as a wireframe or glass rectangle passing through the conveyor
+     * belt. Twice I looked for something SOLID intersecting a belt and found real but
+     * different faults - two security gates, then the scan curtain, then the sun shaft's hard
+     * rim. All three were worth fixing and none of them was this.
+     *
+     * This is: two 8.2m boxes at x 15.55 in a MeshStandardMaterial with `wireframe: true`,
+     * running the length of the sortation hall right beside lane one. Three.js draws that as
+     * literal polygon edges - so a long thin rectangle of hairlines, hanging in the air,
+     * crossing everything behind it. It is a debug material that shipped.
+     *
+     * The comment above it explained the intent - "the sorting hall is a destination, not an
+     * obstacle" - which is why it was made see-through. Wireframe is not see-through, it is
+     * un-rendered. The two security gates at z -14.25 and 14.25 already mark the hall's
+     * boundary, so the fence is removed rather than rebuilt as a real mesh screen.
+     *
+     * If a physical divider is ever wanted here it needs posts and a panel, not a flag.
+     */
     this.root.add(
-      mesh('SortationFenceWestRear', new THREE.BoxGeometry(0.1, 2.35, 8.2), fenceMaterial, new THREE.Vector3(15.55, 1.18, -9.9)),
-      mesh('SortationFenceWestFront', new THREE.BoxGeometry(0.1, 2.35, 8.2), fenceMaterial, new THREE.Vector3(15.55, 1.18, 8.9)),
       mesh('SortationInspectionTable', new THREE.BoxGeometry(5.9, 0.18, 1.7), STEEL, new THREE.Vector3(19.6, 1.05, 12.35)),
       mesh('SortationTableShelf', new THREE.BoxGeometry(5.4, 0.12, 1.35), DARK_STEEL, new THREE.Vector3(19.6, 0.42, 12.35)),
       mesh('SortationCatwalk', new THREE.BoxGeometry(7.6, 0.22, 12), DARK_STEEL, new THREE.Vector3(19.55, 6.4, -1.2))
@@ -1065,15 +1081,16 @@ export class WarehouseEnvironment {
     );
     this.verifiedIntakeScanner = scanner;
     intake.add(scanner);
-    const intakeLabel = readableLabelPanel(
-      'VerifiedIntakeLabel',
-      'VERIFIED INTAKE',
-      2.35,
-      0.48,
-      '#d8ffb0',
-      new THREE.Vector3(0, 1.68, 0.62)
-    );
-    intake.add(intakeLabel.root);
+    /*
+     * The VERIFIED INTAKE sign is removed, and it is the third floating legend to go.
+     *
+     * It sat at y 1.68 on the intake, which puts it at eye level in front of the sortation
+     * lanes - so from the aisle it read as a lit panel stuck on a conveyor, clipped to
+     * "IFIED INT" by the belt in front of it. Same fault as the HOLD BAY plate and the same
+     * answer: the station is a place the console names in words at the moment the player is
+     * told to go there, and it has its own lit clamps, guides and scanner line to be
+     * recognised by.
+     */
     this.root.add(intake);
   }
 
