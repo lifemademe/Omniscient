@@ -113,8 +113,12 @@ export const THE_SLUICE: World = {
      * of this level that went to the harness had a 110px shaft beside it that dropped straight
      * to the corridor - beats one and two, skippable by walking east. The floor plan found it;
      * no amount of arithmetic was ever going to.
+     *
+     * y 550 rather than 560, flush with the catch ledge's underside. Ten pixels apart they
+     * left a slot a hundred and thirty wide and ten tall, and a crawling body is about fifteen
+     * - close enough to be worth not finding out. Two surfaces that meet should meet.
      */
-    { x: 880, y: 560, w: 380, h: SHELF },
+    { x: 880, y: 550, w: 380, h: SHELF },
 
     // -- 2. the patrol --------------------------------------------------------------------
     /*
@@ -159,8 +163,21 @@ export const THE_SLUICE: World = {
     { x: 900, y: 780, w: 180, h: SHELF },
     /** The column's cap, east half. Air stops here; the way out is sideways. */
     { x: 1080, y: 780, w: 180, h: SHELF },
-    /** Where the bridge lands, and where the west climb begins. */
-    { x: 360, y: 1020, w: 260, h: SHELF },
+    /*
+     * Where the bridge lands, and where the west climb begins.
+     *
+     * It reaches east to 750 rather than 620, and the 130 pixels are a bug being paid for.
+     * The rig animates a bridge by ROTATING its slab, so what the player sees is always the
+     * slab's own rectangle turned on its side - and `span` is stated independently of that.
+     * A 90x150 slab lying down is a 150x90 deck; the span said 280 wide, so a hundred and
+     * thirty pixels of the walkway were solid and not drawn. Paul walked over nothing.
+     *
+     * Fixed on the level's side rather than the rig's: a bridge you can see fall and then
+     * land somewhere its own shape does not reach is dishonest whatever draws it. The landing
+     * grew to meet the deck the slab can actually become. See the harness check that now
+     * requires the two to agree.
+     */
+    { x: 360, y: 1020, w: 390, h: SHELF },
 
     // -- 3/4. the corridor's east wall ----------------------------------------------------
     /*
@@ -170,7 +187,19 @@ export const THE_SLUICE: World = {
     { x: 990, y: 1110, w: 90, h: 300 },
 
     // -- 8. the alcove behind the cracked wall --------------------------------------------
-    { x: 0, y: 495, w: 274, h: 120 },
+    /*
+     * 70 thick rather than 120, and the fifty pixels are headroom for the landing below.
+     *
+     * At 120 its underside reached 615 and the west landing's surface is at 640 - twenty-five
+     * pixels of clearance over a body that stands about forty-five, so the end of the patrol
+     * crossing was a crawlspace nobody designed. `crawlRelax` flattens a driven body to about
+     * fifteen, which is exactly why a gap like this is never a mass gate and always an
+     * accident: it does not stop anybody, it just makes them lie down.
+     *
+     * Still comfortably past the 40 that broke stage one's drawbridge deck, and the same 70
+     * stage two's sporeling ledge uses.
+     */
+    { x: 0, y: 495, w: 274, h: 70 },
   ],
 
   /**
@@ -253,7 +282,8 @@ export const THE_SLUICE: World = {
       open: false,
       lift: 0,
       mode: 'bridge',
-      span: { x: 620, y: 1020, w: 280, h: SHELF },
+      // 150x90 - the slab's own 90x150 turned on its side, which is what the fall draws.
+      span: { x: 750, y: 1020, w: 150, h: SHELF },
     },
     /*
      * The cracked wall at the top of the climb. Only the force plate opens it.

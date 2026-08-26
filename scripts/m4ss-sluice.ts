@@ -328,6 +328,26 @@ for (const c of W.crushers ?? []) {
     check(`bridge deck is clear of (${t.x},${t.y})`, !overlap(deck, t));
   }
   check('bridge deck is thick enough to stand on', deck.h > 60, `${deck.h}`);
+  /*
+   * The deck has to BE the slab, turned on its side.
+   *
+   * This is the check that was missing and the fault it would have caught shipped to a
+   * playtest: the rig animates a bridge by rotating its own mesh, so what is drawn when it
+   * lands is always the slab's rectangle with its axes swapped. `span` is stated separately -
+   * deliberately, because deriving it from the pivot was wrong every time - and nothing made
+   * the two agree. The deck was 280 wide and the slab could only ever draw 150 of it, so a
+   * hundred and thirty pixels of walkway were solid and invisible and the report was "I can
+   * just move over nothing to the other side".
+   *
+   * Stated as an equality rather than a tolerance. A bridge whose drawn shape and walkable
+   * shape differ by ANY amount is a bridge with a lie in it, and the size of the lie only
+   * decides how long it takes somebody to fall through it.
+   */
+  check(
+    'the deck is the slab turned on its side',
+    deck.w === bridge.h && deck.h === bridge.w,
+    `deck ${deck.w}x${deck.h}, slab ${bridge.w}x${bridge.h}`
+  );
   const landing = W.tiles.find((t) => t.x === 360 && t.y === 1020)!;
   check('bridge deck meets its west landing', deck.x === landing.x + landing.w, `${deck.x}`);
   const platform = W.tiles.find((t) => t.x === 900 && t.y === 1020)!;

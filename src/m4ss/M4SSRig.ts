@@ -39,7 +39,6 @@ import { SlimeAudio } from './SlimeAudio.js';
 import {
   atmosphereTexture,
   backdropTexture,
-  endCapTexture,
   canopyTexture,
   acidTexture,
   dirtTexture,
@@ -1047,36 +1046,24 @@ export class M4SSRig extends ENGINE.SceneNode {
       }
 
       /*
-       * Broken corners at both ends of every standable slab.
+       * The broken corners are gone.
        *
-       * Only on tiles that are platforms rather than boundary walls, and only on the ends
-       * that face open space - a cap over a corner the player can never see is geometry
-       * nobody will ever look at. Mirrored on the left by negating the scale, so one
-       * generator serves both sides. See endCapTexture.
+       * They were meant to be chunks of stone calving off the end of a slab, and they were
+       * never once drawn as that. The art is 92px tall and was hung at the slab's own top, so
+       * on anything shallower than about 130 it stood proud of both faces and read as a grey
+       * striped column bolted to each end - which a playtest called "those grey horizontal
+       * lines on the side of the platform", and which a second playtest called by the same
+       * name after the height guard was added to fix it.
+       *
+       * The guard was the mistake. It admitted slabs 92 to 199 deep, and there are exactly two
+       * of those in the entire game - both in stage three, neither of them tall enough to
+       * contain the cap. Stage one and stage two have none at all, so this decoration has
+       * spent its whole life drawing nothing anywhere it was wanted and an artefact everywhere
+       * it appeared. Deleting it costs two stages nothing and fixes the third.
+       *
+       * endCapTexture is left in stageArt: the generator is sound, it is the hanging that was
+       * wrong, and a future edge treatment should start from it rather than from scratch.
        */
-      /*
-       * ...and only on slabs deep enough to HAVE a corner. The cap art is 92px tall, so on a
-       * thin ledge it hangs most of its length below the slab it is capping and reads as a
-       * grey striped column stuck to each end - which is exactly what the playtest called
-       * "those grey horizontal lines on the side of the platform".
-       */
-      if (t.w >= 120 && t.h < 200 && t.h >= 92) {
-        for (const side of [-1, 1] as const) {
-          const cap = decorMesh(
-            'EndCap',
-            new THREE.PlaneGeometry(46, 92),
-            this.artMaterial({
-              map: endCapTexture(`cap-${t.x}-${side}`),
-              transparent: true,
-              depthWrite: false,
-            })
-          );
-          const at = side === 1 ? t.x + t.w : t.x;
-          cap.position.set(at, t.y + 34, 6);
-          cap.scale.set(side, 1, 1);
-          this.stage?.add(cap);
-        }
-      }
 
       /*
        * No vine curtain and no rubble lip any more.
@@ -3975,6 +3962,19 @@ export class M4SSRig extends ENGINE.SceneNode {
          * Rotated about the hinge at its foot, so it sweeps through the arc rather than
          * fading between two states. The position is interpolated toward where the fallen
          * span sits, because the slab pivots about its base and its CENTRE therefore travels.
+         *
+         * ## The sign, which was wrong from the day this was written
+         *
+         * `downY` negated the span's centre. Everything else in this file places children in
+         * raw LEVEL coordinates - y positive, downward - because the stage node is scaled with
+         * a negative y and does the flip once for all of them (see SCALE). `restY` two lines
+         * up is positive for exactly that reason. So a bridge did not fall: it travelled from
+         * +945 to -1065 and left the world through the ceiling, and the deck stayed solid the
+         * whole time because collision never reads the mesh.
+         *
+         * It survived because no stage had ever set `mode: 'bridge'`. Dead code does not have
+         * bugs; it has bugs the first time somebody uses it, and the report was "I managed to
+         * activate the button, but I can just move over nothing to the other side".
          */
         const t = gate.lift;
         const eased = t * t * (3 - 2 * t);
@@ -3982,7 +3982,7 @@ export class M4SSRig extends ENGINE.SceneNode {
         const span = gate.span;
         if (span) {
           const downX = span.x + span.w / 2;
-          const downY = -(span.y + span.h / 2);
+          const downY = span.y + span.h / 2;
           node.position.x = (gate.x + gate.w / 2) + (downX - (gate.x + gate.w / 2)) * eased;
           node.position.y = restY + (downY - restY) * eased;
         }

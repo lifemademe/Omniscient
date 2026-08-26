@@ -1629,21 +1629,41 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
   /*
    * The husk's one coal, and its crooked hang.
    *
-   * A single 4px ember low in the dead pane - the only saturated thing on the object -
-   * says "this can be lit" without saying "this is lit". And the whole pane region is
-   * nudged two pixels down-right of the frame, so the dead lantern hangs visibly AJAR:
-   * even in silhouette it reads as broken rather than as a different colour of working.
+   * An ember low in the dead pane - the only saturated thing on the object - says "this can
+   * be lit" without saying "this is lit". And the whole pane region is nudged two pixels
+   * down-right of the frame, so the dead lantern hangs visibly AJAR: even in silhouette it
+   * reads as broken rather than as a different colour of working.
+   *
+   * ## It was four pixels, and four pixels is nothing
+   *
+   * The sprite is 160 across and reaches the screen at about half that, through a pixel grid
+   * running at 2.4 - so a 4x3 coal was under two device pixels and gone. The playtest read it
+   * exactly as it rendered: "the unavailable growths don't have the red centre that they
+   * should have". They did have one. Nobody could see it.
+   *
+   * Scaled off `size` now rather than written in pixels, at about a tenth of the sprite, with
+   * a dim surround so the coal has somewhere to sit. That is still an unlit lamp with a coal
+   * in it and not the red lantern this comment spent five lines refusing - the pane stays ash,
+   * the frame stays cold, and what changed is only that the one saturated thing on the object
+   * is now big enough to be the thing you notice about it.
    */
   if (dead) {
     const shift = g.getImageData(0, 0, size, size);
     g.clearRect(0, 0, size, size);
     g.putImageData(shift, 2, 2);
-    const ex = cx - 2;
-    const ey = cy + Math.round(size * 0.1);
+    const core = Math.max(4, Math.round(size * 0.075));
+    const ex = cx - 2 - Math.round(core / 2);
+    const ey = cy + Math.round(size * 0.06);
+    // The coal's bed: a dull ring so the bright centre is not a chip floating on grey.
+    g.fillStyle = '#5e2c1c';
+    g.fillRect(ex - 2, ey - 2, core + 4, core + 3);
     g.fillStyle = '#c8502a';
-    g.fillRect(ex, ey, 4, 3);
+    g.fillRect(ex, ey, core, core - 1);
     g.fillStyle = '#e8784a';
-    g.fillRect(ex + 1, ey + 1, 2, 1);
+    g.fillRect(ex + 1, ey + 1, core - 2, Math.max(1, core - 3));
+    // One hot pixel off-centre, so the coal has a direction and does not read as a button.
+    g.fillStyle = '#ffc08a';
+    g.fillRect(ex + 2, ey + 2, Math.max(1, core - 5), Math.max(1, core - 5));
   }
   return pixelTexture(c);
 }
