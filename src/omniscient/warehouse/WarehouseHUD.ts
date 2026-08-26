@@ -621,6 +621,27 @@ export class WarehouseHUD {
 
     const root = frame.shell;
     root.classList.add('warehouse-hud');
+    /*
+     * ## The readouts were half the picture, and the fix already existed
+     *
+     * INTEGRITY, QUEST and CLEAN CHAIN sit INSIDE the stage, over the world, and at full
+     * size each is a label, an eight-segment meter, a value and a caption. Stacked, that is
+     * about half the height of the frame and a third of its width, opaque, for the whole
+     * mission. Measured off a door feed: the entire upper left of the shot was behind them -
+     * including an extract louvre placed there the same afternoon to fill exactly that hole.
+     *
+     * `omni-cv--compact` has been in the console chrome since it was written. It drops the
+     * meter and the caption and puts each label beside its value, and LocalSurface has been
+     * applying it on a timer for the whole game. The warehouse builds the same frame and
+     * never turned it on.
+     *
+     * On from the first frame here rather than after a delay, because the Contact View's
+     * "teach at full size, then get out of the way" argument does not transfer: there the
+     * cards overlay a static diorama, and here they overlay live surveillance from the
+     * opening cut onward. Nothing is lost - the meter is a picture of the number printed
+     * beside it, and the caption repeats the label.
+     */
+    root.classList.add('omni-cv--compact');
     root.style.fontSize = 'calc(12px + var(--omni-font-boost, 0px))';
 
     /*

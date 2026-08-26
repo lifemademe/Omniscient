@@ -305,6 +305,30 @@ function signMaterial(layout: WarehouseDoorLayout, mirrored = false): THREE.Mesh
  * 3.32 clears the opening (which tops out at 3.355) and tucks the drum under the canopy at
  * 3.55 rather than through it. Closed, the curtain reaches y 0.02 and covers the door.
  */
+/**
+ * ## Where the cladding actually ENDS, which is not where the door root is
+ *
+ * The shell's walls are 0.35m thick and centred on their wall line - `createClerestorySegment`
+ * in WarehouseDaylight, and the three front infill panels beside door B use the same depth.
+ * Every door root sits 0.17m INSIDE that line, so in the door's own local space the outer
+ * face of the building is at z 0.345.
+ *
+ * Anything on the cladding at a smaller z is inside the wall. Not clipped, not z-fighting -
+ * buried, and it renders as nothing at all, which reads exactly like a prop that was never
+ * added. The two door letter plates went in at z 0.21 specifically so a camera could tell A
+ * from B from C, and they have been a hundred and thirty-five millimetres inside the building
+ * ever since; three door feeds, and the letter still not visible in any of them, for the
+ * second time and for a different reason.
+ *
+ * The door leaf, the vision panel, the handle, the reader and the notice plate are all at a
+ * similar z and all render, which is what hid this: they sit within the 2.94m door frame,
+ * where there is a hole in the cladding rather than cladding. Only furniture out on the solid
+ * wall is affected, and that is everything this pass added.
+ *
+ * So: cladding furniture is placed from WALL_FACE_Z, never from a number typed by eye.
+ */
+const WALL_FACE_Z = 0.345;
+
 const SHUTTER_HEAD_Y = 3.32;
 const SHUTTER_DROP = 3.3;
 const SHUTTER_OPEN = 0.03;
@@ -329,8 +353,17 @@ function wallLetterMaterial(letter: string): THREE.MeshBasicMaterial {
   if (ctx) {
     ctx.fillStyle = '#0b1410';
     ctx.fillRect(0, 0, 256, 256);
-    ctx.strokeStyle = '#d8ffb0';
-    ctx.lineWidth = 9;
+    /*
+     * The border is a painted edge, not a strip light.
+     *
+     * At #d8ffb0 and nine pixels it matched the letter exactly, so the plate read as a lit
+     * rectangle with something inside it rather than as a character on a board - and the
+     * material is toneMapped:false, so nothing downstream was going to bring it back down.
+     * Half the weight and two thirds of the value leaves the letter as the brightest thing
+     * on the plate, which is the only thing on it that has to be read.
+     */
+    ctx.strokeStyle = '#7fb98a';
+    ctx.lineWidth = 5;
     ctx.strokeRect(7, 7, 242, 242);
     ctx.fillStyle = '#d8ffb0';
     ctx.font = 'bold 188px monospace';
@@ -455,7 +488,7 @@ export class WarehouseServiceDoor {
     const scanner = mesh('ServiceCargoScanner', new THREE.BoxGeometry(2.12, 0.16, 1.35), this.statusMaterial, new THREE.Vector3(0, 0.18, -1.05));
     const reader = mesh('ServiceCredentialReader', new THREE.BoxGeometry(0.14, 0.24, 0.08), DARK, new THREE.Vector3(leafX - 0.72, 1.32, 0.24));
     const readerLamp = mesh('ServiceReaderLamp', new THREE.SphereGeometry(0.038, 10, 6), this.statusMaterial, new THREE.Vector3(leafX - 0.72, 1.40, 0.29));
-    const tamper = mesh('ServiceTamperSensor', new THREE.CylinderGeometry(0.09, 0.09, 0.08, 12), this.statusMaterial, new THREE.Vector3(-1.6, 1.78, 0.31));
+    const tamper = mesh('ServiceTamperSensor', new THREE.CylinderGeometry(0.09, 0.09, 0.08, 12), this.statusMaterial, new THREE.Vector3(-1.6, 1.78, WALL_FACE_Z + 0.06));
     tamper.rotation.x = Math.PI / 2;
     const canopy = mesh('ServiceCanopy', new THREE.BoxGeometry(4.2, 0.22, 2.7), FRAME, new THREE.Vector3(0, 3.66, 1.12));
     const canopyLamp = mesh('ServiceCanopyLamp', new THREE.BoxGeometry(2.1, 0.06, 0.34), this.statusMaterial, new THREE.Vector3(0, 3.51, 1.28));
@@ -475,19 +508,32 @@ export class WarehouseServiceDoor {
      * So a second pair, at 2.32 metres on the wall either side of the frame - above a
      * standing visitor's head, below the canopy, and proud of the cladding. The ray from each
      * door camera to these passes under the canopy's outer edge with about seventy
-     * centimetres to spare, and there are two of them because the three cameras approach from
-     * different sides and a single plate would be edge-on to one of them.
+     * centimetres to spare.
+     *
+     * ## One plate, not two, and two thirds the size
+     *
+     * There were two, on the argument that the three cameras approach from different sides and
+     * a single plate would be edge-on to one of them. `probe-approach.ts` can settle that
+     * rather than assume it, and it does: the LEFT plate projects to x 0.24, 0.26 and 0.14 on
+     * A, B and C - square in the visible band on all three, from every approach. The argument
+     * was sound and the measurement retires it.
+     *
+     * Which is worth doing, because the right-hand plate landed in the busiest part of the
+     * frame - it overlapped the downpipe, the junction box and the wall pack's pool, and at
+     * 1.12 metres square and fullbright it read as an illuminated box rather than a sign on a
+     * wall. Down to 0.78, where it is still comfortably legible at seven metres, and the
+     * canvas border comes off full brightness so the plate stops glowing at its own edges.
      *
      * The old high sign stays. It is the right sign for a person standing at the door, and
      * this mission is played through a camera - both readers exist.
      */
     const letterMaterial = wallLetterMaterial(layout.letter);
-    const letters = [-2.16, 2.16].map((x) => mesh(
+    const letters = [mesh(
       `ServiceDoorLetter-${layout.letter}`,
-      createWarehouseLabelGeometry(1.12, 1.12),
+      createWarehouseLabelGeometry(0.78, 0.78),
       letterMaterial,
-      new THREE.Vector3(x, 2.32, 0.21)
-    ));
+      new THREE.Vector3(-2.16, 2.36, WALL_FACE_Z + 0.05)
+    )];
     const pad = mesh('ServiceExteriorPad', new THREE.BoxGeometry(4.5, 0.16, 4.4), CONCRETE, new THREE.Vector3(0, -0.07, 1.65));
     const wetPad = mesh('ServiceExteriorWet', new THREE.PlaneGeometry(4.2, 3.8), WET, new THREE.Vector3(0, 0.02, 1.82));
     wetPad.rotation.x = -Math.PI / 2;
@@ -545,12 +591,12 @@ export class WarehouseServiceDoor {
      */
     const pipeX = 2.35;
     root.add(
-      mesh('ServiceDownpipe', new THREE.CylinderGeometry(0.075, 0.075, 3.5, 8), PIPE, new THREE.Vector3(pipeX, 1.75, 0.26)),
-      mesh('ServiceDownpipeShoe', new THREE.CylinderGeometry(0.085, 0.11, 0.3, 8), PIPE, new THREE.Vector3(pipeX, 0.15, 0.34)),
-      mesh('ServiceDownpipeBracketLow', new THREE.BoxGeometry(0.24, 0.05, 0.16), FRAME, new THREE.Vector3(pipeX, 0.95, 0.2)),
-      mesh('ServiceDownpipeBracketHigh', new THREE.BoxGeometry(0.24, 0.05, 0.16), FRAME, new THREE.Vector3(pipeX, 2.7, 0.2)),
-      mesh('ServiceJunctionBox', new THREE.BoxGeometry(0.3, 0.4, 0.16), DARK, new THREE.Vector3(1.92, 1.62, 0.24)),
-      mesh('ServiceConduit', new THREE.CylinderGeometry(0.035, 0.035, 1.9, 6), PIPE, new THREE.Vector3(1.92, 2.6, 0.22)),
+      mesh('ServiceDownpipe', new THREE.CylinderGeometry(0.075, 0.075, 3.5, 8), PIPE, new THREE.Vector3(pipeX, 1.75, WALL_FACE_Z + 0.11)),
+      mesh('ServiceDownpipeShoe', new THREE.CylinderGeometry(0.085, 0.11, 0.3, 8), PIPE, new THREE.Vector3(pipeX, 0.15, WALL_FACE_Z + 0.13)),
+      mesh('ServiceDownpipeBracketLow', new THREE.BoxGeometry(0.24, 0.05, 0.16), FRAME, new THREE.Vector3(pipeX, 0.95, WALL_FACE_Z + 0.05)),
+      mesh('ServiceDownpipeBracketHigh', new THREE.BoxGeometry(0.24, 0.05, 0.16), FRAME, new THREE.Vector3(pipeX, 2.7, WALL_FACE_Z + 0.05)),
+      mesh('ServiceJunctionBox', new THREE.BoxGeometry(0.3, 0.4, 0.16), DARK, new THREE.Vector3(1.92, 1.62, WALL_FACE_Z + 0.09)),
+      mesh('ServiceConduit', new THREE.CylinderGeometry(0.035, 0.035, 1.9, 6), PIPE, new THREE.Vector3(1.92, 2.6, WALL_FACE_Z + 0.08)),
       mesh('ServiceNoticePlate', new THREE.BoxGeometry(0.44, 0.6, 0.03), PLATE, new THREE.Vector3(1.28, 1.78, 0.23)),
       mesh('ServiceNoticeBand', new THREE.BoxGeometry(0.44, 0.11, 0.035), FRAME, new THREE.Vector3(1.28, 2.0, 0.235))
     );
@@ -666,7 +712,7 @@ export class WarehouseServiceDoor {
      * metre clear of its edge and the camera's ray reaches it. The same mistake put the
      * exterior door sign behind that roof for the whole of development.
      */
-    const louvre = ENGINE.SceneNode.create({ name: 'ServiceExtractLouvre', position: new THREE.Vector3(-2.55, 2.92, 0.2) });
+    const louvre = ENGINE.SceneNode.create({ name: 'ServiceExtractLouvre', position: new THREE.Vector3(-2.55, 2.92, WALL_FACE_Z + 0.07) });
     louvre.add(
       mesh('LouvreHousing', new THREE.BoxGeometry(0.82, 0.96, 0.14), FRAME, new THREE.Vector3(0, 0, 0)),
       mesh('LouvreThroat', new THREE.BoxGeometry(0.68, 0.8, 0.06), DARK, new THREE.Vector3(0, 0, 0.09)),
@@ -693,8 +739,8 @@ export class WarehouseServiceDoor {
      * that rakes gives the bollards, the bin and the pallets each a shadow to stand on.
      */
     root.add(
-      mesh('ServiceWallPackHood', new THREE.BoxGeometry(0.42, 0.14, 0.3), DARK, new THREE.Vector3(2.05, 3.05, 0.38)),
-      mesh('ServiceWallPackLens', new THREE.BoxGeometry(0.34, 0.05, 0.22), WALLPACK, new THREE.Vector3(2.05, 2.96, 0.42))
+      mesh('ServiceWallPackHood', new THREE.BoxGeometry(0.42, 0.14, 0.3), DARK, new THREE.Vector3(2.05, 3.05, WALL_FACE_Z + 0.17)),
+      mesh('ServiceWallPackLens', new THREE.BoxGeometry(0.34, 0.05, 0.22), WALLPACK, new THREE.Vector3(2.05, 2.96, WALL_FACE_Z + 0.21))
     );
     root.add(ENGINE.PointLightNode.create({
       name: 'ServiceWallPackLight',
@@ -708,7 +754,7 @@ export class WarehouseServiceDoor {
       intensity: 5,
       distance: 9,
       decay: 1.5,
-      position: new THREE.Vector3(2.05, 2.9, 0.6),
+      position: new THREE.Vector3(2.05, 2.9, WALL_FACE_Z + 0.4),
     }));
 
     if (layout.id !== 'service-b') {

@@ -21,24 +21,39 @@ import { WAREHOUSE_DOORS, WAREHOUSE_DOOR_IDS } from '../../src/omniscient/wareho
 /** The console panel covers the right of every warehouse view. */
 const PANEL_LEFT = 0.645;
 
+/**
+ * The outer face of the cladding, in door-local z, and the width of the hole in it.
+ *
+ * The shell walls are 0.35m thick and every door root sits 0.17m inside the wall line, so
+ * anything on solid cladding at z below 0.345 is INSIDE the building and renders as nothing.
+ * Within the 2.94m door frame there is no cladding, so hardware there is exempt - which is
+ * precisely what hid the fault: the leaf, the reader and the notice plate all sit at a
+ * similar z and all draw, while the two letter plates out on the wall did not.
+ */
+const WALL_FACE_Z = 0.345;
+const FRAME_HALF_WIDTH = 1.47;
+
 /** Local-space anchors, named for what a critique would call them. */
 const PROPS: Array<[string, THREE.Vector3]> = [
   ['door centre', new THREE.Vector3(0, 1.1, 0.2)],
   ['door head', new THREE.Vector3(0, 2.3, 0.2)],
   ['reader', new THREE.Vector3(0.95, 1.15, 0.24)],
   ['notice plate', new THREE.Vector3(1.28, 1.78, 0.23)],
-  ['junction box', new THREE.Vector3(1.92, 1.62, 0.24)],
-  ['downpipe mid', new THREE.Vector3(2.35, 1.75, 0.26)],
-  ['downpipe top', new THREE.Vector3(2.35, 3.45, 0.26)],
-  ['wall pack', new THREE.Vector3(2.05, 3.0, 0.4)],
+  ['junction box', new THREE.Vector3(1.92, 1.62, 0.435)],
+  ['downpipe mid', new THREE.Vector3(2.35, 1.75, 0.455)],
+  ['downpipe top', new THREE.Vector3(2.35, 3.45, 0.455)],
+  ['wall pack', new THREE.Vector3(2.05, 3.0, 0.515)],
   ['bin', new THREE.Vector3(2.15, 0.5, 1.5)],
   ['cable drum', new THREE.Vector3(1.95, 0.52, 2.3)],
   ['crate stack', new THREE.Vector3(-2.6, 0.55, 1.6)],
   ['leaning pallets', new THREE.Vector3(-2.35, 0.6, 0.62)],
   ['bollard left', new THREE.Vector3(-1.8, 0.52, 2.75)],
   ['bollard right', new THREE.Vector3(1.8, 0.52, 2.75)],
-  ['extract louvre', new THREE.Vector3(-2.55, 2.92, 0.2)],
-  ['door letter L', new THREE.Vector3(-2.16, 2.32, 0.21)],
+  ['extract louvre', new THREE.Vector3(-2.55, 2.92, 0.415)],
+  ['door letter L', new THREE.Vector3(-2.16, 2.32, 0.405)],
+  ['door letter R', new THREE.Vector3(2.16, 2.32, 0.405)],
+  ['high sign', new THREE.Vector3(0, 4.45, 0.16)],
+  ['canopy edge', new THREE.Vector3(0, 3.55, 2.47)],
   ['upper wall centre', new THREE.Vector3(-0.6, 3.1, 0.2)],
 ];
 
@@ -65,7 +80,8 @@ for (const id of WAREHOUSE_DOOR_IDS) {
     const world = local.clone().applyEuler(new THREE.Euler(0, door.rootRotation, 0)).add(door.rootPosition);
     const s = project(cam, tgt, fov, world);
     let state = 'ok';
-    if (s.d <= 0) state = 'BEHIND THE LENS';
+    if (Math.abs(local.x) > FRAME_HALF_WIDTH && local.z < WALL_FACE_Z) state = 'BURIED IN THE CLADDING';
+    else if (s.d <= 0) state = 'BEHIND THE LENS';
     else if (s.x < 0 || s.x > 1 || s.y < 0 || s.y > 1) state = 'OFF FRAME';
     else if (s.x < 0.05 || s.x > 0.95 || s.y < 0.05 || s.y > 0.95) state = 'clipped at the edge';
     else if (s.x > PANEL_LEFT) state = 'behind the panel';
