@@ -730,7 +730,35 @@ export class WarehouseEnvironment {
       };
       const BAY_Z = RACK_BAY_Z;
       const LEVEL_Y = RACK_LEVEL_Y;
+      /*
+       * ## Structure at the BAY, because per-slot randomness is not variety
+       *
+       * Every slot used to draw its own commodity and its own emptiness. Twenty-four
+       * independent draws per rack run, five runs, both sides - and the law of large numbers
+       * does the rest: every face of racking in the building ends up with the same 7% drums,
+       * 12% totes, 81% cartons, 17% holes, so the whole wall has one texture and reads as
+       * wallpaper however busy it is. That is the Law 3 fault exactly, and it is invisible
+       * from inside the code because the code plainly IS varied.
+       *
+       * Randomness at one scale is not rhythm. Rhythm needs the scale above it: a warehouse
+       * stores a commodity in a contiguous block, so a bay column is all drums or all totes
+       * or all cartons, and the next bay is something else. Six blocks along a rack face
+       * instead of twenty-four coin flips, which is a thing the eye can actually count - and
+       * a thing a player can navigate by, since "the drum bay" is a landmark and a 7%
+       * scattering of drums is not.
+       *
+       * Fill goes the same way. One flat 17% gives every bay the same slightly-gappy look;
+       * per-bay it ranges from nearly full to picked out, and one bay in each run is
+       * deliberately stripped so there is a hole in the wall that reads at distance.
+       */
+      const bayStock = BAY_Z.map(() => rng());
+      const bayFill = BAY_Z.map(() => 0.04 + rng() * 0.34);
+      // One picked-out bay per run, never the end ones - a gap at the end of a row reads as
+      // the building running out rather than as stock having moved.
+      const strippedBay = 1 + Math.floor(rng() * (BAY_Z.length - 2));
       for (const [bayIndex, bayZ] of BAY_Z.entries()) {
+        const stock = bayStock[bayIndex];
+        const emptyChance = bayIndex === strippedBay ? 0.62 : bayFill[bayIndex];
         for (const [level, levelY] of LEVEL_Y.entries()) {
           // Never the bottom of a bay: a rack with a hole at floor level reads as broken
           // rather than as busy.
@@ -740,7 +768,7 @@ export class WarehouseEnvironment {
            * constrainDrone - see the rack section there.
            */
           const slotKey = `${aisle}:${bayIndex}:${level}`;
-          if (level > 0 && (RESERVED_PICK_SLOTS.has(slotKey) || rng() < 0.17)) {
+          if (level > 0 && (RESERVED_PICK_SLOTS.has(slotKey) || rng() < emptyChance)) {
             this.emptyBays.add(slotKey);
             continue;
           }
@@ -782,8 +810,15 @@ export class WarehouseEnvironment {
            * Drawn per pallet, not per carton, because a pallet holds ONE kind of thing. Mixed
            * boxes and drums on a single pallet reads as a bug rather than as stock.
            */
-          const stock = rng();
-          if (stock < 0.07) {
+          /*
+           * 0.14 / 0.40, from 0.07 / 0.19, and the reason is that these numbers changed
+           * meaning when the draw moved up a scale. Per SLOT, 7% drums scattered a few barrels
+           * through every run and read as texture. Per BAY, 7% is four drum bays in the entire
+           * building and most runs would have none - the same number produces variety at one
+           * scale and near-uniformity at the other. Rebalanced so a rack face actually mixes:
+           * roughly one bay in seven drums, one in four totes, the rest cartons.
+           */
+          if (stock < 0.14) {
             for (const [dx, dz] of [[-0.3, -0.26], [0.3, -0.26], [-0.3, 0.26], [0.3, 0.26]] as const) {
               if (rng() < 0.22) continue;
               const drum = new THREE.CylinderGeometry(0.26, 0.26, 0.82, 12);
@@ -795,7 +830,7 @@ export class WarehouseEnvironment {
             }
             continue;
           }
-          if (stock < 0.19) {
+          if (stock < 0.4) {
             const stack = Math.min(1 + Math.floor(rng() * 3), Math.max(1, Math.floor(headroom / 0.41)));
             for (let tier = 0; tier < stack; tier++) {
               // 0.41 a tier: a 0.36 tote plus the 0.05 lid the next one stands on.
