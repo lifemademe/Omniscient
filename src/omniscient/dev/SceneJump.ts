@@ -39,6 +39,11 @@ const MODIFIERS = (event: KeyboardEvent): boolean => event.ctrlKey && event.shif
 
 export interface SceneJumpHost {
   jumpToScene(sceneId: string): void;
+  /**
+   * Whether a diorama exists in THIS build. Optional, so a host that does not answer gets
+   * every tab drawn as live and nothing regresses.
+   */
+  hasScene?(sceneId: string): boolean;
   jumpToWarehouse?(): void;
   playFirstFiveCapture?(): void;
 }
@@ -138,6 +143,22 @@ function buildStrip(host: SceneJumpHost, container: HTMLElement): HTMLElement {
     tab.type = 'button';
     tab.textContent = String(index + 1);
     tab.title = sceneId;
+    /*
+     * A scene the queue does not contain is never built, and this strip offered it anyway.
+     *
+     * SCENE_IDS lists every room the game HAS; `buildScenes` builds only the rooms the
+     * queue asks for. Those agree for seven of the eight and disagree for mill road,
+     * because Sanda is cut from this build by decision - see the note on her queue entry in
+     * OmniscientRig. Clicking her tab deactivated the room on screen, mounted nothing in
+     * its place, and left a black viewport that looks exactly like a lighting bug in a
+     * night scene.
+     *
+     * It cost a long hunt to find that out - the moon raised 7.4x, the torchlight guess
+     * fill taken to near-white, and finally an unlit marker cube at the camera's own
+     * target, all of them proving only that there was nothing there to light. A dead tab
+     * that looks dead says it in advance.
+     */
+    const built = host.hasScene?.(sceneId) ?? true;
     tab.style.cssText = [
       'width:20px',
       'height:20px',
@@ -146,8 +167,13 @@ function buildStrip(host: SceneJumpHost, container: HTMLElement): HTMLElement {
       'background:rgba(4,12,16,0.9)',
       'border:0',
       'box-shadow:inset 1px 1px 0 #2f7391,inset -1px -1px 0 #040906',
-      'cursor:pointer',
+      built ? 'cursor:pointer' : 'cursor:not-allowed',
+      built ? 'opacity:1' : 'opacity:0.3',
     ].join(';');
+    if (!built) {
+      tab.disabled = true;
+      tab.title = `${sceneId} - NOT BUILT in this build; its request is not in the queue`;
+    }
     tab.addEventListener('click', () => {
       host.jumpToScene(sceneId);
       showBadge(container, index, sceneId);

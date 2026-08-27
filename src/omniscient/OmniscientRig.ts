@@ -4096,6 +4096,19 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * answered. The console is hidden because the point is the room. A beat that only reads
    * when jumped to is not a beat that reads.
    */
+  /**
+   * Whether a diorama exists in this build, so the dev strip can draw a dead tab as dead.
+   *
+   * `SCENE_IDS` lists every room the game HAS; `buildScenes` builds only the rooms the
+   * queue asks for. Those disagree whenever a request is cut, and one is: Sanda is out of
+   * the queue by decision, so mill road is never built. Without this the strip offers her
+   * tab, the click deactivates whatever room is on screen, mounts nothing, and leaves a
+   * black viewport that reads as a broken night scene rather than as an absent one.
+   */
+  public hasScene(sceneId: string): boolean {
+    return this.scenes.has(sceneId);
+  }
+
   public jumpToScene(sceneId: string): void {
     this.setPhase(Phase.Contact);
     this.globeScreen?.detach();
