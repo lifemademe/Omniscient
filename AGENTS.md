@@ -136,3 +136,35 @@ Example: `[MCP] Set MeshNode material on Floor root` → `[Verify] Re-query node
 
 # Add your custom AI instructions below.
 
+## Art, visuals, feel — read ART-MASTER.md first
+
+**Before changing anything visual, read [ART-MASTER.md](ART-MASTER.md).** It is the single
+source for art direction, and it holds three things: the direction (what the game looks like
+and why), the gauntlet loop (how work gets made and judged), and the ledger (what is done, to
+what standard, proved how).
+
+It is written to be picked up mid-flight by a different agent than the one that left it, so:
+
+1. Read its section 0 first. It tells you what to take and how to hand it back.
+2. Take the top OPEN item from its ledger. Do not invent one.
+3. Run its gauntlet loop. A separate critic with fresh context judges the rendered result
+   against a stated bar - never the builder's own summary, never a diff.
+4. Update the ledger with evidence in the same commit. A status without a capture path and a
+   commit hash is a claim, not a status.
+
+Its section 15 lists every tool that already exists - roughly forty harnesses, previews and
+capture scripts. **Check it before writing a new one.** Most mistakes this project has made
+were caught by one of those tools, and several were made twice because nobody knew it was
+there.
+
+Two standing rules from that document, repeated here because they are the ones most often
+broken: **a green harness is not a bar** - harnesses here have reported green while a scan
+could never succeed and a bridge was invisible - and **never mark your own work finished from
+memory**. Re-open the artifact and look at it.
+
+## Do not push
+
+`.codex/config.toml` is tracked and carries a live bearer token across the history, on a public
+repository. `scripts/ship-clean.ts` fails on it deliberately. Committing is fine. **Pushing is a
+human decision that has not been made yet.**
+
