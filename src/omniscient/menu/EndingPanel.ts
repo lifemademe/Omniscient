@@ -66,16 +66,39 @@ const CSS = `
   transition: opacity 1.4s ease;
 }
 .omni-end--on { opacity: 1; }
+/*
+ * The frame does not scroll; its body does.
+ *
+ * This used to be one scrolling box with the title inside it, and the title was sliced in
+ * half in every capture of the ending. The cause is not the padding: the panel contains
+ * focusable controls, focusing one makes the browser scroll it into view, and the first
+ * thing to leave the top of a scrolling box is whatever sits above the content - here, the
+ * words FINAL TRANSMISSION. Nothing in the panel's own code scrolls it, which is why it
+ * looked like a layout bug rather than a focus one.
+ *
+ * A column with a header that cannot shrink and a body that can is the fix, and it is worth
+ * preferring over scroll-padding tricks because it also means the title stays put while the
+ * report is being read. This is the last thing anybody sees.
+ */
 .omni-end__frame {
   width: min(700px, 82vw);
   max-height: 84vh;
-  overflow: hidden auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   border: 1px solid rgba(127, 224, 138, 0.5);
   background: linear-gradient(180deg, rgba(8, 26, 15, 0.985), rgba(3, 12, 7, 0.985));
   padding: 28px 34px 24px;
   box-shadow: 0 0 0 1px rgba(127, 224, 138, 0.06), 0 0 62px rgba(0, 0, 0, 0.78);
 }
+.omni-end__body {
+  overflow: hidden auto;
+  /* Room above a control that gets focused, so nothing lands hard against the header. */
+  scroll-padding-top: 12px;
+  min-height: 0;
+}
 .omni-end__title {
+  flex: 0 0 auto;
   font-size: calc(14px + var(--omni-font-boost, 0px));
   letter-spacing: 0.24em;
   text-transform: uppercase;
@@ -242,6 +265,11 @@ export class EndingPanel {
     title.textContent = 'FINAL TRANSMISSION';
     frame.appendChild(title);
 
+    // Everything except the title scrolls. See .omni-end__frame for why they are separated.
+    const body = document.createElement('div');
+    body.className = 'omni-end__body';
+    frame.appendChild(body);
+
     const movement = (number: 1 | 2 | 3, labelText: string): HTMLElement => {
       const section = document.createElement('section');
       section.className = `omni-end__movement omni-end__movement--${number}`;
@@ -249,7 +277,7 @@ export class EndingPanel {
       label.className = 'omni-end__movement-label';
       label.textContent = `0${number}  //  ${labelText}`;
       section.appendChild(label);
-      frame.appendChild(section);
+      body.appendChild(section);
       return section;
     };
 
@@ -299,7 +327,7 @@ export class EndingPanel {
     back.className = 'omni-end__return';
     back.textContent = 'RETURN TO THE MACHINE  [ENTER]';
     back.addEventListener('click', () => this.close());
-    frame.appendChild(back);
+    body.appendChild(back);
     this.returnButton = back;
 
     this.container.appendChild(root);

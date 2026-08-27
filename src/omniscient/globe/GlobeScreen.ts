@@ -143,6 +143,9 @@ const DEV_JUMP_TARGETS: ReadonlyArray<readonly [string, string]> = [
   ['m4ss@2', 'M4SS s3'],
   ['warehouse-07', 'warehouse'],
   ['anomaly', 'anomaly'],
+  // The ending exists only after a full playthrough, so it has never been looked at.
+  // Intercepted in OmniscientRig's globe callback rather than routed through openSignal.
+  ['ending', 'ENDING'],
 ];
 
 const CANVAS_W = 320;

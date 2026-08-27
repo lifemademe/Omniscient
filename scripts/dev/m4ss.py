@@ -39,7 +39,10 @@ TAP = ['python', 'scripts/dev/tap.py']
 
 # The dev list is built from DEV_JUMP_TARGETS in GlobeScreen.ts, in that order. These are the
 # y centres of the three M4SS rows; the list is vertically centred, so they move if it grows.
-STAGE_ROW = {1: 645, 2: 680, 3: 715}
+# Re-measured 2026-08-27 after the ENDING entry was appended. The list is vertically
+# CENTRED, so adding a row anywhere - even below these - moves every row up by half a
+# pitch. Measure, do not adjust by eye: the buttons are ~30px tall and half a pitch is 16.
+STAGE_ROW = {1: 636, 2: 668, 3: 701}
 
 
 def tap(x: int, y: int, out: str, wait: float) -> None:

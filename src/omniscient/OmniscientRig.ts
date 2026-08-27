@@ -2342,7 +2342,25 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     this.globeScreen = new GlobeScreen(
       container,
-      (signalId) => this.openSignal(signalId),
+      (signalId) => {
+        /*
+         * The dev list's ENDING entry, intercepted here rather than inside openSignal.
+         *
+         * The ending is the last thing anybody sees and it had never been looked at, for the
+         * same reason M4SS stage three had not: it only exists after a full playthrough, and
+         * a playthrough needs a keyboard this window does not receive. Handling it here keeps
+         * a dev id out of openSignal, which is real game code and has enough special cases.
+         *
+         * The report will be a sparse one - no requests answered, an empty tree - so it is
+         * good for judging the panel's typography, layout and camera and no use at all for
+         * judging what a finished run reads like.
+         */
+        if (!ENGINE.isPublishedGame() && signalId === 'ending') {
+          this.openEnding();
+          return;
+        }
+        this.openSignal(signalId);
+      },
       () => this.returnToMenu(),
       (signalId) => this.reopenAfterCooldown(signalId)
     );
