@@ -13,6 +13,8 @@
  * SAFE UI: contact names go through textContent.
  */
 
+import * as ENGINE from '@gnsx/genesys.js';
+
 import { injectConsoleChrome } from '../link/console-chrome.js';
 import { audio } from '../audio/ConsoleAudio.js';
 
@@ -118,6 +120,24 @@ function formatWait(seconds: number): string {
   return `unreachable - ${minutes}:${String(rest).padStart(2, '0')}`;
 }
 /** Canvas resolution. Small on purpose - this is a machine's display (§9). */
+/**
+ * What the dev jump list offers. Ids only - the labels are for a human reading a strip of
+ * ten buttons at 10px, so they are the shortest thing that still identifies the mission.
+ */
+const DEV_JUMP_TARGETS: ReadonlyArray<readonly [string, string]> = [
+  ['mirela', '1 mirela'],
+  ['tomas', '2 tomas'],
+  ['adaeze', '3 adaeze'],
+  ['ileana', '4 ileana'],
+  ['vasile', '5 vasile'],
+  ['dorin', '6 dorin'],
+  ['sanda', '7 sanda'],
+  ['lucian', '8 lucian'],
+  ['m4ss', 'M4SS'],
+  ['warehouse-07', 'warehouse'],
+  ['anomaly', 'anomaly'],
+];
+
 const CANVAS_W = 320;
 const CANVAS_H = 240;
 /**
@@ -238,6 +258,44 @@ const GLOBE_CSS = `
   background: #06120b;
 }
 .omni-globe__marks { position: absolute; inset: 0; pointer-events: none; }
+/*
+ * ## The dev mission list
+ *
+ * Gated on isPublishedGame, hidden until the pointer is at the right edge, and absent from
+ * every screenshot - the same three properties SceneJump has, for the same reason: this
+ * project has twice shipped a debug hook by accident and ship-clean now asserts against it.
+ *
+ * It exists because verifying almost anything in this game needs a SPECIFIC mission moment -
+ * a scan, a grip, a verdict, a light beat, a transition - and reaching one meant playing to
+ * it or clicking a rotating pin and taking whichever contact came up. Most of the art items
+ * that stalled this month stalled on reachability rather than on the work.
+ */
+.omni-globe__jump {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0 4px 4px;
+  opacity: 0;
+  transition: opacity 140ms ease-out;
+  pointer-events: none;
+  z-index: 10000;
+}
+.omni-globe__jump button {
+  font: 10px/1.6 'Courier New', monospace;
+  letter-spacing: 0.08em;
+  text-align: right;
+  color: #9fd8ec;
+  background: rgba(4, 12, 16, 0.92);
+  border: 0;
+  box-shadow: inset 1px 1px 0 #2f7391, inset -1px -1px 0 #040906;
+  padding: 2px 7px;
+  cursor: pointer;
+}
+.omni-globe__jump button:hover { color: #d8ffb0; }
 .omni-globe__name {
   position: absolute;
   transform: translate(10px, -50%);
@@ -741,6 +799,7 @@ export class GlobeScreen {
     shell.append(top, body, footer);
     root.append(shell, hint);
     this.container.appendChild(root);
+    this.buildJumpList(root);
 
     this.waitingCard = waiting;
     this.blockedCard = blocked;
@@ -1045,6 +1104,54 @@ export class GlobeScreen {
       'the world remembers'
     );
   }
+
+  /**
+   * Every mission, one click away. Editor only.
+   *
+   * Verifying art in this game almost always needs a SPECIFIC moment - a scan, a grip, a
+   * verdict, a light beat firing, a transition playing - and until now reaching one meant
+   * either playing to it or clicking a rotating pin and accepting whichever contact came up.
+   * Several items on the art board stalled on that rather than on the work itself.
+   *
+   * Gated on `isPublishedGame` and not merely hidden, which is the rule SceneJump and the
+   * character review route are both held to and `ship-clean` asserts. Revealed only when the
+   * pointer is near the right edge, so it is absent from every capture and from normal play.
+   *
+   * It calls the SAME onAnswer the pins call, so it cannot drift from the real entry path -
+   * anything special about opening a signal (the anomaly's trace, the warehouse's two modes)
+   * is handled inside openSignal and this gets it for free.
+   */
+  private buildJumpList(root: HTMLElement): void {
+    if (ENGINE.isPublishedGame()) return;
+
+    const strip = document.createElement('div');
+    strip.className = 'omni-globe__jump';
+    for (const [id, label] of DEV_JUMP_TARGETS) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      // A signal id, not player text - but textContent regardless, per the safe-UI rule.
+      button.textContent = label;
+      button.title = id;
+      button.addEventListener('click', (event) => {
+        event.stopPropagation();
+        this.onAnswer(id);
+      });
+      strip.appendChild(button);
+    }
+
+    const onMove = (event: MouseEvent): void => {
+      const rect = this.container.getBoundingClientRect();
+      const near = rect.right - event.clientX < 150;
+      strip.style.opacity = near ? '1' : '0';
+      strip.style.pointerEvents = near ? 'auto' : 'none';
+    };
+    window.addEventListener('mousemove', onMove);
+    this.disposeJumpList = () => window.removeEventListener('mousemove', onMove);
+
+    root.appendChild(strip);
+  }
+
+  private disposeJumpList: (() => void) | null = null;
 
   private onStageClick(event: MouseEvent): void {
     // A press that travelled was a turn, not a selection. Consumed here rather than by
