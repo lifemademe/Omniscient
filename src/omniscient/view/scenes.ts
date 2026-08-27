@@ -787,7 +787,7 @@ function buildRepairShop(scene: ContactScene): void {
    * out-reading the person standing in front of it.
    */
   /*
-   * 1.15. A critic counted the brightest pixels rather than looking at them.
+   * 2.2. Back up, because the tube is bright again and it is the room's real overhead.
    *
    * Of the top 0.5% of the frame, 71% belonged to the bench pool, 26% to this strip, and
    * 1.8% to the woman. The room the bar sets gets 98.9% of its top range from ONE source -
@@ -798,7 +798,7 @@ function buildRepairShop(scene: ContactScene): void {
    * ambient, it lights a wall nobody is asked to look at, and at 2.4 it was the brightest
    * field in the frame. It still has to carry the pegboard, which is what it was raised for.
    */
-  const BATTEN_LEVEL = 1.15;
+  const BATTEN_LEVEL = 2.2;
 
   const tubeRoot = ENGINE.SceneNode.create({ name: 'BattenTube', position: BATTEN_AT.clone() });
   tubeRoot.add(meshOf('Tube', batten.body, MAT.tube));
@@ -2161,16 +2161,33 @@ function buildRepairShop(scene: ContactScene): void {
   const workLampAir = createLampCone({
     apex: new THREE.Vector3(0.462, 1.347, -0.531),
     direction: new THREE.Vector3(-0.21, -0.47, 0.22),
-    length: 0.33,
+    /*
+     * ## Small and faint, because the game POSTERIZES
+     *
+     * The shell was 0.33m long and 0.4m across at its mouth, and it drew a hard-edged
+     * triangular wedge on the pegboard that read as a flat panel stuck to the wall rather
+     * than as light. Hiding the cone and re-capturing proved it was this and not a shadow:
+     * the wedge vanished entirely and the wall came back a smooth gradient.
+     *
+     * The edges are hard for a reason no amount of softening in the shader can fix. The
+     * paint pass posterizes, so a gentle falloff across a large flat area is quantised into
+     * bands and the outermost band becomes a contour - the softer the gradient, the wider
+     * and more visible the step. A big soft shell is the worst possible shape to hand a
+     * posterizer.
+     *
+     * So the shell stops trying to be the effect. It is now a small, faint medium close to
+     * the shade, and the MOTES carry the read - they are discrete, they are already the
+     * thing a critic called "dusty air", and a posterizer cannot band a speck.
+     */
+    length: 0.26,
     apexRadius: 0.045,
-    baseRadius: 0.2,
+    baseRadius: 0.115,
     // Under LIGHT.key rather than borrowing it. This adds into pixels that are already the
     // brightest in the room, and lampWarm/lampCore have produced white chips here before.
     color: '#9c7346',
-    // Half the first attempt. At 0.5 this read as a grey smear ON the pegboard rather than
-    // as air in front of it - additive haze over a dark wall goes milky long before it
-    // goes bright.
-    strength: 0.26,
+    // 0.16. Halved once already for reading as a grey smear on the pegboard; halved again
+    // because at any strength a shell this size posterizes into a visible wedge.
+    strength: 0.16,
     motes: 34,
     moteColor: '#c9b088',
     seed: 'repair-work-lamp',
@@ -2305,7 +2322,20 @@ function buildRepairShop(scene: ContactScene): void {
        * neither the brightest nor the darkest thing in frame is the last thing the eye
        * arrives at, whatever else is correct about the room.
        */
-      intensity: 9.5,
+      /*
+       * ## 3.2, and wide - a fill, not a spotlight
+       *
+       * This ran 8.5 to 13 to 9.5 across six rounds of judgement, every rise a response to
+       * a measurement saying the subject did not read. It worked and it was the wrong
+       * instrument: nothing in this room emits it, so what it actually produced was a hard
+       * pool on one face with no cause - the exact thing §230 exists to prevent, arrived at
+       * by following Law 1 without asking what was making the light.
+       *
+       * The batten above her is a real fixture and is bright again, and that is what lights
+       * her now. What is left here is a soft fill wide enough to have no edge, doing the
+       * job a pale ceiling would do in a room this size.
+       */
+      intensity: 3.2,
       color: new THREE.Color('#cfd8e4'),
       /*
        * ## It has to die before it reaches the wall behind her
@@ -2323,8 +2353,8 @@ function buildRepairShop(scene: ContactScene): void {
        */
       distance: 1.9,
       decay: 2.0,
-      angle: 0.42,
-      penumbra: 0.72,
+      angle: 0.62,
+      penumbra: 0.92,
     });
   faceKey.lookAt(new THREE.Vector3(-0.72, 1.46, -1.14));
   scene.registerProp('face-fill', faceKey);

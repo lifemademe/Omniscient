@@ -751,7 +751,7 @@ export const MAT = {
    * 26mm line at four metres is a lead-in, and the radio is a mass.
    */
   /*
-   * The fluorescent tube's own surface, dimmed from #dfeee6.
+   * The fluorescent tube's own surface. Bright, because it is a lit tube.
    *
    * `toneMapped: false` means this bypasses the tone mapper and lands at whatever it says,
    * so at #dfeee6 it was a 254-white bar - and measured against the rest of its room it
@@ -759,13 +759,20 @@ export const MAT = {
    * 19% for the woman the scene is about. Lowering the LIGHT the batten casts did nothing
    * to that, because this is the fixture, not its light.
    *
-   * It still reads as a lit tube: #a8c0b6 against a wall at about 40 is a wide separation.
-   * It stops being the thing the eye finds first in a room whose subject is a person.
+   * It WAS dimmed, twice, to stop it winning the frame's brightest-pixel count against the
+   * woman the scene is about - and that was solving the right problem with the wrong dial.
+   * A fluorescent tube that is switched on looks switched on; dimming the fixture to make a
+   * person read is a fix that costs the room its only honest overhead source and leaves her
+   * lit by a spotlight nothing in the room is emitting.
+   *
+   * The tube is bright again and the batten's output went back up with it, so the light on
+   * her comes from the thing hanging above her. See BATTEN_LEVEL and FaceKey in the repair
+   * shop, which came down as this went up.
    *
    * Used in exactly one place - the repair shop's batten - so this is not a shared-material
    * change dressed up as a local one.
    */
-  tube: new THREE.MeshBasicMaterial({ color: '#7e948c', toneMapped: false }),
+  tube: new THREE.MeshBasicMaterial({ color: '#dfeee6', toneMapped: false }),
   /** The shut-down control. Dirty red, and the only one of its colour on the machine. */
   warningLamp: new THREE.MeshBasicMaterial({ color: ACCENT.warning, toneMapped: false }),
   /** Knowledge green, unlit. The cable's live end and circuit pulses. */
