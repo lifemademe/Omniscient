@@ -268,8 +268,11 @@ const GLOBE_CSS = `
  *   cooldown  111   closed for the moment
  *   resolved   78   done
  *
- * Every adjacent pair is at least 21 levels apart in greyscale. `scripts/law5-states.ts`
+ * Every adjacent pair is at least 20 levels apart in greyscale. scripts/law5-states.ts
  * asserts it, so the next person to pick a colour here cannot quietly collapse the ladder.
+ *
+ * No backticks anywhere in this comment: it lives inside the GLOBE_CSS template literal, and
+ * a backtick in here ends the string. That is how it broke the first time.
  */
 .omni-globe__name--unknown { color: #e0604a; letter-spacing: 0.22em; }
 /*
