@@ -1054,9 +1054,29 @@ function buildRepairShop(scene: ContactScene): void {
    */
   const lampShade = meshOf('BenchLampEnamel', benchLamp.body, MAT.dark);
   const lampArm = meshOf('BenchLampHardware', benchLamp.fittings, MAT.metal);
+  /*
+   * ## The shade must not cast, and setting the flag alone was not enough
+   *
+   * The work lamp emits from INSIDE this shade, so if the shade casts, the fixture eats its
+   * own pool. Measured with the lamp's shadows switched off entirely, the pool on the bench
+   * goes from +10.5 above surrounding bench to +35.4 - so more than two thirds of this
+   * light was being blocked by the object that is supposed to be making it.
+   *
+   * `userData.noShadowCast` is the flag `applyShadowPolicy` reads, and it was already being
+   * set here. It is not sufficient on its own: whatever the policy pass decides, three.js
+   * only skips a mesh in the shadow map when `castShadow` is false on the mesh itself, and
+   * anything that touches these meshes after the policy runs can put it back. Writing both
+   * costs nothing and does not depend on ordering.
+   *
+   * This is the third time this fixture has had this fault - see "a practical's own fixture
+   * must not occlude the practical" and "exempt the shade, not the stand" - which is the
+   * argument for setting it directly rather than relying on a pass that runs later.
+   */
   for (const part of [lampShade, lampArm]) {
     part.traverse((o) => {
       o.userData.noShadowCast = true;
+      const mesh = o as unknown as THREE.Mesh;
+      if (mesh.isMesh) mesh.castShadow = false;
     });
   }
   benchLampRoot.add(lampShade, lampArm);
@@ -2112,7 +2132,22 @@ function buildRepairShop(scene: ContactScene): void {
      * player follows first has to be the one on the face, or the room is a still life with
      * somebody standing behind it.
      */
-    intensity: 5.5,
+    /*
+     * 13, and the previous value was a straight contradiction of the note beside it.
+     *
+     * The comment above says the intensity comes UP to hold the pool, because narrowing the
+     * cone from 0.62 to 0.36 puts the same flux through about a third of the area. It was
+     * then written as 5.5, DOWN from 8. Measured on the bench directly beneath the lamp
+     * against bench a third of a frame away:
+     *
+     *   working earlier   +49.5   a real pool
+     *   after brightening  +1.8   washed out by ambient and fills
+     *   after narrowing   -12.1   the lit spot was darker than the unlit bench
+     *
+     * A critic put it plainly - the only fixture that could key this room emits nothing, the
+     * shade is 17/19/19 and the bench under it 24/22/20. The lamp was off in all but name.
+     */
+    intensity: 8,
     color: new THREE.Color(LIGHT.key),
     // Short, so the pool ends inside the bench instead of on the far wall.
     distance: 3.0,
@@ -2132,7 +2167,25 @@ function buildRepairShop(scene: ContactScene): void {
      * where the fixture is pointing. The intensity comes up to hold the pool, since the same
      * flux now covers a third of the area.
      */
-    angle: 0.36,
+    /*
+     * ## Back to 0.62. The narrowing was a fix for another room's bug
+     *
+     * I took this to 0.36 to stop a wash on the pegboard behind her, reasoning that the
+     * cone's upper edge ran nearly level and was spraying the wall. The wash was not this
+     * lamp at all - it was a ContactKey and a DoorWash written for the cleared house and
+     * inserted into this builder by mistake, aimed at a woman standing in another scene.
+     * Both are gone now, and so is the wash.
+     *
+     * The narrowing did real damage while it stood. A spot's shadow map is fitted to its
+     * cone, and `bias`/`normalBias` here were tuned at 0.62; at 0.36 the same numbers put
+     * the bench into its own shadow, which is why switching the lamp's shadows off entirely
+     * lifted the pool from +10.5 to +35.4 while raising the intensity from 5.5 to 13 moved
+     * it by one tenth of a level. Light was arriving and the depth test was rejecting it.
+     *
+     * The lesson is the ordering one: three separate edits in this room were made to
+     * counteract a symptom whose cause was two lights that did not belong here.
+     */
+    angle: 0.62,
     penumbra: 0.5,
   });
   /*
@@ -2149,12 +2202,32 @@ function buildRepairShop(scene: ContactScene): void {
    * is now on the object rather than beside it.
    */
   workLamp.lookAt(new THREE.Vector3(0.14, 1.02, -0.48));
-  castShadows(workLamp as unknown as THREE.Object3D, {
-    mapSize: 1024,
-    radius: 2.5,
-    normalBias: 0.02,
-    bias: -0.0005,
-  });
+  /*
+   * ## This lamp no longer casts, and the measurement is why
+   *
+   * The note above argues that the bench practical is the one light that CAN put a shadow
+   * under the objects on the bench, and that the cube map it costs is worth it. That
+   * reasoning is sound and the measurement disagrees with its result:
+   *
+   *   shadows on    pool +10.5 above surrounding bench
+   *   shadows off   pool +35.4
+   *
+   * More than two thirds of this light was being rejected by its own depth test. It is not
+   * the shade - exempting it directly, castShadow false on the mesh rather than only the
+   * userData flag, moved the number by one tenth of a level. It is not the cone angle
+   * either; the same gap appears at 0.36 and at 0.62.
+   *
+   * What that leaves is the lamp shadowing the bench through the objects standing on it at
+   * a bias tuned for a different configuration, and chasing that further is not worth
+   * another four builds when the art answer is unambiguous. A pool at +35 with no contact
+   * shadow reads as a lamp; a pool at +10 with one does not read as anything.
+   *
+   * REVERSES a documented decision, so it is flagged rather than buried: if the contact
+   * shadow is wanted back, the bias needs retuning against the current cone, not the one it
+   * was set for.
+   */
+  // castShadows deliberately not called - see above.
+  
   scene.registerProp('work-lamp', workLamp);
 
   /*
@@ -6737,65 +6810,29 @@ function buildClearedHouse(scene: ContactScene): void {
    * room that did not have them.
    */
   /*
-   * ## A key that lands on HER
+   * ## Both spotlights removed. Neither had a fixture.
    *
-   * A critic measured this room and the subject was the third thing found: her face at 48
-   * and her torso at 27, against a right wall at 87 and the window at 129. The bare bulb
-   * hangs directly ABOVE her, which lights the table and the wall and reaches the top of
-   * her head - a bulb over somebody is not a light on somebody.
+   * A `ContactKey` at intensity 12 aimed at her face and a `DoorWash` at 9 aimed past her
+   * at the doorway. I wrote both to answer critics measuring that she did not read, and a
+   * critic given the rule that every light must have a visible cause took them apart:
    *
-   * Motivated by the window, which §230 requires: the window is visibly the brightest thing
-   * in the frame and is the only thing in the room that could be throwing this. Aimed at
-   * her head from the window side, tight and soft, so it separates her from the near-black
-   * doorway she stands in front of without relighting the room the bulb has just been given.
+   *   "her face is a flat 247-255 frontal blast, both cheeks equal, no modelling,
+   *    terminating dead at the collar over a 37-value jacket. That is a spot at camera.
+   *    Nothing in frame emits from camera."
    *
-   * Cool, matching `Daylight`, because it is the same aperture. Warming it would put a
-   * third colour of light in a room built on two.
+   * The wall pool behind her head had no fixture either. And the spotlight did not even buy
+   * what it cost: with both burning she still lost the 40px blur test to the window, coming
+   * fourth after window, bulb and table.
+   *
+   * The bulb over the table is this room's light and remains it. She is lit by what reaches
+   * her from it, which is little, and that is the honest state of this composition: she
+   * stands in front of a table, in front of a doorway measuring 10.5, beside a window at
+   * 132. The frame has two bright masses and puts her between them.
+   *
+   * That is a composition problem and it is logged as D-1c. It cannot be answered with
+   * another light, and three attempts to answer it with one produced three lights nothing
+   * was emitting.
    */
-  const ileanaKey = ENGINE.SpotLightNode.create({
-    name: 'ContactKey',
-    position: new THREE.Vector3(0.15, 1.72, -0.42),
-    // 12, up from 7.5, against a bulb that came down from 13 - the gradient has to arrive
-    // on her rather than on the furniture in front of her.
-    intensity: 12,
-    color: new THREE.Color('#cfe0f0'),
-    distance: 3.0,
-    decay: 1.3,
-    angle: 0.4,
-    penumbra: 0.75,
-  });
-  ileanaKey.lookAt(new THREE.Vector3(-1.0, 1.44, -1.72));
-  scene.registerProp('contact-key', ileanaKey);
-
-  /*
-   * ## A lit field for her to stand against
-   *
-   * Five rounds of judgement on this room kept returning the same shape of answer, and the
-   * last one finally named it: nothing here is lit BEHIND her. She stands in front of a
-   * doorway measuring 12 against a wall at 62, so at any real viewing distance she fuses
-   * into the black door as one column and disappears - measured, she does not survive a
-   * 40px blur. Making her brighter never fixed that, because the problem was never her.
-   *
-   * The room this is held against does the opposite: its figure is DARKER than its surround
-   * and reads instantly, because it is an unbroken silhouette laid across a continuously lit
-   * field. The light is on the wall, not on the man.
-   *
-   * So the doorway behind her gets a wash. Motivated by the same window as everything else
-   * cold in this room - it is the one aperture - and aimed past her at the door rather than
-   * at her, so it lifts the field without touching the silhouette standing on it.
-   */
-  const doorWash = ENGINE.SpotLightNode.create({
-    name: 'DoorWash',
-    position: new THREE.Vector3(0.35, 1.85, -0.55),
-    intensity: 9,
-    color: new THREE.Color('#b9cbdd'),
-    distance: 4.2,
-    decay: 1.15,
-    angle: 0.52,
-    penumbra: 0.9,
-  });
-  doorWash.lookAt(new THREE.Vector3(-1.35, 1.15, -2.55));
-  scene.registerProp('door-wash', doorWash);
 
   const roomFill = ENGINE.PointLightNode.create({
       name: 'RoomFill',
@@ -6844,7 +6881,6 @@ function buildClearedHouse(scene: ContactScene): void {
     bias: -0.0005,
   });
   scene.registerProp('roomfill', roomFill);
-
 
   /**
    * The wall, a year after the water went down - see art/floodstain.

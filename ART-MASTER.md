@@ -1000,6 +1000,7 @@ Python tools: `python scripts/dev/<name>.py`.
 | `cues-resolve.ts` | Every cue a mission fires lands on a registered prop, action, shot or light beat |
 | `dev-gates.ts` | Nothing that opens the game for testing is reachable in a published build |
 | `css-balanced.ts` | Every embedded stylesheet's braces balance |
+| `scene-tenants.ts` | **No diorama builder may name another contact.** Reads the cast from `content/mission-*.ts`, so re-casting a mission cannot leave it describing an old one. Written after `ContactKey`/`ileanaKey` and a `DoorWash` were inserted into `buildRepairShop`: the edit asserted its anchor was unique, which was true and proved nothing about WHICH room it was in |
 
 **The rule that makes these worth having:** a new verb in the cue grammar must be taught to
 `cues-resolve` in the same change. A verb the checker does not know is a verb it silently
