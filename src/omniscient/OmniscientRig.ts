@@ -4674,7 +4674,19 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.globe?.draw(this.pulse);
     } else if (this.revealProgress < 1) {
       this.revealProgress = Math.min(this.revealProgress + deltaTime / GROWTH_REVEAL_SECONDS, 1);
-      const reveal = this.revealFrom + (1 - this.revealFrom) * this.revealProgress;
+      /*
+       * Eased, not linear. §9 marks "learn a fact" thin on motion, and the motion was there -
+       * it just moved at a constant rate, which is the one speed growth never has. A branch
+       * that extends at a fixed number of segments per second reads as a progress bar drawn
+       * in the shape of a tree, which is precisely what §175 says this must not be.
+       *
+       * Ease-out rather than ease-in: the new growth leaves the old tip fast and settles into
+       * its final length, the way something arriving at its extent does. Squaring the
+       * remaining distance puts about three quarters of the travel in the first half of the
+       * time, so the eye catches WHERE it grew from before it reads how far it went.
+       */
+      const eased = 1 - (1 - this.revealProgress) ** 2;
+      const reveal = this.revealFrom + (1 - this.revealFrom) * eased;
       // Everything past where the old tree ended burns bright while it draws, so the
       // player sees WHAT they earned rather than being handed two similar trees to diff.
       this.tree.draw(reveal, this.pulse, this.revealFrom);
