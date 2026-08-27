@@ -56,6 +56,22 @@ whole of §12 and the most common way this document will be violated.
 could never succeed, a bridge was invisible, a sporeling walked on air, and a live credential
 sat in a tracked file. They prove a rule, not a look. Visual items are closed on captures.
 
+### 0.0 The five surfaces, in plain words
+
+Four names get used throughout this document. They are parts of the game, not parts of the UI,
+and two of them are easy to mix up:
+
+| Name here | What it actually is |
+| --- | --- |
+| **The desk room** | Dana Keller's room — the desk, the CRT, the lamp, the notes on the wall. It is the **main menu**, and it is where you sit between missions. |
+| **The contact scenes** | The nine 3D rooms behind a conversation: the repair shop, the beacon mast, the seedling tunnel, the cleared house, the flooded cellar, the night door, mill road, wire city, the station desk. You see them **while someone is talking to you**. |
+| **Warehouse 07** | The drone level. |
+| **M4SS** | The sidescroller — the slime. |
+| **The people** | The nine named characters themselves, wherever they appear (§4.7). |
+
+Older text in this repo calls the desk room "the workstation" or "the console", and calls the
+contact scenes "the dioramas". Same things.
+
 ### 0.1 Before your first pass — read this once
 
 **Three hard stops.**
@@ -101,9 +117,9 @@ honest state of that, and it is the main reason most of the board cannot start y
 | --- | --- | --- |
 | **M4SS** | `assets/reference/m4ss/` — Background1.png, Background2.png and 6 more, tracked, and studied image-by-image in M4SS-ART-BIBLE §2 | ✅ **Yes** |
 | **The people** | `assets/models/Mirela.glb`, rendered at her own scene's framing beside the procedural version by `MirelaProceduralTestRig` | ✅ **Yes** |
-| Workstation | The "workstation concept frame" — described in `art/palette.ts` §230, **not in the repo** | ❌ prose only |
-| Dioramas | ART_DIRECTION.md's tier ladder, rendered — no frame of it exists | ❌ prose only |
-| Warehouse | Night distribution-centre photography | ❌ **nothing at all** |
+| **The desk room** (main menu) | The "workstation concept frame" — described in `art/palette.ts` §230, **not in the repo** | ❌ prose only |
+| **The contact scenes** (9 rooms) | ART_DIRECTION.md's tier ladder, rendered — no frame of it exists | ❌ prose only |
+| **Warehouse 07** | Night distribution-centre photography | ❌ **nothing at all** |
 
 **So: M4SS and the people can start now. The other three need one image each.**
 
@@ -116,9 +132,20 @@ do not proceed.** Two moves are allowed:
    the strongest existing room is a valid bar for the other seven.
 2. **Ask for the image, take a different item, and say so in the ledger.**
 
-Dropping a reference into `assets/reference/<surface>/` and naming it in §4.x is the single
-highest-value thing a human can do for this document. It converts a stalled item into a
-runnable one.
+**Where to put them.** One folder per surface, any filenames, generated images are fine — the
+M4SS ones are:
+
+```
+assets/reference/warehouse/        a real distribution centre at night: pools of light,
+                                   real darkness between them
+assets/reference/desk-room/        a dim room with one warm lamp in a corner
+assets/reference/contact-scenes/   the mood for one of the nine rooms
+assets/reference/m4ss/             ALREADY DONE - 8 images, and it shows
+```
+
+Dropping one reference into a folder and naming it in §4.x is the single highest-value thing a
+human can do for this document. It converts a stalled item into a runnable one, and M4SS is the
+proof: it is the best-looking surface in the game and it is the only one that had references.
 
 ---
 
