@@ -774,7 +774,19 @@ function buildRepairShop(scene: ContactScene): void {
    * goes to the radio because the radio is in the only warm light in the room, and the
    * wall is legible because the strip light over it is on.
    */
-  const BATTEN_LEVEL = 2.4;
+  /*
+   * 1.6, down from 2.4 - a critic measured what 2.4 actually did.
+   *
+   * It was raised to 2.4 to stop the pegboard going dark when the work lamp became a cone,
+   * and it did that. It also made the tube's two glow discs the brightest field in the
+   * frame at 124, against the woman at 57-60 - so the brightest thing in a room whose
+   * subject is a person was a pool of light on BARE PLASTER. She was the third thing the
+   * eye found, after both pools.
+   *
+   * 1.6 still carries the pegboard, which is what the raise was for, without the wall
+   * out-reading the person standing in front of it.
+   */
+  const BATTEN_LEVEL = 1.6;
 
   const tubeRoot = ENGINE.SceneNode.create({ name: 'BattenTube', position: BATTEN_AT.clone() });
   tubeRoot.add(meshOf('Tube', batten.body, MAT.tube));
@@ -2130,6 +2142,35 @@ function buildRepairShop(scene: ContactScene): void {
    * One cool source on the far side does the whole job - every object now has a warm side
    * and a cold side, which is what separates planes when there is no texture to do it.
    */
+  /*
+   * ## A key that lands on HER
+   *
+   * A critic measured this room and the subject was the third thing found: her face at 48
+   * and her torso at 27, against a right wall at 87 and the window at 129. The bare bulb
+   * hangs directly ABOVE her, which lights the table and the wall and reaches the top of
+   * her head - a bulb over somebody is not a light on somebody.
+   *
+   * Motivated by the window, which §230 requires: the window is visibly the brightest thing
+   * in the frame and is the only thing in the room that could be throwing this. Aimed at
+   * her head from the window side, tight and soft, so it separates her from the near-black
+   * doorway she stands in front of without relighting the room the bulb has just been given.
+   *
+   * Cool, matching `Daylight`, because it is the same aperture. Warming it would put a
+   * third colour of light in a room built on two.
+   */
+  const ileanaKey = ENGINE.SpotLightNode.create({
+    name: 'ContactKey',
+    position: new THREE.Vector3(0.15, 1.72, -0.42),
+    intensity: 7.5,
+    color: new THREE.Color('#cfe0f0'),
+    distance: 3.0,
+    decay: 1.3,
+    angle: 0.4,
+    penumbra: 0.75,
+  });
+  ileanaKey.lookAt(new THREE.Vector3(-1.0, 1.44, -1.72));
+  scene.registerProp('contact-key', ileanaKey);
+
   scene.registerProp(
     'door-light',
     ENGINE.PointLightNode.create({
@@ -2175,7 +2216,16 @@ function buildRepairShop(scene: ContactScene): void {
        * wall behind her on the way.
        */
       position: new THREE.Vector3(-0.55, 1.7, 0.15),
-      intensity: 8.5,
+      /*
+       * Up from 8.5, because nothing was actually reaching her.
+       *
+       * This light exists to put the key on her face, and measured against the room it was
+       * losing to both practicals: her face and the wall behind her were reading within a
+       * few levels of each other, so she had no edge to be found by. A subject that is
+       * neither the brightest nor the darkest thing in frame is the last thing the eye
+       * arrives at, whatever else is correct about the room.
+       */
+      intensity: 13,
       color: new THREE.Color('#cfd8e4'),
       distance: 3.2,
       decay: 1.4,

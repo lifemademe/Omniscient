@@ -4673,6 +4673,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.lightRig.bounce.intensity = 1.575 * (0.32 + 0.68 * (1 - t));
 
     /*
+     * And the machine takes the room.
+     *
+     * §4.1 calls the CRT the only green light in a brown room, and measured across the three
+     * hours it had identical output at noon and at midnight - the one object in frame whose
+     * authority should grow as everything else goes out, gaining nothing. A screen does not
+     * get brighter at night, but its share of a darkening room does, and the glow it throws
+     * onto the desk around it is what carries that.
+     */
+    this.lightRig.glow.intensity = 1.8 * (1 + 0.85 * t);
+
+    /*
      * And the view itself, which no light in this room can reach.
      *
      * Two different jobs. Everything out there loses its afternoon and picks up the colour
@@ -4828,7 +4839,26 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.deskLampTime += deltaTime;
       const wobble =
         Math.sin(this.deskLampTime * 2.7) * 0.012 + Math.sin(this.deskLampTime * 6.31) * 0.008;
-      this.lightRig.lamp.intensity = this.deskLampBase * (1 + wobble);
+      /*
+       * ## The key has to change hands, and holding the lamp steady was not enough
+       *
+       * The note above used to say the lamp deliberately does not brighten - that as the
+       * window goes out its SHARE of the room rises without its intensity changing. Measured
+       * across the three hours, that is not what happens. The lamp's pool on the desk reads
+       * 170 at afternoon and 144 at night: it gets DIMMER, because the window was feeding
+       * that same pool and taking the window away takes light off the desk too.
+       *
+       * So the brightest thing in the frame is the lamp at noon and the lamp at midnight,
+       * decaying slightly, and the three hours read as one lighting setup with the window
+       * dimmed behind it rather than as three times of day.
+       *
+       * The lamp now gains as the window goes, which is also the true thing: it is the same
+       * bulb, and what changes is that somebody is still working after the daylight has
+       * gone. `deskDusk()` is the same eased value the window runs on, so the handover
+       * cannot drift out of step with the thing causing it.
+       */
+      const gain = 1 + 0.42 * Math.max(0, this.duskNow);
+      this.lightRig.lamp.intensity = this.deskLampBase * (1 + wobble) * gain;
     }
     if (this.picker) this.menu?.update(deltaTime, this.picker);
 

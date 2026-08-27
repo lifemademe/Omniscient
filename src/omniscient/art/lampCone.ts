@@ -103,8 +103,17 @@ void main() {
    * stop being visible as geometry.
    */
   float facing = pow(abs(dot(normalize(vNormalView), normalize(vToEye))), 0.85);
-  // Never quite reaches the shade's mouth, so the shaft does not start on a hard ring.
-  float mouth = smoothstep(1.0, 0.86, vAlong);
+  /*
+   * Softened from 0.86 to 0.975, because it was cancelling the taper it sits next to.
+   *
+   * NOTE: no backticks in this comment - it lives inside a template literal, and one ends
+   * the shader string mid-file. The variable "along" brightens toward the bulb; this one
+   * darkens toward the bulb to avoid a hard ring at
+   * the shade's mouth. At 0.86 the two met over most of the visible length and produced a
+   * shaft of almost constant density - measured flat at 58-68 across a 240px scan. It only
+   * has to soften the last few percent.
+   */
+  float mouth = smoothstep(1.0, 0.975, vAlong);
   float a = along * facing * mouth * uStrength;
   // Additive blending multiplies by alpha, so the rgb is NOT premultiplied here.
   gl_FragColor = vec4(uColor, a);
@@ -119,17 +128,34 @@ export function createLampCone(options: LampConeOptions): LampCone {
 
   const root = ENGINE.SceneNode.create({ name: 'LampCone', position: apex.clone() });
 
-  const geometry = new THREE.CylinderGeometry(apexRadius, baseRadius, length, 28, 10, true);
-  // Built around the origin; shift it so the apex ring sits ON the bulb rather than half a
-  // shaft above it, then the whole node is simply rotated to face the throw direction.
-  geometry.translate(0, -length / 2, 0);
+  /*
+   * ## Three nested shells, because one shell has no middle
+   *
+   * A single cone rendered additively is a constant thickness of glass: a critic scanned
+   * across it and found the alpha stepping 8 to 58 in eight pixels and then sitting flat at
+   * 58-68 for 240 - a straight silhouette with a uniform interior, which is a slab, not air.
+   *
+   * The `facing` term should taper it and does not do enough on its own, because a cone this
+   * narrow only swings its normals through a small angle across the frame. Nesting fixes it
+   * geometrically instead: a ray through the middle crosses six surfaces, a ray near the
+   * edge crosses two, so density builds toward the axis the way it does in a real shaft. The
+   * inner shells are also shorter, which is what makes the light densify around the bulb
+   * rather than along the whole throw.
+   *
+   * Three, not more: each is a draw, and by the fourth the gain is under a level.
+   */
+  const SHELLS: ReadonlyArray<{ radius: number; reach: number; weight: number }> = [
+    { radius: 1.0, reach: 1.0, weight: 0.55 },
+    { radius: 0.68, reach: 0.82, weight: 0.3 },
+    { radius: 0.4, reach: 0.6, weight: 0.22 },
+  ];
 
   const material = new THREE.ShaderMaterial({
     vertexShader: VERTEX,
     fragmentShader: FRAGMENT,
     uniforms: {
       uColor: { value: new THREE.Color(color) },
-      uStrength: { value: strength },
+      uStrength: { value: strength * 0.55 },
     },
     transparent: true,
     blending: THREE.AdditiveBlending,
@@ -141,10 +167,26 @@ export function createLampCone(options: LampConeOptions): LampCone {
     fog: false,
   });
 
-  const shell = new THREE.Mesh(geometry, material);
-  shell.frustumCulled = false;
-  shell.renderOrder = 3;
-  root.add(shell);
+  for (const [index, spec] of SHELLS.entries()) {
+    const geometry = new THREE.CylinderGeometry(
+      apexRadius * spec.radius,
+      baseRadius * spec.radius,
+      length * spec.reach,
+      28,
+      10,
+      true
+    );
+    // Built around the origin; shifted so the apex ring sits ON the bulb rather than half a
+    // shaft above it. The node is then rotated once, so every shell shares the throw.
+    geometry.translate(0, -(length * spec.reach) / 2, 0);
+    const shellMaterial = index === 0 ? material : material.clone();
+    shellMaterial.uniforms.uStrength = { value: strength * spec.weight };
+    shellMaterial.uniforms.uColor = { value: new THREE.Color(color) };
+    const shell = new THREE.Mesh(geometry, shellMaterial);
+    shell.frustumCulled = false;
+    shell.renderOrder = 3 + index;
+    root.add(shell);
+  }
 
   if (motes > 0) {
     const flock = createMotes({

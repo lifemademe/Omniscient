@@ -163,12 +163,20 @@ function buildStrip(host: SceneJumpHost, container: HTMLElement): HTMLElement {
       'width:20px',
       'height:20px',
       'font:10px/1 "Courier New",monospace',
-      'color:#9fd8ec',
       'background:rgba(4,12,16,0.9)',
       'border:0',
       'box-shadow:inset 1px 1px 0 #2f7391,inset -1px -1px 0 #040906',
       built ? 'cursor:pointer' : 'cursor:not-allowed',
-      built ? 'opacity:1' : 'opacity:0.3',
+      /*
+       * The DIGIT dims, not the tab.
+       *
+       * Dimming the whole button also dimmed its border, and the border is how dev/jump.py
+       * identifies a scene tab - it scans for #2f7391 and counts what it finds. A faded tab
+       * dropped below that match, the tool found seven tabs instead of eight, and every
+       * index after the disabled one silently pointed at the wrong room. A tool that reads
+       * this strip by colour makes the border part of the contract.
+       */
+      built ? 'color:#9fd8ec' : 'color:#3c5561',
     ].join(';');
     if (!built) {
       tab.disabled = true;

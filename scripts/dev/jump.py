@@ -26,6 +26,17 @@ file. SceneJump gives the scene tabs a blue inset (#2f7391), the warehouse tab a
 Tab order, top to bottom, is NOT the builder registration order:
   1 repair-shop  2 cleared-house  3 beacon-mast  4 seedling-tunnel
   5 flooded-cellar  6 night-door  7 mill-road  8 wire-city
+
+**Tab 7 is disabled in this build and lands on nothing.** Sanda is cut from the queue, so no
+mill road diorama is built; the tab is drawn with a dimmed digit and refuses the click. It
+keeps its border on purpose - this file counts scene tabs by that border colour, so fading a
+whole tab would make the strip read as seven and silently shift every index after it.
+
+**"The scene never changed" does not always mean the click missed.** The landing test is a
+frame diff, so jumping to the room you are ALREADY IN reports failure, and so does jumping to
+a tab that mounts nothing. Bounce through another room first, and read this tool's output
+rather than sending it to /dev/null - it reported the mill road failure correctly for an hour
+while nobody was looking at it.
 """
 import ctypes
 import ctypes.wintypes
