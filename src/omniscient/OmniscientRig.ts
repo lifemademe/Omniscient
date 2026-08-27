@@ -3080,8 +3080,25 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   /** Apply the authored cel conversion to the current 3D scene. */
+  /**
+   * The warehouse gets the look that is named after it.
+   *
+   * `PAINT_LOOKS.warehouseCel` existed, carried the longest comment block in paintShader.ts,
+   * and was applied to NOTHING: every call to setPaintLook in the game passed 'contactCel'
+   * or 'off'. Three separate registries use the string 'warehouseCel' - the retro pass, the
+   * material banding, and this one - and two of them were wired up, so the name appeared all
+   * over the codebase while this particular look sat dead.
+   *
+   * That cost a round of work on its own. The brightness of the warehouse post pass was
+   * changed where it is documented, the change reached the bundle, and the frame did not
+   * move by one level, because the live value was the copy in `contactCel` forty lines up.
+   *
+   * The two looks are otherwise identical - same posterize, softness, gate and saturation -
+   * so routing the warehouse to its own entry changes nothing today except that the surface
+   * can now be graded without dragging every contact scene along with it.
+   */
   private applyCelPost(immediate = false): void {
-    setPaintLook('contactCel', immediate);
+    setPaintLook(this.warehouse ? 'warehouseCel' : 'contactCel', immediate);
   }
 
   /** Warehouse A/B can still temporarily disable the otherwise global post treatment. */
