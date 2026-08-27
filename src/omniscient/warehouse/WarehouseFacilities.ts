@@ -489,8 +489,13 @@ export class WarehouseFacilities {
              * between one bay and the next. The intensity climbs to hold the value directly
              * under the lamp, so the lane keeps its working brightness and only gains an
              * edge.
+             *
+             * Then 300 -> 700, for the reason in art.ts: a narrower cutoff spends floor value
+             * as well as reach. These are the lamps over the LANES and they are the key, so
+             * their pool centre is set to roughly seven times the fill - bright enough that
+             * the lit floor, not the fitting, is the brightest thing under a bay.
              */
-            intensity: 300,
+            intensity: 700,
             // Short, so the pool has an edge. Long-range lamps overlap into the flat fill this
             // whole item exists to remove.
             distance: 9.6,

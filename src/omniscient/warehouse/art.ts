@@ -1876,8 +1876,23 @@ export class WarehouseEnvironment {
              * the floor. Two full-strength grids interleaved is how nineteen lamps over a
              * 40x48m building produced one continuous sheet - each grid was filling the
              * other's gaps.
+             *
+             * Then the intensity had to climb after all, 300 -> 900, and the sentence above
+             * saying it did not is the mistake this fixes. Narrowing the cutoff does not just
+             * move the edge inward, it throws away most of the light at the FLOOR as well:
+             * at reach 11.5 these put 3.38 on the ground directly beneath them and at 10.0
+             * they put 0.65, which is the same as the hemisphere fill. A lamp that lands fill
+             * values on the floor is not lighting it. A critic looking at the result said the
+             * high bays "read as bright objects rather than as sources", which is exactly
+             * what a visible fitting with no pool under it is.
+             *
+             * That is the whole trap of this lever: reach and floor value are the same
+             * number, so tightening one silently spends the other, and the frame looks
+             * plausible either way - a dim uniform floor and a dark uniform floor are both
+             * uniform. 900 restores the centre to about 2.5x fill while the edge stays where
+             * the last pass put it.
              */
-            intensity: 300,
+            intensity: 900,
             distance: 10,
             decay: 1.8,
             /*
@@ -2551,12 +2566,12 @@ export class WarehouseEnvironment {
     // Scaled with the work lights' new falloff - see the note at their construction. These
     // numbers are the old ones times 8.5, so the floor value is unchanged and only the
     // SHAPE of the light differs.
-    const work = this.celStyleEnabled ? 233 : 300;
+    const work = this.celStyleEnabled ? 900 : 1160;
     if (this.ambientLight) this.ambientLight.intensity = THREE.MathUtils.lerp(skyFill, 0.5, emergency);
     if (this.moonLight) this.moonLight.intensity = THREE.MathUtils.lerp(moon, 1.05, emergency);
     if (this.frontLight) this.frontLight.intensity = THREE.MathUtils.lerp(front, 4, emergency);
     if (this.fixtureLensMaterial) this.fixtureLensMaterial.emissiveIntensity = THREE.MathUtils.lerp(fixture, 0.1, emergency);
-    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(work, 26, emergency);
+    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(work, 78, emergency);
     for (const [index, material] of this.emergencyMaterials.entries()) {
       const sequence = contained || reducedMotion ? 1 : 0.72 + Math.sin(this.clock * 2.5 - index * 0.8) * 0.28;
       material.emissiveIntensity = emergency * (1.2 + sequence * 3.8);

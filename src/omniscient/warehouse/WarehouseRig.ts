@@ -108,7 +108,19 @@ interface DevViewpoint {
   readonly yaw: number;
   readonly pitch: number;
 }
-const DEV_TOUR: readonly DevViewpoint[] = [];
+/*
+ * TEMP-VERIFY: populated to judge W-1 (high-bay pools) and emptied again in the same session.
+ *
+ * Aisle centres are the rack centres plus half the spacing - x -15.5, -8.5, -1.5, 5.5, 12.5 -
+ * so -1.5 is the middle lane. 6.8 is the top of ALTITUDES, which is the height the bays read
+ * from: nine rounds of this item were judged from the inbound dock, which is the one part of
+ * the building with no high bay above it, and two critics in a row said the frame could not
+ * show what was being tuned.
+ */
+const DEV_TOUR: readonly DevViewpoint[] = [
+  { name: 'aisle-bays-high', position: new THREE.Vector3(-1.5, 6.8, 16), yaw: Math.PI, pitch: -0.06 },
+  { name: 'aisle-floor', position: new THREE.Vector3(-1.5, 1.8, 16), yaw: Math.PI, pitch: 0.02 },
+];
 const DEV_TOUR_HOLD = 2.5;
 /**
  * Where the rotor wash lives and when it runs.
