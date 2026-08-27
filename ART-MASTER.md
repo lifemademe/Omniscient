@@ -519,7 +519,7 @@ Each stage is a gauntlet item with its own bar. **Do not skip to stage 3.**
 
 | Stage | What | Done when |
 | --- | --- | --- |
-| **P-C1** | People | One character, one framing, against `Mirela.glb` | §4.7 / the GLB itself | `OPEN` claude 2026-08-27 | **Baseline captured and judged: `scripts/dev/PC1-r0-both.jpg`** (GLB left, procedural right, same camera/light/pose). Critic: *"far from the bar — the pieces are adjacent instead of connected, so the figure reads as an unassembled kit rather than one exaggerated mass"*, and it located that at the SHOULDER GIRDLE. **Proportions are NOT the problem** — the spec is measured off the GLB and reads correctly. **The one thing §4.7 actually asked for already works:** *"the surfaces genuinely take the room's light… nothing looks like it is carrying its own baked highlights."* Two concrete leads found in source: hands EXIST but the capsule is **8% narrower than the wrist** (0.045m vs 0.048m radius) so the arm tapers to a rounded end — right size, no silhouette break; and the apron is two separate plates with a gap rather than one draped form |
+| **P-C1** | People | One character, one framing, against `Mirela.glb` | §4.7 / the GLB itself | `PAUSED` claude 2026-08-27 | **Three judged rounds. Real gains, and a critic's honest read that it is "not at bar, and not close".** Added the connective forms that were never built: `Mirela-Neck`, `Mirela-Deltoid`, `Mirela-Pelvis`, plus a real wrist taper. Round 1's gap (head/arms/torso adjacent, not connected) was judged CLOSED. **The one thing §4.7 wanted already works — the surfaces take the room's light rather than baking it.** Captures `PC1-r0-both` → `r1-joined` → `r3-wrist` → `r4-hip`. **Read the two structural findings before resuming:** (1) the "flat cut where the trunk meets the legs" that three critics named is the APRON HEM — a 335mm flat box overhanging thighs that have already tapered — not the trunk; (2) twice, a part existed and was smaller than the thing it sits on (hand inside wrist, pelvis inside thighs), which is indistinguishable from a part that was never built and invisible in source. **The remaining distance is not more joins.** Trunk, sleeve, forearm, hand and legs are still separate primitives butted together; closing it means a continuous lofted body, which is its own project |
 | **P-C2** | The `SkeletonProfile` + one Mixamo clip retargeted onto her | `nod` plays and reads as a nod, with `forceTPose` correct |
 | **P-C3** | Parameterise: the spec drives 9 people, not 1 | Nine silhouettes distinguishable in black at thumbnail size |
 | **P-C4** | Swap Mirela in the shipped scene, GLB kept beside her as the reference | The mission plays; nobody notices except that she is lit by the cellar |
@@ -955,6 +955,7 @@ YYYY-MM-DD  ID    agent      status   bar / evidence / commit
 2026-08-27  W-1   claude     DECLINED phase-shift proves pools are lamp-caused; floor paint outweighs them
 2026-08-27  A-1   claude     IN LOOP  warehouse + M4SS growths + certainty audited: no hue-only mechanic found
 2026-08-27  P-C1  claude     OPEN     baseline judged: "adjacent, not connected"; hands narrower than wrists
+2026-08-27  P-C1  claude     PAUSED   3 rounds: r1 gap CLOSED; still "an assembly of primitives" / dd8aae0
 ```
 
 ---
