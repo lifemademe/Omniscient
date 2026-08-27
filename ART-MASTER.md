@@ -895,7 +895,7 @@ Ordered by value per hour. Take from the top.
 | **W-1b** | Warehouse | Drop `WAREHOUSE_SKY_FILL` so the pools can read | Law 2 | `PAUSED` claude 2026-08-26 | 1.8 → 0.6 is committed and live in the bundle, but it is **not the flattener**: `frontLight` runs at 35 and each of the work lights at 54. The ambient was never the top of the range |
 | **T-3** | Tooling | A reliable way to REACH each surface for capture | — | `AT BAR` claude 2026-08-26 | **Solved: `scripts/dev/jump.py W`.** The strip reveals on `mousemove` and `SetCursorPos` to a single point often generates none — a teleport is not a move. Tabs are found by border colour so the geometry cannot go stale. Evidence: `scripts/dev/W1-r9-after.jpg`, commit a0908aa |
 | **T-4** | Tooling | A capture POSE inside a surface, not just the entrance | — | `DECLINED` claude 2026-08-26 | **Already existed and I opened it anyway.** `DEV_TOUR` in `WarehouseRig.ts` is dev-gated, holds each viewpoint for `DEV_TOUR_HOLD` seconds and is a no-op while the list is empty. Populate it, build, capture, empty it. Nine rounds of W-1 were judged from the wrong viewpoint with the fix sitting in the file being edited |
-| **W-1c** | Warehouse | Real darkness between the pools | `warehouse/02-high-bay-pools.jpg` | `PAUSED` claude 2026-08-26 | r9 measured 5.9% / p5 18 / median 60 / p95 136 / spread 118 / clip 0.0% against the bar's 5.0% / 20 / 78 / 127 / 107 / 0.0% — the shape of the range lands, the median sits 18 low. **Two critics in a row named the same gap and the second one explained why: the capture viewpoint contains exactly ONE overhead fitting, so the rhythm of the bays cannot be judged from it at all.** Nine rounds were tuned from a frame that cannot show the thing being tuned. `BLOCKED` by T-4 in practice. Commit 9c51c3e |
+| **W-1c** | Warehouse | Real darkness between the pools | `warehouse/02-high-bay-pools.jpg` | `PAUSED` claude 2026-08-26 | **Four critics, one gap, unclosed: the pools do not read.** The room stopped being over-exposed and measures near the bar from Paul's own viewpoint (median 79 v 78, p5 21 v 20, no clipping, from median 114 / p95 223 / 0.4% clipping). What no round achieved is a lit patch on the floor that is visibly OWNED by a fitting above it. Latest critic: *"brightness is a function of which surface you are looking at, not where it sits relative to a lamp."* **Twice I offered a floor profile as counter-evidence and twice it was measuring something else** — first the painted markings, then the drone's own lamp, then a change of floor material at the cross-aisle. Captures W1-r9/r10/r11/r12, commit 0b03525 |
 | **W-2** | Warehouse | Depth cueing — value + saturation falloff with distance | §4.4 | `OPEN` | |
 | **W-3** | Warehouse | A lamp on the drone that lights what it approaches | §4.4 | `OPEN` | |
 | **W-4** | Warehouse | Mid-scale rhythm: break the regularity of racking/bays/markings | Law 3 | `OPEN` | |
@@ -942,6 +942,8 @@ YYYY-MM-DD  ID    agent      status   bar / evidence / commit
 2026-08-26  W-1   claude     IN LOOP  r7 measured 3.4%/86/160/0.0 vs bar 5.0%/78/127/0.0 / df8f931
 2026-08-26  W-1   claude     PAUSED   r9 5.9%/60/136 vs bar 5.0%/78/127; 2 critics, same gap / 9c51c3e
 2026-08-26  T-4   claude     opened   the capture viewpoint shows one fitting; nine rounds judged from it
+2026-08-26  T-4   claude     DECLINED DEV_TOUR already was this; added to the §15 toolbox table
+2026-08-26  W-1   claude     PAUSED   4 critics, same gap: no pool is owned by a visible fitting
 ```
 
 ---

@@ -109,18 +109,27 @@ interface DevViewpoint {
   readonly pitch: number;
 }
 /*
- * TEMP-VERIFY: populated to judge W-1 (high-bay pools) and emptied again in the same session.
+ * Viewpoints that have actually been used, kept as a comment because DEV_TOUR must ship
+ * empty. Paste one back in, build, capture, and empty it again.
  *
- * Aisle centres are the rack centres plus half the spacing - x -15.5, -8.5, -1.5, 5.5, 12.5 -
- * so -1.5 is the middle lane. 6.8 is the top of ALTITUDES, which is the height the bays read
- * from: nine rounds of this item were judged from the inbound dock, which is the one part of
- * the building with no high bay above it, and two critics in a row said the frame could not
- * show what was being tuned.
+ *   { name: 'aisle-floor',      position: new THREE.Vector3(-1.5, 1.8, 16), yaw: Math.PI, pitch: 0.02 },
+ *   { name: 'aisle-bays-high',  position: new THREE.Vector3(-1.5, 6.8, 16), yaw: Math.PI, pitch: -0.06 },
+ *
+ * Aisle centres are the rack centres plus half the spacing - x -15.5, -8.5, -1.5, 5.5, 12.5.
+ * Two things learned the slow way:
+ *
+ * ORDER MATTERS, and not the way a tour implies. updateDevTour clamps its index to the last
+ * entry, so the list plays through once and then PARKS on whatever is last for the rest of
+ * the session. For a recording that is a tour; for a still, the final entry is the only one
+ * you can reliably photograph. Put the shot you want at the bottom.
+ *
+ * HEIGHT IS NOT THE CAMERA. These are drone positions and the third-person camera sits on an
+ * arm behind and above it, so 6.8 in a lane - the top of ALTITUDES, and a sensible place for
+ * the drone - swings the camera back into the racking and fills the frame with a shelf and an
+ * AISLE sign. Anything above about 4 in a lane needs the camera's arm accounted for, or a
+ * position out in a cross-aisle where there is clearance behind.
  */
-const DEV_TOUR: readonly DevViewpoint[] = [
-  { name: 'aisle-bays-high', position: new THREE.Vector3(-1.5, 6.8, 16), yaw: Math.PI, pitch: -0.06 },
-  { name: 'aisle-floor', position: new THREE.Vector3(-1.5, 1.8, 16), yaw: Math.PI, pitch: 0.02 },
-];
+const DEV_TOUR: readonly DevViewpoint[] = [];
 const DEV_TOUR_HOLD = 2.5;
 /**
  * Where the rotor wash lives and when it runs.
