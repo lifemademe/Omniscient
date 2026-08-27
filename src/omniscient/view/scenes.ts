@@ -6166,7 +6166,14 @@ function buildClearedHouse(scene: ContactScene): void {
    * already in it and lets the corners go. Each value below is what the fiction says about
    * the place rather than a level: a house with the furniture gone, so nothing left in it to bounce light around
    */
-  scene.daylight = 0.5;
+  /*
+   * 0.62, up from 0.5: the dusk outside still reaches this room.
+   *
+   * This scales the rig's global key and hemisphere, so it is the room's ambient floor
+   * rather than a fixture - which makes it the right lever for legibility and the wrong one
+   * for drama. It is raised here only as far as the window in frame can justify.
+   */
+  scene.daylight = 0.82;
   const rng = createRng(seedFrom('ileana-house'));
 
   const floor = new THREE.BoxGeometry(7, 0.1, 6);
@@ -6354,10 +6361,18 @@ function buildClearedHouse(scene: ContactScene): void {
    * the evidence stays lit, the furniture stops shouting.
    */
   const clearedTimber = (MAT.timber as THREE.MeshStandardMaterial).clone();
-  // 0.42, from 0.62. At 0.62 the slab and what stands on it still held 68% of the frame's
-  // brightest pixels against 4% for the woman, and blurred to 40px she disappeared between
-  // two bright masses. Furniture between the camera and the subject has to give way.
-  clearedTimber.color.multiplyScalar(0.42);
+  /*
+   * 0.78, up from 0.42.
+   *
+   * I took this to 0.62 and then 0.42 chasing a measurement that said the table held too
+   * much of the frame's brightest pixels. It did - but the answer to "the table out-ranks
+   * the person" is not to keep pulling the table toward black, and by 0.42 this room was
+   * 28.8% pure black with a median of 36. Darkness had become the default rather than a
+   * choice, in a room that has a window and a lit bulb in it.
+   *
+   * A worked kitchen table is darker than new timber. It is not nearly black.
+   */
+  clearedTimber.color.multiplyScalar(0.78);
   scene.registerProp('table', meshOf('Table', mergeGeometries(table, false) ?? top, clearedTimber));
 
   /**
@@ -6869,7 +6884,15 @@ function buildClearedHouse(scene: ContactScene): void {
        * her face. The bulb still owns the room and still throws its pool; it no longer wins
        * the frame with a surface nobody is being asked to look at.
        */
-      intensity: 9,
+      /*
+       * 15. This is the room's light and it should light the room.
+       *
+       * It went 13 to 9 to stop the tabletop out-ranking the subject, which treated the
+       * bulb as the problem when the problem was the table's material and the composition.
+       * A bare bulb over a table at dusk is the brightest thing in that room and the reason
+       * anybody can see anything in it.
+       */
+      intensity: 15,
       color: new THREE.Color('#ffd0a0'),
       distance: 3.4,
       decay: 2.0,
@@ -8218,6 +8241,17 @@ function buildFloodedCellar(scene: ContactScene): void {
    *
    * 0.3, not 0. Light gets down a stairwell and in round a hatch; a cellar is dim, not
    * sealed, and at zero the four local pools read as torches in a cave.
+   */
+  /*
+   * 0.3, unchanged, and the reason is worth writing down.
+   *
+   * A legibility sweep flagged this room as too dark on a frame mean of 49. Raised to 0.42
+   * it measured 49.3 - no change at all, because this room is lit by its own bulkhead lamp
+   * and not by the rig's key. Looking at the frame rather than the number, it already reads:
+   * the figure, the pipe run, the valve wheel, the shelves and the tide line are all legible.
+   *
+   * Mean is not the legibility test. A room of readable mid-tones and a room with a bright
+   * patch in a black field can share a mean, and only one of them can be seen.
    */
   scene.daylight = 0.3;
   /**
