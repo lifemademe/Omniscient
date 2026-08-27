@@ -1930,17 +1930,42 @@ function buildRepairShop(scene: ContactScene): void {
   // practical here is motivated, because this is where she has been working. Without it
   // the diorama has only the distant key and reads as a room at night with the lights
   // off, which is not the same thing as atmospheric.
-  scene.registerProp(
-    'work-lamp',
-    ENGINE.PointLightNode.create({
-      name: 'WorkLamp',
-      position: new THREE.Vector3(0.25, 1.55, -0.15),
-      intensity: 3.8,
-      color: new THREE.Color(LIGHT.key),
-      distance: 5.5,
-      decay: 1.5,
-    })
-  );
+  /*
+   * ## The room's shadow-casting key, second choice
+   *
+   * The first attempt put this on FaceKey, and a critic measured the result and threw it
+   * out: "the radio's face, its top, and the benchtop under and around it are identical to
+   * within a hundredth of a level, so it still floats on the bench exactly as before". It was
+   * right, and the reason is geometric rather than a matter of strength. FaceKey is a 0.42
+   * radian cone aimed at her face from 1.2m. Its shadow can only ever land on the wall behind
+   * her. It never reaches the bench, so it can never make anything sit ON the bench, which is
+   * the entire point of §5's "one shadow-casting key per room".
+   *
+   * The bench practical is the light that can. It hangs 0.55m above the bench top, directly
+   * over the objects the player is being asked to believe are resting there, and it is the
+   * motivated source - there is a desk lamp in frame.
+   *
+   * It costs a cube map rather than a single one, six renders instead of one, and that is the
+   * trade being made deliberately: the cheap light casts a shadow nobody can see and the
+   * expensive one casts the shadow the item exists for. A diorama is a small set with a
+   * handful of objects, which is where a point-light shadow is affordable and a warehouse is
+   * where it is not.
+   */
+  const workLamp = ENGINE.PointLightNode.create({
+    name: 'WorkLamp',
+    position: new THREE.Vector3(0.25, 1.55, -0.15),
+    intensity: 3.8,
+    color: new THREE.Color(LIGHT.key),
+    distance: 5.5,
+    decay: 1.5,
+  });
+  castShadows(workLamp as unknown as THREE.Object3D, {
+    mapSize: 1024,
+    radius: 2.5,
+    normalBias: 0.02,
+    bias: -0.0005,
+  });
+  scene.registerProp('work-lamp', workLamp);
 
   /**
    * Cold daylight from the shop door, opposite the lamp.
@@ -2006,30 +2031,6 @@ function buildRepairShop(scene: ContactScene): void {
       penumbra: 0.72,
     });
   faceKey.lookAt(new THREE.Vector3(-0.72, 1.46, -1.14));
-  /*
-   * ## The room's one shadow-casting key
-   *
-   * D-4 asks for one per room and an audit of all nine builders found exactly one: the
-   * seedling tunnel's. Eight rooms, twenty-four lights between them, and nothing casting -
-   * which is why every diorama has objects sitting ON a surface rather than IN a place.
-   *
-   * This light rather than any of the other five here, for a reason that is about cost as
-   * much as composition. It is the only SpotLight in the room, so it needs one shadow map;
-   * every other light is a point light and would need a cube - six renders - to do the same
-   * job. It is also already the key by intent: it is aimed at her face from 1.2m and the
-   * comment above it is entirely about getting light onto the person.
-   *
-   * 1024 rather than the 2048 default. The cone is 0.42 radians at 3.2m, so the map covers a
-   * small volume and the extra resolution buys nothing but memory. The soft radius matches
-   * the 0.72 penumbra it already has - a hard-edged shadow under a soft-edged light reads as
-   * two different lights.
-   */
-  castShadows(faceKey as unknown as THREE.Object3D, {
-    mapSize: 1024,
-    radius: 3.5,
-    normalBias: 0.025,
-    bias: -0.0004,
-  });
   scene.registerProp('face-fill', faceKey);
 
   scene.registerProp(
