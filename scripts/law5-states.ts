@@ -56,6 +56,10 @@ const EXEMPT: Array<[string, string]> = [
   ['verified intake lamp', 'emissiveIntensity 0.7 vs 1.8, plus the scanner mesh appearing when state !== idle'],
   ['M4SS growths', 'a dead growth shifts 2px ajar and darkens - it reads broken in silhouette'],
   ['certainty tiers', 'geometry and material detail differ per tier: bounding shape, then real shape, then maps'],
+  ['SUSPECTED props', 'the prop is not drawn at all - a bounding volume is drawn instead, and it MOVES; see art/suspected.ts'],
+  ['scan targets', 'state is opacity 0 -> 1, which is presence, not hue'],
+  ['board status', 'the --score class changes the status TEXT as well as its colour'],
+  ['feed captions', 'hit 234 vs miss 64 in greyscale - 170 levels apart on value alone'],
 ];
 
 function luma(hex: string): number {
