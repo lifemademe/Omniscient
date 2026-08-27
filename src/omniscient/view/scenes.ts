@@ -370,7 +370,15 @@ function buildRepairShop(scene: ContactScene): void {
    * Mirela's face and the request had no value hierarchy to lead. The room still has a
    * cold side at 0.4; it simply stops behaving like a second key.
    */
-  scene.daylight = 0.3;
+  /*
+   * 0.44, up from 0.3, on direction: the room generally, not one more light on one face.
+   *
+   * This is the scene's ambient term, so raising it lifts everything at once and points at
+   * nobody - which is the right instrument when the note is "brighter room" rather than
+   * "brighter subject". It is also the change with the least chance of reintroducing the
+   * fault above: an ambient has no position to be unmotivated from.
+   */
+  scene.daylight = 0.44;
   const rng = createRng(seedFrom('mirela-shop'));
 
   // Floor and back wall - background mass, not detail (§186).
@@ -675,9 +683,11 @@ function buildRepairShop(scene: ContactScene): void {
     ENGINE.PointLightNode.create({
       name: 'CornerFill',
       position: new THREE.Vector3(-1.75, 0.85, -0.55),
-      intensity: 1.2,
+      // Up from 1.2 with more reach: general room level, raised on direction. This is the
+      // bounce a small room has off its own walls, and it has no direction to give away.
+      intensity: 2.4,
       color: new THREE.Color(LIGHT.fill),
-      distance: 2.4,
+      distance: 4.0,
       decay: 1.2,
     })
   );
@@ -798,7 +808,7 @@ function buildRepairShop(scene: ContactScene): void {
    * ambient, it lights a wall nobody is asked to look at, and at 2.4 it was the brightest
    * field in the frame. It still has to carry the pegboard, which is what it was raised for.
    */
-  const BATTEN_LEVEL = 2.2;
+  const BATTEN_LEVEL = 3.1;
 
   const tubeRoot = ENGINE.SceneNode.create({ name: 'BattenTube', position: BATTEN_AT.clone() });
   tubeRoot.add(meshOf('Tube', batten.body, MAT.tube));
@@ -2300,64 +2310,25 @@ function buildRepairShop(scene: ContactScene): void {
    * under a work lamp throws a great deal back up, and that upward bounce is what actually
    * lights somebody leaning over their own work.
    */
-  const faceKey = ENGINE.SpotLightNode.create({
-      name: 'FaceKey',
-      /**
-       * Brought in to 1.2m, because at 2.4m it was doing nothing.
-       *
-       * First placement sat at (-0.4, 1.72, 1.35), which is 2.4 metres from her head - and
-       * with a 1.4 decay that is most of the light gone before it arrives. Her face moved
-       * 46 to 54 while the radio went to 79, so the pass fixed the object and left the
-       * person exactly where she was. Inverse-square is unforgiving about this: halving
-       * the distance is worth more than doubling the intensity, and it does not wash the
-       * wall behind her on the way.
-       */
-      position: new THREE.Vector3(-0.55, 1.7, 0.15),
-      /*
-       * Up from 8.5, because nothing was actually reaching her.
-       *
-       * This light exists to put the key on her face, and measured against the room it was
-       * losing to both practicals: her face and the wall behind her were reading within a
-       * few levels of each other, so she had no edge to be found by. A subject that is
-       * neither the brightest nor the darkest thing in frame is the last thing the eye
-       * arrives at, whatever else is correct about the room.
-       */
-      /*
-       * ## 3.2, and wide - a fill, not a spotlight
-       *
-       * This ran 8.5 to 13 to 9.5 across six rounds of judgement, every rise a response to
-       * a measurement saying the subject did not read. It worked and it was the wrong
-       * instrument: nothing in this room emits it, so what it actually produced was a hard
-       * pool on one face with no cause - the exact thing §230 exists to prevent, arrived at
-       * by following Law 1 without asking what was making the light.
-       *
-       * The batten above her is a real fixture and is bright again, and that is what lights
-       * her now. What is left here is a soft fill wide enough to have no edge, doing the
-       * job a pale ceiling would do in a room this size.
-       */
-      intensity: 3.2,
-      color: new THREE.Color('#cfd8e4'),
-      /*
-       * ## It has to die before it reaches the wall behind her
-       *
-       * Raising this from 8.5 to 13 lifted her share of the frame's brightest pixels from
-       * 1.8% to 14% and bought nothing, because at 3.2m of reach it lit her AND the pegboard
-       * she stands against. Measured, she came out at 79.5 against a surround of 76.8 - two
-       * and a half levels, which is not a separation, it is a coincidence. The room this is
-       * held against puts its figure 20 levels BELOW its backing.
-       *
-       * She is about 1.3m from this light and the pegboard is about a metre further. Pulling
-       * the reach in to 1.9 and squaring the falloff spends the light on her and lets it run
-       * out before the wall - so the separation comes from the wall going dark rather than
-       * from her getting brighter, which is the only version of it that works.
-       */
-      distance: 1.9,
-      decay: 2.0,
-      angle: 0.62,
-      penumbra: 0.92,
-    });
-  faceKey.lookAt(new THREE.Vector3(-0.72, 1.46, -1.14));
-  scene.registerProp('face-fill', faceKey);
+  /*
+   * ## FaceKey is gone
+   *
+   * It was a spotlight on one person's face that nothing in the room emitted. It came in at
+   * 8.5 to answer a note about her reading darker than the wall, went to 13 and then 9.5
+   * across six rounds of measurement, and each rise was a correct response to a correct
+   * measurement - the subject genuinely was not reading. What none of those rounds asked
+   * was what was supposed to be MAKING the light, which §230 requires of every source in
+   * this game, and the answer was nothing.
+   *
+   * The fixture that should be lighting her is the fluorescent batten hanging over her,
+   * which had been dimmed twice for the opposite reason - to stop it out-ranking her in a
+   * brightest-pixel count. Both of those moves are undone. The room is lit by the two things
+   * in it that are visibly switched on, the batten and the bench lamp, plus the daylight
+   * through the door.
+   *
+   * If she measures dark again, the answer is the batten, the door or the room's ambient -
+   * not a new invisible spot aimed at her head.
+   */
 
   scene.registerProp(
     'bench-bounce',
