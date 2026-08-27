@@ -891,10 +891,10 @@ Ordered by value per hour. Take from the top.
 | **M-1** | M4SS | Stage 3 (Sluice) full art pass | M4SS-ART-BIBLE §2 | `OPEN` | Grey-boxed; largest single item |
 | **M-2** | M4SS | Sluice identity in GEOMETRY, not only the ramp | Bible §5 thumbnail test | `BLOCKED` by M-1 | |
 | **W-1** | Warehouse | Key lighting: high bays as discrete pools with real dark between | `warehouse/02-high-bay-pools.jpg` | `IN LOOP` claude 2026-08-26 | r0 artifact: `scripts/dev/W1-r0-before.jpg`. **Cause found: there are no interior light fittings at all.** The room is a HemisphereLight at 1.8 plus a moon through the skylights, so it cannot pool. Decomposed → W-1a/b/c |
-| **W-1a** | Warehouse | Light the fittings over where the player works | `warehouse/02-high-bay-pools.jpg` | `IN LOOP` claude 2026-08-26 | **r1 built, not yet judged.** Twelve strip fittings already exist; only five were lit and none in the rear half, where the audit now spends a whole quest. Two rear strips lit; the other five stay geometry per the frame-rate note |
-| **W-1b** | Warehouse | Drop `WAREHOUSE_SKY_FILL` so the pools can read | Law 2 | `IN LOOP` claude 2026-08-26 | **r1 built, not yet judged.** 1.8 → 0.6 — the value its own comment prescribes. See below |
-| **T-3** | Tooling | A reliable way to REACH each surface for capture | — | `OPEN` | **Blocks the loop.** `scripts/dev/pin.py` is a partial attempt with an honest docstring: one process closes the rotation gap, but a pin marker and a label glyph are the same hue AND the same size, so it picks the wrong one. Next: find a way to STOP the globe rotating — that removes the whole problem. Meanwhile TAB switches CCTV→drone once inside, which works |
-| **W-1c** | Warehouse | Real darkness between the pools | `warehouse/02-high-bay-pools.jpg` | `BLOCKED` by W-1b | |
+| **W-1a** | Warehouse | Light the fittings over where the player works | `warehouse/02-high-bay-pools.jpg` | `PAUSED` claude 2026-08-26 | **r1 never reached the screen.** r0 and r1 measure identical to 0.2% on every percentile — a stale `.dist`. The r1 conclusion stands untested |
+| **W-1b** | Warehouse | Drop `WAREHOUSE_SKY_FILL` so the pools can read | Law 2 | `PAUSED` claude 2026-08-26 | 1.8 → 0.6 is committed and live in the bundle, but it is **not the flattener**: `frontLight` runs at 35 and each of the work lights at 54. The ambient was never the top of the range |
+| **T-3** | Tooling | A reliable way to REACH each surface for capture | — | `AT BAR` claude 2026-08-26 | **Solved: `scripts/dev/jump.py W`.** The strip reveals on `mousemove`, and `SetCursorPos` to a single point often generates none — a teleport is not a move. Sweeping intermediate points makes it deterministic; tabs are now found by their border colour, so the geometry cannot go stale. Evidence: `scripts/dev/W1-r2-after.jpg`, commit below. `pin.py` is no longer needed for the warehouse |
+| **W-1c** | Warehouse | Real darkness between the pools | `warehouse/02-high-bay-pools.jpg` | `OPEN` | **r2 is a regression, measured.** Adding ten high bays raised the median 71 → 114 and cut near-black (<20) from 26.5% to 2.7%; the bar sits at median 78 with p95 127 and nothing blown, against r2's p95 223. The next move is subtractive: bring `frontLight`/`workLights` down so the bays become the key |
 | **W-2** | Warehouse | Depth cueing — value + saturation falloff with distance | §4.4 | `OPEN` | |
 | **W-3** | Warehouse | A lamp on the drone that lights what it approaches | §4.4 | `OPEN` | |
 | **W-4** | Warehouse | Mid-scale rhythm: break the regularity of racking/bays/markings | Law 3 | `OPEN` | |
@@ -933,6 +933,8 @@ Append one line per completed item. Newest last. Never edit a previous line.
 YYYY-MM-DD  ID    agent      status   bar / evidence / commit
 ----------  ----  ---------  -------  --------------------------------------------
 2026-08-26  —     claude     created  ART-MASTER.md written; board seeded, nothing built
+2026-08-26  T-3   claude     AT BAR   jump.py finds the strip by colour / W1-r2-after.jpg / <commit>
+2026-08-26  W-1   claude     PAUSED   r2 regressed: median 71->114, near-black 26.5%->2.7% vs bar 78/5.0%
 ```
 
 ---
