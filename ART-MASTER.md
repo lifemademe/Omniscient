@@ -910,7 +910,7 @@ Ordered by value per hour. Take from the top.
 | **C-1** | Workstation | Air: dust in the lamp cone, flicker, settle | §4.1 concept frame | `OPEN` | |
 | **C-2** | Workstation | The room ages across nine missions | §4.1 | `OPEN` | |
 | **C-3** | CRT | Phosphor persistence on state change | §4.2 | `OPEN` | |
-| **C-4** | Globe | The anomaly reads as different in KIND | §4.2 | `OPEN` | |
+| **C-4** | Globe | The anomaly reads as different in KIND | §4.2 | `AT BAR` claude 2026-08-27 | Now separated on four channels, none of them hue: it sits **off-sphere**, its label is **bracketed**, its value is 132 against the waiting pins' 185, and — the one that answers "in KIND" — **it is the only thing on the globe that moves.** Borrowed from `art/suspected.ts`'s own rule, *"a guess should not sit as still as a fact"*: every pin the machine can place is static, and the one it cannot place will not hold. The brackets snap on `steps(1,end)` at different delays, so it reads as a lock failing rather than as a pulse asking for attention. Gated on `omni-a11y--reduced-motion`, not the bare media query, so the in-game override is honoured |
 | **J-1** | Juice | Close every `thin` row in the §9 table | §9 floor | `OPEN` | |
 | **J-2** | Juice | Overshoot on everything that stops | §9 rule 2 | `OPEN` | |
 | **P-C1** | People | Post-jam experiment: one character to the bar in her own scene's shot | `Mirela.glb` at that framing | `OPEN` | Do not displace judge-facing work; prototype exists: `experimental/mirela-procedural` |

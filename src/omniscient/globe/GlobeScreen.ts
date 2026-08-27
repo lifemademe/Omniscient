@@ -283,6 +283,50 @@ const GLOBE_CSS = `
  */
 .omni-globe__name--unknown::before { content: '['; }
 .omni-globe__name--unknown::after { content: ']'; }
+/*
+ * ## The one thing on the globe that will not sit still
+ *
+ * C-4: "the anomaly does not feel different in kind from a request". Bracketing it and
+ * lifting its value made it a distinguishable contact; it was still a name in a list. Seven
+ * points on a sphere are people who called, and the eighth is not a person and never called.
+ *
+ * This game already has the idiom, in art/suspected.ts: a SUSPECTED prop is drawn as the
+ * volume the machine is guessing at, and it MOVES, "because a guess should not sit as still
+ * as a fact". The same sentence answers this one level up. Every pin the machine can place
+ * is static. The one it cannot place does not hold.
+ *
+ * It is the BRACKETS that move, not the label - the label's transform is doing its
+ * positioning, including the offworld variant that flips it to the left, and animating that
+ * would fight it. Pseudo-elements carry their own transform and are free.
+ *
+ * steps(1, end) rather than a glide, and the two brackets run on different delays. A smooth
+ * synchronised pulse reads as ATTENTION, which is what a waiting request would want; a snap
+ * that is out of step with itself reads as a lock that is not holding, which is the fiction.
+ * One pixel, three and a half seconds - findable when looked at, never a distraction.
+ *
+ * Motion is gated on the container class rather than the media query alone, because
+ * accessibility/preferences.ts lets the player force reduced motion in-game and a bare
+ * media query would ignore that setting.
+ */
+@keyframes omni-globe-unlocked {
+  0%, 100% { transform: translateX(0);    opacity: 1; }
+  17%      { transform: translateX(-1px); opacity: 0.5; }
+  41%      { transform: translateX(1px);  opacity: 1; }
+  58%      { transform: translateX(0);    opacity: 0.65; }
+  79%      { transform: translateX(-1px); opacity: 1; }
+}
+.omni-globe__name--unknown::before,
+.omni-globe__name--unknown::after {
+  display: inline-block;
+  animation: omni-globe-unlocked 3.7s steps(1, end) infinite;
+}
+.omni-globe__name--unknown::after { animation-delay: 1.3s; }
+.omni-a11y--reduced-motion .omni-globe__name--unknown::before,
+.omni-a11y--reduced-motion .omni-globe__name--unknown::after {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
 .omni-globe__name--waiting { color: #7fe08a; }
 .omni-globe__name--cooldown { color: #a85a4a; }
 .omni-globe__name--resolved { color: #3a5a44; }
