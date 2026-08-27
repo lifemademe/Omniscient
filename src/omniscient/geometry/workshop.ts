@@ -211,6 +211,8 @@ export function createBenchLamp(): PropParts {
   const body: THREE.BufferGeometry[] = [];
   const fittings: THREE.BufferGeometry[] = [];
   const recesses: THREE.BufferGeometry[] = [];
+  // Split from `body` so the base can cast a shadow while the shade above it does not.
+  const pedestal: THREE.BufferGeometry[] = [];
 
   const UP = new THREE.Vector3(0, 1, 0);
   const DOWN = new THREE.Vector3(0, -1, 0);
@@ -244,10 +246,10 @@ export function createBenchLamp(): PropParts {
 
   const base = new THREE.CylinderGeometry(0.115, 0.128, 0.03, 14, 1);
   base.translate(0, 0.022, 0);
-  body.push(base);
+  pedestal.push(base);
   const baseCap = new THREE.CylinderGeometry(0.095, 0.112, 0.025, 14, 1);
   baseCap.translate(0, 0.048, 0);
-  body.push(baseCap);
+  pedestal.push(baseCap);
 
   // A real switch, not a glowing status jewel. It sits where a hand can find it without
   // reaching beneath the shade and stays in the dark material even under the warm key.
@@ -343,6 +345,7 @@ export function createBenchLamp(): PropParts {
 
   return {
     body: merged(body),
+    pedestal: merged(pedestal),
     fittings: merged(fittings),
     recesses: merged(recesses),
     anchors: {

@@ -16,6 +16,21 @@ import { createRng, jitter, range, seedFrom } from '../core/rng.js';
 
 export interface PropParts {
   body: THREE.BufferGeometry;
+  /**
+   * Optional: the part of a prop that STANDS on something, split out from the rest.
+   *
+   * Added for the bench lamp, and the reason is specific enough to be worth stating. A
+   * fixture that depicts a light must not cast that light's shadow - its shade sits close to
+   * the emitter and projects itself across the room (see the opt-out in art/shadows.ts). But
+   * the exemption then applies to the whole prop, and a critic caught what that costs: "the
+   * lamp base still casts nothing, so the most prominent object standing in the key's own
+   * light reads as sitting on the bench while the radio beside it reads as in the room".
+   *
+   * The base is not the problem - it is at bench height, far from the emitter, and it is
+   * exactly the kind of object that should be anchored. So it becomes its own mesh, and the
+   * exemption goes on the shade and arm alone.
+   */
+  pedestal?: THREE.BufferGeometry;
   /** Secondary material: metal fittings, brackets, cable. */
   fittings: THREE.BufferGeometry;
   /**
