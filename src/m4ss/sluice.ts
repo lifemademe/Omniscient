@@ -283,12 +283,27 @@ export const THE_SLUICE: World = {
    */
   anchors: [
     // 1. Over the drop. Its sweep's lowest point sits 40px above the landing shelf.
-    { id: 'd1', x: 900, y: 310, rope: 130 },
+    /*
+     * d1, p1 and g3 removed on direction, 2026-08-27. They were the opening ledge
+     * swing, one of the two patrol growths, and a rung of the climb the drop button
+     * wakes. The notes around them still describe the beats they carried, because those
+     * notes are why the REMAINING geometry is placed where it is - t1's landing and p2's
+     * spacing were both authored against growths that are no longer here, and anything
+     * re-tuning this stage needs to know that rather than find it.
+     */
 
     // 2. The patrol. No rope on any of them.
-    { id: 'p1', x: 720, y: 420 },
-    { id: 't1', x: 630, y: 590 },
-    { id: 'p2', x: 540, y: 420 },
+    // Moved up and west on direction, 2026-08-27, from (630, 590).
+    { id: 't1', x: 590, y: 550 },
+    /*
+     * p2 is dead, and unlike g1/g2 nothing wakes it.
+     *
+     * The g-growths are dead as a PUZZLE - the drop plate turns them on and they become
+     * the climb out of the sump. This one is dead permanently: it is scenery that reads as
+     * a growth, which is what the stage now uses to fill the middle of the frame instead
+     * of the three live growths that were removed from it.
+     */
+    { id: 'p2', x: 540, y: 420, live: false },
 
     /*
      * 7. The gallery, west, going up. All three RED until the column's plate is pressed.
@@ -334,7 +349,6 @@ export const THE_SLUICE: World = {
      */
     { id: 'g1', x: 330, y: 820, rope: 70, live: false },
     { id: 'g2', x: 420, y: 680, rope: 70, live: false },
-    { id: 'g3', x: 400, y: 500, rope: 70, live: false },
 
     /*
      * 6b. The rise out of the sump, and the beat that had no way back.
@@ -435,7 +449,8 @@ export const THE_SLUICE: World = {
       radius: 26,
       pressed: false,
       opens: ['s1', 'b1'],
-      activates: ['g1', 'g2', 'g3'],
+      // g3 went with the other two; the button now wakes the two rungs that are left.
+      activates: ['g1', 'g2'],
     },
     /*
      * 460px/s, against stage two's 420 and a crawl of fifteen.

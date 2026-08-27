@@ -58,6 +58,7 @@ import {
   bigShroomTexture,
   bonesTexture,
   deadTreeTexture,
+  vesselTexture,
   leafVineTexture,
   pressTexture,
   propTexture,
@@ -1769,6 +1770,43 @@ export class M4SSRig extends ENGINE.SceneNode {
         bones.position.set(tile.x + tile.w * 0.52, tile.y - 30, -14);
         this.stage?.add(bones);
       }
+
+      /*
+       * Containment vessels, standing on the wide floors.
+       *
+       * M4SS-ART-BIBLE §2 asks for these off both gameplay references and ends the note with
+       * "we have no vessels anywhere", which was true of all three stages.
+       *
+       * All three is where they go, and this block is not stage-gated. The reference draws
+       * them as the lab's purpose made visible, which is stage one's job; the Sluice earns
+       * them for a different reason, which is that the specimen is forty units of something
+       * that was supposed to stay in a tank and this is where it went. A row of tanks it is
+       * not in tells that without a line of dialogue.
+       *
+       * Two spent to one full, deliberately. A facility of intact vessels reads as a working
+       * lab; this one stopped working eleven days ago, and the single lit one is there to say
+       * what the others used to look like.
+       *
+       * Same z as the giant mushrooms - behind the play plane, in front of the fog - so they
+       * are scenery the player walks PAST. In front of it they would be obstacles the
+       * collision map does not know about, which is the worst kind of prop.
+       */
+      floors.slice(0, 3).forEach((tile, i) => {
+        const tall = 96 + Math.round(rng() * 26);
+        const vessel = decorMesh(
+          'Vessel',
+          new THREE.PlaneGeometry(tall * 0.5625, tall),
+          this.artMaterial({
+            map: vesselTexture(`vessel-${Math.round(tile.x)}-${i}`, i !== 1),
+            transparent: true,
+            depthWrite: false,
+          })
+        );
+        // Off the tile's centre, and a different fraction each time: three props sharing one
+        // offset reads as a repeated stamp however different the textures are.
+        vessel.position.set(tile.x + tile.w * (0.18 + i * 0.24), tile.y - tall / 2 + 4, -15);
+        this.stage?.add(vessel);
+      });
 
       /*
        * Leafy vines hanging from the undersides of high ledges - the thing the old vine

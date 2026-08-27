@@ -214,7 +214,9 @@ for (const a of W.anchors) {
     const a = named(id);
     check(`${id} at full reach sweeps into the patrol`, a.y + MAX_REACH > headY, `bottom ${a.y + MAX_REACH}`);
   }
-  for (const id of ['p1', 'p2']) {
+  // p1 was removed from the level on 2026-08-27 along with d1 and g3; p2 is the whole of
+  // the patrol pair that is left, and this assertion still has to hold for it.
+  for (const id of ['p2']) {
     const a = named(id);
     check(`${id} at full reach still clears the patrol`, a.y + MAX_REACH < headY, `bottom ${a.y + MAX_REACH}`);
   }
@@ -320,11 +322,30 @@ for (const c of W.crushers ?? []) {
     check(`and something wakes ${a.id}`, woken.has(a.id!));
   }
   const plate = W.buttons.find((b) => b.id === 'drop')!;
+  /*
+   * Counted against the dead growths rather than against a literal 3.
+   *
+   * It WAS a literal 3, and when g3 was removed from the level this failed with the plate
+   * still in exactly the right place - the assertion was testing how many rungs the climb
+   * happened to have, which is a design decision, instead of the invariant it exists for,
+   * which is that every growth held back is released by this one plate. A rung can be added
+   * or dropped; a rung that nothing wakes is the bug.
+   */
+  /*
+   * The g-growths specifically, not every dead growth in the level.
+   *
+   * The first generalisation counted all of them, and it failed the moment p2 was made
+   * permanently dead on direction - correctly flagging that a dead growth had no waker, but
+   * flagging it as a bug when it is the intent. Dead means two different things here: the
+   * g-growths are held back by a PUZZLE and the plate is what releases them, while p2 is
+   * scenery that happens to be growth-shaped. Only the first kind needs a waker.
+   */
+  const dead = W.anchors.filter((a) => a.live === false && a.id!.startsWith('g'));
   check(
     'the thing that wakes them is at the top of the column',
     // At the top of the column: east of the pier and a long way above the machine floor.
-    (plate.activates ?? []).length === 3 && plate.y < FLOOR_TOP - 300 && plate.x > 900,
-    `at (${plate.x}, ${plate.y})`
+    (plate.activates ?? []).length === dead.length && plate.y < FLOOR_TOP - 300 && plate.x > 900,
+    `wakes ${(plate.activates ?? []).length} of ${dead.length} dead, at (${plate.x}, ${plate.y})`
   );
   // A red growth is not a growth you can be handed early by a second switch.
   for (const b of W.buttons) {

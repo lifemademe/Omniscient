@@ -1246,7 +1246,19 @@ export function backdropTexture(
    * than as light. Round, small, and drawn under the lamp rather than over it.
    */
   const lanterns: LanternAt[] = [];
-  for (let i = 0; i < 9; i++) {
+  /*
+   * Five, down from nine, on direction 2026-08-27.
+   *
+   * Nine was set when these were the frame's only warm accent and the worry was that the
+   * middle distance had nothing in it. Judged on a live stage-three capture the opposite
+   * was true: nine warm lamps scattered through the haze competed with the growths, which
+   * are the things the player actually has to find, and a lantern and a growth are close
+   * enough in size and glow at parallax distance to be mistaken for one another.
+   *
+   * Five keeps the warm accent - losing it entirely would leave a stage lit only in cold
+   * green - while leaving the growths as the brightest hanging things in the frame.
+   */
+  for (let i = 0; i < 5; i++) {
     const lx = Math.round(range(rng, 20, w - 20));
     const ly = Math.round(range(rng, h * 0.22, h * 0.58));
     lanterns.push({ u: lx / w, v: ly / h });
@@ -2069,6 +2081,146 @@ export function propTexture(seed: string, kind: 'fern' | 'shroom', size = 48): T
  * the join. The rig then offsets each tile by its WORLD position, so two tiles that touch
  * continue one field of earth.
  */
+/**
+ * A containment vessel: glass cylinder, metal collar and plinth, glowing residue inside.
+ *
+ * M4SS-ART-BIBLE §2 names this twice off the reference sheets - "glass containers with
+ * glowing green contents, the lab's purpose made visible" - and ends the note with "we have
+ * no vessels anywhere", which was true of all three stages.
+ *
+ * It earns its place in the Sluice rather than only in the lab because of what the stage IS.
+ * The specimen is forty units of something that was supposed to stay in a tank, and the
+ * sluice is where it went; a row of tanks it is no longer in says that without a line of
+ * dialogue. Two of every three are drawn `spent` for the same reason - a facility of intact
+ * vessels reads as a working lab, and this one stopped working eleven days ago.
+ *
+ * ## Glass, without transparency
+ *
+ * Nothing here is actually translucent. The engine composites these as flat cut-outs and a
+ * real alpha would drag whatever is behind them - fog, pipes, a moss lip - into the glass and
+ * make it read as a hole. Glass is drawn the way the rest of this set is drawn: a dark
+ * interior, a bright vertical specular strip down the left of the cylinder, a fainter one on
+ * the right, and a single-pixel rim. Value does the work transparency would have done.
+ *
+ * ## The numbers, because the first version got all three wrong
+ *
+ * This prop sits BEHIND the play plane, so every value in it is measured against the Sluice's
+ * background, `hazeNear` at luma 51. The first pass ignored that and the live capture showed
+ * exactly what the arithmetic predicts:
+ *
+ * - The interior was `voidMid`/`stoneDark`, luma 23 - less than half the background, so the
+ *   cylinder read as a HOLE punched through the wall rather than as glass. It now sits at
+ *   about 38: below the background, but not by a factor of two.
+ * - The contents were flat `slime`, luma 200, over the whole lower half. That was the
+ *   brightest large area anywhere in frame and it read as a pint of beer. The body is now
+ *   mixed back toward the haze to about 130 and only the one-pixel meniscus keeps the full
+ *   `slimeGlow` at 227, which is what a fluid surface is for.
+ * - The collar was `rustMid` lifted toward `rustLit`, close to luma 100 against a 51
+ *   background. stageArt's own midground note records this being done twice before and
+ *   reverted twice - "a floating orange platform in a world that had just gone cold" - and
+ *   this made it three. It is now mixed toward `stoneMid` to about 55, with the lit top edge
+ *   as a single line, which is the only place the warm family belongs on a background prop.
+ *
+ * The contents use `slime` and `slimeGlow`, never `lampWarm` or `lampCore`. Those two clip to
+ * a white chip the moment anything else warm lands in the same pixels, which this project has
+ * rediscovered more than once.
+ */
+export function vesselTexture(seed: string, spent = false, w = 54, h = 96): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed));
+  const { c, g } = surface(w, h);
+
+  const plinthTop = h - 11;
+  const glassTop = 15;
+  const left = 12;
+  const right = w - 12;
+  const inner = right - left;
+
+  // Plinth. Wider than the glass, so the vessel sits ON something rather than ending.
+  g.fillStyle = mixHex(PAL.rustDark, PAL.stoneDark, 0.5);
+  g.fillRect(6, plinthTop, w - 12, 11);
+  g.fillStyle = mixHex(PAL.rustMid, PAL.stoneMid, 0.75);
+  g.fillRect(6, plinthTop, w - 12, 2);
+
+  // The cylinder's dark interior, before anything is put in it.
+  g.fillStyle = mixHex(PAL.hazeNear, PAL.voidMid, 0.45);
+  g.fillRect(left, glassTop, inner, plinthTop - glassTop);
+
+  if (!spent) {
+    /*
+     * Contents, filled from the bottom to a meniscus that is the brightest line in the prop.
+     *
+     * The surface is what makes a fluid read as a fluid rather than as a coloured block, so
+     * it gets its own two rows - one at full slimeGlow, one mixed back toward slime.
+     */
+    const fill = Math.round(range(rng, plinthTop - 46, plinthTop - 22));
+    g.fillStyle = mixHex(PAL.slime, PAL.hazeNear, 0.45);
+    g.fillRect(left, fill, inner, plinthTop - fill);
+    g.fillStyle = PAL.slimeGlow;
+    g.fillRect(left, fill, inner, 1);
+    g.fillStyle = mixHex(PAL.slime, PAL.hazeNear, 0.2);
+    g.fillRect(left, fill + 1, inner, 1);
+    // Three or four bubbles clinging to the inside of the glass, none of them centred.
+    const bubbles = 3 + Math.floor(rng() * 2);
+    for (let i = 0; i < bubbles; i++) {
+      const bx = Math.round(range(rng, left + 2, right - 3));
+      const by = Math.round(range(rng, fill + 4, plinthTop - 3));
+      g.fillStyle = mixHex(PAL.slime, PAL.hazeNear, 0.15);
+      g.fillRect(bx, by, 1 + Math.round(rng()), 1);
+    }
+  } else {
+    // Spent: a crust of residue in the bottom, and nothing standing above it.
+    g.fillStyle = mixHex(PAL.slime, PAL.voidDeep, 0.62);
+    g.fillRect(left, plinthTop - 7, inner, 7);
+    g.fillStyle = mixHex(PAL.slime, PAL.hazeNear, 0.42);
+    g.fillRect(left, plinthTop - 7, inner, 1);
+  }
+
+  // Specular. Left strip strong, right strip faint - one light, from the left, as everywhere.
+  g.fillStyle = mixHex(PAL.stoneEdge, PAL.stoneLit, 0.4);
+  g.fillRect(left + 2, glassTop + 3, 2, plinthTop - glassTop - 8);
+  g.fillStyle = mixHex(PAL.stoneLit, PAL.hazeNear, 0.35);
+  g.fillRect(right - 4, glassTop + 7, 1, plinthTop - glassTop - 16);
+
+  // Rim, one pixel, so the cylinder has an edge against whatever is behind it.
+  g.fillStyle = PAL.stoneEdge;
+  g.fillRect(left - 1, glassTop, 1, plinthTop - glassTop);
+  g.fillRect(right, glassTop, 1, plinthTop - glassTop);
+
+  // Collar and hoops: iron holding glass, which is the only reason a tank this size stands.
+  /*
+   * Desaturated, not darkened - the second correction, and the more useful one.
+   *
+   * Mixing to 0.55 put the collar at luma 55 against a background of 51, which is what the
+   * arithmetic asked for and it STILL read as the loudest object in the frame. Matching
+   * value is not enough in a world that is entirely one hue: an orange chip at the same
+   * brightness as the green around it separates on saturation instead, and saturation is a
+   * channel the eye reads first. The fix is to take the orange out, not the light.
+   */
+  g.fillStyle = mixHex(PAL.rustMid, PAL.stoneMid, 0.72);
+  g.fillRect(left - 3, glassTop - 7, inner + 6, 8);
+  g.fillStyle = mixHex(PAL.rustLit, PAL.stoneEdge, 0.72);
+  g.fillRect(left - 3, glassTop - 7, inner + 6, 1);
+  g.fillStyle = mixHex(PAL.rustDark, PAL.voidMid, 0.25);
+  for (const y of [glassTop + 18, plinthTop - 20]) g.fillRect(left - 1, y, inner + 2, 2);
+
+  if (spent) {
+    /*
+     * A crack, on the vessels that are empty - and only after the hoops are down, so it
+     * runs across the ironwork as well as the glass. A crack that stops at the metal reads
+     * as a decal on the glass rather than as damage to the object.
+     */
+    let cx = Math.round(range(rng, left + 4, right - 6));
+    g.fillStyle = mixHex(PAL.voidDeep, PAL.stoneDark, 0.35);
+    for (let y = glassTop + 2; y < plinthTop - 4; y++) {
+      if (rng() > 0.72) cx += rng() > 0.5 ? 1 : -1;
+      cx = Math.max(left + 1, Math.min(right - 2, cx));
+      g.fillRect(cx, y, 1, 1);
+    }
+  }
+
+  return pixelTexture(c);
+}
+
 export function dirtTexture(
   seed: string,
   w = 128,
