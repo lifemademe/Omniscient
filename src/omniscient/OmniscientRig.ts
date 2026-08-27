@@ -203,6 +203,22 @@ enum Screen {
 }
 
 /** Where the workstation sits, far from the dioramas so shots never overlap. */
+/**
+ * The painted parts of the view through the workstation window.
+ *
+ * Named rather than pattern-matched on "View": the pinboard and the desk clutter are not out
+ * there, and a rule that swept them in would put the room's own props into evening too.
+ */
+const DUSK_VIEW_PARTS: ReadonlySet<string> = new Set([
+  'WindowSky',
+  'WindowSea',
+  'ViewFarLand',
+  'ViewNearLand',
+  'ViewTown',
+  'ViewMast',
+  'ViewTownLights',
+]);
+
 const WORKSTATION_ORIGIN = new THREE.Vector3(0, 0, -60);
 
 /** M4SS's own patch of empty world - see enterM4SS. Well clear of every diorama. */
@@ -450,6 +466,42 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   /** The air under the desk lamp. See art/lampCone.ts. */
   private deskAir: LampCone | null = null;
+
+  /*
+   * ## The window going dark across the nine requests
+   *
+   * C-2 asks for the room to age, and the cheapest true thing that happens to a room
+   * somebody sits in all day is that the light in it runs out. The workstation opens in a
+   * late coastal afternoon and ends at night, one step per request answered, so by the last
+   * one the desk lamp is very nearly the only light left and the operator is alone in a dark
+   * room with the machine. That is the arc the writing already has; this is the room
+   * agreeing with it.
+   *
+   * Only `windowKey` and `bounce` move. `key` and `sky` are GLOBAL - the same directional
+   * and hemisphere light the Contact View dioramas sixty units away are lit by - so ageing
+   * those would quietly walk every room in the game into night along with this one.
+   * `windowKey` is distance-limited to 8 units for exactly that reason and is the only
+   * exterior light the workstation has.
+   *
+   * The desk lamp deliberately does NOT dim to match. It is the constant: as the window
+   * goes out, its share of the room goes up without its intensity changing, which is a
+   * better telling than turning it up would be.
+   */
+  private static readonly DUSK_DAY = new THREE.Color(LIGHT.key);
+
+  private static readonly DUSK_SUNSET = new THREE.Color('#ff9152');
+
+  private static readonly DUSK_NIGHT = new THREE.Color('#41567e');
+
+  /** Where the light actually is, chased toward the target. -1 until the first frame. */
+  private duskNow = -1;
+
+  /** The painted view through the window, cloned so it can be taken into evening. */
+  private duskView: Array<{
+    name: string;
+    material: THREE.MeshBasicMaterial;
+    base: THREE.Color;
+  }> = [];
 
   /** Seconds the desk lamp has been burning, for its filament wobble. */
   private deskLampTime = 0;
@@ -1029,8 +1081,32 @@ export class OmniscientRig extends ENGINE.SceneNode {
     for (const part of createWorkstationRoom()) {
       // Almost every part names a member of the shared family; the pinboard's notes each
       // carry their own authored canvas and hand one over directly. See RoomPart.
-      const surface = typeof part.material === 'string' ? MAT[part.material] : part.material;
+      const shared = typeof part.material === 'string' ? MAT[part.material] : part.material;
+      /*
+       * The view through the window gets its own copy of its material.
+       *
+       * Everything out there is a MeshBasicMaterial - the sea, the sky and the headlands
+       * are painted rather than lit, which is why they are readable through a bright
+       * aperture in the first place. It also means no light in the room can touch them, and
+       * that showed the moment the window key was allowed to run down to night: the light
+       * coming IN was blue and low while the water it was supposedly coming off was still
+       * mid-afternoon. The light said evening, the view said two o'clock.
+       *
+       * `MAT` entries are shared across the whole game, so these are cloned before being
+       * tinted - writing to the originals would take the daylight out of every other surface
+       * that happens to name the same family.
+       */
+      const dusking = DUSK_VIEW_PARTS.has(part.name);
+      const surface = dusking ? (shared as THREE.Material).clone() : shared;
       station.add(meshOf(part.name, part.geometry, surface));
+      if (dusking) {
+        const material = surface as THREE.MeshBasicMaterial;
+        this.duskView.push({
+          name: part.name,
+          material,
+          base: material.color.clone(),
+        });
+      }
     }
 
     /**
@@ -4530,6 +4606,65 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.revealProgress = 0;
   }
 
+  /**
+   * Walk the workstation's window from afternoon to night as requests are answered.
+   *
+   * Recomputed from `answered.length` every frame rather than hooked onto the moment a
+   * request resolves, because that list is written in two places - once when a signal is
+   * answered and once when a save is loaded - and a hook on one of them would leave a
+   * restored game sitting in the wrong daylight until the player finished something.
+   *
+   * Chased rather than snapped, so a request resolving does not step the window down like a
+   * dimmer switch. At 0.35 the sweep takes a few seconds, which is roughly how long the
+   * player spends watching the globe come back.
+   */
+  private updateDusk(deltaTime: number): void {
+    if (!this.lightRig) return;
+    const want = Math.min(1, this.answered.length / 8);
+    // First frame of a loaded game arrives at its hour rather than sweeping into it from
+    // the afternoon, which would announce the mechanic on the title screen.
+    if (this.duskNow < 0) this.duskNow = want;
+    else this.duskNow += (want - this.duskNow) * Math.min(1, deltaTime * 0.35);
+
+    const t = this.duskNow;
+    const window = this.lightRig.windowKey;
+    if (t < 0.55) {
+      window.color.copy(OmniscientRig.DUSK_DAY).lerp(OmniscientRig.DUSK_SUNSET, t / 0.55);
+    } else {
+      window.color
+        .copy(OmniscientRig.DUSK_SUNSET)
+        .lerp(OmniscientRig.DUSK_NIGHT, (t - 0.55) / 0.45);
+    }
+    // Curved, not linear: an afternoon holds its level and then goes in a hurry. A straight
+    // ramp spends the first four requests looking like a dimmed lamp rather than like later.
+    window.intensity = 0.75 + (11.6 - 0.75) * Math.pow(1 - t, 1.6);
+    // The floor stops throwing back what the window is no longer putting on it.
+    this.lightRig.bounce.intensity = 1.575 * (0.32 + 0.68 * (1 - t));
+
+    /*
+     * And the view itself, which no light in this room can reach.
+     *
+     * Two different jobs. Everything out there loses its afternoon and picks up the colour
+     * of the hour - not merely darker, because a dimmed daylight photograph reads as an
+     * underexposure rather than as an evening. The town is the exception and goes the other
+     * way: it is unlit by day and comes ON as the light drains, which is the one thing in
+     * the frame that tells the player time is passing rather than a dimmer being turned.
+     */
+    for (const part of this.duskView) {
+      if (part.name === 'ViewTownLights') {
+        // Barely there in daylight, full strength once the sky has gone.
+        const lit = 0.18 + 0.82 * Math.pow(t, 1.4);
+        part.material.color.copy(part.base).multiplyScalar(lit);
+        continue;
+      }
+      const fade = 0.1 + 0.9 * Math.pow(1 - t, 1.35);
+      part.material.color
+        .copy(part.base)
+        .multiplyScalar(fade)
+        .lerp(window.color, Math.min(0.55, t * 0.55));
+    }
+  }
+
   public override tickPrePhysics(deltaTime: number): void {
     super.tickPrePhysics(deltaTime);
     this.navigator?.update(deltaTime);
@@ -4657,6 +4792,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * because the tuning panel writes this same field and an accumulator would walk away
      * from whatever the slider was left at.
      */
+    this.updateDusk(deltaTime);
     if (this.lightRig && this.deskLampBase > 0) {
       this.deskLampTime += deltaTime;
       const wobble =
