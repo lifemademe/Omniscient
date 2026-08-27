@@ -64,7 +64,7 @@ and two of them are easy to mix up:
 | Name here | What it actually is |
 | --- | --- |
 | **The desk room** | Dana Keller's room — the desk, the CRT, the lamp, the notes on the wall. It is the **main menu**, and it is where you sit between missions. |
-| **The contact scenes** | The nine 3D rooms behind a conversation: the repair shop, the beacon mast, the seedling tunnel, the cleared house, the flooded cellar, the night door, mill road, wire city, the station desk. You see them **while someone is talking to you**. |
+| **The contact scenes** | Eight reconstructed 3D rooms behind conversations, plus Dana's station desk for M4SS: the repair shop, beacon mast, seedling tunnel, cleared house, flooded cellar, night door, mill road, wire city, and station desk. You see them **while someone is talking to you**. |
 | **Warehouse 07** | The drone level. |
 | **M4SS** | The sidescroller — the slime. |
 | **The people** | The nine named characters themselves, wherever they appear (§4.7). |
@@ -81,8 +81,9 @@ quoting it — do not go looking for it here.
 **Three hard stops.**
 
 1. **Do not push.** `.codex/config.toml` is tracked and carries a live bearer token across 512
-   commits, on a public repo. `ship-clean` fails on it deliberately (item X-1). Committing is
-   fine. Pushing is a human decision that has not been made.
+   commits, on a public repo. `ship-clean` fails on it deliberately (item X-1). Rotation and
+   untracking only protect future commits; publishing also requires a sanitised history (or a
+   new clean repository). Committing is fine. Pushing is a human decision that has not been made.
 2. **Only `pnpm build` and `pnpm lint` may be run.** Never `pnpm dev`, `pnpm test` or
    `pnpm start` — see AGENTS.md. Set the working directory to the project root explicitly.
 3. **Never hand-edit `src/auto-imports.ts`.** The build writes it. For scene or node state, use
@@ -346,7 +347,7 @@ behaviour of a real P1 tube — bloom on the bright, smear on motion, not a scan
 
 ---
 
-### 4.3 The contact dioramas — eight rooms
+### 4.3 The contact dioramas — eight reconstructions plus the station desk
 
 **Intent.** A machine's reconstruction of a place from a voice and a data feed. Not a
 photograph: a **model**, lit like a memory. The certainty scale in ART_DIRECTION.md is how the
@@ -550,8 +551,9 @@ engine cost of a light that is off is zero.
 **The shadow budget.** `art/shadows.ts` is a policy — lit materials cast and receive, unlit do
 neither — and it currently has four callers. The rule from here:
 
-- **Every diorama gets exactly one shadow-casting light: its key.** One 1024 map per room,
-  turned on when the room mounts and off when it unmounts.
+- **Every diorama gets one dominant shadow story per frame.** Normally that is one 1024-map
+  key, turned on when the room mounts and off when it unmounts. A small practical may cast as
+  well only when it supports the same direction and does not create a competing shadow story.
 - **The warehouse gets none.** Sixty units will not fit a directional map and the high bays are
   too many to cast. It gets SSAO plus **authored dark**: painted-in floor darkening under
   racking, which is cheaper and more controllable than a shadow map at that scale.
@@ -880,15 +882,18 @@ Ordered by value per hour. Take from the top.
 
 | ID | Surface | Item | Bar | Status | Evidence |
 | --- | --- | --- | --- | --- | --- |
+| **F-1** | First five minutes | Cold boot → menu → globe → Mirela connection → first request reads as one authored, judge-ready sequence | `ART-DIRECTION-v1.png`, desk-room and contact-scene references; §3/§4.1/§4.3/§4.6 | `IN LOOP` — Codex, 2026-08-26 | Judge-first item; capture as motion and stills, never against the real save |
+| **M-3** | M4SS | Audit every mechanic-carrying visual for the ember fault | Law 5 | `OPEN` | First gameplay-art item after F-1 |
+| **M-1** | M4SS | Stage 3 (Sluice) full art pass | M4SS-ART-BIBLE §2 | `OPEN` | Grey-boxed; largest single item |
+| **M-2** | M4SS | Sluice identity in GEOMETRY, not only the ramp | Bible §5 thumbnail test | `BLOCKED` by M-1 | |
 | **W-1** | Warehouse | Key lighting: high bays as discrete pools with real dark between | §4.4 night-DC reference | `OPEN` | |
 | **W-2** | Warehouse | Depth cueing — value + saturation falloff with distance | §4.4 | `OPEN` | |
 | **W-3** | Warehouse | A lamp on the drone that lights what it approaches | §4.4 | `OPEN` | |
 | **W-4** | Warehouse | Mid-scale rhythm: break the regularity of racking/bays/markings | Law 3 | `OPEN` | |
 | **W-5** | Warehouse | Audit `warehouseCel` — style or a patch over flat light? | §4.4 | `OPEN` | |
-| **M-1** | M4SS | Stage 3 (Sluice) full art pass | M4SS-ART-BIBLE §2 | `OPEN` | Grey-boxed; largest single item |
-| **M-2** | M4SS | Sluice identity in GEOMETRY, not only the ramp | Bible §5 thumbnail test | `BLOCKED` by M-1 | |
-| **M-3** | M4SS | Audit every mechanic-carrying visual for the ember fault | Law 5 | `OPEN` | |
 | **M-4** | M4SS | The column ride answers on sound | §9 | `OPEN` | |
+| **T-1** | Transitions | Contact ↔ globe gets a signature | §4.6 | `OPEN` | |
+| **T-2** | Transitions | The ending, art-directed | §4.6 | `OPEN` | |
 | **D-1** | Dioramas | Eight rooms, eight named lighting looks | §4.3 / §7 | `OPEN` | |
 | **D-2** | Dioramas | Certainty expressed in LIGHT, not only geometry | ART_DIRECTION §1 | `OPEN` | |
 | **D-3** | Dioramas | Verify the three F10 lighting beats on screen | Themselves | `OPEN` | Never once seen |
@@ -897,11 +902,9 @@ Ordered by value per hour. Take from the top.
 | **C-2** | Workstation | The room ages across nine missions | §4.1 | `OPEN` | |
 | **C-3** | CRT | Phosphor persistence on state change | §4.2 | `OPEN` | |
 | **C-4** | Globe | The anomaly reads as different in KIND | §4.2 | `OPEN` | |
-| **T-1** | Transitions | Contact ↔ globe gets a signature | §4.6 | `OPEN` | |
-| **T-2** | Transitions | The ending, art-directed | §4.6 | `OPEN` | |
 | **J-1** | Juice | Close every `thin` row in the §9 table | §9 floor | `OPEN` | |
 | **J-2** | Juice | Overshoot on everything that stops | §9 rule 2 | `OPEN` | |
-| **P-C1** | People | One character to the bar in her own scene's shot | `Mirela.glb` at that framing | `OPEN` | Prototype exists: `experimental/mirela-procedural` |
+| **P-C1** | People | Post-jam experiment: one character to the bar in her own scene's shot | `Mirela.glb` at that framing | `OPEN` | Do not displace judge-facing work; prototype exists: `experimental/mirela-procedural` |
 | **P-C2** | People | `SkeletonProfile` + one Mixamo clip retargeted | The clip reading as itself | `BLOCKED` by P-C1 | Three traps in §4.7 |
 | **P-C3** | People | Parameterise the spec: 9 people, not 1 | §185 + thumbnail silhouette test | `BLOCKED` by P-C1 | |
 | **P-C4** | People | Swap Mirela into the shipped scene, GLB kept beside her | The mission plays; she is lit by the room | `BLOCKED` by P-C3 | |
@@ -912,7 +915,7 @@ Ordered by value per hour. Take from the top.
 | **A-1** | Access | Audit every hue-carried mechanic | §11 | `OPEN` | |
 | **P-1** | Post | Per-surface vignette | §6 | `OPEN` | |
 | **P-2** | Post | Feed artefacts: aberration, signal grain, dropout | §6 | `OPEN` | |
-| **X-1** | Hygiene | `.codex/config.toml` carries a live bearer token in 512 commits | ship-clean | `BLOCKED` — needs a human decision | Rotate + untrack; do not push until resolved |
+| **X-1** | Hygiene | `.codex/config.toml` carries a live bearer token in 512 commits | ship-clean | `BLOCKED` — needs a human decision | Rotate + untrack + sanitise history (or republish from a clean repository); do not push until resolved |
 
 ### 13.4 The log
 
