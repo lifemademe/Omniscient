@@ -6394,10 +6394,24 @@ function buildClearedHouse(scene: ContactScene): void {
        * window three metres from somebody actually does.
        */
       position: new THREE.Vector3(-0.2, 1.75, -1.93),
-      intensity: 10.5,
+      /*
+       * Demoted, now that the bulb is the key rather than this.
+       *
+       * Both notes above stand and neither is undone. This stays a wash rather than a
+       * hotspot, and it stays inside the glass so the window is visibly what emits it.
+       * What changes is that it is no longer carrying the room: at 10.5 over 12 metres in
+       * a space four across it reached the far wall at nearly the strength it reached the
+       * table, which is an ambient term with a position rather than light from an aperture.
+       *
+       * The clipping fix is safe at these numbers, and it was checked rather than assumed.
+       * She stands about two metres from this, so the decay change alone would give her
+       * 2^-1.25 / 2^-0.85 = 0.76 of what she had, and the intensity cut takes that to about
+       * 0.47. Her face moves away from clipping, not toward it.
+       */
+      intensity: 6.5,
       color: new THREE.Color('#cfe0f0'),
-      distance: 12,
-      decay: 0.85,
+      distance: 9,
+      decay: 1.25,
     });
   castShadows(daylightKey as unknown as THREE.Object3D, {
     /*
@@ -6472,10 +6486,29 @@ function buildClearedHouse(scene: ContactScene): void {
       // note about scenes getting darker looked the other way.
       // Down again, for the same reason as the daylight above: she stands under both, and
       // two fills that are each defensible alone add up on her face.
-      intensity: 4.4,
+      /*
+       * ## The bulb is the key now, and calling it a fill was the bug
+       *
+       * `Daylight` was carrying this room at 10.5 with a decay of 0.85 while a bare bulb
+       * hung over the table at 4.4 doing nothing that could be seen. Same fault as the
+       * repair shop's desk lamp, and the same test finds it: a light that is visibly ON and
+       * throws no pool is a prop, however motivated the fixture is.
+       *
+       * A POINT light is right here, unlike the repair shop. That fixture is a shaded desk
+       * lamp, and a shade is a direction, so it became a cone. This is a bare bulb on a
+       * flex and it genuinely does throw every way at once. What a bare bulb does NOT do is
+       * carry five metres at decay 1.5 - it goes as the inverse square, and the pool it
+       * puts on a table is entirely a product of that falloff. So the reach comes in and
+       * the decay goes to 2, which is the number the physics actually has.
+       *
+       * The table is what the pool has to land on. This is the room where a box of
+       * somebody's papers is the evidence, and the light is the reason the player looks
+       * at it.
+       */
+      intensity: 13,
       color: new THREE.Color('#ffd0a0'),
-      distance: 5.0,
-      decay: 1.5,
+      distance: 3.4,
+      decay: 2.0,
     })
   );
 
