@@ -151,8 +151,12 @@ export class WarehouseDaylight {
     // the fill leads and these follow rather than the other way round.
     // Key up, bounce down: the ratio between them is the modelling, and pushing both
     // together was the reason the room went flat while getting brighter.
-    const sun = this.celStyleEnabled ? 2.8 : 0.9;
-    const bounce = this.celStyleEnabled ? 4.2 : 4.6;
+    // The cel branch is the one that ships - see the long note in art.ts. Its sun was 2.8
+    // against the other branch's 0.9, which is a three-times-brighter night, and between that
+    // and a hemisphere at 2.2 the interior read as an overcast afternoon: pale walls the
+    // materials here author as near-black, and a blue sky sitting in the clerestory.
+    const sun = this.celStyleEnabled ? 1.1 : 0.9;
+    const bounce = this.celStyleEnabled ? 3.4 : 4.6;
     /*
      * Do NOT reach for these to darken the ceiling. Measured: dropping them from 28 to 19 made
      * the room FLATTER, not deeper - top 99 to 97 while the bottom fell 110 to 107 and the

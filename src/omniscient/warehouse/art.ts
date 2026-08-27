@@ -1840,9 +1840,32 @@ export class WarehouseEnvironment {
              * highlights is just over-exposed, and the drone - the one object always on
              * screen - was the worst of it.
              */
-            intensity: 78,
-            distance: 30,
-            decay: 1.25,
+            /*
+             * ## A reach that ends
+             *
+             * 300/11.5/1.8, from 78/30/1.25. The note above is right that decay is the lever
+             * and wrong about which end of the curve matters here. At distance 30 a lamp
+             * hung 9m up is still throwing light 30m away while its neighbours sit 8-10m
+             * off, so every point on the floor is inside three or four of them at once and
+             * NO point on the floor is outside any of them. That is a wash by construction:
+             * there is nowhere for a pool to have an edge, whatever the decay does in
+             * between. A critic put it as "no boundary where one light's reach ends", which
+             * is the same sentence from the other side.
+             *
+             * three.js windows a punctual light to zero at `distance`, so the cutoff is the
+             * edge. 11.5 against a 9.02m drop puts the lamp at full value on the floor
+             * directly below, half of it 4m out, and nothing at all by 7m - measured off
+             * the renderer's own attenuation, not estimated. Lamps 8-10m apart then leave
+             * real dark between them.
+             *
+             * The intensity is not a taste number: it is 54 x 8.5, where 8.5 is exactly the
+             * attenuation this curve loses at the floor relative to the old one. The working
+             * plane comes out at 3.40 against 3.41 before, so this buys the pools without
+             * taking a level off the ground the player actually reads.
+             */
+            intensity: 300,
+            distance: 11.5,
+            decay: 1.8,
             /*
              * ## Out of the shade, and below the lens
              *
@@ -1874,7 +1897,7 @@ export class WarehouseEnvironment {
         }
       }
     }
-    this.frontLight = ENGINE.PointLightNode.create({ name: 'FrontSodium', color: '#e0a24c', intensity: 35, distance: 20, decay: 1.55, position: new THREE.Vector3(0, 5.2, 27) });
+    this.frontLight = ENGINE.PointLightNode.create({ name: 'FrontSodium', color: '#e0a24c', intensity: 20, distance: 14, decay: 1.55, position: new THREE.Vector3(0, 5.2, 27) });
     this.root.add(this.frontLight);
 
     for (const [index, id] of WAREHOUSE_SECURITY_ZONE_IDS.entries()) {
@@ -2464,16 +2487,46 @@ export class WarehouseEnvironment {
      * black. Fill sets the BOTTOM of the range, key sets the top - raising the fill to reach
      * the top is what flattens a picture.
      */
-    const skyFill = this.celStyleEnabled ? 2.2 : WAREHOUSE_SKY_FILL;
-    const moon = this.celStyleEnabled ? 2.05 : 1.7;
-    const front = this.celStyleEnabled ? 28 : 35;
+    /*
+     * ## The branch that ships is the cel one
+     *
+     * `warehouseCelEnabled` defaults to TRUE in OmniscientRig, so every number on the left of
+     * these ternaries is the game and every number on the right is dead unless somebody
+     * presses F10. That is worth stating plainly because it wasted a whole round of work:
+     * WAREHOUSE_SKY_FILL was moved 1.8 -> 0.6 to fix exactly the flatness this item is about,
+     * the change was correct, it was committed, it was in the bundle - and the frame did not
+     * move by one level, because the live path reads 2.2 from here instead.
+     *
+     * 2.2 of hemisphere is the flat light. An ambient has no direction by definition, so it
+     * sets a floor under every surface in the room at once; at 2.2 that floor is up near what
+     * the lamps deliver, and no lamp can then carve a pool out of anything. The frame measured
+     * 2.2% of pixels below luma 20 against a night-warehouse reference at 5.0%, with a median
+     * 44 levels high - a room with no dark in it at all.
+     *
+     * 0.85 is above the non-cel 0.6 on purpose: cel shading wants a readable floor in shadow
+     * rather than black, which is presumably what the 2.2 was reaching for. It is the reach
+     * that was wrong, not the intent - fill sets the BOTTOM of the range, and this one had
+     * been pushed until it set the top.
+     */
+    const skyFill = this.celStyleEnabled ? 0.85 : WAREHOUSE_SKY_FILL;
+    const moon = this.celStyleEnabled ? 1.7 : 1.7;
+    /*
+     * The front sodium was the single biggest flattener in the room and nothing here said
+     * so. One lamp at intensity 35 with a 20m reach, standing at z 27, covers the whole
+     * front half on its own - so the dock never went dark no matter what the high bays did.
+     * 20 over 14m keeps it a door light instead of a room light.
+     */
+    const front = this.celStyleEnabled ? 16 : 20;
     const fixture = this.celStyleEnabled ? 0.92 : 1.15;
-    const work = this.celStyleEnabled ? 42 : 54;
+    // Scaled with the work lights' new falloff - see the note at their construction. These
+    // numbers are the old ones times 8.5, so the floor value is unchanged and only the
+    // SHAPE of the light differs.
+    const work = this.celStyleEnabled ? 357 : 459;
     if (this.ambientLight) this.ambientLight.intensity = THREE.MathUtils.lerp(skyFill, 0.5, emergency);
     if (this.moonLight) this.moonLight.intensity = THREE.MathUtils.lerp(moon, 1.05, emergency);
     if (this.frontLight) this.frontLight.intensity = THREE.MathUtils.lerp(front, 4, emergency);
     if (this.fixtureLensMaterial) this.fixtureLensMaterial.emissiveIntensity = THREE.MathUtils.lerp(fixture, 0.1, emergency);
-    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(work, 4.6, emergency);
+    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(work, 39, emergency);
     for (const [index, material] of this.emergencyMaterials.entries()) {
       const sequence = contained || reducedMotion ? 1 : 0.72 + Math.sin(this.clock * 2.5 - index * 0.8) * 0.28;
       material.emissiveIntensity = emergency * (1.2 + sequence * 3.8);

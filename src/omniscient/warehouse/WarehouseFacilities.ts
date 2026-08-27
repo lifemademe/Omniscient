@@ -468,7 +468,21 @@ export class WarehouseFacilities {
           ENGINE.PointLightNode.create({
             name: 'HighBay',
             color: '#ffd9a6',
-            intensity: 14,
+            /*
+             * 210, from 14.
+             *
+             * These are the only lamps in the building over the LANES - the old 6x5 fixture
+             * grid lights x -20, -4 and 12, which are the racks. At 14 they put 0.22 on the
+             * floor against the work lights' 3.4, so they were fittings with a glow rather
+             * than a light source, and every aisle was actually being lit sideways by lamps
+             * hanging over the shelving next to it. That is why the floor read as one value:
+             * nothing was keyed to the space the player moves through.
+             *
+             * 210 puts them level with the work lights at the floor, which makes the lane
+             * the brightest part of its own bay. Their reach already ended (13m, decay 1.9);
+             * it was the only thing about them that was right.
+             */
+            intensity: 210,
             // Short, so the pool has an edge. Long-range lamps overlap into the flat fill this
             // whole item exists to remove.
             distance: 13,
