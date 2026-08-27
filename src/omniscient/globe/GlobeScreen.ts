@@ -251,10 +251,38 @@ const GLOBE_CSS = `
    The anomaly sits outside the sphere near the right edge - 15px of surface remain, and a
    left-aligned label would run off the screen. Everything else keeps the default. */
 .omni-globe__name--offworld { transform: translate(calc(-100% - 10px), -50%); }
-.omni-globe__name--unknown { color: #c2483a; }
+/*
+ * ## A value ladder, because red against green is not a signal
+ *
+ * These four states carried their whole meaning in hue: unknown #c2483a, waiting #7fe08a,
+ * cooldown #c2483a, resolved #4a7355. Desaturated, the ANOMALY sat 7.6 levels from a contact
+ * the player had already helped - 106.9 against 99.3 - so for the one man in twelve who
+ * cannot separate red from green, the strangest object in the game read as finished
+ * business. Cooldown and unknown shared a hex outright and never separated at all, in colour
+ * or out of it. ART-MASTER §11 names exactly this: "no mechanic may be carried by hue alone".
+ *
+ * The four states are now a ladder in VALUE, brightest first, which is also their urgency:
+ *
+ *   waiting   185   go here now
+ *   unknown   132   this is not a person
+ *   cooldown  111   closed for the moment
+ *   resolved   78   done
+ *
+ * Every adjacent pair is at least 21 levels apart in greyscale. `scripts/law5-states.ts`
+ * asserts it, so the next person to pick a colour here cannot quietly collapse the ladder.
+ */
+.omni-globe__name--unknown { color: #e0604a; letter-spacing: 0.22em; }
+/*
+ * And the anomaly is bracketed, because §11 asks for a SHAPE difference and C-4 asks for it
+ * to read as different in KIND rather than in degree. Value alone would make it a louder
+ * contact; brackets make it a different sort of thing. Authored punctuation in CSS content,
+ * never the signal's own name, which stays textContent - see the note at the label above.
+ */
+.omni-globe__name--unknown::before { content: '['; }
+.omni-globe__name--unknown::after { content: ']'; }
 .omni-globe__name--waiting { color: #7fe08a; }
-.omni-globe__name--cooldown { color: #c2483a; }
-.omni-globe__name--resolved { color: #4a7355; }
+.omni-globe__name--cooldown { color: #a85a4a; }
+.omni-globe__name--resolved { color: #3a5a44; }
 .omni-globe__head {
   position: absolute;
   top: 18px; left: 24px;
