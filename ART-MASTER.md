@@ -56,6 +56,70 @@ whole of §12 and the most common way this document will be violated.
 could never succeed, a bridge was invisible, a sporeling walked on air, and a live credential
 sat in a tracked file. They prove a rule, not a look. Visual items are closed on captures.
 
+### 0.1 Before your first pass — read this once
+
+**Three hard stops.**
+
+1. **Do not push.** `.codex/config.toml` is tracked and carries a live bearer token across 512
+   commits, on a public repo. `ship-clean` fails on it deliberately (item X-1). Committing is
+   fine. Pushing is a human decision that has not been made.
+2. **Only `pnpm build` and `pnpm lint` may be run.** Never `pnpm dev`, `pnpm test` or
+   `pnpm start` — see AGENTS.md. Set the working directory to the project root explicitly.
+3. **Never hand-edit `src/auto-imports.ts`.** The build writes it. For scene or node state, use
+   the Genesys MCP tools, not the `.genesys-scene` file.
+
+**Getting the game on screen.** The capture tools in §15 are useless until something is
+running. The sequence, every time:
+
+```
+query_editor(getState)          → connected, ready, not in play mode
+action_build(buildProject)      → the ONLY reliable way to refresh .dist
+action_editor(enterPlayMode)
+python scripts/dev/shot.py out.png 10     → boot screen takes ~8s
+python scripts/dev/drive.py click 1280 1100   → dismiss "PRESS ANY KEY"
+python scripts/dev/shot.py out.png 6      → the menu
+```
+
+`.dist` is written by the editor's bundler, **not** by `pnpm build`, and only while the editor
+world is loaded — so exiting play mode once is what picks up your changes. Skipping that step
+is why four already-fixed bugs were re-reported.
+
+**Running the loop in your harness.** §12 gives the critic and builder prompts verbatim. How
+you spawn a critic with fresh context depends on what you are:
+- **Claude Code** — the Agent tool. `subagent_type: "general-purpose"`, one gap per call.
+- **Codex** — a separate session or task with only the bar and the capture path in it.
+- **Neither** — open a new chat, paste the critic prompt, attach the capture. Slower, valid.
+
+The one thing that is not negotiable: the critic must not have seen the builder's reasoning.
+
+### 0.2 The bars — what exists, and what you must supply
+
+The loop's first rule is that a bar is *a thing you can put next to the artifact*. Here is the
+honest state of that, and it is the main reason most of the board cannot start yet:
+
+| Surface | Bar | Openable today? |
+| --- | --- | --- |
+| **M4SS** | `assets/reference/m4ss/` — Background1.png, Background2.png and 6 more, tracked, and studied image-by-image in M4SS-ART-BIBLE §2 | ✅ **Yes** |
+| **The people** | `assets/models/Mirela.glb`, rendered at her own scene's framing beside the procedural version by `MirelaProceduralTestRig` | ✅ **Yes** |
+| Workstation | The "workstation concept frame" — described in `art/palette.ts` §230, **not in the repo** | ❌ prose only |
+| Dioramas | ART_DIRECTION.md's tier ladder, rendered — no frame of it exists | ❌ prose only |
+| Warehouse | Night distribution-centre photography | ❌ **nothing at all** |
+
+**So: M4SS and the people can start now. The other three need one image each.**
+
+If you are an agent and the surface you are taking has no openable bar, **do not invent one and
+do not proceed.** Two moves are allowed:
+
+1. **Use the game's own better half.** A shipped surface at its best is a legitimate bar and it
+   is free — it is what settled stage three's chain in one pass (stage two measured spin 6.0 at
+   both links, so the other three links were fine and had to be left alone). For the dioramas,
+   the strongest existing room is a valid bar for the other seven.
+2. **Ask for the image, take a different item, and say so in the ledger.**
+
+Dropping a reference into `assets/reference/<surface>/` and naming it in §4.x is the single
+highest-value thing a human can do for this document. It converts a stalled item into a
+runnable one.
+
 ---
 
 ## 1. The direction, in one sentence
@@ -265,8 +329,9 @@ distance: INSIDE. Secondary for readable industrial density: the racking studies
 **Intent.** Owned by [M4SS-ART-BIBLE.md](M4SS-ART-BIBLE.md). Do not re-litigate its five
 principles or its colour script; they were earned over 23 measured passes.
 
-**The bar.** The bible's §2 reference sheet, which already states per-image what each reference
-does that we do not.
+**The bar.** `assets/reference/m4ss/` — eight tracked images, studied one by one in the
+bible's §2, which already states per-image what each reference does that we do not. This is the
+only surface in the game with a bar a critic can open without being handed anything.
 
 **Known gaps.**
 - **Stage 3 (`sluice.ts`) is grey-boxed.** It has a theme (`THEME_SLUICE`), a column, a
