@@ -91,6 +91,31 @@ const CSS = `
   padding: 28px 34px 24px;
   box-shadow: 0 0 0 1px rgba(127, 224, 138, 0.06), 0 0 62px rgba(0, 0, 0, 0.78);
 }
+/*
+ * ## A vignette, and deliberately NOT a scanline
+ *
+ * This panel is the one surface in the game with no CRT treatment, and the obvious fix - a
+ * repeating-linear-gradient raster over it - is one this codebase has already made and
+ * undone. See the note on .omni-terminal in link/LocalSurface.ts: a CSS raster there
+ * survived every attempt to switch it off from the render side, because it was never in the
+ * renderer, and cost a long hunt through seven post-processing passes before a probe of
+ * computed styles found it. It was removed once our own retro pass could do scanlines
+ * properly, per view, and switchably - none of which a blend-mode overlay can do.
+ *
+ * That pass runs on the canvas and cannot reach DOM, so this panel cannot have the real
+ * thing. What it can have is the treatment that note explicitly keeps: "the ::before glow
+ * below stays; it is a vignette, not a raster." Same idiom, same reason - it darkens toward
+ * the corners the way a tube does, and it is one gradient that nothing later will mistake
+ * for a rendering artefact.
+ */
+.omni-end__frame { position: relative; }
+.omni-end__frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 58%, rgba(0, 0, 0, 0.42) 100%);
+}
 .omni-end__body {
   overflow: hidden auto;
   /* Room above a control that gets focused, so nothing lands hard against the header. */
