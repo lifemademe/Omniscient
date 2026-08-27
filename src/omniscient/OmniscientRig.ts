@@ -545,6 +545,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private warehouse: WarehouseRig | null = null;
   private warehouseFog: { near: number; far: number } | null = null;
   private warehouseArchiveDisplay: ENGINE.SceneNode | null = null;
+  /*
+   * Defaults TRUE, and it is worth saying so here because the whole room's lighting hangs
+   * off it: every `celStyleEnabled ? a : b` in art.ts and WarehouseDaylight.ts takes its
+   * left branch in the shipping game, and the right branch is dead unless F10 is pressed.
+   * Two rounds of W-1 were spent editing the dead side.
+   */
   private warehouseCelEnabled = true;
   private warehouseCelTuning: PaintLook = {
     ...PAINT_LOOKS.warehouseCel,
