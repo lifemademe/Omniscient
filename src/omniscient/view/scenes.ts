@@ -977,6 +977,16 @@ function buildRepairShop(scene: ContactScene): void {
   if (benchLamp.recesses) {
     benchLampRoot.add(meshOf('BenchLampDark', benchLamp.recesses, MAT.slot));
   }
+  /*
+   * The fixture does not occlude the practical it depicts. It stands 0.7m under the bench
+   * lamp, so once that light casts, this shade throws its own silhouette across a third of
+   * the room - see the opt-out note in art/shadows.ts. It still RECEIVES, so it is still lit
+   * and still shaded like everything else; it simply stops blocking the source it exists to
+   * explain.
+   */
+  benchLampRoot.traverse((o) => {
+    o.userData.noShadowCast = true;
+  });
   scene.registerProp('bench-lamp', benchLampRoot, { anchors: benchLamp.anchors });
 
   /**

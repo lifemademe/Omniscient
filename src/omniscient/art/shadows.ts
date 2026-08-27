@@ -108,7 +108,29 @@ export function applyShadowPolicy(root: THREE.Object3D): void {
       (m) => m instanceof THREE.MeshBasicMaterial || (m as THREE.Material)?.type === 'MeshBasicMaterial'
     );
 
-    mesh.castShadow = !unlit;
+    /*
+     * ## The opt-out, and why one is needed
+     *
+     * A small object very close to a light does not cast a small shadow - it casts an
+     * enormous one. Mirela's task lamp sits 0.7m under the bench practical, and when that
+     * practical was given a shadow map the shade projected itself across a third of the
+     * frame: a critic described "a large soft-edged black mass covering the pegboard,
+     * swallowing the hanging tools, that nothing in frame plausibly casts". The room was
+     * traded for a shadow.
+     *
+     * This is the same fault the warehouse had and fixed by moving the emitter - "a lamp
+     * sitting ABOVE its own lens and shadowing the floor it was supposed to light. Every
+     * high bay in the building was blocking itself." Here the fixture is not the emitter's
+     * own housing, so it cannot be solved by moving anything; the shade genuinely is between
+     * the light and the wall, and the honest answer is that a practical's own fixture should
+     * not occlude the practical.
+     *
+     * Deliberately opt-OUT rather than opt-in. The default has to stay "everything lit
+     * casts", because the failure mode of forgetting a caster is an object floating, and this
+     * whole file exists because several hundred props cannot each be trusted to remember.
+     */
+    const exempt = mesh.userData?.noShadowCast === true;
+    mesh.castShadow = !unlit && !exempt;
     mesh.receiveShadow = !unlit;
   });
 }
