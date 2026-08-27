@@ -369,6 +369,42 @@ export function createMirelaProceduralModel(): MirelaProceduralCharacter {
     skinnedMesh('Mirela-Shirt-Torso', torso, materials.shirt, skeleton, hips, chest, boneIndex.hips, boneIndex.chest)
   );
 
+  /*
+   * ## The neck, which did not exist
+   *
+   * There was no geometry at all between the torso's top plane and the head sphere. A critic
+   * given this figure beside the GLB said "the pieces are adjacent instead of connected, so
+   * it reads as an unassembled kit rather than one exaggerated mass", and located the fault
+   * at the shoulder girdle: "the neck peg is visibly narrower than both the head above and
+   * the slab below, with unlit gaps on either side". There was no peg. It was seeing the head
+   * hovering over the torso with air between them.
+   *
+   * Both ends deliberately OVERLAP rather than meet. It starts below the torso's top section
+   * and ends inside the head sphere, so there is no seam to find at either join - which is
+   * the whole difference between a body and a kit. The base is wider than the neck proper, a
+   * trapezius flare, so the column grows out of the shoulders instead of being socketed into
+   * them.
+   */
+  root.add(
+    skinnedMesh(
+      'Mirela-Neck',
+      segmentGeometry(
+        new THREE.Vector3(0, shoulderY - torsoHeight * 0.16, 0),
+        worldAt('head').clone().add(new THREE.Vector3(0, headHeight * 0.12, 0)),
+        height * 0.058,
+        height * 0.034,
+        12,
+        6
+      ),
+      materials.skin,
+      skeleton,
+      new THREE.Vector3(0, shoulderY, 0),
+      worldAt('head'),
+      boneIndex.chest,
+      boneIndex.head
+    )
+  );
+
   const apron = new THREE.BoxGeometry(shoulderWidth * 0.45, torsoHeight * 0.63, height * 0.018, 4, 8, 1);
   apron.translate(0, hipY + torsoHeight * 0.53, height * 0.083);
   root.add(
@@ -417,6 +453,28 @@ export function createMirelaProceduralModel(): MirelaProceduralCharacter {
     const shoulder = worldAt(shoulderName);
     const elbow = worldAt(elbowName);
     const wrist = worldAt(wristName);
+    /*
+     * ## The deltoid, which also did not exist
+     *
+     * The upper arm began at the shoulder bone, and the shoulder bone sits exactly ON the
+     * torso's top corner - so the arm cylinder started where the slab ended and the two forms
+     * merely touched. The critic read that as "the arm cylinders hang outside the shoulder
+     * boxes with a dark seam between them, so the arms look hung on the body rather than grown
+     * from it".
+     *
+     * A rounded cap centred on the joint fixes it by overlapping BOTH: it reaches inboard over
+     * the torso's corner and down over the top of the sleeve, so the silhouette runs unbroken
+     * from collar to elbow. It is parented to the shoulder bone rather than skinned, so it
+     * turns with the arm - a deltoid that stayed behind when the arm lifted would be a worse
+     * artefact than the gap it replaces.
+     */
+    rigidMesh(
+      `Mirela-${side}-Deltoid`,
+      new THREE.SphereGeometry(height * 0.047, 12, 10),
+      materials.shirt,
+      bones[shoulderName],
+      new THREE.Vector3(0, -height * 0.006, 0)
+    ).scale.set(0.88, 1.02, 0.94);
     root.add(
       skinnedMesh(
         `Mirela-${side}-UpperArm`,
