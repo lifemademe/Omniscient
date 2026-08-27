@@ -248,6 +248,7 @@ export class WarehouseFacilities {
     this.buildMezzanine(bucket);
     this.buildLooseLife(bucket);
     this.buildStripLighting(bucket);
+    this.buildHighBays(bucket);
     this.buildZoneIdentity();
 
     const merged: Array<[string, THREE.BufferGeometry[], THREE.Material]> = [
@@ -413,6 +414,73 @@ export class WarehouseFacilities {
    * decision rather than an art one - and the ones that light the floor a player works on
    * were already the ones that had lights.
    */
+  /**
+   * High bays over the aisles, and the cadence of light and dark they make on the floor.
+   *
+   * ## The gap this closes, stated by a critic who had not seen the code
+   *
+   * "There is no lamp visible in the aisle at all - the ceiling is beams and glow, with no
+   * fitting, no shade, no stem, nothing casting", and "the floor is one uniform value from
+   * foreground to far wall, with no bright-under-lamp, dark-between cadence".
+   *
+   * Both halves are true and they are one fault. The twelve strip fittings sit at x -19.5, -8,
+   * 6, 17.9, 19 and 0 - BETWEEN the aisles, which run at -19, -12, -5, 2 and 9 - and at y 6.4,
+   * which is three tenths of a metre above racking that stands 6.1. So they are hidden behind
+   * the rack tops from every camera the player has, and they light the gaps rather than the
+   * lanes. The room was lit by things nobody could see, in places nobody looks.
+   *
+   * ## Why this is a rhythm and not a row
+   *
+   * Every other station carries a lamp. A lamp at every station gives an evenly lit aisle,
+   * which is the fault being fixed with extra steps; alternating gives bright, dim, bright
+   * down the lane, and that cadence is what carries depth when perspective alone cannot -
+   * see Law 3, and the same argument the racking pass had to make about regularity.
+   *
+   * ## The light budget, which is real
+   *
+   * buildStripLighting's note is right that a point light per fitting is a frame-rate decision.
+   * So the fittings are geometry at every station and only the LIT stations get a light: ten
+   * across five aisles. They are short-range on purpose - distance 13 against a 10.5m roof, so
+   * the pool has an edge instead of washing into its neighbour.
+   */
+  private buildHighBays(bucket: Buckets): void {
+    const roof = WAREHOUSE_LAYOUT.shell.roofY - 0.28;
+    const y = 8.1;
+    // Uneven on purpose: a fitting every 9m reads as a grid, which is the "this was generated"
+    // tell. These are the four cross-aisle stations, spaced the way a real building lands them.
+    const stations = [-21.5, -11.5, -1.5, 9.5, 19.5];
+    for (let a = 0; a < WAREHOUSE_LAYOUT.rack.centers.length; a++) {
+      const x = WAREHOUSE_LAYOUT.rack.centers[a] + WAREHOUSE_LAYOUT.rack.spacing / 2;
+      for (let i = 0; i < stations.length; i++) {
+        const z = stations[i];
+        // The shade: a squat truncated cone reads as a high bay at this resolution, and the
+        // retro pass would turn anything finer into noise.
+        box(bucket.bodyDark, 1.15, 0.42, 1.15, x, y, z);
+        box(bucket.steel, 0.86, 0.1, 0.86, x, y - 0.24, z);
+        // The stem up to the roof, so it hangs off something. A lamp on nothing is the fault
+        // this building already shipped once.
+        box(bucket.steel, 0.07, roof - y - 0.2, 0.07, x, (y + 0.2 + roof) / 2, z);
+        // Alternate down the lane, and offset the phase per aisle so two neighbouring lanes
+        // are never bright at the same station - that is what makes the floor read across.
+        if ((i + a) % 2 !== 0) continue;
+        box(bucket.tube, 0.7, 0.06, 0.7, x, y - 0.3, z);
+        this.root.add(
+          ENGINE.PointLightNode.create({
+            name: 'HighBay',
+            color: '#ffd9a6',
+            intensity: 14,
+            // Short, so the pool has an edge. Long-range lamps overlap into the flat fill this
+            // whole item exists to remove.
+            distance: 13,
+            decay: 1.9,
+            // Below the shade, never inside it - see the note in buildStripLighting.
+            position: new THREE.Vector3(x, y - 0.42, z),
+          })
+        );
+      }
+    }
+  }
+
   private buildStripLighting(bucket: Buckets): void {
     const roof = WAREHOUSE_LAYOUT.shell.roofY - 0.28;
     const strips: Array<[number, number, number, number, boolean]> = [
