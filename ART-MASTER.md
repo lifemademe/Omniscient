@@ -921,7 +921,7 @@ Ordered by value per hour. Take from the top.
 | **P-C6** | People | Delete the GLBs, `debake.ts`, the Tripo paths | Build shrinks, nothing regresses | `BLOCKED` by P-C5 | The only stage allowed to remove a GLB |
 | **L-6** | All | Human/AI duality in the RENDERING: warm+imperfect where a person is, cold+ordered where the machine is — and the boundary fading as the tree grows | `ART-DIRECTION-v1.png` | `OPEN` | The sheet's best idea. Nothing answers it yet |
 | **L-7** | All | Five named lighting moods (day, sunset, night+rain, fog, neon night) instead of one per surface | `ART-DIRECTION-v1.png` | `OPEN` | |
-| **A-1** | Access | Audit every hue-carried mechanic | §11 | `OPEN` | |
+| **A-1** | Access | Audit every hue-carried mechanic | §11 | `IN LOOP` claude 2026-08-27 | **Audited and compliant so far — five surfaces, none carried by hue alone.** M4SS growths: dead sprites shift 2px ajar and darken, so they read broken in silhouette (§11 already calls this right). Certainty tiers: separate by GEOMETRY and material detail (bounding shape → real shape → maps arrive), not just warm/cold. Warehouse zone and door buttons: status spelled in text, and door identity uses shape glyphs △ ‖ ○. Intake lamp: 4 states separate on value (78/78/161/93), emissiveIntensity (0.7 vs 1.8) and a scanner mesh appearing. Door lamps: effective greyscale brightness 210/210/305/121/41 — every pair separates without hue. **Two things to carry:** `locked` and `tamper` are byte-identical on the in-world lamp (disambiguated only by HUD text); and `bushTexture`'s actual greyscale separation is UNVERIFIED because there is no headless canvas in this repo, so it is read from source, not measured. **Not yet audited: globe, console, dioramas.** |
 | **P-1** | Post | Per-surface vignette | §6 | `OPEN` | **Read this first:** `setPaintLook` was only ever called with `contactCel` or `off`, so `PAINT_LOOKS.warehouseCel` — the most heavily commented block in paintShader.ts — was applied to nothing. Fixed in 1a38a7c. Three registries share the name `warehouseCel`; check which one you are editing |
 | **P-2** | Post | Feed artefacts: aberration, signal grain, dropout | §6 | `OPEN` | |
 | **X-1** | Hygiene | `.codex/config.toml` carries a live bearer token | ship-clean | `BLOCKED` — needs a human | **Already public since 2026-08-16.** Repo confirmed public via the GitHub API; the identical bytes are in `origin/master`'s tree; **428 pushed commits carry it**; the token is live, since every MCP call uses it. Not-pushing was never the mitigation. **Rotate at the issuer**, then untrack + `.gitignore`. A history rewrite un-exposes nothing on a public repo |
@@ -953,6 +953,7 @@ YYYY-MM-DD  ID    agent      status   bar / evidence / commit
 2026-08-27  W-2   claude     IN LOOP  fog was outdoor numbers: 0% haze for 32m of a 58m building
 2026-08-27  W-2   claude     AT BAR   far wall reads as a plane; lamp grid lit 3 of 6 columns / W2-r3-symmetry.jpg
 2026-08-27  W-1   claude     DECLINED phase-shift proves pools are lamp-caused; floor paint outweighs them
+2026-08-27  A-1   claude     IN LOOP  warehouse + M4SS growths + certainty audited: no hue-only mechanic found
 ```
 
 ---
