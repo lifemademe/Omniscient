@@ -2508,7 +2508,15 @@ export class WarehouseEnvironment {
      * that was wrong, not the intent - fill sets the BOTTOM of the range, and this one had
      * been pushed until it set the top.
      */
-    const skyFill = this.celStyleEnabled ? 0.85 : WAREHOUSE_SKY_FILL;
+    /*
+     * 0.55, from 0.85. The gain above was hiding what this was doing: with a flat 1.95
+     * multiply on top, no fill value could produce a dark pixel, so 0.85 measured the same as
+     * 2.2 and there was no way to tell from a capture which of them was wrong. With the gain
+     * corrected the fill is finally the thing it is named after - the floor of the range -
+     * and the frame still carried only 2.6% of pixels below luma 20 against the reference's
+     * 5.0%. This is what buys the last of that.
+     */
+    const skyFill = this.celStyleEnabled ? 0.55 : WAREHOUSE_SKY_FILL;
     const moon = this.celStyleEnabled ? 1.7 : 1.7;
     /*
      * The front sodium was the single biggest flattener in the room and nothing here said

@@ -264,8 +264,14 @@ export const PAINT_LOOKS = {
      * picture sitting in the shoulder of a curve, where large changes in radiance produce
      * small changes on screen. The lamps were never the problem; they were being measured
      * through a gain that swamped them.
+     *
+     * Then 1.30 -> 1.05, measured. 1.30 was the first value that moved anything at all and it
+     * moved everything the right way at once: median 115 -> 94, p95 216 -> 175, and the frame
+     * stopped clipping entirely at 0.0% against 0.5%. It was still 16 levels of median and 48
+     * of p95 above the reference, which is a picture that has stopped being over-exposed
+     * without yet being a night one.
      */
-    brightness: 1.3,
+    brightness: 1.05,
     /*
      * Four value steps with a nearly hard edge, and 1.3x chroma.
      *
