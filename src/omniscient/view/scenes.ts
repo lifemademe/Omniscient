@@ -7744,6 +7744,14 @@ function buildFloodedCellar(scene: ContactScene): void {
     position: lampAt.clone().add(new THREE.Vector3(0, 0, 0.2)),
     // 11 down to 9.5. It is still the key and still the brightest thing in the room; the
     // run no longer needs it to reach six metres, so it can go back to being a lamp.
+    /*
+     * The light beat that runs on this lamp takes it 9.5 -> 11.2 over 3.2s, and D-3 asked
+     * whether that is visible at all or whether it is a number nobody ever sees move.
+     * Measured by holding it at t=1 and photographing both ends: the frame mean goes 47.31 to
+     * 49.53, a quarter of the picture changes by more than three levels, and the peak change
+     * is 29. It reads - and it reads as the room coming up rather than as a light switching,
+     * which is what a beat spread over three seconds is for.
+     */
     intensity: 9.5,
     color: new THREE.Color('#ffdcae'),
     distance: 7,
