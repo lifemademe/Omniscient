@@ -162,9 +162,26 @@ broken: **a green harness is not a bar** - harnesses here have reported green wh
 could never succeed and a bridge was invisible - and **never mark your own work finished from
 memory**. Re-open the artifact and look at it.
 
-## Do not push
+## The `.codex` token is already public — rotate it
 
-`.codex/config.toml` is tracked and carries a live bearer token across the history, on a public
-repository. `scripts/ship-clean.ts` fails on it deliberately. Committing is fine. **Pushing is a
-human decision that has not been made yet.**
+`.codex/config.toml` carries a live bearer token for the Sandbox Studio staging MCP server.
+`scripts/ship-clean.ts` fails on it deliberately.
 
+**The facts, checked 2026-08-27, correcting an earlier and wrong summary of them:**
+
+- The repo `lifemademe/Omniscient` is **public** — confirmed against the GitHub API anonymously.
+- The token was committed on **2026-08-16** and the identical bytes are in the tree at
+  `origin/master` today. **428 already-pushed commits carry it.** 120 more are local-only.
+- It is **live**: every MCP call in this project authenticates with it.
+
+**So "do not push" was protecting a door that has been open for eleven days.** Withholding a
+push does not reduce the exposure by one commit, and treating it as the mitigation is what
+let the real one go undone. The only action that revokes this is **rotating the token at the
+issuer**. That is a human action; do not attempt it.
+
+Once it is rotated: untrack the file, add `.codex/` to `.gitignore`, and keep the local copy
+untracked. Rewriting history afterwards is optional and largely cosmetic — a public repo can
+have been cloned, forked or indexed, so a rewrite reduces casual discovery and un-exposes
+nothing. Do not let it delay the rotation, and do not treat it as a substitute.
+
+Until the user says it has been rotated, keep committing and leave pushing to them.

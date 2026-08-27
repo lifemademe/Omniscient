@@ -924,7 +924,7 @@ Ordered by value per hour. Take from the top.
 | **A-1** | Access | Audit every hue-carried mechanic | §11 | `OPEN` | |
 | **P-1** | Post | Per-surface vignette | §6 | `OPEN` | **Read this first:** `setPaintLook` was only ever called with `contactCel` or `off`, so `PAINT_LOOKS.warehouseCel` — the most heavily commented block in paintShader.ts — was applied to nothing. Fixed in 1a38a7c. Three registries share the name `warehouseCel`; check which one you are editing |
 | **P-2** | Post | Feed artefacts: aberration, signal grain, dropout | §6 | `OPEN` | |
-| **X-1** | Hygiene | `.codex/config.toml` carries a live bearer token in 512 commits | ship-clean | `BLOCKED` — needs a human decision | Rotate + untrack + sanitise history (or republish from a clean repository); do not push until resolved |
+| **X-1** | Hygiene | `.codex/config.toml` carries a live bearer token | ship-clean | `BLOCKED` — needs a human | **Already public since 2026-08-16.** Repo confirmed public via the GitHub API; the identical bytes are in `origin/master`'s tree; **428 pushed commits carry it**; the token is live, since every MCP call uses it. Not-pushing was never the mitigation. **Rotate at the issuer**, then untrack + `.gitignore`. A history rewrite un-exposes nothing on a public repo |
 
 ### 13.4 The log
 
