@@ -933,7 +933,7 @@ Append one line per completed item. Newest last. Never edit a previous line.
 YYYY-MM-DD  ID    agent      status   bar / evidence / commit
 ----------  ----  ---------  -------  --------------------------------------------
 2026-08-26  —     claude     created  ART-MASTER.md written; board seeded, nothing built
-2026-08-26  T-3   claude     AT BAR   jump.py finds the strip by colour / W1-r2-after.jpg / <commit>
+2026-08-26  T-3   claude     AT BAR   jump.py finds the strip by colour / W1-r2-after.jpg / a0908aa
 2026-08-26  W-1   claude     PAUSED   r2 regressed: median 71->114, near-black 26.5%->2.7% vs bar 78/5.0%
 ```
 
