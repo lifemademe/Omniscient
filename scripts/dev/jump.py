@@ -32,6 +32,7 @@ import ctypes.wintypes
 import sys
 import time
 
+import numpy as np
 from PIL import ImageGrab
 
 u = ctypes.windll.user32
@@ -155,37 +156,25 @@ def resolve(found, want):
     return x + 8, top + pitch // 2, pitch, len(scenes)
 
 
-def still_on_menu(shot) -> bool:
-    """Did the click actually land?
+def landed(before, after) -> bool:
+    """Did the click actually change the scene?
 
-    A click misses perhaps one time in four - the strip retracts on a pointer move it does not
-    like - and a missed jump is SILENT. The rewrite of this file dropped the check the previous
-    version had, and the very next capture taken without it was a screenshot of the main menu,
-    measured twice as if it were a warehouse before anybody looked at the picture.
+    This replaces a "are we still on the menu" test, which was wrong twice in opposite
+    directions. Its threshold was measured against a DIORAMA at about -25 green-minus-red, so
+    the warehouse at -7 read as the menu and four successful jumps were refused; and when the
+    menu check was made specific enough to pass, jumping from one diorama to ANOTHER failed,
+    because the tool only knew what the menu looked like and every other screen was a guess.
 
-    Two conditions, and it needs BOTH, because one of them alone is what went wrong twice.
+    The scene-agnostic question is simply whether the picture changed. A jump replaces the
+    entire frame; a missed click leaves it alone. No screen has to be recognised, so no new
+    screen can break it.
 
-    The previous version tested green-minus-red over the logo box and called anything above -10
-    the menu. That threshold was measured against a DIORAMA, which reads about -25. The
-    warehouse reads -7.35 there, because the box lands on the mission ticker and the ticker is
-    olive-green text - so the check reported "still on the menu" for four consecutive successful
-    jumps into a warehouse and refused to save any of them. The old version had the same bug and
-    had simply never been pointed at this room.
-
-    So the second condition carries the weight: the HUD panel at the top left exists in every
-    playable scene and never on the menu, and it is a saturated green on near-black, measuring
-    about +12 green-minus-red against the menu's dark desk room. A frame is only the menu if the
-    logo signature is there AND the HUD is not.
+    The threshold is loose on purpose: the dioramas animate, so two frames of the SAME scene
+    differ by a few levels, while two different scenes differ by tens.
     """
-    rgb = shot.convert('RGB')
-
-    def green_over_red(box):
-        px = list(rgb.crop(box).getdata())
-        return sum(g - r for r, g, b in px) / len(px)
-
-    logo_looks_like_menu = green_over_red((510, 150, 900, 270)) > -10
-    hud_present = green_over_red((60, 215, 355, 340)) > 5.0
-    return logo_looks_like_menu and not hud_present
+    a = np.asarray(before.convert('L'), dtype=float)
+    b = np.asarray(after.convert('L'), dtype=float)
+    return float(np.abs(a - b).mean()) > 6.0
 
 
 def main():
@@ -201,6 +190,7 @@ def main():
     x, y, pitch, count = resolve(find_tabs(shot), want)
     target = (rect[0] + x, rect[1] + y)
 
+    before = grab(rect)
     for attempt in range(4):
         # Approach ALONG the strip, so the reveal never lapses between hover and click.
         sweep([(target[0], rect[1] + y - 60), (target[0], rect[1] + y - 25), target], 0.06)
@@ -215,13 +205,12 @@ def main():
         time.sleep(settle if attempt == 0 else 3.0)
 
         shot = grab(rect)
-        if not still_on_menu(shot):
+        if landed(before, shot):
             break
-        print(f'  attempt {attempt + 1}: click missed, still on the menu - retrying')
-        # Re-reveal: the strip has retracted since the pointer was parked.
+        print(f'  attempt {attempt + 1}: the picture did not change - retrying')
         reveal(rect)
     else:
-        raise SystemExit('never left the menu - the capture would have been of the menu')
+        raise SystemExit('the scene never changed - the click is not landing')
 
     shot.save(out)
     print(f'{out}  tab {want} at {target}  (pitch {pitch}, {count} scene tabs)')

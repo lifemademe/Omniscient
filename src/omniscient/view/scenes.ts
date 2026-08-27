@@ -6209,9 +6209,15 @@ function buildClearedHouse(scene: ContactScene): void {
 
   // -- Light -----------------------------------------------------------------
   // One window and one fill. A house with the curtains taken down and half the power off.
-  scene.registerProp(
-    'daylight',
-    ENGINE.PointLightNode.create({
+    /*
+   * ## This room's shadow-casting key (D-4)
+   *
+   * A point light, so a cube map - six renders rather than one. That is the trade the repair
+   * shop settled: the cheap lights in these rooms cast shadows nobody can see, and the one
+   * that can reach the surfaces objects rest on is the expensive kind. A diorama is a small
+   * set with a handful of props, which is where a cube is affordable.
+   */
+  const daylightKey = ENGINE.PointLightNode.create({
       name: 'Daylight',
       /**
        * Pulled back and softened, because it was clipping her.
@@ -6253,8 +6259,14 @@ function buildClearedHouse(scene: ContactScene): void {
       color: new THREE.Color('#cfe0f0'),
       distance: 12,
       decay: 0.85,
-    })
-  );
+    });
+  castShadows(daylightKey as unknown as THREE.Object3D, {
+    mapSize: 1024,
+    radius: 2.5,
+    normalBias: 0.02,
+    bias: -0.0005,
+  });
+  scene.registerProp('daylight', daylightKey);;
 
   /**
    * The bare bulb, and the light that was already pretending to be one.
@@ -7697,6 +7709,15 @@ function buildFloodedCellar(scene: ContactScene): void {
   shade.translate(lampAt.x, lampAt.y, lampAt.z + 0.085);
   scene.registerProp('bulkhead', meshOf('Bulkhead', shade, MAT.lamp));
 
+  /*
+   * ## This room's shadow-casting key (D-4)
+   *
+   * A point light, so a cube map - six renders rather than one. That is the trade the repair
+   * shop settled: the cheap lights in these rooms cast shadows nobody can see, and the one
+   * that can reach the surfaces objects rest on is the expensive kind. A diorama is a small
+   * set with a handful of props, which is where a cube is affordable; the warehouse is where
+   * it is not.
+   */
   const bulkheadLamp = ENGINE.PointLightNode.create({
     name: 'Bulkhead',
     position: lampAt.clone().add(new THREE.Vector3(0, 0, 0.2)),
@@ -7706,6 +7727,12 @@ function buildFloodedCellar(scene: ContactScene): void {
     color: new THREE.Color('#ffdcae'),
     distance: 7,
     decay: 1.3,
+  });
+  castShadows(bulkheadLamp as unknown as THREE.Object3D, {
+    mapSize: 1024,
+    radius: 2.5,
+    normalBias: 0.02,
+    bias: -0.0005,
   });
   scene.registerProp('lamp', bulkheadLamp);
 
@@ -9799,9 +9826,15 @@ function buildNightDoor(scene: ContactScene): void {
   lining.translate(porchAt.x, SHADE_MID, porchAt.z + 0.05);
   scene.registerProp('porch-hood-inner', meshOf('PorchHoodInner', lining, MAT.plastic));
 
-  scene.registerProp(
-    'porch',
-    ENGINE.PointLightNode.create({
+    /*
+   * ## This room's shadow-casting key (D-4)
+   *
+   * A point light, so a cube map - six renders rather than one. That is the trade the repair
+   * shop settled: the cheap lights in these rooms cast shadows nobody can see, and the one
+   * that can reach the surfaces objects rest on is the expensive kind. A diorama is a small
+   * set with a handful of props, which is where a cube is affordable.
+   */
+  const porchKey = ENGINE.PointLightNode.create({
       name: 'Porch',
       /*
        * Further off the facade, and a slacker falloff, because the wall around the bulb was
@@ -9837,8 +9870,14 @@ function buildNightDoor(scene: ContactScene): void {
       color: new THREE.Color('#ffd49a'),
       distance: 5,
       decay: 1.25,
-    })
-  );
+    });
+  castShadows(porchKey as unknown as THREE.Object3D, {
+    mapSize: 1024,
+    radius: 2.5,
+    normalBias: 0.02,
+    bias: -0.0005,
+  });
+  scene.registerProp('porch', porchKey);;
 
   /**
    * The sky, which this scene did not have.
@@ -10520,6 +10559,12 @@ function buildMillRoad(scene: ContactScene): void {
   lens.rotateY(Math.PI);
   lens.translate(0, 0, -0.161);
   torchRoot.add(meshOf('TorchLens', lens, MAT.lamp));
+  // The torch's own body must not block the torch - see the note on torchLight above and
+  // the opt-out in art/shadows.ts. It is centimetres from the emitter, so its bell would
+  // throw a black disc over the entire road it is meant to be lighting.
+  torchRoot.traverse((o) => {
+    o.userData.noShadowCast = true;
+  });
 
   /**
    * No cone.
@@ -10783,6 +10828,21 @@ function buildMillRoad(scene: ContactScene): void {
     distance: 14,
     decay: 1.0,
   });
+  /*
+   * Deliberately NOT casting, and now with the reason recorded.
+   *
+   * D-4 gave every other diorama a shadow-casting key and tried to give this one the torch,
+   * which is by far the most motivated caster in the game: a woman alone on a night road
+   * holding the only light, her shadow thrown down the road ahead. Measured, the scene went
+   * to 98.8% of pixels under luma 10 - the road, the hedge and the woman all vanished. The
+   * torch is a narrow cone at a shallow angle down a long road, and once it casts, almost
+   * everything the cone reaches is behind something else that the cone also reaches.
+   *
+   * Exempting the torch body did not help, which is what rules out the fixture-occlusion
+   * fault that the repair shop had. Whatever this is, it is not that, and a black scene is a
+   * worse outcome than an unattached one. Left off until somebody can work out why with the
+   * scene in front of them.
+   */
   torchLight.castShadow = false;
 
   /**
