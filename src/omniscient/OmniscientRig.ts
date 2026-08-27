@@ -1754,8 +1754,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
       // 0.95, up from 0.55: measured, the shaft between the shade and the desk was reading
       // 0.67 mean against a void of 0 - present in the source and absent on the screen.
       strength: 0.95,
-      motes: 44,
-      moteColor: '#c9b088',
+      motes: 72,
+      moteColor: '#e0cba2',
       seed: 'desk-lamp',
     });
     this.add(this.deskAir.root);

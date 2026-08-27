@@ -750,7 +750,22 @@ export const MAT = {
    * clipped tube would take it again. What saves this one is area rather than value - a
    * 26mm line at four metres is a lead-in, and the radio is a mass.
    */
-  tube: new THREE.MeshBasicMaterial({ color: '#dfeee6', toneMapped: false }),
+  /*
+   * The fluorescent tube's own surface, dimmed from #dfeee6.
+   *
+   * `toneMapped: false` means this bypasses the tone mapper and lands at whatever it says,
+   * so at #dfeee6 it was a 254-white bar - and measured against the rest of its room it
+   * owned 43% of the brightest 0.5% of the frame, against 34% for the task lamp's pool and
+   * 19% for the woman the scene is about. Lowering the LIGHT the batten casts did nothing
+   * to that, because this is the fixture, not its light.
+   *
+   * It still reads as a lit tube: #a8c0b6 against a wall at about 40 is a wide separation.
+   * It stops being the thing the eye finds first in a room whose subject is a person.
+   *
+   * Used in exactly one place - the repair shop's batten - so this is not a shared-material
+   * change dressed up as a local one.
+   */
+  tube: new THREE.MeshBasicMaterial({ color: '#a8c0b6', toneMapped: false }),
   /** The shut-down control. Dirty red, and the only one of its colour on the machine. */
   warningLamp: new THREE.MeshBasicMaterial({ color: ACCENT.warning, toneMapped: false }),
   /** Knowledge green, unlit. The cable's live end and circuit pulses. */

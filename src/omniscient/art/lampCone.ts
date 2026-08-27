@@ -68,7 +68,9 @@ const VERTEX = `
 varying float vAlong;
 varying vec3 vNormalView;
 varying vec3 vToEye;
+varying vec3 vLocal;
 void main() {
+  vLocal = position;
   // CylinderGeometry's uv.y runs 0 at the bottom ring to 1 at the top. The cone is built
   // apex-up and then rotated onto the light's axis, so this is "how close to the bulb".
   vAlong = uv.y;
@@ -82,9 +84,45 @@ void main() {
 const FRAGMENT = `
 uniform vec3 uColor;
 uniform float uStrength;
+uniform float uTime;
 varying float vAlong;
 varying vec3 vNormalView;
 varying vec3 vToEye;
+varying vec3 vLocal;
+
+/*
+ * Cheap value noise, so the shaft has grain instead of a gradient.
+ *
+ * A critic measured the previous version and found 52% of adjacent pixel pairs EXACTLY
+ * equal, with identical-value runs up to fifteen pixels - a smooth band, which reads as a
+ * translucent plastic skirt hanging off the shade. What air in a beam actually looks like is
+ * particulate, and §4.1 asks for dust in the cone by name.
+ *
+ * Two octaves is enough at this size and costs almost nothing. It drifts DOWN over time,
+ * slowly, because dust falls - the same direction the motes travel, so the two read as one
+ * material rather than as a texture with sprites in front of it.
+ */
+float mrHash(vec3 p) {
+  return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+}
+float mrNoise(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float n000 = mrHash(i);
+  float n100 = mrHash(i + vec3(1.0, 0.0, 0.0));
+  float n010 = mrHash(i + vec3(0.0, 1.0, 0.0));
+  float n110 = mrHash(i + vec3(1.0, 1.0, 0.0));
+  float n001 = mrHash(i + vec3(0.0, 0.0, 1.0));
+  float n101 = mrHash(i + vec3(1.0, 0.0, 1.0));
+  float n011 = mrHash(i + vec3(0.0, 1.0, 1.0));
+  float n111 = mrHash(i + vec3(1.0, 1.0, 1.0));
+  return mix(
+    mix(mix(n000, n100, f.x), mix(n010, n110, f.x), f.y),
+    mix(mix(n001, n101, f.x), mix(n011, n111, f.x), f.y),
+    f.z
+  );
+}
 void main() {
   /*
    * Falls away from the bulb - GENTLY. The exponent was 1.7 and that was the whole fault.
@@ -112,7 +150,9 @@ void main() {
    * dust to scatter off. Fading the silhouette to nothing is also what makes the geometry
    * stop being visible as geometry.
    */
-  float facing = pow(abs(dot(normalize(vNormalView), normalize(vToEye))), 0.85);
+  // 1.5, up from 0.85: the silhouette was dropping 124 to 90 in six pixels, which is an
+  // edge. A shaft does not have one.
+  float facing = pow(abs(dot(normalize(vNormalView), normalize(vToEye))), 1.5);
   /*
    * Softened from 0.86 to 0.975, because it was cancelling the taper it sits next to.
    *
@@ -124,7 +164,16 @@ void main() {
    * has to soften the last few percent.
    */
   float mouth = smoothstep(1.0, 0.975, vAlong);
-  float a = along * facing * mouth * uStrength;
+  vec3 drift = vec3(0.0, uTime * 0.06, 0.0);
+  float grain =
+    mrNoise(vLocal * 52.0 + drift) * 0.58 + mrNoise(vLocal * 124.0 + drift * 1.7) * 0.42;
+  /*
+   * Harder contrast than the first attempt, which measured a mean adjacent-pixel difference
+   * of 2.76 and 43% of neighbours exactly equal - grain that is present in the source and
+   * invisible on the screen. Still floored above zero: this is texture in a volume, not
+   * holes punched through it.
+   */
+  float a = along * facing * mouth * uStrength * (0.28 + 1.35 * grain);
   // Additive blending multiplies by alpha, so the rgb is NOT premultiplied here.
   gl_FragColor = vec4(uColor, a);
 }
@@ -166,6 +215,7 @@ export function createLampCone(options: LampConeOptions): LampCone {
     uniforms: {
       uColor: { value: new THREE.Color(color) },
       uStrength: { value: strength * 0.85 },
+      uTime: { value: 0 },
     },
     transparent: true,
     blending: THREE.AdditiveBlending,
@@ -177,6 +227,7 @@ export function createLampCone(options: LampConeOptions): LampCone {
     fog: false,
   });
 
+  const clocks: Array<{ value: number }> = [];
   for (const [index, spec] of SHELLS.entries()) {
     const geometry = new THREE.CylinderGeometry(
       apexRadius * spec.radius,
@@ -192,6 +243,10 @@ export function createLampCone(options: LampConeOptions): LampCone {
     const shellMaterial = index === 0 ? material : material.clone();
     shellMaterial.uniforms.uStrength = { value: strength * spec.weight };
     shellMaterial.uniforms.uColor = { value: new THREE.Color(color) };
+    // Each shell keeps its own clock offset, so the three grains never line up into one
+    // pattern - which is what would put a moire through the shaft instead of dust in it.
+    shellMaterial.uniforms.uTime = { value: index * 11.0 };
+    clocks.push(shellMaterial.uniforms.uTime);
     const shell = new THREE.Mesh(geometry, shellMaterial);
     shell.frustumCulled = false;
     shell.renderOrder = 3 + index;
@@ -204,13 +259,26 @@ export function createLampCone(options: LampConeOptions): LampCone {
       size: new THREE.Vector3(baseRadius * 1.5, length * 0.9, baseRadius * 1.5),
       count: motes,
       color: moteColor,
-      scale: 0.0042,
+      /*
+       * 0.011, up from 0.0042 - they were smaller than a pixel.
+       *
+       * A critic scanning the cone body found zero discrete motes and called the shaft
+       * clean fog. They were there the whole time: 44 of them, at a world size that at this
+       * camera distance lands under one screen pixel, so they dithered into the gradient
+       * instead of sitting in it. `sizeAttenuation` means this is a real size in the room,
+       * not a screen size, which is exactly why it can be too small to exist.
+       */
+      scale: 0.011,
       // Slow enough that a speck takes most of a minute to cross the shaft. Dust settling
       // in still air, not snow - and not the fly behaviour this helper does by default.
       fall: options.fallSpeed ?? 0.012,
       seed: `${seed}-motes`,
     });
     root.add(flock.root);
+    const step = (deltaTime: number): void => {
+      for (const clock of clocks) clock.value += deltaTime;
+      flock.idle(deltaTime);
+    };
     root.traverse((o) => {
       o.userData.noShadowCast = true;
       if ((o as THREE.Mesh).isMesh || (o as THREE.Points).isPoints) {
@@ -219,7 +287,7 @@ export function createLampCone(options: LampConeOptions): LampCone {
       }
     });
     aim(root, direction);
-    return { root, idle: flock.idle };
+    return { root, idle: step };
   }
 
   root.traverse((o) => {
@@ -230,7 +298,12 @@ export function createLampCone(options: LampConeOptions): LampCone {
     }
   });
   aim(root, direction);
-  return { root, idle: () => undefined };
+  return {
+    root,
+    idle: (deltaTime: number): void => {
+      for (const clock of clocks) clock.value += deltaTime;
+    },
+  };
 }
 
 /** Point the cone's -y axis down `direction`. */

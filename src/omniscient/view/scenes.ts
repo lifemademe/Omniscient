@@ -2181,7 +2181,9 @@ function buildRepairShop(scene: ContactScene): void {
   const ileanaKey = ENGINE.SpotLightNode.create({
     name: 'ContactKey',
     position: new THREE.Vector3(0.15, 1.72, -0.42),
-    intensity: 7.5,
+    // 12, up from 7.5, against a bulb that came down from 13 - the gradient has to arrive
+    // on her rather than on the furniture in front of her.
+    intensity: 12,
     color: new THREE.Color('#cfe0f0'),
     distance: 3.0,
     decay: 1.3,
@@ -2245,10 +2247,24 @@ function buildRepairShop(scene: ContactScene): void {
        * neither the brightest nor the darkest thing in frame is the last thing the eye
        * arrives at, whatever else is correct about the room.
        */
-      intensity: 13,
+      intensity: 9.5,
       color: new THREE.Color('#cfd8e4'),
-      distance: 3.2,
-      decay: 1.4,
+      /*
+       * ## It has to die before it reaches the wall behind her
+       *
+       * Raising this from 8.5 to 13 lifted her share of the frame's brightest pixels from
+       * 1.8% to 14% and bought nothing, because at 3.2m of reach it lit her AND the pegboard
+       * she stands against. Measured, she came out at 79.5 against a surround of 76.8 - two
+       * and a half levels, which is not a separation, it is a coincidence. The room this is
+       * held against puts its figure 20 levels BELOW its backing.
+       *
+       * She is about 1.3m from this light and the pegboard is about a metre further. Pulling
+       * the reach in to 1.9 and squaring the falloff spends the light on her and lets it run
+       * out before the wall - so the separation comes from the wall going dark rather than
+       * from her getting brighter, which is the only version of it that works.
+       */
+      distance: 1.9,
+      decay: 2.0,
       angle: 0.42,
       penumbra: 0.72,
     });
@@ -6150,7 +6166,23 @@ function buildClearedHouse(scene: ContactScene): void {
     leg.translate(x, 0.37, z);
     table.push(leg);
   }
-  scene.registerProp('table', meshOf('Table', mergeGeometries(table, false) ?? top, MAT.timber));
+  /*
+   * The table gets its OWN timber, darker than the shared one.
+   *
+   * Measured, this slab plus what stands on it held 74% of the frame's brightest pixels and
+   * nine of the ten strongest saliency blocks, against 3% for the woman - the brightest
+   * large mass in the frame was empty furniture standing between the camera and the subject.
+   * The room this is held against has nothing bright between the camera and its person; its
+   * pool falls BEHIND him.
+   *
+   * Cloned rather than dimming `MAT.timber`, which is shared by tables and boards across the
+   * game and would take this room's problem out to all of them. Darkening the slab and not
+   * the box on it also keeps the thing the mission is actually about as the bright object -
+   * the evidence stays lit, the furniture stops shouting.
+   */
+  const clearedTimber = (MAT.timber as THREE.MeshStandardMaterial).clone();
+  clearedTimber.color.multiplyScalar(0.62);
+  scene.registerProp('table', meshOf('Table', mergeGeometries(table, false) ?? top, clearedTimber));
 
   /**
    * The box of photographs - the prop the whole request is about.
@@ -6575,7 +6607,15 @@ function buildClearedHouse(scene: ContactScene): void {
        * somebody's papers is the evidence, and the light is the reason the player looks
        * at it.
        */
-      intensity: 13,
+      /*
+       * 9, down from 13: the bulb was keying the TABLE.
+       *
+       * Measured, the brightest large mass in the frame was the tabletop at 115-145 - empty
+       * furniture standing in front of the subject, ten times her area and 48 levels above
+       * her face. The bulb still owns the room and still throws its pool; it no longer wins
+       * the frame with a surface nobody is being asked to look at.
+       */
+      intensity: 9,
       color: new THREE.Color('#ffd0a0'),
       distance: 3.4,
       decay: 2.0,
