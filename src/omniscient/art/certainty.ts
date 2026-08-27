@@ -161,6 +161,26 @@ function ensureShader(material: THREE.Material): CertaintyUniforms {
           '  float certLuma = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));',
           '  diffuseColor.rgb = mix(diffuseColor.rgb, vec3(certLuma), certCold * 0.55);',
           '  diffuseColor.rgb = mix(diffuseColor.rgb, uCertCold, certCold * 0.5);',
+          /*
+           * D-2: certainty in VALUE, not only in hue.
+           *
+           * The two lines above are the whole cold half of the law and neither of them makes
+           * an uncertain thing darker. The desaturation mixes toward vec3(certLuma), which
+           * preserves luminance by construction, and the cold tint only moves value by
+           * however far ACCENT.data happens to sit from the albedo. So a guess and a fact
+           * have been rendering at the same brightness, separated by hue and saturation - the
+           * two channels that do not survive a squint or a colourblind viewer.
+           *
+           * §1 says "the player's eye goes to the warmest thing in frame, and the warmest
+           * thing is whatever they have earned". The eye goes to the BRIGHTEST thing before
+           * it goes to the warmest one, and until now that was whatever happened to be pale.
+           *
+           * 0.74 at full cold. Enough that a SUSPECTED volume sits back from a KNOWN prop in
+           * a greyscale print of the frame; small enough that the tier is still legible
+           * rather than sunk - the bounding volume must read as a claim the machine is
+           * making, not as something switched off.
+           */
+          '  diffuseColor.rgb *= mix(1.0, 0.74, certCold);',
           '  diffuseColor.rgb = mix(diffuseColor.rgb, uCertWarm, certWarm * 0.15);',
           '  diffuseColor.rgb = mix(vec3(certLuma), diffuseColor.rgb, 1.0 + certWarm * 0.6);',
           /*
