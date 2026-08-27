@@ -2410,9 +2410,26 @@ function buildRepairShop(scene: ContactScene): void {
        * itself cannot reach her; the only honest way a woman leaning over her own work gets
        * lit is from the work.
        */
-      intensity: 1.8,
+      /*
+       * ## 4.6 and 4.2m of reach - this is what lights the right third
+       *
+       * A critic measured the frame in thirds: left 84.1, middle 60.0, right 23.2, with 37%
+       * of the frame's 16px tiles both dark AND flat against 0.4% in the room used as the
+       * bar. Boosting that third 3.2x brings up a hammer, a chisel, the pegboard grid, a
+       * board on the bench and the bench underside - all modelled, all present, none of them
+       * visible. The room ended at the bench.
+       *
+       * The anglepoise hangs against that wall and lights only the bench, which is what a
+       * shade does. What reaches the wall behind a lit bench is the BOUNCE off it, and this
+       * light is exactly that - a pale worked benchtop under a strong practical throws a
+       * great deal back up. It was calibrated at 1.8 for a bench that was much dimmer.
+       *
+       * Motivated, and it is the only source in the room positioned to do this job: the
+       * batten is on the far wall and the door is behind the camera.
+       */
+      intensity: 4.6,
       color: new THREE.Color('#ffd9ae'),
-      distance: 2.6,
+      distance: 4.2,
       decay: 1.6,
     })
   );
@@ -6848,6 +6865,35 @@ function buildClearedHouse(scene: ContactScene): void {
    * another light, and three attempts to answer it with one produced three lights nothing
    * was emitting.
    */
+
+  /*
+   * ## The rest of the house, through the open door
+   *
+   * A critic measured this frame in thirds and found the black is not spread but stacked on
+   * the left: 36.2% of that third below value 8, the open doorway itself 72.5% pure black
+   * with a median of 3, and her body below the shoulders reading 23 against 15 - no
+   * silhouette, no legs, no contact with the ground. Its words for the whole left side were
+   * "one continuous information-free void", and for the room "one lit pool floating in a
+   * void rather than a space".
+   *
+   * The fixture is already in the frame and is the one thing that can light that wall: the
+   * door is OPEN, and a house has more rooms. This sits just beyond the threshold and
+   * spills back through the opening, which lifts the doorway off zero and finally gives her
+   * a lit field to stand against - the thing three earlier attempts tried to buy with
+   * spotlights nothing was emitting.
+   *
+   * Cool and weak on purpose. It is a hallway at dusk with no lamp lit in it, not a second
+   * key: enough to say the room continues, not enough to compete with the bulb.
+   */
+  const hallSpill = ENGINE.PointLightNode.create({
+    name: 'HallSpill',
+    position: new THREE.Vector3(DOOR.x, DOOR.head * 0.55, -2.62),
+    intensity: 5.5,
+    color: new THREE.Color('#9fb4c6'),
+    distance: 4.6,
+    decay: 1.35,
+  });
+  scene.registerProp('hall-spill', hallSpill);
 
   const roomFill = ENGINE.PointLightNode.create({
       name: 'RoomFill',
