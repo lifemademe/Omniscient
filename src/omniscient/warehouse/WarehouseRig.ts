@@ -1090,7 +1090,26 @@ export class WarehouseRig extends ENGINE.SceneNode {
        * not its absolute value but the RATIO across the approach: 4.7x from 1.5m to 4m,
        * against 3.9x before.
        */
-      intensity: 7.5,
+      /*
+       * 24, and the number is measured rather than judged.
+       *
+       * 7.5 was arrived at by arithmetic - it improved the approach RATIO on paper from 3.9x
+       * to 4.7x - and delivered nothing: parked 1.2m off a rack face, an identical carton
+       * read 162 near against 164 far. The ratio was right about the lamp and silent about
+       * what the lamp was competing with, which is a room that already puts those cartons
+       * near the top of the tone curve.
+       *
+       * Rather than tune blind, the lamp was taken to an absurd 60 to ask a single question:
+       * too weak, or clamped? Near carton 162 -> 220 while the far one held at 164, so it is
+       * simply too weak, nothing is clipping it, and the hull still only reached 0.27%. That
+       * one throwaway build was worth more than the two careful ones before it.
+       *
+       * 24 lands the near carton around 190 - unmistakably brighter than the 164 it would be
+       * without the drone, and short of the blown 220. It also gives the machine a floor pool
+       * of about 4 at cruise, near a high bay's 5, which is what a landing light should be:
+       * the drone carries its own light rather than borrowing the building's.
+       */
+      intensity: 24,
       distance: 9,
       decay: 1.5,
       position: new THREE.Vector3(0, -0.3, -0.62),
