@@ -274,7 +274,28 @@ const GLOBE_CSS = `
  * No backticks anywhere in this comment: it lives inside the GLOBE_CSS template literal, and
  * a backtick in here ends the string. That is how it broke the first time.
  */
-.omni-globe__name--unknown { color: #e0604a; letter-spacing: 0.22em; }
+/*
+ * ## Persistence of phosphor, which is an ASYMMETRY and not a fade
+ *
+ * §4.2's third known gap: "nothing on the tube has persistence-of-phosphor - state changes
+ * are instant swaps". A P1 tube does not cross-fade. The beam strikes and the grain is at
+ * full brightness within microseconds; when the beam leaves, the grain DECAYS, and the decay
+ * is the slow half. Symmetric easing on a colour change is a dissolve, which is a slideshow
+ * transition and reads as software.
+ *
+ * CSS can express the asymmetry exactly, because the transition that runs is the one on the
+ * class being moved TO. Brightening states get a near-instant transition; dimming states get
+ * a long tail. So a pin going answered fades out over a third of a second, and a pin lighting
+ * up snaps on - which is the actual behaviour of the display this game is pretending to be.
+ *
+ * Not gated on reduced motion, deliberately. The setting exists for movement that provokes
+ * discomfort - parallax, shake, scroll - and a colour decaying in place moves nothing. Taking
+ * it away would remove a legibility cue from the players most likely to want one.
+ */
+.omni-globe__name { transition: color 340ms cubic-bezier(0.1, 0.75, 0.25, 1); }
+/* Striking, not decaying: these two are states a pin moves INTO by lighting up. */
+.omni-globe__name--waiting { transition: color 45ms linear; }
+.omni-globe__name--unknown { color: #e0604a; letter-spacing: 0.22em; transition: color 45ms linear; }
 /*
  * And the anomaly is bracketed, because §11 asks for a SHAPE difference and C-4 asks for it
  * to read as different in KIND rather than in degree. Value alone would make it a louder

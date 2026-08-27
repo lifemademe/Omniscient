@@ -278,7 +278,10 @@ export const TERMINAL_CSS = `
 }
 .omni-tab:last-child { border-right: none; }
 .omni-tab:hover { color: #7fe08a; }
-.omni-tab--active { color: #d8ffb0; background: #10251a; }
+/* The same asymmetry as the globe pins - see the phosphor note in GlobeScreen. A tab
+   going dark keeps its glow for a moment; the one taking over strikes immediately. */
+.omni-tab { transition: color 300ms cubic-bezier(0.1, 0.75, 0.25, 1), background 300ms cubic-bezier(0.1, 0.75, 0.25, 1); }
+.omni-tab--active { color: #d8ffb0; background: #10251a; transition: color 40ms linear, background 40ms linear; }
 .omni-tab__count { opacity: 0.6; }
 /* Hint and record rows. */
 .omni-item {
