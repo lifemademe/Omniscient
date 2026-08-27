@@ -21,8 +21,13 @@ says so by name in §3, and the reason is written down.
 
 You are picking this up mid-flight. Somebody else was here yesterday.
 
-**Read in this order:** §3 (the five laws) → §13 (the ledger) → the one surface section for the
-item you are taking → §12 (the loop). Nothing else. §4–§11 are reference, not a reading list.
+**Read in this order:** §3 (the five laws) → §13 (the ledger) → the one surface section for
+the item you are taking → §12 (the loop) → §15 (the toolbox). Nothing else. §4–§11 are
+reference, not a reading list.
+
+**§15 is not optional.** Nearly forty tools already exist. Most mistakes this project has
+made were caught by one of them, and several were made twice because somebody did not know
+it was there. Check §15 before writing a script.
 
 **Then:**
 
@@ -284,6 +289,114 @@ work. Everything else should be held against them.
 - The ending exists and has never been art-directed.
 - No mission has an establishing beat that is *composed* rather than framed.
 - Nothing in the game has a hold. Every transition is the same duration family.
+
+### 4.7 The people — replacing the Tripo GLBs with procedural characters
+
+**This is the largest art item in the game and it is a direction change, not a cleanup.**
+
+### Where this stands today
+
+Three character systems coexist and only one of them is on screen for the contacts:
+
+| System | What it is | Used by |
+| --- | --- | --- |
+| **Tripo GLBs** | 9 photograph-derived skinned meshes: Adaeze, Dorin, Ileana, Lucian, Mirela, Sanda, Tomas, Vasile, Stalker | Every rigged contact, via `view/riggedContact.ts` → `placeRigged` |
+| **`geometry/character.ts`** | Procedural people from chamfered slabs. Static poses, silhouette-first, no skeleton | Background figures in `view/scenes.ts` |
+| **`experimental/mirela-procedural/`** | A **skinned** procedural character: real `THREE.Skeleton`, 18 bones, `SkinnedMesh`, `setPose`, `updateIdle`, and a capture harness | Nothing shipped. It is the prototype |
+
+`GAUNTLET_v4.9` §323/§329 records that the ImageGen + img2threejs pipeline was never
+installed and that direct procedural Three.js is the sanctioned fallback. The Mirela prototype
+**is** that fallback, already built and already reviewed against `Mirela.glb`.
+
+### Why replace them at all
+
+Not for novelty. Four concrete reasons, in order of weight:
+
+1. **The lighting is baked into the texture.** `art/debake.ts` exists specifically because
+   "every character in this project comes out of Tripo, and [the lighting is] in the TEXTURE."
+   A character carrying its own baked key light cannot be lit by a room. Every diorama in §4.3
+   is about to get its own key (§5, D-1/D-4) and the GLBs will fight all eight of them.
+2. **They are the only realistic objects in a stylised game.** `geometry/character.ts`'s header
+   already argues this: a procedural human reaching for realism lands in uncanny territory
+   immediately. The rooms are chamfered slabs and painted ramps; the people are twenty thousand
+   smooth photogrammetric verts. They are from a different game.
+3. **They cannot be authored.** A Tripo mesh is a black box: no ramps, no value control, no
+   per-tier certainty, no way to express §11's rule that a mechanic may not be carried by hue.
+4. **Cost.** 9 GLBs is the largest single chunk of the download and none of it is reusable.
+
+### The intent
+
+> **People built the way the rooms are built: big exaggerated masses, silhouette first, lit by
+> the room they are standing in and by nothing else.**
+
+Not "low-poly humans". The existing header has the right idea and the wrong scale of ambition —
+`character.ts` makes figures that stand convincingly and never move; the prototype makes one
+that is skinned and can. Merge those: **the slab language of `character.ts`, on the skeleton of
+`mirela-procedural`.**
+
+### The bar
+
+**`Mirela.glb`, in the room, at the shot the mission actually uses.** Not a turntable — the
+framing the player sees. The procedural character wins when a critic with fresh context cannot
+say which is which at that framing, *or* prefers the procedural one because it is lit by the
+room. `MirelaProceduralTestRig` already renders both side by side and captures passes; that
+harness is the loop's instrument and it exists.
+
+Secondary bar for the *language*: the game's own props. A person should look like they were
+made in the same workshop as the chair, the desk lamp and the CRT.
+
+### Animation — settled, with three traps
+
+The engine has a full retargeting stack: `.engine/src/animation/` — `SkeletonProfile`,
+`retargetAnimationClip`, `RetargetingSession`, `applyTPose`. It is **role-based**, so a
+procedural rig does not need Mixamo's names or its 66 bones. A `SkeletonProfile` is a
+`boneToRole` map plus a hip bone name. Roughly seventeen lines.
+
+The traps, all verified:
+
+1. **`mirela-leftShoulder` is the UPPER ARM, not the clavicle.** Its chain is
+   `leftShoulder → leftElbow → leftWrist`. It maps to `BoneRole.LeftUpperArm`. Mixamo's
+   `LeftShoulder` *is* the collarbone and `LeftArm` is the upper arm — map by name similarity
+   and every arm swing lands on a bone that does not exist, so the arms barely move and the
+   chest shears.
+2. **The rest pose is an A-pose.** `leftElbow.position` is `(0.16 × upperArm, −0.98 × upperArm)`
+   — arms down and slightly out. Mixamo authors against a T-pose. Without `forceTPose: true`
+   every limb is rotated by the difference.
+3. **Unmapped roles are silently dropped.** No clavicles, no toes, no fingers, no UpperChest in
+   the 18-bone rig. For the conversational clips this project actually ships — nod, point,
+   react, slump, dread — that costs a shoulder shrug and nothing else. For anything with a walk
+   in it, the missing toe roll reads as skating. **Add a toe bone before attempting locomotion.**
+
+The clips are already proven: `Crouch Idle.fbx` carries 66 `mixamorig:` bones, `riggedContact.ts`
+already handles GLTFLoader stripping the colon (`boneKey()`), and the contacts play them today.
+This is pointing an existing pipeline at a different skeleton, not building one.
+
+### Staged programme
+
+Each stage is a gauntlet item with its own bar. **Do not skip to stage 3.**
+
+| Stage | What | Done when |
+| --- | --- | --- |
+| **P-C1** | One character, one framing. Take the Mirela prototype to the bar in her own scene's shot | A fresh critic cannot pick the GLB out at that framing |
+| **P-C2** | The `SkeletonProfile` + one Mixamo clip retargeted onto her | `nod` plays and reads as a nod, with `forceTPose` correct |
+| **P-C3** | Parameterise: the spec drives 9 people, not 1 | Nine silhouettes distinguishable in black at thumbnail size |
+| **P-C4** | Swap Mirela in the shipped scene, GLB kept beside her as the reference | The mission plays; nobody notices except that she is lit by the cellar |
+| **P-C5** | Roll out the remaining 8, one per pass, each against its own GLB | Each passes its own bar |
+| **P-C6** | Delete the GLBs, `debake.ts`, and the Tripo-specific paths | Build shrinks; nothing regresses |
+
+### Known blockers and rules
+
+- **Warehouse first, or not at all.** `placeRigged` draws nothing in Warehouse 07 — a bare
+  `ModelMeshNode` does. If procedural characters are meant to appear there, that is a separate
+  investigation and it belongs *before* P-C5, not after.
+- **Keep `character.ts` for crowds.** Static slab figures are correct for background people and
+  cost nothing. This programme replaces the nine *named* characters, not everyone in the game.
+- **Do not delete a GLB until its replacement is `AT BAR`.** The GLB is the bar. P-C6 is the
+  only stage allowed to remove one.
+- **§185's brief still governs the generator:** vary head shape, shoulder width, torso mass,
+  limb proportions, posture, hand/foot scale, asymmetry — within animation-safe limits. A
+  generator where every NPC is the same mannequin in new clothes has failed even if each one
+  passes its own bar.
 
 ---
 
@@ -647,6 +760,12 @@ Ordered by value per hour. Take from the top.
 | **T-2** | Transitions | The ending, art-directed | §4.6 | `OPEN` | |
 | **J-1** | Juice | Close every `thin` row in the §9 table | §9 floor | `OPEN` | |
 | **J-2** | Juice | Overshoot on everything that stops | §9 rule 2 | `OPEN` | |
+| **P-C1** | People | One character to the bar in her own scene's shot | `Mirela.glb` at that framing | `OPEN` | Prototype exists: `experimental/mirela-procedural` |
+| **P-C2** | People | `SkeletonProfile` + one Mixamo clip retargeted | The clip reading as itself | `BLOCKED` by P-C1 | Three traps in §4.7 |
+| **P-C3** | People | Parameterise the spec: 9 people, not 1 | §185 + thumbnail silhouette test | `BLOCKED` by P-C1 | |
+| **P-C4** | People | Swap Mirela into the shipped scene, GLB kept beside her | The mission plays; she is lit by the room | `BLOCKED` by P-C3 | |
+| **P-C5** | People | Roll out the remaining 8, one per pass | Each against its own GLB | `BLOCKED` by P-C4 | Warehouse `placeRigged` must be solved first if they go there |
+| **P-C6** | People | Delete the GLBs, `debake.ts`, the Tripo paths | Build shrinks, nothing regresses | `BLOCKED` by P-C5 | The only stage allowed to remove a GLB |
 | **A-1** | Access | Audit every hue-carried mechanic | §11 | `OPEN` | |
 | **P-1** | Post | Per-surface vignette | §6 | `OPEN` | |
 | **P-2** | Post | Feed artefacts: aberration, signal grain, dropout | §6 | `OPEN` | |
@@ -676,3 +795,122 @@ Refuse these unless a human overrides in writing.
 - **A shadow map for the warehouse.** Sixty units will not fit one. Authored dark instead.
 - **Horizontal scroll in M4SS.** The camera is Y-only and every reach number depends on it.
 - **Replacing the certainty scale or the M4SS colour script.** Both were earned. Extend them.
+- **Deleting a Tripo GLB before its replacement is `AT BAR`.** The GLB *is* the bar. Only
+  P-C6 removes one, and only after P-C5.
+- **Replacing `geometry/character.ts`.** Static slab figures are correct for background
+  crowds and cost nothing. §4.7 replaces the nine NAMED characters, not everyone.
+
+---
+
+## 15. THE TOOLBOX — what already exists, and when to reach for it
+
+**Read this before writing a new script.** Nearly forty tools exist. Most of the mistakes this
+project has made were caught by one of them, and several were made twice because somebody did
+not know it was there.
+
+Run everything from the project root. TypeScript harnesses: `npx tsx scripts/<name>.ts`.
+Python tools: `python scripts/dev/<name>.py`.
+
+### 15.1 The gates — run these before any commit
+
+| Tool | Answers |
+| --- | --- |
+| `ship-clean.ts` | Is this build fit to hand to a judge? Dev routes gated, no `console.log` in `src`, **no credentials in any tracked file** |
+| `preview-stuck.ts` | Walks Mission 01 as a player does and proves there is always a way on. Also: every globe signal can be opened, every suggestion chip is understood by its own beat |
+| `cues-resolve.ts` | Every cue a mission fires lands on a registered prop, action, shot or light beat |
+| `dev-gates.ts` | Nothing that opens the game for testing is reachable in a published build |
+| `css-balanced.ts` | Every embedded stylesheet's braces balance |
+
+**The rule that makes these worth having:** a new verb in the cue grammar must be taught to
+`cues-resolve` in the same change. A verb the checker does not know is a verb it silently
+passes.
+
+### 15.2 Geometry and level proof — before anything renders
+
+| Tool | Answers |
+| --- | --- |
+| `m4ss-stage.ts` | Is stage one playable? Drives the real `step()` with scripted input |
+| `m4ss-shaft.ts` | Does stage two's geometry admit the route it was drawn for? |
+| `m4ss-sluice.ts` | Stage three: geometry, the updraft, the route, and the creatures. **56+ checks** |
+| `m4ss-map.ts <stage>` | **Draws a whole level as an SVG floor plan.** Tiles, every sweep at its reachable radius, press strokes, creature beats, both gate states, and the camera frame |
+| `warehouse-audit.ts` | Does anything pass through anything, or stand on nothing? Has **canaries** that fail loudly if it stops being able to catch either |
+| `warehouse-cameras.ts` | Do the fixed cameras show a person? Pitch, standoff, mount height — plus the drone-lens rules |
+| `warehouse-addresses.ts` | Can every package be found where the game says it is? Plus: is the worker standing where the objective claims |
+| `shop-fittings.ts` `reach.py` | Are wall fittings where the arithmetic says, and can an arm actually reach every authored hand target |
+
+**`m4ss-map.ts` is the single most useful tool in this list and the least obvious.** Fifty-six
+green assertions coexisted with two skippable beats; drawing the level showed both in one look.
+**Adjacency — what happens to be near what — is the class of fault only a picture catches.**
+
+### 15.3 Headless renders and previews — look without launching
+
+| Tool | Renders |
+| --- | --- |
+| `preview-globe.ts` | The globe, for visual review without the editor |
+| `preview-tree.ts` | The knowledge tree |
+| `preview-terminal.ts` | The intervention terminal, to a standalone HTML file |
+| `preview-ending.ts` | Holds the ending to its rules before anyone sees it |
+| `preview-save.ts` | Does the tape actually hold the game? |
+| `preview-car.ts` | Is the car a place, or a diorama? |
+| `preview-callback.ts` / `-link.ts` | The callback and §222, proved in data |
+| `certainty-tiers.ts` / `suspected-split.ts` | Can every guess the machine draws stop being one; does SUSPECTED draw one box per crate or per shelf |
+| `audit-traces.ts` / `-trail.ts` / `-pursuit.ts` | Mission 08's deduction, breadcrumbs and camera chase, proved before a city was built around them |
+| `room-tone.ts` | The rule at the top of `RoomTone.ts`, enforced |
+
+### 15.4 Live capture — the critic's eyes
+
+**These are how a gauntlet critic sees anything.** Nothing else in the toolbox can judge a look.
+
+| Tool | Use |
+| --- | --- |
+| `dev/shot.py [out.png] [waitSeconds]` | One still of the game window. **Asks Windows where the window is every time** — play mode moves it on every restart |
+| `dev/record.py NAME [seconds] [fps]` | A **contact sheet** of every frame plus an animated GIF. The sheet is the one that finds bugs: a transition is easier to judge as a strip than as a movie |
+| `dev/drive.py move\|click\|hover X Y` | Moves and clicks the real cursor, **bounded to the game window** so a mistyped coordinate cannot press something else |
+| `dev/press.py` / `dev/keys.py` / `dev/hold.py` | Send keys at the live window and capture the result. `keys.py` reports what each one did |
+| `dev/jump.py` / `dev/intro.py` | Reach a diorama through SceneJump; record the warehouse opening sweep |
+| `dev/blackbox.py` / `dev/spin.py` | Rotate the drone camera a full circle and report black frames |
+| `dev/bake-sporeling.py` | Bake a Spriterrific spritesheet into a source module |
+
+**Four rules about capture in this project, each learned the expensive way:**
+
+1. **`pnpm build` does NOT write `.dist`.** Only the editor's own bundler does, and it only runs
+   while the editor world is loaded. If you are looking at play mode, exit it once — otherwise
+   the capture is of a stale build. This has caused four re-reports of already-fixed bugs.
+2. **Synthetic clicks reach the game; synthetic keystrokes do not.** `keybd_event` does not land
+   in the play window. Verify key bindings another way.
+3. **Screen coordinates are 1.5× wrong without `SetProcessDPIAware`.** Every tool above already
+   calls it. A new one must too.
+4. **A still proves geometry and lighting and nothing about motion.** Anything that transitions,
+   pulses, blinks or reveals is judged on a contact sheet.
+
+### 15.5 The editor, over MCP
+
+| Call | Use |
+| --- | --- |
+| `query_editor(getState)` | **Run before any mutation.** Reports connected / ready / play mode / busy |
+| `action_build(buildProject)` | The reliable way to rebuild `.dist`. `pnpm build-project` is not reliable from an agent shell |
+| `action_editor(enterPlayMode / exitPlayMode)` | Get in and out of play |
+| `action_editor(captureScreenshot)` | **Editor viewport only.** Returns `editor_not_ready` in play mode — use `dev/shot.py` there |
+| `query_node` / `action_node` / `action_scene(save)` | Read and mutate scene state; save when the scene changed |
+
+**The editor does not rebuild while its world is unloaded**, which is the mechanism behind rule
+1 above. `getState` will tell you which of those you are in.
+
+### 15.6 Writing a new tool — the three rules this project earned
+
+**1. A source-reading check must prove it found something.**
+`ship-clean` printed *"no credentials in anything tracked"* for months while reading two
+directories and a single file extension. `preview-stuck`'s interception scrape asserts
+`intercepted.size >= 2` for exactly this reason. **A scan that silently finds nothing passes
+forever.**
+
+**2. Every new check gets a canary before it is trusted.**
+Reintroduce the bug, watch the check fail on the right line, put it back. Four checks this
+month passed while the fault was still in — including one whose own canary also passed, because
+the test placed a hazard at the level's *template* position while the live one had walked away.
+**A test that places something by hand must ask the simulation where it actually is.**
+
+**3. Bound the test to the thing, not to a square around it.**
+A pendulum sweeps a disc; testing its bounding box reports collisions on four corners the arc
+never reaches. That fiction walled off four hundred pixels of level and forced five growths into
+a pile. **An over-broad rule gets exempted, and the exemption hides the real case.**
