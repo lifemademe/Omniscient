@@ -371,14 +371,23 @@ function buildRepairShop(scene: ContactScene): void {
    * cold side at 0.4; it simply stops behaving like a second key.
    */
   /*
-   * 0.44, up from 0.3, on direction: the room generally, not one more light on one face.
+   * ## Back to 0.30, and the reason is the whole point of the rule above
    *
-   * This is the scene's ambient term, so raising it lifts everything at once and points at
-   * nobody - which is the right instrument when the note is "brighter room" rather than
-   * "brighter subject". It is also the change with the least chance of reintroducing the
-   * fault above: an ambient has no position to be unmotivated from.
+   * I raised this to 0.44 believing it was the scene's ambient - a term that lifts
+   * everything and points at nobody. It is not. `ContactScene.daylight` scales the RIG's
+   * global DIRECTIONAL key and its hemisphere: the same pair that lights every diorama in
+   * the game, arriving from front-right, with nothing in this room emitting it.
+   *
+   * A directional at that angle washes the pegboard, and the wash landed as a broad disc
+   * directly behind her head at her face's own value, cancelling her against her own
+   * backing. A critic named it as light with no fixture and was exactly right - it has no
+   * fixture anywhere, by construction.
+   *
+   * The room is still brighter than it started. That brightness now comes from the batten,
+   * the corner and the door, which are at least in this room. See BATTEN_LEVEL, raised to
+   * carry what this was wrongly carrying.
    */
-  scene.daylight = 0.44;
+  scene.daylight = 0.30;
   const rng = createRng(seedFrom('mirela-shop'));
 
   // Floor and back wall - background mass, not detail (§186).
@@ -652,7 +661,6 @@ function buildRepairShop(scene: ContactScene): void {
     );
   }
 
-
   /**
    * And something for it to be lit by.
    *
@@ -808,7 +816,7 @@ function buildRepairShop(scene: ContactScene): void {
    * ambient, it lights a wall nobody is asked to look at, and at 2.4 it was the brightest
    * field in the frame. It still has to carry the pegboard, which is what it was raised for.
    */
-  const BATTEN_LEVEL = 3.1;
+  const BATTEN_LEVEL = 3.8;
 
   const tubeRoot = ENGINE.SceneNode.create({ name: 'BattenTube', position: BATTEN_AT.clone() });
   tubeRoot.add(meshOf('Tube', batten.body, MAT.tube));
@@ -2104,14 +2112,27 @@ function buildRepairShop(scene: ContactScene): void {
      * player follows first has to be the one on the face, or the room is a still life with
      * somebody standing behind it.
      */
-    intensity: 8,
+    intensity: 5.5,
     color: new THREE.Color(LIGHT.key),
     // Short, so the pool ends inside the bench instead of on the far wall.
     distance: 3.0,
     decay: 1.5,
-    angle: 0.62,
-    // A shade edge is soft, but it is an edge. Past ~0.7 the pool loses its rim and the
-    // room is evenly lit again, which is the fault being fixed.
+    /*
+     * ## 0.36, because at 0.62 the shade was not blocking anything
+     *
+     * The lamp hangs at y 1.41 and aims at y 1.02 across 0.36 horizontally - about 47
+     * degrees below horizontal. At a half-angle of 0.62 radians (35.5 degrees) the cone's
+     * UPPER edge therefore ran at 11 degrees below horizontal: nearly level, spraying
+     * across the room at head height and washing a disc onto the pegboard directly behind
+     * her. That disc sat at her face's exact value and cancelled her against her own
+     * backing, and it read as sourceless because no shaded desk lamp throws light level
+     * with its own shade. A real enamel shade blocks precisely that part of the beam.
+     *
+     * At 0.36 the upper edge is 26 degrees below horizontal and the cone lands on the bench
+     * where the fixture is pointing. The intensity comes up to hold the pool, since the same
+     * flux now covers a third of the area.
+     */
+    angle: 0.36,
     penumbra: 0.5,
   });
   /*
@@ -2243,73 +2264,13 @@ function buildRepairShop(scene: ContactScene): void {
    * One cool source on the far side does the whole job - every object now has a warm side
    * and a cold side, which is what separates planes when there is no texture to do it.
    */
-  /*
-   * ## A key that lands on HER
-   *
-   * A critic measured this room and the subject was the third thing found: her face at 48
-   * and her torso at 27, against a right wall at 87 and the window at 129. The bare bulb
-   * hangs directly ABOVE her, which lights the table and the wall and reaches the top of
-   * her head - a bulb over somebody is not a light on somebody.
-   *
-   * Motivated by the window, which §230 requires: the window is visibly the brightest thing
-   * in the frame and is the only thing in the room that could be throwing this. Aimed at
-   * her head from the window side, tight and soft, so it separates her from the near-black
-   * doorway she stands in front of without relighting the room the bulb has just been given.
-   *
-   * Cool, matching `Daylight`, because it is the same aperture. Warming it would put a
-   * third colour of light in a room built on two.
-   */
-  const ileanaKey = ENGINE.SpotLightNode.create({
-    name: 'ContactKey',
-    position: new THREE.Vector3(0.15, 1.72, -0.42),
-    // 12, up from 7.5, against a bulb that came down from 13 - the gradient has to arrive
-    // on her rather than on the furniture in front of her.
-    intensity: 12,
-    color: new THREE.Color('#cfe0f0'),
-    distance: 3.0,
-    decay: 1.3,
-    angle: 0.4,
-    penumbra: 0.75,
-  });
-  ileanaKey.lookAt(new THREE.Vector3(-1.0, 1.44, -1.72));
-  scene.registerProp('contact-key', ileanaKey);
-
-  /*
-   * ## A lit field for her to stand against
-   *
-   * Five rounds of judgement on this room kept returning the same shape of answer, and the
-   * last one finally named it: nothing here is lit BEHIND her. She stands in front of a
-   * doorway measuring 12 against a wall at 62, so at any real viewing distance she fuses
-   * into the black door as one column and disappears - measured, she does not survive a
-   * 40px blur. Making her brighter never fixed that, because the problem was never her.
-   *
-   * The room this is held against does the opposite: its figure is DARKER than its surround
-   * and reads instantly, because it is an unbroken silhouette laid across a continuously lit
-   * field. The light is on the wall, not on the man.
-   *
-   * So the doorway behind her gets a wash. Motivated by the same window as everything else
-   * cold in this room - it is the one aperture - and aimed past her at the door rather than
-   * at her, so it lifts the field without touching the silhouette standing on it.
-   */
-  const doorWash = ENGINE.SpotLightNode.create({
-    name: 'DoorWash',
-    position: new THREE.Vector3(0.35, 1.85, -0.55),
-    intensity: 9,
-    color: new THREE.Color('#b9cbdd'),
-    distance: 4.2,
-    decay: 1.15,
-    angle: 0.52,
-    penumbra: 0.9,
-  });
-  doorWash.lookAt(new THREE.Vector3(-1.35, 1.15, -2.55));
-  scene.registerProp('door-wash', doorWash);
 
   scene.registerProp(
     'door-light',
     ENGINE.PointLightNode.create({
       name: 'DoorLight',
       position: new THREE.Vector3(-2.4, 1.7, 1.6),
-      intensity: 2.6,
+      intensity: 3.4,
       color: new THREE.Color(LIGHT.fill),
       distance: 7,
       decay: 1.4,
@@ -2382,7 +2343,6 @@ function buildRepairShop(scene: ContactScene): void {
       decay: 1.6,
     })
   );
-
 
   /**
    * The wall, a year after the water went down - see art/floodstain.
@@ -6761,6 +6721,82 @@ function buildClearedHouse(scene: ContactScene): void {
    * bench lamp makes, for the same reason: a diorama is a small set with a handful of
    * objects, which is exactly where a point-light shadow is affordable.
    */
+  /*
+   * ## These two lights were written for this room and landed in the repair shop
+   *
+   * Both blocks below were authored with Ileana's coordinates - her head at (-1.0, 1.44,
+   * -1.72), the doorway behind her at (-1.35, 1.15, -2.55) - and were inserted into
+   * `buildRepairShop` by an edit anchored on `registerProp('door-light')`, which only that
+   * function contains. The uniqueness assertion passed and proved the wrong thing: that the
+   * anchor was unique, not that it was in the right room.
+   *
+   * The cost was paid twice. Mirela got two spotlights aimed at a person who is not in her
+   * room, which is where the unexplained wash on her pegboard came from. And Ileana never
+   * received either light, so five rounds of judgement on this room measured it WITHOUT the
+   * fixes that were supposed to be in it - every one of those verdicts was correct about a
+   * room that did not have them.
+   */
+  /*
+   * ## A key that lands on HER
+   *
+   * A critic measured this room and the subject was the third thing found: her face at 48
+   * and her torso at 27, against a right wall at 87 and the window at 129. The bare bulb
+   * hangs directly ABOVE her, which lights the table and the wall and reaches the top of
+   * her head - a bulb over somebody is not a light on somebody.
+   *
+   * Motivated by the window, which §230 requires: the window is visibly the brightest thing
+   * in the frame and is the only thing in the room that could be throwing this. Aimed at
+   * her head from the window side, tight and soft, so it separates her from the near-black
+   * doorway she stands in front of without relighting the room the bulb has just been given.
+   *
+   * Cool, matching `Daylight`, because it is the same aperture. Warming it would put a
+   * third colour of light in a room built on two.
+   */
+  const ileanaKey = ENGINE.SpotLightNode.create({
+    name: 'ContactKey',
+    position: new THREE.Vector3(0.15, 1.72, -0.42),
+    // 12, up from 7.5, against a bulb that came down from 13 - the gradient has to arrive
+    // on her rather than on the furniture in front of her.
+    intensity: 12,
+    color: new THREE.Color('#cfe0f0'),
+    distance: 3.0,
+    decay: 1.3,
+    angle: 0.4,
+    penumbra: 0.75,
+  });
+  ileanaKey.lookAt(new THREE.Vector3(-1.0, 1.44, -1.72));
+  scene.registerProp('contact-key', ileanaKey);
+
+  /*
+   * ## A lit field for her to stand against
+   *
+   * Five rounds of judgement on this room kept returning the same shape of answer, and the
+   * last one finally named it: nothing here is lit BEHIND her. She stands in front of a
+   * doorway measuring 12 against a wall at 62, so at any real viewing distance she fuses
+   * into the black door as one column and disappears - measured, she does not survive a
+   * 40px blur. Making her brighter never fixed that, because the problem was never her.
+   *
+   * The room this is held against does the opposite: its figure is DARKER than its surround
+   * and reads instantly, because it is an unbroken silhouette laid across a continuously lit
+   * field. The light is on the wall, not on the man.
+   *
+   * So the doorway behind her gets a wash. Motivated by the same window as everything else
+   * cold in this room - it is the one aperture - and aimed past her at the door rather than
+   * at her, so it lifts the field without touching the silhouette standing on it.
+   */
+  const doorWash = ENGINE.SpotLightNode.create({
+    name: 'DoorWash',
+    position: new THREE.Vector3(0.35, 1.85, -0.55),
+    intensity: 9,
+    color: new THREE.Color('#b9cbdd'),
+    distance: 4.2,
+    decay: 1.15,
+    angle: 0.52,
+    penumbra: 0.9,
+  });
+  doorWash.lookAt(new THREE.Vector3(-1.35, 1.15, -2.55));
+  scene.registerProp('door-wash', doorWash);
+
   const roomFill = ENGINE.PointLightNode.create({
       name: 'RoomFill',
       position: BULB.clone(),
