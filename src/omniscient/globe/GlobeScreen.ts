@@ -14,6 +14,7 @@
  */
 
 import * as ENGINE from '@gnsx/genesys.js';
+import { saveM4ssStage } from '../session/persistence.js';
 
 import { injectConsoleChrome } from '../link/console-chrome.js';
 import { audio } from '../audio/ConsoleAudio.js';
@@ -133,7 +134,13 @@ const DEV_JUMP_TARGETS: ReadonlyArray<readonly [string, string]> = [
   ['dorin', '6 dorin'],
   ['sanda', '7 sanda'],
   ['lucian', '8 lucian'],
+  // M4SS starts at whatever stage the save says, and a stage is only reachable by playing
+  // the ones before it - which needs a keyboard, and synthetic keys do not reach this
+  // window. Three entries that write the saved stage first are the only way stage two and
+  // stage three can be looked at at all. See buildJumpList.
   ['m4ss', 'M4SS'],
+  ['m4ss@1', 'M4SS s2'],
+  ['m4ss@2', 'M4SS s3'],
   ['warehouse-07', 'warehouse'],
   ['anomaly', 'anomaly'],
 ];
@@ -1134,7 +1141,25 @@ export class GlobeScreen {
       button.title = id;
       button.addEventListener('click', (event) => {
         event.stopPropagation();
-        this.onAnswer(id);
+        /*
+         * `id@n` writes the M4SS stage before opening it.
+         *
+         * M4SS reads its starting stage from the save, and the only way to advance that in
+         * normal play is to finish the stage before - which needs a keyboard, and keys sent
+         * from outside this process are swallowed. Without this, stages two and three
+         * cannot be rendered at all, and an art pass on a stage nobody can look at is the
+         * one thing ART-MASTER is most explicit about not doing.
+         *
+         * Split rather than given its own array so the list stays one flat set of buttons,
+         * and gated by the same isPublishedGame check as everything else here.
+         */
+        const at = id.indexOf('@');
+        if (at < 0) {
+          this.onAnswer(id);
+          return;
+        }
+        saveM4ssStage(Number(id.slice(at + 1)));
+        this.onAnswer(id.slice(0, at));
       });
       strip.appendChild(button);
     }
