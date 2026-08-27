@@ -161,15 +161,38 @@ export const RETRO_LOOKS = {
    * accessibleLook.
    */
   warehouseFeed: {
+    /*
+     * ## The feed had every artefact at zero
+     *
+     * P-2. This look is what the player sees through a fixed camera in somebody else's
+     * building, and the HUD over it says REMOTE LINK and LOW BANDWIDTH - and it carried
+     * curve 0, aberration 0, scanline 0, grille 0, bleed 0, roll 0 and flicker 0. Apart from
+     * its raster it was the CLEANEST surface in the game, cleaner than the console the player
+     * is sitting at and far cleaner than the machine's own interior.
+     *
+     * That is the same inversion the note on `world` already records and fixes for the
+     * raster: "the mission whose HUD says REMOTE LINK and LOW BANDWIDTH was the CRISPEST
+     * thing in the game". The raster was corrected and the artefacts were not.
+     *
+     * Deliberately BELOW the machine on every axis. The machine's interior is the deepest
+     * inside the instrument the player ever gets and it should stay the most degraded thing
+     * they see; a door camera is a cheap sensor on a long cable, not a phosphor tube. So: a
+     * small lens split, a shallow raster, a faint roll and a little persistence - enough that
+     * the image reads as ARRIVING from somewhere rather than being rendered here.
+     *
+     * flicker stays at 0. The parameter's own comment calls it a nausea risk and says small
+     * numbers only; a feed the player stares at while hunting for a person is the last place
+     * to spend that budget.
+     */
     pixel: 2.6,
-    curve: 0,
-    aberration: 0,
-    scanline: 0,
+    curve: 0.02,
+    aberration: 0.0026,
+    scanline: 0.11,
     scanPitch: 3,
-    grille: 0,
-    bleed: 0,
+    grille: 0.18,
+    bleed: 0.22,
     vignette: 0.27,
-    roll: 0,
+    roll: 0.03,
     flicker: 0,
     saturation: 1.02,
     tint: new THREE.Color(0.96, 1.0, 1.03),
