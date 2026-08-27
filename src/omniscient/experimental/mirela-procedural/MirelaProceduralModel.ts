@@ -467,10 +467,13 @@ export function createMirelaProceduralModel(): MirelaProceduralCharacter {
      * from collar to elbow. It is parented to the shoulder bone rather than skinned, so it
      * turns with the arm - a deltoid that stayed behind when the arm lifted would be a worse
      * artefact than the gap it replaces.
+     *
+     * 0.042 from 0.047: paired with the tapered forearm it was reading as a puffed sleeve,
+     * and the shoulder is meant to be the widest point of the arm, not a separate bulb on it.
      */
     rigidMesh(
       `Mirela-${side}-Deltoid`,
-      new THREE.SphereGeometry(height * 0.047, 12, 10),
+      new THREE.SphereGeometry(height * 0.042, 12, 10),
       materials.shirt,
       bones[shoulderName],
       new THREE.Vector3(0, -height * 0.006, 0)
@@ -499,8 +502,13 @@ export function createMirelaProceduralModel(): MirelaProceduralCharacter {
          * the hand can be its own real size, 90mm, and still stand 1.4x proud of what it
          * grows out of. The break was always supposed to come from the arm getting thinner,
          * not from the hand getting fatter.
+         *
+         * Then 0.019 -> 0.023, because 0.019 overshot: a critic read the arm as "big, thin,
+         * bulb - rubbery, closer to an inflatable mascot than to exaggerated mass". 76mm
+         * still tapers hard from the elbow's 116 and still leaves the hand standing proud,
+         * without the forearm becoming a stick.
          */
-        segmentGeometry(elbow, wrist, height * 0.035, height * 0.019),
+        segmentGeometry(elbow, wrist, height * 0.035, height * 0.023),
         materials.skin,
         skeleton,
         elbow,
@@ -547,7 +555,18 @@ export function createMirelaProceduralModel(): MirelaProceduralCharacter {
     materials.pants,
     bones.hips,
     new THREE.Vector3(0, -torsoHeight * 0.06, 0)
-  ).scale.set(1.1, 0.62, 0.78);
+    /*
+     * 1.44 in x, from 1.10, and the first value was a part that could not be seen.
+     *
+     * The thigh bones sit 81mm off the centre line with a 95mm radius, so the leg's outer
+     * edge is at 176mm. The pelvis at 1.10 was 155mm - twenty millimetres NARROWER than the
+     * legs it is meant to sit on - so all 252 of its triangles were inside the trouser
+     * volume. A critic reported the hip as "did not change at all, pixel-for-pixel the same
+     * shape", and was right about the picture while the geometry had in fact been added.
+     *
+     * A hip has to be the widest thing between the ribs and the knee or it is not a hip.
+     */
+  ).scale.set(1.44, 0.62, 0.78);
 
   for (const side of ['left', 'right'] as const) {
     const hipName = `${side}Hip` as const;
