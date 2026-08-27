@@ -303,9 +303,19 @@ const HIDE_CRT_POST = false;
  * The outdoor LIGHT.haze is untouched - it is correct for the dioramas, and this constant
  * exists precisely so the warehouse can disagree with it.
  */
-const WAREHOUSE_HAZE = '#141b23';
+/*
+ * Then #141b23 -> #1e2732 and far 62 -> 72, because the first pass overcorrected in a way
+ * worth naming: linear fog blends toward the haze colour, so THE HAZE LUMA IS THE FLOOR OF
+ * THE RAMP. At luma 26 the far end had nowhere to go but black, and a critic read the result
+ * as "deep but bottomless - a featureless black void with no readable far wall or floor
+ * junction". Distance in a night interior gets dim; it does not get deleted. Raising the
+ * floor to luma 38 gives the rear wall a value to settle at, so it reads as a surface a long
+ * way off rather than as the end of the model, and pushing far out to 72 takes the rear wall
+ * from 83% haze to 72% so there is something left of it to see.
+ */
+const WAREHOUSE_HAZE = '#1e2732';
 const WAREHOUSE_FOG_NEAR = 9;
-const WAREHOUSE_FOG_FAR = 62;
+const WAREHOUSE_FOG_FAR = 72;
 
 /**
  * The machine, three-quarter on. §129 wants this to be the shot a player screenshots at
