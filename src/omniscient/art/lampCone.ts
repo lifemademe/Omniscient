@@ -86,9 +86,19 @@ varying float vAlong;
 varying vec3 vNormalView;
 varying vec3 vToEye;
 void main() {
-  // Falls away from the bulb. The exponent is what stops the shaft arriving at the desk
-  // as a ring - by the time it lands there is nothing left of it.
-  float along = pow(clamp(vAlong, 0.0, 1.0), 1.7);
+  /*
+   * Falls away from the bulb - GENTLY. The exponent was 1.7 and that was the whole fault.
+   *
+   * At 1.7 the density is down to 0.31 by the middle of the shaft and effectively zero at
+   * the bottom, and the mouth term below zeroes the very top. Between them all the air
+   * lived in a thin ring under the shade with nothing beneath it, so a critic scanning
+   * across the gap between lamp and desk measured a mean of 0.67 - the shaft had not been
+   * softened, it had been deleted.
+   *
+   * 0.85 keeps roughly half the density at mid-shaft, which is what makes the space between
+   * the shade and the desk read as occupied rather than as a smudge on the bulb.
+   */
+  float along = pow(clamp(vAlong, 0.0, 1.0), 0.85);
   /*
    * Faces turned TOWARD the camera carry the shaft; the silhouette fades out.
    *
@@ -145,9 +155,9 @@ export function createLampCone(options: LampConeOptions): LampCone {
    * Three, not more: each is a draw, and by the fourth the gain is under a level.
    */
   const SHELLS: ReadonlyArray<{ radius: number; reach: number; weight: number }> = [
-    { radius: 1.0, reach: 1.0, weight: 0.55 },
-    { radius: 0.68, reach: 0.82, weight: 0.3 },
-    { radius: 0.4, reach: 0.6, weight: 0.22 },
+    { radius: 1.0, reach: 1.0, weight: 0.85 },
+    { radius: 0.68, reach: 0.86, weight: 0.5 },
+    { radius: 0.4, reach: 0.66, weight: 0.34 },
   ];
 
   const material = new THREE.ShaderMaterial({
@@ -155,7 +165,7 @@ export function createLampCone(options: LampConeOptions): LampCone {
     fragmentShader: FRAGMENT,
     uniforms: {
       uColor: { value: new THREE.Color(color) },
-      uStrength: { value: strength * 0.55 },
+      uStrength: { value: strength * 0.85 },
     },
     transparent: true,
     blending: THREE.AdditiveBlending,

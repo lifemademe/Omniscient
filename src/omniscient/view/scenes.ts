@@ -786,7 +786,19 @@ function buildRepairShop(scene: ContactScene): void {
    * 1.6 still carries the pegboard, which is what the raise was for, without the wall
    * out-reading the person standing in front of it.
    */
-  const BATTEN_LEVEL = 1.6;
+  /*
+   * 1.15. A critic counted the brightest pixels rather than looking at them.
+   *
+   * Of the top 0.5% of the frame, 71% belonged to the bench pool, 26% to this strip, and
+   * 1.8% to the woman. The room the bar sets gets 98.9% of its top range from ONE source -
+   * every value in it is a single falloff, and the subject sits at that light's edge. This
+   * room had three co-equal lights and the subject was lit by the weakest of them.
+   *
+   * A batten over bare plaster is the one of the three with no claim to be a key: it is
+   * ambient, it lights a wall nobody is asked to look at, and at 2.4 it was the brightest
+   * field in the frame. It still has to carry the pegboard, which is what it was raised for.
+   */
+  const BATTEN_LEVEL = 1.15;
 
   const tubeRoot = ENGINE.SceneNode.create({ name: 'BattenTube', position: BATTEN_AT.clone() });
   tubeRoot.add(meshOf('Tube', batten.body, MAT.tube));
@@ -2058,7 +2070,15 @@ function buildRepairShop(scene: ContactScene): void {
      * player can see instead of away from a point in the air beside it.
      */
     position: new THREE.Vector3(0.49, 1.41, -0.56),
-    intensity: 11,
+    /*
+     * 8, down from 11. The pool stays; it stops out-ranking the person.
+     *
+     * At 11 this owned 71% of the frame's brightest pixels and clipped at 241. The bench is
+     * what the mission is about and it must still read as an island - but the light the
+     * player follows first has to be the one on the face, or the room is a still life with
+     * somebody standing behind it.
+     */
+    intensity: 8,
     color: new THREE.Color(LIGHT.key),
     // Short, so the pool ends inside the bench instead of on the far wall.
     distance: 3.0,

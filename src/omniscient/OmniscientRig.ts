@@ -1751,7 +1751,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
       // Well under the lamp's own #ffcf96. This ADDS to whatever is already in the pixel,
       // and the warm surfaces below it are already near the top of the range.
       color: '#a8794a',
-      strength: 0.55,
+      // 0.95, up from 0.55: measured, the shaft between the shade and the desk was reading
+      // 0.67 mean against a void of 0 - present in the source and absent on the screen.
+      strength: 0.95,
       motes: 44,
       moteColor: '#c9b088',
       seed: 'desk-lamp',
