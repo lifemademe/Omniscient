@@ -4678,7 +4678,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * to WIN at t=0 or the three hours read as one setup fading rather than as two lights
      * trading the room.
      */
-    window.intensity = 0.75 + (17 - 0.75) * Math.pow(1 - t, 1.6);
+    // 24 at the afternoon end. The window has to WIN at t=0 or there is no handover, only
+    // a fade - and it is competing with a practical that clips its own pool.
+    window.intensity = 0.75 + (24 - 0.75) * Math.pow(1 - t, 1.6);
     // The floor stops throwing back what the window is no longer putting on it.
     this.lightRig.bounce.intensity = 1.575 * (0.32 + 0.68 * (1 - t));
 
@@ -4880,7 +4882,20 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * 1.0 - dimmed, not switched off, because §4.1's concept frame is a warm pool in a
        * cold room and that frame is the NIGHT one.
        */
-      const gain = 0.78 + 0.62 * Math.max(0, this.duskNow);
+      /*
+       * 0.34 at two in the afternoon, 1.46 at midnight - a four-fold swing.
+       *
+       * 0.78 was not enough and the measurement says why: the lamp's pool reads 206 at
+       * afternoon against a window at 112, and owns 96.5% of that frame's brightest 0.5%.
+       * A desk lamp outranking a daylit window is wrong physically and wrong dramatically,
+       * and no amount of raising the window fixes it while the lamp is that far ahead.
+       *
+       * At 2pm you would barely need this lamp on, which is the honest reason for the low
+       * end. By night it is the only thing left burning, which is the reason for the high
+       * one. The point of the arc is that the room changes hands; it cannot if one light
+       * leads at every hour.
+       */
+      const gain = 0.34 + 1.12 * Math.max(0, this.duskNow);
       this.lightRig.lamp.intensity = this.deskLampBase * (1 + wobble) * gain;
     }
     if (this.picker) this.menu?.update(deltaTime, this.picker);
