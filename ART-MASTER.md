@@ -554,9 +554,13 @@ neither — and it currently has four callers. The rule from here:
 - **Every diorama gets one dominant shadow story per frame.** Normally that is one 1024-map
   key, turned on when the room mounts and off when it unmounts. A small practical may cast as
   well only when it supports the same direction and does not create a competing shadow story.
-- **The warehouse gets none.** Sixty units will not fit a directional map and the high bays are
-  too many to cast. It gets SSAO plus **authored dark**: painted-in floor darkening under
-  racking, which is cheaper and more controllable than a shadow map at that scale.
+- **The warehouse already has one and I was wrong about that.** `WarehouseMoon` is a
+  DirectionalLight at 1.7 with `castShadow: true` and a 2048 map, aimed (there is a long note
+  at its call site about the day it was not). So the cold key and its shadow exist. What does
+  not exist is any INTERIOR fitting: no high bays, nothing overhead, nothing that pools. The
+  room is a HemisphereLight at 1.8 plus moonlight through skylights, which is why it reads
+  evenly lit everywhere. **The high bays get no shadow maps** — too many — they get pools
+  plus SSAO plus authored dark under the racking.
 - **M4SS gets none.** It is 2D; its depth comes from the parallax layers and the value ladder.
 
 **Falloff is the depth cue, not fog.** Distance haze flattens. Falloff separates. Prefer a
@@ -886,7 +890,10 @@ Ordered by value per hour. Take from the top.
 | **M-3** | M4SS | Audit every mechanic-carrying visual for the ember fault | Law 5 | `OPEN` | First gameplay-art item after F-1 |
 | **M-1** | M4SS | Stage 3 (Sluice) full art pass | M4SS-ART-BIBLE §2 | `OPEN` | Grey-boxed; largest single item |
 | **M-2** | M4SS | Sluice identity in GEOMETRY, not only the ramp | Bible §5 thumbnail test | `BLOCKED` by M-1 | |
-| **W-1** | Warehouse | Key lighting: high bays as discrete pools with real dark between | §4.4 night-DC reference | `OPEN` | |
+| **W-1** | Warehouse | Key lighting: high bays as discrete pools with real dark between | `warehouse/02-high-bay-pools.jpg` | `IN LOOP` claude 2026-08-26 | r0 artifact: `scripts/dev/W1-r0-before.jpg`. **Cause found: there are no interior light fittings at all.** The room is a HemisphereLight at 1.8 plus a moon through the skylights, so it cannot pool. Decomposed → W-1a/b/c |
+| **W-1a** | Warehouse | High-bay fittings as OBJECTS, hung from the roof structure, with a pool under each | `warehouse/02-high-bay-pools.jpg` | `OPEN` | Must come first — the fill cannot drop until something else lights the floor |
+| **W-1b** | Warehouse | Drop `WAREHOUSE_SKY_FILL` (1.8) so the pools can read | Law 2 | `BLOCKED` by W-1a | The single number flattening the room |
+| **W-1c** | Warehouse | Real darkness between the pools | `warehouse/02-high-bay-pools.jpg` | `BLOCKED` by W-1b | |
 | **W-2** | Warehouse | Depth cueing — value + saturation falloff with distance | §4.4 | `OPEN` | |
 | **W-3** | Warehouse | A lamp on the drone that lights what it approaches | §4.4 | `OPEN` | |
 | **W-4** | Warehouse | Mid-scale rhythm: break the regularity of racking/bays/markings | Law 3 | `OPEN` | |

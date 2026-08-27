@@ -127,6 +127,26 @@ export const PAINT_LOOKS = {
     brightness: 1, posterize: 0, posterizeSoft: 0, posterizeGate: 0, saturation: 1,
     outlineFadeStart: 999, outlineFadeEnd: 1000,
   },
+  /**
+   * Contact reconstructions: retain the authored value grade without treating a two-metre
+   * room like the warehouse's twenty-six-metre aisle.
+   *
+   * The warehouse look uses a 3px, full-strength neighbourhood filter to quiet distant
+   * racking. Applied globally, that same filter erased Mirela's pegboard tools, flood line,
+   * compressor silhouette and bench layers. Those are the details that make the room hers.
+   * Keep the measured brightness/chroma/soft eight-step grade, but leave source pixels and
+   * material edges intact. Geometry ink remains disabled: the room already has authored
+   * outlines and a second contour makes the small props noisy rather than specific.
+   */
+  contactCel: {
+    radius: 0, strength: 0, ink: 0, tint: 0, tooth: 0,
+    outlineWidth: 0.25, depthInk: 0, normalInk: 0, outlineStrength: 0,
+    normalScale: 0.25, protectSignals: 0,
+    inkColor: [0.0092, 0.0125, 0.0155],
+    brightness: 1.95,
+    posterize: 8, posterizeSoft: 0.6, posterizeGate: 0.08, saturation: 0.89,
+    outlineFadeStart: 2, outlineFadeEnd: 4,
+  },
   /** Pushed, for judging the direction rather than for shipping. */
   heavy: {
     radius: 1.8, strength: 0.34, ink: 0.48, tint: 0.65, tooth: 0.08,

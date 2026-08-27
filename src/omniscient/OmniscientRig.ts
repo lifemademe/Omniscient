@@ -33,6 +33,7 @@ import {
   clearM4ssStage,
   clearSave,
   hasSave,
+  isCaptureStorage,
   loadGame,
   loadM4ssStage,
   saveGame,
@@ -943,6 +944,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
     void this.startSession();
 
     return true;
+  }
+
+  /** Editor-only deterministic route used by the first-five-minute visual gauntlet. */
+  public playFirstFiveCapture(): void {
+    if (ENGINE.isPublishedGame() || !isCaptureStorage()) return;
+    this.onMenuAction('new-game');
+    window.setTimeout(() => {
+      if (this.openable.has(MIRELA_SIGNAL)) this.openSignal(MIRELA_SIGNAL);
+    }, 3200);
   }
 
   // -- Workstation -------------------------------------------------------------------
@@ -3071,8 +3081,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   /** Apply the authored cel conversion to the current 3D scene. */
   private applyCelPost(immediate = false): void {
-    setPaintLook('warehouseCel', immediate);
-    setPaintValues(this.warehouseCelTuning, immediate);
+    setPaintLook('contactCel', immediate);
   }
 
   /** Warehouse A/B can still temporarily disable the otherwise global post treatment. */

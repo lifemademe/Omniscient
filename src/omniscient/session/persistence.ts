@@ -45,6 +45,28 @@ import type { SignalState } from '../crt/GlobeView.js';
 import { clearWarehouseSave } from '../warehouse/persistence.js';
 
 const SAVE_KEY = 'omniscient.save';
+const CAPTURE_PREFIX = 'omniscient.capture.f1.';
+let captureStorage = false;
+
+/**
+ * Put an editor capture in its own save namespace.
+ *
+ * The game entry point decides whether this is permitted before the rig is created. Keeping
+ * the switch here means every campaign and M4SS key follows the same rule; a visual-review
+ * run can press NEW GAME freely without ever reading, clearing, or replacing the player's
+ * tape. Published builds never call this with true.
+ */
+export function configureCaptureStorage(enabled: boolean): void {
+  captureStorage = enabled;
+}
+
+export function isCaptureStorage(): boolean {
+  return captureStorage;
+}
+
+function storageKey(key: string): string {
+  return captureStorage ? `${CAPTURE_PREFIX}${key}` : key;
+}
 /** Bump when the shape changes. A save from another version is ignored, not migrated. */
 const SAVE_VERSION = 1;
 
@@ -100,8 +122,9 @@ export interface SaveData {
 export function saveGame(data: Omit<SaveData, 'version'>): boolean {
   try {
     const payload = JSON.stringify({ version: SAVE_VERSION, ...data });
-    window.localStorage?.setItem(SAVE_KEY, payload);
-    return window.localStorage?.getItem(SAVE_KEY) === payload;
+    const key = storageKey(SAVE_KEY);
+    window.localStorage?.setItem(key, payload);
+    return window.localStorage?.getItem(key) === payload;
   } catch {
     return false;
   }
@@ -109,7 +132,7 @@ export function saveGame(data: Omit<SaveData, 'version'>): boolean {
 
 export function loadGame(): SaveData | null {
   try {
-    const raw = window.localStorage?.getItem(SAVE_KEY);
+    const raw = window.localStorage?.getItem(storageKey(SAVE_KEY));
     if (!raw) return null;
     const data = JSON.parse(raw) as SaveData;
     if (data?.version !== SAVE_VERSION) return null;
@@ -136,11 +159,11 @@ export function hasSave(): boolean {
 /** New game. The cartridge wipes the tape. */
 export function clearSave(): void {
   try {
-    window.localStorage?.removeItem(SAVE_KEY);
+    window.localStorage?.removeItem(storageKey(SAVE_KEY));
   } catch {
     // Nothing to do - if storage is unreadable the save is unreachable anyway.
   }
-  clearWarehouseSave();
+  if (!captureStorage) clearWarehouseSave();
 }
 
 // -- The M4SS stage, from the other side ---------------------------------------------------
@@ -156,7 +179,7 @@ const M4SS_KEY = 'omniscient.m4ss.stage';
 
 export function loadM4ssStage(): number {
   try {
-    const raw = window.localStorage?.getItem(M4SS_KEY);
+    const raw = window.localStorage?.getItem(storageKey(M4SS_KEY));
     const value = Number(raw);
     return Number.isInteger(value) && value >= 0 ? value : 0;
   } catch {
@@ -166,7 +189,7 @@ export function loadM4ssStage(): number {
 
 export function saveM4ssStage(stage: number): void {
   try {
-    window.localStorage?.setItem(M4SS_KEY, String(stage));
+    window.localStorage?.setItem(storageKey(M4SS_KEY), String(stage));
   } catch {
     // See saveGame.
   }
@@ -181,7 +204,7 @@ const CONTAINED_KEY = 'omniscient.m4ss.contained';
 
 export function saveM4ssContained(): void {
   try {
-    window.localStorage?.setItem(CONTAINED_KEY, '1');
+    window.localStorage?.setItem(storageKey(CONTAINED_KEY), '1');
   } catch {
     // See saveGame.
   }
@@ -189,7 +212,7 @@ export function saveM4ssContained(): void {
 
 export function isM4ssContained(): boolean {
   try {
-    return window.localStorage?.getItem(CONTAINED_KEY) === '1';
+    return window.localStorage?.getItem(storageKey(CONTAINED_KEY)) === '1';
   } catch {
     return false;
   }
@@ -198,8 +221,8 @@ export function isM4ssContained(): boolean {
 /** A new game resets the whole specimen record: the stage AND the containment. */
 export function clearM4ssStage(): void {
   try {
-    window.localStorage?.removeItem(M4SS_KEY);
-    window.localStorage?.removeItem(CONTAINED_KEY);
+    window.localStorage?.removeItem(storageKey(M4SS_KEY));
+    window.localStorage?.removeItem(storageKey(CONTAINED_KEY));
   } catch {
     // See clearSave.
   }

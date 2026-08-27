@@ -363,7 +363,13 @@ function buildRepairShop(scene: ContactScene): void {
    * the place rather than a level: a workshop in the afternoon with a window and a work lamp over the bench, which is where
    * the light in that frame should be coming from
    */
-  scene.daylight = 0.55;
+  /*
+   * F-1 gauntlet: the opening frame was being read from the bench outward. The broad
+   * daylight lifted the pegboard, floor and every pale horizontal surface together, so
+   * Mirela's face and the request had no value hierarchy to lead. The room still has a
+   * cold side at 0.4; it simply stops behaving like a second key.
+   */
+  scene.daylight = 0.3;
   const rng = createRng(seedFrom('mirela-shop'));
 
   // Floor and back wall - background mass, not detail (§186).
@@ -668,7 +674,7 @@ function buildRepairShop(scene: ContactScene): void {
     ENGINE.PointLightNode.create({
       name: 'CornerFill',
       position: new THREE.Vector3(-1.75, 0.85, -0.55),
-      intensity: 2.6,
+      intensity: 1.2,
       color: new THREE.Color(LIGHT.fill),
       distance: 2.4,
       decay: 1.2,
@@ -785,7 +791,7 @@ function buildRepairShop(scene: ContactScene): void {
     const lamp = ENGINE.PointLightNode.create({
       name: 'BattenLamp',
       position: BATTEN_AT.clone().add(anchor),
-      intensity: 1.1,
+      intensity: 0.55,
       color: new THREE.Color(LIGHT.fill),
       distance: 3.4,
       decay: 1.5,
@@ -1250,7 +1256,17 @@ function buildRepairShop(scene: ContactScene): void {
       'SetShell',
       set.body,
       texturedFrom(MAT.equipment, {
-        color: '#6c6e6f',
+        /*
+         * Mid-value enamel, not a white card in the middle of the frame.
+         *
+         * The contact cel pass preserves this surface now instead of averaging it into the
+         * bench, which exposed the old value as the brightest large shape in the opening
+         * shot. That made the answer object outrank both Mirela and her request before the
+         * player had even heard her. Keep enough separation for the inspection shot and the
+         * rusted arrises, but seat the idle set below the human/key-light register.
+         */
+        color: '#505657',
+        tint: '#747d7e',
         /**
          * Widened and lifted, for the shot the mission is actually spent in.
          *
@@ -1919,7 +1935,7 @@ function buildRepairShop(scene: ContactScene): void {
     ENGINE.PointLightNode.create({
       name: 'WorkLamp',
       position: new THREE.Vector3(0.25, 1.55, -0.15),
-      intensity: 7.5,
+      intensity: 3.8,
       color: new THREE.Color(LIGHT.key),
       distance: 5.5,
       decay: 1.5,
@@ -1942,7 +1958,7 @@ function buildRepairShop(scene: ContactScene): void {
     ENGINE.PointLightNode.create({
       name: 'DoorLight',
       position: new THREE.Vector3(-2.4, 1.7, 1.6),
-      intensity: 4.2,
+      intensity: 2.6,
       color: new THREE.Color(LIGHT.fill),
       distance: 7,
       decay: 1.4,
@@ -1969,10 +1985,8 @@ function buildRepairShop(scene: ContactScene): void {
    * under a work lamp throws a great deal back up, and that upward bounce is what actually
    * lights somebody leaning over their own work.
    */
-  scene.registerProp(
-    'face-fill',
-    ENGINE.PointLightNode.create({
-      name: 'FaceFill',
+  const faceKey = ENGINE.SpotLightNode.create({
+      name: 'FaceKey',
       /**
        * Brought in to 1.2m, because at 2.4m it was doing nothing.
        *
@@ -1984,12 +1998,15 @@ function buildRepairShop(scene: ContactScene): void {
        * wall behind her on the way.
        */
       position: new THREE.Vector3(-0.55, 1.7, 0.15),
-      intensity: 4.5,
+      intensity: 8.5,
       color: new THREE.Color('#cfd8e4'),
       distance: 3.2,
       decay: 1.4,
-    })
-  );
+      angle: 0.42,
+      penumbra: 0.72,
+    });
+  faceKey.lookAt(new THREE.Vector3(-0.72, 1.46, -1.14));
+  scene.registerProp('face-fill', faceKey);
 
   scene.registerProp(
     'bench-bounce',
@@ -1998,7 +2015,7 @@ function buildRepairShop(scene: ContactScene): void {
       // Just above the bench top and in front of the set, so it throws up onto the radio's
       // face and onto hers rather than washing the wall behind them.
       position: new THREE.Vector3(0.1, 0.98, 0.45),
-      intensity: 3.4,
+      intensity: 0.8,
       color: new THREE.Color('#ffd9ae'),
       distance: 2.6,
       decay: 1.6,

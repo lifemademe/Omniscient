@@ -56,6 +56,8 @@ export interface SurfaceMaps {
 export interface PaintedMetalOptions {
   /** Base coat. Should be the colour the material already had - texture is not a repaint. */
   color: string;
+  /** Optional material multiplier for seating one lit prop in a scene's value hierarchy. */
+  tint?: string;
   /** Bare metal beneath, revealed by wear. */
   worn?: string;
   /** Corrosion or discolouration settling in the lower half. */
@@ -322,9 +324,10 @@ export function texturedFrom(
   material.roughnessMap = maps.roughnessMap;
   material.metalnessMap = maps.metalnessMap;
   // The maps carry the variation now; the scalars become multipliers and must be 1 or
-  // they scale the whole map down. Colour stays white for the same reason - it tints
-  // `map`, and the base coat is already in there.
-  material.color = new THREE.Color('#ffffff');
+  // they scale the whole map down. Colour is white by default because it tints `map`, but
+  // a hero prop may deliberately use a multiplier to sit below a person or practical in a
+  // scene's value hierarchy without repainting its generated wear map.
+  material.color = new THREE.Color(options.tint ?? '#ffffff');
   material.roughness = 1;
   material.metalness = 1;
   material.normalScale = new THREE.Vector2(1, 1);

@@ -32,6 +32,7 @@ import { SignalState } from '../src/omniscient/crt/GlobeView.js';
 import {
   clearM4ssStage,
   clearSave,
+  configureCaptureStorage,
   hasSave,
   loadGame,
   loadM4ssStage,
@@ -171,6 +172,21 @@ check(
   loaded?.offered === 3 && loaded?.openable[0] === 'tomas' && loaded?.m4ssStage === 1
 );
 check('and the signal states', loaded?.signals.find((s) => s.id === 'sanda')?.hidden === true);
+
+// ------------------------------------------------ the first-five capture cannot touch the tape
+const playerTape = backing.get('omniscient.save');
+saveM4ssStage(2);
+configureCaptureStorage(true);
+check('capture namespace starts without the player tape', loadGame() === null && !hasSave());
+check('capture namespace starts at M4SS stage zero', loadM4ssStage() === 0);
+check('capture write reports true', saveGame({ ...sample, offered: 9 }) === true);
+saveM4ssStage(1);
+clearSave();
+clearM4ssStage();
+check('clearing the capture leaves the player tape byte-identical', backing.get('omniscient.save') === playerTape);
+configureCaptureStorage(false);
+check('leaving capture restores the player tape', loadGame()?.offered === 3);
+check('leaving capture restores the player M4SS stage', loadM4ssStage() === 2);
 
 // ---------------------------------------------------------------- the validator refuses junk
 const KEY = 'omniscient.save';

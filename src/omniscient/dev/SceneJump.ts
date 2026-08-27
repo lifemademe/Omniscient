@@ -40,6 +40,27 @@ const MODIFIERS = (event: KeyboardEvent): boolean => event.ctrlKey && event.shif
 export interface SceneJumpHost {
   jumpToScene(sceneId: string): void;
   jumpToWarehouse?(): void;
+  playFirstFiveCapture?(): void;
+}
+
+const FIRST_FIVE_CAPTURE_FLAG = 'omniscient.dev.first-five';
+
+function captureActive(): boolean {
+  try {
+    return window.sessionStorage?.getItem(FIRST_FIVE_CAPTURE_FLAG) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function toggleFirstFiveCapture(): void {
+  try {
+    if (captureActive()) window.sessionStorage?.removeItem(FIRST_FIVE_CAPTURE_FLAG);
+    else window.sessionStorage?.setItem(FIRST_FIVE_CAPTURE_FLAG, '1');
+    window.location.reload();
+  } catch {
+    // The review route is a convenience. Storage denial must not affect the game.
+  }
 }
 
 const BADGE_ID = 'omniscient-scenejump-badge';
@@ -107,7 +128,9 @@ function buildStrip(host: SceneJumpHost, container: HTMLElement): HTMLElement {
     'padding:4px 4px 4px 0',
     'opacity:0',
     'transition:opacity 140ms ease-out',
-    'z-index:10',
+    // Above BootScreen and MainMenu: this strip exists specifically to reach otherwise
+    // inaccessible review states, including a fresh boot namespace.
+    'z-index:10000',
   ].join(';');
 
   for (const [index, sceneId] of SCENE_IDS.entries()) {
@@ -150,6 +173,25 @@ function buildStrip(host: SceneJumpHost, container: HTMLElement): HTMLElement {
     tab.addEventListener('click', () => host.jumpToWarehouse?.());
     strip.appendChild(tab);
   }
+
+  const captureTab = document.createElement('button');
+  captureTab.type = 'button';
+  captureTab.textContent = captureActive() ? 'R' : 'F';
+  captureTab.title = captureActive()
+    ? 'return to the player save namespace'
+    : 'fresh first-five-minute capture (isolated save namespace)';
+  captureTab.style.cssText = [
+    'width:20px',
+    'height:20px',
+    'font:10px/1 "Courier New",monospace',
+    'color:#d8e9c0',
+    'background:rgba(7,18,12,0.94)',
+    'border:0',
+    'box-shadow:inset 1px 1px 0 #66864f,inset -1px -1px 0 #040906',
+    'cursor:pointer',
+  ].join(';');
+  captureTab.addEventListener('click', toggleFirstFiveCapture);
+  strip.appendChild(captureTab);
 
   /*
    * Pointer-events stay off the strip until it is revealed, so an invisible column of
@@ -194,11 +236,60 @@ export function installSceneJump(host: SceneJumpHost, container: HTMLElement): (
 
   window.addEventListener('keydown', onKey);
   const strip = buildStrip(host, container);
+  const captureLauncher = captureActive() ? null : document.createElement('button');
+  if (captureLauncher) {
+    captureLauncher.type = 'button';
+    captureLauncher.textContent = 'F1';
+    captureLauncher.title = 'fresh first-five-minute capture (isolated save namespace)';
+    captureLauncher.style.cssText = [
+      'position:fixed',
+      'left:4px',
+      'top:4px',
+      'width:24px',
+      'height:18px',
+      'padding:0',
+      'font:8px/18px "Courier New",monospace',
+      'color:#d8e9c0',
+      'background:rgba(7,18,12,0.82)',
+      'border:1px solid #66864f',
+      'z-index:2147483647',
+      'cursor:pointer',
+    ].join(';');
+    captureLauncher.addEventListener('click', toggleFirstFiveCapture);
+    container.appendChild(captureLauncher);
+  }
+  const capturePlay = captureActive() && host.playFirstFiveCapture ? document.createElement('button') : null;
+  if (capturePlay) {
+    capturePlay.type = 'button';
+    capturePlay.textContent = 'GO';
+    capturePlay.title = 'play the isolated globe-to-Mirela capture route';
+    capturePlay.style.cssText = [
+      'position:fixed',
+      'left:4px',
+      'top:4px',
+      'width:28px',
+      'height:18px',
+      'padding:0',
+      'font:8px/18px "Courier New",monospace',
+      'color:#d8e9c0',
+      'background:rgba(7,18,12,0.82)',
+      'border:1px solid #66864f',
+      'z-index:2147483647',
+      'cursor:pointer',
+    ].join(';');
+    capturePlay.addEventListener('click', () => {
+      capturePlay.remove();
+      host.playFirstFiveCapture?.();
+    });
+    container.appendChild(capturePlay);
+  }
 
   return () => {
     window.removeEventListener('keydown', onKey);
     (strip as HTMLElement & { _dispose?: () => void })._dispose?.();
     strip.remove();
+    captureLauncher?.remove();
+    capturePlay?.remove();
     document.getElementById(BADGE_ID)?.remove();
   };
 }

@@ -11,6 +11,15 @@ import { isPhoneRequested, PhoneClient } from './omniscient/link/PhoneClient.js'
 import { M4SSRig } from './m4ss/M4SSRig.js';
 import { MirelaProceduralTestRig } from './omniscient/experimental/mirela-procedural/MirelaProceduralTestRig.js';
 import { OmniscientRig } from './omniscient/OmniscientRig.js';
+import { configureCaptureStorage } from './omniscient/session/persistence.js';
+
+const FIRST_FIVE_CAPTURE_FLAG = 'omniscient.dev.first-five';
+
+function configureEditorCaptureStorage(): void {
+  if (typeof window === 'undefined') return;
+  const active = !ENGINE.isPublishedGame() && window.sessionStorage?.getItem(FIRST_FIVE_CAPTURE_FLAG) === '1';
+  configureCaptureStorage(active);
+}
 
 /**
  * Which game this build starts.
@@ -63,6 +72,7 @@ class MyGameMode extends ENGINE.GameMode {
       return false;
     }
 
+    configureEditorCaptureStorage();
     const world = this.getWorld();
     if (world) {
       if (wantsMirelaProceduralTest()) {
