@@ -765,7 +765,7 @@ export const MAT = {
    * Used in exactly one place - the repair shop's batten - so this is not a shared-material
    * change dressed up as a local one.
    */
-  tube: new THREE.MeshBasicMaterial({ color: '#a8c0b6', toneMapped: false }),
+  tube: new THREE.MeshBasicMaterial({ color: '#7e948c', toneMapped: false }),
   /** The shut-down control. Dirty red, and the only one of its colour on the machine. */
   warningLamp: new THREE.MeshBasicMaterial({ color: ACCENT.warning, toneMapped: false }),
   /** Knowledge green, unlit. The cable's live end and circuit pulses. */

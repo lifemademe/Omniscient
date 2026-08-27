@@ -4670,7 +4670,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
     // Curved, not linear: an afternoon holds its level and then goes in a hurry. A straight
     // ramp spends the first four requests looking like a dimmed lamp rather than like later.
-    window.intensity = 0.75 + (11.6 - 0.75) * Math.pow(1 - t, 1.6);
+    /*
+     * 17 at the afternoon end, up from 11.6, so that daylight is the key while there is any.
+     *
+     * The old peak was set when this light was the room's only exterior source and the desk
+     * lamp was not being asked to hand anything over. Judged as a sequence, the window has
+     * to WIN at t=0 or the three hours read as one setup fading rather than as two lights
+     * trading the room.
+     */
+    window.intensity = 0.75 + (17 - 0.75) * Math.pow(1 - t, 1.6);
     // The floor stops throwing back what the window is no longer putting on it.
     this.lightRig.bounce.intensity = 1.575 * (0.32 + 0.68 * (1 - t));
 
@@ -4859,7 +4867,20 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * gone. `deskDusk()` is the same eased value the window runs on, so the handover
        * cannot drift out of step with the thing causing it.
        */
-      const gain = 1 + 0.42 * Math.max(0, this.duskNow);
+      /*
+       * The handoff is at the AFTERNOON end, which is not where I was looking.
+       *
+       * Making the lamp gain at night stopped it decaying - measured 193/178/175 across the
+       * three hours instead of 170/144 - and the key still never changed hands, because it
+       * had never been anybody else's. At two in the afternoon a desk lamp was out-valuing
+       * a window. There was nothing for night to take over FROM.
+       *
+       * So the lamp is now a subordinate practical by day and the room's light by night,
+       * which is what a desk lamp actually is. 0.78 at the afternoon end rather than a full
+       * 1.0 - dimmed, not switched off, because §4.1's concept frame is a warm pool in a
+       * cold room and that frame is the NIGHT one.
+       */
+      const gain = 0.78 + 0.62 * Math.max(0, this.duskNow);
       this.lightRig.lamp.intensity = this.deskLampBase * (1 + wobble) * gain;
     }
     if (this.picker) this.menu?.update(deltaTime, this.picker);

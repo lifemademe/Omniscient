@@ -256,7 +256,19 @@ export function createLampCone(options: LampConeOptions): LampCone {
   if (motes > 0) {
     const flock = createMotes({
       at: new THREE.Vector3(0, -length * 0.55, 0),
-      size: new THREE.Vector3(baseRadius * 1.5, length * 0.9, baseRadius * 1.5),
+      /*
+       * 0.8 of the base radius, down from 1.5 - the box was WIDER than the cone.
+       *
+       * Motes are drawn as Points and lit by nothing; they carry their own colour. Inside
+       * the beam that is right and reads as dust. Outside it they are specks glowing ten
+       * times over an unlit wall, which is a sprite layer pasted on the screen rather than
+       * dust in a light - a critic measured 16% of them sitting on background below value
+       * 30, peaking at 147 against a wall of 10.
+       *
+       * Dust is only visible where light strikes it. The cheapest way to honour that here is
+       * to keep the particles inside the volume that is lit.
+       */
+      size: new THREE.Vector3(baseRadius * 0.8, length * 0.82, baseRadius * 0.8),
       count: motes,
       color: moteColor,
       /*

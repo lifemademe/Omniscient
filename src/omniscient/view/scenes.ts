@@ -2088,9 +2088,20 @@ function buildRepairShop(scene: ContactScene): void {
     // room is evenly lit again, which is the fault being fixed.
     penumbra: 0.5,
   });
-  // Down onto the benchtop just in front of the set rather than at the set - the pool is
-  // what puts objects on the bench, and aiming at the radio only lights the radio.
-  workLamp.lookAt(new THREE.Vector3(0.28, 0.94, -0.34));
+  /*
+   * Onto the SET, not the bench in front of it.
+   *
+   * The note this replaces argued that aiming at the radio only lights the radio, and that
+   * the pool is what puts objects on the bench. Measured, that produced the opposite of
+   * what it intended: the pool became the brightest and squint-dominant mass in the frame
+   * at every blur radius, and it contained nothing. A key light pointing at empty benchtop
+   * is a key light pointing away from the scene.
+   *
+   * The radio is what the request is about and it is what should be sitting in the light.
+   * The pool still lands on the bench - a spot this wide cannot avoid it - but its centre
+   * is now on the object rather than beside it.
+   */
+  workLamp.lookAt(new THREE.Vector3(0.14, 1.02, -0.48));
   castShadows(workLamp as unknown as THREE.Object3D, {
     mapSize: 1024,
     radius: 2.5,
@@ -2192,6 +2203,36 @@ function buildRepairShop(scene: ContactScene): void {
   });
   ileanaKey.lookAt(new THREE.Vector3(-1.0, 1.44, -1.72));
   scene.registerProp('contact-key', ileanaKey);
+
+  /*
+   * ## A lit field for her to stand against
+   *
+   * Five rounds of judgement on this room kept returning the same shape of answer, and the
+   * last one finally named it: nothing here is lit BEHIND her. She stands in front of a
+   * doorway measuring 12 against a wall at 62, so at any real viewing distance she fuses
+   * into the black door as one column and disappears - measured, she does not survive a
+   * 40px blur. Making her brighter never fixed that, because the problem was never her.
+   *
+   * The room this is held against does the opposite: its figure is DARKER than its surround
+   * and reads instantly, because it is an unbroken silhouette laid across a continuously lit
+   * field. The light is on the wall, not on the man.
+   *
+   * So the doorway behind her gets a wash. Motivated by the same window as everything else
+   * cold in this room - it is the one aperture - and aimed past her at the door rather than
+   * at her, so it lifts the field without touching the silhouette standing on it.
+   */
+  const doorWash = ENGINE.SpotLightNode.create({
+    name: 'DoorWash',
+    position: new THREE.Vector3(0.35, 1.85, -0.55),
+    intensity: 9,
+    color: new THREE.Color('#b9cbdd'),
+    distance: 4.2,
+    decay: 1.15,
+    angle: 0.52,
+    penumbra: 0.9,
+  });
+  doorWash.lookAt(new THREE.Vector3(-1.35, 1.15, -2.55));
+  scene.registerProp('door-wash', doorWash);
 
   scene.registerProp(
     'door-light',
@@ -4750,21 +4791,49 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * loaded fine. AGENTS.md says never construct a project path programmatically; this is
    * what that rule is protecting against.
    */
-  // A little wild carrot at the margins - the one flowering thing, and sparse enough that
-  // it reads as a weed she has not got to rather than as planting.
-  scene.registerProp(
-    'planting-carrot',
-    scatter(rng, {
+  /*
+   * A little wild carrot at the margins - the one flowering thing, and sparse enough that it
+   * reads as a weed she has not got to rather than as planting.
+   *
+   * ## Weighted off the side that is doing well
+   *
+   * This used to sit at x +1.0 with 9.4m of width, which put most of eleven weeds across the
+   * healthy beds - the rows at +0.65 are the ones still growing, and the failing rows at
+   * -1.45 are the ones in the neighbour's shade. Weeds spread evenly over both said nothing;
+   * worse, they said she had neglected the half that is visibly fine.
+   *
+   * Somebody with a garden going wrong keeps up with the part that rewards the effort and
+   * loses the part that does not. So the scatter is centred on the shaded side now, and the
+   * healthy rows carry a clear radius of their own on top of the shared one - a weeded bed
+   * next to an overgrown one is the whole picture, and it is the picture Adaeze describes.
+   */
+  /*
+   * Held in a variable, because the mower has to be able to cut these too.
+   *
+   * This scatter was built inline and registered straight to the scene, so unlike
+   * `bankWeeds` and `bankDocks` it was never handed to the mowing field - and it is the one
+   * that stands in the OPEN GROUND the player drives over, rather than on the bank at the
+   * edge. Eleven wild carrots survived every pass, standing untouched in ground that had
+   * just been cut, which is the one thing a mown strip must not contain.
+   *
+   * Wild carrot foliage is ferny enough to read as the same plant as the bank's ferns, so
+   * cutting one and not the other looked like the mower choosing.
+   */
+  const plantingCarrot = scatter(rng, {
       modelUrl: '@project/assets/models/Plants/SM_WildCarrot_01.glb',
-      at: new THREE.Vector3(1.0, 0, 1.2),
-      width: 9.4,
+      at: new THREE.Vector3(-1.5, 0, 1.2),
+      width: 7.6,
       depth: 5.4,
       count: 11,
       scale: [0.32, 0.5],
-      clear: KEEP_CLEAR,
+      clear: [
+        ...KEEP_CLEAR,
+        // The rows that are still growing, and the ground she can reach them from.
+        { centre: new THREE.Vector3(0.9, 0, -1.6), radius: 2.5 },
+      ],
       y: 0.01,
-    })
-  );
+  });
+  scene.registerProp('planting-carrot', plantingCarrot);
 
   /**
    * -- The meadow, and the ground it grows out of ---------------------------------------
@@ -4905,6 +4974,31 @@ function buildSeedlingTunnel(scene: ContactScene): void {
       seedHeads: { share: 0.05, height: [0.5, 0.8] },
       keepOffBeach: 3.2,
       clear: KEEP_CLEAR,
+      /*
+       * The good half of the garden is kept, and kept ground is SHORT - not bare.
+       *
+       * The healthy rows are at x +0.65 and the failing ones at -1.45, in the neighbour's
+       * shade. Waist-high meadow ran right up to both, which said she had walked away from
+       * the whole plot - and the half that is visibly still growing is the half she would
+       * have kept up with. `clear` was the wrong instrument for it: taking the blades out
+       * altogether would ring the good bed with scorched earth.
+       *
+       * Two overlapping patches rather than one big circle, so the kept ground follows the
+       * bed and the standing room in front of it instead of stamping a disc on the field.
+       */
+      short: [
+        /*
+         * Kept to the HEALTHY side, which is the whole point of it.
+         *
+         * The first pair was centred at x 0.9 with a 3m radius, which reaches x -2.1 - past
+         * the failing rows at -1.45. It shortened the grass around both beds equally and so
+         * showed nothing: a difference applied to both sides of a comparison is not a
+         * difference. These stop at x -0.9, short of the shaded bed, and go deeper (0.25)
+         * so the change is legible rather than technically present.
+         */
+        { centre: new THREE.Vector3(1.3, 0, -1.5), radius: 2.2, scale: 0.25 },
+        { centre: new THREE.Vector3(2.2, 0, 0.4), radius: 2.2, scale: 0.3 },
+      ],
       y: 0,
   });
   scene.registerProp(
@@ -5083,6 +5177,8 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   mowingField.addMeadow(fieldGrass);
   mowingField.addWeeds(bankWeeds);
   mowingField.addWeeds(bankDocks);
+  // The carrots out in the open ground, which is where the mower actually goes.
+  mowingField.addWeeds(plantingCarrot);
 
   /**
    * The ground it may drive on, which is BIGGER than the ground it must clear.
@@ -6181,7 +6277,10 @@ function buildClearedHouse(scene: ContactScene): void {
    * the evidence stays lit, the furniture stops shouting.
    */
   const clearedTimber = (MAT.timber as THREE.MeshStandardMaterial).clone();
-  clearedTimber.color.multiplyScalar(0.62);
+  // 0.42, from 0.62. At 0.62 the slab and what stands on it still held 68% of the frame's
+  // brightest pixels against 4% for the woman, and blurred to 40px she disappeared between
+  // two bright masses. Furniture between the camera and the subject has to give way.
+  clearedTimber.color.multiplyScalar(0.42);
   scene.registerProp('table', meshOf('Table', mergeGeometries(table, false) ?? top, clearedTimber));
 
   /**
@@ -6200,19 +6299,41 @@ function buildClearedHouse(scene: ContactScene): void {
   boxRoot.add(meshOf('BoxShell', shell, MAT.plastic));
 
   const lid = new THREE.BoxGeometry(0.36, 0.02, 0.26);
+  /*
+   * The lid lies FLAT on the table, not tipped against the box.
+   *
+   * It was at 0.22 radians on Z, which drew a rectangle standing at an angle off the box's
+   * side and read as a mistake rather than as a lid somebody had put down. It was also 2cm
+   * up on a 2cm-thick slab, so its underside hung a centimetre clear of the table.
+   *
+   * y is now half its own thickness, which is what "resting on the surface" means for a
+   * box centred on its origin. The `settle` action still lifts it back onto the box, and it
+   * now travels from flat to flat instead of from tilted to flat.
+   */
   const boxLidRoot = ENGINE.SceneNode.create({
     name: 'BoxLid',
-    position: new THREE.Vector3(0.32, 0.02, 0.04),
-    rotation: new THREE.Euler(0, 0, 0.22),
+    position: new THREE.Vector3(0.32, 0.01, 0.04),
+    rotation: new THREE.Euler(0, 0, 0),
   });
   boxLidRoot.add(meshOf('BoxLidMesh', lid, MAT.plastic));
   boxRoot.add(boxLidRoot);
 
+  /*
+   * The photographs are IN the box, which is where a search through them starts.
+   *
+   * They were stacked from y 0.113, and the box's shell is 0.11 tall - so all nine sat
+   * ABOVE the rim, hanging over an open container as a little raft of pale rectangles. The
+   * scatter across x and z made it worse: several cleared the walls entirely and floated
+   * over the table beside it.
+   *
+   * The stack now starts below the rim and the scatter is pulled in to the inside of the
+   * shell, which is 0.34 by 0.24, so the prints stay within the walls that are holding them.
+   */
   const prints: THREE.BufferGeometry[] = [];
   for (let i = 0; i < 9; i++) {
     const print = new THREE.BoxGeometry(0.085, 0.002, 0.062);
     print.rotateY(jitter(rng, 0.9));
-    print.translate(-0.02 + jitter(rng, 0.26), 0.113 + i * 0.0022, 0.02 + jitter(rng, 0.13));
+    print.translate(-0.01 + jitter(rng, 0.075), 0.062 + i * 0.0022, 0.01 + jitter(rng, 0.045));
     prints.push(print);
   }
   boxRoot.add(meshOf('Photographs', mergeGeometries(prints, false) ?? prints[0], MAT.paper));
@@ -6578,9 +6699,25 @@ function buildClearedHouse(scene: ContactScene): void {
   glass.translate(BULB.x, BULB.y - 0.03, BULB.z);
   scene.registerProp('bulb', meshOf('Bulb', glass, MAT.lamp));
 
-  scene.registerProp(
-    'roomfill',
-    ENGINE.PointLightNode.create({
+  /*
+   * ## The bulb casts, and that is why things stop floating
+   *
+   * Everything standing on the table read as hovering, and it is not a placement bug - the
+   * box sits at 0.77 on a 0.77 surface and the envelopes at 0.775. What was missing was the
+   * shadow. The only light in this room that cast anything was the window, which comes in
+   * almost horizontally from behind and throws long shapes across the FLOOR; nothing was lit
+   * from above, so nothing standing on the table had a contact shadow. An object without one
+   * is an object with nothing holding it down, however correct its coordinates are.
+   *
+   * The bulb is the light that can. It hangs directly over the table, which is where the
+   * objects this request is a search through are sitting.
+   *
+   * It costs a cube map - six renders rather than one - because a bare bulb is a point light
+   * and there is no honest way to make it a spot. That is the same trade the repair shop's
+   * bench lamp makes, for the same reason: a diorama is a small set with a handful of
+   * objects, which is exactly where a point-light shadow is affordable.
+   */
+  const roomFill = ENGINE.PointLightNode.create({
       name: 'RoomFill',
       position: BULB.clone(),
       // Halved from 13: it used to be four metres from her and is now two, and a fill that
@@ -6619,8 +6756,14 @@ function buildClearedHouse(scene: ContactScene): void {
       color: new THREE.Color('#ffd0a0'),
       distance: 3.4,
       decay: 2.0,
-    })
-  );
+  });
+  castShadows(roomFill as unknown as THREE.Object3D, {
+    mapSize: 1024,
+    radius: 2.5,
+    normalBias: 0.02,
+    bias: -0.0005,
+  });
+  scene.registerProp('roomfill', roomFill);
 
 
   /**

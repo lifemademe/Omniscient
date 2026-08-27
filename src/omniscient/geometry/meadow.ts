@@ -311,6 +311,17 @@ export interface MeadowOptions {
   keepOffBeach?: number;
   /** Circles nothing grows in - paths, beds, the base of a tree. */
   clear?: Array<{ centre: THREE.Vector3; radius: number }>;
+  /**
+   * Regions where the grass is SHORT rather than absent - ground somebody keeps.
+   *
+   * `clear` removes blades, which is right for a path or a bed and wrong for the part of a
+   * garden that is simply looked after: bare earth reads as scorched, not as tended. This
+   * scales blade height inside a radius instead, with a soft edge so a kept patch fades into
+   * rough ground rather than ending on a circle.
+   *
+   * `scale` is the multiplier at the centre; the falloff runs out to `radius`.
+   */
+  short?: Array<{ centre: THREE.Vector3; radius: number; scale: number }>;
   y?: number;
   /**
    * Blades per crown.
@@ -440,7 +451,18 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
     position.set(x, y, z);
     quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), range(rng, 0, Math.PI * 2));
     // clumpHeight is shared across the tuft - blades from one root are the same age.
-    const tall = range(rng, low, high) * clumpHeight * (0.45 + 0.55 * lush);
+    let kept = 1;
+    for (const patch of options.short ?? []) {
+      const dx = x - patch.centre.x;
+      const dz = z - patch.centre.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      if (d >= patch.radius) continue;
+      // Smoothstep out to the radius, so the kept ground has an edge you can believe.
+      const t = d / patch.radius;
+      const edge = t * t * (3 - 2 * t);
+      kept = Math.min(kept, patch.scale + (1 - patch.scale) * edge);
+    }
+    const tall = range(rng, low, high) * clumpHeight * (0.45 + 0.55 * lush) * kept;
     /**
      * Z scales with height, and this was the bug that made the field look mown flat.
      *
