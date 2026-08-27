@@ -2006,6 +2006,30 @@ function buildRepairShop(scene: ContactScene): void {
       penumbra: 0.72,
     });
   faceKey.lookAt(new THREE.Vector3(-0.72, 1.46, -1.14));
+  /*
+   * ## The room's one shadow-casting key
+   *
+   * D-4 asks for one per room and an audit of all nine builders found exactly one: the
+   * seedling tunnel's. Eight rooms, twenty-four lights between them, and nothing casting -
+   * which is why every diorama has objects sitting ON a surface rather than IN a place.
+   *
+   * This light rather than any of the other five here, for a reason that is about cost as
+   * much as composition. It is the only SpotLight in the room, so it needs one shadow map;
+   * every other light is a point light and would need a cube - six renders - to do the same
+   * job. It is also already the key by intent: it is aimed at her face from 1.2m and the
+   * comment above it is entirely about getting light onto the person.
+   *
+   * 1024 rather than the 2048 default. The cone is 0.42 radians at 3.2m, so the map covers a
+   * small volume and the extra resolution buys nothing but memory. The soft radius matches
+   * the 0.72 penumbra it already has - a hard-edged shadow under a soft-edged light reads as
+   * two different lights.
+   */
+  castShadows(faceKey as unknown as THREE.Object3D, {
+    mapSize: 1024,
+    radius: 3.5,
+    normalBias: 0.025,
+    bias: -0.0004,
+  });
   scene.registerProp('face-fill', faceKey);
 
   scene.registerProp(

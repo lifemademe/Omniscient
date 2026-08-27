@@ -98,7 +98,22 @@ def find_tabs(shot):
             xs = [x for x in range(margin) if near(pixels[x, y], colour)]
             # A top border, not the one-pixel column down a tab's side.
             if len(xs) >= 8 and y - last > 4:
-                found.append((kind, min(xs), y))
+                # The x of the LONGEST CONTIGUOUS RUN, not min(xs). The menu renders behind
+                # the strip, and a red glyph in the page at x 2 matched the warehouse tab's
+                # dark red - so min(xs) reported the tab at x 2 while its actual border sat
+                # at 11, and the alignment filter then threw the only warehouse tab away.
+                # The border is a solid run; background text is scattered.
+                best_start, best_len, start, prev = xs[0], 1, xs[0], xs[0]
+                for x2 in xs[1:] + [None]:
+                    if x2 is not None and x2 - prev <= 1:
+                        prev = x2
+                        continue
+                    if prev - start + 1 > best_len:
+                        best_len, best_start = prev - start + 1, start
+                    if x2 is None:
+                        break
+                    start = prev = x2
+                found.append((kind, best_start, y))
                 last = y
                 break
     return found
