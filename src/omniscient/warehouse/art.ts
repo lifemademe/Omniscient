@@ -1863,8 +1863,22 @@ export class WarehouseEnvironment {
              * plane comes out at 3.40 against 3.41 before, so this buys the pools without
              * taking a level off the ground the player actually reads.
              */
+            /*
+             * Reach 10.0, from 11.5, and the intensity holds at 300 rather than climbing to
+             * match. 11.5 gave a floor pool 7.1m across on lamps spaced 10m apart, so the
+             * pools still met - a reach that ends is not the same as a reach that ends SOON
+             * ENOUGH, and only the arithmetic tells them apart. 10.0 lands the edge at 4.3m,
+             * comfortably inside half the spacing.
+             *
+             * These are the RACK lamps. They stop being the key in this pass and become the
+             * secondary wash over the shelving: the lit lanes are what the player moves
+             * through and the aisle bays own those, at roughly three times what these put on
+             * the floor. Two full-strength grids interleaved is how nineteen lamps over a
+             * 40x48m building produced one continuous sheet - each grid was filling the
+             * other's gaps.
+             */
             intensity: 300,
-            distance: 11.5,
+            distance: 10,
             decay: 1.8,
             /*
              * ## Out of the shade, and below the lens
@@ -2515,8 +2529,16 @@ export class WarehouseEnvironment {
      * corrected the fill is finally the thing it is named after - the floor of the range -
      * and the frame still carried only 2.6% of pixels below luma 20 against the reference's
      * 5.0%. This is what buys the last of that.
+     *
+     * Then 0.55 -> 0.78. With the pools finally ending where they should, the frame overshot
+     * the other way: p95 134 and spread 116 landed almost exactly on the reference's 127 and
+     * 107 - the SHAPE of the range was right - while the median sat at 59 against 78 and a
+     * quarter of the frame was below luma 40 against the reference's sixth. Too much of the
+     * room was in the dark rather than the dark being in the right places. Fill is the
+     * correct lever for that and the only one: it lifts the bottom of the range without
+     * touching the top, so the pools keep the edges this pass just bought them.
      */
-    const skyFill = this.celStyleEnabled ? 0.55 : WAREHOUSE_SKY_FILL;
+    const skyFill = this.celStyleEnabled ? 0.78 : WAREHOUSE_SKY_FILL;
     const moon = this.celStyleEnabled ? 1.7 : 1.7;
     /*
      * The front sodium was the single biggest flattener in the room and nothing here said
@@ -2529,12 +2551,12 @@ export class WarehouseEnvironment {
     // Scaled with the work lights' new falloff - see the note at their construction. These
     // numbers are the old ones times 8.5, so the floor value is unchanged and only the
     // SHAPE of the light differs.
-    const work = this.celStyleEnabled ? 357 : 459;
+    const work = this.celStyleEnabled ? 233 : 300;
     if (this.ambientLight) this.ambientLight.intensity = THREE.MathUtils.lerp(skyFill, 0.5, emergency);
     if (this.moonLight) this.moonLight.intensity = THREE.MathUtils.lerp(moon, 1.05, emergency);
     if (this.frontLight) this.frontLight.intensity = THREE.MathUtils.lerp(front, 4, emergency);
     if (this.fixtureLensMaterial) this.fixtureLensMaterial.emissiveIntensity = THREE.MathUtils.lerp(fixture, 0.1, emergency);
-    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(work, 39, emergency);
+    for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(work, 26, emergency);
     for (const [index, material] of this.emergencyMaterials.entries()) {
       const sequence = contained || reducedMotion ? 1 : 0.72 + Math.sin(this.clock * 2.5 - index * 0.8) * 0.28;
       material.emissiveIntensity = emergency * (1.2 + sequence * 3.8);

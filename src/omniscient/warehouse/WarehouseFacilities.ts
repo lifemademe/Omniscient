@@ -482,10 +482,18 @@ export class WarehouseFacilities {
              * the brightest part of its own bay. Their reach already ended (13m, decay 1.9);
              * it was the only thing about them that was right.
              */
-            intensity: 210,
+            /*
+             * 300 at reach 9.6, from 210 at 13.0. At 13 the floor pool was 10.5m across on
+             * lit stations 20m apart, so neighbours met in the middle and the lane read as
+             * one sheet; 9.6 puts the edge at 5.8m and leaves 8m of genuinely unlit floor
+             * between one bay and the next. The intensity climbs to hold the value directly
+             * under the lamp, so the lane keeps its working brightness and only gains an
+             * edge.
+             */
+            intensity: 300,
             // Short, so the pool has an edge. Long-range lamps overlap into the flat fill this
             // whole item exists to remove.
-            distance: 13,
+            distance: 9.6,
             decay: 1.9,
             // Below the shade, never inside it - see the note in buildStripLighting.
             position: new THREE.Vector3(x, y - 0.42, z),
