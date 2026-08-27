@@ -2141,11 +2141,28 @@ function buildRepairShop(scene: ContactScene): void {
    * measured rounds to settle and is not being disturbed by a change made for a different
    * reason. Logged as D-1b.
    */
+  /*
+   * ## The shaft starts BELOW the shade's mouth, not inside it
+   *
+   * The apex used to sit exactly on the shade at (0.49, 1.41, -0.56), which is where the
+   * bulb is - correct for the light and wrong for the geometry drawn to represent it. The
+   * cone's top rings were then inside the fixture, and since the shaft does not write depth
+   * they came through the enamel and drew a bright arc across the front of the shade: the
+   * beam appeared to be in front of the lamp making it.
+   *
+   * Pushed 7.5cm down the throw direction so the widest ring it starts on is already clear
+   * of the rim, and shortened by the same amount so the far end lands where it did. The
+   * apex radius comes in too - a shaft wider than the mouth it leaves would poke out of the
+   * shade's sides for the same reason.
+   *
+   * The LIGHT is untouched and still emits from inside the shade, which is where §230 wants
+   * it. This is only about where the drawn volume begins.
+   */
   const workLampAir = createLampCone({
-    apex: new THREE.Vector3(0.49, 1.41, -0.56),
+    apex: new THREE.Vector3(0.462, 1.347, -0.531),
     direction: new THREE.Vector3(-0.21, -0.47, 0.22),
-    length: 0.4,
-    apexRadius: 0.062,
+    length: 0.33,
+    apexRadius: 0.045,
     baseRadius: 0.2,
     // Under LIGHT.key rather than borrowing it. This adds into pixels that are already the
     // brightest in the room, and lampWarm/lampCore have produced white chips here before.

@@ -163,7 +163,21 @@ void main() {
    * shaft of almost constant density - measured flat at 58-68 across a 240px scan. It only
    * has to soften the last few percent.
    */
-  float mouth = smoothstep(1.0, 0.975, vAlong);
+  /*
+   * Widened again, to 0.86, and this time for a reason the depth buffer cannot solve.
+   *
+   * The shaft starts at the shade's mouth, and from a camera off to one side the first
+   * stretch of it is genuinely IN FRONT of the shade's body - so depth testing correctly
+   * draws it over the enamel and the beam appears to be in front of the lamp making it.
+   * Moving the apex clear helps and does not finish the job, because any offset big enough
+   * to clear the fixture from one angle detaches the shaft from it at another.
+   *
+   * Fading the first 14% of the shaft to nothing solves it from every angle: there is no
+   * light drawn where the fixture is, so there is nothing to paint over it. This was 0.975
+   * to stop it cancelling the along term back when that exponent was 1.7 and already steep;
+   * at 0.85 there is room for both. (No backticks in here - template literal.)
+   */
+  float mouth = smoothstep(1.0, 0.86, vAlong);
   vec3 drift = vec3(0.0, uTime * 0.06, 0.0);
   float grain =
     mrNoise(vLocal * 52.0 + drift) * 0.58 + mrNoise(vLocal * 124.0 + drift * 1.7) * 0.42;
