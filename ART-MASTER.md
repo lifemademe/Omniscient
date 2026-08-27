@@ -887,7 +887,7 @@ Ordered by value per hour. Take from the top.
 | ID | Surface | Item | Bar | Status | Evidence |
 | --- | --- | --- | --- | --- | --- |
 | **F-1** | First five minutes | Cold boot → menu → globe → Mirela connection → first request reads as one authored, judge-ready sequence | `ART-DIRECTION-v1.png`, desk-room and contact-scene references; §3/§4.1/§4.3/§4.6 | `IN LOOP` — Codex, 2026-08-26 | Judge-first item; capture as motion and stills, never against the real save |
-| **M-3** | M4SS | Audit every mechanic-carrying visual for the ember fault | Law 5 | `OPEN` | First gameplay-art item after F-1 |
+| **M-3** | M4SS | Audit every mechanic-carrying visual for the ember fault | Law 5 | `AT BAR` claude 2026-08-27 | **Now a gate: `scripts/ember-fault.ts`.** Law 5's second failure mode — a signal that exists and is too small to reach the screen. `device px = authored x 0.5 display / 2.4 retro grid`; the original 4px ember computes to **0.83**, reproducing the incident exactly. Two mechanic features registered (`core` 2.50, `paneW` 2.83) against a notice floor of 2.0; all other sprite features reported but not failed. **Double-canaried:** shrink the ember → fails with 0.83; rename it → fails as missing |
 | **M-1** | M4SS | Stage 3 (Sluice) full art pass | M4SS-ART-BIBLE §2 | `OPEN` | Grey-boxed; largest single item |
 | **M-2** | M4SS | Sluice identity in GEOMETRY, not only the ramp | Bible §5 thumbnail test | `BLOCKED` by M-1 | |
 | **W-1** | Warehouse | Key lighting: high bays as discrete pools with real dark between | `warehouse/02-high-bay-pools.jpg` | `IN LOOP` claude 2026-08-26 | r0 artifact: `scripts/dev/W1-r0-before.jpg`. **Cause found: there are no interior light fittings at all.** The room is a HemisphereLight at 1.8 plus a moon through the skylights, so it cannot pool. Decomposed → W-1a/b/c |
@@ -1047,6 +1047,7 @@ green assertions coexisted with two skippable beats; drawing the level showed bo
 | `dev/jump.py` / `dev/intro.py` | Reach a diorama through SceneJump; record the warehouse opening sweep |
 | `dev/blackbox.py` / `dev/spin.py` | Rotate the drone camera a full circle and report black frames |
 | `dev/bake-sporeling.py` | Bake a Spriterrific spritesheet into a source module |
+| `ember-fault.ts` | **Law 5's other half: a signal too SMALL to reach the screen.** Computes device pixels through the retro grid and fails when a mechanic-carrying sprite feature drops under the floor. The original 4px ember computes to 0.83 |
 | `law5-states.ts` | **Law 5 as a gate: no mechanic carried by hue alone.** Scrapes state→colour maps, converts to greyscale luma, and fails when two states collapse. Exemptions must name the non-hue channel that carries them instead |
 | **`DEV_TOUR`** in `WarehouseRig.ts` | **Park the drone at authored viewpoints inside the warehouse.** Not a script - a dev-gated list in the rig. Empty by default, so populate it, build, capture, and empty it again. This is how you photograph anything that is not at the inbound dock, and `jump.py W` always lands at the dock |
 
