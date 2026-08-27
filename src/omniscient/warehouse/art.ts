@@ -927,10 +927,30 @@ export class WarehouseEnvironment {
        * spread wider, so the spread survives the posterise instead of collapsing into one
        * band.
        */
+      /*
+       * Cardboard at a cardboard's albedo.
+       *
+       * These were #cea764 / #b29058 / #bf9a5e - luma 171, 145 and 156, so a two-thirds
+       * reflectance. Real corrugate is nearer four tenths. That sounds like pedantry and it
+       * is the reason a critic could measure a carton the drone is hovering 1.2m from at 221
+       * while an ambient-lit one on an upper shelf read 224: a surface that bright is pinned
+       * against the top of the tone curve by any light at all, so no local lamp can lift it
+       * further and the "fly closer to read it" loop has nothing to express itself with.
+       *
+       * The upper shelves make that worse for a reason that is pure geometry and cannot be
+       * tuned away: an aisle high bay hangs at 7.68m, the top load sits at 5.05m, so that
+       * shelf is 2.63m from the lamp against the floor's 7.68m and receives 7.7x what the
+       * floor does. The top of a rack is inherently the brightest cargo in the building. The
+       * drone cannot out-light it, so the cargo has to stop saturating instead.
+       *
+       * Scaled to 0.78 of value, hue untouched. Dark enough to leave headroom, light enough
+       * that cartons still read as the warm half of the palette against the cool totes and
+       * the blue racking - which W-4's bay blocking depends on.
+       */
       const CARTONS = [
-        new THREE.MeshStandardMaterial({ color: '#cea764', roughness: 0.95 }),
-        new THREE.MeshStandardMaterial({ color: '#b29058', roughness: 0.95 }),
-        new THREE.MeshStandardMaterial({ color: '#bf9a5e', roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: '#a1824e', roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: '#8b7045', roughness: 0.95 }),
+        new THREE.MeshStandardMaterial({ color: '#957849', roughness: 0.95 }),
       ];
       const merged: Array<[string, THREE.BufferGeometry[], THREE.Material]> = [
         [`RackPallets-${aisle}`, bucket.pallet, PALLET],
