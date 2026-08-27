@@ -153,6 +153,33 @@ interface DevViewpoint {
  * THE MISSION OPENS ON A FIXED CAMERA. Capture too early and you photograph a CCTV feed
  * rather than the drone. Ten seconds of settle is enough; four is not.
  */
+/*
+ * Viewpoints that have actually been used, kept as a comment because DEV_TOUR must ship
+ * empty. Paste one back in, build, capture, and empty it again.
+ *
+ *   { name: 'aisle-floor',     position: new THREE.Vector3(-1.5, 1.8,  16), yaw: Math.PI,      pitch: 0.02 },
+ *   { name: 'aisle-bays-high', position: new THREE.Vector3(-1.5, 6.8,  16), yaw: Math.PI,      pitch: -0.06 },
+ *   { name: 'bay-approach',    position: new THREE.Vector3(-3.2, 2.35, 8.1), yaw: -Math.PI / 2, pitch: 0 },
+ *
+ * Four things learned the slow way, and the last one is the expensive one:
+ *
+ * ORDER MATTERS, and not the way a tour implies. updateDevTour clamps its index to the last
+ * entry, so the list plays through once and then PARKS on whatever is last for the rest of
+ * the session. For a still, the final entry is the only one you can reliably photograph.
+ *
+ * HEIGHT IS NOT THE CAMERA. These are drone positions and the third-person camera sits on an
+ * arm behind and above it, so 6.8 in a lane swings the camera into the racking.
+ *
+ * THE MISSION OPENS ON A FIXED CAMERA. Capture too early and you photograph a CCTV feed.
+ * Ten seconds of settle is enough; four is not.
+ *
+ * AIM AT SOMETHING. WAREHOUSE_RACK_BAY_Z is [-10.7, -6, -1.3, 3.4, 8.1, 12.8] and loads sit
+ * about 0.45 above the deck heights [0.55, 1.9, 3.25, 4.6]. A pose at z 6.0 is 2.1m from the
+ * nearest bay centre - pointed straight at the gap between two of them, at an upright and
+ * fresh air. A whole round of W-3 was judged from there and the critic's verdict was that the
+ * payoff "is not visible in the frame". It was not IN the frame. Land on a bay centre and a
+ * load centre, or the capture is of nothing.
+ */
 const DEV_TOUR: readonly DevViewpoint[] = [];
 const DEV_TOUR_HOLD = 2.5;
 /**
@@ -1112,7 +1139,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
       intensity: 24,
       distance: 9,
       decay: 1.5,
-      position: new THREE.Vector3(0, -0.3, -0.62),
+      /*
+       * Lifted from -0.3 to -0.14. A critic watching the 24 land said the belly plate and the
+       * rotor cross-arms had gone from gold to near-white while the black upper shell held -
+       * which is the emitter being slung under the machine and lighting its own underside
+       * first. It also said the pool was landing on the FLOOR rather than on the shelf ahead,
+       * and the same 16cm answers both: the floor gets further away, the airframe's underside
+       * gets further away, and what is in front gets no further at all.
+       */
+      position: new THREE.Vector3(0, -0.14, -0.62),
     });
 
     // A hot little glass under the lens, so the source is visible on the drone itself and not
