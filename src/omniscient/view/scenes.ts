@@ -3106,6 +3106,32 @@ function buildBeaconMast(scene: ContactScene): void {
   // Aimed at the deck rather than left pointing down its own default axis - the whole
   // point of the change is that the direction is deliberate.
   moonLight.lookAt(new THREE.Vector3(0, 0.5, 0));
+  /*
+   * ## This room's shadow-casting key (D-4)
+   *
+   * The moon, and it is the easy case after the repair shop's four rounds. The two rules
+   * that came out of that one both pass here without any work: it REACHES the surface things
+   * rest on - it is already aimed at the deck, which is where the mast, the crates and she
+   * all stand - and there is no fixture near it to occlude itself, because the caster is
+   * ninety metres away and outside the set.
+   *
+   * A directional needs one map rather than a point light's cube, so this is the cheapest
+   * shadow in the game as well as the most motivated: a low moon behind the mast is what
+   * gives a lattice tower its shadow down a deck, and that shadow is most of what says the
+   * tower is standing ON something.
+   *
+   * extent 16 rather than the 24 default. The whole budget of a directional map is spent
+   * across that box, so it wants to be the smallest one containing everything that casts;
+   * the deck and the outcrops fit inside 16 and the extra eight metres would have quartered
+   * the resolution for empty sea. normalBias is high because the moon rakes in at a glancing
+   * angle, which is the worst case for acne on flat-shaded geometry.
+   */
+  castShadows(moonLight as unknown as THREE.Object3D, {
+    extent: 16,
+    mapSize: 2048,
+    radius: 2.5,
+    normalBias: 0.045,
+  });
   scene.registerProp('moon', moonLight);
 
   /**
