@@ -72,6 +72,10 @@ and two of them are easy to mix up:
 Older text in this repo calls the desk room "the workstation" or "the console", and calls the
 contact scenes "the dioramas". Same things.
 
+**One more numbering note.** A § with two digits or fewer (§4.4, §12) is a section of THIS
+document. A three-digit one (§185, §231, §329) is from `GAUNTLET_v4.9.md` or a code comment
+quoting it — do not go looking for it here.
+
 ### 0.1 Before your first pass — read this once
 
 **Three hard stops.**
