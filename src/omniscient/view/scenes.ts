@@ -754,6 +754,27 @@ function buildRepairShop(scene: ContactScene): void {
    * behaviour a lamp wants. The channel and the caps are standard materials and do get
    * pulled, which is also correct: the steel is inferred, the light is on.
    */
+  /*
+   * ## What the batten is for, restated after the work lamp became a cone
+   *
+   * This was 1.1, and the note below still explains why it was modest: a batten that
+   * out-lit the workbench would be a beautifully made mistake. That reasoning is intact -
+   * what changed underneath it is which fixture lights the PEGBOARD.
+   *
+   * The old work lamp was a point light with 5.5m of reach, so it lit the bench, the back
+   * wall, the pegboard and the tools on it all at once. Turning it into the 3m cone the
+   * shade actually implies gave the bench the pool it never had - and took the pegboard
+   * with it, measured at 31% of the frame under luma 10 where it had been 9%. That wall
+   * carries the evidence the mission's note refers to; it cannot go dark to buy contrast
+   * somewhere else.
+   *
+   * So the pegboard goes back on the fixture that is really above it. The batten is cold
+   * and the bench pool is warm, so the two do not compete for the same read: the eye still
+   * goes to the radio because the radio is in the only warm light in the room, and the
+   * wall is legible because the strip light over it is on.
+   */
+  const BATTEN_LEVEL = 2.4;
+
   const tubeRoot = ENGINE.SceneNode.create({ name: 'BattenTube', position: BATTEN_AT.clone() });
   tubeRoot.add(meshOf('Tube', batten.body, MAT.tube));
   const battenLamps: ENGINE.PointLightNode[] = [];
@@ -762,7 +783,7 @@ function buildRepairShop(scene: ContactScene): void {
     idle: (dt) => {
       battenTime = (battenTime + dt) % 9.4;
       const dip = battenTime < 0.035 ? 0.58 : battenTime < 0.09 ? 0.84 : 1;
-      for (const lamp of battenLamps) lamp.intensity = 1.1 * dip;
+      for (const lamp of battenLamps) lamp.intensity = BATTEN_LEVEL * dip;
     },
   });
 
@@ -791,9 +812,12 @@ function buildRepairShop(scene: ContactScene): void {
     const lamp = ENGINE.PointLightNode.create({
       name: 'BattenLamp',
       position: BATTEN_AT.clone().add(anchor),
-      intensity: 0.55,
+      // Overwritten every frame by the flicker above; this is only what frame zero sees,
+      // so it tracks BATTEN_LEVEL rather than sitting at a stale number.
+      intensity: BATTEN_LEVEL,
       color: new THREE.Color(LIGHT.fill),
-      distance: 3.4,
+      // Far enough down the wall to reach the tools, which is the whole job.
+      distance: 4.2,
       decay: 1.5,
     });
     battenLamps.push(lamp);
@@ -1977,14 +2001,48 @@ function buildRepairShop(scene: ContactScene): void {
    * handful of objects, which is where a point-light shadow is affordable and a warehouse is
    * where it is not.
    */
-  const workLamp = ENGINE.PointLightNode.create({
+  /*
+   * ## A shade is a direction, and this one threw in every direction
+   *
+   * Measured across all eight dioramas in greyscale, this room had the LOWEST value spread
+   * of any lit set in the game - p5 5, p95 96, so nothing in frame ever reached even half
+   * white. The lamp's own enamel was the brightest thing in the shot and there was no pool
+   * underneath it. A lamp that is on and throws nothing is a prop, and this is the first
+   * room in the game.
+   *
+   * The cause was `distance: 5.5, decay: 1.5` on a point light in a 5m shop. That is not a
+   * desk lamp, it is a second ceiling light hung low: it reached the pegboard, the back
+   * wall and the door at close to the strength it reached the bench, so the bench could
+   * never become an island.
+   *
+   * A spot is what the object already is - there is an enamel shade in frame with a hole in
+   * one end, and the light it implies is a cone. The paragraph above is untouched by this
+   * and still correct: it argues that the BENCH lamp rather than FaceKey must be the
+   * shadow caster, because only a source above the bench can put anything ON the bench.
+   * Both types cast; this one now casts from inside a cone, which is also a fifth of the
+   * cost - one shadow render rather than a cube map's six.
+   *
+   * Nothing else in the room moved. The fix had to be additive: a previous pass measured
+   * the pegboard at 66 against her face at 46 and widened `DoorLight` to carry across the
+   * shop and lift her, and pulling any fill back down to make this pool "read" would buy
+   * contrast by undoing that. The room gets a brighter top end, not a darker bottom.
+   */
+  const workLamp = ENGINE.SpotLightNode.create({
     name: 'WorkLamp',
     position: new THREE.Vector3(0.25, 1.55, -0.15),
-    intensity: 3.8,
+    intensity: 11,
     color: new THREE.Color(LIGHT.key),
-    distance: 5.5,
+    // Short, so the pool ends inside the bench instead of on the far wall.
+    distance: 3.0,
     decay: 1.5,
+    angle: 0.62,
+    // A shade edge is soft, but it is an edge. Past ~0.7 the pool loses its rim and the
+    // room is evenly lit again, which is the fault being fixed.
+    penumbra: 0.5,
   });
+  // Down onto the benchtop just in front of the set rather than at the set - the pool is
+  // what puts objects on the bench, and aiming at the radio only lights the radio.
+  workLamp.lookAt(new THREE.Vector3(0.28, 0.94, -0.34));
   castShadows(workLamp as unknown as THREE.Object3D, {
     mapSize: 1024,
     radius: 2.5,
@@ -2066,7 +2124,20 @@ function buildRepairShop(scene: ContactScene): void {
       // Just above the bench top and in front of the set, so it throws up onto the radio's
       // face and onto hers rather than washing the wall behind them.
       position: new THREE.Vector3(0.1, 0.98, 0.45),
-      intensity: 0.8,
+      /*
+       * Raised with the lamp that causes it.
+       *
+       * This stands in for light coming back off a pale timber benchtop, so its strength is
+       * a function of how hard that benchtop is lit - and the benchtop went from a general
+       * 98 to a 161 pool when the work lamp became a cone. At 0.8 it was calibrated to the
+       * old flat bench and left her reading 20 levels darker than before while the surface
+       * in front of her got brighter, which is the one thing bounce light exists to prevent.
+       *
+       * It is also the right instrument for the job. She is BEHIND the bench, so the pool
+       * itself cannot reach her; the only honest way a woman leaning over her own work gets
+       * lit is from the work.
+       */
+      intensity: 1.8,
       color: new THREE.Color('#ffd9ae'),
       distance: 2.6,
       decay: 1.6,
