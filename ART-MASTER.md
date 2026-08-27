@@ -891,8 +891,9 @@ Ordered by value per hour. Take from the top.
 | **M-1** | M4SS | Stage 3 (Sluice) full art pass | M4SS-ART-BIBLE §2 | `OPEN` | Grey-boxed; largest single item |
 | **M-2** | M4SS | Sluice identity in GEOMETRY, not only the ramp | Bible §5 thumbnail test | `BLOCKED` by M-1 | |
 | **W-1** | Warehouse | Key lighting: high bays as discrete pools with real dark between | `warehouse/02-high-bay-pools.jpg` | `IN LOOP` claude 2026-08-26 | r0 artifact: `scripts/dev/W1-r0-before.jpg`. **Cause found: there are no interior light fittings at all.** The room is a HemisphereLight at 1.8 plus a moon through the skylights, so it cannot pool. Decomposed → W-1a/b/c |
-| **W-1a** | Warehouse | High-bay fittings as OBJECTS, hung from the roof structure, with a pool under each | `warehouse/02-high-bay-pools.jpg` | `OPEN` | Must come first — the fill cannot drop until something else lights the floor |
-| **W-1b** | Warehouse | Drop `WAREHOUSE_SKY_FILL` (1.8) so the pools can read | Law 2 | `BLOCKED` by W-1a | The single number flattening the room |
+| **W-1a** | Warehouse | Light the fittings over where the player works | `warehouse/02-high-bay-pools.jpg` | `IN LOOP` claude 2026-08-26 | **r1 built, not yet judged.** Twelve strip fittings already exist; only five were lit and none in the rear half, where the audit now spends a whole quest. Two rear strips lit; the other five stay geometry per the frame-rate note |
+| **W-1b** | Warehouse | Drop `WAREHOUSE_SKY_FILL` so the pools can read | Law 2 | `IN LOOP` claude 2026-08-26 | **r1 built, not yet judged.** 1.8 → 0.6 — the value its own comment prescribes. See below |
+| **T-3** | Tooling | A reliable way to REACH each surface for capture | — | `OPEN` | **Blocks the loop.** The globe auto-rotates faster than measure-then-click, SceneJump's strip never appeared, and Night Shift is gated. Round 1 of W-1 is built and uncapturable |
 | **W-1c** | Warehouse | Real darkness between the pools | `warehouse/02-high-bay-pools.jpg` | `BLOCKED` by W-1b | |
 | **W-2** | Warehouse | Depth cueing — value + saturation falloff with distance | §4.4 | `OPEN` | |
 | **W-3** | Warehouse | A lamp on the drone that lights what it approaches | §4.4 | `OPEN` | |

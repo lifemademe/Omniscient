@@ -444,7 +444,19 @@ function bayRulerMaterial(mirrored: boolean): THREE.MeshBasicMaterial {
 const GATE_HEAD_Y = 5.8;
 const GATE_DROP = 5.8;
 const GATE_OPEN_SCALE = 0.03;
-const WAREHOUSE_SKY_FILL = 1.8;
+/**
+ * The number the hemisphere note asks for. See buildLights.
+ *
+ * That note diagnoses this exact fault - "1.9 of directionless fill, and an ambient has no
+ * direction by definition, so every shadow in the building was lifted to roughly the value of
+ * every lit surface... a scene that looks deliberate and measures flat" - and prescribes 0.6.
+ * The constant said 1.8. The fix was written down and then undone, and the comment was left
+ * describing a room that no longer existed.
+ *
+ * 0.6, as prescribed. The moon at 1.7 is the cold key, the strip fittings are the warm
+ * practicals, and the fill goes back to being fill.
+ */
+const WAREHOUSE_SKY_FILL = 0.6;
 
 /** Mirrors ZONE_ACCENT in WarehouseFacilities so signage and floor read as one code. */
 const ZONE_SIGN_ACCENT: Readonly<Record<string, string>> = {

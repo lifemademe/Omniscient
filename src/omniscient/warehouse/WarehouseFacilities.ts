@@ -421,9 +421,17 @@ export class WarehouseFacilities {
       [-8, 6.4, 20.6, 7.2, true],
       [6, 6.4, 20.6, 7.2, true],
       [-19.5, 4.2, -20.2, 5.0, true],
-      // The rear half, which had none at all.
-      [-8, 6.4, -20.6, 7.2, false],
-      [6, 6.4, -20.6, 7.2, false],
+      /*
+       * The rear half, which had none at all - and these two are LIT now.
+       *
+       * The note above is right that twelve point lights is a frame-rate decision, and it was
+       * right about which floors mattered when it was written. It has been overtaken: the
+       * inbound audit stands its workers at z -16 to -18 and unloads them through the freight
+       * door at -29, so the rear half is where the player now spends a whole quest. Two lights,
+       * not seven - the other five stay geometry.
+       */
+      [-8, 6.4, -20.6, 7.2, true],
+      [6, 6.4, -20.6, 7.2, true],
       [-19.5, 5.8, -6.4, 5.0, false],
       [19.5, 5.8, -6.4, 5.0, false],
       // The west run and the sortation floor.
