@@ -13,6 +13,19 @@ The globe's dev list carries `M4SS s2` / `M4SS s3` entries that write the saved 
 opening the mission; this drives them, then walks the three lines of dialogue that unlock the
 folder. That is the whole trick.
 
+## Reading a marked-up screenshot back into level coordinates
+
+When someone circles something on a capture of a stage, the level coordinate is
+
+    level = (screen - (10, 5)) / 1.5
+
+and screen is the position in the window-content image this writes. That constant was
+derived once and then checked against two fixed objects with known level positions - the
+`breach` button at (280, 460) and the `w2` gate at x 214 - so it can be re-verified the same
+way if a camera or a scale ever changes. It is worth doing: the difference between two
+growths a hundred level-pixels apart is one circle's width on screen, and deleting the wrong
+one silently removes a beat.
+
 Coordinates are window-content pixels, the space `shot.py` writes and `tap.py` reads. They
 are stable because every one of them is a fixed element of a fixed layout - the menu buttons,
 the dev list, the response chips - but if the globe's dev list gains entries above M4SS, the
