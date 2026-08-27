@@ -2030,7 +2030,22 @@ function buildRepairShop(scene: ContactScene): void {
    */
   const workLamp = ENGINE.SpotLightNode.create({
     name: 'WorkLamp',
-    position: new THREE.Vector3(0.25, 1.55, -0.15),
+    /*
+     * Inside the shade, which it was not.
+     *
+     * This sat at (0.25, 1.55, -0.15) while the enamel shade it is supposed to be burning
+     * inside sits at (0.49, 1.41, -0.56) - the bench lamp's root plus the `neck` of its arm.
+     * 0.41m apart in z. That survived every previous pass because an invisible cone cannot
+     * betray its own origin; it took hanging a visible shaft off the light to see haze
+     * appear in mid-air a foot from the fixture.
+     *
+     * Moving it costs nothing that was measured. A spot's pool is placed by its TARGET, not
+     * by where the bulb is, and the target below is unchanged - so the pool stays on the
+     * benchtop where three rounds of measurement put it. What does change is the direction
+     * everything on the bench throws its shadow, which now runs away from the lamp the
+     * player can see instead of away from a point in the air beside it.
+     */
+    position: new THREE.Vector3(0.49, 1.41, -0.56),
     intensity: 11,
     color: new THREE.Color(LIGHT.key),
     // Short, so the pool ends inside the bench instead of on the far wall.
