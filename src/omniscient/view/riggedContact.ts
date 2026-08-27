@@ -1151,7 +1151,24 @@ const ARRIVE = 0.06;
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
       for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-        const map = (material as THREE.MeshStandardMaterial).map;
+        /*
+         * Take the shine off the MATERIAL, not only out of the texture.
+         *
+         * This traverse debaked painted highlights out of the map and left roughness and
+         * metalness at whatever the GLB was authored with - so a character exported with a
+         * low roughness kept a live specular and read as wet plastic under any practical.
+         * Reported on Vasile, who stands under a bulkhead lamp in a cellar.
+         *
+         * Cloth, skin and webbing are rough and not metal. 0.92 leaves a trace of sheen on
+         * the highest curvature - a shoulder, a cheekbone - and kills the plastic.
+         */
+        const standard = material as THREE.MeshStandardMaterial;
+        if (standard.isMeshStandardMaterial) {
+          standard.roughness = Math.max(standard.roughness ?? 1, 0.92);
+          standard.metalness = Math.min(standard.metalness ?? 0, 0.04);
+          standard.needsUpdate = true;
+        }
+        const map = standard.map;
         if (!map || debaked.has(map)) continue;
         debaked.add(map);
         debakeHighlights(map);

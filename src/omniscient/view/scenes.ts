@@ -3589,7 +3589,20 @@ function buildBeaconMast(scene: ContactScene): void {
     ENGINE.PointLightNode.create({
       name: 'FaceFill',
       position: new THREE.Vector3(2.6, 3.1, 2.8),
-      intensity: 5.5,
+      /*
+     * 12, from 5.5. Tomas has to read in VALUE, not in hue.
+     *
+     * A critic put it plainly: this frame "reads only in colour - orange hi-vis on blue",
+     * which Law 1 forbids outright. Measured, he sat at 15 against water at 26 - the only
+     * thing telling him apart from the sea was that he is orange, and desaturated he
+     * disappeared into a 74% value plateau.
+     *
+     * The sea now carries its own texture, which broke the plateau, and this is the other
+     * half: he is standing directly beneath a lit beacon, so the light on him is the most
+     * motivated in the scene. Nothing else moves and nothing is darkened - the sea stays
+     * where it is and he comes up off it.
+     */
+    intensity: 12,
       color: new THREE.Color('#9fb6cc'),
       distance: 5.5,
       decay: 1.5,
@@ -8422,23 +8435,61 @@ function buildFloodedCellar(scene: ContactScene): void {
   const rim = new THREE.TorusGeometry(0.132, 0.008, 5, 14);
   rim.translate(lampAt.x, lampAt.y, lampAt.z + 0.135);
   housing.push(rim);
+  /*
+   * Straight bars across the glass, not half-tori around it.
+   *
+   * These were TorusGeometry arcs at 4 radial by 10 tubular segments. At that count a torus
+   * tube is a square prism stepping through ten positions, and rotated into a cage they
+   * overlapped into four fat angular lobes sitting on the backplate - reported as the wall
+   * light "looking like that". A cage read as a blot.
+   *
+   * A bulkhead guard is bars across the front of the glass. Boxes are what bars are, they
+   * stay one pixel wide at this distance instead of stepping, and the silhouette is the
+   * whole read: a lamp with bars across it is a bulkhead, one without is a bulb.
+   */
   for (let i = 0; i < 4; i++) {
-    const rib = new THREE.TorusGeometry(0.135, 0.007, 4, 10, Math.PI);
-    rib.rotateY(Math.PI / 2);
-    rib.rotateZ(Math.PI / 2 + (i * Math.PI) / 4);
-    rib.translate(lampAt.x, lampAt.y, lampAt.z + 0.02);
-    housing.push(rib);
+    const bar = new THREE.BoxGeometry(0.262, 0.012, 0.012);
+    bar.rotateZ((i * Math.PI) / 4);
+    bar.translate(lampAt.x, lampAt.y, lampAt.z + 0.128);
+    housing.push(bar);
   }
-  scene.registerProp(
-    'bulkhead-guard',
-    meshOf('BulkheadGuard', mergeGeometries(housing, false) ?? housing[0], MAT.metal)
+  /*
+   * ## The lamp housing must not shadow its own wall
+   *
+   * The backplate, rim and bars stand a few centimetres proud of a light that is mounted ON
+   * the wall behind them, so with shadow casting on they threw a large dark blot across the
+   * plaster - reported as the wall light "looking like that". It is not a decal fault or a
+   * cage fault: it is the fixture occluding the practical it exists to house.
+   *
+   * Third time this project has hit it - see the bench lamp's shade in the repair shop and
+   * the note there. Set on the mesh as well as in userData, because the policy pass runs
+   * later and only `castShadow` on the mesh keeps a thing out of the shadow map.
+   */
+  const bulkheadGuard = meshOf(
+    'BulkheadGuard',
+    mergeGeometries(housing, false) ?? housing[0],
+    MAT.metal
   );
+  bulkheadGuard.traverse((o) => {
+    o.userData.noShadowCast = true;
+    const mesh = o as unknown as THREE.Mesh;
+    if (mesh.isMesh) mesh.castShadow = false;
+  });
+  scene.registerProp('bulkhead-guard', bulkheadGuard);
 
   // The diffuser, squashed against the plate the way a bulkhead's glass is.
   const shade = new THREE.SphereGeometry(0.115, 12, 9);
   shade.scale(1, 1, 0.78);
   shade.translate(lampAt.x, lampAt.y, lampAt.z + 0.085);
-  scene.registerProp('bulkhead', meshOf('Bulkhead', shade, MAT.lamp));
+  const bulkheadGlass = meshOf('Bulkhead', shade, MAT.lamp);
+  // The diffuser sits in front of the bulb; if it casts, it puts a disc of its own shadow on
+  // the wall it is lighting.
+  bulkheadGlass.traverse((o) => {
+    o.userData.noShadowCast = true;
+    const mesh = o as unknown as THREE.Mesh;
+    if (mesh.isMesh) mesh.castShadow = false;
+  });
+  scene.registerProp('bulkhead', bulkheadGlass);
 
   /*
    * ## This room's shadow-casting key (D-4)
