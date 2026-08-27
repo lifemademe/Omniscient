@@ -72,6 +72,39 @@ const DARK_STEEL = new THREE.MeshStandardMaterial({ color: '#1b2432', roughness:
  * instead of disappearing into it.
  */
 const ROOF_DECK = new THREE.MeshStandardMaterial({ color: '#151b28', roughness: 0.94, metalness: 0.05 });
+/**
+ * The racking, and it is the same fault as the roof deck one comment up.
+ *
+ * A critic judging the drone's lamp said the brightest pixels in the frame "belong to
+ * architecture rather than to the lamp", and pointed at a near-white horizontal band running
+ * the full width. Measured, that band is rgb(128,139,141) at a 95th percentile of 222 - as
+ * bright as the lamp glass itself at 211, and hundreds of times its area. It is the top of a
+ * rack shelf deck.
+ *
+ * The colour was never the problem: #273a49 is a dark blue and stays. `metalness: 0.58` is
+ * the problem. A metal in PBR answers a light almost entirely in specular, so a semi-rough
+ * 58% metallic deck under a high bay returns a broad sheen no albedo can argue with - and
+ * there is no reflection probe in this room, so that metalness is buying brightness and
+ * nothing else. Warehouse racking is PAINTED, and paint is a dielectric.
+ *
+ * Its own material rather than editing STEEL, for the reason ROOF_DECK has its own: STEEL
+ * also carries the conveyor rollers and the inspection table, which are bare metal and should
+ * stay that way. Only the thing that is painted gets painted.
+ */
+/*
+ * The colour then had to come down with it, and that is not a second opinion - it is the
+ * arithmetic of the first change. A metal answers a light almost entirely in specular, so
+ * dropping metalness 0.58 -> 0.08 kills the sheen AND hands the surface back its diffuse
+ * albedo everywhere. Measured, exactly that: the deck's 95th percentile fell 222 -> 203, the
+ * near-white streak the critic pointed at, while its MEDIAN rose 127 -> 154. Better shape,
+ * brighter surface, and the band was already the largest bright thing in the room.
+ *
+ * #1e2d39 from #273a49 - the same blue at about four fifths the value - puts the median back
+ * where it was while keeping the fixed highlight gone. Change the response first, then
+ * re-derive the albedo for the response you now have; doing it the other way round tunes a
+ * colour against physics that is about to change underneath it.
+ */
+const RACK_PAINT = new THREE.MeshStandardMaterial({ color: '#1e2d39', roughness: 0.78, metalness: 0.08 });
 /* Stock that is not cardboard - see the tote and drum buckets in buildRacks. The drums
    carry the only saturated colour on the racking and it is cool on purpose. */
 const TOTE = new THREE.MeshStandardMaterial({ color: '#2b4950', roughness: 0.72, metalness: 0.06 });
@@ -625,7 +658,7 @@ export class WarehouseEnvironment {
     const rng = createRng(seedFrom('warehouse-racks'));
     for (const [index, x] of WAREHOUSE_LAYOUT.rack.centers.entries()) {
       const aisle = index + 1;
-      const rack = mesh(`Rack-${aisle}`, rackGeometry(), STEEL, new THREE.Vector3(x, 0, WAREHOUSE_LAYOUT.rack.centerZ));
+      const rack = mesh(`Rack-${aisle}`, rackGeometry(), RACK_PAINT, new THREE.Vector3(x, 0, WAREHOUSE_LAYOUT.rack.centerZ));
       this.root.add(rack);
       /**
        * 8.55, not 7.2 - the aisle numbers were being eclipsed by the light fittings.
