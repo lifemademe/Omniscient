@@ -1885,7 +1885,29 @@ export class WarehouseEnvironment {
          * compiles a shorter shader - which matters in a scene that also runs ten clerestory
          * lights, six door lights, four zone lights and two shadow-casting directionals.
          */
-        if (xIndex % 2 === 0 && zIndex % 2 === 0) {
+        /*
+         * A diagonal, not a checkerboard, and the difference is a whole side of the building.
+         *
+         * `xIndex % 2 === 0 && zIndex % 2 === 0` lights nine lamps and the note below is right
+         * that nine is enough of them. What it never checked is WHICH nine: taking every other
+         * x index lights columns -20, -4 and 12 and NOTHING else, for the life of the build.
+         * The racks stand at -19, -12, -5, 2 and 9, so three of them get a lamp a metre away
+         * and two of them are six and eight metres from the nearest one. Half the racking in
+         * the building was systematically underlit, in a fixed pattern, forever.
+         *
+         * A critic flying the aisle put it as "the right-hand rack is consistently darker than
+         * the left at equal depth and its labels are effectively gone from the second bay
+         * onward, which is an asymmetry the player would feel". Measured at matched depths
+         * across the lane, the right side came out at 0.79x the left. It is a navigation
+         * fault as much as an art one - the bay numbers are how the player finds anything.
+         *
+         * Stepping the pair of lit columns along by two on each z row covers all six columns
+         * for one extra lamp - ten against nine, where a true checkerboard would need fifteen.
+         * It also stops the lamps forming a rectangular grid, which Law 3 asks for anyway.
+         */
+        const litA = (zIndex * 2) % 6;
+        const litB = (zIndex * 2 + 3) % 6;
+        if (xIndex === litA || xIndex === litB) {
           /**
            * High bay lamps, and they are WARM.
            *

@@ -140,6 +140,39 @@ def resolve(found, want):
     return x + 8, top + pitch // 2, pitch, len(scenes)
 
 
+def still_on_menu(shot) -> bool:
+    """Did the click actually land?
+
+    A click misses perhaps one time in four - the strip retracts on a pointer move it does not
+    like - and a missed jump is SILENT. The rewrite of this file dropped the check the previous
+    version had, and the very next capture taken without it was a screenshot of the main menu,
+    measured twice as if it were a warehouse before anybody looked at the picture.
+
+    Two conditions, and it needs BOTH, because one of them alone is what went wrong twice.
+
+    The previous version tested green-minus-red over the logo box and called anything above -10
+    the menu. That threshold was measured against a DIORAMA, which reads about -25. The
+    warehouse reads -7.35 there, because the box lands on the mission ticker and the ticker is
+    olive-green text - so the check reported "still on the menu" for four consecutive successful
+    jumps into a warehouse and refused to save any of them. The old version had the same bug and
+    had simply never been pointed at this room.
+
+    So the second condition carries the weight: the HUD panel at the top left exists in every
+    playable scene and never on the menu, and it is a saturated green on near-black, measuring
+    about +12 green-minus-red against the menu's dark desk room. A frame is only the menu if the
+    logo signature is there AND the HUD is not.
+    """
+    rgb = shot.convert('RGB')
+
+    def green_over_red(box):
+        px = list(rgb.crop(box).getdata())
+        return sum(g - r for r, g, b in px) / len(px)
+
+    logo_looks_like_menu = green_over_red((510, 150, 900, 270)) > -10
+    hud_present = green_over_red((60, 215, 355, 340)) > 5.0
+    return logo_looks_like_menu and not hud_present
+
+
 def main():
     want = sys.argv[1] if len(sys.argv) > 1 else 'W'
     out = sys.argv[2] if len(sys.argv) > 2 else 'scripts/dev/jump.png'
@@ -153,19 +186,29 @@ def main():
     x, y, pitch, count = resolve(find_tabs(shot), want)
     target = (rect[0] + x, rect[1] + y)
 
-    # Approach ALONG the strip, so the reveal never lapses between hover and click.
-    sweep([(target[0], rect[1] + y - 60), (target[0], rect[1] + y - 25), target], 0.06)
-    time.sleep(0.2)
-    u.mouse_event(LEFTDOWN, 0, 0, 0, 0)
-    time.sleep(0.07)
-    u.mouse_event(LEFTUP, 0, 0, 0, 0)
+    for attempt in range(4):
+        # Approach ALONG the strip, so the reveal never lapses between hover and click.
+        sweep([(target[0], rect[1] + y - 60), (target[0], rect[1] + y - 25), target], 0.06)
+        time.sleep(0.2)
+        u.mouse_event(LEFTDOWN, 0, 0, 0, 0)
+        time.sleep(0.07)
+        u.mouse_event(LEFTUP, 0, 0, 0, 0)
 
-    # Park well clear, or the strip stays lit in the capture.
-    time.sleep(0.7)
-    u.SetCursorPos((rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2)
-    time.sleep(settle)
+        # Park well clear, or the strip stays lit in the capture.
+        time.sleep(0.7)
+        u.SetCursorPos((rect[0] + rect[2]) // 2, (rect[1] + rect[3]) // 2)
+        time.sleep(settle if attempt == 0 else 3.0)
 
-    grab(rect).save(out)
+        shot = grab(rect)
+        if not still_on_menu(shot):
+            break
+        print(f'  attempt {attempt + 1}: click missed, still on the menu - retrying')
+        # Re-reveal: the strip has retracted since the pointer was parked.
+        reveal(rect)
+    else:
+        raise SystemExit('never left the menu - the capture would have been of the menu')
+
+    shot.save(out)
     print(f'{out}  tab {want} at {target}  (pitch {pitch}, {count} scene tabs)')
 
 
