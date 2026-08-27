@@ -391,8 +391,8 @@ export function createMirelaProceduralModel(): MirelaProceduralCharacter {
       segmentGeometry(
         new THREE.Vector3(0, shoulderY - torsoHeight * 0.16, 0),
         worldAt('head').clone().add(new THREE.Vector3(0, headHeight * 0.12, 0)),
-        height * 0.058,
-        height * 0.034,
+        height * 0.050,
+        height * 0.033,
         12,
         6
       ),
@@ -490,7 +490,17 @@ export function createMirelaProceduralModel(): MirelaProceduralCharacter {
     root.add(
       skinnedMesh(
         `Mirela-${side}-Forearm`,
-        segmentGeometry(elbow, wrist, height * 0.035, height * 0.029),
+        /*
+         * The wrist end taken 0.029 -> 0.019, and this is the actual fault behind two
+         * critics reading "a blunt rounded stump with no hand". At 0.029 the forearm ends
+         * 96mm across - nearly twice a real wrist's 55 - so it barely tapered at all, and the
+         * only way to make a hand proud of it was to inflate the hand. Widening the hand to
+         * 1.34 did produce a silhouette break and it produced a MITTEN. Taper the wrist and
+         * the hand can be its own real size, 90mm, and still stand 1.4x proud of what it
+         * grows out of. The break was always supposed to come from the arm getting thinner,
+         * not from the hand getting fatter.
+         */
+        segmentGeometry(elbow, wrist, height * 0.035, height * 0.019),
         materials.skin,
         skeleton,
         elbow,
@@ -505,8 +515,39 @@ export function createMirelaProceduralModel(): MirelaProceduralCharacter {
       materials.skin,
       bones[wristName],
       new THREE.Vector3(0, -height * 0.037, height * 0.016)
-    ).scale.set(0.92, 1.08, 0.72);
+      /*
+       * Wider than the wrist, and flat. It was 0.92 in x, which made the hand 83mm across
+       * where the forearm it grows out of is 96mm - so the arm simply tapered to a rounded
+       * end and two critics in a row read "no hand at all, a blunt rounded stump". The length
+       * was never wrong: 195mm against a real hand's 190. What was missing is that a hand is
+       * WIDER than its wrist and much flatter, and both of those are silhouette facts. 1.34
+       * in x puts it at 120mm across, comfortably proud of the wrist, and 0.45 in z makes it
+       * a paddle instead of a sausage. Back to 1.0 once the wrist was tapered - see the
+       * forearm note above; 1.34 was compensating for an arm that never narrowed.
+       */
+    ).scale.set(1.0, 1.06, 0.45);
   }
+
+  /*
+   * ## The pelvis, which is the same fault as the neck one level down
+   *
+   * With the shoulder girdle joined, a critic said "the continuity now stops at the ribs -
+   * the trunk meets the legs as a flat cut with no hip". It did: the torso loft ends at a
+   * horizontal section and the thigh cylinders begin at the hip bones, with nothing spanning
+   * the two. The same overlapping cap that fixed the shoulder fixes this, turned ninety
+   * degrees: wide, flattened front to back, sitting across the bottom of the trunk and over
+   * the top of both thighs so the silhouette runs unbroken from ribs to knee.
+   *
+   * In `pants` rather than `apron`, because the apron is a separate draped plate over the
+   * front and this is the body underneath it.
+   */
+  rigidMesh(
+    'Mirela-Pelvis',
+    new THREE.SphereGeometry(height * 0.085, 14, 10),
+    materials.pants,
+    bones.hips,
+    new THREE.Vector3(0, -torsoHeight * 0.06, 0)
+  ).scale.set(1.1, 0.62, 0.78);
 
   for (const side of ['left', 'right'] as const) {
     const hipName = `${side}Hip` as const;
