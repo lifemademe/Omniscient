@@ -362,6 +362,8 @@ export class M4SSRig extends ENGINE.SceneNode {
   private readonly voice = new SlimeAudio();
   /** Last frame's values, so a cue fires on the TRANSITION and never on the state. */
   private wasAttached = false;
+  /** 'none' | 'lift' | 'refused' - see the column cues in the per-frame block. */
+  private wasDraught: 'none' | 'lift' | 'refused' = 'none';
   private wasSnapped = 0;
   private wasOwned = 0;
   private wasAirborne = false;
@@ -3717,6 +3719,27 @@ export class M4SSRig extends ENGINE.SceneNode {
 
     // The creature's filter follows the fling's slow motion. Heard, not just seen.
     this.voice.setSlowmo(state.slowmo);
+
+    /*
+     * The column, on entry and on refusal, and each only once.
+     *
+     * draftOn returns the column WITH a lift of zero when the body is too heavy, which is why
+     * it hands back the pair rather than a boolean - and it is the reason there are two cues
+     * here rather than one. Rising and being refused are different events and the player
+     * needs to tell them apart without reading the HUD line.
+     *
+     * Edge-triggered on both. A draught is a place, not an impulse: the body is inside it for
+     * seconds at a time, and playing on every frame it is in there would be a buzz rather
+     * than a sound. The state is remembered so the cue fires when the body ENTERS the column
+     * and again only if it leaves and comes back.
+     */
+    const inDraught = draftOn(state);
+    const draughtNow = inDraught ? (inDraught.lift > 0 ? 'lift' : 'refused') : 'none';
+    if (draughtNow !== this.wasDraught) {
+      if (draughtNow === 'lift') this.voice.play('draught');
+      else if (draughtNow === 'refused') this.voice.play('refused');
+      this.wasDraught = draughtNow;
+    }
 
     // Latch, snap, release. Snap wins over release: both drop `attached` in one frame,
     // and the tear is the one the player needs to hear.

@@ -67,7 +67,11 @@ export type SlimeCue =
   /** The final chamber seals around an empty room. */
   | 'contained'
   /** The body lands from a real fall. */
-  | 'land';
+  | 'land'
+  /** The updraught takes hold and the body starts to rise. */
+  | 'draught'
+  /** The column is there and the body is too heavy for it. */
+  | 'refused';
 
 interface Voice {
   hz: number | null;
@@ -149,9 +153,41 @@ const CUES: Record<SlimeCue, Voice[]> = {
     { hz: 92, to: 68, length: 0.72, level: 0.11, type: 'triangle', delay: 0.3 },
   ],
   land: [{ hz: null, band: 540, q: 0.9, length: 0.06, level: 0.4 }],
+  /*
+   * The column, and it is the only RISING sound in the table.
+   *
+   * §9 marks "ride the column" thin with no sound at all, and everything else here either
+   * falls in pitch or is a transient - a snap, a thud, a landing. Air lifting a body is the
+   * one event in the game that goes UP and keeps going, so the noise band sweeps upward
+   * across a long tail and a soft sine follows it. Low Q on the band because moving air is
+   * broad; a tight Q would make it a whistle, which is a kettle rather than a draught.
+   *
+   * Quiet. It sits under the ride rather than announcing it: the player already knows they
+   * are rising because the screen is moving, and the sound's job is to say that the AIR is
+   * doing it rather than the rope.
+   */
+  draught: [
+    { hz: null, band: 300, q: 0.6, length: 0.9, level: 0.16 },
+    { hz: 150, to: 340, length: 0.85, level: 0.06, type: 'sine' },
+  ],
+  /*
+   * The refusal, and it is deliberately the same voice failing rather than a different one.
+   *
+   * A body too heavy for the column is IN the draught and being denied by it - mass.ts
+   * returns the column with a lift of zero precisely so that case can be told apart. So the
+   * sound starts as the draught and gives up: the same band, a third of the length, and the
+   * sine sags instead of climbing. It should read as the air trying and not managing, which
+   * is exactly what the HUD line says in words.
+   */
+  refused: [
+    { hz: null, band: 300, q: 0.6, length: 0.3, level: 0.13 },
+    { hz: 170, to: 110, length: 0.34, level: 0.05, type: 'sine' },
+  ],
 };
 
 const CAPTIONS: Readonly<Record<SlimeCue, SoundCaptionEvent>> = {
+  draught: { text: 'updraught lifts the body', tier: 'all', kind: 'world', key: 'slime-draught' },
+  refused: { text: 'updraught cannot lift this mass', tier: 'all', kind: 'world', key: 'slime-refused' },
   latch: { text: 'tendril grips anchor', tier: 'all', kind: 'world', key: 'slime-latch' },
   release: { text: 'tendril releases', tier: 'all', kind: 'world', key: 'slime-release' },
   snap: {
