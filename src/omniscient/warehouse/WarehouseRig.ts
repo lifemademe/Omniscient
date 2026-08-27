@@ -129,6 +129,30 @@ interface DevViewpoint {
  * AISLE sign. Anything above about 4 in a lane needs the camera's arm accounted for, or a
  * position out in a cross-aisle where there is clearance behind.
  */
+/*
+ * Viewpoints that have actually been used, kept as a comment because DEV_TOUR must ship
+ * empty. Paste one back in, build, capture, and empty it again.
+ *
+ *   { name: 'aisle-floor',     position: new THREE.Vector3(-1.5, 1.8, 16), yaw: Math.PI,      pitch: 0.02 },
+ *   { name: 'aisle-bays-high', position: new THREE.Vector3(-1.5, 6.8, 16), yaw: Math.PI,      pitch: -0.06 },
+ *   { name: 'rack-approach',   position: new THREE.Vector3(-3.2, 2.2,  6), yaw: -Math.PI / 2, pitch: 0 },
+ *
+ * Aisle centres are the rack centres plus half the spacing - x -15.5, -8.5, -1.5, 5.5, 12.5 -
+ * and racks border the middle lane at x -5 and x 2, so -3.2 parks the nose about 1.2m off a
+ * face. Three things learned the slow way:
+ *
+ * ORDER MATTERS, and not the way a tour implies. updateDevTour clamps its index to the last
+ * entry, so the list plays through once and then PARKS on whatever is last for the rest of
+ * the session. For a recording that is a tour; for a still, the final entry is the only one
+ * you can reliably photograph. Put the shot you want at the bottom.
+ *
+ * HEIGHT IS NOT THE CAMERA. These are drone positions and the third-person camera sits on an
+ * arm behind and above it, so 6.8 in a lane swings the camera back into the racking and fills
+ * the frame with a shelf. Anything above about 4 in a lane needs the arm accounted for.
+ *
+ * THE MISSION OPENS ON A FIXED CAMERA. Capture too early and you photograph a CCTV feed
+ * rather than the drone. Ten seconds of settle is enough; four is not.
+ */
 const DEV_TOUR: readonly DevViewpoint[] = [];
 const DEV_TOUR_HOLD = 2.5;
 /**
@@ -1042,10 +1066,34 @@ export class WarehouseRig extends ENGINE.SceneNode {
        * white and its 95th percentile was 255. The hull is authored at #16191c, a
        * near-black, so that was never albedo - it was the drone bleaching itself.
        */
-      intensity: 4.5,
-      distance: 11,
-      decay: 1.35,
-      position: new THREE.Vector3(0, -0.3, -0.5),
+      /*
+       * 7.5/9/1.5 at -0.62, from 4.5/11/1.35 at -0.50.
+       *
+       * The note above is still correct and its PREMISE expired. It cut this lamp from 10 to
+       * 4.5 because "the room is high-key now and the cel pass lifts it further", and it was
+       * right: 9.35% of the airframe was clipping to pure white on a hull authored at
+       * #16191c. The room has since had the flat post-pass gain taken from 1.95 to 1.05 and
+       * the hemisphere fill from 2.2 to 0.78, and the same measurement now reads 0.33%
+       * clipped at a 95th percentile of 196, down from 1.87% and 242. The headroom that was
+       * spent compensating for an over-bright room is back, and it belongs to the one light
+       * in this building the player actually aims.
+       *
+       * Intensity alone would have put it straight back into the hull, because the airframe
+       * is the nearest thing to the lamp and inverse-square is unkind at 20cm. Moving the
+       * emitter 12cm further off the nose holds the hull almost exactly where it was - 41
+       * against 39 - while the extra reach goes into the room. The lamp is now 26cm ahead of
+       * its own glass, which is invisible in play and is the standard trick for a headlight
+       * that must not light its own housing.
+       *
+       * Steeper decay and a shorter cutoff are the point rather than a side effect. This
+       * lamp exists so that flying closer to a package makes it clearer, so what matters is
+       * not its absolute value but the RATIO across the approach: 4.7x from 1.5m to 4m,
+       * against 3.9x before.
+       */
+      intensity: 7.5,
+      distance: 9,
+      decay: 1.5,
+      position: new THREE.Vector3(0, -0.3, -0.62),
     });
 
     // A hot little glass under the lens, so the source is visible on the drone itself and not
