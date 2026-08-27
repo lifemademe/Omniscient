@@ -278,9 +278,34 @@ const HIDE_CEL_POST = false;
  */
 const HIDE_CRT_POST = false;
 
-const WAREHOUSE_HAZE = '#5d6b77';
-const WAREHOUSE_FOG_NEAR = 32;
-const WAREHOUSE_FOG_FAR = 120;
+/*
+ * ## Aerial perspective, at the scale of the building it is in
+ *
+ * These were the outdoor numbers with a warehouse name on them, and measured, they did
+ * nothing: linear fog contributes (d - near) / (far - near), so at near 32 / far 120 the
+ * first thirty-two metres of a fifty-eight metre building carry NO haze at all and the far
+ * wall carries 26%. The depth cue W-2 is about was not absent because it was subtle - it was
+ * switched off for the whole space the player occupies. Measured across a deep interior shot,
+ * saturation went 0.229 near, 0.409 mid, 0.408 far: it RISES with distance, which is aerial
+ * perspective backwards.
+ *
+ * 9 / 62 puts the ramp across the room: about a fifth of the way at 20m, half at 35m, and
+ * near-full at the rear wall, which is what a big shed full of air actually does.
+ *
+ * ## And it fades toward the dark
+ *
+ * #5d6b77 is a pale grey at luma 105. Blending distance toward that lifts the far end, which
+ * is the daylight version of this effect - haze is bright outdoors because the sky lights it.
+ * A night interior has no sky in it: distance loses light, so it must fade DOWN. #141b23 is
+ * the same cool hue at a third the value, and it takes the far end toward the dark it should
+ * already have been going to, desaturating on the way.
+ *
+ * The outdoor LIGHT.haze is untouched - it is correct for the dioramas, and this constant
+ * exists precisely so the warehouse can disagree with it.
+ */
+const WAREHOUSE_HAZE = '#141b23';
+const WAREHOUSE_FOG_NEAR = 9;
+const WAREHOUSE_FOG_FAR = 62;
 
 /**
  * The machine, three-quarter on. §129 wants this to be the shot a player screenshots at
