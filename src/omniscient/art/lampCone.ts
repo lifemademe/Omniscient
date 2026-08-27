@@ -50,6 +50,19 @@ export interface LampConeOptions {
   readonly color: string;
   /** Peak alpha of the shell. Small: 0.3 is already clearly visible. */
   readonly strength?: number;
+  /**
+   * Draw the volumetric shell at all. Default true.
+   *
+   * The shell is a large, soft, additive surface, and this game POSTERIZES - so its falloff
+   * is quantised into bands and the outermost band becomes a hard contour. At small size and
+   * low strength that is invisible; on a bench lamp filling a chunk of the frame it drew a
+   * hard-edged wedge on the wall that read as a flat panel rather than as light. No amount
+   * of softening helps, because softer means a wider band.
+   *
+   * `false` keeps the motes and drops the shell, which is the right trade wherever the cone
+   * is large in frame: a posterizer cannot band a speck.
+   */
+  readonly shell?: boolean;
   /** Motes drifting inside the shaft. 0 for none. */
   readonly motes?: number;
   /** Metres per second the motes sink. See `fall` in createMotes. */
@@ -196,7 +209,7 @@ void main() {
 export function createLampCone(options: LampConeOptions): LampCone {
   const {
     apex, direction, length, apexRadius, baseRadius, color,
-    strength = 0.55, motes = 0, moteColor = '#d8c49a', seed = 'lamp-cone',
+    strength = 0.55, motes = 0, moteColor = '#d8c49a', seed = 'lamp-cone', shell = true,
   } = options;
 
   const root = ENGINE.SceneNode.create({ name: 'LampCone', position: apex.clone() });
@@ -242,7 +255,7 @@ export function createLampCone(options: LampConeOptions): LampCone {
   });
 
   const clocks: Array<{ value: number }> = [];
-  for (const [index, spec] of SHELLS.entries()) {
+  for (const [index, spec] of shell ? SHELLS.entries() : []) {
     const geometry = new THREE.CylinderGeometry(
       apexRadius * spec.radius,
       baseRadius * spec.radius,

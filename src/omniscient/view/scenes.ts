@@ -1459,9 +1459,25 @@ function buildRepairShop(scene: ContactScene): void {
    */
   const METER_REST = 2.45;
   const METER_LIVE = 0.74;
+  /*
+   * ## The needle pivots INSIDE the dial
+   *
+   * Its anchor was at y 0.064 and the meter face runs 0.069 to 0.173 - so the pivot sat
+   * five millimetres BELOW the bottom edge of the scale, and since the bar is built from
+   * the pivot outward, its root end crossed the dial's frame and hung into the radio's
+   * body. At this pixel scale that reads as a white staircase running off the bottom of
+   * the meter.
+   *
+   * 0.079 puts the pivot a centimetre inside the bottom edge, which is where a moving-coil
+   * needle is actually hinged. The arm is 0.068 long, so at vertical the tip reaches 0.147
+   * against a face top of 0.173 - it sweeps the scale without ever leaving it, at rest or
+   * live.
+   *
+   * METER_REST and METER_LIVE are unchanged: the angles were never the problem.
+   */
   const meterNeedleRoot = ENGINE.SceneNode.create({
     name: 'MeterNeedle',
-    position: new THREE.Vector3(-0.1144, 0.064, 0.191),
+    position: new THREE.Vector3(-0.1144, 0.079, 0.191),
     rotation: new THREE.Euler(0, 0, METER_REST),
   });
   const needleGeo = new THREE.BoxGeometry(0.068, 0.005, 0.002);
@@ -2195,8 +2211,18 @@ function buildRepairShop(scene: ContactScene): void {
     // Under LIGHT.key rather than borrowing it. This adds into pixels that are already the
     // brightest in the room, and lampWarm/lampCore have produced white chips here before.
     color: '#9c7346',
-    // 0.16. Halved once already for reading as a grey smear on the pegboard; halved again
-    // because at any strength a shell this size posterizes into a visible wedge.
+    /*
+     * No shell here at all - only the dust.
+     *
+     * Shrinking and fading it was not enough and was never going to be: the paint pass
+     * posterizes, so this surface's falloff bands and the outermost band draws a hard
+     * gradient outline around a cone shape on the pegboard. Softer makes the band WIDER.
+     * The only version of this that does not draw an outline is the one that is not drawn.
+     *
+     * The motes stay. They are what a critic measured and called dusty air in the first
+     * place, they read at this scale, and a posterizer cannot band a speck.
+     */
+    shell: false,
     strength: 0.16,
     motes: 34,
     moteColor: '#c9b088',
