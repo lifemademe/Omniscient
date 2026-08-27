@@ -3126,10 +3126,23 @@ function buildBeaconMast(scene: ContactScene): void {
   const glow = ENGINE.PointLightNode.create({
     name: 'BeaconGlow',
     position: new THREE.Vector3(0, beaconY + 0.08, 0),
-    intensity: 15,
+    /*
+     * 24, and the decay eased to 1.05, so the beacon reaches its own deck.
+     *
+     * Measured, the lower half of this frame was 74.2% inside a single 16-level band: deck,
+     * railing, the man, the near water and the far shore all the same value. The man
+     * separated from his own surround by 2.9 levels. The frame read only in COLOUR - orange
+     * hi-vis against blue - which Law 1 forbids outright.
+     *
+     * The fixture is already there and already pointed the right way. A lamp on a mast
+     * lights the platform it is bolted to, and at 15 with a 1.3 decay it arrived at the deck
+     * at the same value as the sea behind it. Nothing is darkened to buy this separation:
+     * the deck comes up, the water stays where it is.
+     */
+    intensity: 24,
     color: new THREE.Color(ACCENT.amber),
     distance: 14,
-    decay: 1.3,
+    decay: 1.05,
   });
   beaconRoot.add(glow);
 

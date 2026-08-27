@@ -1824,10 +1824,27 @@ export class OmniscientRig extends ENGINE.SceneNode {
       color: new THREE.Color(LIGHT.key),
       // Wide and very soft. A hard-edged pool on the floor would read as a stage light;
       // the penumbra is doing the work of a window's diffuse spill.
-      angle: 0.828,
-      penumbra: 1,
-      distance: 8,
-      decay: 1.25,
+      /*
+       * ## The sun has to reach the room, and cast a shape when it gets there
+       *
+       * The note above argues for a wide, very soft cone on the grounds that a hard-edged
+       * pool would read as a stage light. That is right about hardness and wrong about the
+       * consequence at penumbra 1: a fully soft cone dissolves the window's own frame, so
+       * the one light in this room that HAS a shape to cast was casting none.
+       *
+       * Measured across the three hours: the desk away from the lamp collapses 165 to 6, so
+       * daylight is genuinely doing work on the horizontal - but the wall left of the desk
+       * reads 11 at two in the afternoon and 0 at night. The sun was landing on the desk and
+       * nothing else, and with no mullion shape anywhere.
+       *
+       * 0.45 keeps the edge soft enough to read as a window rather than a spotlight and hard
+       * enough for the frame to print. Wider and longer so it reaches the walls and the
+       * floor, which is where a window at 2pm puts most of its light.
+       */
+      angle: 0.98,
+      penumbra: 0.45,
+      distance: 11,
+      decay: 1.15,
     });
     /*
      * The window casts too, softly. Same argument as the lamp - a spot is self-bounding -
@@ -1837,7 +1854,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
     castShadows(windowKey as unknown as THREE.Object3D, { mapSize: 1024, radius: 4.5, normalBias: 0.03, bias: -0.0005 });
     // Aim across the desk rather than straight at the wall opposite, so the beam travels
     // along the desk surface and the near clutter picks up a rim.
-    windowKey.lookAt(WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(-0.6, 0.1, 0.2)));
+    // Aimed further into the room and a little higher, so the cone takes in the left wall
+    // and the floor rather than terminating on the desk.
+    windowKey.lookAt(WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(-1.15, 0.35, 0.5)));
     this.add(windowKey);
 
     /**
