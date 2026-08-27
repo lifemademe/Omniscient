@@ -261,16 +261,78 @@ export function skyTexture(moon: THREE.Vector3): THREE.CanvasTexture | null {
  * §230 abandoned the wet specular on the sea, so there is no moon path on the water. The
  * temptation is real and it is a lens effect on a surface that has no waves.
  */
-export function seaTexture(): THREE.CanvasTexture | null {
-  return createDecal(256, 256, (ctx, w, h) => {
-    const gradient = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w * 0.5);
+/**
+ * Night water: swell, a moon path, and crests.
+ *
+ * This was a bare radial gradient, and it measured a standard deviation of 1.2 across the
+ * whole sea - no texture at any scale, so deck, railing, figure and water all collapsed into
+ * one value band and the frame read only in colour. Law 3 wants detail at three scales; a
+ * gradient has none.
+ *
+ * The disc is mapped from the viewer outward, so distance from centre IS distance to the
+ * horizon: swell rings therefore compress as they approach the edge, which is the whole of
+ * sea perspective. The moon path is the one bright feature and it points at the moon.
+ */
+export function seaTexture(moon?: THREE.Vector3): THREE.CanvasTexture | null {
+  return createDecal(512, 512, (ctx, w, h) => {
+    const cx = w / 2;
+    const cy = h / 2;
+    const horizon = (SKY_RADIUS / 55) * 0.5 * w;
+
+    const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, w * 0.5);
     gradient.addColorStop(0, '#141d27');
     gradient.addColorStop(0.22, '#18222d');
-    // The horizon sits at 46 of the disc's 55-unit half-width.
     gradient.addColorStop((SKY_RADIUS / 55) * 0.5, '#2a3542');
     gradient.addColorStop(1, '#2a3542');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, w, h);
+
+    // Swell: rings that crowd toward the horizon. Spacing goes as the square of the
+    // remaining distance, which is what makes open water recede rather than tile.
+    ctx.lineWidth = 1;
+    for (let i = 1; i < 90; i++) {
+      const t = i / 90;
+      const r = horizon * (1 - (1 - t) * (1 - t));
+      if (r < 6) continue;
+      const near = 1 - t;
+      ctx.strokeStyle = `rgba(150, 178, 205, ${(0.02 + near * 0.055).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    /*
+     * The moon path. A single bright lane from under the moon out to the horizon, broken
+     * into glints rather than drawn as a solid streak - a continuous bar reads as a spill,
+     * and what water actually does is throw back a thousand separate facets.
+     */
+    const bearing = moon ? Math.atan2(moon.z, moon.x) : -Math.PI / 3;
+    for (let i = 0; i < 460; i++) {
+      const t = i / 460;
+      const r = horizon * (0.06 + t * 0.94);
+      // The lane narrows with distance, the way a real glitter path converges on the moon.
+      const spread = (1 - t) * 0.20 + 0.012;
+      const a = bearing + (Math.sin(i * 12.9898) * 43758.5453 % 1 - 0.5) * spread * 2;
+      const x = cx + Math.cos(a) * r;
+      const y = cy + Math.sin(a) * r;
+      const size = Math.max(1, (1 - t) * 3.2);
+      const alpha = (0.10 + (1 - t) * 0.42) * (0.35 + ((i * 7919) % 100) / 154);
+      ctx.fillStyle = `rgba(214, 231, 246, ${alpha.toFixed(3)})`;
+      ctx.fillRect(x - size / 2, y - size / 2, size, Math.max(1, size * 0.55));
+    }
+
+    // Crests away from the moon: sparse, short, and only where the eye can still resolve
+    // them. This is the third scale - swell, path, then individual breaks.
+    for (let i = 0; i < 900; i++) {
+      const t = Math.pow(((i * 2654435761) % 1000) / 1000, 1.8);
+      const r = horizon * (0.05 + t * 0.95);
+      const a = ((i * 40503) % 6283) / 1000;
+      const x = cx + Math.cos(a) * r;
+      const y = cy + Math.sin(a) * r;
+      const len = Math.max(1, (1 - t) * 4.5);
+      ctx.fillStyle = `rgba(120, 150, 178, ${(0.05 + (1 - t) * 0.16).toFixed(3)})`;
+      ctx.fillRect(x, y, len, 1);
+    }
   });
 }
 
@@ -857,7 +919,7 @@ export function createFieldBackdrop(sun: THREE.Vector3): BackdropPart[] {
 
 export function createNightBackdrop(moon: THREE.Vector3): BackdropPart[] {
   const sky = skyTexture(moon);
-  const sea = seaTexture();
+  const sea = seaTexture(moon);
   if (!sky || !sea) return [];
 
   const parts: BackdropPart[] = [];

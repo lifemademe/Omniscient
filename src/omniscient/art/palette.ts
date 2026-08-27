@@ -429,6 +429,8 @@ export const MAT = {
    * in the normal map, where §232 charges nothing for it.
    */
   pegboard: standard('#7d6a4c', 0.8),
+  /** Masonry that has been under water and stayed wet. Darker and duller than the wall. */
+  floodStain: standard('#3d4a4a', 0.95),
   /**
    * Galvanised tube. Dull enough to stand in daylight without becoming the subject.
    *

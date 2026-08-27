@@ -8023,6 +8023,82 @@ function buildFloodedCellar(scene: ContactScene): void {
     mark.translate(-2.4 + jitter(rng, 0.11), height, -2.103);
     marks.push(mark);
   }
+  /*
+   * ## The tide line, and what the water does where it meets things
+   *
+   * A critic measuring this room found the flood unreadable: no waterline anywhere on the
+   * wall (the vertical profile was monotone), no shoreline across the floor, and at three
+   * times exposure the drum, the boots and the crate all met the floor with hard dry contact
+   * shadows and no meniscus. One specular lobe was the only wet cue in a room whose entire
+   * job is to make a flood legible.
+   *
+   * Three things a flood actually leaves, built rather than lit:
+   *
+   * A STAIN BAND where the water stood at its peak - darker below than above, because
+   * masonry that has been wet stays wet. It runs the back wall and the side wall at the same
+   * height, which is what makes it read as a level rather than as dirt.
+   *
+   * A HIGH-WATER LINE on top of it: one thin, sharper mark at the peak. Floods leave a
+   * distinct edge where the surface rested longest, and it is the single most legible cue in
+   * a flooded room - the eye reads a horizontal it can compare to its own idea of level.
+   *
+   * A MENISCUS where each standing object enters the water: a flat collar slightly above the
+   * surface. Water climbs a solid it touches, and without it an object standing in a flood
+   * looks like an object standing on a floor that happens to be shiny.
+   */
+  const WATER_PEAK = WATER_LEVEL + 0.42;
+
+  const stainParts: THREE.BufferGeometry[] = [];
+  const floodEdge: THREE.BufferGeometry[] = [];
+
+  // The stained band, on both walls at one height.
+  const backStain = new THREE.BoxGeometry(8, WATER_PEAK, 0.012);
+  backStain.translate(0, WATER_PEAK / 2, -2.104);
+  stainParts.push(backStain);
+
+  const sideStain = new THREE.BoxGeometry(0.012, WATER_PEAK, 4.6);
+  sideStain.translate(-3.304, WATER_PEAK / 2, 0.2);
+  stainParts.push(sideStain);
+
+  /*
+   * The peak line, drawn in segments with a little sag between them. A dead-straight band
+   * across eight metres reads as a painted stripe; real tide marks wander a centimetre.
+   */
+  for (let seg = 0; seg < 22; seg++) {
+    const wide = 8 / 22;
+    const line = new THREE.BoxGeometry(wide * 0.98, 0.02, 0.014);
+    line.translate(-4 + wide * (seg + 0.5), WATER_PEAK + jitter(rng, 0.012), -2.099);
+    floodEdge.push(line);
+  }
+  for (let seg = 0; seg < 13; seg++) {
+    const deep = 4.6 / 13;
+    const line = new THREE.BoxGeometry(0.014, 0.02, deep * 0.98);
+    line.translate(-3.299, WATER_PEAK + jitter(rng, 0.012), -2.1 + deep * (seg + 0.5));
+    floodEdge.push(line);
+  }
+
+  /*
+   * No meniscus collars.
+   *
+   * They were built and removed in the same pass. Water climbing a solid is a real cue and
+   * the right instinct, but it only works if the ring is AT an object - and these were
+   * placed from guessed coordinates, so four bright circles rendered on open floor with
+   * nothing standing in them. They read as UI markers, not water.
+   *
+   * Doing this properly means taking each standing prop's actual footprint rather than
+   * estimating it, which is worth doing and is not worth guessing at. The stain band and the
+   * peak line below carry the flood on their own.
+   */
+
+  scene.registerProp(
+    'flood-stain',
+    meshOf('FloodStain', mergeGeometries(stainParts, false) ?? backStain, MAT.floodStain)
+  );
+  scene.registerProp(
+    'flood-edge',
+    meshOf('FloodEdge', mergeGeometries(floodEdge, false) ?? floodEdge[0], MAT.chalkMark)
+  );
+
   scene.registerProp(
     'marks',
     meshOf('Marks', mergeGeometries(marks, false) ?? marks[0], MAT.chalkMark)
@@ -9421,6 +9497,43 @@ function buildNightDoor(scene: ContactScene): void {
   // so the lid rendered as a slab of bright green on top of a dark bin, which was the one
   // thing in the frame that looked like a mistake because it was one.
   stoopDark.push(binLid);
+
+  /*
+   * ## Crates beside the bin, because one dark box is not a scene
+   *
+   * A critic measured this frame's right third at 28-44% pure black and said the player
+   * "cannot resolve whether the right-hand mass is a bin, a wall or a doorway". The bin was
+   * already there. What it lacked was anything to be read AGAINST: a single box against a
+   * wall at the same value has no profile, so it stops being an object.
+   *
+   * Two crates, turned off-square to each other and to the wall, put three vertical corners
+   * and two horizontal lips into that third. Corners survive darkness in a way flat faces do
+   * not - they catch the porch bulb at a different angle from the wall behind them, so the
+   * mass separates by shape rather than by exposure.
+   *
+   * Nothing is lit to achieve this and nothing is darkened. The third gets objects.
+   */
+  const CRATE_X = 1.62;
+  for (const [k, turn] of [[0, 0.08], [1, -0.23]] as const) {
+    const crate = new THREE.BoxGeometry(0.44, 0.29, 0.34);
+    crate.rotateY(turn);
+    crate.translate(CRATE_X + k * 0.06, STEP_TOP + 0.145 + k * 0.29, 0.34 + k * 0.05);
+    stoop.push(crate);
+
+    // The hand slot under each lip - the shadow line that says crate rather than cube.
+    const slot = new THREE.BoxGeometry(0.3, 0.035, 0.02);
+    slot.rotateY(turn);
+    slot.translate(CRATE_X + k * 0.06, STEP_TOP + 0.255 + k * 0.29, 0.51 + k * 0.05);
+    stoopDark.push(slot);
+  }
+
+  // A rolled sack leaning on the crates: a curve among the boxes, so the group has one
+  // silhouette that is not a rectangle.
+  const sack = new THREE.CylinderGeometry(0.12, 0.15, 0.46, 9);
+  sack.rotateZ(0.34);
+  sack.rotateY(0.5);
+  sack.translate(CRATE_X + 0.42, STEP_TOP + 0.2, 0.22);
+  stoop.push(sack);
 
   /**
    * Stone edging down both sides of the path.
