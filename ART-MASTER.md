@@ -894,7 +894,7 @@ Ordered by value per hour. Take from the top.
 | **W-1a** | Warehouse | Light the fittings over where the player works | `warehouse/02-high-bay-pools.jpg` | `PAUSED` claude 2026-08-26 | **r1 measured as a literal no-op** — r0 and r1 match on every percentile. The cause is W-5: the constant it changed is not on the path the game runs. The lamps over the LANES were at intensity 14 against the rack lamps' 54, so every aisle was lit sideways by fittings hanging over the shelving beside it |
 | **W-1b** | Warehouse | Drop `WAREHOUSE_SKY_FILL` so the pools can read | Law 2 | `PAUSED` claude 2026-08-26 | 1.8 → 0.6 is committed and live in the bundle, but it is **not the flattener**: `frontLight` runs at 35 and each of the work lights at 54. The ambient was never the top of the range |
 | **T-3** | Tooling | A reliable way to REACH each surface for capture | — | `AT BAR` claude 2026-08-26 | **Solved: `scripts/dev/jump.py W`.** The strip reveals on `mousemove`, and `SetCursorPos` to a single point often generates none — a teleport is not a move. Sweeping intermediate points makes it deterministic; tabs are now found by their border colour, so the geometry cannot go stale. Evidence: `scripts/dev/W1-r2-after.jpg`, commit below. `pin.py` is no longer needed for the warehouse |
-| **W-1c** | Warehouse | Real darkness between the pools | `warehouse/02-high-bay-pools.jpg` | `PAUSED` claude 2026-08-26 | r2 and r3 both sit at ~2.2% below luma 20 against the bar's 5.0%, median ~45 high. r3 gave every lamp a reach that ends (distance 30 → 11.5, decay 1.25 → 1.8, intensity × 8.5 so the floor value is unchanged) and moved nothing, because the fill was doing the work. The cel-branch fix is written and **UNVERIFIED** — the editor crashed before it could be captured. Next session: capture, measure, judge |
+| **W-1c** | Warehouse | Real darkness between the pools | `warehouse/02-high-bay-pools.jpg` | `IN LOOP` claude 2026-08-26 | r7: near-black 3.4% / median 86 / p95 160 / clip 0.0% against the bar's 5.0% / 78 / 127 / 0.0%, from r2's 2.7% / 114 / 223 / 0.4%. p5 within two levels. Aisle-floor variation 120 levels at sd 35.2, up from sd 30.9 on a much lower range. Capture `scripts/dev/W1-r7-after.jpg`, commit df8f931. **Awaiting the critic** |
 | **W-2** | Warehouse | Depth cueing — value + saturation falloff with distance | §4.4 | `OPEN` | |
 | **W-3** | Warehouse | A lamp on the drone that lights what it approaches | §4.4 | `OPEN` | |
 | **W-4** | Warehouse | Mid-scale rhythm: break the regularity of racking/bays/markings | Law 3 | `OPEN` | |
@@ -921,7 +921,7 @@ Ordered by value per hour. Take from the top.
 | **L-6** | All | Human/AI duality in the RENDERING: warm+imperfect where a person is, cold+ordered where the machine is — and the boundary fading as the tree grows | `ART-DIRECTION-v1.png` | `OPEN` | The sheet's best idea. Nothing answers it yet |
 | **L-7** | All | Five named lighting moods (day, sunset, night+rain, fog, neon night) instead of one per surface | `ART-DIRECTION-v1.png` | `OPEN` | |
 | **A-1** | Access | Audit every hue-carried mechanic | §11 | `OPEN` | |
-| **P-1** | Post | Per-surface vignette | §6 | `OPEN` | |
+| **P-1** | Post | Per-surface vignette | §6 | `OPEN` | **Read this first:** `setPaintLook` was only ever called with `contactCel` or `off`, so `PAINT_LOOKS.warehouseCel` — the most heavily commented block in paintShader.ts — was applied to nothing. Fixed in 1a38a7c. Three registries share the name `warehouseCel`; check which one you are editing |
 | **P-2** | Post | Feed artefacts: aberration, signal grain, dropout | §6 | `OPEN` | |
 | **X-1** | Hygiene | `.codex/config.toml` carries a live bearer token in 512 commits | ship-clean | `BLOCKED` — needs a human decision | Rotate + untrack + sanitise history (or republish from a clean repository); do not push until resolved |
 
@@ -937,6 +937,8 @@ YYYY-MM-DD  ID    agent      status   bar / evidence / commit
 2026-08-26  W-1   claude     PAUSED   r2 regressed: median 71->114, near-black 26.5%->2.7% vs bar 78/5.0%
 2026-08-26  W-5   claude     AT BAR   celStyleEnabled ships true; fill was 2.2 not 0.6 / traced in OmniscientRig:3162
 2026-08-26  W-1   claude     PAUSED   cel-branch fill 2.2->0.85 written, UNVERIFIED - Sandbox Studio crashed
+2026-08-26  W-1   claude     note     3 real no-ops found by levels.py: dead constant, dead branch, dead paint look
+2026-08-26  W-1   claude     IN LOOP  r7 measured 3.4%/86/160/0.0 vs bar 5.0%/78/127/0.0 / df8f931
 ```
 
 ---
