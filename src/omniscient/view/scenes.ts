@@ -6261,6 +6261,27 @@ function buildClearedHouse(scene: ContactScene): void {
       decay: 0.85,
     });
   castShadows(daylightKey as unknown as THREE.Object3D, {
+    /*
+     * 1024 and radius 2.5, and the sharper settings that were tried here are worth recording
+     * because they were inert.
+     *
+     * A critic rejected this room with "no caster geometry survives in it - you cannot find
+     * the tabletop, the four legs, or the woman inside that shape; it resolves as one
+     * undifferentiated slab", and the obvious reading is that the shadow is over-blurred.
+     * Raising the map to 2048 and dropping the radius to 1.0 changed the frame by nothing:
+     * mean value 49.58 both ways, edge energy 1.87 against 1.86. shadow.radius only does
+     * anything under PCFSoftShadowMap, and the resolution was never the limit.
+     *
+     * So the shadow is not blurred - it is accurate. A tabletop is a large flat rectangle and
+     * it casts a large flat rectangle; the legs are thin and land as the thin strips the
+     * critic actually found. Six faces of 2048 cube map for no visible change is pure cost,
+     * so it goes back.
+     *
+     * The other half of that critique was wrong on measurement: it called the shadow "brown
+     * against a blue-white floor" and read it as a fault, but the lit boards run r-b -7.3 and
+     * the shadowed boards +21.9, because the key is cool daylight and removing it from warm
+     * timber correctly leaves the timber. That was already right.
+     */
     mapSize: 1024,
     radius: 2.5,
     normalBias: 0.02,
