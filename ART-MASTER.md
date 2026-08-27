@@ -117,11 +117,17 @@ honest state of that, and it is the main reason most of the board cannot start y
 | --- | --- | --- |
 | **M4SS** | `assets/reference/m4ss/` — Background1.png, Background2.png and 6 more, tracked, and studied image-by-image in M4SS-ART-BIBLE §2 | ✅ **Yes** |
 | **The people** | `assets/models/Mirela.glb`, rendered at her own scene's framing beside the procedural version by `MirelaProceduralTestRig` | ✅ **Yes** |
-| **The desk room** (main menu) | The "workstation concept frame" — described in `art/palette.ts` §230, **not in the repo** | ❌ prose only |
-| **The contact scenes** (9 rooms) | ART_DIRECTION.md's tier ladder, rendered — no frame of it exists | ❌ prose only |
-| **Warehouse 07** | Night distribution-centre photography | ❌ **nothing at all** |
+| **The desk room** (main menu) | `assets/reference/desk-room/01-lamp-and-mast.jpg` | ✅ **Yes** |
+| **The contact scenes** (9 rooms) | `assets/reference/contact-scenes/` — 2 images | ✅ **Yes** |
+| **Warehouse 07** | `assets/reference/warehouse/` — 3 images | ✅ **Yes** |
+| **Everything** | `assets/reference/ART-DIRECTION-v1.png` — the master sheet | ✅ **Yes** |
 
-**So: M4SS and the people can start now. The other three need one image each.**
+**Every surface now has an openable bar.** Nothing on the board is stalled for want of a
+reference. **Read [`assets/reference/NOTES.md`](assets/reference/NOTES.md) first** — it says
+what each image is a bar FOR, because several are UI mockups and the interface is not on the
+board. `warehouse/03-shape-language-only.jpg` in particular is a bar for shapes and
+**emphatically not for lighting**; judging against it would flatten the exact thing being
+fixed.
 
 If you are an agent and the surface you are taking has no openable bar, **do not invent one and
 do not proceed.** Two moves are allowed:
@@ -149,13 +155,42 @@ proof: it is the best-looking surface in the game and it is the only one that ha
 
 ---
 
-## 1. The direction, in one sentence
+## 1. The direction
+
+### The authority is `assets/reference/ART-DIRECTION-v1.png`
+
+**Open it before reading another line of this section.** It is the game's own art direction
+sheet and it outranks everything written here. World vision, character line-up, silhouette
+rule, three palettes, five lighting moods, props, UI style, theme rules — all in one frame, all
+more specific than prose. Where it and this document disagree, **it wins** and this document
+gets corrected.
+
+What it settles, that nothing else did:
+
+- **The period.** *A parallel Earth in the 1990s dreamed of the future — advanced, but analog,
+  chunky and imperfect.* Stylised low-poly / hand-painted. Arcane × Disco Elysium in tone.
+  **Not cyberpunk.** A reference that was pushing the game toward neon-futurism has been
+  removed from the folder for exactly this reason.
+- **The characters.** *Real people. Imperfect. Expressive.* Strong shapes, easy to read;
+  "silhouette exaggeration" is written on the sheet as a rule. This is the answer §4.7 needed
+  and it is the one a procedural generator can actually hit.
+- **The duality, and it is the best idea in the set.** A warm, messy, imperfect **human world**
+  against a cold, vast, orderly **AI realm** — and *"as knowledge grows, boundaries fade."*
+  That is an art rule wired to a mechanic. The knowledge tree already grows; nothing in the
+  rendering answers it yet. See L-6 in the ledger.
+- **Five lighting moods**, named: day, sunset, night + rain, fog, neon night. The game
+  currently has one per surface.
+
+### The sentence, restated to fit it
 
 > **A machine's reconstruction of places it has never been, lit like a memory and rendered
 > like a signal — and one specimen, in a real room, lit like a photograph.**
 
-Everything follows from the split in that sentence. The console **infers**; M4SS is a **feed**.
-The two halves of this game are not the same picture and must never be graded as if they were.
+Everything follows from the split. The desk room and the contact scenes are the machine
+**inferring**; M4SS and the drone link are a **feed**. Two different pictures, never graded as
+one. The sheet's human/AI duality is the same divide seen from the fiction's side rather than
+the renderer's, and the two should be made to agree — warm and imperfect where a person is,
+cold and ordered where the machine is.
 
 ### What is changing from today, and why
 
@@ -421,6 +456,12 @@ Not for novelty. Four concrete reasons, in order of weight:
 > **People built the way the rooms are built: big exaggerated masses, silhouette first, lit by
 > the room they are standing in and by nothing else.**
 
+**The sheet has already answered this** (§1): *stylised low-poly / hand-painted, real people,
+imperfect, expressive*, with **silhouette exaggeration** written on it as a rule, and a line-up
+of eight body types to match against. That is the target, it is not negotiable by a critic, and
+it is the one style a procedural generator can actually reach — which is why the photoreal
+reference was removed from the folder.
+
 Not "low-poly humans". The existing header has the right idea and the wrong scale of ambition —
 `character.ts` makes figures that stand convincingly and never move; the prototype makes one
 that is skinned and can. Merge those: **the slab language of `character.ts`, on the skeleton of
@@ -434,8 +475,12 @@ say which is which at that framing, *or* prefers the procedural one because it i
 room. `MirelaProceduralTestRig` already renders both side by side and captures passes; that
 harness is the loop's instrument and it exists.
 
-Secondary bar for the *language*: the game's own props. A person should look like they were
-made in the same workshop as the chair, the desk lamp and the CRT.
+**The bar for the LANGUAGE** is `ART-DIRECTION-v1.png`'s character line-up and its silhouette
+row — eight bodies that are distinguishable in black. **The bar for the RESULT** is `Mirela.glb`
+at her own framing. A character can pass the second and fail the first; both are required.
+
+And the game's own props: a person should look like they were made in the same workshop as
+the chair, the desk lamp and the CRT.
 
 ### Animation — settled, with three traps
 
@@ -858,6 +903,8 @@ Ordered by value per hour. Take from the top.
 | **P-C4** | People | Swap Mirela into the shipped scene, GLB kept beside her | The mission plays; she is lit by the room | `BLOCKED` by P-C3 | |
 | **P-C5** | People | Roll out the remaining 8, one per pass | Each against its own GLB | `BLOCKED` by P-C4 | Warehouse `placeRigged` must be solved first if they go there |
 | **P-C6** | People | Delete the GLBs, `debake.ts`, the Tripo paths | Build shrinks, nothing regresses | `BLOCKED` by P-C5 | The only stage allowed to remove a GLB |
+| **L-6** | All | Human/AI duality in the RENDERING: warm+imperfect where a person is, cold+ordered where the machine is — and the boundary fading as the tree grows | `ART-DIRECTION-v1.png` | `OPEN` | The sheet's best idea. Nothing answers it yet |
+| **L-7** | All | Five named lighting moods (day, sunset, night+rain, fog, neon night) instead of one per surface | `ART-DIRECTION-v1.png` | `OPEN` | |
 | **A-1** | Access | Audit every hue-carried mechanic | §11 | `OPEN` | |
 | **P-1** | Post | Per-surface vignette | §6 | `OPEN` | |
 | **P-2** | Post | Feed artefacts: aberration, signal grain, dropout | §6 | `OPEN` | |
