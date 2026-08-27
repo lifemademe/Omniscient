@@ -176,6 +176,16 @@ export interface MoteOptions {
   color?: string;
   /** Point size in pixels. These are insects; two is generous. */
   scale?: number;
+  /**
+   * Metres per second of sink. Zero - the default - is an insect, which holds a station.
+   *
+   * Anything above zero is dust instead, and it changes the simulation rather than just
+   * biasing it: the spring that pulls a fly back to its home height is dropped, and a mote
+   * that falls out of the bottom of the box is recycled to the top with a fresh horizontal
+   * position. Without that swap the cloud is a swarm of gnats hovering under the lamp, which
+   * is what the lamp cone had before anyone looked at it closely.
+   */
+  fall?: number;
 }
 
 /**
@@ -236,6 +246,8 @@ export function createMotes(options: MoteOptions): Flock {
 
   const attribute = geometry.getAttribute('position') as THREE.BufferAttribute;
 
+  const fall = options.fall ?? 0;
+
   const idle = (deltaTime: number): void => {
     // Clamped, because a stalled frame with a random walk in it scatters the cloud across
     // the field and it never comes back.
@@ -246,9 +258,26 @@ export function createMotes(options: MoteOptions): Flock {
         const k = o + axis;
         // The kick, and a spring home. Vertical is damped harder - flies hold a height.
         velocity[k] += (rng() - 0.5) * (axis === 1 ? 1.6 : 3.2) * step;
-        velocity[k] += (home[k] - positions[k]) * (axis === 1 ? 5.5 : 2.2) * step;
+        // Dust has no home height to be pulled back to; that spring is the whole difference
+        // between an insect holding station and a speck on its way down.
+        if (fall === 0 || axis !== 1) {
+          velocity[k] += (home[k] - positions[k]) * (axis === 1 ? 5.5 : 2.2) * step;
+        }
         velocity[k] *= 1 - Math.min(0.9, 2.6 * step);
         positions[k] += velocity[k] * step;
+      }
+      if (fall > 0) {
+        positions[o + 1] -= fall * step;
+        // Back to the top, somewhere else along the box. Recycling in place would make the
+        // same speck fall down the same line for ever, which reads as a repeating loop.
+        if (positions[o + 1] < 0) {
+          positions[o + 1] = options.size.y;
+          positions[o] = range(rng, -half.x, half.x);
+          positions[o + 2] = range(rng, -half.z, half.z);
+          velocity[o] = 0;
+          velocity[o + 1] = 0;
+          velocity[o + 2] = 0;
+        }
       }
     }
     attribute.needsUpdate = true;

@@ -23,6 +23,7 @@ import { MISSION_07 } from './content/mission-07-torch.js';
 import { MISSION_08 } from './content/mission-08-district.js';
 import { MISSION_09 } from './content/mission-09-specimen.js';
 import { createScreenGlass } from './art/glass.js';
+import { createLampCone, type LampCone } from './art/lampCone.js';
 import { PAINT_UNIFORMS } from './art/painterly.js';
 import { TUNED_BLOOM, TUNED_OCCLUSION } from './art/postTuning.js';
 import { decorMesh } from './art/mesh.js';
@@ -446,6 +447,15 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private disposeSoundCaptions: (() => void) | null = null;
   /** Gulls and a boat in the window. Driven from the tick; see createSeaLife. */
   private seaLife: ReturnType<typeof createSeaLife> | null = null;
+
+  /** The air under the desk lamp. See art/lampCone.ts. */
+  private deskAir: LampCone | null = null;
+
+  /** Seconds the desk lamp has been burning, for its filament wobble. */
+  private deskLampTime = 0;
+
+  /** What the desk lamp was authored at, so the wobble is a deviation and not a drift. */
+  private deskLampBase = 0;
   /** The workstation lights, kept so the panel can reach them. */
   private lightRig: {
     key: ENGINE.DirectionalLightNode;
@@ -1641,6 +1651,37 @@ export class OmniscientRig extends ENGINE.SceneNode {
     castShadows(lamp as unknown as THREE.Object3D, { mapSize: 1024, radius: 3, normalBias: 0.02, bias: -0.0004 });
     lamp.lookAt(lampAt.clone().add(new THREE.Vector3(0.16, -1, 0.22)));
     this.add(lamp);
+
+    /*
+     * The air the bulb is standing in.
+     *
+     * The lamp above lit the desk and the notebook and left the 28cm between the shade and
+     * the desk completely empty, so it read as a projector aimed at a surface rather than a
+     * bulb in a room. §186 is explicit that this is where the cheap depth is - haze and
+     * shafts rather than more modelled objects - and this is the one fixture in the game
+     * the player looks at from two feet away, on the menu, before anything has happened.
+     *
+     * Same apex and same throw direction as the light, from the same two values, so the
+     * shaft cannot drift away from the thing casting it if either is retuned. It stops
+     * short of the desk on purpose: the pool belongs to the light, and a shaft that
+     * arrived would draw a second, harder ring on top of it.
+     */
+    this.deskAir = createLampCone({
+      apex: lampAt.clone(),
+      direction: new THREE.Vector3(0.16, -1, 0.22),
+      length: 0.3,
+      apexRadius: 0.062,
+      baseRadius: 0.185,
+      // Well under the lamp's own #ffcf96. This ADDS to whatever is already in the pixel,
+      // and the warm surfaces below it are already near the top of the range.
+      color: '#a8794a',
+      strength: 0.55,
+      motes: 44,
+      moteColor: '#c9b088',
+      seed: 'desk-lamp',
+    });
+    this.add(this.deskAir.root);
+    this.deskLampBase = lamp.intensity;
 
     /**
      * A little light on the menu itself.
@@ -4601,6 +4642,27 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // not stop because somebody is on the line, and coming back from a call to a boat that
     // has moved is most of what the boat is for.
     this.seaLife?.update(deltaTime);
+    // Air moves whatever phase the game is in; a still shaft reads as a texture.
+    this.deskAir?.idle(deltaTime);
+    /*
+     * A filament, not a fault.
+     *
+     * Two slow sines that do not share a period, so the lamp never settles into a pulse the
+     * eye can predict and start watching - §168 asks ambient motion to stay under notice.
+     * The amplitude is deliberately tiny: at 2% this is invisible as flicker and visible as
+     * the shaft and the pool very slightly breathing, which is the difference between a
+     * light that is switched on and a light that is burning.
+     *
+     * Written as base * (1 + wobble) rather than by accumulating onto the current value,
+     * because the tuning panel writes this same field and an accumulator would walk away
+     * from whatever the slider was left at.
+     */
+    if (this.lightRig && this.deskLampBase > 0) {
+      this.deskLampTime += deltaTime;
+      const wobble =
+        Math.sin(this.deskLampTime * 2.7) * 0.012 + Math.sin(this.deskLampTime * 6.31) * 0.008;
+      this.lightRig.lamp.intensity = this.deskLampBase * (1 + wobble);
+    }
     if (this.picker) this.menu?.update(deltaTime, this.picker);
 
     /*

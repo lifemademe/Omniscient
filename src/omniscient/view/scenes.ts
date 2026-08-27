@@ -47,6 +47,7 @@ import { CERTAINTY } from '../art/certainty.js';
 import { createFloodwater } from '../art/floodwater.js';
 import { createRipples } from '../art/ripples.js';
 import { createTorchlight } from '../art/torchlight.js';
+import { createLampCone } from '../art/lampCone.js';
 import { applyFloodstain } from '../art/floodstain.js';
 import { applySaltRust } from '../art/saltrust.js';
 import { createStarfield } from '../art/starfield.js';
@@ -2050,6 +2051,58 @@ function buildRepairShop(scene: ContactScene): void {
     bias: -0.0005,
   });
   scene.registerProp('work-lamp', workLamp);
+
+  /*
+   * And the air the work lamp is throwing through.
+   *
+   * The same fault the workstation lamp had, in the room that had just been given a cone
+   * to put air in: a pool arrived on the bench and the 60cm above it was empty, so the
+   * shade read as a projector. §186 asks for haze and shafts before more modelled detail,
+   * and there is no cheaper depth available in a room this size.
+   *
+   * Apex, direction and reach come off the light's own numbers, so retuning the lamp cannot
+   * leave the shaft pointing somewhere else. It stops well short of the benchtop: the pool
+   * belongs to the light, and a shaft that arrived would draw a second, harder ring on top
+   * of the one that took three rounds to get right.
+   */
+  /*
+   * ## The apex is the SHADE, not the light, and they are not in the same place
+   *
+   * `workLamp` sits at (0.25, 1.55, -0.15). The shade it is supposed to be inside is at
+   * (0.49, 1.41, -0.56) - the bench lamp's root at (0.98, 0.81, -0.78) plus the `neck` of
+   * its arm at (-0.49, 0.6, 0.22). That is 0.41m apart in z alone.
+   *
+   * Nobody could see that while the lamp threw an invisible cone; the first version of this
+   * shaft was hung off the light's own position and immediately drew a column of haze in
+   * mid-air a foot to the left of the fixture, against the pegboard. Air is what makes a
+   * light's position legible, and the first thing it made legible here was a mistake.
+   *
+   * The shaft is anchored to the shade and aimed at the middle of the pool, so what the
+   * player sees is a fixture connected to the light it is making. Moving the LIGHT into the
+   * shade is the real fix and is deliberately not done here: the pool's position took three
+   * measured rounds to settle and is not being disturbed by a change made for a different
+   * reason. Logged as D-1b.
+   */
+  const workLampAir = createLampCone({
+    apex: new THREE.Vector3(0.49, 1.41, -0.56),
+    direction: new THREE.Vector3(-0.21, -0.47, 0.22),
+    length: 0.4,
+    apexRadius: 0.062,
+    baseRadius: 0.2,
+    // Under LIGHT.key rather than borrowing it. This adds into pixels that are already the
+    // brightest in the room, and lampWarm/lampCore have produced white chips here before.
+    color: '#9c7346',
+    // Half the first attempt. At 0.5 this read as a grey smear ON the pegboard rather than
+    // as air in front of it - additive haze over a dark wall goes milky long before it
+    // goes bright.
+    strength: 0.26,
+    motes: 34,
+    moteColor: '#c9b088',
+    seed: 'repair-work-lamp',
+  });
+  scene.registerProp('work-lamp-air', workLampAir.root, {
+    idle: (deltaTime) => workLampAir.idle(deltaTime),
+  });
 
   /**
    * Cold daylight from the shop door, opposite the lamp.
