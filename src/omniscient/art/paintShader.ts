@@ -250,7 +250,22 @@ export const PAINT_LOOKS = {
      * the pools and the falloff, and pulling them flattens the modelling, while this is a
      * flat gain sitting on top of all of it.
      */
-    brightness: 1.95,
+    /*
+     * 1.30, down from 1.95, and the note above is the reason it took four rounds to get here.
+     *
+     * It is right, and it was written before anybody had measured what the number was doing
+     * at 1.95. A flat gain over the whole picture sets a floor under every pixel: at 1.95 the
+     * frame carried 2.5% of pixels below luma 20 against a night-warehouse reference at 5.0%,
+     * with the median 37 levels high. There was no dark in the room for a pool to sit in, and
+     * no lamp could put any there, because the gain was applied after all of them.
+     *
+     * That is also why three rounds of lighting work read as nothing. Cutting the hemisphere
+     * fill by 61% and the sun by 61% together moved the median by 6% - the signature of a
+     * picture sitting in the shoulder of a curve, where large changes in radiance produce
+     * small changes on screen. The lamps were never the problem; they were being measured
+     * through a gain that swamped them.
+     */
+    brightness: 1.3,
     /*
      * Four value steps with a nearly hard edge, and 1.3x chroma.
      *
