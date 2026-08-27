@@ -126,7 +126,18 @@ class PulseRing {
     this.root.quaternion.copy(face);
     // Held near full size for reduced motion: the ring still marks the subject, it just
     // does not travel outward.
-    const scale = still ? this.spread * 0.6 : 0.25 + progress * this.spread;
+    /*
+     * Eased, not linear. A ring expanding at a constant rate is the one motion a physical
+     * pulse never makes - a shock leaves fast and slows as it spreads - and linear travel is
+     * most of why §9 marks this verb thin. Cubing the remaining distance puts roughly half
+     * the growth in the first fifth of the life, so the ring leaves the gripper hard and
+     * drifts out rather than sliding out at a constant crawl.
+     *
+     * The reduced-motion branch is untouched: it does not travel at all, so it has no rate
+     * to ease.
+     */
+    const eased = 1 - (1 - progress) ** 3;
+    const scale = still ? this.spread * 0.6 : 0.25 + eased * this.spread;
     this.root.scale.setScalar(Math.max(0.001, scale));
     /*
      * Squared falloff rather than linear: a ring that fades on a straight line reads as a

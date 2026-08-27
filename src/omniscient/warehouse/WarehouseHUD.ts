@@ -237,7 +237,14 @@ const CSS = `
   border: 1px solid rgba(127, 224, 138, 0.78);
   opacity: 0;
   transform: scale(0.72);
-  transition: opacity 0.12s, transform 0.3s;
+  /*
+   * §9 rule 2: everything that stops should overshoot, because nothing in a physical world
+   * arrives exactly. This scaled 0.72 -> 1 on a plain ease and stopped dead on the number,
+   * which is what makes a UI flash read as a value being set rather than as a thing
+   * happening. The bezier's third control point above 1 carries it past full size and lets
+   * it settle back - about 4% over, which is enough to feel and too little to notice.
+   */
+  transition: opacity 0.12s, transform 0.3s cubic-bezier(0.2, 1.42, 0.36, 1);
 }
 .warehouse-hud__scanfx::before, .warehouse-hud__scanfx::after {
   content: '';

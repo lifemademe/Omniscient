@@ -35,6 +35,7 @@ import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
 import { debakeHighlights } from '../art/debake.js';
+import { applyShadowPolicy } from '../art/shadows.js';
 import { HIPS, loadGesture, type GestureName } from './gestures.js';
 
 import { devLog } from '../core/devLog.js';
@@ -1156,6 +1157,26 @@ const ARRIVE = 0.06;
         debakeHighlights(map);
       }
     });
+
+    /*
+     * ## The people did not cast shadows. Any of them. Ever.
+     *
+     * applyShadowPolicy runs once when a scene mounts, and a contact is a GLB that streams in
+     * afterwards - so it was never traversed, and every character in the game kept whatever
+     * castShadow the file shipped with, which for a GLTF load is false.
+     *
+     * A critic judging the doorstep put it exactly: "the standing figure - the subject of the
+     * picture - casts no legible shadow on the pavement... under a bright overhead porch lamp
+     * a metre or two away, a full-height human figure should be laying down the longest, most
+     * obvious shadow in the shot. He is the one object in the frame that is unambiguously
+     * pasted on." It was not a lighting fault in that room. It was every room.
+     *
+     * This is the same shape as the fault the policy exists to prevent - "several hundred
+     * props and not one of them sets a shadow flag" - with the twist that the one class of
+     * object that arrives LATE slipped through the traversal that was written to catch
+     * exactly that.
+     */
+    applyShadowPolicy(loaded);
 
     loaded.traverse((child) => {
       if (child.type === 'Bone' || /mixamorig/i.test(child.name)) {
