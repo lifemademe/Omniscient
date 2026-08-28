@@ -883,7 +883,7 @@ is present in both stages. `pnpm lint`, `pnpm build`, editor bundle refresh, `pr
 No full start-to-finish campaign or audio listening assessment claimed. Two editor `ensure failed`
 assertions in `endPlay`/effect disposal appeared during repeated reload/checkpoint testing;
 their root cause is not established and this is not an error-free runtime certification.
-Implementation commit receipt follows in the next ledger update; no push.
+Implementation and evidence commit: `bcb4fee`. No push.
 
 **This is the handoff.** Update it in the same commit as the work.
 
