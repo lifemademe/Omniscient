@@ -913,8 +913,9 @@ stage resets plate/gates/growths. Existing swing/throw/recall/lift checks remain
 Live pause/Space/resume preserved 40g; real focus loss paused; file selection/open/return
 checked. Still needs human held-key/focus-loss-during-Space replay and full-HD capture matrix;
 the desktop automation only offers key taps, not sustained holds. Growth activation is
-simulation-proved, not yet captured as an in-game plate-to-growth sequence. Local commit
-receipt follows this implementation commit. No scene edits, migration or push.
+simulation-proved, not yet captured as an in-game plate-to-growth sequence. Local implementation
+and evidence commit: `0a60903`. This supersedes M-1's earlier permanently-dormant p2 direction:
+p2 is now deliberately restored by `drop`. No scene edits, migration or push.
 
 **Dorin contact pass — user-directed D-1g extension, 2026-08-28: AT BAR (scoped visual pass, Codex).**
 Bar: worried person first, old lock second, inhabited home third; crisp night-time PS1
