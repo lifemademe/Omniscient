@@ -83,6 +83,7 @@ import './omniscient/geometry/clouds.js';
 import './omniscient/geometry/foliage.js';
 import './omniscient/geometry/hardware.js';
 import './omniscient/geometry/meadow.js';
+import './omniscient/geometry/menuConnector.js';
 import './omniscient/geometry/model-parts.js';
 import './omniscient/geometry/modules.js';
 import './omniscient/geometry/mower.js';

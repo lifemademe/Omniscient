@@ -884,6 +884,28 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
+**F-1 menu detail correction PAUSED — Codex, 2026-08-27:** User-directed follow-up to
+the accepted broad composition: restrain lamp haze/dust and shade gloss, articulate the
+cable connector and keep its route clear of the lamp, remove CRT hover-name duplication.
+Bar: §3/§4.1, desk-room reference for restraint and readable chunky hardware. Runtime menu
+only; C-1's earlier beam judgment does not settle the user's close-up concern. Implementation
+commit recorded in the follow-up ledger entry. The lamp has local rough enamel, 22 dimmer,
+smaller motes, and no additive cone shell. The connector has a dark grip, metal rectangular
+nose, strain relief and one green inset; its sockets match. It reaches for the selected
+socket from the CRT's left shoulder instead of following the pointer across the lamp.
+Physical button labels remain; their duplicate CRT hover names are no longer drawn.
+`pnpm lint`, `pnpm build` and editor build passed. Live R1 evidence:
+`scripts/dev/F1-menu-detail-r1-idle.jpg`, `scripts/dev/F1-menu-detail-r1-hover.jpg`,
+`scripts/dev/F1-menu-detail-connect-0.jpg` through `-5.jpg` (94–592ms after click).
+These show the cable clear of lamp/CRT, name-free tree during hover, and Credits opening
+after insertion. Fresh critic rejected R1's faint shell as a cloudy column/smoke; final
+revision removes the shell entirely. **That final lamp revision is unjudged:** the preview
+closed before capture, Sandbox Studio exposed an Error dialog and an unloaded editor;
+Computer Use could not inspect it ("foreground window did not report a process id"). MCP
+console diagnostics reported no errors, so the cause is not established. Resume by
+dismissing the host error, reopening play, and recapturing idle/hover for the fresh critic.
+Do not treat the earlier broad menu acceptance or successful builds as this detail pass's bar.
+
 **F-1 menu subpass AT BAR — Codex, 2026-08-27:** User-directed splash-to-menu readiness,
 camera handoff, physical rack mounting and readability. Implementation commit `5fa4a77`.
 Bar: §3/§4.1/§4.6 and

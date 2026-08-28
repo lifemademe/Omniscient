@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 import { createRng, jitter, range, seedFrom } from '../core/rng.js';
+import { createMenuSocket } from './menuConnector.js';
 
 import type { MAT } from '../art/palette.js';
 
@@ -219,21 +220,16 @@ export function createModule(kind: ModuleKind, seedKey: string): ModuleBuild {
    * in the air a few centimetres off the plate face and stopped, which reads as the cable
    * bumping into the module rather than entering it.
    *
-   * A recessed collar with a dark bore. The recess is what sells it: a ring sitting proud
-   * of the surface is a boss, a ring around a hole is a socket, and the difference is one
-   * dark cylinder.
+   * A rectangular metal collar and dark recess share the plug's finished-scale dimensions.
    */
   const socketAt = new THREE.Vector3(PLATE_W / 2 - 0.1, 0, face + 0.03);
 
-  const collar = new THREE.CylinderGeometry(0.038, 0.042, 0.022, 12);
-  collar.rotateX(Math.PI / 2);
-  collar.translate(socketAt.x, socketAt.y, face + 0.006);
-  details.push({ geometry: collar, material: 'metal' });
-
-  const bore = new THREE.CylinderGeometry(0.025, 0.025, 0.03, 10);
-  bore.rotateX(Math.PI / 2);
-  bore.translate(socketAt.x, socketAt.y, face + 0.001);
-  details.push({ geometry: bore, material: 'dark' });
+  for (const part of createMenuSocket()) {
+    // Socket dimensions are shared with the finished-size plug, unlike the legacy panel.
+    part.geometry.scale(1 / PLATE_SCALE, 1 / PLATE_SCALE, 1 / PLATE_SCALE);
+    part.geometry.translate(socketAt.x, socketAt.y, socketAt.z);
+    details.push(part);
+  }
 
   // Everything down to life size in one place. See PLATE_SCALE.
   const plate = plateGeometry();

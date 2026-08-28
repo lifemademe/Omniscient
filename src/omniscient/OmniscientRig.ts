@@ -84,7 +84,6 @@ import { M4SSRig } from '../m4ss/M4SSRig.js';
 import { FocusNavigator } from './input/FocusNavigator.js';
 import { Picker } from './input/Picker.js';
 import { MainMenu } from './menu/MainMenu.js';
-import { drawMenuLabel } from './crt/menuLabel.js';
 import { EndingPanel } from './menu/EndingPanel.js';
 import { SessionController } from './session/SessionController.js';
 import {
@@ -1099,7 +1098,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
        */
       const dusking = DUSK_VIEW_PARTS.has(part.name);
       const quietSurface = ['Papers', 'Desk', 'RoomSideWall'].includes(part.name);
-      const surface = dusking || quietSurface ? (shared as THREE.Material).clone() : shared;
+      const lampMetal = ['LampShade', 'LampArm', 'LampFoot', 'LampCollar'].includes(part.name);
+      const surface = dusking || quietSurface || lampMetal ? (shared as THREE.Material).clone() : shared;
       // Keep the view and loose paper below the controls without changing shared mission materials.
       if (dusking && part.name !== 'ViewTownLights') {
         (surface as THREE.MeshBasicMaterial).color.multiplyScalar(0.075);
@@ -1107,6 +1107,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
         (surface as THREE.MeshStandardMaterial).color.set('#b4a17f');
       } else if (part.name === 'Desk' || part.name === 'RoomSideWall') {
         (surface as THREE.MeshStandardMaterial).color.multiplyScalar(part.name === 'Desk' ? 0.42 : 0.55);
+      } else if (lampMetal) {
+        const enamel = surface as THREE.MeshStandardMaterial;
+        enamel.color.set('#4b5154');
+        enamel.roughness = 0.86;
+        enamel.metalness = 0.18;
       }
       station.add(meshOf(part.name, part.geometry, surface));
       if (dusking) {
@@ -1768,11 +1773,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
       // Well under the lamp's own #ffcf96. This ADDS to whatever is already in the pixel,
       // and the warm surfaces below it are already near the top of the range.
       color: '#a8794a',
-      // 0.95, up from 0.55: measured, the shaft between the shade and the desk was reading
-      // 0.67 mean against a void of 0 - present in the source and absent on the screen.
-      strength: 0.95,
-      motes: 72,
-      moteColor: '#e0cba2',
+      // Posterization turns even a faint shell into smoke; let the light pool and dust carry it.
+      shell: false,
+      motes: 22,
+      moteScale: 0.004,
+      moteColor: '#96836a',
       seed: 'desk-lamp',
     });
     this.add(this.deskAir.root);
@@ -2542,16 +2547,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.menu?.attach(this.picker);
     this.menu?.onAction((action) => this.onMenuAction(action));
 
-    /*
-     * Hovering a plate makes the machine say what it is, on its own screen.
-     *
-     * Only the name is recorded here; the drawing happens in the CRT's own redraw, because
-     * the tree clears that canvas every frame and anything painted outside that order is
-     * erased before it is seen.
-     */
-    this.menu?.onHoverChange((spec) => {
-      this.menuLabel = spec ? spec.title : null;
-    });
   }
 
   private onMenuAction(action: MenuAction): void {
@@ -4093,15 +4088,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private onDevAudioUnlock: (() => void) | null = null;
 
   /**
-   * The menu plate under the pointer, drawn on the CRT because the plates cannot name
-   * themselves any more.
-   *
-   * Their labels are world geometry and the game renders at a three-pixel grid, which turns
-   * small text into texture. See crt/menuLabel for why the tube is the right place for the
-   * name and an overlay on the wall was not.
-   */
-  private menuLabel: string | null = null;
-  /**
    * Reusable corner buffers for the menu plates' screen quads, one per face.
    *
    * Allocated on first use and never again: this is projected every frame for the whole time
@@ -5017,20 +5003,6 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.tree.draw(1, this.pulse);
     }
 
-    /*
-     * The plate name, over the tree, on the frame the tree just drew.
-     *
-     * After `draw` and not before: the tree clears this canvas every frame and re-commits
-     * it, so anything written earlier is gone before it reaches the GPU. `commit` only sets
-     * `needsUpdate`, so raising the flag a second time in one frame costs nothing.
-     *
-     * Menu only. The tube shows the knowledge tree everywhere else and a plate name over a
-     * mission's growth would be the front door talking during a call.
-     */
-    if (this.menuLabel && this.surface && this.phase === Phase.Menu && this.screen === Screen.Tree) {
-      drawMenuLabel(this.surface, this.menuLabel);
-      this.surface.commit();
-    }
 
     // Let the resolution finish being watched before the camera leaves it.
     if (this.resolveHold > 0) {

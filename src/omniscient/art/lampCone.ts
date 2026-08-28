@@ -65,6 +65,8 @@ export interface LampConeOptions {
   readonly shell?: boolean;
   /** Motes drifting inside the shaft. 0 for none. */
   readonly motes?: number;
+  /** World-space mote size; defaults preserve existing contact lamps. */
+  readonly moteScale?: number;
   /** Metres per second the motes sink. See `fall` in createMotes. */
   readonly fallSpeed?: number;
   readonly moteColor?: string;
@@ -307,7 +309,7 @@ export function createLampCone(options: LampConeOptions): LampCone {
        * instead of sitting in it. `sizeAttenuation` means this is a real size in the room,
        * not a screen size, which is exactly why it can be too small to exist.
        */
-      scale: 0.011,
+      scale: options.moteScale ?? 0.011,
       // Slow enough that a speck takes most of a minute to cross the shaft. Dust settling
       // in still air, not snow - and not the fly behaviour this helper does by default.
       fall: options.fallSpeed ?? 0.012,

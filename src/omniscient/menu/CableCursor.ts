@@ -19,19 +19,21 @@ import * as THREE from 'three';
 import { decorMesh } from '../art/mesh.js';
 import { MAT } from '../art/palette.js';
 import { Ease, Tweener } from '../core/tween.js';
+import { CONNECTOR, createMenuPlug } from '../geometry/menuConnector.js';
 
 /** Points along the cable, root to tip. */
 const SEGMENTS = 14;
-const CABLE_RADIUS = 0.012;
+const CABLE_RADIUS = 0.007;
 
 export class CableCursor {
   public readonly root: ENGINE.SceneNode;
 
   private readonly points: THREE.Vector3[] = [];
+  private readonly drawPoints: THREE.Vector3[] = [];
   private readonly velocities: THREE.Vector3[] = [];
   private readonly curve: THREE.CatmullRomCurve3;
   private readonly mesh: ENGINE.MeshNode;
-  private readonly plug: ENGINE.MeshNode;
+  private readonly plug: ENGINE.SceneNode;
   private readonly tweener = new Tweener();
 
   /** Where the cable is anchored - it comes out of the machine, not out of nowhere. */
@@ -52,30 +54,8 @@ export class CableCursor {
 
   constructor(anchor: THREE.Vector3) {
     this.anchor.copy(anchor);
-    /**
-     * Resting place: behind and below, not out in front.
-     *
-     * It used to idle at +0.2 in z, which put the loose end of the cable in FRONT of the
-     * machine - a bright green connector floating over the screen, which is the one thing
-     * in this shot that must never be occluded. Tucked behind, the cable reads as slack
-     * hanging off the back of the desk until the player reaches for a module.
-     */
-    /**
-     * Behind the tube, not beside it.
-     *
-     * It was +0.22 in x, which put the loose end 25cm to the RIGHT of a chassis that ends
-     * at 0.27 - so the plug lay on open desk with nothing in front of it, a black bar
-     * stopping in the middle of the frame with no explanation. The old comment claims the
-     * end is tucked behind the machine, and it was true when written; the machine has
-     * since been rescaled to 0.54 and moved back with the desk, and the offset did not
-     * follow it.
-     *
-     * Now -0.12 in x and -0.34 in z, which puts the tip inside the chassis's width and
-     * past its back face. Checked against the home camera rather than assumed: the ray
-     * from the lens to the tip passes through the tube's own bounding box, so the plug is
-     * occluded rather than merely nearby.
-     */
-    this.restingTip.copy(anchor).add(new THREE.Vector3(-0.12, -0.16, -0.34));
+    // Short slack behind the CRT's left shoulder, clear of the lamp and notebook.
+    this.restingTip.copy(anchor).add(new THREE.Vector3(-0.05, -0.17, -0.16));
     this.targetTip.copy(this.restingTip);
 
     // Spread the initial points along the rest direction. Starting them all coincident
@@ -84,10 +64,11 @@ export class CableCursor {
     for (let i = 0; i < SEGMENTS; i++) {
       const t = i / (SEGMENTS - 1);
       this.points.push(this.anchor.clone().lerp(this.targetTip, t));
+      this.drawPoints.push(this.points[i].clone());
       this.velocities.push(new THREE.Vector3());
     }
 
-    this.curve = new THREE.CatmullRomCurve3(this.points);
+    this.curve = new THREE.CatmullRomCurve3(this.drawPoints);
     this.curve.curveType = 'catmullrom';
     this.curve.tension = 0.5;
 
@@ -100,13 +81,10 @@ export class CableCursor {
     );
     this.root.add(this.mesh);
 
-    // The live end. Knowledge green so the cable reads as carrying the AI itself.
-    this.plug = decorMesh(
-      'Plug',
-      new THREE.CylinderGeometry(0.022, 0.026, 0.055, 8),
-      MAT.knowledgeLamp
-    );
+    this.plug = ENGINE.SceneNode.create({ name: 'MenuPlug' });
+    for (const part of createMenuPlug()) this.plug.add(decorMesh('PlugPart', part.geometry, MAT[part.material]));
     this.root.add(this.plug);
+    this.rebuild();
   }
 
   /** Point the tip should reach for while free. */
@@ -248,20 +226,24 @@ export class CableCursor {
   }
 
   private rebuild(): void {
-    this.curve.points = this.points;
+    for (let i = 0; i < SEGMENTS; i++) this.drawPoints[i].copy(this.points[i]);
+    // The simulated point is the metal nose; rubber cable joins the strain relief behind it.
+    this.drawPoints[SEGMENTS - 1].z += CONNECTOR.tail;
+    this.drawPoints[SEGMENTS - 2].lerp(this.drawPoints[SEGMENTS - 1], 0.5);
     const geometry = new THREE.TubeGeometry(this.curve, SEGMENTS * 2, CABLE_RADIUS, 5, false);
     this.mesh.geometry.dispose();
     this.mesh.geometry = geometry;
 
     const tip = this.points[SEGMENTS - 1];
-    const before = this.points[SEGMENTS - 2];
     this.plug.position.copy(tip);
-    this.plug.lookAt(before);
-    this.plug.rotateX(Math.PI / 2);
+    // All panel sockets face +Z, so the insertion axis stays -Z rather than following sag.
   }
 
   public dispose(): void {
     this.tweener.clear();
     this.mesh.geometry.dispose();
+    this.plug.traverse((object) => {
+      if ((object as THREE.Mesh).isMesh) (object as THREE.Mesh).geometry.dispose();
+    });
   }
 }

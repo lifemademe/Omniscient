@@ -21,6 +21,7 @@ import { DESK_SHIFT } from '../geometry/room.js';
 
 import { CableCursor } from './CableCursor.js';
 import { createLabelMaterial } from './labels.js';
+import { CONNECTOR } from '../geometry/menuConnector.js';
 
 import type { Picker } from '../input/Picker.js';
 import type { ModuleKind } from '../geometry/modules.js';
@@ -232,11 +233,11 @@ export class MainMenu {
      * desk edge and looped across the screen - the one thing in this shot that must never
      * be occluded.
      *
-     * Level with the machine's right shoulder and slightly behind it: the loose end then
+     * Level with the machine's left shoulder and slightly behind it: the loose end then
      * rests further back still (see CableCursor's idle target), so at rest the whole cable
      * is behind the tube and only comes forward when the player reaches for a module.
      */
-    const anchor = new THREE.Vector3(0.24, 0.2, -0.62 + DESK_SHIFT);
+    const anchor = new THREE.Vector3(-0.27, 0.2, -0.62 + DESK_SHIFT);
     this.cable = new CableCursor(anchor);
     this.root.add(this.cable.root);
 
@@ -266,14 +267,14 @@ export class MainMenu {
 
     const socketUnavailableGlow = decorMesh(
       'SocketUnavailableGlow',
-      new THREE.CircleGeometry(0.038, 20),
+      new THREE.PlaneGeometry(0.048, 0.028),
       UNAVAILABLE_SOCKET_GLOW
     );
     socketUnavailableGlow.position.copy(build.socket).add(new THREE.Vector3(0, 0, 0.001));
     socketUnavailableGlow.renderOrder = 3;
     const socketUnavailableCore = decorMesh(
       'SocketUnavailableCore',
-      new THREE.CircleGeometry(0.015, 16),
+      new THREE.PlaneGeometry(0.025, 0.008),
       UNAVAILABLE_SOCKET_CORE
     );
     socketUnavailableCore.position.copy(build.socket).add(new THREE.Vector3(0, 0, 0.002));
@@ -344,8 +345,7 @@ export class MainMenu {
   /**
    * Be told which plate is under the pointer, or null for none and for a disabled one.
    *
-   * Exists because the plate labels are no longer legible at the game's pixel size and the
-   * name has to arrive somewhere else - see MenuReadout for the whole argument.
+   * Optional observer for menu focus; physical labels now carry their own names.
    */
   public onHoverChange(handler: (spec: ModuleSpec | null) => void): () => void {
     this.hoverHandlers.add(handler);
@@ -431,7 +431,7 @@ export class MainMenu {
     const module = this.modules.get(available[next].id);
     this.controllerFocused = true;
     this.setHovered(available[next].id);
-    if (module) this.cable.setTarget(module.node.position.clone().add(module.socket));
+    if (module) this.cable.setTarget(module.node.position.clone().add(module.socket).add(new THREE.Vector3(0, 0, CONNECTOR.approach)));
     return true;
   }
 
@@ -476,14 +476,7 @@ export class MainMenu {
     this.hovered = id;
     if (entering && this.modules.get(id)?.spec.disabled !== true) audio.play('tap');
 
-    /*
-     * And tell whoever is listening what the plate is called.
-     *
-     * The names left the world when the game got a pixel grid - see MenuReadout - so this
-     * is now the only way a player learns which socket is which. A disabled plate reports
-     * null rather than its name: CONTINUE before there is a save is not a thing you can
-     * reach for, and naming it would be the menu offering something it will refuse.
-     */
+    // Disabled plates do not advertise an actionable focus.
     const named = id !== null ? this.modules.get(id) : undefined;
     const spec = named && named.spec.disabled !== true ? named.spec : null;
     for (const handler of this.hoverHandlers) handler(spec);
@@ -549,10 +542,15 @@ export class MainMenu {
       if (point) {
         const local = point.sub(this.root.position);
         const nearPlates =
+          local.x > STACK_ORIGIN.x - MODULE_PLATE.width * 0.7 &&
           local.x < STACK_ORIGIN.x + MODULE_PLATE.width * 0.9 &&
           local.y > STACK_ORIGIN.y - PITCH * (MODULES.length - 1) - MODULE_PLATE.height &&
           local.y < STACK_ORIGIN.y + MODULE_PLATE.height;
-        this.cable.setTarget(nearPlates ? local : this.cable.restingTip);
+        const selected = this.hovered ? this.modules.get(this.hovered) : undefined;
+        const reach = nearPlates && selected && !selected.spec.disabled;
+        this.cable.setTarget(reach
+          ? this.scratch.copy(selected.node.position).add(selected.socket).add(new THREE.Vector3(0, 0, CONNECTOR.approach))
+          : this.cable.restingTip);
       }
     }
     this.cable.update(deltaTime);
