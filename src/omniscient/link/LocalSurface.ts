@@ -129,6 +129,9 @@ export const TERMINAL_CSS = `
 .omni-terminal__log > :first-child {
   margin-top: auto;
 }
+/* Pipe routing is the task on this tab, not a message waiting at the foot of a chat. */
+.omni-terminal__log--pipes > :first-child { margin-top: 0; }
+.omni-terminal__log--pipes { padding: 4px 0 12px; }
 .omni-line__who {
   display: block;
   font-size: calc(11px + var(--omni-font-boost, 0px));
@@ -1644,7 +1647,10 @@ export class LocalSurface implements InterventionSurface {
     this.lastState = state;
 
     this.contactElement.textContent = state.contactName;
-    this.hintElement.textContent = state.hint ?? '';
+    this.hintElement.textContent =
+      state.device?.kind === 'pipes' && !state.failure && !state.resolved && !state.confirming
+        ? 'routing — no time pressure'
+        : state.hint ?? '';
     this.renderSuggestions(state.suggestions);
     this.renderReadouts(state);
     // The whole panel goes red, not just the notice inside it.
@@ -1927,6 +1933,7 @@ export class LocalSurface implements InterventionSurface {
      * time constants and restarting them each frame would flatten them into nothing.
      */
     const onConsole = this.tab === 'console';
+    this.panelElement.classList.toggle('omni-terminal__log--pipes', onConsole && state.device?.kind === 'pipes');
     if (onConsole !== this.roomToneOnConsole) {
       this.roomToneOnConsole = onConsole;
       setRoomToneFocus(onConsole);

@@ -24,7 +24,7 @@
 
 import { initialBeam, stepBeam } from '../mission/beam.js';
 import { describe } from '../mission/pursuit.js';
-import { reached } from '../mission/pipes.js';
+import { openingsOf, reached } from '../mission/pipes.js';
 import { narrow } from '../mission/traces.js';
 import { audio } from '../audio/ConsoleAudio.js';
 import { DISTRICT_CITY } from '../content/district-07.js';
@@ -518,29 +518,59 @@ const BOARD_CSS = `
    It does not leak the answer and does not cross §157's boundary. The fill runs on the
    board the player is looking at, using the rotations the player set, and every input to it
    is already on their screen. It reports what they have built, not what they should. */
+.omni-board--pipes { gap: 12px; }
+.omni-board--pipes .omni-board__grid {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 10px;
+}
+.omni-board--pipes .omni-board__foot {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 9px;
+}
+.omni-board--pipes .omni-board__status { line-height: 1.45; }
+.omni-board--pipes .omni-board__send { align-self: center; min-width: 132px; }
 .omni-board__pipes {
   display: grid;
-  gap: 3px;
-  justify-content: start;
+  width: min(100%, 288px, 36vh);
+  gap: 0;
+  border: 1px solid rgba(127, 224, 138, 0.32);
 }
 .omni-board__cell {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 1;
   padding: 0;
-  border: 1px solid rgba(127, 224, 138, 0.28);
-  border-radius: 2px;
+  border: 0;
+  border-radius: 0;
+  box-shadow: inset 0 0 0 1px rgba(127, 224, 138, 0.2);
   background: rgba(10, 24, 15, 0.85);
   color: #7fe08a;
   font: inherit;
-  font-size: calc(17px + var(--omni-font-boost, 0px));
   line-height: 1;
   cursor: pointer;
-  transition: transform 120ms ease, border-color 120ms ease;
 }
-.omni-board__cell:hover { border-color: rgba(127, 224, 138, 0.75); }
+.omni-board__cell:not(:disabled):hover {
+  box-shadow: inset 0 0 0 2px rgba(127, 224, 138, 0.75);
+}
+.omni-board__cell:focus-visible { outline: 2px solid #d8ffb0; outline-offset: -3px; z-index: 1; }
+.omni-board__pipe { width: 100%; height: 100%; display: block; pointer-events: none; }
+.omni-board__endpoint, .omni-board__fixed {
+  position: absolute;
+  left: 0;
+  right: 0;
+  text-align: center;
+  pointer-events: none;
+  font-size: calc(10px + var(--omni-font-boost, 0px));
+  letter-spacing: 0.04em;
+}
+.omni-board__endpoint { top: 9px; }
+.omni-board__fixed { bottom: 8px; font-size: 8px; opacity: 0.8; }
 /* Fixed pieces are already plumbed in - dimmer, and they do not take a pointer. */
 
 /*
@@ -557,15 +587,14 @@ const BOARD_CSS = `
  * tile on it - and present, so the grid is a grid.
  */
 .omni-board__cell--blank {
-  border-style: dashed;
-  border-color: rgba(127, 224, 138, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(127, 224, 138, 0.16);
   background: rgba(3, 9, 5, 0.6);
   cursor: default;
 }
 .omni-board__cell--fixed {
   cursor: default;
   color: rgba(127, 224, 138, 0.45);
-  border-color: rgba(127, 224, 138, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(127, 224, 138, 0.14);
 }
 /*
  * ## These come after --fixed on purpose
@@ -589,7 +618,7 @@ const BOARD_CSS = `
 /* Water in the pipe. Brighter and warmer-edged than a dry piece, so a partial run reads as
    a line growing out of the sump rather than as a scatter of selected tiles. */
 .omni-board__cell--wet {
-  border-color: rgba(143, 214, 232, 0.85);
+  box-shadow: inset 0 0 0 1px rgba(143, 214, 232, 0.85);
   background: rgba(20, 58, 74, 0.9);
   color: #bfe6f4;
 }
@@ -598,11 +627,11 @@ const BOARD_CSS = `
    repeat. Cool for the sump, because that is where water arrives from; amber for the
    outfall, because that is the one the whole request is trying to reach. */
 .omni-board__cell--source {
-  border-color: rgba(143, 214, 232, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(143, 214, 232, 0.9);
   color: #8fd6e8;
 }
 .omni-board__cell--drain {
-  border-color: rgba(224, 162, 76, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(224, 162, 76, 0.9);
   color: #e0a24c;
 }
 .omni-board__legend {
@@ -614,9 +643,6 @@ const BOARD_CSS = `
   text-transform: uppercase;
   color: rgba(159, 216, 168, 0.62);
 }
-.omni-board__legend b { font-weight: normal; }
-.omni-board__legend .sump { color: #8fd6e8; }
-.omni-board__legend .outfall { color: #e0a24c; }
 /*
  * The lock, drawn as a lock.
  *
@@ -807,26 +833,6 @@ export function injectBoardStyles(): void {
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 type PipeGridView = Extract<DeviceView, { kind: 'pipes' }>['grid'];
-
-/**
- * Box-drawing characters, indexed by quarter turn.
- *
- * A straight piece has only two distinct orientations and a cross has one, so the tables
- * are short and the modulo does the rest. Using the characters directly means a pipe
- * piece needs no art, and at this size it reads better than a sprite would.
- */
-const GLYPHS: Record<string, string[]> = {
-  straight: ['\u2503', '\u2501'],
-  bend: ['\u2517', '\u250f', '\u2513', '\u251b'],
-  tee: ['\u2523', '\u2533', '\u252b', '\u253b'],
-  cross: ['\u254b'],
-  blank: [' '],
-};
-
-function pipeGlyph(shape: string, turn: number): string {
-  const options = GLYPHS[shape] ?? [' '];
-  return options[((turn % options.length) + options.length) % options.length];
-}
 
 /** Minutes past midnight as a clock reading. */
 function clock(minutes: number): string {
@@ -1039,6 +1045,7 @@ export class BoardPanel {
   public update(view: DeviceView | undefined): void {
     this.view = view ?? null;
     this.element.classList.toggle('omni-board--relations', view?.kind === 'relations');
+    this.element.classList.toggle('omni-board--pipes', view?.kind === 'pipes');
     /*
      * The camera feed belongs to the chase and to nothing else.
      *
@@ -1198,14 +1205,13 @@ export class BoardPanel {
    * board's click-then-click, and here it is even simpler because a piece has only one
    * thing it can do.
    *
-   * Glyphs rather than sprites: box-drawing characters already ARE pipe pieces, they
-   * rotate by picking a different character, and they cost no texture and no atlas. The
-   * grid is small enough that a 17px glyph reads perfectly.
+   * Draw the grader's actual openings all the way to the cell edges: adjacent pieces
+   * read as one pipe, independent of font metrics or the operator's text size.
    */
   private buildPipes(grid: PipeGridView): void {
     const board = document.createElement('div');
     board.className = 'omni-board__pipes';
-    board.style.gridTemplateColumns = `repeat(${grid.columns}, 34px)`;
+    board.style.gridTemplateColumns = `repeat(${grid.columns}, minmax(0, 1fr))`;
 
     grid.cells.forEach((cell, index) => {
       const button = document.createElement('button');
@@ -1220,13 +1226,39 @@ export class BoardPanel {
         .filter(Boolean)
         .join(' ');
 
-      if (!cell.fixed && cell.shape !== 'blank') {
-        button.addEventListener('mousedown', (event) => {
+      const pipe = document.createElementNS(SVG_NS, 'svg');
+      pipe.setAttribute('class', 'omni-board__pipe');
+      pipe.setAttribute('viewBox', '0 0 100 100');
+      pipe.setAttribute('aria-hidden', 'true');
+      const path = document.createElementNS(SVG_NS, 'path');
+      path.setAttribute('fill', 'none');
+      path.setAttribute('stroke', 'currentColor');
+      path.setAttribute('stroke-width', '10');
+      path.setAttribute('stroke-linecap', 'square');
+      path.setAttribute('shape-rendering', 'crispEdges');
+      pipe.appendChild(path);
+      button.appendChild(pipe);
+
+      const endpoint = index === grid.source ? 'SUMP' : index === grid.drain ? 'OUTFALL' : '';
+      if (endpoint) {
+        const label = document.createElement('span');
+        label.className = 'omni-board__endpoint';
+        label.textContent = endpoint;
+        button.appendChild(label);
+      }
+      if (cell.fixed) {
+        const fixed = document.createElement('span');
+        fixed.className = 'omni-board__fixed';
+        fixed.textContent = 'FIXED';
+        button.appendChild(fixed);
+      }
+      button.disabled = cell.fixed || cell.shape === 'blank';
+      if (!button.disabled) {
+        button.addEventListener('click', (event) => {
           event.preventDefault();
-          audio.play('seat');
           this.rotations[index] = (this.rotations[index] + 1) % 4;
-          this.paintFlow(grid);
           if (this.view) this.refresh(this.view);
+          audio.play('seat');
         });
       }
 
@@ -1236,18 +1268,9 @@ export class BoardPanel {
 
     this.grid.appendChild(board);
 
-    /*
-     * The legend, because the prompt names the sump and the outfall and the board never did.
-     * Two words and two colours - the cheapest possible way to turn "two orange squares"
-     * into "this end and that end".
-     */
     const legend = document.createElement('div');
     legend.className = 'omni-board__legend';
-    const sump = document.createElement('span');
-    sump.innerHTML = '<b class="sump">&#9633;</b> sump';
-    const outfall = document.createElement('span');
-    outfall.innerHTML = '<b class="outfall">&#9633;</b> outfall';
-    legend.append(sump, outfall);
+    legend.textContent = 'Click a piece to turn it clockwise';
     this.grid.appendChild(legend);
 
     this.paintFlow(grid);
@@ -1261,8 +1284,18 @@ export class BoardPanel {
    */
   private paintFlow(grid: PipeGridView): void {
     const wet = reached(grid, this.rotations);
+    const tips = ['50 0', '100 50', '50 100', '0 50'];
+    const directions = ['north', 'east', 'south', 'west'];
     this.cellButtons.forEach((button, index) => {
       button.classList.toggle('omni-board__cell--wet', wet.has(index));
+      const cell = grid.cells[index];
+      const openings = openingsOf(cell, this.rotations[index] ?? 0);
+      button.querySelector('path')?.setAttribute(
+        'd',
+        openings.map((open, side) => open ? `M 50 50 L ${tips[side]}` : '').join(' ')
+      );
+      const name = index === grid.source ? 'Sump' : index === grid.drain ? 'Outfall' : `Pipe ${index + 1}`;
+      button.setAttribute('aria-label', `${name}, ${cell.fixed ? 'fixed' : 'rotate clockwise'}, openings ${directions.filter((_, side) => openings[side]).join(' and ')}, ${wet.has(index) ? 'water reaches here' : 'dry'}`);
     });
   }
 
@@ -2497,10 +2530,7 @@ export class BoardPanel {
     this.send.style.display = '';
 
     if (view.kind === 'pipes') {
-      view.grid.cells.forEach((cell, index) => {
-        const button = this.cellButtons[index];
-        if (button) button.textContent = pipeGlyph(cell.shape, cell.turn + this.rotations[index]);
-      });
+      this.paintFlow(view.grid);
       this.send.disabled = false;
       this.status.className = view.note
         ? 'omni-board__status omni-board__status--score'

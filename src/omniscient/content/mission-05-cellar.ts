@@ -102,6 +102,9 @@ export const MISSION_05: MissionDefinition = {
   sceneId: 'scene-flooded-cellar',
   archetype: 'diagnosis',
   objective: 'Find out where the water is going, and get it out of the cellar.',
+  resolutionDelayMs: 4800,
+  resolutionPendingObjective: 'Watching the water fall…',
+  resolutionObjective: 'Cellar draining. The route is recorded.',
   // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
   reopeningSay: 'You again. The water is still coming in, if that matters.',
   /**
@@ -161,20 +164,21 @@ export const MISSION_05: MissionDefinition = {
     },
     {
       id: 'hint-covers',
-      summary: 'Three inspection **covers** are up along the cellar floor.',
+      summary: 'Three routing **junctions**, with levers, sit along the cellar wall.',
       detail:
-        'Under each one is a junction box with the pipework turned into it, and each box ' +
-        'can be set to send water on in a different direction. Two of them are painted a ' +
-        'colour nobody has used since the seventies.',
-      keywords: ['covers', 'junction', 'boxes'],
+        'Each lever changes which branch the water takes through the pipework. The ' +
+        'junctions are above the floodwater, where Vasile can reach them. Two still carry ' +
+        'paint nobody has used since the seventies.',
+      keywords: ['junction', 'junctions', 'lever', 'levers', 'boxes', 'covers'],
       cue: 'prop.highlight:covers',
     },
     {
       id: 'hint-marks',
       summary: 'Chalk **marks** on the cellar wall, at four different heights.',
       detail:
-        'Somebody has been recording the water each spring for years. The highest is at ' +
-        'chest height and dated, and the water today is a hand under it.',
+        'Somebody has been recording the water each spring for years. The old, dated ' +
+        'marks climb to waist height. Today it is shin-deep and rising - well below ' +
+        'those marks, but already around the stored furniture.',
       keywords: ['marks', 'water'],
     },
   ],
@@ -202,11 +206,11 @@ export const MISSION_05: MissionDefinition = {
       priority: 3,
     },
     {
-      /** The one that raises the grid. */
+      /** Raises the grid. Keep the historical ID and cover aliases for saved conversations. */
       id: 'OPEN_COVERS',
       requires: [
-        [...TERMS.inspect, 'open', 'lift', 'show', 'set', 'turn'],
-        ['covers', 'cover', 'junction', 'junctions', 'boxes', 'box', 'inspection'],
+        [...TERMS.inspect, ...TERMS.describe, 'open', 'lift', 'show', 'set', 'turn'],
+        ['covers', 'cover', 'junction', 'junctions', 'lever', 'levers', 'boxes', 'box', 'inspection'],
       ],
       priority: 4,
     },
@@ -239,7 +243,7 @@ export const MISSION_05: MissionDefinition = {
         'The pump is running - I can hear it, it sounds right - but there is nothing ' +
         'coming out the other end. I have been under this building thirty years and I ' +
         'still could not tell you where half of this pipe goes.',
-      suggest: ['check the pump', 'follow the pipe', 'open the inspection covers'],
+      suggest: ['check the pump', 'follow the pipe', 'show me the junction levers'],
       on: {
         ASK_PUMP: { to: 'pump-fine', environment: 'prop.point:contact', learn: [FACT_PUMP_IS_FINE] },
         ASK_RUN: { to: 'the-run', environment: 'prop.point:contact', learn: [FACT_PIECEMEAL_PLUMBING] },
@@ -254,8 +258,8 @@ export const MISSION_05: MissionDefinition = {
       tempo: Tempo.Think,
       say:
         'Say again? It is loud down here. Ask me about the pump, or about where the pipe ' +
-        'goes, or tell me to get the covers up.',
-      suggest: ['check the pump', 'follow the pipe', 'open the inspection covers'],
+        'goes, or tell me to show you the junction levers.',
+      suggest: ['check the pump', 'follow the pipe', 'show me the junction levers'],
       on: {
         ASK_PUMP: { to: 'pump-fine', learn: [FACT_PUMP_IS_FINE] },
         ASK_RUN: { to: 'the-run', learn: [FACT_PIECEMEAL_PLUMBING] },
@@ -271,7 +275,7 @@ export const MISSION_05: MissionDefinition = {
         'The pump is fine. Steady note, not racing, not straining. I have had the lid off ' +
         'and the impeller is turning and it is wet all the way up. It is pushing water ' +
         'somewhere with everything it has got. It is just not out.',
-      suggest: ['follow the pipe', 'open the inspection covers'],
+      suggest: ['follow the pipe', 'show me the junction levers'],
       on: {
         ASK_RUN: { to: 'the-run', learn: [FACT_PIECEMEAL_PLUMBING] },
         OPEN_COVERS: { to: 'covers' },
@@ -289,7 +293,7 @@ export const MISSION_05: MissionDefinition = {
         'the nineties and there is a bit I put in myself. Every one of us changed where ' +
         'it went and not one of us drew it. I can see any two feet of it you like. I ' +
         'cannot see all of it at once.',
-      suggest: ['open the inspection covers', 'check the pump'],
+      suggest: ['show me the junction levers', 'check the pump'],
       on: {
         OPEN_COVERS: { to: 'covers' },
         ASK_PUMP: { to: 'pump-fine', learn: [FACT_PUMP_IS_FINE] },
@@ -302,19 +306,20 @@ export const MISSION_05: MissionDefinition = {
        * The device beat.
        *
        * He describes the junctions and then hands the whole run over, which is the moment
-       * the mission is built around: he has the covers up and his hands on the boxes, and
+       * the mission is built around: he can reach the wall levers and trace each junction, and
        * the thing he cannot do is hold the layout. That is the machine's half.
        */
       id: 'covers',
       framing: 'camera.push-in:covers',
-      tempo: Tempo.Act,
+      tempo: Tempo.Think,
       learn: [FACT_CELLAR_RUN],
       say:
-        'Covers are up. Three boxes, and every one of them can be turned to send it on a ' +
-        'different way - they are made to be, that is how you re-route a run without ' +
-        'digging. Some of these are still set for whatever was here before the last lot ' +
-        'changed it.\n\nI will turn whichever you tell me. Just tell me the whole thing at ' +
-        'once, because I cannot hold it.',
+        'Three junctions on the wall. Each has a lever to send the water a different ' +
+        'way - that is how you re-route the run without digging it up. The pipe between ' +
+        'them disappears behind the walls and under the floor. Some of these are still ' +
+        'set for whatever was here before the last lot changed it.\n\nYou lay out the ' +
+        'whole run, from the sump to the outfall. I will set the levers to match. I can ' +
+        'follow one bit at a time; I cannot hold the whole thing.',
       // "go back over the pipe" resolved to nothing - ASK_RUN needs a word from the first
       // group and "go", "back" and "over" are all outside it, so the one chip on this beat
       // answered "say that again". A suggestion that does not resolve is worse than none.
@@ -342,7 +347,7 @@ export const MISSION_05: MissionDefinition = {
           environment:
             'camera.push:valve,prop.turn:valve,prop.clear:water,prop.release:outfall@1.35,' +
             // F10: the room comes up as the water goes. See registerLightBeat('cellar').
-            'light.settle:cellar@1.35',
+            'light.settle:cellar@1.35,camera.push:reassurance@3.5',
         },
         onWrong: { to: 'covers', environment: 'camera.push:valve,prop.burst:valve' },
         wrongSay:
@@ -388,7 +393,7 @@ export const MISSION_05: MissionDefinition = {
     },
     {
       id: 'solved',
-      gesture: 'prop.nod:contact',
+      gesture: 'prop.nod:contact@4.7',
       tempo: Tempo.Respond,
       say:
         'It is going. You can hear it change - that is it out through the wall and into ' +

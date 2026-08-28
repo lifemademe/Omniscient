@@ -57,6 +57,7 @@ import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { CONTACT_GESTURES } from './gestures.js';
 import { placeRigged } from './riggedContact.js';
 import { dressRepairShop } from './repairShopDressing.js';
+import { dressSchoolCellar } from './schoolCellarDressing.js';
 import {
   buildStationScreen,
   SCREEN_H,
@@ -6966,6 +6967,7 @@ function buildFloodedCellar(scene: ContactScene): void {
    * sump, and it reaches Vasile, which is the whole point - the man is standing IN it.
    */
   const WATER_LEVEL = 0.22;
+  let waterLevel = WATER_LEVEL;
 
   /**
    * The water.
@@ -6979,7 +6981,11 @@ function buildFloodedCellar(scene: ContactScene): void {
   waterGeo.rotateX(-Math.PI / 2);
   waterGeo.translate(0, WATER_LEVEL, 0);
   const flood = createFloodwater();
+  // Keep a broken practical reflection, not a second white lamp on the floor.
+  flood.material.roughness = 0.46;
+  flood.material.metalness = 0.04;
   const waterMesh = meshOf('Water', waterGeo, flood.material);
+  waterMesh.traverse((object) => { object.userData.noWaterline = true; });
 
   /**
    * The run, as something that can be seen to carry water.
@@ -7055,15 +7061,22 @@ function buildFloodedCellar(scene: ContactScene): void {
           }
         );
 
-        /** It drains: the sheet drops and thins away. */
-        const material = waterMesh.material as THREE.MeshBasicMaterial;
-        const from = material.opacity;
+        // Expose submerged surfaces rather than dissolving a sheet in place. Ripples,
+        // contact edges and wetting follow the same height; the old flood stain stays.
         tweener.add(
           (t) => {
-            waterMesh.position.setY(-t * 0.055);
-            material.opacity = from * (1 - t * 0.85);
+            waterLevel = WATER_LEVEL - t * (WATER_LEVEL - 0.025);
+            const offset = waterLevel - WATER_LEVEL;
+            waterMesh.position.setY(offset);
+            ripples.root.position.setY(offset);
+            floodContacts.position.setY(offset);
+            applyWaterline(
+              scene as unknown as THREE.Object3D,
+              waterLevel,
+              scene.nodeFor('contact') as unknown as THREE.Object3D | null
+            );
           },
-          { duration: 2.6, delay: 0.7, easing: Ease.outCubic, channel: 'cellar-drain' }
+          { duration: 3.4, delay: 1.35, easing: Ease.inOutCubic, channel: 'cellar-drain' }
         );
       },
     },
@@ -7637,7 +7650,6 @@ function buildFloodedCellar(scene: ContactScene): void {
   const DRIP_PERIOD = 3.2;
   // Drips land on the surface, wherever that currently is - not on a second copy of the
   // number, which is how a drop ends up falling through the water it is supposed to join.
-  const WATER_Y = WATER_LEVEL;
   scene.registerProp('run-drips', drips, {
     idle: (deltaTime) => {
       if (!runIsWet) return;
@@ -7660,7 +7672,7 @@ function buildFloodedCellar(scene: ContactScene): void {
           // lowered on a wire.
           drip.node.position.set(
             drip.at.x,
-            drip.at.y - (drip.at.y - WATER_Y) * fall * fall,
+            drip.at.y - (drip.at.y - waterLevel) * fall * fall,
             drip.at.z
           );
           /*
@@ -7819,6 +7831,8 @@ function buildFloodedCellar(scene: ContactScene): void {
        */
       inked: true,
       anchors: { default: new THREE.Vector3(0.25, runY + 0.17, -1.86) },
+      label: 'junctions',
+      labelPlacement: 'below',
     }
   );
   scene.registerProp(
@@ -7940,6 +7954,7 @@ function buildFloodedCellar(scene: ContactScene): void {
   const pump = new THREE.CylinderGeometry(0.13, 0.15, 0.34, 10);
   pump.translate(-2.6, 0.62, -1.5);
   scene.registerProp('pump', meshOf('Pump', pump, MAT.equipment));
+  const floodContacts = dressSchoolCellar(scene, WATER_LEVEL);
 
   /**
    * -- Dressing, and the one idea behind all of it --------------------------------------
@@ -8232,7 +8247,7 @@ function buildFloodedCellar(scene: ContactScene): void {
    * It also breaks the bloom into ribs instead of letting it stay a circle, which is most
    * of what turns a blob into a lamp.
    */
-  const lampAt = new THREE.Vector3(-0.4, 2.05, -2.0);
+  const lampAt = new THREE.Vector3(-1.55, 2.05, -2.0);
   const housing: THREE.BufferGeometry[] = [];
 
   const plate = new THREE.CylinderGeometry(0.15, 0.16, 0.035, 12);
@@ -8265,7 +8280,7 @@ function buildFloodedCellar(scene: ContactScene): void {
   for (let i = 0; i < 4; i++) {
     const bar = new THREE.BoxGeometry(0.262, 0.012, 0.012);
     bar.rotateZ((i * Math.PI) / 4);
-    bar.translate(lampAt.x, lampAt.y, lampAt.z + 0.128);
+    bar.translate(lampAt.x, lampAt.y, lampAt.z + 0.19);
     housing.push(bar);
   }
   /*
@@ -8296,7 +8311,7 @@ function buildFloodedCellar(scene: ContactScene): void {
   const shade = new THREE.SphereGeometry(0.115, 12, 9);
   shade.scale(1, 1, 0.78);
   shade.translate(lampAt.x, lampAt.y, lampAt.z + 0.085);
-  const bulkheadGlass = meshOf('Bulkhead', shade, MAT.lamp);
+  const bulkheadGlass = meshOf('Bulkhead', shade, new THREE.MeshBasicMaterial({ color: '#bfa16a' }));
   // The diffuser sits in front of the bulb; if it casts, it puts a disc of its own shadow on
   // the wall it is lighting.
   bulkheadGlass.traverse((o) => {
@@ -8317,18 +8332,9 @@ function buildFloodedCellar(scene: ContactScene): void {
    */
   const bulkheadLamp = ENGINE.PointLightNode.create({
     name: 'Bulkhead',
-    position: lampAt.clone().add(new THREE.Vector3(0, 0, 0.2)),
-    // 11 down to 9.5. It is still the key and still the brightest thing in the room; the
-    // run no longer needs it to reach six metres, so it can go back to being a lamp.
-    /*
-     * The light beat that runs on this lamp takes it 9.5 -> 11.2 over 3.2s, and D-3 asked
-     * whether that is visible at all or whether it is a number nobody ever sees move.
-     * Measured by holding it at t=1 and photographing both ends: the frame mean goes 47.31 to
-     * 49.53, a quarter of the picture changes by more than three levels, and the peak change
-     * is 29. It reads - and it reads as the room coming up rather than as a light switching,
-     * which is what a beat spread over three seconds is for.
-     */
-    intensity: 9.5,
+    position: lampAt.clone().add(new THREE.Vector3(0, -0.06, 0.44)),
+    // Support Vasile without the clipped wall halo or mirror-white flood reflection.
+    intensity: 5.4,
     color: new THREE.Color('#ffdcae'),
     distance: 7,
     decay: 1.3,
@@ -8354,13 +8360,12 @@ function buildFloodedCellar(scene: ContactScene): void {
    * at the moment the player wins is a punishment for winning. A cellar with the flood gone is
    * a cellar somebody can work in; the lamp reaching further is the whole idea.
    *
-   * 9.5 to 11.2 is under twenty per cent - enough to feel as a change, not enough to blow the
-   * pipe run's highlights, which sit close to clipping already.
+   * The restrained 5.4 to 6.05 lift keeps the lamp subordinate to Vasile.
    */
   scene.registerLightBeat(
     'cellar',
     (t) => {
-      bulkheadLamp.intensity = 9.5 + t * 1.7;
+      bulkheadLamp.intensity = 5.4 + t * 0.65;
     },
     3.2
   );
@@ -8424,9 +8429,9 @@ function buildFloodedCellar(scene: ContactScene): void {
        * On his eyeline now and inside its own range, coming from the camera side so it
        * lands on the cheek the lens can actually see.
        */
-      position: new THREE.Vector3(0.75, 1.72, -0.25),
-      intensity: 3.2,
-      color: new THREE.Color('#a8c0d4'),
+      position: new THREE.Vector3(-0.55, 1.8, -0.35),
+      intensity: 3.8,
+      color: new THREE.Color('#d4c6ae'),
       distance: 4.5,
       decay: 1.35,
     })
@@ -8466,14 +8471,14 @@ function buildFloodedCellar(scene: ContactScene): void {
     // the water reads as a plane rather than as a dark floor.
     // Pulled back and swung right so the covers, the run and the water are all in frame
     // with Vasile at the left edge rather than in the middle of the lens.
-    position: new THREE.Vector3(3.3, 1.8, 3.5),
-    target: new THREE.Vector3(-0.3, 0.6, -1.35),
+    position: new THREE.Vector3(2.45, 1.72, 2.4),
+    target: new THREE.Vector3(-0.45, 0.98, -1.55),
   });
   scene.registerShot('covers', {
     // Follows the junctions up onto the run. They were on the floor and this looked down at
     // the floor; they are lever cocks on the pipe now, so it looks along it.
-    position: new THREE.Vector3(1.55, 1.62, 0.75),
-    target: new THREE.Vector3(0.15, 1.36, -1.9),
+    position: new THREE.Vector3(1.9, 1.67, 1.6),
+    target: new THREE.Vector3(-0.05, 1.12, -1.8),
     duration: 2.2,
   });
   /**
@@ -8503,6 +8508,11 @@ function buildFloodedCellar(scene: ContactScene): void {
     // picks up - see LEAD_IN. The camera has to be parked before the thing it came to
     // watch happens, or the player watches it through a move.
     duration: 1,
+  });
+  scene.registerShot('reassurance', {
+    position: new THREE.Vector3(2.6, 1.72, 2.5),
+    target: new THREE.Vector3(-0.25, 0.88, -1.55),
+    duration: 1.2,
   });
 
   /**
@@ -8607,7 +8617,7 @@ function buildFloodedCellar(scene: ContactScene): void {
   scene.registerFinisher(() => {
     applyWaterline(
       scene as unknown as THREE.Object3D,
-      WATER_LEVEL,
+      waterLevel,
       scene.nodeFor('contact') as unknown as THREE.Object3D | null
     );
   });

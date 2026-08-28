@@ -147,6 +147,11 @@ export function applyWaterline(
 
   root.traverse((object) => {
     if (excluded.has(object)) return;
+    if (object.userData.noWaterline === true) {
+      // Collect now, not during construction: MeshNode may load render children later.
+      object.traverse((child) => excluded.add(child));
+      return;
+    }
     const mesh = renderTargetOf(object);
     if (!mesh) return;
 

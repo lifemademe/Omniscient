@@ -146,6 +146,7 @@ import './omniscient/view/repairShopDressing.js';
 import './omniscient/view/riggedContact.js';
 import './omniscient/view/scene-ids.js';
 import './omniscient/view/scenes.js';
+import './omniscient/view/schoolCellarDressing.js';
 import './omniscient/view/stationDesk.js';
 import './omniscient/warehouse/archive.js';
 import './omniscient/warehouse/archiveDisplay.js';

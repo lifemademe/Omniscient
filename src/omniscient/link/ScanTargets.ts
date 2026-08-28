@@ -223,6 +223,7 @@ export interface ScanTarget {
   id: string;
   node: THREE.Object3D;
   labelPlacement?: 'side' | 'below';
+  label?: string;
 }
 
 interface Marker {
@@ -389,7 +390,7 @@ export class ScanTargets {
       n.textContent = String(index + 1).padStart(2, '0');
       const name = document.createElement('span');
       name.className = 'omni-scan__name';
-      name.textContent = labelFor(target.id);
+      name.textContent = target.label ?? labelFor(target.id);
       tag.append(n, name);
 
       root.append(box, sweep, leader, tag);

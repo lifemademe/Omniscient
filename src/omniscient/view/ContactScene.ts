@@ -72,6 +72,7 @@ export interface RegisteredProp {
   inked?: boolean;
   /** Optional caption placement for evidence whose side callout would cross the caller. */
   labelPlacement?: 'side' | 'below';
+  label?: string;
   /** How much the machine knows about this prop. ART_DIRECTION §1. */
   certainty?: number;
   /** Live only below SHAPED: the guess standing in for the prop. ART_DIRECTION §1 tier 1. */
@@ -322,6 +323,7 @@ export class ContactScene extends ENGINE.SceneNode {
        */
       inked?: boolean;
       labelPlacement?: 'side' | 'below';
+      label?: string;
     } = {}
   ): void {
     /*
@@ -345,6 +347,7 @@ export class ContactScene extends ENGINE.SceneNode {
       idle: options.idle,
       inked: options.inked,
       labelPlacement: options.labelPlacement,
+      label: options.label,
     });
   }
 
@@ -554,10 +557,10 @@ export class ContactScene extends ENGINE.SceneNode {
     if (raised > 0 && this.live) this.applyCertainties();
   }
 
-  public scanTargets(): { id: string; node: ENGINE.SceneNode; labelPlacement?: 'side' | 'below' }[] {
-    const out: { id: string; node: ENGINE.SceneNode; labelPlacement?: 'side' | 'below' }[] = [];
+  public scanTargets(): { id: string; node: ENGINE.SceneNode; labelPlacement?: 'side' | 'below'; label?: string }[] {
+    const out: { id: string; node: ENGINE.SceneNode; labelPlacement?: 'side' | 'below'; label?: string }[] = [];
     for (const [id, prop] of this.props) {
-      if (prop.inked) out.push({ id, node: prop.node, labelPlacement: prop.labelPlacement });
+      if (prop.inked) out.push({ id, node: prop.node, labelPlacement: prop.labelPlacement, label: prop.label });
     }
     return out;
   }

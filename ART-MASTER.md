@@ -884,6 +884,19 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
+**Vasile contact pass — user-directed D-1f extension, 2026-08-28: IN LOOP (Codex).**
+Bar: Vasile first, routing junctions second, a recognizably flooded school cellar third;
+crisp PS1 treatment, readable untimed pipe board, and a visible drain followed by a human
+acknowledgement. Source recording: `20260828-0556-25.2420282.mp4` supplied by the user.
+Scope includes local lighting/framing, flood contact, school dressing, matching junction
+wording, board layout and the ending hold. No save reset or puzzle-rule change.
+Implemented: restrained lamp/glass and water reflection, closer human-led shots, classroom
+storage, junction labels, enlarged continuous pipe paths with fixed endpoints, and a 19.5 cm
+drain followed by the reassurance shot before Vasile's closing speech. Build and lint pass.
+Visual evidence and fresh critic verdict remain PENDING: live window capture repeatedly
+failed with `foreground window did not report a process id`, including after window
+reselection. No AT BAR claim; source recording is baseline only, not proof of this change.
+
 **Tomas switch-box clearances — user-directed geometry correction, 2026-08-28:**
 Wrist target pulled back 14.5 cm; upper cable routed to a rear gland
 outside the lid sweep; lid shifted forward of its rear-edge hinge and widened to
