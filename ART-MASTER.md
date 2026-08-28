@@ -896,6 +896,7 @@ drain followed by the reassurance shot before Vasile's closing speech. Build and
 Visual evidence and fresh critic verdict remain PENDING: live window capture repeatedly
 failed with `foreground window did not report a process id`, including after window
 reselection. No AT BAR claim; source recording is baseline only, not proof of this change.
+Implementation receipt: local commit `fc5312f`; fresh rendered capture/critic still required.
 
 **Tomas switch-box clearances — user-directed geometry correction, 2026-08-28:**
 Wrist target pulled back 14.5 cm; upper cable routed to a rear gland
