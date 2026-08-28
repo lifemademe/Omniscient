@@ -890,7 +890,7 @@ records without the earlier warehouse lifecycle errors; unrelated editor errors 
 Still OPEN: sustained RMB + UI release/focus loss/denied lock/tight fallback, forced-load
 failure/retry, complete delivery scans/docking/pursuit, five worker close-ups and fresh
 worker-art judgement, exact-resolution captures and frame-level latency thresholds.
-Implementation receipt is recorded in the local commit follow-up. No push.
+Local implementation and evidence commit: `073b5c3`. No push.
 
 **Adaeze residual canopy shadow — user-reported correction, AT BAR (scoped), Codex 2026-08-28.**
 Bar: `codex-clipboard-b35c620e-1a86-433d-9927-1a8bfbb38dc0.png` without the broad rear-bed
