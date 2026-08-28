@@ -455,6 +455,9 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
     waypoints: readonly WarehouseWorkerFugitiveWaypoint[],
     callbacks: WarehouseWorkerFugitiveCallbacks = {}
   ): void {
+    this.foldRigTravel();
+    this.musterTarget = null;
+    this.musterLocalTarget = null;
     this.fugitiveRoute = waypoints.map((entry) => ({ ...entry, position: entry.position.clone() }));
     this.fugitiveCallbacks = callbacks;
     this.fugitiveIndex = 0;
@@ -480,6 +483,7 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
   }
 
   public resetFugitiveAtReceiving(position: THREE.Vector3): void {
+    this.rig?.stopWalk();
     this.position.copy(position);
     if (this.rig) this.rig.root.position.set(0, 0, 0);
     this.state = 'alerted';
@@ -496,6 +500,9 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
 
   private foldRigTravel(): void {
     if (!this.rig) return;
+    // The walk target is rig-local. Cancel it before moving that origin, otherwise
+    // idle() walks the same displacement again from the newly rebased parent.
+    this.rig.stopWalk();
     this.position.add(this.rig.root.position);
     this.rig.root.position.set(0, 0, 0);
     this.fugitiveTarget = null;
@@ -550,6 +557,7 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
     }
     if (this.fugitiveTarget && this.fugitiveLocalTarget && this.rig) {
       if (this.rig.root.position.distanceTo(this.fugitiveLocalTarget) > 0.13) return;
+      this.rig.stopWalk();
       this.position.copy(this.fugitiveTarget);
       this.rig.root.position.set(0, 0, 0);
       this.fugitiveTarget = null;
@@ -566,9 +574,15 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
       this.hideSeconds = point?.concealed ? Number.POSITIVE_INFINITY : 0.45;
       return;
     }
-    if (this.state === 'final-escape' && this.escapeSeconds !== null) {
+    if (this.state === 'final-escape') {
+      // A resolved timeout waits for the mission's checkpoint callback. Do not
+      // restart this leg or issue another penalty on every behavior-tree tick.
+      if (this.escapeSeconds === null) return;
       this.escapeSeconds = Math.max(0, this.escapeSeconds - deltaTime);
-      if (this.escapeSeconds <= 0) this.fugitiveCallbacks.onEscaped?.();
+      if (this.escapeSeconds <= 0) {
+        this.escapeSeconds = null;
+        this.fugitiveCallbacks.onEscaped?.();
+      }
       return;
     }
     this.hideSeconds -= deltaTime;
@@ -579,6 +593,7 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
   }
 
   public moveToMuster(position: THREE.Vector3): void {
+    this.foldRigTravel();
     this.held = true;
     this.musterTarget = position.clone();
     this.musterLocalTarget = position.clone().sub(this.position);
@@ -592,6 +607,7 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
   }
 
   public resumeRoute(): void {
+    this.rig?.stopWalk();
     if (this.rig && this.musterLocalTarget) {
       this.position.add(this.rig.root.position);
       this.rig.root.position.set(0, 0, 0);
@@ -605,6 +621,7 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
   }
 
   public resetToInbound(): void {
+    this.rig?.stopWalk();
     if (this.rig) this.rig.root.position.set(0, 0, 0);
     this.musterTarget = null;
     this.musterLocalTarget = null;
@@ -617,13 +634,14 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
 
   public override tickPrePhysics(deltaTime: number): void {
     super.tickPrePhysics(deltaTime);
-    this.rig?.idle(deltaTime);
+    this.rig?.idle(this.fugitivePaused && this.isFugitiveActive() ? 0 : deltaTime);
     if (
       this.rig
       && this.musterTarget
       && this.musterLocalTarget
       && this.rig.root.position.distanceTo(this.musterLocalTarget) < 0.12
     ) {
+      this.rig.stopWalk();
       this.position.copy(this.musterTarget);
       this.rig.root.position.set(0, 0, 0);
       this.musterTarget = null;

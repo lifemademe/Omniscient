@@ -380,6 +380,8 @@ export interface RiggedContact {
    * Ignored while a walk is already running.
    */
   walk: (to: THREE.Vector3, options?: WalkOptions) => void;
+  /** Cancel travel (including a pending clip load) before reparenting/rebasing the root. */
+  stopWalk: () => void;
   /** Explicit moving-prop grip, applied AFTER idle/locomotion; targets are world-space. */
   poseHands: (targets: { left?: THREE.Vector3; right?: THREE.Vector3 }, weight?: number) => void;
 }
@@ -584,6 +586,8 @@ const ARRIVE = 0.06;
   /** Seconds since this leg began, for easing the root up to speed. See WALK_TAKE. */
   let legAge = 0;
   let leg: Leg | null = null;
+  let walkRevision = 0;
+  let walkPending = false;
   let route: Leg[] = [];
   let dwell = 0;
   let dwellLeft = 0;
@@ -770,7 +774,11 @@ const ARRIVE = 0.06;
   const beginLeg = (): void => {
     const next = route.shift();
     if (!next) return;
+    const revision = walkRevision;
+    walkPending = true;
     void loadGesture(locomotion).then((clip) => {
+      if (revision !== walkRevision) return;
+      walkPending = false;
       if (!clip || !mixer) return;
 
       const action = mixer.clipAction(fitHips(clip));
@@ -1018,8 +1026,10 @@ const ARRIVE = 0.06;
       // One walk at a time, unless told otherwise. A second instruction arriving
       // mid-stride would otherwise capture a half-walked position as "home" and send her
       // back to the middle of the last trip.
-      const busy = leg !== null || dwellLeft > 0 || route.length > 0;
+      const busy = walkPending || leg !== null || dwellLeft > 0 || route.length > 0;
       if (busy && !walkOptions.interrupt) return;
+      walkRevision += 1;
+      walkPending = false;
       if (busy) {
         leg = null;
         route = [];
@@ -1040,6 +1050,13 @@ const ARRIVE = 0.06;
       beginLeg();
     },
 
+    stopWalk: () => {
+      walkRevision += 1;
+      walkPending = false;
+      route = [];
+      dwellLeft = 0;
+      endLeg();
+    },
 
     poseHands: (targets, weight = 1) => {
       root.updateWorldMatrix(true, true);

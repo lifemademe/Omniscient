@@ -4669,7 +4669,13 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private isCameraBlocker(object: THREE.Object3D): boolean {
     if (!(object instanceof THREE.Mesh)) return false;
     const materials = Array.isArray(object.material) ? object.material : [object.material];
-    if (materials.every((material) => material.transparent && material.opacity < 0.45)) return false;
+    // Shader opacity is not its rendered alpha: LampCone shells keep opacity=1
+    // and write transparency in GLSL. Additive, non-depth-writing air is not a
+    // physical obstacle (nor an optical occluder), even when the mesh is unnamed.
+    if (materials.every((material) => material.transparent && (
+      material.opacity < 0.45
+      || (!material.depthWrite && material.blending === THREE.AdditiveBlending)
+    ))) return false;
     return !/(Lens|Lamp|Status|Beacon|Rain|Dust|Tape|ShrinkWrap|AisleGuide|SafetyChevron|FloorWear|WetGround|Sky)/i.test(object.name);
   }
 
