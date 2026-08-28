@@ -3,6 +3,7 @@ import * as THREE from 'three';
 
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
+import { createLampCone, type LampCone } from '../art/lampCone.js';
 import { WAREHOUSE_LAYOUT, WAREHOUSE_SECURITY_ZONES, WAREHOUSE_SECURITY_ZONE_IDS } from './WarehouseLayout.js';
 
 /**
@@ -216,6 +217,9 @@ function cyl(
 export class WarehouseFacilities {
   public readonly root = ENGINE.SceneNode.create({ name: 'WarehouseFacilities' });
 
+  /** The air under the lit high bays. Driven by `tick` so the grain in the shafts drifts. */
+  private readonly lampCones: LampCone[] = [];
+
   /**
    * Build and parent. Never from a field initialiser - nodes created while the owning rig's
    * fields are still initialising do not render, which cost this project a whole debugging
@@ -244,6 +248,7 @@ export class WarehouseFacilities {
     this.buildForklift(bucket, -21.4, -21.6, Math.PI * 0.5, true);
     this.buildPalletTruck(bucket, 4.6, 20.9, 0.22);
     this.buildPalletTruck(bucket, -10.2, -20.4, -0.6);
+    this.buildInboundTruck(bucket, 7.6, -26.4);
     this.buildChargingBay(bucket, -22.2, -18.4);
     this.buildMezzanine(bucket);
     this.buildLooseLife(bucket);
@@ -504,8 +509,58 @@ export class WarehouseFacilities {
             position: new THREE.Vector3(x, y - 0.42, z),
           })
         );
+        /*
+         * ## The shaft, which is what makes the pool belong to the fitting
+         *
+         * Four critics with fresh context named the same unclosed gap in the same words: no
+         * lit patch in this room is visibly OWNED by a fitting. That is a different fault
+         * from "there are no pools" - the phase-shift test proved the pools move when the
+         * lamps move - and it cannot be fixed by moving a dial, because the thing missing is
+         * the connection between the fitting and the ground under it, not the ground.
+         *
+         * A visible shaft is the connection. It is also the one lever left that ADDS light
+         * rather than removing it: the previous pass stalled because the only way it could
+         * see to make the pools dominant was to dull the floor markings the drone navigates
+         * by, and this building has to stay flyable.
+         *
+         * `createLampCone` rather than a hand-rolled cone: it exists, it is tuned against
+         * renders, and its grain term is specifically there to survive this game's
+         * posterizer, which turns a smooth additive gradient into a hard-edged wedge. Its own
+         * note warns that a large shell in frame bands badly - hence the low strength and the
+         * narrow base. The `along` fade means the shaft dies out before it reaches the slab,
+         * so what lands on the floor is the lamp's own pool and not a ring drawn by this.
+         *
+         * Apex at 7.76 sits just under the lens box at 7.77 and just above the emitter at
+         * 7.68, so the shaft leaves the fitting rather than hanging below it. Base radius 2.5
+         * is inside the lamp's half-value floor radius of about 3.1m, so the shaft points at
+         * the middle of its own pool instead of overhanging the edge.
+         *
+         * Cost, stated plainly: three additive shells per shaft on thirteen lit stations.
+         * The geometry is trivial; the bill is overdraw, which is why strength is 0.3 and the
+         * depth test stays on so the racking occludes them.
+         */
+        const shaft = createLampCone({
+          apex: new THREE.Vector3(x, y - 0.34, z),
+          direction: new THREE.Vector3(0, -1, 0),
+          length: 7.5,
+          apexRadius: 0.36,
+          baseRadius: 2.5,
+          // Below the lamp's own '#ffd9a6' on purpose - an additive pass at the source colour
+          // clips the moment anything else warm lands in the same pixels.
+          color: '#c99a5c',
+          strength: 0.3,
+          motes: 0,
+          seed: `high-bay-${a}-${i}`,
+        });
+        this.lampCones.push(shaft);
+        this.root.add(shaft.root);
       }
     }
+  }
+
+  /** Advance the shafts under the high bays. Cheap, and a no-op before `build`. */
+  public tick(deltaTime: number): void {
+    for (const cone of this.lampCones) cone.idle(deltaTime);
   }
 
   private buildStripLighting(bucket: Buckets): void {
@@ -678,6 +733,90 @@ export class WarehouseFacilities {
     const [gripX, gripZ] = at(0, -0.9);
     rod(bucket.steel, 0.045, new THREE.Vector3(footX, 0.3, footZ), new THREE.Vector3(gripX, 1.22, gripZ));
     box(bucket.rail, 0.34, 0.05, 0.05, gripX, 1.24, gripZ, rotY);
+  }
+
+  /**
+   * The inbound trailer, backed onto the receiving dock.
+   *
+   * A comment on the receiving zone marker has said "clear of the inbound truck and its dock
+   * seal, which own the middle of receiving" for as long as that marker has existed. There
+   * was no truck. The zone was being kept clear for a vehicle nobody had built, and the
+   * middle of receiving was empty floor.
+   *
+   * Built from inside, because that is the only side the drone ever sees: an opening in the
+   * wall with a trailer's interior beyond it. The parts that matter for the read are the
+   * ones that say "this is a vehicle and not a corridor" - a floor at dock height rather
+   * than at warehouse height, ribbed side walls that converge, a roller door stowed in its
+   * housing above the opening, and the leveller plate bridging the gap with a visible seam.
+   *
+   * The dock seal is what frames it. Three foam bumpers, compressed where the trailer has
+   * pushed into them, are the difference between a lorry parked at a hole and a lorry docked.
+   */
+  private buildInboundTruck(bucket: Buckets, x: number, dockZ: number): void {
+    const DECK = 1.14;      // trailer floor, a lorry bed above the warehouse slab
+    const HALF = 1.24;      // internal half-width
+    const HEAD = 2.62;      // internal height
+    const DEEP = 7.4;       // how far back it runs
+
+    // The seal: two side pads and a header, squashed against the trailer's face.
+    for (const side of [-1, 1] as const) {
+      box(bucket.rubber, 0.3, HEAD + 0.5, 0.42, x + side * (HALF + 0.32), (HEAD + 0.5) / 2, dockZ + 0.1);
+    }
+    box(bucket.rubber, HALF * 2 + 0.94, 0.34, 0.42, x, HEAD + 0.52, dockZ + 0.1);
+
+    // The leveller: a plate from the dock edge onto the trailer bed, and the lip that lands
+    // on it. The step in height is the whole reason this object exists.
+    box(bucket.deck, HALF * 2 - 0.1, 0.06, 1.5, x, DECK - 0.03, dockZ + 0.62);
+    box(bucket.steel, HALF * 2 - 0.1, 0.04, 0.34, x, DECK - 0.05, dockZ - 0.12);
+
+    // Bed, roof and side walls of the trailer itself.
+    box(bucket.bodyDark, HALF * 2, 0.12, DEEP, x, DECK - 0.06, dockZ - DEEP / 2);
+    box(bucket.bodyDark, HALF * 2 + 0.3, 0.14, DEEP, x, DECK + HEAD + 0.07, dockZ - DEEP / 2);
+    for (const side of [-1, 1] as const) {
+      box(bucket.body, 0.12, HEAD, DEEP, x + side * HALF, DECK + HEAD / 2, dockZ - DEEP / 2);
+    }
+    // The far bulkhead, so the trailer ends somewhere instead of running into the dark.
+    box(bucket.body, HALF * 2, HEAD, 0.12, x, DECK + HEAD / 2, dockZ - DEEP);
+
+    /*
+     * Ribs down both walls. A trailer's interior is corrugated, and at this distance the
+     * ribs are the only thing that tells the eye it is looking down a box rather than at a
+     * flat wall - they converge, and convergence is the depth cue.
+     */
+    for (let i = 0; i < 9; i++) {
+      const rz = dockZ - 0.5 - i * 0.78;
+      for (const side of [-1, 1] as const) {
+        box(bucket.bodyDark, 0.05, HEAD - 0.2, 0.09, x + side * (HALF - 0.07), DECK + HEAD / 2, rz);
+      }
+    }
+
+    // The roller door, stowed in its housing over the opening, with its bottom rail showing.
+    box(bucket.steel, HALF * 2 + 0.16, 0.44, 0.5, x, DECK + HEAD - 0.16, dockZ - 0.28);
+    box(bucket.rail, HALF * 2 + 0.1, 0.09, 0.12, x, DECK + HEAD - 0.42, dockZ - 0.16);
+
+    /*
+     * Part-unloaded, because a full trailer and an empty one both read as a wall. Two stacks
+     * left at the back and one pulled to the lip is a load somebody is halfway through, and
+     * it puts three depths of object down the length of the box.
+     */
+    for (const [px, pz, ph] of [
+      [-0.6, 1.5, 1.5],
+      [0.62, 1.4, 1.15],
+      [-0.5, 3.6, 1.35],
+      [0.66, 4.2, 0.95],
+      [0.0, 6.1, 1.25],
+    ] as const) {
+      // The pallet under each stack: a dark band that stops the boxes floating on the bed.
+      box(bucket.bodyDark, 1.0, 0.13, 0.9, x + px, DECK + 0.07, dockZ - pz);
+      box(bucket.body, 0.96, ph, 0.86, x + px, DECK + 0.14 + ph / 2, dockZ - pz);
+      // A strap over the top of the taller ones.
+      if (ph > 1.2) {
+        box(bucket.rail, 1.0, 0.03, 0.05, x + px, DECK + 0.16 + ph, dockZ - pz);
+      }
+    }
+
+    // One box down on the leveller, where somebody set it and went to do something else.
+    box(bucket.body, 0.62, 0.5, 0.56, x - 0.42, DECK + 0.25, dockZ + 0.68);
   }
 
   /** Where the trucks live overnight, which is the reason there are batteries in a warehouse. */

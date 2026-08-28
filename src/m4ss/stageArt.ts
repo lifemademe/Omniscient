@@ -339,6 +339,26 @@ export interface StageTheme {
   midground: 'dome' | 'pipes';
   /** What hangs into the frame in front of the play plane. */
   occluders: 'leaves' | 'pipes';
+  /**
+   * Whether a glass roof closes the top of the background. See roofLatticeTexture.
+   *
+   * Separate from `midground` rather than a third value of it, because the two answer
+   * different questions and a place can want both: the midground is what stands in the
+   * middle distance, the roof is what is over your head. Folding them together would make
+   * "pipe stacks under a greenhouse roof" - which is exactly what the Sluice is - an
+   * unrepresentable state.
+   */
+  roof: 'glass' | 'none';
+  /**
+   * How deep the standing water on the lowest floor reads, in level pixels. 0 is dry.
+   *
+   * Water is a property of the PLACE, not of the level geometry: the sump has water in it
+   * because it is the bottom of a machine that pumped culture medium, and the Gallery does
+   * not because it is three hundred metres higher up. Where the sheet goes is derived from
+   * the level's own floors (see the rig's standing-water block); how wet the place is
+   * belongs here.
+   */
+  water: number;
   /** Flora density multiplier - the Stack is where the forest thins out. */
   flora: number;
   /** Final (post-grade) colours for the three parallax forest layers, far to near. */
@@ -362,6 +382,8 @@ export const THEME_GALLERY: StageTheme = {
   light: 'diagonal',
   midground: 'dome',
   occluders: 'leaves',
+  roof: 'none',
+  water: 0,
   flora: 1,
   forest: ['#22332e', '#18271f', '#0e1a13'],
   fog: '#3d7a6c',
@@ -374,6 +396,8 @@ export const THEME_STACK: StageTheme = {
   light: 'vertical',
   midground: 'pipes',
   occluders: 'pipes',
+  roof: 'none',
+  water: 0,
   flora: 0.4,
   forest: ['#20303a', '#141f29', '#0a121a'],
   fog: '#2f5f70',
@@ -391,6 +415,22 @@ export const THEME_SLUICE: StageTheme = {
   light: 'vertical',
   midground: 'pipes',
   occluders: 'pipes',
+  /*
+   * The one stage that gets both. The pipe stacks are what stands around you at the bottom
+   * of the machine; the glass roof is what is over all of it, a long way up - the same
+   * greenhouse the Gallery walks around inside, seen from underneath its floor. It is also
+   * the only thing in this stage's background that says LAB: the Sluice's forest layers are
+   * nearly black by design, so the upper background had nothing in it at all.
+   */
+  roof: 'glass',
+  /*
+   * 96px of standing water, which is the sheet's visible depth rather than a simulated one -
+   * nothing in the sim knows this exists. Deep enough that a reflection has somewhere to
+   * fall (the smears reach about seventy of it) and shallow enough that the bottom of the
+   * sheet is still above the floor mist's dense half, so the two fade into one another
+   * instead of one swallowing the other.
+   */
+  water: 96,
   /*
    * 0.75 - thicker than the Stack and thinner than the Gallery, which is the opposite of where
    * you would put it if depth meant less life. Nothing grows TALL at the bottom of a sump and
@@ -3170,6 +3210,181 @@ export function acidTexture(seed: string, w = 256, h = 128): THREE.CanvasTexture
   return pixelTexture(c);
 }
 
+/** One light standing over a pool: where it is across the sheet, and what it throws down. */
+export interface WaterLight {
+  /** 0..1 across the pool's width. */
+  u: number;
+  colour: string;
+  /** 0..1. Falls off with how far above the water the light hangs. */
+  strength: number;
+}
+
+/**
+ * Standing water: the culture medium the lab pumped through everything, pooled on the
+ * lowest floor it could reach.
+ *
+ * The bible's reference study has one line about it worth more than the water itself:
+ * "water doubles every light: standing water reflects each glow as a vertical smear". A
+ * pool that only darkens the floor is a stain. A pool that repeats every growth and every
+ * lamp above it as a broken column of that light's own colour DOUBLES the frame's light
+ * sources for one plane - and it does so without touching the background, which is the
+ * constraint this file has failed twice (see the machinery band's note).
+ *
+ * Two modes off one drawing, because the doubling has to be a real second light rather
+ * than a paler paint of the first. 'surface' is the wet sheet - transparent enough that
+ * the floor's art reads through the shallows, opaque with depth, ripples receding. 'glint'
+ * is the reflections alone on clear black, to be laid over the surface ADDITIVELY.
+ *
+ * The specular here is PAL_RAW.spec finally being spent, and it is spent the way that
+ * note asked for. Its diagnosis was that nothing in this stage is wet enough to catch
+ * light; its post-mortem was that one- and two-pixel highlights do not survive being
+ * displayed and only muddy their neighbours. A pool is the large wet surface it wanted,
+ * and the meniscus is drawn in dashes six to eighteen pixels long for exactly that reason.
+ */
+export function waterTexture(
+  seed: string,
+  lights: WaterLight[],
+  w = 512,
+  h = 96,
+  mode: 'surface' | 'glint' = 'surface'
+): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(`${seed}-water-${mode}`));
+  const { c, g } = surface(w, h);
+
+  /*
+   * The waterline, riding two sine terms like the acid's does. A dead straight line across
+   * a sheet this wide reads as a painted edge, and the whole job of the top few rows is to
+   * be the one place the eye accepts as liquid.
+   */
+  const lineAt = (x: number): number =>
+    Math.round(
+      6 + Math.sin((x / w) * Math.PI * 6) * 2 + Math.sin((x / w) * Math.PI * 17 + 0.7) * 1.4
+    );
+
+  if (mode === 'surface') {
+    /*
+     * The body. Not clean water - this is the medium the specimen was grown in, so it is
+     * the void pulled a quarter toward the moss, and it gets more opaque with depth: the
+     * shallows show the floor's own dirt and moss through them (which is what makes it
+     * read as a film ON something rather than a hole in the floor) and the far side of the
+     * sheet goes to near-black, where the floor mist takes over.
+     */
+    const body = mixHex(PAL.voidDeep, PAL.mossDark, 0.28);
+    const deep = mixHex(PAL.voidDeep, '#000000', 0.25);
+    for (let x = 0; x < w; x++) {
+      const top = lineAt(x);
+      for (let s = 0; s < 6; s++) {
+        const y0 = top + Math.round(((h - top) * s) / 6);
+        const y1 = top + Math.round(((h - top) * (s + 1)) / 6);
+        // 0.26 to 0.62, not 0.34 to 0.84. The first render turned the sump floor into a
+        // black band with three lights on it, which is darkness standing in for design -
+        // a wet floor is a floor you can still see, holding a reflection.
+        g.globalAlpha = 0.26 + (s / 5) * 0.36;
+        g.fillStyle = s < 3 ? body : deep;
+        g.fillRect(x, y0, 1, y1 - y0);
+      }
+    }
+    g.globalAlpha = 1;
+
+    // Ripple lines, bunching toward the bottom of the sheet. A flat plane seen side-on has
+    // no perspective of its own; the spacing of its ripples is the only thing that says the
+    // far edge is further away than the near one.
+    for (let i = 0; i < Math.round(w / 14); i++) {
+      const t = range(rng, 0, 1) ** 0.55;
+      const ry = Math.round(8 + t * (h - 12));
+      const rw = Math.round(range(rng, 8, 62) * (1 - t * 0.5));
+      g.globalAlpha = 0.3 - t * 0.14;
+      g.fillStyle = mixHex(body, PAL.hazeNear, 0.4);
+      g.fillRect(Math.round(range(rng, 0, w - rw)), ry, rw, 1);
+    }
+    g.globalAlpha = 1;
+  }
+
+  /*
+   * The reflections. Each is a column of the light's own colour hanging straight down from
+   * the point on the waterline beneath it, narrowing and fading with depth, and BROKEN -
+   * the rows a ripple has swallowed are simply missing. The gaps are the entire difference
+   * between a reflection and a painted bar, and they cost nothing to draw.
+   */
+  for (const light of lights) {
+    const cx = Math.round(light.u * w);
+    // A light at the very limit of the caller's reach contributes a smear of nothing and a
+    // head of something, which is a bright chip on the waterline with no parent. Drop it.
+    if (cx < -20 || cx > w + 20 || light.strength <= 0.06) continue;
+    const top = lineAt(Math.max(0, Math.min(w - 1, cx)));
+    const reach = Math.max(8, Math.round(h * (0.45 + 0.45 * light.strength)));
+    /*
+     * Wider and squarer in falloff than the first draft (which was 3+9px on a 1.4 power).
+     * At 1:1 against the level - this sheet is drawn a texture pixel to a level pixel - the
+     * visible part of that smear was about eight pixels by thirty, which is a tick mark. If
+     * water is here to double the lights it has to be legible as the second one.
+     */
+    const wide = Math.max(5, Math.round(4 + 12 * light.strength));
+    g.fillStyle = light.colour;
+    for (let d = 0; d < reach; d++) {
+      const t = d / reach;
+      if (rng() < 0.2 + t * 0.4) continue;
+      const half = Math.max(1, Math.round((wide / 2) * (1 - t * 0.55) + range(rng, -1.5, 1.5)));
+      g.globalAlpha = (mode === 'glint' ? 0.6 : 0.85) * (1 - t) * light.strength;
+      g.fillRect(cx - half, top + d, half * 2, 1);
+    }
+    // The head of the smear, at the line itself: the brightest part of any reflection and
+    // the only part of it allowed to be solid.
+    g.globalAlpha = (mode === 'glint' ? 0.9 : 1) * Math.min(1, 0.4 + light.strength);
+    g.fillStyle = mixHex(light.colour, PAL.spec, 0.3);
+    const headW = Math.max(5, Math.round(wide * 0.75));
+    g.fillRect(cx - Math.round(headW / 2), top, headW, Math.max(2, Math.round(1 + 2 * light.strength)));
+  }
+  g.globalAlpha = 1;
+
+  if (mode === 'surface') {
+    // The meniscus, in dashes rather than a run: the wet line where the sheet meets the
+    // bank, and the one place in this stage bright enough to be called a highlight.
+    for (let x = 0; x < w; x += Math.round(range(rng, 14, 46))) {
+      g.globalAlpha = range(rng, 0.35, 0.7);
+      g.fillStyle = mixHex(PAL.spec, PAL.hazeNear, 0.45);
+      g.fillRect(x, lineAt(x) - 1, Math.round(range(rng, 6, 18)), 2);
+    }
+    g.globalAlpha = 1;
+    // Scum and floating debris along the line. A clean edge reads as a fill, and the sump
+    // is where everything that ever fell down this shaft ended up.
+    for (let i = 0; i < Math.round(w / 22); i++) {
+      const fx = Math.round(range(rng, 0, w));
+      g.fillStyle = rng() > 0.6 ? PAL.mossDark : mixHex(PAL.vineDark, PAL.voidDeep, 0.4);
+      g.fillRect(
+        fx,
+        lineAt(fx) + Math.round(range(rng, 1, 7)),
+        Math.round(range(rng, 2, 7)),
+        1
+      );
+    }
+  }
+
+  /*
+   * The far edge dissolves. The sheet is a rectangle and its bottom was landing on the
+   * floor as a hard horizontal line - the exact fault the floor mist exists to cure at the
+   * bottom of the world, reintroduced ninety pixels higher up. The last fifth is erased in
+   * stepped rows, taking the smears with it, so the water fades into the floor it lies on
+   * instead of ending on one.
+   */
+  const fade = Math.round(h * 0.22);
+  g.globalCompositeOperation = 'destination-out';
+  for (let d = 0; d < fade; d++) {
+    g.globalAlpha = Math.floor((d / fade) * 6) / 6;
+    g.fillStyle = '#000000';
+    g.fillRect(0, h - fade + d, w, 1);
+  }
+  g.globalAlpha = 1;
+  g.globalCompositeOperation = 'source-over';
+
+  const tex = pixelTexture(c);
+  // Clamped, for the canopy's reason: one plane, never tiled, and a wrap here would bleed
+  // the opaque bottom rows around onto the transparent margin above the waterline.
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  return tex;
+}
+
 /**
  * A foreground occluder sheet: the layer the parallax spec puts at 120%, and the one the
  * stage never had. Near-black shapes IN FRONT of the play plane - the camera moves and
@@ -3566,6 +3781,269 @@ export function domeTexture(seed: string, w = 1280, h = 520): THREE.CanvasTextur
   dome(Math.round(w * range(rng, 0.78, 0.88)), h - 55, Math.round(range(rng, 100, 150)), 0.7);
 
   return pixelTexture(c);
+}
+
+/**
+ * The glass roof: a greenhouse span seen from underneath, closing the upper background.
+ *
+ * The bible's reference study (section 2, ChatGPT 08_50_08) asks for "a huge glass roof,
+ * backlit by haze, fills the upper background - instantly greenhouse", and the only thing
+ * in this file that ever answered it was the Gallery's dome - which is a building standing
+ * in the distance, not a roof over your head. The Sluice is the bottom of the same
+ * machine, so what closes ITS sky is the underside of the glazing: ridge-and-furrow bays
+ * on a truss, a long way up, with the shaft's haze behind them.
+ *
+ * Ridge-and-furrow rather than a third dome, because the sawtooth IS the read - one bay
+ * repeated across the whole frame says SPAN, and span is what separates a roof from a
+ * building. It also gives the top of the frame a rhythm at the silhouette scale, which the
+ * Sluice's near-black forest layers cannot supply.
+ *
+ * Values stay inside the haze family, exactly as the dome's do, and for the reason
+ * recorded against the machinery band above: a brighter midground has been tried twice and
+ * reverted twice. What carries this is the PATTERN - sawtooth, pane grid, truss - not
+ * brightness. The only things allowed above the glass are the ridge flashing (two rows)
+ * and the moss tips, both of which are lines rather than areas.
+ *
+ * A silhouette sheet, transparent everywhere the roof is not.
+ */
+export function roofLatticeTexture(seed: string, w = 1280, h = 360): THREE.CanvasTexture {
+  const rng = createRng(seedFrom(seed + '-roof'));
+  const { c, g } = surface(w, h);
+
+  const paneRamp = [
+    mixHex(PAL.hazeNear, PAL.bioCyan, 0.3),
+    mixHex(PAL.hazeNear, PAL.bioCyan, 0.14),
+    mixHex(PAL.hazeFar, PAL.hazeNear, 0.78),
+    mixHex(PAL.hazeFar, PAL.hazeNear, 0.42),
+  ];
+  const rib = mixHex(PAL.hazeFar, PAL.voidMid, 0.6);
+  const ribLit = mixHex(rib, PAL.hazeNear, 0.55);
+  const eat = mixHex(PAL.voidMid, PAL.leafDark, 0.5);
+
+  // Six bays across 1280 - a pane run of about 210, wide enough to read as a bay at
+  // parallax distance and narrow enough that there are several of them in frame at once.
+  const bays = Math.max(4, Math.round(w / 214));
+  const bayW = w / bays;
+  const ridgeY = Math.round(h * 0.16);
+  const rise = Math.round(h * 0.15);
+  const eaveY = Math.round(h * 0.62);
+  const chordY = eaveY + 30;
+  // Per-bay ridge heights. A roof whose every peak is the same height is a graph.
+  const peaks = Array.from({ length: bays }, () => range(rng, 0.75, 1.15));
+  // One bay has gone: glass out, rafters bent, the growth coming through. A span with a
+  // hole in it is the only version of this that has a history, and it breaks the repeat
+  // at the largest scale - which is where law 3 says the break has to happen first.
+  const gone = Math.max(1, Math.min(bays - 2, Math.floor(range(rng, 1, bays - 1))));
+
+  const bayAt = (x: number): number => Math.min(bays - 1, Math.max(0, Math.floor(x / bayW)));
+  /** The top edge at x: the sawtooth, one ridge at the centre of each bay. */
+  const topAt = (x: number): number => {
+    const b = bayAt(x);
+    const k = (x - b * bayW) / bayW;
+    return Math.round(ridgeY + Math.abs(k - 0.5) * 2 * rise * peaks[b]);
+  };
+
+  /*
+   * The glass, per column: brightest under the ridges where the haze behind it is
+   * thickest, falling to the eaves where the truss is in the way.
+   *
+   * The bands are HORIZONTAL - fixed to the sheet, not to each column's own top edge.
+   * Drawn parallel to the sawtooth (which is the obvious way to do it) every bay came out
+   * as a stack of nested chevrons and the whole roof read as a range of distant hills; the
+   * first render of this function was unusable for exactly that reason. Horizontal bands
+   * put the light where the light is - one height above the floor of the world - and each
+   * bay then differs only by how much of the bright top band its ridge reaches into, which
+   * is what backlighting actually does to a row of gables.
+   */
+  const bandTop = ridgeY;
+  const bandSpan = eaveY - bandTop;
+  for (let x = 0; x < w; x++) {
+    if (bayAt(x) === gone) continue;
+    const top = topAt(x);
+    for (let s = 0; s < paneRamp.length; s++) {
+      const y0 = Math.max(top, bandTop + Math.round((bandSpan * s) / paneRamp.length));
+      const y1 = bandTop + Math.round((bandSpan * (s + 1)) / paneRamp.length);
+      if (y1 <= y0) continue;
+      g.fillStyle = paneRamp[s];
+      g.fillRect(x, y0, 1, y1 - y0);
+    }
+    // The ridge flashing: the lit lip every silhouette in this project wears.
+    g.fillStyle = ribLit;
+    g.fillRect(x, top, 1, 2);
+  }
+
+  // Glazing bars down the slope, and a heavier gutter in every furrow where two bays meet.
+  // The furrow is where the water runs, so it is also where the moss ends up.
+  for (let x = 0; x < w; x += 13) {
+    if (bayAt(x) === gone) continue;
+    g.fillStyle = rib;
+    g.fillRect(x, topAt(x), 1, eaveY - topAt(x));
+  }
+  for (let b = 0; b <= bays; b++) {
+    const x = Math.max(1, Math.min(w - 2, Math.round(b * bayW)));
+    g.fillStyle = mixHex(rib, PAL.voidDeep, 0.35);
+    g.fillRect(x - 1, topAt(x) - 2, 3, eaveY - topAt(x) + 2);
+  }
+
+  // Purlins: the horizontals of the grid. Lit near the eaves, where the haze is thickest
+  // behind them, so the pane grid has a direction instead of being a mesh.
+  for (let y = ridgeY + 6; y < eaveY - 4; y += 21) {
+    for (let x = 0; x < w; x++) {
+      if (bayAt(x) === gone || y < topAt(x) + 3) continue;
+      g.fillStyle = y > eaveY - 44 ? ribLit : rib;
+      g.fillRect(x, y, 1, 1);
+    }
+  }
+
+  // What is left of the collapsed bay: a broken ridge beam sagging across the gap, bent
+  // rafters standing under it, a few panes still hanging off them. The beam matters more
+  // than the rafters do - without it the clumps and strands over the gap have nothing to
+  // sit on and read as shrubs floating in the sky, which is how the first render came out.
+  {
+    const x0 = Math.round(gone * bayW);
+    const x1 = Math.round((gone + 1) * bayW);
+    const sagFrom = topAt(x0 - 2);
+    const sagTo = topAt(x1 + 2);
+    for (let x = x0; x < x1; x++) {
+      const k = (x - x0) / (x1 - x0);
+      // A beam that has let go at one end: it dips, and it is missing in two places.
+      if (k > 0.34 && k < 0.44) continue;
+      if (k > 0.66 && k < 0.72) continue;
+      const y = Math.round(sagFrom + (sagTo - sagFrom) * k + Math.sin(k * Math.PI) * 26);
+      g.fillStyle = rib;
+      g.fillRect(x, y, 1, 3);
+      g.fillStyle = ribLit;
+      g.fillRect(x, y, 1, 1);
+    }
+    for (let k = 0; k < 5; k++) {
+      const bx = Math.round(range(rng, x0 + 6, x1 - 6));
+      const lean = range(rng, -0.18, 0.18);
+      const top = topAt(bx) + Math.round(range(rng, 0, 14));
+      g.fillStyle = rib;
+      for (let y = top; y < eaveY; y++) {
+        g.fillRect(Math.round(bx + (y - top) * lean), y, 2, 1);
+      }
+      if (rng() > 0.5) {
+        g.fillStyle = paneRamp[2];
+        g.fillRect(
+          bx + 2,
+          top + Math.round(range(rng, 4, 30)),
+          Math.round(range(rng, 5, 14)),
+          Math.round(range(rng, 6, 16))
+        );
+      }
+    }
+  }
+
+  // Broken panes elsewhere, each with the root that found the hole. Drawn as a CLEAR so
+  // the gap shows the backdrop rather than a painted dark - a hole in glass is an absence.
+  for (let b = 0; b < 7; b++) {
+    const bx = Math.round(range(rng, 4, w - 28));
+    if (bayAt(bx) === gone) continue;
+    const top = topAt(bx);
+    const by = top + Math.round(range(rng, 6, Math.max(8, eaveY - top - 14)));
+    const bw = Math.round(range(rng, 9, 24));
+    const bh = Math.round(range(rng, 5, 13));
+    g.clearRect(bx, by, bw, bh);
+    g.fillStyle = rib;
+    g.fillRect(bx, by, 1, Math.round(bh * 0.7));
+    g.fillRect(bx + bw - 1, by, 1, Math.round(bh * 0.5));
+    if (rng() > 0.4) {
+      let sx = bx + Math.round(bw * 0.5);
+      const drop = Math.round(range(rng, 10, 40));
+      g.fillStyle = eat;
+      for (let d = 0; d < drop; d++) {
+        if (d % 6 === 0) sx += Math.round(range(rng, -1, 1));
+        g.fillRect(sx, by + bh + d, 2, 1);
+      }
+    }
+  }
+
+  // Panes with the light still on behind them, dimmed INTO the glass - the dome's round-3
+  // lesson, which is that a lamp seen through a hundred metres of haze is a warm blur in
+  // the pane and never a crisp card carrying the core colour.
+  /*
+   * Two, small, and mixed most of the way into the pane. The first render put four at
+   * 10-18px across at a third of the pane's colour and they came out as sticky notes on
+   * the glass - the same failure the dome logged in its round 3, made again in the same
+   * file. A lit pane this far away is a warm smudge in the grid, not a card.
+   */
+  for (let l = 0; l < 2; l++) {
+    const lx = Math.round(range(rng, 20, w - 40));
+    if (bayAt(lx) === gone) continue;
+    const top = topAt(lx);
+    const ly = top + Math.round(range(rng, 10, Math.max(12, eaveY - top - 20)));
+    const lw = Math.round(range(rng, 7, 11));
+    const lh = Math.round(range(rng, 4, 7));
+    g.fillStyle = mixHex(PAL.lampWarm, paneRamp[2], 0.78);
+    g.fillRect(lx - 2, ly - 1, lw + 4, lh + 2);
+    g.fillStyle = mixHex(PAL.lampWarm, paneRamp[2], 0.58);
+    g.fillRect(lx, ly, lw, lh);
+  }
+
+  /*
+   * The eaves beam and the truss under it. A glass roof reads as GLASS from its panes and
+   * as a ROOF from what holds them up: without the lower chord and the struts between it
+   * and the beam, the sawtooth is a decorative border along the top of the frame.
+   */
+  g.fillStyle = rib;
+  g.fillRect(0, eaveY, w, 7);
+  g.fillStyle = ribLit;
+  g.fillRect(0, eaveY, w, 1);
+  g.fillStyle = mixHex(rib, PAL.voidMid, 0.4);
+  g.fillRect(0, chordY, w, 3);
+  const strutH = chordY - eaveY - 7;
+  for (let x = 0; x < w; x += 26) {
+    const dir = (x / 26) % 2 === 0 ? 1 : -1;
+    g.fillStyle = mixHex(rib, PAL.voidMid, 0.25);
+    for (let d = 0; d < strutH; d++) {
+      g.fillRect(Math.round(x + (dir * d * 26) / strutH), eaveY + 7 + d, 2, 1);
+    }
+    // Hangers: the rods the whole span is slung from, dropping past the chord.
+    if ((x / 26) % 3 === 0) {
+      g.fillStyle = mixHex(rib, PAL.voidMid, 0.5);
+      g.fillRect(x, chordY, 2, Math.round(range(rng, 8, 26)));
+    }
+  }
+
+  /*
+   * The forest is ON TOP of this roof and it is coming through. Clumps ride the ridge
+   * line, moss beards the eaves in runs rather than a continuous band, and strands hang
+   * off the truss into the empty bottom of the sheet - so the roof never ends on a
+   * straight line anywhere, which is the note the dome's drum earned in pass 40.
+   */
+  for (let k = 0; k < Math.round(w / 46); k++) {
+    const cx = Math.round(range(rng, 0, w));
+    blob(g, rng, cx, topAt(cx) + range(rng, -3, 4), range(rng, 5, 13), eat, 1.7);
+  }
+  /*
+   * Six runs of beard, not fourteen. mossRun scatters slime and bioCore pips at its tips -
+   * they are the brightest pixels it draws - and a continuous beard across the whole eaves
+   * puts a line of the player's own green across the back of the frame. The backdrop's
+   * lanterns were cut from nine to five for the same reason: nothing in the background is
+   * allowed to be mistaken for a growth.
+   */
+  for (let k = 0; k < Math.round(w / 200); k++) {
+    const x0 = Math.round(range(rng, 0, w - 60));
+    mossRun(g, rng, x0, x0 + Math.round(range(rng, 30, 110)), eaveY + 6, 9);
+  }
+  for (let k = 0; k < Math.round(w / 40); k++) {
+    let sx = Math.round(range(rng, 0, w));
+    const drop = Math.round(range(rng, 12, Math.max(20, h - chordY - 4)));
+    g.fillStyle = eat;
+    for (let d = 0; d < drop; d++) {
+      if (d % 8 === 0) sx += Math.round(range(rng, -1, 1));
+      g.fillRect(sx, chordY + d, 2, 1);
+    }
+  }
+
+  const tex = pixelTexture(c);
+  // Clamped. This sheet is placed once and never tiled, and a repeat wrap on a plane like
+  // this bleeds its solid rows around the edge as a hairline - see the canopy, where two
+  // rounds were spent redrawing art to fix what was a wrap mode.
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  return tex;
 }
 
 /**

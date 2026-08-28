@@ -26,6 +26,7 @@ import { WarehouseAutomation } from './WarehouseAutomation.js';
 import { WarehouseDaylight } from './WarehouseDaylight.js';
 import { WarehouseSetDressing } from './WarehouseSetDressing.js';
 import { MEZZANINE_BOUNDS, WarehouseFacilities } from './WarehouseFacilities.js';
+import { keepCelSheen } from './WarehouseCelStyle.js';
 import { WarehouseTransferDock } from './WarehouseTransferDock.js';
 
 import type {
@@ -111,7 +112,26 @@ const TOTE = new THREE.MeshStandardMaterial({ color: '#2b4950', roughness: 0.72,
 const TOTE_LID = new THREE.MeshStandardMaterial({ color: '#3c5a62', roughness: 0.66, metalness: 0.08 });
 const DRUM = new THREE.MeshStandardMaterial({ color: '#35778a', roughness: 0.54, metalness: 0.12 });
 const DRUM_BAND = new THREE.MeshStandardMaterial({ color: '#688497', roughness: 0.44, metalness: 0.46 });
-const FLOOR = new THREE.MeshStandardMaterial({ color: '#948671', roughness: 0.91, metalness: 0.04 });
+/*
+ * The slab, and the one surface allowed to return a lamp.
+ *
+ * 0.91 was a raw unsealed screed, and under the cel clamp (which forces 0.78 anyway) it made
+ * no difference: the floor could not carry a specular highlight, so a high bay put a flat
+ * disc of diffuse on it and nothing else. That is most of why twelve rounds of moving lamp
+ * dials never produced a pool anybody could point at - `paintBand` quantises the direct N·L
+ * term, and for a horizontal floor lit from 7.7m up every point inside an 8.4m radius lands
+ * in the same band, so the cosine falloff that would shape a pool is erased before the pixel
+ * is written. Distance attenuation survives, which is why the phase-shift test could measure
+ * the pools at 15 levels while no critic could see one.
+ *
+ * 0.55 is sealed concrete, which is what a distribution centre floor is, and `keepCelSheen`
+ * is what stops the cel pass clamping it straight back to matte. The reflection of the
+ * fitting is then a lamp-locked mark on the floor directly under it - the thing §4.4 means
+ * by "wet concrete", and the only high-contrast floor signal available that is not albedo.
+ */
+const FLOOR = keepCelSheen(
+  new THREE.MeshStandardMaterial({ color: '#948671', roughness: 0.55, metalness: 0.04 })
+);
 const AMBER = new THREE.MeshStandardMaterial({ color: '#8d6c31', emissive: '#39250b', emissiveIntensity: 0.55, roughness: 0.58 });
 const RED = new THREE.MeshStandardMaterial({ color: '#6e2d2d', emissive: '#2c0909', emissiveIntensity: 0.6, roughness: 0.62 });
 const BELT = new THREE.MeshStandardMaterial({ color: '#11171e', roughness: 0.82, metalness: 0.25 });
@@ -2160,13 +2180,38 @@ export class WarehouseEnvironment {
       }
     }
 
+    /*
+     * ## The track was the loudest thing on the floor, and it was not the light
+     *
+     * The controlled test for W-1 shifted every aisle bay 5m along z and re-shot the frame:
+     * the lane floor moved by a mean of 14.9 levels, so the pools are real and lamp-caused.
+     * The same round measured within-slice variation - across a constant depth - at sd 36
+     * against the reference's 27, and nearly all of the artifact's was ALBEDO rather than
+     * light. A 15-level lighting cadence was sitting underneath a 36-level painting, which
+     * is why every critic reported a uniform floor while the histogram said otherwise.
+     *
+     * #43464a on a #948671 slab is a 66-level albedo step, 3.1m wide, running the full length
+     * of every lane - the single biggest term in that 36. #6f6e69 cuts it to 26 while making
+     * the lane BRIGHTER, which matters: this room is flown, not looked at, and the previous
+     * pass declined W-1 rather than close it by dulling the markings the drone navigates by.
+     * Lifting the track is the same fix in the direction that costs the player nothing.
+     *
+     * The amber lane lines sit at +/-1.72 and the track is 3.1 wide, so they are on the slab
+     * outside it: their contrast is untouched by this, and so is the bay numerals'.
+     *
+     * Cool rather than warm, because it always was - a polished track mirrors the clerestory
+     * above it, not the sodium. And it keeps its sheen: 0.42 with `keepCelSheen`, so the same
+     * lamp reflection the slab now carries lands hardest on the strip the drone flies down.
+     */
     const wearMerged = mergeGeometries(wear, false);
     if (wearMerged) {
       this.root.add(
         mesh(
           'FloorWear',
           wearMerged,
-          new THREE.MeshStandardMaterial({ color: '#43464a', roughness: 0.62, metalness: 0.12 })
+          keepCelSheen(
+            new THREE.MeshStandardMaterial({ color: '#6f6e69', roughness: 0.42, metalness: 0.12 })
+          )
         )
       );
     }
@@ -2693,6 +2738,7 @@ export class WarehouseEnvironment {
     if (this.lightingMode === 'recovery' && emergency < 0.02) this.lightingMode = 'normal';
     this.setDressing.setEmergencyLevel(emergency, contained);
     this.setDressing.tick(deltaTime);
+    this.facilities.tick(deltaTime);
     this.daylight.tick(deltaTime, emergency, contained, reducedMotion);
     this.automation.tick(deltaTime, this.conveyorRunning, emergency, contained, reducedMotion);
     for (const door of this.serviceDoors.values()) door.tick(deltaTime);

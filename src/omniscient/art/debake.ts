@@ -185,3 +185,60 @@ export function debakeHighlights(texture: THREE.Texture, options: DebakeOptions 
   texture.needsUpdate = true;
   return true;
 }
+
+/**
+ * Hard-cap the brightest pixels of a texture, regardless of what is around them.
+ *
+ * `debakeHighlights` compares each pixel to a blurred local average, which is the right
+ * instrument when a highlight is small against its surroundings and the wrong one when it is
+ * not: a patch large enough in UV space pulls the local average up to meet itself, the excess
+ * goes to nothing, and the pass leaves it untouched while reporting success. It also returns
+ * false silently when it cannot read the image at all, so "nothing happened" and "nothing
+ * needed to happen" look identical from outside.
+ *
+ * This asks a question with no such failure mode: is this pixel brighter than cloth can be?
+ * Anything above the ceiling is scaled down to it with its hue kept, so a blown specular
+ * becomes a light patch of the same colour rather than a white hole.
+ *
+ * Faces survive. Skin sits well under the ceiling used for characters, and the cap is
+ * proportional rather than a clamp, so nothing flattens - a face that did approach it would
+ * compress, not posterise.
+ */
+export function capHighlights(texture: THREE.Texture, ceiling = 0.62): boolean {
+  if (typeof document === 'undefined') return false;
+  const source = texture.image as (HTMLImageElement | ImageBitmap | HTMLCanvasElement) | undefined;
+  const width = (source as { width?: number } | undefined)?.width ?? 0;
+  const height = (source as { height?: number } | undefined)?.height ?? 0;
+  if (!source || !width || !height) return false;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return false;
+  try {
+    ctx.drawImage(source as CanvasImageSource, 0, 0);
+  } catch {
+    return false;
+  }
+
+  const image = ctx.getImageData(0, 0, width, height);
+  const a = image.data;
+  const limit = ceiling * 255;
+  let touched = 0;
+  for (let i = 0; i < a.length; i += 4) {
+    const luma = 0.2126 * a[i] + 0.7152 * a[i + 1] + 0.0722 * a[i + 2];
+    if (luma <= limit) continue;
+    const scale = limit / luma;
+    a[i] *= scale;
+    a[i + 1] *= scale;
+    a[i + 2] *= scale;
+    touched += 1;
+  }
+  if (touched === 0) return false;
+
+  ctx.putImageData(image, 0, 0);
+  texture.image = canvas;
+  texture.needsUpdate = true;
+  return true;
+}

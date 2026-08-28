@@ -42,6 +42,40 @@ const CEL_CHROMA_GAIN = 1.18;
  */
 const CEL_HEIGHT_TINT = 0.2;
 
+/**
+ * The roughness floor for a surface that is allowed to keep a sheen, and why there is one.
+ *
+ * `captureNewMaterials` clamps every MeshStandardMaterial in the building to roughness 0.78,
+ * and the cel branch is the branch that ships - so no surface in Warehouse 07 has been able
+ * to show a specular highlight of a lamp for as long as the look has existed. That clamp is
+ * right for the racking, the cladding and the stock; it is wrong for the floor, and it cost
+ * W-1 several rounds. §4.4 asks for "wet concrete" by name, and a sealed slab returning a
+ * lamp's reflection is the main way a real high bay announces itself on a floor: the diffuse
+ * term under an overhead lamp is almost flat across the whole pool once `paintBand` has
+ * quantised N·L, so the sheen is the only lamp-locked, high-contrast mark left available.
+ *
+ * 0.5 rather than something glossier. At 0.5 a dielectric slab (F0 0.04) returns a soft
+ * satin lobe roughly four times the peak of the 0.78 clamp and much more localised - a
+ * visible mark under each fitting, nowhere near a mirror. If a critic reports a hot streak
+ * on the floor this number is the first thing to move, and it moves in one place.
+ */
+export const CEL_SHEEN_ROUGHNESS = 0.5;
+
+/** `userData` key checked by the capture pass. Set it through `keepCelSheen`, not by hand. */
+const CEL_SHEEN_FLAG = 'warehouseCelSheen';
+
+/**
+ * Exempt one material from the cel roughness clamp.
+ *
+ * Deliberately opt-in and deliberately narrow: the clamp is what keeps the toon ramp from
+ * fighting a hundred specular highlights, so this is for surfaces whose whole job is to
+ * catch a lamp. Today that is the floor slab and the traffic tracks on it.
+ */
+export function keepCelSheen<T extends THREE.Material>(material: T): T {
+  material.userData[CEL_SHEEN_FLAG] = true;
+  return material;
+}
+
 function beveledRail(width: number, height: number, length: number): THREE.ExtrudeGeometry {
   const radius = Math.min(width, height) * 0.22;
   const halfWidth = width / 2;
@@ -182,7 +216,11 @@ export class WarehouseCelStyle {
           material.color.getHSL(hsl);
           material.color.setHSL(hsl.h, Math.min(1, hsl.s * CEL_CHROMA_GAIN), hsl.l);
         }
-        material.roughness = Math.max(material.roughness, material.metalness > 0.45 ? 0.58 : 0.78);
+        const sheen = material.userData[CEL_SHEEN_FLAG] === true;
+        material.roughness = Math.max(
+          material.roughness,
+          sheen ? CEL_SHEEN_ROUGHNESS : material.metalness > 0.45 ? 0.58 : 0.78
+        );
         material.metalness *= 0.72;
         material.envMapIntensity = Math.min(material.envMapIntensity, 0.7);
         if (!snapshot.wasBanded) applyPaintBanding(material);

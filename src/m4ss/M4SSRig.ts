@@ -63,6 +63,7 @@ import {
   pressTexture,
   propTexture,
   ringTexture,
+  roofLatticeTexture,
   strikerTexture,
   setStageTheme,
   sporelingSprite,
@@ -81,7 +82,10 @@ import {
   intakeTexture,
   sillTexture,
   vineTexture,
+  waterTexture,
 } from './stageArt.js';
+
+import type { WaterLight } from './stageArt.js';
 import {
   TUNING,
   absorbTouching,
@@ -1902,6 +1906,110 @@ export class M4SSRig extends ENGINE.SceneNode {
     }
 
     /*
+     * THE STANDING WATER, AND WHY IT IS TWO PLANES.
+     *
+     * The bible asks for water because of what water DOES: "standing water reflects each
+     * glow as a vertical smear", which doubles the number of light sources in the frame
+     * for the price of one plane and without lifting the background a single value. The
+     * sump is the one room in the game that has to have it - it is the bottom of a machine
+     * that pumped culture medium, and everything that ever leaked ended up here.
+     *
+     * The sheet's PLACE is derived from the level (the lowest wide walked floor, because
+     * that is where water goes) and its DEPTH comes from the theme (see StageTheme.water),
+     * which is the split this file already uses for the mushrooms: geometry is the level's
+     * business, and how wet the world is, is the place's.
+     *
+     * Two planes because the doubling has to be real light. The surface is a normal-blended
+     * wet film, so the floor's dirt and moss still read through the shallows; the glint is
+     * the same reflections additively on top, so a growth hanging over the sump genuinely
+     * puts a second green into the frame rather than a painted picture of one.
+     *
+     * Painted at build time: a growth that wakes later keeps the ember reflection it was
+     * given. That is a static sheet's one lie and it is a cheap one - the dead growths in
+     * this stage are woken from a plate the player reaches after leaving the sump.
+     */
+    if (this.theme.water > 0) {
+      // The same floor test the lantern pools use, plus a width bound: a sheet of water on
+      // a 60px pillar top is a puddle nobody can see, and it would reflect nothing.
+      const walked = world.tiles.filter((t) => t.h < 400 && t.y > 100 && t.w > 200);
+      const lowest = walked.reduce((deepest, t) => Math.max(deepest, t.y), 0);
+      for (const floor of walked) {
+        // Within 12px of the deepest floor: water runs downhill, so anything measurably
+        // higher than the sump is dry no matter how wide it is.
+        if (floor.y < lowest - 12) continue;
+
+        /*
+         * What is standing over this sheet. Reach is capped at 760px - a light further up
+         * than that is behind the haze and its reflection would be a stripe with no visible
+         * parent, which reads as a paint smear rather than as light.
+         */
+        const lights: WaterLight[] = [];
+        const fallOff = (fall: number): number => (1 - fall / 760) ** 0.7;
+        const over = (x: number): boolean => x > floor.x - 40 && x < floor.x + floor.w + 40;
+        for (const a of world.anchors) {
+          const fall = floor.y - a.y;
+          if (!over(a.x) || fall <= 0 || fall > 760) continue;
+          lights.push({
+            u: (a.x - floor.x) / floor.w,
+            // A live culture is the stage's green; a dead one is the ember the bible gives
+            // it, at well under half strength, because a dormant growth is barely alight.
+            colour: a.live === false ? PAL.rustLit : PAL.slime,
+            strength: (a.live === false ? 0.4 : 1) * fallOff(fall),
+          });
+        }
+        for (const b of world.buttons) {
+          const fall = floor.y - b.y;
+          if (!over(b.x) || fall <= 0 || fall > 760) continue;
+          lights.push({ u: (b.x - floor.x) / floor.w, colour: PAL.lampWarm, strength: 0.55 * fallOff(fall) });
+        }
+        // The background lanterns, faintly. They are a long way behind the sheet, so what
+        // they contribute is one warm column against a cluster of green ones - which is the
+        // only warm/cool break the bottom of this stage has.
+        for (const lx of this.lanternXs) {
+          if (!over(lx)) continue;
+          lights.push({ u: (lx - floor.x) / floor.w, colour: PAL.lampWarm, strength: 0.3 });
+        }
+
+        const depth = this.theme.water;
+        const texW = Math.max(64, Math.min(1400, Math.round(floor.w)));
+        /*
+         * The sheet starts 2px below the tile's top edge, and the texture keeps another six
+         * clear above its own waterline - so the moss lip along the floor's crown still
+         * reads ABOVE the water. Drowning the lit lip would break the one rule the bible
+         * repeats about every walkable surface in the stage.
+         */
+        const surfaceTop = floor.y + 2;
+        // z -0.45 and -0.35: in front of the tile face (-1) and its grass crown (-0.5),
+        // behind the portal sill, the creature's trail and the creature itself.
+        const wet = decorMesh(
+          'StandingWater',
+          new THREE.PlaneGeometry(floor.w, depth),
+          this.artMaterial({
+            map: waterTexture(`water-${this.theme.name}-${floor.x}`, lights, texW, depth, 'surface'),
+            transparent: true,
+            depthWrite: false,
+          })
+        );
+        wet.position.set(floor.x + floor.w / 2, surfaceTop + depth / 2, -0.45);
+        this.stage?.add(wet);
+
+        const glints = decorMesh(
+          'WaterGlint',
+          new THREE.PlaneGeometry(floor.w, depth),
+          this.artMaterial({
+            map: waterTexture(`water-${this.theme.name}-${floor.x}`, lights, texW, depth, 'glint'),
+            transparent: true,
+            opacity: 0.55,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+          })
+        );
+        glints.position.set(floor.x + floor.w / 2, surfaceTop + depth / 2, -0.35);
+        this.stage?.add(glints);
+      }
+    }
+
+    /*
      * The hover halo: one additive glow sprite, parked invisible, moved behind whichever
      * reachable growth the pointer is over. The old hover feedback was a tint two steps
      * paler than the in-reach tint and a scale of 1.08 - measurably present, visibly
@@ -2231,6 +2339,40 @@ export class M4SSRig extends ENGINE.SceneNode {
      */
     arch.position.set(world.width / 2, world.height - archH / 2 - world.height * 0.04, -190);
     this.stage?.add(arch);
+
+    /*
+     * The glass roof over the whole place, for a stage whose theme asks for one.
+     *
+     * The architecture plane above stands ON the ground and grows upward, which leaves the
+     * TOP of the background empty - and in the Sluice, whose forest layers are near-black
+     * by design, empty means a flat dark field across the upper third of every frame. The
+     * bible's reference study wants that band to be the greenhouse roof, backlit by haze,
+     * because it is the one image that says laboratory without a single readable object in
+     * it.
+     *
+     * Hung from the top of the world rather than centred, and pushed down past the level's
+     * own ceiling slab (which is 160px deep and opaque at z -2): a roof whose ridge line is
+     * behind the ceiling is a roof with no silhouette, and the sawtooth is the whole read.
+     *
+     * z -205 follows the dome's hard-won lesson rather than repeating its mistake. At -240
+     * the middle forest layer and the additive haze ate the dome outright; -205 puts this
+     * in front of the middle forest (-210) and a hair behind the lantern glows (-200), so
+     * the lamps hanging in the haze light the glass instead of being occluded by it.
+     */
+    if (this.theme.roof === 'glass') {
+      const roofH = Math.min(430, Math.round(world.height * 0.26));
+      const roof = decorMesh(
+        'GlassRoof',
+        new THREE.PlaneGeometry(world.width * 1.3, roofH),
+        this.artMaterial({
+          map: roofLatticeTexture(`roof-${this.theme.name}`, 1280, 360),
+          transparent: true,
+          depthWrite: false,
+        })
+      );
+      roof.position.set(world.width / 2, world.height * 0.075 + roofH / 2, -205);
+      this.stage?.add(roof);
+    }
 
     /*
      * The frame-closers. Every reference is CLOSED at the top and dark in the corners -

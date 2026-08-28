@@ -34,7 +34,7 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
-import { debakeHighlights } from '../art/debake.js';
+import { capHighlights, debakeHighlights } from '../art/debake.js';
 import { applyShadowPolicy } from '../art/shadows.js';
 import { HIPS, loadGesture, type GestureName } from './gestures.js';
 
@@ -1164,6 +1164,46 @@ const ARRIVE = 0.06;
          */
         const standard = material as THREE.MeshStandardMaterial;
         if (standard.isMeshStandardMaterial) {
+          /*
+           * ## A person is not a light source
+           *
+           * Vasile's uniform carried white patches at exactly 255 that survived every other
+           * fix, and the sequence of what did NOT move them is the diagnosis: flooring
+           * roughness to 0.92 and capping metalness left them (so not specular), a stronger
+           * relative debake on `map` left them at p99 149 and max 255 (so not the colour
+           * map), and an absolute luma ceiling on `map` left them at max 255 (so not in that
+           * texture at all).
+           *
+           * Emissive is added AFTER lighting and ignores roughness, metalness and every
+           * change to the albedo, which is exactly the fingerprint. Whatever these were
+           * authored as - a rim pass, an accidental export - a character in this game is lit
+           * by the room and emits nothing.
+           */
+          standard.emissive?.setRGB(0, 0, 0);
+          standard.emissiveMap = null;
+          standard.emissiveIntensity = 0;
+
+          /*
+           * ## And a ceiling on the material's own colour
+           *
+           * Fifth hypothesis, after four that measured no change at all: not specular
+           * (roughness 0.92 / metalness 0.04 moved nothing), not the colour map (a stronger
+           * relative debake AND an absolute luma cap both left max at 255), not emissive
+           * (cleared, still 255). What survives all of that is a material whose own base
+           * colour is near white - separate equipment meshes rather than the uniform, which
+           * is exactly where the patches sit: a chest badge, a shoulder patch, a radio at the
+           * hip, boot caps.
+           *
+           * They are not highlights, they are objects, and the fault is that they are
+           * authored near white on a near-black uniform - so they read as blown specular
+           * rather than as kit.
+           *
+           * 0.66 is above skin, so faces and hands are untouched, and below the white these
+           * were exported at. Scaled rather than clamped, so the hue survives.
+           */
+          const c = standard.color;
+          const luma = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+          if (luma > 0.66) c.multiplyScalar(0.66 / luma);
           standard.roughness = Math.max(standard.roughness ?? 1, 0.92);
           standard.metalness = Math.min(standard.metalness ?? 0, 0.04);
           standard.needsUpdate = true;
@@ -1171,7 +1211,34 @@ const ARRIVE = 0.06;
         const map = standard.map;
         if (!map || debaked.has(map)) continue;
         debaked.add(map);
-        debakeHighlights(map);
+        /*
+         * Harder than the default, because a character's cloth is dark.
+         *
+         * `debakeHighlights` pulls a pixel toward its local average once it is `threshold`
+         * brighter, and the reduction is proportional to the excess. On a near-black uniform
+         * a painted specular at luma 0.6 against cloth at 0.12 clears the default 0.18
+         * threshold, gets pulled to about 0.31, and is still a bright blob on dark cloth -
+         * reported on Vasile as his texture looking shiny after the MATERIAL had already
+         * been made matte. The material was not the problem; the map is.
+         *
+         * A lower threshold and full strength take the same patch to roughly cloth value. A
+         * face survives it because the blurred average AROUND a face is also light, so the
+         * excess there is small - this removes highlights that jump off their surroundings,
+         * not everything pale.
+         */
+        debakeHighlights(map, { threshold: 0.07, strength: 1, blur: 32 });
+        /*
+         * And a hard ceiling on top of it.
+         *
+         * The relative pass above left Vasile's painted speculars untouched - measured
+         * before and after at p99 149 and max 255 on both, so it was doing nothing here and
+         * saying nothing about it. A patch big enough in UV raises its own local average and
+         * becomes invisible to a comparison against that average.
+         *
+         * 0.62 is above skin and well under blown white, so faces keep their modelling and
+         * the white blobs on near-black cloth come down to a value cloth can actually be.
+         */
+        capHighlights(map, 0.62);
       }
     });
 
