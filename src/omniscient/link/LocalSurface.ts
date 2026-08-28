@@ -1157,7 +1157,9 @@ export class LocalSurface implements InterventionSurface {
     const element = this.objectiveText;
     if (!element || text === this.objectiveShown) return;
     this.objectiveShown = text;
-    if (!this.compactOnArrival) this.shell?.classList.remove('omni-cv--compact');
+    if (!this.compactOnArrival && !this.shell?.classList.contains('omni-cv--resolving')) {
+      this.shell?.classList.remove('omni-cv--compact');
+    }
     if (this.compactTimer !== null) window.clearTimeout(this.compactTimer);
     this.compactTimer = null;
 
@@ -1402,6 +1404,8 @@ export class LocalSurface implements InterventionSurface {
       'omni-cv--leaving'
     );
     shell.classList.add('omni-cv--resolving');
+    // Verification and the final verdict must not expand telemetry over the payoff.
+    shell.classList.add('omni-cv--compact');
     if (this.continueSlot) this.continueSlot.hidden = false;
     this.continueButton?.setLabel('Signal settling…');
     this.continueButton?.setDisabled(true);
