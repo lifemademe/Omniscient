@@ -857,6 +857,34 @@ there is no assertion that can be written.
 
 ## 13. THE LEDGER
 
+**Lucian contact / three interventions — user-directed D-1 extension, AT BAR (visual), Codex 2026-08-28.**
+Scope: evidence hierarchy, bold speed rule, distinct lights/call/watch performances and delayed
+acknowledgement. Preserve the shared outcome and deduction rules. Baseline: supplied recording
+`20260828-1505-48.8609390.mp4`; fresh rendered-only critic found wire density overwhelms evidence
+and WATCH resolves without a clear cabin reveal. Replay in existing isolated capture storage;
+no player-save or authored-scene changes. L8/P8/T8 capture-only checkpoints exercise the real
+session/choice/device path without replaying the whole campaign.
+
+Rendered critic `lucian_final_critic`: R1 rejected unreadable vehicle/phone glow; R2 rejected
+dominant rain; R3 **AT BAR**. Separate fresh smoothing critic `lucian_smoothing`: **AT BAR**.
+Evidence: `scripts/dev/lucian-r2-lights-sheet.jpg`, `lucian-r3-call-sheet.jpg`, and
+`lucian-r3-watch-sheet.jpg` (eleven chronological one-second frames per route, left-to-right).
+Full-size settled frames: `lucian-r3-call-10.jpg`, `lucian-r3-watch-10.jpg`.
+Evidence UI: `lucian-r2-pursuit-small.jpg`, `lucian-r2-pursuit-selected.jpg`,
+`lucian-r2-trail-small.jpg`, `lucian-r2-trail-selected.jpg`; return: `lucian-r3-return.jpg`.
+All paths in this paragraph are under `scripts/dev/`. Captured game content at 1280×720.
+
+Verified: all three bridge choices reach acknowledgement/Continue after visible settling;
+lights car crosses red before stopping, call screen pulses without lighting the casing,
+watch supplies driver-eye framing. Continue returns to globe with Lucian resolved. Pursuit
+selection advances its sighting; claimed trail ping updates distance origins. Bold speed hint
+is present in both stages. `pnpm lint`, `pnpm build`, editor bundle refresh, `preview-car`
+(including windscreen UV coverage), `audit-pursuit`, `audit-trail`, and `cues-resolve` pass.
+No full start-to-finish campaign or audio listening assessment claimed. Two editor `ensure failed`
+assertions in `endPlay`/effect disposal appeared during repeated reload/checkpoint testing;
+their root cause is not established and this is not an error-free runtime certification.
+Implementation commit receipt follows in the next ledger update; no push.
+
 **This is the handoff.** Update it in the same commit as the work.
 
 ### 13.1 Status vocabulary

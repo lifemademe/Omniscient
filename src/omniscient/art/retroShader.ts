@@ -228,6 +228,21 @@ export const RETRO_LOOKS = {
     saturation: 1.12,
     tint: new THREE.Color(0.99, 1.0, 1.02),
   },
+  district: {
+    // Discrete data lines, without the main machine's trailing phosphor smear.
+    pixel: 2.4,
+    curve: 0,
+    aberration: 0,
+    scanline: 0.06,
+    scanPitch: 3,
+    grille: 0,
+    bleed: 0,
+    vignette: 0.16,
+    roll: 0,
+    flicker: 0,
+    saturation: 1.02,
+    tint: new THREE.Color(0.96, 1.0, 1.03),
+  },
   machine: {
     /*
      * 3, like everywhere else, and not the 5 this started at.

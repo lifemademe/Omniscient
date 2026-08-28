@@ -62,6 +62,8 @@ export interface CameraShot {
 export type PropAction = (tweener: Tweener, node: ENGINE.SceneNode) => void;
 
 export interface RegisteredProp {
+  /** Captured surfaces keep their authored materials and visibility. */
+  captured?: boolean;
   node: ENGINE.SceneNode;
   actions: Record<string, PropAction>;
   /** Local-space points of interest, e.g. where sparks should appear. */
@@ -234,7 +236,7 @@ export class ContactScene extends ENGINE.SceneNode {
     if (getAccessibilityPreferences().reducedMotion) return;
 
     const eligible = [...this.props.entries()].filter(([, prop]) => {
-      if (prop.suspicion) return false;
+      if (prop.suspicion || prop.captured) return false;
       const certainty = prop.certainty ?? (prop.inked ? CERTAINTY.KNOWN : CERTAINTY.SHAPED);
       return certainty >= CERTAINTY.SHAPED;
     });
@@ -298,6 +300,7 @@ export class ContactScene extends ENGINE.SceneNode {
     id: string,
     node: ENGINE.SceneNode,
     options: {
+      captured?: boolean;
       actions?: Record<string, PropAction>;
       anchors?: Record<string, THREE.Vector3>;
       /**
@@ -342,6 +345,7 @@ export class ContactScene extends ENGINE.SceneNode {
     if (!node.parent) this.add(node);
     this.props.set(id, {
       node,
+      captured: options.captured,
       actions: options.actions ?? {},
       anchors: options.anchors ?? {},
       idle: options.idle,
@@ -432,6 +436,7 @@ export class ContactScene extends ENGINE.SceneNode {
   private applyCertainties(): void {
     let resolved = 0;
     for (const [id, prop] of this.props) {
+      if (prop.captured) continue;
       const certainty =
         prop.certainty ?? (prop.inked ? CERTAINTY.KNOWN : CERTAINTY.SHAPED);
 

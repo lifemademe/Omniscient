@@ -60,11 +60,11 @@ function beadTexture(seed: number, count: number): THREE.Texture | null {
     const x = hash(seed, i * 3) * 512;
     const y = hash(seed, i * 3 + 1) * 512;
     // Mostly small, a few large. An even spread of sizes looks like a pattern.
-    const r = 1.4 + Math.pow(hash(seed, i * 3 + 2), 3) * 9;
+    const r = 0.8 + Math.pow(hash(seed, i * 3 + 2), 3) * 3.2;
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, r);
     gradient.addColorStop(0, 'rgba(255,255,255,0.10)');
     gradient.addColorStop(0.62, 'rgba(255,255,255,0.05)');
-    gradient.addColorStop(0.88, 'rgba(255,255,255,0.85)');
+    gradient.addColorStop(0.88, 'rgba(255,255,255,0.45)');
     gradient.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = gradient;
     ctx.beginPath();
@@ -73,6 +73,7 @@ function beadTexture(seed: number, count: number): THREE.Texture | null {
   }
 
   const texture = new THREE.CanvasTexture(element);
+  texture.magFilter = THREE.NearestFilter;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   return texture;
@@ -93,8 +94,8 @@ function runTexture(seed: number, count: number): THREE.Texture | null {
   for (let i = 0; i < count; i++) {
     const x = hash(seed + 7, i * 3) * 512;
     const y = hash(seed + 7, i * 3 + 1) * 512;
-    const length = 18 + hash(seed + 7, i * 3 + 2) * 90;
-    const width = 1 + hash(seed + 13, i) * 2.2;
+    const length = 12 + hash(seed + 7, i * 3 + 2) * 35;
+    const width = 0.7 + hash(seed + 13, i) * 0.8;
 
     const trail = ctx.createLinearGradient(x, y - length, x, y);
     trail.addColorStop(0, 'rgba(255,255,255,0)');
@@ -112,6 +113,7 @@ function runTexture(seed: number, count: number): THREE.Texture | null {
   }
 
   const texture = new THREE.CanvasTexture(element);
+  texture.magFilter = THREE.NearestFilter;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   return texture;
@@ -137,8 +139,8 @@ export interface RainGlass {
  */
 export function createRainGlass(geometry: THREE.BufferGeometry, seedText = 'district-07-rain'): RainGlass {
   const seed = seedFrom(seedText);
-  const beads = beadTexture(seed, 220);
-  const runs = runTexture(seed, 26);
+  const beads = beadTexture(seed, 110);
+  const runs = runTexture(seed, 14);
 
   /*
    * Additive, and only just.
@@ -154,6 +156,7 @@ export function createRainGlass(geometry: THREE.BufferGeometry, seedText = 'dist
       transparent: true,
       opacity: 0,
       depthWrite: false,
+      side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
       color: new THREE.Color('#9fd8c8'),
     });
@@ -162,7 +165,14 @@ export function createRainGlass(geometry: THREE.BufferGeometry, seedText = 'dist
   const runMat = material(runs);
 
   const layer = (mat: THREE.Material, nudge: number): THREE.Mesh => {
-    const mesh = new THREE.Mesh(geometry.clone(), mat);
+    const inset = geometry.clone();
+    // Keep weather inside the clear aperture, away from pillar and dashboard overlaps.
+    inset.computeBoundingBox();
+    const centre = inset.boundingBox!.getCenter(new THREE.Vector3());
+    inset.translate(-centre.x, -centre.y, -centre.z);
+    inset.scale(0.80, 0.82, 0.82);
+    inset.translate(centre.x, centre.y, centre.z);
+    const mesh = new THREE.Mesh(inset, mat);
     mesh.name = 'RainLayer';
     mesh.position.z += nudge;
     mesh.visible = false;
@@ -184,13 +194,13 @@ export function createRainGlass(geometry: THREE.BufferGeometry, seedText = 'dist
        * Gathers fast and tops out below full.
        *
        * Glass in rain is wet within a second - the slow part is not the wetting, it is the
-       * blade being two seconds away. Topping out at 0.85 leaves the road visible through
+       * blade being two seconds away. Low contrast leaves the road visible through
        * it, which matters more here than the rain does: this shot exists so the player sees
        * the little green boxes turn out to be people.
        */
       gathered = Math.min(1, gathered + deltaTime * 0.85);
-      beadMat.opacity = gathered * 0.85;
-      runMat.opacity = gathered * 0.6;
+      beadMat.opacity = gathered * 0.16;
+      runMat.opacity = gathered * 0.09;
 
       // The runs slide. Slowly, and only downwards - water on a moving windscreen is being
       // pushed as much as it is falling, so this is nothing like gravity and should not be.

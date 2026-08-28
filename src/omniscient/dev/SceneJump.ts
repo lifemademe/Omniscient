@@ -46,6 +46,7 @@ export interface SceneJumpHost {
   hasScene?(sceneId: string): boolean;
   jumpToWarehouse?(): void;
   playFirstFiveCapture?(): void;
+  playDistrictCapture?(beat: 'bridge' | 'found' | 'ahead-of-him'): void;
 }
 
 const FIRST_FIVE_CAPTURE_FLAG = 'omniscient.dev.first-five';
@@ -226,6 +227,19 @@ function buildStrip(host: SceneJumpHost, container: HTMLElement): HTMLElement {
   ].join(';');
   captureTab.addEventListener('click', toggleFirstFiveCapture);
   strip.appendChild(captureTab);
+
+  // Real mission beats in isolated storage, not manually fired visual cues.
+  if (captureActive() && host.playDistrictCapture) {
+    for (const [label, beat] of [['L8', 'bridge'], ['P8', 'found'], ['T8', 'ahead-of-him']] as const) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.title = `Lucian capture: ${beat}`;
+      button.style.cssText = captureTab.style.cssText;
+      button.addEventListener('click', () => host.playDistrictCapture?.(beat));
+      strip.appendChild(button);
+    }
+  }
 
   /*
    * Pointer-events stay off the strip until it is revealed, so an invisible column of

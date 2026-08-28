@@ -114,6 +114,9 @@ export const MISSION_08: MissionDefinition = {
   sceneId: 'scene-wire-city',
   archetype: 'diagnosis',
   objective: 'Find the car that left the scene, and where it is going.',
+  resolutionPendingObjective: 'Holding the bridge approach. Lucian is moving into position…',
+  resolutionObjective: 'One car stopped. Lucian has the driver.',
+  resolutionDelayMs: 8500,
   // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
   reopeningSay: 'Dispatch logged how our last attempt went. I would rather this one read differently.',
   /**
@@ -321,6 +324,7 @@ export const MISSION_08: MissionDefinition = {
   beats: [
     {
       id: 'call',
+      framing: 'camera.cut:default,prop.reset:car',
       say:
         'This is Lucian Barbu, District 07. We had a vehicle leave a scene on Strada Vam '
         + 'about twenty minutes ago and we have lost it. I am told I can ask you.',
@@ -594,8 +598,8 @@ export const MISSION_08: MissionDefinition = {
     /*
      * ------------------------------------------------------------------ the three arrivals
      *
-     * Same shot, same question, same outcome object. The only thing that differs is the
-     * first sentence, where Lucian answers the instruction he was actually given.
+     * Distinct intervention shots, the same final question and shared outcome object.
+     * Lucian answers the instruction he was actually given.
      *
      * That difference is the whole repair. The machine still has no hands - the lights get
      * changed and the car goes through them, the phone gets rung and nobody picks it up -
@@ -611,7 +615,7 @@ export const MISSION_08: MissionDefinition = {
        * the municipal network and changed a light, so the shot is the machine's own view of
        * the thing it touched - and of the car going through it anyway.
        */
-      framing: ARRIVE,
+      framing: 'camera.push-in:intervention',
       say:
         'You can actually do that? ... Then do it. ... '
         + 'It went red. He went through it. He is not stopping for a light, is he. '
@@ -625,9 +629,8 @@ export const MISSION_08: MissionDefinition = {
     {
       id: 'arrival-call',
       gesture: 'prop.nod:contact',
-      // The same drop into the traffic as the other two. What differs is what is standing
-      // there when it lands - see the car's registration in scenes.ts.
-      framing: ARRIVE,
+      // The unanswered handset stays visible below the driver's eye line.
+      framing: 'camera.push-in:phone',
       say:
         'Ring it. If he answers, keep him talking. ... '
         + 'Still ringing? ... Leave it. Nobody picks up a phone at that speed. '

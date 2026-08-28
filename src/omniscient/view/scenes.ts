@@ -29,6 +29,7 @@
 
 import * as ENGINE from '@gnsx/genesys.js';
 import { roomToneSwell } from '../audio/RoomTone.js';
+import { audio } from '../audio/ConsoleAudio.js';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -11739,8 +11740,12 @@ function buildWireCity(scene: ContactScene): void {
    * roads are the brightest thing because the roads are what the mission is about. A player
    * who looks at this frame should find the network before they find the skyline.
    */
-  const wire = (colour: string, opacity: number): THREE.LineBasicMaterial =>
-    new THREE.LineBasicMaterial({ color: new THREE.Color(colour), transparent: true, opacity });
+  const districtMaterials: Array<{ material: THREE.LineBasicMaterial; opacity: number }> = [];
+  const wire = (colour: string, opacity: number): THREE.LineBasicMaterial => {
+    const material = new THREE.LineBasicMaterial({ color: new THREE.Color(colour).multiplyScalar(0.34), transparent: true, opacity });
+    districtMaterials.push({ material, opacity });
+    return material;
+  };
 
   const layer = (name: string, geometry: THREE.BufferGeometry, material: THREE.Material): ENGINE.SceneNode => {
     const node = ENGINE.SceneNode.create({ name, position: new THREE.Vector3() });
@@ -11765,9 +11770,9 @@ function buildWireCity(scene: ContactScene): void {
    * closer in. The colours come from the shared MAP palette rather than being typed here,
    * so they cannot drift apart.
    */
-  scene.registerProp('lattice', layer('Lattice', city.lattice, wire(MAP.grid, 0.85)));
-  scene.registerProp('towers', layer('Towers', city.towers, wire(MAP.land, 0.7)));
-  scene.registerProp('roads', layer('Roads', city.roads, wire(ACCENT.knowledge, 0.85)));
+  scene.registerProp('lattice', layer('Lattice', city.lattice, wire(MAP.grid, 0.18)));
+  scene.registerProp('towers', layer('Towers', city.towers, wire(MAP.land, 0.38)));
+  scene.registerProp('roads', layer('Roads', city.roads, wire(ACCENT.knowledge, 0.65)));
 
   /**
    * Cameras, as the thing they are: a point of view.
@@ -11793,7 +11798,7 @@ function buildWireCity(scene: ContactScene): void {
   }
   const sightGeometry = new THREE.BufferGeometry();
   sightGeometry.setAttribute('position', new THREE.Float32BufferAttribute(sight, 3));
-  scene.registerProp('cameras', layer('Cameras', sightGeometry, wire(ACCENT.amber, 0.6)));
+  scene.registerProp('cameras', layer('Cameras', sightGeometry, wire(ACCENT.amber, 0.32)));
 
   /**
    * The traffic. Every car in the district, and one of them did it.
@@ -11830,8 +11835,8 @@ function buildWireCity(scene: ContactScene): void {
      * rather than as a city. The tallest thing in the frame has to be able to occlude
      * something behind it or there is no third dimension in the picture at all.
      */
-    position: new THREE.Vector3(92, 34, 118),
-    target: new THREE.Vector3(-10, 14, -18),
+    position: new THREE.Vector3(92, 64, 118),
+    target: new THREE.Vector3(-10, 4, -18),
   });
   scene.registerShot('downtown', {
     position: new THREE.Vector3(34, 40, 58),
@@ -11894,6 +11899,16 @@ function buildWireCity(scene: ContactScene): void {
     target: new THREE.Vector3(-8, 3.4, -16),
     duration: 4,
   });
+  scene.registerShot('phone', {
+    position: new THREE.Vector3(12, 2.2, 30),
+    target: new THREE.Vector3(-11, -2.8, -16),
+    duration: 4,
+  });
+  scene.registerShot('intervention', {
+    position: new THREE.Vector3(12, 4.0, 33),
+    target: new THREE.Vector3(4, 0.5, 11),
+    duration: 3.2,
+  });
 
   /*
    * ------------------------------------------------------------------ the car, and the end
@@ -11940,7 +11955,7 @@ function buildWireCity(scene: ContactScene): void {
     return mesh;
   };
 
-  const cabin = part('Cabin', car.cabin, solid('#161a1c'));
+  const cabin = part('Cabin', car.cabin, solid('#344248'));
   const glass = part(
     'Windscreen',
     car.windscreen,
@@ -11949,6 +11964,10 @@ function buildWireCity(scene: ContactScene): void {
   const wipers = part('Wipers', car.wipers, solid('#0a0c0d'));
   const phone = part('Phone', car.phone, solid('#0b0e10', { emissive: new THREE.Color('#0b0e10') }));
   const rim = part('Glasses', car.glasses, solid('#0e1113'));
+  // Sweep about the lower windscreen, not about the driver's eye.
+  wipers.geometry.translate(0.34, 0.195, 0.768);
+  wipers.position.set(-0.34, -0.195, -0.768);
+  (wipers.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
 
   /*
    * A group inside the node carries the yaw, so the set faces down the road the camera is
@@ -11959,6 +11978,39 @@ function buildWireCity(scene: ContactScene): void {
   const cabinGroup = new THREE.Group();
   cabinGroup.rotation.y = Math.atan2(-facing.x, -facing.z);
   for (const mesh of [cabin, glass, wipers, phone, rim]) cabinGroup.add(mesh);
+
+  // The received view resolves only this bridge approach, not an invented solid city.
+  const approach = new THREE.Group();
+  approach.name = 'BridgeApproach';
+  cabinGroup.add(approach);
+  const roadMat = new THREE.MeshBasicMaterial({ color: '#18292b' });
+  const railMat = new THREE.MeshBasicMaterial({ color: '#536668' });
+  const stripeMat = new THREE.MeshBasicMaterial({ color: '#98a99b' });
+  const streetBox = (x: number, y: number, z: number, w: number, h: number, d: number, mat: THREE.Material): THREE.Mesh => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    mesh.position.set(x, y, z);
+    approach.add(mesh);
+    return mesh;
+  };
+  streetBox(0, -1.25, -30, 4.8, 0.1, 60, roadMat);
+  for (const side of [-1, 1]) {
+    streetBox(side * 2.3, -0.55, -30, 0.09, 0.09, 60, railMat);
+    streetBox(side * 2.3, -0.90, -30, 0.09, 0.09, 60, railMat);
+    for (let z = -4; z > -60; z -= 4) streetBox(side * 2.3, -0.87, z, 0.1, 0.75, 0.1, railMat);
+  }
+  for (let i = 0; i < 12; i++) streetBox(0.65, -1.19, -i * 5 - 4, 0.08, 0.012, 2, stripeMat);
+  const phoneScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.105, 0.10),
+    new THREE.MeshBasicMaterial({ color: '#a8cf9b', side: THREE.DoubleSide }));
+  phoneScreen.rotation.x = -Math.PI / 2;
+  phoneScreen.position.copy(car.anchors.phone).add(new THREE.Vector3(0, 0.015, -0.045));
+  cabinGroup.add(phoneScreen);
+  const phoneKeys = new THREE.Group();
+  for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) {
+    const key = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.006, 0.015), new THREE.MeshBasicMaterial({ color: '#697879' }));
+    key.position.copy(car.anchors.phone).add(new THREE.Vector3((x - 1) * 0.033, 0.016, 0.025 + y * 0.025));
+    phoneKeys.add(key);
+  }
+  cabinGroup.add(phoneKeys);
 
   /*
    * The intervention the machine can perform and cannot enforce.
@@ -11993,7 +12045,7 @@ function buildWireCity(scene: ContactScene): void {
   signalRoot.add(new THREE.LineSegments(signalGeometry, signalMaterial));
 
   const signalLamp = new THREE.Mesh(
-    new THREE.RingGeometry(0.13, 0.24, 14),
+    new THREE.CircleGeometry(0.42, 12),
     new THREE.MeshBasicMaterial({
       color: new THREE.Color('#ff5968'),
       transparent: true,
@@ -12005,19 +12057,18 @@ function buildWireCity(scene: ContactScene): void {
   signalLamp.position.set(-2.3, 1.15, -15.78);
   signalRoot.add(signalLamp);
 
-  const suspectGeometry = new THREE.BufferGeometry();
-  suspectGeometry.setAttribute(
-    'position',
-    new THREE.Float32BufferAttribute(
-      [-0.48, 0, 0, 0.48, 0, 0, 0, 0, -0.82, 0, 0, 0.82],
-      3
-    )
-  );
-  const suspect = new THREE.LineSegments(
-    suspectGeometry,
-    new THREE.LineBasicMaterial({ color: new THREE.Color('#bfe9c8'), transparent: true, opacity: 0.98 })
-  );
-  suspect.position.set(0, -1.88, -23);
+  const suspect = new THREE.Group();
+  const vehicleInk = new THREE.LineBasicMaterial({ color: '#bfe9c8' });
+  const vehicleBody = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.65, 0.55, 3.2)), vehicleInk);
+  const vehicleRoof = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.25, 0.45, 1.4)), vehicleInk);
+  vehicleRoof.position.y = 0.48;
+  suspect.add(vehicleBody, vehicleRoof);
+  for (const x of [-0.6, 0.6]) {
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.14, 0.04), new THREE.MeshBasicMaterial({ color: '#e4efc2' }));
+    lamp.position.set(x, 0.06, 1.62);
+    suspect.add(lamp);
+  }
+  suspect.position.set(0, -1.5, -23);
   signalRoot.add(suspect);
   cabinGroup.add(signalRoot);
 
@@ -12044,9 +12095,9 @@ function buildWireCity(scene: ContactScene): void {
   key.position.set(-3, 2, -6);
   carNode.add(key);
 
-  /** A point in the car's own frame, in world space. */
+  /** Anchors are local to carNode; the prop system supplies its world transform. */
   const inCar = (local: THREE.Vector3): THREE.Vector3 =>
-    local.clone().applyEuler(cabinGroup.rotation).add(EYE_AT);
+    local.clone().applyEuler(cabinGroup.rotation);
 
   /*
    * Wipers and a ringing phone, driven per frame.
@@ -12058,30 +12109,52 @@ function buildWireCity(scene: ContactScene): void {
    */
   let carClock = 0;
   let wiped = false;
+  let arrival: 'lights' | 'call' | 'watch' | null = null;
+  let lastRing = -1;
+  scene.onReset(() => {
+    arrival = null;
+    carClock = 0;
+    cabinGroup.visible = false;
+    approach.position.z = 0;
+    rain.setVisible(false);
+    for (const entry of districtMaterials) entry.material.opacity = entry.opacity;
+  });
   scene.registerProp('car', carNode, {
+    captured: true,
     anchors: {
       windscreen: inCar(car.anchors.windscreen),
       phone: inCar(car.anchors.phone),
       road: inCar(car.anchors.road),
     },
     idle: (deltaTime) => {
-      if (!cabin.visible && !signalRoot.visible) return;
+      if (!arrival) {
+        cabinGroup.visible = false;
+        return;
+      }
       carClock += deltaTime;
+      const backgroundLevel = 1 - Math.min(1, carClock / 3.5) * 0.88;
+      for (const entry of districtMaterials) entry.material.opacity = entry.opacity * backgroundLevel;
+      // Avoid flying through the car shell during the long establishing descent.
+      cabinGroup.visible = carClock >= (arrival === 'lights' ? 2.8 : 3.85);
+      approach.visible = arrival !== 'lights';
+      phoneScreen.visible = phoneKeys.visible = arrival === 'call';
       if (signalRoot.visible) {
-        // The four-second camera descent arrives as the trace crosses the red line.
-        const crossing = Math.max(0, Math.min(1, (carClock - 2.75) / 1.55));
-        suspect.position.z = -23 + crossing * 18;
-        signalMaterial.opacity = 0.72 + Math.sin(carClock * 7) * 0.18;
-        signalLamp.scale.setScalar(0.9 + Math.sin(carClock * 7) * 0.12);
+        // First establish the red light; only then does the tracked vehicle cross it.
+        const crossing = Math.max(0, Math.min(1, (carClock - 4.1) / 3.3));
+        suspect.position.z = -23 + (1 - (1 - crossing) ** 2) * 12.5;
+        signalMaterial.opacity = 0.9;
       }
       if (!cabin.visible) return;
       /*
        * One sweep every 2.4 seconds, and it PARKS between them. A wiper that never stops is
        * a metronome; the pause is what makes the next sweep feel like weather.
        */
-      const cycle = carClock % 2.4;
+      const travel = Math.max(0, Math.min(3.8, carClock - 3.85));
+      const distance = 4 * travel - 0.5 * travel * travel;
+      approach.position.z = distance;
+      const cycle = Math.max(0, carClock - 3.85) % 2.4;
       const sweeping = cycle < 0.9;
-      wipers.rotation.z = sweeping ? Math.sin((cycle / 0.9) * Math.PI) * 0.85 : 0;
+      wipers.rotation.z = sweeping ? Math.sin((cycle / 0.9) * Math.PI) * 0.75 : 0;
       /*
        * The blade and the water are one system.
        *
@@ -12090,7 +12163,7 @@ function buildWireCity(scene: ContactScene): void {
        * Clearing on contact is the whole illusion: rain that fades on a timer next to a
        * wiper that happens to be moving reads as two unrelated animations.
        */
-      if (sweeping && !wiped) {
+      if (sweeping && cycle >= 0.38 && !wiped) {
         rain.wipe();
         wiped = true;
       }
@@ -12098,12 +12171,23 @@ function buildWireCity(scene: ContactScene): void {
       rain.update(deltaTime);
       if (phone.visible) {
         // Bursts of two, the way a phone rings, then a gap somebody could hope into.
-        const ring = carClock % 4.2;
-        const lit = ring < 0.6 || (ring > 1 && ring < 1.6);
-        (phone.material as THREE.MeshStandardMaterial).emissive.setStyle(lit ? '#7fe08a' : '#0b0e10');
+        const ringing = carClock >= 4 && carClock < 7.8;
+        const ring = (carClock - 4) % 2.1;
+        const lit = ringing && (ring < 0.45 || (ring > 0.7 && ring < 1.15));
+        (phoneScreen.material as THREE.MeshBasicMaterial).color.setStyle(lit ? '#c1ecae' : '#536b4f');
+        const ringIndex = Math.floor((carClock - 4) / 2.1);
+        if (ringing && ringIndex !== lastRing) {
+          lastRing = ringIndex;
+          audio.playPhoneRing();
+        }
       }
     },
     actions: {
+      reset: () => {
+        arrival = null;
+        carClock = 0;
+        cabinGroup.visible = false;
+      },
       /*
        * Three endings, three subsets of one set.
        *
@@ -12112,6 +12196,7 @@ function buildWireCity(scene: ContactScene): void {
        * only which surfaces are in shot and where the lens is.
        */
       'arrive-lights': () => {
+        arrival = 'lights';
         // Stays in the wireframe. Nothing of the car is revealed; the district IS the shot.
         for (const mesh of [cabin, glass, wipers, phone, rim]) mesh.visible = false;
         rain.setVisible(false);
@@ -12120,6 +12205,9 @@ function buildWireCity(scene: ContactScene): void {
         carClock = 0;
       },
       'arrive-call': () => {
+        arrival = 'call';
+        lastRing = -1;
+        wiped = false;
         for (const mesh of [cabin, glass, wipers, phone]) mesh.visible = true;
         // No spectacles: this ending is not looking through anybody. It is reaching into a
         // car through a phone nobody picks up.
@@ -12129,6 +12217,8 @@ function buildWireCity(scene: ContactScene): void {
         carClock = 0;
       },
       'arrive-watch': () => {
+        arrival = 'watch';
+        wiped = false;
         for (const mesh of [cabin, glass, wipers]) mesh.visible = true;
         // No phone, because nothing was called - and the rim, because somebody is wearing
         // the thing the machine is looking through.
@@ -12141,16 +12231,7 @@ function buildWireCity(scene: ContactScene): void {
     },
   });
 
-  /*
-   * There is no second camera move, and that is deliberate.
-   *
-   * Two more shots were registered here - one looking down at the phone, one out at the
-   * road - and they were the wrong instrument. All three endings take the SAME drop into
-   * the traffic; what differs is what is standing there when it lands. A camera that swings
-   * to the phone tells the player to look at it, and the whole point of where that phone
-   * sits is that it goes off beside somebody who is not looking at it. Peripheral vision
-   * does the work a pan would have taken away.
-   */
+  // Each intervention has one continuous descent, ending on its own readable subject.
 
   /*
    * No certainty table here either, and this one is not a choice - the law cannot reach

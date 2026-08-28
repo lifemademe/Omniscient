@@ -42,6 +42,7 @@ for (const [name, part] of Object.entries(car)) {
  * as a bus. Both are still "a windscreen" and neither is "somebody is driving this".
  */
 const glass = points(car.windscreen as never);
+check('rain has UVs on every windscreen vertex', car.windscreen.getAttribute('uv')?.count === glass.length);
 const near = Math.min(...glass.map((p) => Math.abs(p[2])));
 const far = Math.max(...glass.map((p) => Math.abs(p[2])));
 check('the glass is at driving distance', near > 0.7 && far < 1.25, `${near.toFixed(2)}m to ${far.toFixed(2)}m`);
@@ -56,7 +57,7 @@ check('nothing is built behind the driver', all.every((p) => p[2] < 0.55), `furt
 // happening beside a person who is not looking at it.
 const phone = car.anchors.phone;
 check('the phone is within reach', phone.distanceTo(EYE) < 0.85, `${phone.distanceTo(EYE).toFixed(2)}m`);
-check('the phone is off the eye line', phone.x > 0.25 && phone.y < -0.1, `x ${phone.x.toFixed(2)}, y ${phone.y.toFixed(2)}`);
+check('the phone is off the eye line', Math.abs(phone.x) > 0.25 && phone.y < -0.1, `x ${phone.x.toFixed(2)}, y ${phone.y.toFixed(2)}`);
 
 // The spectacle frame must sit inside the glass, or it is an object in the room rather
 // than something being worn.

@@ -75,6 +75,7 @@ const BOARD_CSS = `
   color: #9fd8a8;
   text-transform: uppercase;
 }
+.omni-board__speed { font-weight: bold; color: #d8ffb0; }
 /* The wires are drawn on a layer behind the boxes, sized to the grid. */
 /*
  * Natural height, and the TAB scrolls it.
@@ -348,7 +349,27 @@ const BOARD_CSS = `
   font-size: calc(12px + var(--omni-font-boost, 0px));
   letter-spacing: 0.06em;
   color: #e0a24c;
+  line-height: 1.5;
 }
+.omni-hop__sighting-main { display: block; font-weight: bold; color: #e8d7b4; }
+.omni-hop__sighting-rule { display: block; margin-top: 4px; }
+.omni-trail__rule { display: block; margin-top: 5px; color: #9fd8a8; }
+.omni-trail__row {
+  display: grid;
+  grid-template-columns: 5ch minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  padding: 8px 9px;
+  line-height: 1.4;
+}
+.omni-trail__row .omni-trace__plate {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  font-weight: bold;
+}
+.omni-trail__row .omni-trace__detail { white-space: normal; overflow: visible; }
+.omni-trail__distance { font-weight: bold; color: #cfe9d2; }
+.omni-trail__source { display: block; margin-top: 2px; }
 /*
  * The route is finished, and that is not an alarm.
  *
@@ -860,6 +881,22 @@ export function injectBoardStyles(): void {
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+/** Keep the load-bearing speed hint bold without interpreting mission text as HTML. */
+function setSpeedHint(element: HTMLElement, text: string): void {
+  const phrase = 'a block a second';
+  const pieces = text.split(phrase);
+  element.replaceChildren();
+  pieces.forEach((piece, index) => {
+    if (index > 0) {
+      const emphasis = document.createElement('strong');
+      emphasis.className = 'omni-board__speed';
+      emphasis.textContent = phrase;
+      element.appendChild(emphasis);
+    }
+    element.appendChild(document.createTextNode(piece));
+  });
+}
+
 type PipeGridView = Extract<DeviceView, { kind: 'pipes' }>['grid'];
 
 /** Minutes past midnight as a clock reading. */
@@ -1128,7 +1165,11 @@ export class BoardPanel {
       this.build(view);
     }
 
-    this.promptElement.textContent = view.prompt;
+    if (view.kind === 'pursuit' || view.kind === 'trail') {
+      setSpeedHint(this.promptElement, view.prompt);
+    } else {
+      this.promptElement.textContent = view.prompt;
+    }
     this.refresh(view);
   }
 
@@ -1732,11 +1773,17 @@ export class BoardPanel {
     const turned = this.hopIndex > 0 && view.hops[this.hopIndex - 1].heading !== hop.heading;
     // Back to the live question, and back to the colour that means "this is in front of you".
     sighting.className = 'omni-hop__sighting';
-    sighting.textContent = turned
-      ? `HE TURNED - ${hop.heading} now, not ${view.hops[this.hopIndex - 1].heading}. That was `
-        + `${hop.seconds}s ago, still about a block a second. Ahead means ${hop.heading} from here.`
-      : `LAST CONFIRMED - still heading ${hop.heading}, ${hop.seconds}s ago, doing about a `
-        + `block a second. Which one picks him up?`;
+    const confirmed = document.createElement('strong');
+    confirmed.className = 'omni-hop__sighting-main';
+    confirmed.textContent = turned
+      ? `HE TURNED - ${hop.heading} now, not ${view.hops[this.hopIndex - 1].heading} - ${hop.seconds}s ago.`
+      : `LAST CONFIRMED - heading ${hop.heading} - ${hop.seconds}s ago.`;
+    const speed = document.createElement('span');
+    speed.className = 'omni-hop__sighting-rule';
+    setSpeedHint(speed, turned
+      ? `Still about a block a second. Ahead means ${hop.heading} from here.`
+      : 'About a block a second. Which camera picks him up?');
+    sighting.replaceChildren(confirmed, speed);
 
     for (const option of hop.options) {
       const row = document.createElement('button');
@@ -1949,10 +1996,8 @@ export class BoardPanel {
     const ordered = [...view.trail.fragments].sort((a, b) => a.at - b.at);
     for (const fragment of ordered) {
       const row = document.createElement('button');
-      // --wrap: these rows carry a position AND a source, and one line ellipsed the source
-      // away entirely - which threw out the only writing that gives this phase its texture
-      // while keeping the arithmetic. Both fit if the row is allowed two lines.
-      row.className = 'omni-trace__row omni-trace__row--wrap';
+      // Keep timestamps aligned and allow the source of each ping to wrap.
+      row.className = 'omni-trace__row omni-trail__row';
       row.type = 'button';
 
       const when = document.createElement('span');
@@ -2013,10 +2058,8 @@ export class BoardPanel {
     /**
      * The whole rule, in one sentence, with no geometry left in it.
      *
-     * He does about a block a second. Claim two pings and the board says how far apart they
-     * are and how long he had. If the distance is bigger than the seconds, no car did both -
-     * and that is the entire test. Nothing here asks the player to hold a direction, add two
-     * numbers, or work out which row a figure was measured against.
+     * He does about a block a second. The board supplies the driving distance, not the
+     * timestamp difference: comparing those remains the player's deduction.
      */
     /**
      * The rule, and where the numbers come from. Not which rows pass it.
@@ -2026,11 +2069,13 @@ export class BoardPanel {
      * halves have to be said, because a distance with no stated origin is the thing that
      * caused every misreading in this panel's history.
      */
-    this.trailParts.headline.textContent =
-      `LAST SEEN heading ${view.trail.heading}, doing about a block a second. Each line is `
-      + `the drive from the last ping you claimed - and the clock is on the left. Could he `
-      + `have covered that ground in that long? `
-      + `${this.claimed.size} of ${view.trail.fragments.length} claimed as him.`;
+    setSpeedHint(this.trailParts.headline,
+      `Heading ${view.trail.heading} - about a block a second.`);
+    const rule = document.createElement('span');
+    rule.className = 'omni-trail__rule';
+    rule.textContent = 'Compare timestamp gaps with the drive from your last earlier claimed ping '
+      + '(or the last camera). Could one car cover it?';
+    this.trailParts.headline.appendChild(rule);
 
     const ordered = [...view.trail.fragments].sort((a, b) => a.at - b.at);
 
@@ -2087,7 +2132,13 @@ export class BoardPanel {
        * which is the answer, not a tool for finding it - and a board that flags every wrong
        * option is a board being clicked rather than read.
        */
-      detail.textContent = `after ${step.blocks} blocks, ${ordered[i].detail}`;
+      const distance = document.createElement('strong');
+      distance.className = 'omni-trail__distance';
+      distance.textContent = `${step.blocks} blocks`;
+      const source = document.createElement('span');
+      source.className = 'omni-trail__source';
+      source.textContent = ordered[i].detail;
+      detail.replaceChildren(distance, document.createTextNode(` from ${step.from}`), source);
     });
 
     /*

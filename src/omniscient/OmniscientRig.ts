@@ -155,7 +155,7 @@ import type {
 } from './input/FocusNavigator.js';
 import type { MenuAction } from './menu/MainMenu.js';
 import type { Contact, MissionDefinition, MissionFailure } from './mission/types.js';
-import { Urgency } from './mission/types.js';
+import { OutcomeKind, Urgency } from './mission/types.js';
 import type { CameraShot, ContactScene } from './view/ContactScene.js';
 
 /** Stable per-playthrough seed. §123: the same knowledge must draw the same tree. */
@@ -2367,11 +2367,14 @@ export class OmniscientRig extends ENGINE.SceneNode {
          */
         this.scene?.learn(factIds);
       },
-      onResolved: () => {
+      onResolved: (outcome) => {
         // recordOutcome has now applied the solved-request growth floor as well.
         this.revealGrowth();
         adaptiveScore.setState('resolution');
-        const acknowledgementDelay = audio.playContactPayoff(this.scene?.sceneId ?? '') ?? 0;
+        const acknowledgementDelay = Math.max(
+          audio.playContactPayoff(this.scene?.sceneId ?? '') ?? 0,
+          this.activeIndex === null || outcome.kind !== OutcomeKind.Solved ? 0 : this.queue[this.activeIndex]?.mission.resolutionDelayMs ?? 0
+        );
         window.setTimeout(() => audio.play('solved'), acknowledgementDelay);
         /*
          * And the machine's own three notes, under the verdict.
@@ -3170,7 +3173,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
   }
 
-  private openSignal(signalId: string): void {
+  private openSignal(signalId: string, captureMission?: MissionDefinition): void {
     if (signalId === ANOMALY_SIGNAL) {
       this.openWarehouseTrace();
       return;
@@ -3232,7 +3235,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     }
     this.contactGrowthStart = this.tree?.segmentCount ?? 0;
     this.latestContactFact = null;
-    this.session.start(request.mission, request.contact);
+    this.session.start(captureMission ?? request.mission, request.contact);
     this.cameraTweener.add(() => undefined, {
       duration: 0.01,
       delay: 0.94,
@@ -3796,6 +3799,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.resolveHold = Math.max(RESOLVE_HOLD, visualDelay + 1.35, acknowledgementDelayMs / 1000 + 1.35);
   }
 
+  /** Replay the real choice/device path without overwriting the player's campaign. */
+  public playDistrictCapture(beat: 'bridge' | 'found' | 'ahead-of-him'): void {
+    if (ENGINE.isPublishedGame() || !isCaptureStorage() || !this.session || this.warehouse || this.m4ss) return;
+    this.boot?.dispose();
+    this.boot = null;
+    this.resolutionPending = false;
+    this.resolveHold = 0;
+    this.cueTweener.clear();
+    this.openSignal('lucian', { ...MISSION_08, openingBeatId: beat });
+  }
+
   private returnHome(): void {
     if (this.phase !== Phase.Contact || !this.resolutionPending) return;
     this.resolutionPending = false;
@@ -4067,7 +4081,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * The wireframe city is the exception because it is not a place. It is the machine's
      * own reconstruction of a district it has never seen, and it should look like one.
      */
-    setRetroLook(sceneId === 'scene-wire-city' ? 'machine' : 'world');
+    setRetroLook(sceneId === 'scene-wire-city' ? 'district' : 'world');
     /*
      * And the room arrives as a signal rather than as a fact.
      *

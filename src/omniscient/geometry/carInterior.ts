@@ -50,7 +50,7 @@ export interface CarInterior {
   windscreen: THREE.BufferGeometry;
   /** Wiper blades, in their parked position. Animated by the scene. */
   wipers: THREE.BufferGeometry;
-  /** The phone on the passenger seat. Its own geometry so it can light on its own. */
+  /** The handset on the dash, separate from its illuminated screen. */
   phone: THREE.BufferGeometry;
   /**
    * The inside edge of a pair of spectacles, drawn as a vignette frame at eye distance.
@@ -120,11 +120,11 @@ export function carInterior(): CarInterior {
    * and one past a metre reads as a bus, and the difference between those two feelings is
    * most of whether this shot lands as "a person is driving this".
    */
-  const glassBottom = -0.34;
-  const glassTop = 0.30;
+  const glassBottom = -0.22;
+  const glassTop = 0.23;
   const glassNear = -0.78;
   const glassFar = -1.12;
-  const halfWidth = 0.62;
+  const halfWidth = 0.48;
 
   const screen: number[] = [];
   quad(
@@ -158,38 +158,34 @@ export function carInterior(): CarInterior {
     box(cabin, side * (halfWidth + 0.1), glassBottom - 0.18, 0.05, 0.08, 0.5, 0.7);
   }
 
-  // The passenger seat back, which is what the phone sits against.
+  // Passenger seat back, outside the focused dashboard view.
   box(cabin, 0.52, glassBottom - 0.3, 0.16, 0.46, 0.44, 0.12);
 
   /*
-   * The wipers, parked low across the glass.
+   * The wiper, parked low across the glass.
    *
-   * Two blades on the near face of the screen rather than modelled arms. At this distance a
+   * One blade on the near face of the screen rather than modelled arms. At this distance a
    * wiper is a dark line that sweeps; the mechanism is never in shot and modelling it would
    * be detail the player pays for in geometry and never sees.
    */
   const wipers: number[] = [];
-  for (const side of [-1, 1]) {
-    const originX = side * 0.28;
-    quad(
-      wipers,
-      new THREE.Vector3(originX - 0.02, glassBottom + 0.02, glassNear - 0.01),
-      new THREE.Vector3(originX + 0.02, glassBottom + 0.02, glassNear - 0.01),
-      new THREE.Vector3(originX + 0.34 * side + 0.02, glassBottom + 0.12, glassNear - 0.03),
-      new THREE.Vector3(originX + 0.34 * side - 0.02, glassBottom + 0.12, glassNear - 0.03)
-    );
-  }
+  quad(wipers,
+    new THREE.Vector3(-0.34, glassBottom + 0.018, glassNear + 0.012),
+    new THREE.Vector3(0.26, glassBottom + 0.018, glassNear + 0.012),
+    new THREE.Vector3(0.26, glassBottom + 0.032, glassNear + 0.012),
+    new THREE.Vector3(-0.34, glassBottom + 0.032, glassNear + 0.012));
 
   /*
-   * The phone, face up on the passenger seat.
+   * The phone, face up on the left dash.
    *
-   * Off to the right and BELOW the eye line, so it is at the edge of vision rather than in
+   * Left of centre and BELOW the eye line, clear of the conversation panel rather than in
    * the middle of the shot. The call ending is about a thing happening beside somebody who
    * is not looking at it, and a phone in the centre of frame is a phone being looked at.
    */
-  const phonePos = new THREE.Vector3(0.44, glassBottom - 0.22, -0.06);
+  // On the left dash, inside the actual lens and clear of the conversation panel.
+  const phonePos = new THREE.Vector3(-0.26, -0.206, -0.72);
   const phone: number[] = [];
-  box(phone, phonePos.x, phonePos.y, phonePos.z, 0.07, 0.004, 0.145);
+  box(phone, phonePos.x, phonePos.y, phonePos.z, 0.15, 0.028, 0.24);
 
   /*
    * The spectacle frame, as a vignette at eye distance.
@@ -201,15 +197,16 @@ export function carInterior(): CarInterior {
    */
   const glasses: number[] = [];
   const rimZ = -0.11;
-  box(glasses, 0, 0.075, rimZ, 0.30, 0.006, 0.004);
-  box(glasses, 0, -0.075, rimZ, 0.30, 0.006, 0.004);
-  for (const side of [-1, 1]) box(glasses, side * 0.15, 0, rimZ, 0.006, 0.155, 0.004);
+  box(glasses, 0, 0.039, rimZ, 0.17, 0.003, 0.003);
+  for (const side of [-1, 1]) box(glasses, side * 0.076, 0.022, rimZ, 0.003, 0.035, 0.003);
   // The bridge, which is the one part of a pair of glasses anybody actually sees on themselves.
-  box(glasses, 0, 0.04, rimZ, 0.03, 0.008, 0.004);
+  box(glasses, 0, 0.030, rimZ, 0.02, 0.005, 0.003);
 
+  const windscreen = geometryFrom(screen);
+  windscreen.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1], 2));
   return {
     cabin: geometryFrom(cabin),
-    windscreen: geometryFrom(screen),
+    windscreen,
     wipers: geometryFrom(wipers),
     phone: geometryFrom(phone),
     glasses: geometryFrom(glasses),

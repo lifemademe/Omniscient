@@ -607,6 +607,29 @@ export class ConsoleAudio {
     return acknowledgementDelayMs;
   }
 
+  /** Two short unanswered handset bursts, mixed through the existing gameplay bus. */
+  public playPhoneRing(): void {
+    if (!this.enabled) return;
+    const bus = this.bus();
+    if (!bus) return;
+    for (const delay of [0, 0.7]) {
+      for (const frequency of [660, 880]) {
+        const oscillator = bus.ctx.createOscillator();
+        const gain = bus.ctx.createGain();
+        const start = bus.ctx.currentTime + delay;
+        oscillator.frequency.value = frequency;
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.025, start + 0.015);
+        gain.gain.setValueAtTime(0.025, start + 0.38);
+        gain.gain.linearRampToValueAtTime(0, start + 0.45);
+        oscillator.connect(gain).connect(bus.gameplay);
+        oscillator.onended = () => { oscillator.disconnect(); gain.disconnect(); };
+        oscillator.start(start);
+        oscillator.stop(start + 0.46);
+      }
+    }
+  }
+
   public dispose(): void {
     if (this.duckTimer !== null) window.clearTimeout(this.duckTimer);
     this.duckTimer = null;

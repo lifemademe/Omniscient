@@ -384,7 +384,7 @@ export class SessionController {
 
   private apply(step: MissionStep): void {
     if (!this.contact) return;
-    const resolutionDelay = step.outcome ? this.runtime?.definition.resolutionDelayMs ?? 0 : 0;
+    const resolutionDelay = step.outcome && !step.failure ? this.runtime?.definition.resolutionDelayMs ?? 0 : 0;
 
     if (step.confirming) {
       /*
