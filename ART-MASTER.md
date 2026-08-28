@@ -904,7 +904,7 @@ separate whole-scene smoothing critic also returned AT BAR. Ordered captures pro
 work/entry/resolution states, not exhaustive animation smoothness or aspect-ratio coverage.
 `pnpm lint`, `pnpm build`, and editor build passed. Live isolated-save review confirmed
 failed-pin feedback, sequence progression, entry before final reply, and return to globe.
-Implementation/evidence commit: recorded in the receipt immediately below after commit.
+Implementation/evidence commit: `16f5bc5` (local, not pushed).
 
 **Vasile contact pass — user-directed D-1f extension, 2026-08-28: AT BAR (scoped visual pass, Codex).**
 Bar: Vasile first, routing junctions second, a recognizably flooded school cellar third;
