@@ -870,7 +870,7 @@ City and bridge have no menu-room intrusion; the menu room returns intact. Fresh
 critic `lucian_isolation_critic`: **AT BAR** for this narrow regression, not unpictured states.
 Builder reopened the captures. `pnpm lint`, `pnpm build`, editor `buildProject` passed;
 editor exited play successfully. City/menu game content is 1280x720; larger bridge capture is
-1707x1019 including window chrome. Local implementation/evidence commit receipt follows; no push.
+1707x1019 including window chrome. Local implementation/evidence commit: `163a81a`. No push.
 
 **Lucian ending asset finish — user-requested continuation, AT BAR (visual), Codex 2026-08-28.**
 The previous verdict covered choice readability, not a finished asset bar. User's new capture
