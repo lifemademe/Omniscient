@@ -25,7 +25,7 @@
  * ## The coordinate frame
  *
  * Origin at the driver's eye, looking down -Z, +X to the right, +Y up. Metres. Every number
- * below is a real measurement off a real car, because the one thing this set has to do is
+ * below uses metre-scale proportions, because the one thing this set has to do is
  * feel like a place rather than a diorama - and a windscreen at the wrong distance reads as
  * wrong long before anybody can say why.
  */
@@ -85,6 +85,19 @@ function box(target: number[], cx: number, cy: number, cz: number, w: number, h:
   geometry.dispose();
 }
 
+/** Sloping trim, following the glass rather than a vertical cuboid beside it. */
+function pillar(target: number[], side: number): void {
+  const a = new THREE.Vector3(side * 0.75, -0.26, -0.76);
+  const b = new THREE.Vector3(side * 0.63, 0.34, -1.14);
+  const geometry = new THREE.BoxGeometry(0.065, a.distanceTo(b), 0.075).toNonIndexed();
+  geometry.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()));
+  const centre = a.add(b).multiplyScalar(0.5);
+  geometry.translate(centre.x, centre.y, centre.z);
+  const positions = geometry.getAttribute('position');
+  for (let i = 0; i < positions.count; i++) target.push(positions.getX(i), positions.getY(i), positions.getZ(i));
+  geometry.dispose();
+}
+
 /** A flat quad from four corners, wound so it faces the eye. */
 function quad(
   target: number[],
@@ -121,37 +134,37 @@ export function carInterior(): CarInterior {
    * most of whether this shot lands as "a person is driving this".
    */
   const glassBottom = -0.22;
-  const glassTop = 0.23;
+  const glassTop = 0.32;
   const glassNear = -0.78;
   const glassFar = -1.12;
-  const halfWidth = 0.48;
+  const halfWidth = 0.72;
 
   const screen: number[] = [];
   quad(
     screen,
     new THREE.Vector3(-halfWidth, glassBottom, glassNear),
     new THREE.Vector3(halfWidth, glassBottom, glassNear),
-    new THREE.Vector3(halfWidth, glassTop, glassFar),
-    new THREE.Vector3(-halfWidth, glassTop, glassFar)
+    new THREE.Vector3(0.60, glassTop, glassFar),
+    new THREE.Vector3(-0.60, glassTop, glassFar)
   );
 
-  /*
-   * The dashboard, and it is a LEDGE rather than a slab.
-   *
-   * What sells an interior at this focal length is the horizon line the dash cuts across
-   * the bottom of the glass. The shape behind it barely matters; the edge does all the
-   * work, so the edge is where the geometry goes.
-   */
-  box(cabin, 0, glassBottom - 0.06, glassNear + 0.02, halfWidth * 2, 0.12, 0.26);
-  box(cabin, 0, glassBottom - 0.22, glassNear + 0.16, halfWidth * 2, 0.24, 0.1);
-
-  // A-pillars either side of the glass. Thin, and the only vertical in shot.
-  for (const side of [-1, 1]) {
-    box(cabin, side * (halfWidth + 0.04), (glassBottom + glassTop) / 2, (glassNear + glassFar) / 2, 0.09, 0.78, 0.4);
+  // Moulded dash: windscreen trough, sloped shoulder, bevelled nose and lower return.
+  // The cross-section tapers towards the seats instead of ending in a full-width slab.
+  const section = [
+    [-0.22, -0.90, 0.72], [-0.22, -0.73, 0.72], [-0.255, -0.62, 0.69],
+    [-0.30, -0.57, 0.67], [-0.40, -0.59, 0.67], [-0.43, -0.66, 0.69],
+  ];
+  for (let i = 0; i < section.length; i++) {
+    const [y, z, width] = section[i];
+    const [ny, nz, nw] = section[(i + 1) % section.length];
+    quad(cabin, new THREE.Vector3(-nw, ny, nz), new THREE.Vector3(nw, ny, nz),
+      new THREE.Vector3(width, y, z), new THREE.Vector3(-width, y, z));
   }
 
+  for (const side of [-1, 1]) pillar(cabin, side);
+
   // Roof lining, cutting the top of frame the way a real one does.
-  box(cabin, 0, glassTop + 0.1, glassFar + 0.2, halfWidth * 2 + 0.16, 0.1, 0.8);
+  box(cabin, 0, glassTop + 0.09, glassFar + 0.12, halfWidth * 2 + 0.16, 0.075, 0.5);
 
   // Door cards, just inside the frame edges - they catch light and say "enclosed".
   for (const side of [-1, 1]) {
@@ -183,7 +196,7 @@ export function carInterior(): CarInterior {
    * is not looking at it, and a phone in the centre of frame is a phone being looked at.
    */
   // On the left dash, inside the actual lens and clear of the conversation panel.
-  const phonePos = new THREE.Vector3(-0.26, -0.206, -0.72);
+  const phonePos = new THREE.Vector3(-0.40, -0.206, -0.68);
   const phone: number[] = [];
   box(phone, phonePos.x, phonePos.y, phonePos.z, 0.15, 0.028, 0.24);
 

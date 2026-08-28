@@ -43,6 +43,7 @@ import {
 } from '../art/decals.js';
 import { decorMesh } from '../art/mesh.js';
 import { carInterior } from '../geometry/carInterior.js';
+import { districtCabinDetails, districtTrackedCar, dressDistrictBridge } from '../geometry/districtEndingDetails.js';
 import { createRainGlass } from '../art/rainGlass.js';
 import { CERTAINTY, cloneKeepingShader } from '../art/certainty.js';
 import { createFloodwater } from '../art/floodwater.js';
@@ -11896,12 +11897,12 @@ function buildWireCity(scene: ContactScene): void {
 
   scene.registerShot('windscreen', {
     position: new THREE.Vector3(12, 2.2, 30),
-    target: new THREE.Vector3(-8, 3.4, -16),
+    target: new THREE.Vector3(-8, -5.5, -16),
     duration: 4,
   });
   scene.registerShot('phone', {
     position: new THREE.Vector3(12, 2.2, 30),
-    target: new THREE.Vector3(-11, -2.8, -16),
+    target: new THREE.Vector3(-11, -7, -16),
     duration: 4,
   });
   scene.registerShot('intervention', {
@@ -11937,7 +11938,7 @@ function buildWireCity(scene: ContactScene): void {
    * shot moves the car and the two can never drift apart.
    */
   const EYE_AT = new THREE.Vector3(12, 2.2, 30);
-  const LOOK_AT = new THREE.Vector3(-8, 3.4, -16);
+  const LOOK_AT = new THREE.Vector3(-8, -5.5, -16);
   const car = carInterior();
 
   const solid = (colour: string, extra: THREE.MeshStandardMaterialParameters = {}): THREE.MeshStandardMaterial =>
@@ -11955,7 +11956,7 @@ function buildWireCity(scene: ContactScene): void {
     return mesh;
   };
 
-  const cabin = part('Cabin', car.cabin, solid('#344248'));
+  const cabin = part('Cabin', car.cabin, solid('#58666b'));
   const glass = part(
     'Windscreen',
     car.windscreen,
@@ -11978,14 +11979,16 @@ function buildWireCity(scene: ContactScene): void {
   const cabinGroup = new THREE.Group();
   cabinGroup.rotation.y = Math.atan2(-facing.x, -facing.z);
   for (const mesh of [cabin, glass, wipers, phone, rim]) cabinGroup.add(mesh);
+  const fittings = districtCabinDetails();
+  cabinGroup.add(fittings);
 
   // The received view resolves only this bridge approach, not an invented solid city.
   const approach = new THREE.Group();
   approach.name = 'BridgeApproach';
   cabinGroup.add(approach);
-  const roadMat = new THREE.MeshBasicMaterial({ color: '#18292b' });
-  const railMat = new THREE.MeshBasicMaterial({ color: '#536668' });
-  const stripeMat = new THREE.MeshBasicMaterial({ color: '#98a99b' });
+  const roadMat = solid('#252e31', { roughness: 0.92 });
+  const railMat = solid('#455054');
+  const stripeMat = solid('#a2a18b');
   const streetBox = (x: number, y: number, z: number, w: number, h: number, d: number, mat: THREE.Material): THREE.Mesh => {
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     mesh.position.set(x, y, z);
@@ -11999,6 +12002,7 @@ function buildWireCity(scene: ContactScene): void {
     for (let z = -4; z > -60; z -= 4) streetBox(side * 2.3, -0.87, z, 0.1, 0.75, 0.1, railMat);
   }
   for (let i = 0; i < 12; i++) streetBox(0.65, -1.19, -i * 5 - 4, 0.08, 0.012, 2, stripeMat);
+  dressDistrictBridge(approach);
   const phoneScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.105, 0.10),
     new THREE.MeshBasicMaterial({ color: '#a8cf9b', side: THREE.DoubleSide }));
   phoneScreen.rotation.x = -Math.PI / 2;
@@ -12045,7 +12049,7 @@ function buildWireCity(scene: ContactScene): void {
   signalRoot.add(new THREE.LineSegments(signalGeometry, signalMaterial));
 
   const signalLamp = new THREE.Mesh(
-    new THREE.CircleGeometry(0.42, 12),
+    new THREE.CircleGeometry(0.24, 12),
     new THREE.MeshBasicMaterial({
       color: new THREE.Color('#ff5968'),
       transparent: true,
@@ -12057,17 +12061,16 @@ function buildWireCity(scene: ContactScene): void {
   signalLamp.position.set(-2.3, 1.15, -15.78);
   signalRoot.add(signalLamp);
 
-  const suspect = new THREE.Group();
-  const vehicleInk = new THREE.LineBasicMaterial({ color: '#bfe9c8' });
-  const vehicleBody = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.65, 0.55, 3.2)), vehicleInk);
-  const vehicleRoof = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.25, 0.45, 1.4)), vehicleInk);
-  vehicleRoof.position.y = 0.48;
-  suspect.add(vehicleBody, vehicleRoof);
-  for (const x of [-0.6, 0.6]) {
-    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.14, 0.04), new THREE.MeshBasicMaterial({ color: '#e4efc2' }));
-    lamp.position.set(x, 0.06, 1.62);
-    suspect.add(lamp);
+  const housing = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(0.68, 1.78, 0.25)),
+    new THREE.LineBasicMaterial({ color: '#688b8a' }));
+  housing.position.set(-2.3, 0.59, -15.95);
+  signalRoot.add(housing);
+  for (const y of [0.59, 0.03]) {
+    const lens = new THREE.Mesh(new THREE.CircleGeometry(0.24, 12), new THREE.MeshBasicMaterial({ color: '#24332f' }));
+    lens.position.set(-2.3, y, -15.78);
+    signalRoot.add(lens);
   }
+  const suspect = districtTrackedCar();
   suspect.position.set(0, -1.5, -23);
   signalRoot.add(suspect);
   cabinGroup.add(signalRoot);
@@ -12080,10 +12083,8 @@ function buildWireCity(scene: ContactScene): void {
    * that has ever stood here, so without these it renders as a black rectangle in front of
    * the city - which is exactly what it did.
    *
-   * Three sources, all weak. A cold ambient so the cabin is a shape rather than a
-   * silhouette; a green key from ahead and to the left, which is the district's own light
-   * coming through the glass; and nothing behind, because there is nothing behind - a
-   * back light would invent a world outside the car that this shot never shows.
+   * A cold ambient retains the cabin silhouette; a restrained warm overhead key catches
+   * the moulded dashboard and wheel. Bridge practicals supply the road's pools of light.
    */
   const rain = createRainGlass(car.windscreen);
   for (const layer of rain.layers) cabinGroup.add(layer);
@@ -12091,8 +12092,10 @@ function buildWireCity(scene: ContactScene): void {
   const carNode = ENGINE.SceneNode.create({ name: 'CarInterior', position: EYE_AT });
   carNode.add(cabinGroup);
   carNode.add(new THREE.AmbientLight(new THREE.Color('#1c2c33'), 1.1));
-  const key = new THREE.DirectionalLight(new THREE.Color('#9fd8a8'), 1.4);
-  key.position.set(-3, 2, -6);
+  const key = new THREE.DirectionalLight(new THREE.Color('#efd4a8'), 3.2);
+  key.position.set(-1.5, 2, 0.5);
+  key.target.position.set(0, -0.3, -0.65);
+  carNode.add(key.target);
   carNode.add(key);
 
   /** Anchors are local to carNode; the prop system supplies its world transform. */
@@ -12137,6 +12140,7 @@ function buildWireCity(scene: ContactScene): void {
       // Avoid flying through the car shell during the long establishing descent.
       cabinGroup.visible = carClock >= (arrival === 'lights' ? 2.8 : 3.85);
       approach.visible = arrival !== 'lights';
+      fittings.visible = arrival !== 'lights';
       phoneScreen.visible = phoneKeys.visible = arrival === 'call';
       if (signalRoot.visible) {
         // First establish the red light; only then does the tracked vehicle cross it.

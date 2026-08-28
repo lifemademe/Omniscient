@@ -81,6 +81,7 @@ import './omniscient/geometry/carInterior.js';
 import './omniscient/geometry/cat.js';
 import './omniscient/geometry/character.js';
 import './omniscient/geometry/clouds.js';
+import './omniscient/geometry/districtEndingDetails.js';
 import './omniscient/geometry/foliage.js';
 import './omniscient/geometry/hardware.js';
 import './omniscient/geometry/meadow.js';

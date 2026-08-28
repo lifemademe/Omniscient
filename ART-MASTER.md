@@ -857,6 +857,38 @@ there is no assertion that can be written.
 
 ## 13. THE LEDGER
 
+**Lucian ending asset finish — user-requested continuation, AT BAR (visual), Codex 2026-08-28.**
+The previous verdict covered choice readability, not a finished asset bar. User's new capture
+`codex-clipboard-d7bf5712-3eb9-4938-be19-da288fa5c4fe.png` reopens the cabin and bridge.
+Bar: repair-shop prop articulation and practical-light value separation (`Downloads/download.jpg`),
+translated to a recognisable worn car cabin and constructed night bridge, retaining crisp PS1
+geometry. Fresh baseline critic: bright rails dominate; the dark slab cabin does not read as an
+inhabited vehicle. Runtime-built assets only; story, timings and puzzle rules remain unchanged.
+
+Replaced the slab pillars and dashboard with raked trim and a faceted moulded shell; added
+recessed instruments, worn wheel grips, vents, paper route slip and a supported phone tray.
+The bridge now has truss portals, fitted practical lights, curb joints, rail plates and sparse
+road repairs. The lights ending retains machine wireframe, with an articulated saloon and
+three-lens signal housing. No new raster assets, broad post-process changes or scene-file edits.
+
+Rendered critic `lucian_asset_critic`: R1 rejected hidden cabin, R2 slab dash, R3 insufficient
+value separation, R4 lack of habitation; R5 **AT BAR**, including separate call/lights checks.
+Fresh whole-set critic `lucian_asset_smoothing`: **AT BAR for cohesion**.
+Evidence under `scripts/dev/`: `lucian-assets-r5-watch-sheet.jpg`,
+`lucian-assets-r5-call-sheet.jpg`, `lucian-assets-r3-lights-sheet.jpg` (eleven sequential
+one-second frames each, left-to-right). Settled originals: `lucian-assets-r5-watch-10.jpg`,
+`lucian-assets-r5-call-10.jpg`, `lucian-assets-r3-lights-10.jpg`; larger framing check:
+`lucian-assets-r5-watch-large.jpg`. Builder reopened all three sheets after assembly.
+The sequence captures contain 1280x720 game content; the maximised desktop capture is
+1707x1019 including window chrome, not a claimed 1920x1080 test.
+
+Verification: `pnpm lint`, `pnpm build`, editor `buildProject`, and existing `preview-car.ts`
+diagnostic pass. Replayed all three real choice/cue paths using isolated capture checkpoints:
+cabin/rain reveal, phone pulse, red signal crossing, deceleration, acknowledgement and Continue
+hold remain visible. This is visual/runtime replay evidence, not a complete campaign or audio
+listening pass; earlier lifecycle teardown assertions remain outside this asset-only scope.
+Implementation commit receipt follows after the local commit; no push.
+
 **Lucian contact / three interventions — user-directed D-1 extension, AT BAR (visual), Codex 2026-08-28.**
 Scope: evidence hierarchy, bold speed rule, distinct lights/call/watch performances and delayed
 acknowledgement. Preserve the shared outcome and deduction rules. Baseline: supplied recording
