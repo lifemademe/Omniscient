@@ -165,6 +165,20 @@ const BOARD_CSS = `
   color: rgba(159, 216, 168, 0.72);
   font-style: italic;
 }
+/* Keep all nine relationships surveyable without changing other console devices. */
+.omni-board--relations { gap: 8px; padding: 8px 10px; }
+.omni-board--relations .omni-board__column { gap: 3px; }
+.omni-board--relations .omni-board__box { padding: 5px 8px; line-height: 1.25; }
+.omni-board--relations .omni-board__box--slot { min-height: 25px; padding-block: 3px; line-height: 1.1; }
+.omni-board--relations .omni-board__box--linked {
+  border-left: 3px solid #9fd8a8;
+  background: #10291a;
+}
+.omni-board--relations .omni-board__box--armed {
+  border-color: #d8ffb0;
+  color: #e7f0d1;
+  background: #23402a;
+}
 
 /*
  * The bag. A shelf of things rather than a list of names - the player is meant to look
@@ -1024,6 +1038,7 @@ export class BoardPanel {
    */
   public update(view: DeviceView | undefined): void {
     this.view = view ?? null;
+    this.element.classList.toggle('omni-board--relations', view?.kind === 'relations');
     /*
      * The camera feed belongs to the chase and to nothing else.
      *
@@ -2522,7 +2537,7 @@ export class BoardPanel {
     } else if (this.armed) {
       const name = view.people.find((person) => person.id === this.armed)?.name ?? '';
       this.status.className = 'omni-board__status';
-      this.status.textContent = `${name} is their... (pick one on the right)`;
+      this.status.textContent = `For ${name}, pick a relationship`;
     } else {
       this.status.className = 'omni-board__status';
       // Says what to do next rather than reporting a score. A disabled button with

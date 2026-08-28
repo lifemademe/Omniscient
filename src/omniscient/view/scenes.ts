@@ -6142,7 +6142,9 @@ function buildClearedHouse(scene: ContactScene): void {
 
   const pane = new THREE.PlaneGeometry(1.34, 0.94);
   pane.translate(-0.2, 1.75, -1.96);
-  scene.registerProp('window', meshOf('Window', pane, MAT.daylight));
+  const houseDaylight = (MAT.daylight as THREE.MeshBasicMaterial).clone();
+  houseDaylight.color.multiplyScalar(0.32);
+  scene.registerProp('window', meshOf('Window', pane, houseDaylight));
 
   /**
    * A curtain rail with nothing on it.
@@ -6210,7 +6212,8 @@ function buildClearedHouse(scene: ContactScene): void {
    *
    * A worked kitchen table is darker than new timber. It is not nearly black.
    */
-  clearedTimber.color.multiplyScalar(0.78);
+  // Current staging: keep the empty slab below the face, without dimming the room.
+  clearedTimber.color.multiplyScalar(0.32);
   scene.registerProp('table', meshOf('Table', mergeGeometries(table, false) ?? top, clearedTimber));
 
   /**
@@ -6224,9 +6227,22 @@ function buildClearedHouse(scene: ContactScene): void {
     position: new THREE.Vector3(-0.55, 0.77, -1.06),
   });
 
-  const shell = new THREE.BoxGeometry(0.34, 0.11, 0.24);
-  shell.translate(0, 0.055, 0);
-  boxRoot.add(meshOf('BoxShell', shell, MAT.plastic));
+  // A floor and four thin walls, not a solid cube hiding the photographs inside it.
+  const cardboard = new THREE.MeshStandardMaterial({ color: '#78664e', roughness: 1 });
+  const photoPaper = new THREE.MeshStandardMaterial({ color: '#b6afa0', roughness: 1 });
+  const shellParts: THREE.BufferGeometry[] = [];
+  for (const [w, h, d, x, y, z] of [
+    [0.34, 0.008, 0.24, 0, 0.004, 0],
+    [0.008, 0.102, 0.24, -0.166, 0.059, 0],
+    [0.008, 0.102, 0.24, 0.166, 0.059, 0],
+    [0.324, 0.102, 0.008, 0, 0.059, -0.116],
+    [0.324, 0.102, 0.008, 0, 0.059, 0.116],
+  ]) {
+    const part = new THREE.BoxGeometry(w, h, d);
+    part.translate(x, y, z);
+    shellParts.push(part);
+  }
+  boxRoot.add(meshOf('BoxShell', mergeGeometries(shellParts, false) ?? shellParts[0], cardboard));
 
   const lid = new THREE.BoxGeometry(0.36, 0.02, 0.26);
   /*
@@ -6245,7 +6261,9 @@ function buildClearedHouse(scene: ContactScene): void {
     position: new THREE.Vector3(0.32, 0.01, 0.04),
     rotation: new THREE.Euler(0, 0, 0),
   });
-  boxLidRoot.add(meshOf('BoxLidMesh', lid, MAT.plastic));
+  const lidCardboard = cardboard.clone();
+  lidCardboard.color.multiplyScalar(0.5);
+  boxLidRoot.add(meshOf('BoxLidMesh', lid, lidCardboard));
   boxRoot.add(boxLidRoot);
 
   /*
@@ -6260,13 +6278,24 @@ function buildClearedHouse(scene: ContactScene): void {
    * shell, which is 0.34 by 0.24, so the prints stay within the walls that are holding them.
    */
   const prints: THREE.BufferGeometry[] = [];
+  const photoImages: THREE.BufferGeometry[] = [];
   for (let i = 0; i < 9; i++) {
     const print = new THREE.BoxGeometry(0.085, 0.002, 0.062);
-    print.rotateY(jitter(rng, 0.9));
-    print.translate(-0.01 + jitter(rng, 0.075), 0.062 + i * 0.0022, 0.01 + jitter(rng, 0.045));
+    const angle = jitter(rng, 0.9);
+    const x = -0.01 + jitter(rng, 0.075);
+    const y = 0.062 + i * 0.0022;
+    const z = 0.01 + jitter(rng, 0.045);
+    print.rotateY(angle);
+    print.translate(x, y, z);
     prints.push(print);
+    // Dark image fields inside pale print borders; no relationship answers on the props.
+    const picture = new THREE.BoxGeometry(0.069, 0.0005, 0.044);
+    picture.rotateY(angle);
+    picture.translate(x, y + 0.0013, z - 0.002);
+    photoImages.push(picture);
   }
-  boxRoot.add(meshOf('Photographs', mergeGeometries(prints, false) ?? prints[0], MAT.paper));
+  boxRoot.add(meshOf('Photographs', mergeGeometries(prints, false) ?? prints[0], photoPaper));
+  boxRoot.add(meshOf('PhotoImages', mergeGeometries(photoImages, false) ?? photoImages[0], MAT.timberDark));
   scene.registerProp('photo-box', boxRoot, {
     // Inked: The box of photographs the whole request is a search through.
     inked: true,
@@ -6276,7 +6305,8 @@ function buildClearedHouse(scene: ContactScene): void {
       settle: (tweener) => {
         const from = boxLidRoot.position.clone();
         const turn = boxLidRoot.rotation.z;
-        const to = new THREE.Vector3(0, 0.165, 0);
+        // Lid underside meets the 0.11m rim exactly.
+        const to = new THREE.Vector3(0, 0.12, 0);
         tweener.add(
           (t) => {
             const eased = Ease.inOutCubic(t);
@@ -6314,7 +6344,7 @@ function buildClearedHouse(scene: ContactScene): void {
       position: home.clone(),
       rotation: new THREE.Euler(0, jitter(rng, i < 4 ? 0.06 : 0.18), 0),
     });
-    node.add(meshOf(`EnvelopeMesh${i + 1}`, envelope, MAT.paper));
+    node.add(meshOf(`EnvelopeMesh${i + 1}`, envelope, photoPaper));
     node.visible = i < 4;
     lettersRoot.add(node);
     letterNodes.push(node);
@@ -6335,7 +6365,7 @@ function buildClearedHouse(scene: ContactScene): void {
       address: (tweener) => {
         addressed = true;
         const destinations = letterNodes.map((_, i) =>
-          new THREE.Vector3(-0.28 + i * 0.2, 0.785 + i * 0.0015, -0.88 - Math.abs(2 - i) * 0.025)
+          new THREE.Vector3(-0.55 + i * 0.2, 0.772, -0.84 - Math.abs(2 - i) * 0.025)
         );
         letterNodes.forEach((node, i) => {
           node.visible = true;
@@ -6612,7 +6642,9 @@ function buildClearedHouse(scene: ContactScene): void {
    */
   // Off the window's centre line. Hung at x 0.5 the flex ran straight down the middle of
   // the brightest rectangle in the frame and crossed the curtain rail on the way.
-  const BULB = new THREE.Vector3(0.92, 1.98, -0.42);
+  // The practical is beside her work, close enough to model the face rather than
+  // spending its strongest light on empty furniture. The fixture moves with the key.
+  const BULB = new THREE.Vector3(-0.5, 1.95, -1.05);
   const fitting: THREE.BufferGeometry[] = [];
   const flex = new THREE.CylinderGeometry(0.009, 0.009, WALL_TOP - BULB.y, 6);
   flex.translate(BULB.x, (WALL_TOP + BULB.y) / 2, BULB.z);
@@ -6759,7 +6791,7 @@ function buildClearedHouse(scene: ContactScene): void {
        * A bare bulb over a table at dusk is the brightest thing in that room and the reason
        * anybody can see anything in it.
        */
-      intensity: 15,
+      intensity: 7.5,
       color: new THREE.Color('#ffd0a0'),
       distance: 3.4,
       decay: 2.0,
@@ -6801,16 +6833,21 @@ function buildClearedHouse(scene: ContactScene): void {
      * holds three and a half metres of height, so she is about half the frame: present,
      * uncropped, and not the only thing in it.
      */
-    position: new THREE.Vector3(2.15, 1.78, 2.0),
-    target: new THREE.Vector3(-0.35, 1.02, -1.15),
+    position: new THREE.Vector3(1.25, 1.72, 1.65),
+    target: new THREE.Vector3(-0.55, 1.08, -1.3),
   });
   scene.registerShot('photo-box', {
     // Still over her shoulder rather than square on the box. Same trade as Mirela's
     // transmitter shot: losing the person the moment the player looks closely at the
     // object is the wrong swap every time.
-    position: new THREE.Vector3(0.62, 1.18, 0.2),
-    target: new THREE.Vector3(-0.48, 0.84, -1.14),
+    position: new THREE.Vector3(0.85, 1.58, 1.35),
+    target: new THREE.Vector3(-0.55, 1.12, -1.27),
     duration: 2.2,
+  });
+  scene.registerShot('addressed-letters', {
+    position: new THREE.Vector3(0.7, 1.6, 1.45),
+    target: new THREE.Vector3(-0.48, 1.08, -1.23),
+    duration: 1.6,
   });
 
   /**

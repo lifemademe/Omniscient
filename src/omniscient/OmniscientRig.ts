@@ -62,6 +62,7 @@ import { WINDOW_VIEW } from './geometry/room.js';
 import {
   ANOMALY_SIGNAL,
   createSignals,
+  ILEANA_SIGNAL,
   M4SS_SIGNAL,
   MIRELA_SIGNAL,
   WAREHOUSE_SIGNAL,
@@ -2496,6 +2497,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
    */
   private setPhase(next: Phase): void {
     this.phase = next;
+    // Resuming a contact can interrupt the CRT approach before its delayed handoff.
+    // A stale handoff must never attach the globe over the contact's room and controls.
+    if (next !== Phase.Choosing) this.globeHandoff = 0;
     if (this.facilityPlate) this.facilityPlate.visible = next === Phase.Menu;
   }
 
@@ -3211,7 +3215,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.overhead = false;
     this.screen = Screen.Tree;
     this.globeScreen?.detach();
-    this.phone?.beginConnection(signalId === MIRELA_SIGNAL);
+    this.phone?.beginConnection(signalId === MIRELA_SIGNAL || signalId === ILEANA_SIGNAL);
     this.phone?.setVisible(true);
 
     const request = this.queue[index];

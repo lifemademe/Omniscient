@@ -93,6 +93,7 @@ export function createSignals(): Signal[] {
       longitude: 61.0,
       name: 'Ileana Marku',
       label: 'There is nobody left who knows.',
+      resolvedLabel: 'Five names. Five letters.',
       // Arrives once Mirela's request is closed.
       state: SignalState.Dormant,
       hidden: true,

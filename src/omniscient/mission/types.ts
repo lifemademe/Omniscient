@@ -539,6 +539,8 @@ export interface MissionRequirement {
 export interface MissionDefinition {
   /** Resolved-state objective; never displayed before the repair succeeds. */
   resolutionObjective?: string;
+  /** Objective while the scene's closing action settles, before the final words. */
+  resolutionPendingObjective?: string;
   /** Presentation delay for the final words/status; outcome and save remain immediate. */
   resolutionDelayMs?: number;
   id: string;

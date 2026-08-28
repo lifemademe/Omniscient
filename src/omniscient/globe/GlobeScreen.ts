@@ -288,7 +288,7 @@ const GLOBE_CSS = `
 .omni-globe__canvas {
   display: block;
   image-rendering: pixelated;
-  background: #06120b;
+  background: transparent;
 }
 .omni-globe__marks { position: absolute; inset: 0; pointer-events: none; }
 /*
@@ -512,27 +512,9 @@ const GLOBE_CSS = `
   outline-offset: 3px;
 }
 .omni-globe__wait { color: #c2483a; letter-spacing: 0.1em; text-transform: uppercase; }
-/* CRT treatment - §221, since RetroEffect is unavailable on WebGL. */
-.omni-globe__stage::after {
-  content: "";
-  position: absolute; inset: 0; pointer-events: none;
-  background: repeating-linear-gradient(
-    to bottom,
-    rgba(0,0,0,0) 0px, rgba(0,0,0,0) 1px,
-    rgba(0,0,0,0.20) 2px, rgba(0,0,0,0.20) 3px);
-  mix-blend-mode: multiply;
-}
 /*
- * Vignette and viewport brackets on the same layer, because it is the only one above the
- * canvas.
- *
- * The stage has an opaque canvas filling it, so a background on the stage itself is
- * painted and then covered - the brackets went on there first and were invisible for
- * exactly that reason. Both pseudo-elements are already spoken for (this one and the
- * scanlines), so the frame joins the vignette rather than asking for a third.
- *
- * Bracket layers come first in the list and therefore paint on top of the vignette, which
- * is right: the frame belongs to the instrument and the vignette belongs to the tube.
+ * The full-screen globe shares the page's field. Only the instrument brackets frame it;
+ * the physical CRT keeps its own opaque tube treatment in its separate PixelSurface.
  */
 .omni-globe__stage::before {
   content: "";
@@ -543,21 +525,18 @@ const GLOBE_CSS = `
     linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
     linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
     linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
-    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc)),
-    radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.65) 100%);
+    linear-gradient(var(--bc), var(--bc)), linear-gradient(var(--bc), var(--bc));
   background-repeat: no-repeat;
   background-size:
     var(--bk) 1px, 1px var(--bk),
     var(--bk) 1px, 1px var(--bk),
     var(--bk) 1px, 1px var(--bk),
-    var(--bk) 1px, 1px var(--bk),
-    100% 100%;
+    var(--bk) 1px, 1px var(--bk);
   background-position:
     left top, left top,
     right top, right top,
     left bottom, left bottom,
-    right bottom, right bottom,
-    center;
+    right bottom, right bottom;
 }
 `;
 
@@ -575,15 +554,14 @@ class ScreenSurface implements PixelSurface {
     this.canvas.height = height;
     this.canvas.className = 'omni-globe__canvas';
 
-    const ctx = this.canvas.getContext('2d', { alpha: false });
+    const ctx = this.canvas.getContext('2d', { alpha: true });
     if (!ctx) throw new Error('GlobeScreen: 2D canvas context unavailable');
     this.ctx = ctx;
     this.ctx.imageSmoothingEnabled = false;
   }
 
   public clear(): void {
-    this.ctx.fillStyle = '#06120b';
-    this.ctx.fillRect(0, 0, this.width, this.height);
+    this.ctx.clearRect(0, 0, this.width, this.height);
   }
 
   public pixel(x: number, y: number, color: string): void {
@@ -619,10 +597,14 @@ class ScreenSurface implements PixelSurface {
   }
 
   public applyScanlines(strength = 0.16): void {
+    // Modulate drawn pixels only: never paint a second rectangular background.
+    this.ctx.save();
+    this.ctx.globalCompositeOperation = 'source-atop';
     this.ctx.fillStyle = `rgba(0,0,0,${strength})`;
     for (let y = 0; y < this.height; y += 2) {
       this.ctx.fillRect(0, y, this.width, 1);
     }
+    this.ctx.restore();
   }
 
   public commit(): void {

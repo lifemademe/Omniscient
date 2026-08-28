@@ -69,6 +69,9 @@ export const MISSION_04: MissionDefinition = {
   sceneId: 'scene-cleared-house',
   archetype: 'diagnosis',
   objective: 'Work out how Ileana’s family are related, so she can address the letters.',
+  resolutionDelayMs: 2400,
+  resolutionObjective: 'Five names. Five letters.',
+  resolutionPendingObjective: 'Putting the names in order…',
   // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
   reopeningSay: 'I put the letters away for a while, after last time. They are back on the table now.',
   // Nothing is on fire and nobody is in danger. §154: not every request gets a countdown,
@@ -440,7 +443,7 @@ export const MISSION_04: MissionDefinition = {
     {
       id: 'solved',
       gesture: 'prop.address:letters,prop.settle:photo-box,prop.nod:contact',
-      framing: 'camera.push-in:photo-box',
+      framing: 'camera.push-in:addressed-letters',
       tempo: Tempo.Respond,
       say:
         'That is it. That is them. Aunt, cousin, grandmother, grandfather, niece. Two ' +

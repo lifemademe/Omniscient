@@ -538,7 +538,7 @@ export class SessionController {
        * stays a sentence about the request and the progress stays a fact about the play.
        */
       objective: ((): string => {
-        if (this.settling) return 'Verifying the repair…';
+        if (this.settling) return definition.resolutionPendingObjective ?? 'Verifying the repair…';
         if (finished && !this.failed) return definition.resolutionObjective ?? 'Request resolved.';
         const tasks = this.runtime.taskProgress();
         return tasks ? `${definition.objective}  ${tasks.done}/${tasks.total}` : definition.objective;

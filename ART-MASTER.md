@@ -884,6 +884,38 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
+**Ileana / globe integration — rendered gauntlet accepted, receipt pending — Codex, 2026-08-28:** User-directed follow-up
+to the 05:01 recording. Bar: Ileana's whole face and her photographs remain readable
+beside chat and the relations board; an open, grounded box and five addressed letters
+carry the request and its resolution. Keep the emptied-house practical lighting and
+crisp reconstruction. The full-screen globe shares the page background with blue
+brackets, without a second opaque/vignetted rectangle; physical CRT unchanged.
+Runtime source only: reframed arrival/evidence/closure, moved the existing practical
+with its fixture, reduced local tabletop/window/lid values, rebuilt a hollow photograph
+box, seated its closing lid, and placed all five letters outside the console's footprint.
+Compact relations styling keeps five people, nine choices and SEND IT visible; telemetry
+opens compact. The outcome waits for the scene action and reads “Five names. Five letters.”
+ScreenSurface is transparent, its scanlines shade drawn pixels only, and blue brackets
+remain without the second vignetted rectangle. Physical CRT surface is unchanged.
+The final resume correction cancels a pending globe handoff when leaving Choosing, so
+Continue cannot attach a delayed globe over a restored contact.
+Rendered evidence under `scripts/dev/`: `ileana-r3-arrival-small.jpg`,
+`ileana-r3-board-small.jpg`, `ileana-r3-linked-small.jpg`, `ileana-r3-linked-full.jpg`,
+`ileana-r3-resolve-0.jpg` through `ileana-r3-resolve-7.jpg`,
+`ileana-r3-complete-small.jpg`, `ileana-r3-return-0.jpg` through
+`ileana-r3-return-9.jpg`, `ileana-r3-globe-full.jpg` and
+`ileana-r3-globe-selected-full.jpg`. Inspected at 1282×752 and 1707×1019;
+the full-size solve reveals five letters and closes the lid before final dialogue,
+Continue remains held, and the small-size return shows physical CRT growth before
+the globe's truthful 7 waiting / 2 answered state. Only isolated capture storage used.
+Final rebuilt resume check: `ileana-r4-resume-contact.jpg` shows the saved contact
+still unobscured well past the old 1.9-second handoff deadline.
+Fresh Ileana critic rejected the first two value passes, then accepted r3 arrival and
+both board/completion sizes: **AT BAR**. Separate fresh cross-screen critic: **AT BAR**,
+no blocking visual gap; coherent CRT return and no extra globe rectangle.
+`pnpm lint`, `pnpm build`, final MCP editor build and `git diff --check` passed.
+This closes this user-directed visual correction only, not the broader F-1 item.
+
 **F-1 globe / Tomas / completion correction AT BAR — Codex, 2026-08-28:**
 Implementation `776f09d`; final telemetry correction and rendered evidence `64562f9`.
 User-directed follow-up to the 04:29 recording. Reopens the prior subpass: the
