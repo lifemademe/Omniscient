@@ -906,6 +906,19 @@ work/entry/resolution states, not exhaustive animation smoothness or aspect-rati
 failed-pin feedback, sequence progression, entry before final reply, and return to globe.
 Implementation/evidence commit: `16f5bc5` (local, not pushed).
 
+**Dorin follow-up corrections — 2026-08-28: verified scoped fixes (§12.7).**
+The user's later captures exposed faults missed by the pass above: coplanar upstairs glass
+and solid frame backing, an undersized lock in the working shot, and a leaf extending below
+the step top. Replaced the backing with four frame members, moved the working camera to the
+free side of the keyway, and trimmed the leaf bottom to 0.16m above the 0.14m step. Hinge,
+hardware, puzzle rules and entry timing remain unchanged. This is not a renewed whole-scene
+AT BAR claim. Live editor review at 1282×752 checked the window, cumulative pin feedback and
+opening/entry sequence. Evidence: `scripts/dev/dorin-fix-window.jpg`,
+`dorin-fix-lock-before.jpg`, `dorin-fix-lock-pin3.jpg`, `dorin-fix-lock-pin2.jpg`, and
+`dorin-fix-door-1.jpg` through `dorin-fix-door-4.jpg` (about 1.9-second intervals).
+`pnpm lint`, `pnpm build` and editor build passed. Implementation/evidence commit: recorded
+in the following receipt commit (local only).
+
 **Vasile contact pass — user-directed D-1f extension, 2026-08-28: AT BAR (scoped visual pass, Codex).**
 Bar: Vasile first, routing junctions second, a recognizably flooded school cellar third;
 crisp PS1 treatment, readable untimed pipe board, and a visible drain followed by a human

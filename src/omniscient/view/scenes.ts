@@ -9484,6 +9484,9 @@ function buildNightDoor(scene: ContactScene): void {
 
   // -- The door -------------------------------------------------------------
   const DOOR = { w: 0.92, h: 2.02, x: DOOR_X };
+  // The step tops out at 0.14. Trim the leaf, not the hinge or hardware, for 20mm clearance.
+  const DOOR_BOTTOM = 0.16;
+  const LEAF_HEIGHT = DOOR.h - DOOR_BOTTOM;
 
   /**
    * A panelled door, because this one is looked at for the whole request.
@@ -9529,8 +9532,8 @@ function buildNightDoor(scene: ContactScene): void {
    * rails standing 24mm proud, which is structurally what the joiner did and which cannot
    * have a gap in it by construction - there is nothing for a gap to be between.
    */
-  const leafSlab = new THREE.BoxGeometry(DOOR.w, DOOR.h, 0.036);
-  leafSlab.translate(DOOR.x, DOOR.h / 2, LEAF_Z);
+  const leafSlab = new THREE.BoxGeometry(DOOR.w, LEAF_HEIGHT, 0.036);
+  leafSlab.translate(DOOR.x, DOOR_BOTTOM + LEAF_HEIGHT / 2, LEAF_Z);
 
   /*
    * The framing, standing proud toward the street.
@@ -9554,14 +9557,14 @@ function buildNightDoor(scene: ContactScene): void {
   const LOCK_Y = 1.0;
   for (const [w, h, ox, oy] of [
     // Stiles, full height, one each side.
-    [STILE, DOOR.h, -(DOOR.w - STILE) / 2, DOOR.h / 2],
-    [STILE, DOOR.h, (DOOR.w - STILE) / 2, DOOR.h / 2],
+    [STILE, LEAF_HEIGHT, -(DOOR.w - STILE) / 2, DOOR_BOTTOM + LEAF_HEIGHT / 2],
+    [STILE, LEAF_HEIGHT, (DOOR.w - STILE) / 2, DOOR_BOTTOM + LEAF_HEIGHT / 2],
     // Top rail, lock rail, bottom rail. The lock rail is the thick one, as it always is.
     [DOOR.w, 0.13, 0, DOOR.h - 0.065],
     [DOOR.w, 0.2, 0, 1.02],
-    [DOOR.w, 0.17, 0, 0.085],
+    [DOOR.w, 0.17, 0, DOOR_BOTTOM + 0.085],
     // The muntin, from the bottom rail to the top one.
-    [0.08, DOOR.h - 0.3, 0, DOOR.h / 2 - 0.015],
+    [0.08, LEAF_HEIGHT - 0.3, 0, DOOR_BOTTOM + LEAF_HEIGHT / 2 - 0.015],
   ] as const) {
     /*
      * PLUS, not minus, and this was the fault behind three separate reports.
@@ -10263,9 +10266,18 @@ function buildNightDoor(scene: ContactScene): void {
   });
 
   // -- The landing window he keeps looking at -------------------------------
-  const upperFrame = new THREE.BoxGeometry(0.94, 1.16, 0.08);
-  upperFrame.translate(0.42, 3.5, -0.28);
-  scene.registerProp('upper-frame', meshOf('UpperFrame', upperFrame, MAT.timber));
+  // Four frame members, not a solid box coplanar with the glass across its whole opening.
+  const upperFrameParts: THREE.BufferGeometry[] = [];
+  for (const [w, h, x, y] of [
+    [0.94, 0.07, 0.42, 2.955], [0.94, 0.07, 0.42, 4.045],
+    [0.07, 1.02, -0.015, 3.5], [0.07, 1.02, 0.855, 3.5],
+  ]) {
+    const member = new THREE.BoxGeometry(w, h, 0.08);
+    member.translate(x, y, -0.28);
+    upperFrameParts.push(member);
+  }
+  scene.registerProp('upper-frame', meshOf('UpperFrame',
+    mergeGeometries(upperFrameParts, false) ?? upperFrameParts[0], MAT.timber));
 
   const upperGlass = new THREE.PlaneGeometry(0.8, 1.02);
   upperGlass.translate(0.42, 3.5, -0.24);
@@ -10718,9 +10730,9 @@ function buildNightDoor(scene: ContactScene): void {
     duration: 1.2,
   });
   scene.registerShot('working', {
-    // Left of his crouch: retain the tool contact without looking through his shoulder.
-    position: new THREE.Vector3(-1.1, 1.4, 2.5),
-    target: new THREE.Vector3(0.6, 1.0, 0.12),
+    // Near the keyway, on the free side of his crouch, so each plug movement is readable.
+    position: new THREE.Vector3(-0.35, 1.12, 0.65),
+    target: new THREE.Vector3(0.16, 1.02, -0.19),
     duration: 1.0,
   });
   scene.registerShot('entry', {
