@@ -869,7 +869,7 @@ Live 1280x720 replay: rear canopy patch clears, branch drop remains visible, pal
 and healthy-bed illumination persist; isolated contact restart restores canopy and shadow.
 Fresh rendered-only `branch_shadow_critic`: **AT BAR** for this correction, no scoped
 residual issue. Not a whole-scene approval. `pnpm lint`, `pnpm build`, editor bundle refresh
-passed. Local implementation commit follows; no push.
+passed. Local implementation and evidence commit: `a4d0d87`; no push.
 
 **Adaeze tree / sunlight — user-directed continuation, AT BAR (scoped visual), Codex 2026-08-28.**
 Bar: the supplied `codex-clipboard-d6d04956-d51e-430b-a6dc-bce826c8eb7c.png`, improved so
