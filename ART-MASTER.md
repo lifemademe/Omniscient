@@ -885,8 +885,8 @@ was green somewhere.
 Ordered by value per hour. Take from the top.
 
 **F-1 menu subpass AT BAR — Codex, 2026-08-27:** User-directed splash-to-menu readiness,
-camera handoff, physical rack mounting and readability. Implementation commit recorded
-in the follow-up ledger entry. Bar: §3/§4.1/§4.6 and
+camera handoff, physical rack mounting and readability. Implementation commit `5fa4a77`.
+Bar: §3/§4.1/§4.6 and
 `assets/reference/desk-room/01-lamp-and-mast.jpg` (mood, not menu layout).
 The boot waits for logo/CRT preparation, remembers activation and keeps pending status
 on the splash instead of adding a separate loading screen. Buttons remain visible during
