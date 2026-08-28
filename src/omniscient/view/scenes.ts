@@ -3165,13 +3165,17 @@ function buildBeaconMast(scene: ContactScene): void {
   // at the bracket, and leaves again in a direction that is not the light - which is the
   // whole deduction, sitting there for anybody who looks.
   const spliceAt = new THREE.Vector3(0.05, 2.78, 1.08);
+  const spliceScale = 1.45;
+  const feedEntry = new THREE.Vector3(0, 0.13, -0.105);
 
   const feedDown = new THREE.TubeGeometry(
     new THREE.CatmullRomCurve3([
       new THREE.Vector3(0.06, beaconY - 0.24, 0.1),
       new THREE.Vector3(0.16, 4.4, 0.3),
       new THREE.Vector3(0.24, 3.4, 0.38),
-      spliceAt.clone().add(new THREE.Vector3(0, 0.16, 0)),
+      // Approach behind the hinge, then enter the rear gland rather than the open bay.
+      spliceAt.clone().add(new THREE.Vector3(0, 0.34, -0.24)),
+      spliceAt.clone().addScaledVector(feedEntry, spliceScale),
     ]),
     24,
     0.022,
@@ -3206,6 +3210,10 @@ function buildBeaconMast(scene: ContactScene): void {
   spliceBody.translate(0, 0.09, -0.056);
   const spliceRoot = ENGINE.SceneNode.create({ name: 'SpliceBox', position: spliceAt.clone() });
   spliceRoot.add(meshOf('SpliceBody', spliceBody, enclosurePaint));
+  const feedGland = new THREE.CylinderGeometry(0.025, 0.025, 0.05, 8);
+  feedGland.rotateX(Math.PI / 2);
+  feedGland.translate(feedEntry.x, feedEntry.y, -0.085);
+  spliceRoot.add(meshOf('FeedGland', feedGland, MAT.dark));
 
   // The open enclosure and chunky terminals must survive the conversation raster.
   for (const x of [-0.12, 0.12]) {
@@ -3226,10 +3234,11 @@ function buildBeaconMast(scene: ContactScene): void {
   isolatorSwitch.position.set(0, 0, 0.039);
   fittedUnit.add(isolatorSwitch);
   spliceRoot.add(fittedUnit);
-  spliceRoot.scale.setScalar(1.45);
+  spliceRoot.scale.setScalar(spliceScale);
 
-  const lidGeo = new THREE.BoxGeometry(0.24, 0.02, 0.14);
-  lidGeo.translate(0, 0.01, 0);
+  // Rear-edge hinge: the closed lid covers the full depth and both side-wall rims.
+  const lidGeo = new THREE.BoxGeometry(0.258, 0.02, 0.14);
+  lidGeo.translate(0, 0.01, 0.07);
   const lid = meshOf('SpliceLid', lidGeo, enclosurePaint);
   const lidPivot = ENGINE.SceneNode.create({
     name: 'LidPivot',
@@ -3307,15 +3316,9 @@ function buildBeaconMast(scene: ContactScene): void {
     // Face the working camera, with the near-side hand braced on the guardrail.
     rotation: new THREE.Euler(0, -Math.PI * 0.15, 0),
     handsOn: {
-      /*
-       * z 0.94, not 0.75. The handrail runs along z 0.94 at y 3.07, and the height
-       * and the x were already right - the hand was simply 19cm short of it, holding
-       * a rail that was not there. Reported as his hand not being on anything.
-       *
-       * 0.925 rather than 0.94 so the palm meets the near face of a 45mm rail rather
-       * than floating at its centre line.
-       */
-      right: new THREE.Vector3(0.22, 3.07, 0.925),
+      // IK targets the wrist, not the fingertips. Leave hand length behind the rail
+      // so the fingers cannot pass through the enlarged enclosure or its lid swing.
+      right: new THREE.Vector3(0.22, 3.07, 0.78),
     },
     // He is six metres up a lattice on a headland at night. The one figure in the cast
     // with weather on him gets the larger idle - still under two centimetres at the head,

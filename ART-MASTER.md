@@ -884,6 +884,17 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
+**Tomas switch-box clearances — user-directed geometry correction, 2026-08-28:**
+Wrist target pulled back 14.5 cm; upper cable routed to a rear gland
+outside the lid sweep; lid shifted forward of its rear-edge hinge and widened to
+cover both side rims. No camera, lighting, puzzle or gesture-system changes.
+Geometry/no-overlap scope (§12.7), not a new AT BAR composition claim.
+Closed-lid local bounds now span x ±0.129 and z ±0.07, covering both side rims;
+the rear-edge pivot is unchanged. Open contact inspected at 1282×752 and
+1707×1019 in isolated preview storage: hand/cable no longer protrude through
+the enclosure. Evidence: `scripts/dev/tomas-box-clearance-r1-full.jpg`.
+`pnpm lint`, `pnpm build`, MCP editor build and `git diff --check` passed.
+
 **Mirela radio indicators — user-directed geometry correction, 2026-08-28:**
 Removed the yellow front power pilot and its visual toggle/reset references; raised
 the green carrier indicator from local y=0.135 to y=0.165 (3 cm). Carrier state,
