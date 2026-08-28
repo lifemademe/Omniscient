@@ -857,7 +857,7 @@ there is no assertion that can be written.
 
 ## 13. THE LEDGER
 
-**Warehouse loading / entrances / collection / render cost — IN LOOP, Codex 2026-08-28.**
+**Warehouse loading / entrances / collection / render cost — IMPLEMENTED / OPEN QA, Codex 2026-08-28.**
 User-approved runtime-only follow-up to the warehouse entry item below. Bar: true-stage
 loading relay; distinct goods/reception/plant CCTV compositions with visitor/load first;
 supported hatch-to-trolley transfer with visible receipt and departure; lower measured
@@ -878,9 +878,36 @@ Cold preparation was 34.43s, including 30.24s first-feed shader compilation. The
 not an unchanged pre-work baseline and not GPU timings. Later static batching and 72-light
 revision require a comparable live sample; no sustained-lag fix is claimed from code counts.
 Fresh loading critic rejected faint corner text; increased it to 14px and higher contrast.
-Final rendered review, single/paired handoff replay and exact-resolution acceptance remain
-pending; not an AT BAR claim. Lint/build pass; editor preview recovery needed after a host
-`Object has been destroyed` error unloaded its world during inspection.
+Implementation commit: `f3262e3`. Final-build evidence under `scripts/dev/`:
+`warehouse-r3-final-loading.jpg`, `warehouse-r3-final-preparation.jpg`,
+`warehouse-r3-final-door-a.jpg`, `warehouse-r3-final-door-b.jpg`,
+`warehouse-r3-final-door-c.jpg`, `warehouse-r3-final-drone.jpg`,
+`warehouse-r3-final-frame-samples.jpg`. Window captures include 1280x720 game content.
+Fresh rendered-only critic `warehouse_final_critic`: loading still **AT BAR** (animation
+not verified); exterior set **NOT AT BAR** because B's trolley/working area falls behind
+chat. B/C aims subsequently shifted to reserve the handoff area, B widened to 55 degrees;
+those last framing adjustments are not yet captured. Do not inherit the earlier images as
+proof of that correction. A/C identity and controlled highlights accepted; B's dark visitor
+remains a hierarchy concern. No full collection playback has been visually approved.
+Final live full-width drone samples: median 56.3–57.2ms, p95 62.2–64.8ms, warehouse CPU
+update p95 14.6–15.2ms; 8,076 all-pass draw submissions, 1,214 meshes, 362 material instances,
+72 lights / one shadow light. CCTV median A43.5/B42.8–43.0/C46.5ms; CPU update p95 0.3ms.
+Draw submissions fell ~15% against the first implementation sample, but this is not a
+controlled baseline against the previous committed mission. Sustained gameplay remains
+~17.5–17.8fps; rendering/shader workload is still substantial. Final preparation 28.775s,
+including 25.857s first-feed shader compilation; cache state prevents a cold-load speed claim.
+The saved final-frame-samples image also contains a later mixed viewport-resize sample;
+do not compare that mixed sample as a fixed-size route. No direct GPU measurements taken.
+Lint/build pass. Editor refresh passed for the captured revision. Preview twice crashed in
+the Electron host (`Object has been destroyed`, play-mode.js:470) and unloaded the world;
+evidence `warehouse-r3-final-preview-host-error.jpg`. Release correctly stayed disabled
+without scan/dock; no rules bypassed for capture. Single/paired transfer, hand contact,
+departure, cancellation/retry/reduced-motion and 1920x1080 acceptance remain OPEN QA,
+along with repeated RMB/tight-aisle/pursuit route profiling. Latest B/C framing needs recapture.
+The host error's cause is unestablished; a shell build overlapped inspection. A new preview
+subsequently appeared without an agent launch and was left untouched (possibly user-owned).
+Final B/C source passes lint/build but editor bundle refresh for those two last camera
+adjustments is pending until play stops; do not call the captured revision final acceptance.
 
 **Warehouse entry / optical / workers — user-approved implementation, PARTIAL / OPEN QA, Codex 2026-08-28.**
 User-directed scope: cancellable staged construction without advancing mission time;

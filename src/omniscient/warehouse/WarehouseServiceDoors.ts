@@ -168,8 +168,9 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
       /* Panned 1.9m off the panel - see service-a above. */
       // Reception is the calm, near-frontal read: person, leaf and made path share an axis.
       position: new THREE.Vector3(-0.15, 3.35, WAREHOUSE_LAYOUT.shell.frontZ + 6.15),
-      target: new THREE.Vector3(-0.18, 1.32, WAREHOUSE_LAYOUT.shell.frontZ + 1.02),
-      fov: 50,
+      // Reserve the right third for chat: include the cart and its pusher at local x=2.16.
+      target: new THREE.Vector3(1.35, 1.32, WAREHOUSE_LAYOUT.shell.frontZ + 1.02),
+      fov: 55,
     },
     pursuit: {
       suspectStart: new THREE.Vector3(0, 0, 30.9),
@@ -204,7 +205,7 @@ export const WAREHOUSE_DOORS: Readonly<Record<WarehouseDoorId, WarehouseDoorLayo
     camera: {
       // Tighter and lower than A: plant hardware frames a compressed, asymmetric threshold.
       position: new THREE.Vector3(29.7, 3.15, 24.55),
-      target: new THREE.Vector3(26.12, 1.28, WAREHOUSE_LAYOUT.service.sideZ - 0.18),
+      target: new THREE.Vector3(26.84, 1.28, WAREHOUSE_LAYOUT.service.sideZ - 0.72),
       fov: 48,
     },
     pursuit: {
