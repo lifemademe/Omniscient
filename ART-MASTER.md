@@ -884,6 +884,14 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
+**Mirela radio indicators — user-directed geometry correction, 2026-08-28:**
+Removed the yellow front power pilot and its visual toggle/reset references; raised
+the green carrier indicator from local y=0.135 to y=0.165 (3 cm). Carrier state,
+meter motion, mains behavior, mission text and room lighting remain unchanged.
+Exact placement/removal request, not a new composition pass (§12.7); no AT BAR claim.
+`pnpm lint`, `pnpm build`, MCP editor build and `git diff --check` passed.
+Rendered review of this small correction is left to the user.
+
 **Ileana / globe integration AT BAR — Codex, 2026-08-28:** Implementation and rendered
 evidence commit `c4acc0c`. User-directed follow-up
 to the 05:01 recording. Bar: Ileana's whole face and her photographs remain readable

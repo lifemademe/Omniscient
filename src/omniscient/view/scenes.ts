@@ -1454,7 +1454,7 @@ function buildRepairShop(scene: ContactScene): void {
   const carrierGeo = new THREE.CircleGeometry(0.012, 12);
   const carrierRoot = ENGINE.SceneNode.create({
     name: 'CarrierLamp',
-    position: new THREE.Vector3(0.14, 0.135, 0.188),
+    position: new THREE.Vector3(0.14, 0.165, 0.188),
   });
   const carrierDim = meshOf(
     'CarrierDim',
@@ -1470,22 +1470,6 @@ function buildRepairShop(scene: ContactScene): void {
   carrierRoot.add(carrierDim);
   carrierRoot.add(carrierLive);
   setRoot.add(carrierRoot);
-
-  // Power is present even while the carrier is dead: this is the symptom Mirela describes.
-  const powerRoot = ENGINE.SceneNode.create({
-    name: 'PowerPilot',
-    position: new THREE.Vector3(-0.222, 0.136, 0.188),
-  });
-  powerRoot.add(meshOf('PowerBezel', new THREE.CircleGeometry(0.023, 12), MAT.metal));
-  const powerDim = meshOf('PowerDim', new THREE.CircleGeometry(0.017, 12),
-    new THREE.MeshBasicMaterial({ color: '#493b2e', toneMapped: false }));
-  const powerLive = meshOf('PowerLive', new THREE.CircleGeometry(0.017, 12),
-    new THREE.MeshBasicMaterial({ color: '#d5aa62', toneMapped: false }));
-  powerDim.position.z = powerLive.position.z = 0.002;
-  powerDim.visible = false;
-  powerRoot.add(powerDim);
-  powerRoot.add(powerLive);
-  setRoot.add(powerRoot);
 
   // The rating plate, under the controls on the front panel.
   const plate = createRatingPlate();
@@ -1894,8 +1878,6 @@ function buildRepairShop(scene: ContactScene): void {
         const from = leverRoot.rotation.x;
         const to = mainsOn ? -0.9 : 0;
         mainsOn = !mainsOn;
-        powerLive.visible = mainsOn;
-        powerDim.visible = !mainsOn;
         tweener.add((t) => leverRoot.rotation.set(from + (to - from) * t, 0, 0), {
           duration: 0.28,
           easing: Ease.outBack,
@@ -1908,8 +1890,6 @@ function buildRepairShop(scene: ContactScene): void {
   scene.onReset(() => {
     mainsOn = true;
     leverRoot.rotation.x = 0;
-    powerLive.visible = true;
-    powerDim.visible = false;
   });
 
   // Keep her authored model and work pose; frame the person beside her set.
