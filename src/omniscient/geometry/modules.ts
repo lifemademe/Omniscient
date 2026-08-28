@@ -33,6 +33,22 @@ export interface ModuleBuild {
   socket: THREE.Vector3;
 }
 
+/** A desk-mounted rack: continuous side rails, a recessed back, and bolted feet. */
+export function createModuleRack(width: number, top: number): ModulePart[] {
+  const parts: ModulePart[] = [];
+  const box = (w: number, h: number, d: number, x: number, y: number, z: number, material: keyof typeof MAT): void => {
+    parts.push({ geometry: new THREE.BoxGeometry(w, h, d).translate(x, y, z), material });
+  };
+  box(width, top - 0.18, 0.08, 0, (top + 0.18) / 2, -0.10, 'dark');
+  for (const side of [-1, 1]) {
+    const x = side * (width / 2 - 0.025);
+    box(0.045, top, 0.13, x, top / 2, -0.045, 'dark');
+    box(0.12, 0.035, 0.34, x, 0.018, -0.005, 'metal');
+  }
+  box(width, 0.04, 0.13, 0, top, -0.045, 'metal');
+  return parts;
+}
+
 /**
  * Plate size, corrected against a real rack panel - and applied as a SCALE rather than as
  * new constants, which is a bug fix as much as a tidy-up.

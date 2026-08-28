@@ -148,7 +148,7 @@ const CSS = `
   0%, 100% { opacity: 0.45; }
   50% { opacity: 1; }
 }
-.omni-boot--going { animation: omni-boot-out 0.5s ease-in forwards; }
+.omni-boot--going { animation: omni-boot-out var(--boot-fade, 0.5s) ease-in forwards; }
 @keyframes omni-boot-out {
   to { opacity: 0; }
 }
@@ -189,15 +189,23 @@ export interface BootScreen {
   dispose: () => void;
 }
 
+interface BootOptions {
+  /** Menu-owned resources only; mission assets must not delay the front door. */
+  ready: Promise<void>;
+  hasSavedSession: boolean;
+  /** Must run synchronously inside the first gesture, even if preparation is pending. */
+  onActivate: () => void;
+}
+
 /**
  * Put the boot screen up.
  *
- * `onBegin` fires once, on the first press of anything, and is where the caller starts the
- * audio and pulls the camera back. Everything here is skippable from the first frame: a
+ * `onActivate` unlocks audio on the first press; `onBegin` reveals the prepared room once
+ * that press and menu readiness have both arrived. Everything is skippable from the first frame: a
  * judge playing twenty entries will not sit through a boot sequence twice, and they will
  * certainly replay.
  */
-export function showBoot(container: HTMLElement, onBegin: () => void): BootScreen {
+export function showBoot(container: HTMLElement, onBegin: () => void, options: BootOptions): BootScreen {
   if (!document.getElementById(STYLE_ID)) {
     const style = document.createElement('style');
     style.id = STYLE_ID;
@@ -207,6 +215,13 @@ export function showBoot(container: HTMLElement, onBegin: () => void): BootScree
 
   const root = document.createElement('div');
   root.className = 'omni-boot';
+  const fadeSeconds = accessibleCameraDuration(0.5);
+  root.style.setProperty('--boot-fade', `${fadeSeconds}s`);
+  const lines = LINES.map(([label, result, told]): [string, string, boolean] => [
+    label,
+    label === 'KNOWLEDGE BASE' && options.hasSavedSession ? 'SESSION FOUND' : result,
+    told,
+  ]);
 
   // Every line goes in here, not on the root - see the note on .omni-boot__column.
   const column = document.createElement('div');
@@ -223,7 +238,7 @@ export function showBoot(container: HTMLElement, onBegin: () => void): BootScree
   rule.textContent = '─'.repeat(RULE);
   column.appendChild(rule);
 
-  const rows = LINES.map(([label, , told]) => {
+  const rows = lines.map(([label, , told]) => {
     const row = document.createElement('div');
     row.className = `omni-boot__line${told ? ' omni-boot__line--told' : ''}`;
     row.textContent = '';
@@ -259,7 +274,7 @@ export function showBoot(container: HTMLElement, onBegin: () => void): BootScree
    */
   let at = 260;
   rows.forEach((row, index) => {
-    const [label, result] = LINES[index];
+    const [label, result] = lines[index];
     const dots = Math.max(3, WIDTH - label.length - result.length);
     after(at, () => {
       row.textContent = `${label} ${'.'.repeat(dots)} ${result}`;
@@ -290,18 +305,33 @@ export function showBoot(container: HTMLElement, onBegin: () => void): BootScree
   });
 
   let begun = false;
-  const begin = (): void => {
-    if (begun) return;
-    begun = true;
-    detach();
+  let disposed = false;
+  let ready = false;
+  let revealed = false;
+  const reveal = (): void => {
+    if (!begun || !ready || disposed || revealed) return;
+    revealed = true;
     root.classList.add('omni-boot--going');
-    // Removed after the fade rather than on the frame it starts, or the last thing the
-    // player sees of the boot screen is it vanishing.
-    window.setTimeout(
-      () => root.remove(),
-      Math.round(accessibleCameraDuration(0.52) * 1000)
-    );
+    timers.push(window.setTimeout(() => root.remove(), Math.ceil(fadeSeconds * 1000)));
     onBegin();
+  };
+  // The caller handles optional-resource failures before resolving this promise.
+  void options.ready.then(() => {
+    ready = true;
+    reveal();
+  });
+  const begin = (): void => {
+    if (begun || disposed) return;
+    begun = true;
+    options.onActivate();
+    detach();
+    for (const timer of timers) window.clearTimeout(timer);
+    title.textContent = NAME;
+    if (!ready) {
+      prompt.textContent = 'INITIALIZING INTERFACE…';
+      prompt.style.animation = 'none';
+    }
+    reveal();
   };
 
   const onKey = (): void => begin();
@@ -318,6 +348,7 @@ export function showBoot(container: HTMLElement, onBegin: () => void): BootScree
   return {
     begin,
     dispose: () => {
+      disposed = true;
       detach();
       for (const timer of timers) window.clearTimeout(timer);
       root.remove();

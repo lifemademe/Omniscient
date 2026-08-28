@@ -70,9 +70,9 @@ export function createLabelTexture(options: LabelOptions): THREE.CanvasTexture {
   const accent = options.accent ?? ACCENT.amber;
   // Dark values barely move under ACES (§255), so these arrive close to as authored.
   const title = '#2b2620';
-  const subtitle = '#5a5147';
+  const subtitle = '#39332a';
 
-  ctx.font = `bold ${44 * SCALE}px "Courier New", monospace`;
+  ctx.font = `bold ${54 * SCALE}px "Courier New", monospace`;
   if (options.lit) {
     ctx.shadowColor = accent;
     ctx.shadowBlur = 18 * SCALE;
@@ -88,7 +88,7 @@ export function createLabelTexture(options: LabelOptions): THREE.CanvasTexture {
   ctx.fillStyle = title;
   ctx.fillText(options.title.toUpperCase(), 12 * SCALE, 52 * SCALE);
 
-  ctx.font = `${24 * SCALE}px "Courier New", monospace`;
+  ctx.font = `bold ${26 * SCALE}px "Courier New", monospace`;
   ctx.fillStyle = subtitle;
   ctx.fillText(options.subtitle, 14 * SCALE, 90 * SCALE);
 

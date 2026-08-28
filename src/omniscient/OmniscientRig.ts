@@ -380,8 +380,8 @@ const HOME_SHOT: CameraShot = {
   // somebody sitting at it, nearly front-on to the back wall; this shot was 1.62 high and
   // swung 1.12 to the right, which is a standing three-quarter. Dropping to 1.30 and
   // halving the swing puts the lens where the chair is, and closes the distance to 2.24.
-  position: new THREE.Vector3(0.62, 1.31, -59.2),
-  target: new THREE.Vector3(-0.22, 0.92, -61.0),
+  position: new THREE.Vector3(0.48, 1.20, -58.9),
+  target: new THREE.Vector3(-0.28, 0.77, -61.0),
   duration: 2.0,
 };
 
@@ -487,7 +487,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * goes out, its share of the room goes up without its intensity changing, which is a
    * better telling than turning it up would be.
    */
-  private static readonly DUSK_DAY = new THREE.Color(LIGHT.key);
+  private static readonly DUSK_DAY = new THREE.Color('#afc4df');
 
   private static readonly DUSK_SUNSET = new THREE.Color('#ff9152');
 
@@ -562,6 +562,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private phase: Phase = Phase.Menu;
   /** Up until the first keypress. Held so endPlay can take it down. */
   private boot: BootScreen | null = null;
+  private menuReady: Promise<void> = Promise.resolve();
   /** Contact ids in the order their requests were answered. Drives the record strip. */
   private answered: string[] = [];
   /** True while the departure sequence is running - see leaveContact. */
@@ -876,7 +877,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   /** Ease to a shot. */
-  private moveTo(shot: CameraShot, duration: number): void {
+  private moveTo(shot: CameraShot, duration: number, onComplete?: () => void): void {
     const fromPosition = this.cameraPosition.clone();
     const fromTarget = this.cameraTarget.clone();
     this.takeShotDrift(shot);
@@ -887,7 +888,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
         this.cameraTarget.lerpVectors(fromTarget, shot.target, t);
         this.applyCameraTransform();
       },
-      { duration: accessibleCameraDuration(duration), easing: Ease.inOutCubic, channel: 'camera' }
+      { duration: accessibleCameraDuration(duration), easing: Ease.inOutCubic, channel: 'camera', onComplete }
     );
   }
 
@@ -1097,7 +1098,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * that happens to name the same family.
        */
       const dusking = DUSK_VIEW_PARTS.has(part.name);
-      const surface = dusking ? (shared as THREE.Material).clone() : shared;
+      const quietSurface = ['Papers', 'Desk', 'RoomSideWall'].includes(part.name);
+      const surface = dusking || quietSurface ? (shared as THREE.Material).clone() : shared;
+      // Keep the view and loose paper below the controls without changing shared mission materials.
+      if (dusking && part.name !== 'ViewTownLights') {
+        (surface as THREE.MeshBasicMaterial).color.multiplyScalar(0.075);
+      } else if (part.name === 'Papers') {
+        (surface as THREE.MeshStandardMaterial).color.set('#b4a17f');
+      } else if (part.name === 'Desk' || part.name === 'RoomSideWall') {
+        (surface as THREE.MeshStandardMaterial).color.multiplyScalar(part.name === 'Desk' ? 0.42 : 0.55);
+      }
       station.add(meshOf(part.name, part.geometry, surface));
       if (dusking) {
         const material = surface as THREE.MeshBasicMaterial;
@@ -1140,9 +1150,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * stayed there. On a wall it is static geometry with a texture, it cannot stall a tick,
      * and if the image never loads there is simply nothing hanging there.
      */
-    void this.hangFacilityPlate(station);
+    this.menuReady = this.hangFacilityPlate(station);
 
     this.surface = new CRTSurface({ width: 192, height: 144 });
+    // Local phosphor gain: keep an almost-empty saved tree visibly powered, not a dead tube.
+    this.surface.material.color.setRGB(1.8, 1.8, 1.8);
     /**
      * The menu screen shows the REAL knowledge state, at every stage including an empty
      * one. A looping attract sequence was tried here and withdrawn: showing a full canopy
@@ -1218,6 +1230,11 @@ export class OmniscientRig extends ENGINE.SceneNode {
       useDynamicMaterials: true,
     });
     monitor.onMeshLoaded.add((_node, root) => this.dressTerminal(root));
+    this.menuReady = Promise.all([
+      this.menuReady,
+      monitor.loadModel(ENGINE.AssetPath.fromString('@project/assets/models/CRT_TV.glb'))
+        .catch((error: unknown) => { console.warn('[omniscient] terminal could not load', error); }),
+    ]).then(() => undefined);
     station.add(monitor);
 
     this.add(station);
@@ -2415,35 +2432,25 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
     const bootContainer = world.gameContainer;
     if (bootContainer) {
-      // Nothing under the boot screen is interactive, and nothing under it should be
-      // visible either - see the note on its background.
-      this.menu?.setEnabled(false);
+      // The opaque boot hides a complete room; input waits for the camera, not a timer.
+      this.menu?.setInteractive(false);
       this.boot = showBoot(bootContainer, () => {
         this.boot = null;
-        /*
-         * Everything that needs a user gesture happens here, on the same press.
-         *
-         * A browser will not let an AudioContext make a sound before one, so this press is
-         * literally what gives the machine its voice. Room tone first so the hum is already
-         * under the motif rather than arriving after it.
-         */
-        audio.unlock();
+        // Audio was unlocked synchronously by onActivate. Start the room tone with the reveal.
         setRoomTone('home');
         adaptiveScore.setState('home');
         audio.play('motif');
         // 2.6s rather than SCREEN_SHOT's own 1.6 - this is the reveal, and it is the only
         // time this move is the point rather than a way of getting somewhere.
-        this.moveTo(HOME_SHOT, 2.6);
-        this.cameraTweener.add(() => undefined, {
-          duration: 0.01,
-          delay: 2.2,
-          channel: 'boot-input',
-          onComplete: () => {
-            if (this.phase !== Phase.Menu) return;
-            this.menu?.setEnabled(true);
-            setCursorVisible(true);
-          },
+        this.moveTo(HOME_SHOT, 2.6, () => {
+          if (this.phase !== Phase.Menu) return;
+          this.menu?.setInteractive(true);
+          setCursorVisible(true);
         });
+      }, {
+        ready: this.menuReady,
+        hasSavedSession: hasSave(),
+        onActivate: () => audio.unlock(),
       });
     } else {
       // No container to hang it on: skip the ceremony rather than start inside the tube
@@ -4697,9 +4704,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * to WIN at t=0 or the three hours read as one setup fading rather than as two lights
      * trading the room.
      */
-    // 24 at the afternoon end. The window has to WIN at t=0 or there is no handover, only
-    // a fade - and it is competing with a practical that clips its own pool.
-    window.intensity = 0.75 + (24 - 0.75) * Math.pow(1 - t, 1.6);
+    // Daylight still yields to the practical across the story, but must not flatten the
+    // entire desktop into a bright field competing with the front-door controls.
+    window.intensity = 0.75 + (12 - 0.75) * Math.pow(1 - t, 1.6);
     // The floor stops throwing back what the window is no longer putting on it.
     this.lightRig.bounce.intensity = 1.575 * (0.32 + 0.68 * (1 - t));
 

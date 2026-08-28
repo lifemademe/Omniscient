@@ -884,6 +884,31 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
+**F-1 menu subpass AT BAR — Codex, 2026-08-27:** User-directed splash-to-menu readiness,
+camera handoff, physical rack mounting and readability. Implementation commit recorded
+in the follow-up ledger entry. Bar: §3/§4.1/§4.6 and
+`assets/reference/desk-room/01-lamp-and-mast.jpg` (mood, not menu layout).
+The boot waits for logo/CRT preparation, remembers activation and keeps pending status
+on the splash instead of adding a separate loading screen. Buttons remain visible during
+the pullback; input unlock follows camera completion, including reduced motion. Saved
+sessions receive truthful boot text; unavailable actions have explanatory labels.
+Rack supports, camera framing and restrained local palette/light values put the menu
+first, CRT second and window behind both. No scene-file edits or save-policy changes.
+Independent critic rejected R1–R3 hierarchy, then judged R4 **AT BAR**; a separate fresh
+cohesion critic judged boot/room identity **AT BAR**. The final 12-frame handoff also
+passed independent review: cohesive pullback, buttons present on entry, no visible late
+pop-in. Evidence:
+`scripts/dev/F1-menu-final-sheet.jpg` (normal-motion handoff, 0–3.78s),
+`scripts/dev/F1-menu-final-11.jpg` (1707×1019 settled menu),
+`scripts/dev/F1-menu-r4-small.jpg` (1282×752 critic capture),
+`scripts/dev/F1-menu-boot-saved.jpg` (saved-session boot), and
+`scripts/dev/F1-menu-reduced-sheet.jpg` (reduced-motion timing, usable by ~0.55s;
+pre-final art). `pnpm lint`, `pnpm build` and editor build passed; rendered artifacts
+reopened. Reduced-motion preference restored after capture. Cold-network/failure paths
+and the complete nine-mission day/night arc were not exercised. Dusk progression remains,
+but its window intensity ceiling changed; C-2 still needs its full-arc judgment.
+This accepts only the menu subpass, not the overall F-1 first-five-minutes item below.
+
 **F-1 user correction, Codex 2026-08-27, commit `5d04fd6`:** Mirela's standing and walk depth moved back
 24 cm with wrist targets lifted clear of the tabletop and the near reach shortened.
 Contact-only footer spacing now gives the

@@ -15,7 +15,7 @@ import * as THREE from 'three';
 import { audio } from '../audio/ConsoleAudio.js';
 import { decorMesh } from '../art/mesh.js';
 import { ACCENT, MAT } from '../art/palette.js';
-import { createModule, MODULE_PLATE } from '../geometry/modules.js';
+import { createModule, createModuleRack, MODULE_PLATE } from '../geometry/modules.js';
 
 import { DESK_SHIFT } from '../geometry/room.js';
 
@@ -35,6 +35,7 @@ interface ModuleSpec {
   accent: string;
   /** Present but not selectable - lit dimly, no cable, no action. */
   disabled?: boolean;
+  unavailable?: string;
 }
 
 /**
@@ -51,6 +52,7 @@ const MODULES: ModuleSpec[] = [
     kind: 'cartridge',
     title: 'New game',
     subtitle: 'Initialize.',
+    unavailable: 'Use Continue — saved session',
     accent: ACCENT.knowledge,
   },
   {
@@ -58,6 +60,7 @@ const MODULES: ModuleSpec[] = [
     kind: 'tape',
     title: 'Continue',
     subtitle: 'Restore from memory.',
+    unavailable: 'No saved session',
     accent: ACCENT.amber,
     /*
      * Cold until the rig warms it. There is a save system now; what stays true is that a
@@ -71,6 +74,7 @@ const MODULES: ModuleSpec[] = [
     kind: 'card',
     title: 'Night shift',
     subtitle: 'Warehouse 07 archive.',
+    unavailable: 'Locked — finish Warehouse 07',
     accent: ACCENT.warning,
     disabled: true,
   },
@@ -155,13 +159,13 @@ const HOVER_PUSH = 0.045;
  * additive disc supplies a controlled red halo even when post-process bloom is reduced.
  */
 const UNAVAILABLE_SOCKET_CORE = new THREE.MeshBasicMaterial({
-  color: new THREE.Color('#ff382e').multiplyScalar(1.35),
+  color: new THREE.Color('#b45338'),
   toneMapped: false,
 });
 const UNAVAILABLE_SOCKET_GLOW = new THREE.MeshBasicMaterial({
   color: '#e32620',
   transparent: true,
-  opacity: 0.3,
+  opacity: 0.12,
   blending: THREE.AdditiveBlending,
   depthWrite: false,
   toneMapped: false,
@@ -172,6 +176,7 @@ interface MenuModule {
   node: ENGINE.SceneNode;
   labelLit: THREE.MeshBasicMaterial;
   labelIdle: THREE.MeshBasicMaterial;
+  labelUnavailable: THREE.MeshBasicMaterial;
   labelMesh: ENGINE.MeshNode;
   /**
    * The painted face itself, kept rather than added and forgotten.
@@ -211,7 +216,12 @@ export class MainMenu {
   constructor(origin: THREE.Vector3) {
     this.root = ENGINE.SceneNode.create({ name: 'MainMenu', position: origin.clone() });
 
-    MODULES.forEach((spec, index) => this.buildModule(spec, index));
+    for (const part of createModuleRack(MODULE_PLATE.width + 0.11, STACK_ORIGIN.y + 0.12)) {
+      part.geometry.translate(STACK_ORIGIN.x, 0, STACK_ORIGIN.z);
+      this.root.add(decorMesh('MenuRack', part.geometry, MAT[part.material]));
+    }
+
+    MODULES.forEach((spec, index) => this.buildModule({ ...spec }, index));
 
     /**
      * The cable emerges from the machine, and now actually does.
@@ -275,11 +285,12 @@ export class MainMenu {
     // Label painted on the plate face.
     const labelIdle = createLabelMaterial({ ...spec, lit: false });
     const labelLit = createLabelMaterial({ ...spec, lit: true, accent: spec.accent });
-    const labelGeo = new THREE.PlaneGeometry(MODULE_PLATE.width * 0.62, MODULE_PLATE.height * 0.62);
+    const labelUnavailable = createLabelMaterial({ ...spec, subtitle: spec.unavailable ?? 'Unavailable' });
+    const labelGeo = new THREE.PlaneGeometry(MODULE_PLATE.width * 0.62, MODULE_PLATE.height * 0.74);
     // Clear of the plate's bevel, which extends past depth/2 - at +0.004 the label was
     // buried inside the front face and invisible.
     labelGeo.translate(0.16, 0.0, MODULE_PLATE.depth / 2 + 0.028);
-    const labelMesh = decorMesh('Label', labelGeo, labelIdle);
+    const labelMesh = decorMesh('Label', labelGeo, spec.disabled ? labelUnavailable : labelIdle);
     node.add(labelMesh);
 
     this.root.add(node);
@@ -289,6 +300,7 @@ export class MainMenu {
       node,
       labelIdle,
       labelLit,
+      labelUnavailable,
       labelMesh,
       plateMesh,
       socketUnavailableCore,
@@ -375,6 +387,7 @@ export class MainMenu {
     module.spec.disabled = !enabled;
     module.socketUnavailableCore.visible = !enabled;
     module.socketUnavailableGlow.visible = !enabled;
+    module.labelMesh.material = enabled ? module.labelIdle : module.labelUnavailable;
   }
 
   public onAction(handler: (action: MenuAction) => void): () => void {
@@ -387,8 +400,13 @@ export class MainMenu {
   }
 
   public setEnabled(enabled: boolean): void {
-    this.enabled = enabled;
     this.root.visible = enabled;
+    this.setInteractive(enabled);
+  }
+
+  /** Keep the hardware in the room while the camera is moving, without accepting input. */
+  public setInteractive(enabled: boolean): void {
+    this.enabled = enabled;
     if (!enabled) {
       this.controllerFocused = false;
       this.setHovered(null);
@@ -472,7 +490,7 @@ export class MainMenu {
 
     for (const [key, module] of this.modules) {
       const hovered = key === id && !module.spec.disabled;
-      module.labelMesh.material = hovered ? module.labelLit : module.labelIdle;
+      module.labelMesh.material = module.spec.disabled ? module.labelUnavailable : hovered ? module.labelLit : module.labelIdle;
       // Plate pushes toward the player - §103's "hovering a module wakes its socket".
       module.node.position.setZ(module.baseZ + (hovered ? HOVER_PUSH : 0));
     }
