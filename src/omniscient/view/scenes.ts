@@ -3921,6 +3921,9 @@ function buildSeedlingTunnel(scene: ContactScene): void {
      * business. The threshold is the fiction, written as a number.
      */
     overhangPast: 1.7,
+    // Rear-facing upper bough: its tip stops at local x=1.48, but the canopy's
+    // projected shadow reaches the back rows. Prune it with the three overhangs.
+    cutBranchIndices: [1],
   });
   const treeRoot = neighbourTree.root;
 

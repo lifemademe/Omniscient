@@ -55,6 +55,8 @@ export interface TreeOptions {
    * change a length or a lean and the right limbs still go in the right group.
    */
   overhangPast?: number;
+  /** Additional zero-based boughs to prune when their foliage shades beyond the wood tip. */
+  cutBranchIndices?: readonly number[];
 }
 
 export interface GeneratedTree {
@@ -358,10 +360,11 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
      *
      * The test is on the TIP, in the tree's own space, so it asks the question the scene
      * actually cares about - does this branch end up over the tunnel - rather than
-     * guessing from the swing. A limb angled the right way but too short to get there is
-     * not the neighbour's problem and does not get cut.
+     * guessing from the swing. Explicit scene selections also cover foliage whose
+     * projected shadow reaches the bed even when the wooden tip stops short.
      */
-    const overhanging = options.overhangPast !== undefined && tip.x > options.overhangPast;
+    const overhanging = (options.overhangPast !== undefined && tip.x > options.overhangPast)
+      || options.cutBranchIndices?.includes(i) === true;
     if (overhanging) {
       cutParts.push({ limbs: limbParts, leaves: leafParts, from, direction: dir.clone() });
     } else {

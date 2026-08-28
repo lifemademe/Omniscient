@@ -857,6 +857,20 @@ there is no assertion that can be written.
 
 ## 13. THE LEDGER
 
+**Adaeze residual canopy shadow — user-reported correction, AT BAR (scoped), Codex 2026-08-28.**
+Bar: `codex-clipboard-b35c620e-1a86-433d-9927-1a8bfbb38dc0.png` without the broad rear-bed
+canopy shadow after pruning; unchanged sunlight, healthy bed and pale seedling state.
+Trace: neighbour-tree bough index 1 ends at local x=1.48 (below the 1.7 wood-tip cutoff),
+but its elevated foliage projects into the rear rows. Explicitly include this bough in the
+existing cut/drop/reset sequence. Runtime code only; four boughs now cut instead of three.
+Evidence: `scripts/dev/adaeze-branch-r1-before.jpg`, `adaeze-branch-r1-cut-15.jpg`,
+`adaeze-branch-r1-cut-sheet.jpg` and `adaeze-branch-r1-reset.jpg` (all under `scripts/dev/`).
+Live 1280x720 replay: rear canopy patch clears, branch drop remains visible, pale seedlings
+and healthy-bed illumination persist; isolated contact restart restores canopy and shadow.
+Fresh rendered-only `branch_shadow_critic`: **AT BAR** for this correction, no scoped
+residual issue. Not a whole-scene approval. `pnpm lint`, `pnpm build`, editor bundle refresh
+passed. Local implementation commit follows; no push.
+
 **Adaeze tree / sunlight — user-directed continuation, AT BAR (scoped visual), Codex 2026-08-28.**
 Bar: the supplied `codex-clipboard-d6d04956-d51e-430b-a6dc-bce826c8eb7c.png`, improved so
 the tree casts legible shade onto the failing bed, healthy seedlings stay mostly sunlit,
