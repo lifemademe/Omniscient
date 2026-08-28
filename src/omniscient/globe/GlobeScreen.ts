@@ -331,6 +331,8 @@ const GLOBE_CSS = `
 .omni-globe__jump button:hover { color: #d8ffb0; }
 .omni-globe__name {
   position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
   transform: translate(10px, -50%);
   white-space: nowrap;
   font-size: calc(12px + var(--omni-font-boost, 0px));
@@ -851,6 +853,7 @@ export class GlobeScreen {
      * gestures start identically and there is no other way to tell them apart.
      */
     stage.addEventListener('mousedown', (event) => {
+      if (!this.canNavigate || (event.target instanceof Node && this.tipEl?.contains(event.target))) return;
       this.dragFrom = event.clientX;
       this.dragged = false;
     });
@@ -1210,26 +1213,48 @@ export class GlobeScreen {
   private disposeJumpList: (() => void) | null = null;
 
   private onStageClick(event: MouseEvent): void {
+    if (!this.canNavigate || (event.target instanceof Node && this.tipEl?.contains(event.target))) return;
     // A press that travelled was a turn, not a selection. Consumed here rather than by
     // suppressing the click, because the browser fires it either way.
     if (this.dragged) {
       this.dragged = false;
       return;
     }
+    // Names can be displaced away from their dots. Test their actual rendered bounds,
+    // including font scaling and the offworld label's reversed alignment, before dots.
+    // A circle around the label's anchor only covers the first few letters and lets a
+    // neighbouring contact steal clicks on the rest of the name.
+    let labelHit: { id: string; distance: number } | null = null;
+    for (const id of this.layout.keys()) {
+      const name = this.nameEls.get(id);
+      if (!name) continue;
+      const bounds = name.getBoundingClientRect();
+      const dx = Math.max(bounds.left - event.clientX, 0, event.clientX - bounds.right);
+      const dy = Math.max(bounds.top - event.clientY, 0, event.clientY - bounds.bottom);
+      const distance = Math.hypot(dx, dy);
+      if (distance <= 6 && (!labelHit || distance < labelHit.distance)) labelHit = { id, distance };
+    }
+    if (labelHit) {
+      this.selectSignal(labelHit.id, true);
+      return;
+    }
+
     const rect = this.surface.canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
     const x = ((event.clientX - rect.left) / rect.width) * CANVAS_W;
     const y = ((event.clientY - rect.top) / rect.height) * CANVAS_H;
 
-    /**
-     * Hit-test against the laid-out LABEL positions, not the raw projected dots.
-     *
-     * Two contacts in the same town project to the same pixel, so testing the dots meant
-     * the nearer one always won and the other could never be selected at all. The label
-     * is what the player is aiming at anyway - it is the thing they can see and read.
-     */
+    // Keep both the visible dot and the label's leader endpoint usable. Names take
+    // priority above so contacts sharing a town remain independently selectable.
     let best: { id: string; distance: number } | null = null;
-    for (const [id, spot] of this.layout) {
-      const distance = Math.hypot(spot.x - x, spot.y - y);
+    for (const projected of this.globe.getProjectedSignals()) {
+      const id = projected.signal.id;
+      const spot = this.layout.get(id);
+      if (!spot) continue;
+      const distance = Math.min(
+        Math.hypot(spot.x - x, spot.y - y),
+        Math.hypot(projected.x - x, projected.y - y)
+      );
       if (distance <= HIT_RADIUS && (!best || distance < best.distance)) {
         best = { id, distance };
       }
@@ -1374,10 +1399,10 @@ export class GlobeScreen {
 
     if (!wanted || !signal || !this.marks) return;
 
-    const projected = this.globe.getProjectedSignals().find((p) => p.signal.id === wanted);
-    if (!projected) return;
+    const spot = this.layout.get(wanted);
+    if (!spot) return;
 
-    this.tipEl = this.buildTip(signal, projected.x * this.scale, projected.y * this.scale);
+    this.tipEl = this.buildTip(signal, spot.x * this.scale, spot.y * this.scale);
     this.marks.appendChild(this.tipEl);
   }
 
@@ -1447,6 +1472,7 @@ export class GlobeScreen {
       button.textContent = signal.actionLabel ?? 'Answer';
       button.addEventListener('click', (event) => {
         event.stopPropagation();
+        if (!this.canNavigate) return;
         this.onAnswer(signal.id);
       });
       tip.appendChild(button);
