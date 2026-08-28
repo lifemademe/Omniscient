@@ -884,7 +884,7 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
-**F-1 user correction, Codex 2026-08-27:** Mirela's standing and walk depth moved back
+**F-1 user correction, Codex 2026-08-27, commit `5d04fd6`:** Mirela's standing and walk depth moved back
 24 cm with wrist targets lifted clear of the tabletop and the near reach shortened.
 Contact-only footer spacing now gives the
 suggestions/status/input room above the bottom bezel; input focus darkens the interior
