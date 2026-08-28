@@ -884,13 +884,13 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
-**F-1 globe / Tomas / completion subpass IN LOOP — Codex, 2026-08-28:**
+**F-1 globe / Tomas / completion subpass AT BAR — Codex, 2026-08-28:**
 User-directed follow-up to the 03:41 recording. Bar: §3, §4.2/4.3/4.6 and the
 beacon silhouette reference for value hierarchy. Tomas and the junction must remain
 readable beside both contact panels; the repaired hardware and steady beacon must
 register before a player-controlled Continue; one composed CRT return should lead
 to a globe with truthful counts and a clear completion record. Runtime code only.
-Implementation and rendered gauntlet complete; local commit receipt pending below.
+Implementation and rendered gauntlet complete; implementation/evidence commit `9314e80`.
 Globe cards are compact, clustered labels use separate rows and leaders without moving
 their geographic dots, and resolved contacts retain truthful counts after editor reveal.
 The latest answer is highlighted in history and acknowledged on the globe. Tomas faces
