@@ -322,19 +322,13 @@ export class WarehouseSetDressing {
   }
 
   private buildLightingAccents(): void {
+    // Preserve the four front-apron fills. Rear/middle fills duplicated the aisle high
+    // bays, rack lamps and clerestory spill and added eight light terms to every material.
     for (const [index, [x, z, color]] of ([
       [-17.5, 19.5, '#86b7b0'],
       [-5.5, 19.5, '#d0b06a'],
       [6.5, 19.5, '#86b7b0'],
       [18.5, 19.5, '#86b7b0'],
-      [-17.5, 1, '#86aeb7'],
-      [-5.5, 1, '#86aeb7'],
-      [6.5, 1, '#86aeb7'],
-      [18.5, 1, '#86aeb7'],
-      [-17.5, -19.5, '#86aeb7'],
-      [-5.5, -19.5, '#86aeb7'],
-      [6.5, -19.5, '#86aeb7'],
-      [18.5, -19.5, '#86aeb7'],
     ] as const).entries()) {
       const normal = index < 4 ? 12 : 8;
       const light = ENGINE.PointLightNode.create({

@@ -380,6 +380,8 @@ export interface RiggedContact {
    * Ignored while a walk is already running.
    */
   walk: (to: THREE.Vector3, options?: WalkOptions) => void;
+  /** Explicit moving-prop grip, applied AFTER idle/locomotion; targets are world-space. */
+  poseHands: (targets: { left?: THREE.Vector3; right?: THREE.Vector3 }, weight?: number) => void;
 }
 
 export interface WalkOptions {
@@ -1039,6 +1041,13 @@ const ARRIVE = 0.06;
     },
 
 
+    poseHands: (targets, weight = 1) => {
+      root.updateWorldMatrix(true, true);
+      for (const named of ['left', 'right'] as const) {
+        const target = targets[named];
+        if (target) reachFor(contact.bones, sideFor[named], target, poleFor(root, sideFor[named]), contact.rest, weight);
+      }
+    },
     idle: (deltaTime: number) => {
       if (mixer) mixer.update(deltaTime);
 

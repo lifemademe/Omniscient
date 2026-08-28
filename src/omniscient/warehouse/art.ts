@@ -29,6 +29,7 @@ import { MEZZANINE_BOUNDS, WarehouseFacilities } from './WarehouseFacilities.js'
 import { keepCelSheen } from './WarehouseCelStyle.js';
 import { WarehouseTransferDock } from './WarehouseTransferDock.js';
 import { buildWarehouseLoadingBay } from './WarehouseLoadingBay.js';
+import { batchStaticWarehouseParts } from './WarehouseStaticBatches.js';
 
 import type {
   WarehouseDoorId,
@@ -170,7 +171,11 @@ const SHADE = new THREE.MeshStandardMaterial({ color: '#181f2a', roughness: 0.76
 const SPRINKLER = new THREE.MeshStandardMaterial({ color: '#8c3a30', roughness: 0.66, metalness: 0.24 });
 
 function mesh(name: string, geometry: THREE.BufferGeometry, material: THREE.Material, position?: THREE.Vector3): ENGINE.MeshNode {
-  const node = ENGINE.MeshNode.create({ name, geometry, material, castShadow: true, receiveShadow: true });
+  // Surface markings and millimetre-thin labels cannot contribute a meaningful silhouette.
+  // Keep shadow reception, so floor paint and labels remain part of the lit environment.
+  const castShadow = geometry.type !== 'PlaneGeometry'
+    && !['FloorMarkings', 'FloorWear', 'FloorPaint', 'CeilingSprinkler'].includes(name);
+  const node = ENGINE.MeshNode.create({ name, geometry, material, castShadow, receiveShadow: true });
   if (position) node.position.copy(position);
   return node;
 }
@@ -373,7 +378,7 @@ function rackGeometry(height = WAREHOUSE_LAYOUT.rack.height, length = WAREHOUSE_
   return mergeGeometries(pieces, false) ?? new THREE.BoxGeometry(1, 1, 1);
 }
 
-function buildRain(root: ENGINE.SceneNode): void {
+function buildRain(root: ENGINE.SceneNode): THREE.Points {
   const rng = createRng(seedFrom('warehouse-07-rain'));
   const positions = new Float32Array(720 * 3);
   for (let i = 0; i < 720; i++) {
@@ -394,6 +399,7 @@ function buildRain(root: ENGINE.SceneNode): void {
   );
   points.name = 'ExteriorRain';
   root.add(points);
+  return points;
 }
 
 /*
@@ -615,6 +621,7 @@ export class WarehouseEnvironment {
   private moonLight: ENGINE.DirectionalLightNode | null = null;
   private frontLight: ENGINE.PointLightNode | null = null;
   private fixtureLensMaterial: THREE.MeshStandardMaterial | null = null;
+  private exteriorRain: THREE.Points | null = null;
   private lightingMode: WarehouseLightingMode = 'normal';
   private emergencyLevel = 0;
   private celStyleEnabled = false;
@@ -687,7 +694,11 @@ export class WarehouseEnvironment {
     this.facilities.build();
     this.root.add(this.facilities.root);
     yield;
-    buildRain(this.root);
+    this.exteriorRain = buildRain(this.root);
+    yield;
+    // All source objects are still detached, so engine lifecycle and disposal remain owned
+    // by the eventual instance nodes rather than a second, hidden copy of each fitting.
+    this.root.userData.staticBatching = batchStaticWarehouseParts(this.root);
   }
 
   private *buildRacks(): Generator<void> {
@@ -1675,15 +1686,11 @@ export class WarehouseEnvironment {
     this.moonLight = ENGINE.DirectionalLightNode.create({
       name: 'WarehouseMoon',
       color: '#a9d0d7',
-      // Up from 1.35: with the hemisphere down by two thirds this is the light doing the
-      // silhouette work, and it is the only cold key in the building.
-      intensity: 1.7,
+      // Unshadowed directional bounce only. WarehouseDaylight owns the single shadow key;
+      // retaining the old key strength here would leak full moonlight through the roof.
+      intensity: 0.35,
       position: new THREE.Vector3(-18, 24, 15),
-      castShadow: true,
-      shadowMapSize: 2048,
-      shadowFar: 95,
-      shadowNormalBias: 0.025,
-      shadowBias: -0.0004,
+      castShadow: false,
     });
     this.root.add(this.ambientLight, this.moonLight);
     /*
@@ -1721,6 +1728,26 @@ export class WarehouseEnvironment {
       metalness: 0.12,
     });
     this.fixtureLensMaterial = fixtureLens;
+    // Static fixture parts share geometry/material and are never scanned or moved. Engine
+    // instances preserve scene lifecycle and local transforms without ninety mesh nodes.
+    const fixturePositions = [-20, -12, -4, 4, 12, 20].flatMap((x) =>
+      [-20, -10, 0, 10, 20].map((z) => ({ x, z }))
+    );
+    const fixturePart = (name: string, geometry: THREE.BufferGeometry, material: THREE.Material, y: number, castShadow: boolean): void => {
+      this.root.add(ENGINE.InstancedMeshNode.create({
+        name,
+        geometry,
+        material,
+        maxInstances: fixturePositions.length,
+        instances: fixturePositions.map(({ x, z }) => ({ position: new THREE.Vector3(x, y, z) })),
+        castShadow,
+        receiveShadow: castShadow,
+        perInstanceFrustumCulling: false,
+      }));
+    };
+    fixturePart('CeilingFixtureStems', new THREE.CylinderGeometry(0.045, 0.045, 0.62, 6), DARK_STEEL, 9.9, false);
+    fixturePart('CeilingFixtureShades', new THREE.CylinderGeometry(0.18, 0.62, 0.4, 12, 1, true), SHADE, 9.35, true);
+    fixturePart('CeilingFixtureLenses', new THREE.CylinderGeometry(0.56, 0.56, 0.05, 12), fixtureLens, 9.16, false);
     for (const [xIndex, x] of [-20, -12, -4, 4, 12, 20].entries()) {
       for (const [zIndex, z] of [-20, -10, 0, 10, 20].entries()) {
         /**
@@ -1741,7 +1768,6 @@ export class WarehouseEnvironment {
          * at 8.35 - close enough to be objects in the room rather than texture on it, clear
          * enough that nobody flies into one.
          */
-        const stem = mesh('CeilingFixtureStem', new THREE.CylinderGeometry(0.045, 0.045, 0.62, 6), DARK_STEEL, new THREE.Vector3(x, 9.9, z));
         /*
          * DoubleSide, because an open-ended cone is a hole from the inside: back faces are not
          * drawn, so a camera in here sees straight through the building and renders black. The
@@ -1755,14 +1781,6 @@ export class WarehouseEnvironment {
          * keeps the bright-thing-inside-dark-thing read and takes half the silhouette area
          * off it.
          */
-        const shade = mesh(
-          'CeilingFixtureShade',
-          new THREE.CylinderGeometry(0.18, 0.62, 0.4, 12, 1, true),
-          SHADE,
-          new THREE.Vector3(x, 9.35, z)
-        );
-        const lens = mesh('CeilingFixtureLens', new THREE.CylinderGeometry(0.56, 0.56, 0.05, 12), fixtureLens, new THREE.Vector3(x, 9.16, z));
-        this.root.add(stem, shade, lens);
         this.ceilingFixtureColumns.add(x);
         /*
          * Nine lamps, not fifteen.
@@ -1774,8 +1792,8 @@ export class WarehouseEnvironment {
          *
          * Every other row AND column is nine, still 8-10m apart, with the intensity below
          * making up the difference. The room looks the same and every lit material in it
-         * compiles a shorter shader - which matters in a scene that also runs ten clerestory
-         * lights, six door lights, four zone lights and two shadow-casting directionals.
+         * compiles a shorter shader - which matters in a scene that also runs six clerestory
+         * fills, six door lights, four zone lights and one shadow-casting directional.
          */
         /*
          * A diagonal, not a checkerboard, and the difference is a whole side of the building.
@@ -2381,6 +2399,18 @@ export class WarehouseEnvironment {
     this.serviceDoors.get(id)?.cycleCargo();
   }
 
+  public setServiceCargoOpen(id: WarehouseDoorId, open: boolean): void {
+    this.serviceDoors.get(id)?.setCargoOpen(open);
+  }
+
+  public isServiceCargoOpen(id: WarehouseDoorId): boolean {
+    return this.serviceDoors.get(id)?.isCargoOpen ?? false;
+  }
+
+  public isServiceCargoClosed(id: WarehouseDoorId): boolean {
+    return this.serviceDoors.get(id)?.isCargoClosed ?? true;
+  }
+
   public lockdownServiceDoor(id: WarehouseDoorId): void {
     this.serviceDoors.get(id)?.lockdown();
   }
@@ -2581,7 +2611,7 @@ export class WarehouseEnvironment {
      * touching the top, so the pools keep the edges this pass just bought them.
      */
     const skyFill = this.celStyleEnabled ? 0.78 : WAREHOUSE_SKY_FILL;
-    const moon = this.celStyleEnabled ? 1.7 : 1.7;
+    const moon = 0.35;
     /*
      * The front sodium was the single biggest flattener in the room and nothing here said
      * so. One lamp at intensity 35 with a 20m reach, standing at z 27, covers the whole
@@ -2595,7 +2625,7 @@ export class WarehouseEnvironment {
     // SHAPE of the light differs.
     const work = this.celStyleEnabled ? 900 : 1160;
     if (this.ambientLight) this.ambientLight.intensity = THREE.MathUtils.lerp(skyFill, 0.5, emergency);
-    if (this.moonLight) this.moonLight.intensity = THREE.MathUtils.lerp(moon, 1.05, emergency);
+    if (this.moonLight) this.moonLight.intensity = THREE.MathUtils.lerp(moon, 0.22, emergency);
     if (this.frontLight) this.frontLight.intensity = THREE.MathUtils.lerp(front, 4, emergency);
     if (this.fixtureLensMaterial) this.fixtureLensMaterial.emissiveIntensity = THREE.MathUtils.lerp(fixture, 0.1, emergency);
     for (const light of this.workLights) light.intensity = THREE.MathUtils.lerp(work, 78, emergency);
@@ -2630,8 +2660,7 @@ export class WarehouseEnvironment {
     for (const carton of this.inboundPackages) {
       carton.position.z = THREE.MathUtils.damp(carton.position.z, WAREHOUSE_LAYOUT.receiving.freightStageZ, 1.35, deltaTime);
     }
-    const rain = this.root.getObjectByName('ExteriorRain') as THREE.Points | undefined;
-    const position = rain?.geometry.getAttribute('position');
+    const position = this.exteriorRain?.geometry.getAttribute('position');
     if (position) {
       for (let i = 0; i < position.count; i++) {
         const y = position.getY(i) - deltaTime * 8;

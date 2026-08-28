@@ -117,15 +117,7 @@ function softShaftGeometry(
 export class WarehouseDaylight {
   public readonly root = ENGINE.SceneNode.create({ name: 'WarehouseDaylightArchitecture' });
 
-  private readonly bounceLights: ENGINE.PointLightNode[] = [];
-  /**
-   * The cold clerestory, kept apart from the warm one.
-   *
-   * They very nearly shared `bounceLights`, and the emergency ramp below drives that whole
-   * array to a single lerp - so on the first tick every cool light would have been reset to
-   * the warm one's 7.6 and the split this exists to create would have closed itself. Two
-   * intensities need two lists.
-   */
+  /** Three fills per elevation replace two overlapping clerestory light systems. */
   private readonly nightLights: ENGINE.PointLightNode[] = [];
   private readonly yard = new WarehouseYard();
   private readonly shaftMaterials: THREE.MeshBasicMaterial[] = [];
@@ -156,7 +148,6 @@ export class WarehouseDaylight {
     // and a hemisphere at 2.2 the interior read as an overcast afternoon: pale walls the
     // materials here author as near-black, and a blue sky sitting in the clerestory.
     const sun = this.celStyleEnabled ? 1.1 : 0.9;
-    const bounce = this.celStyleEnabled ? 3.4 : 4.6;
     /*
      * Do NOT reach for these to darken the ceiling. Measured: dropping them from 28 to 19 made
      * the room FLATTER, not deeper - top 99 to 97 while the bottom fell 110 to 107 and the
@@ -164,12 +155,13 @@ export class WarehouseDaylight {
      * light, so leaning on them dims the part of the picture the player works in and barely
      * touches the roof. The bright band up there is the glazing itself; see windowMaterials.
      */
-    const night = this.celStyleEnabled ? 30 : CLERESTORY_NIGHT;
+    // Approximate the previous integrated fill energy with three rather than five points
+    // per wall. Keep the emergency floor and both elevations; do not dynamically cull lights.
+    const night = (this.celStyleEnabled ? 30 : CLERESTORY_NIGHT) * 5 / 3;
     if (this.sunLight) this.sunLight.intensity = THREE.MathUtils.lerp(sun, 0.52, emergency);
-    for (const light of this.bounceLights) light.intensity = THREE.MathUtils.lerp(bounce, 1.45, emergency);
     // The night side barely dims. When the work lights drop it is most of what is left, and
     // an emergency that goes black is a scene the player cannot act in.
-    for (const light of this.nightLights) light.intensity = THREE.MathUtils.lerp(night, 14, emergency);
+    for (const light of this.nightLights) light.intensity = THREE.MathUtils.lerp(night, 14 * 5 / 3, emergency);
     const breathing = reducedMotion || contained ? 1 : 0.94 + Math.sin(this.clock * 0.24) * 0.06;
     for (const material of this.shaftMaterials) {
       const normalOpacity = this.celStyleEnabled ? 0.028 : 0.036;
@@ -417,58 +409,16 @@ export class WarehouseDaylight {
     this.sunLight.lookAt(new THREE.Vector3(-4, 0, 0));
 
     for (const [index, z] of [14, 6, -2, -10, -18].entries()) {
-      const bounce = ENGINE.PointLightNode.create({
-        name: `ClerestoryBounce-${index + 1}`,
-        /* Was warm sun spill through the west clerestory. Night: the same spill, moonlit. */
-        color: index % 2 ? '#9dc0dc' : '#8fb2d0',
-        intensity: 4.6,
-        distance: 16,
-        decay: 1.75,
-        position: new THREE.Vector3(-21.1, 6.7, z),
-      });
-      this.bounceLights.push(bounce);
-      this.root.add(bounce);
-
-      /**
-       * And the cold side, opposite.
-       *
-       * Measured after the warm pass: 40% of the frame was warm and 2.1% was cool. That is
-       * not a warm/cool split, it is warm on black - and the reason is that the only cold
-       * light in the building is a directional outside a roof that casts shadows, so it never
-       * gets in at all.
-       *
-       * The warm bounce above is the sunbreak coming through the WEST clerestory. This is the
-       * night sky coming through the east one: same row, same heights, opposite wall,
-       * opposite colour, a third of the strength. It costs five point lights and it is the
-       * difference between a room lit by lamps and a room that has an outside.
-       *
-       * Weak on purpose. It is not competing with the high bays for the floor; it is there so
-       * that the tops of the east racks and the upper wall have something that is not amber,
-       * and so a silhouette in the middle distance has two colours behind it.
-       */
-      /*
-       * Both walls now, not just the east one.
-       *
-       * A single cold side lights one row of rack tops and leaves the opposite wall entirely
-       * amber, so the room still reads as one hue from every angle that does not happen to
-       * face east. Windows exist on both elevations; the light should too.
-       */
-      for (const wallX of [17.4, -17.4]) {
+      /* Cold window fill on both elevations. It is broad and unshadowed by design; the
+         directional sunbreak below is the sole shadow-producing key. */
+      // The five shaft meshes remain artwork, not five additional live lights. Every other
+      // bay provides the broad fill; no shadow map or material variant changes during play.
+      for (const wallX of index % 2 === 0 ? [17.4, -17.4] : []) {
       const nightSide = ENGINE.PointLightNode.create({
         name: `ClerestoryNight-${index + 1}-${wallX > 0 ? 'E' : 'W'}`,
         color: index % 2 ? '#7fb4d8' : '#8ec3e0',
-        /*
-         * 12, not 4.4, and further in.
-         *
-         * Measured after it was added: cool pixels went from 2.1% to 0.7%, so at 4.4 against
-         * nine warm high bays at 54 it was not merely losing, it was inaudible. It also sat at
-         * x 21.1 - hard against the east wall, behind the racking from every angle the player
-         * flies down an aisle.
-         *
-         * Still deliberately weak next to the lamps. Its job is to put something that is not
-         * amber on the tops of the east racks and the upper wall, not to light the floor.
-         */
-        intensity: 12,
+        // Rescaled from five samples to three per wall to preserve the authored fill energy.
+        intensity: CLERESTORY_NIGHT * 5 / 3,
         distance: 30,
         decay: 1.25,
         position: new THREE.Vector3(wallX, 7.6, z),

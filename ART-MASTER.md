@@ -857,6 +857,31 @@ there is no assertion that can be written.
 
 ## 13. THE LEDGER
 
+**Warehouse loading / entrances / collection / render cost — IN LOOP, Codex 2026-08-28.**
+User-approved runtime-only follow-up to the warehouse entry item below. Bar: true-stage
+loading relay; distinct goods/reception/plant CCTV compositions with visitor/load first;
+supported hatch-to-trolley transfer with visible receipt and departure; lower measured
+render/update costs without losing actionable labels or the pixel treatment. No scene edits.
+Implemented stage-driven CSS relay with reduced-motion/error states; distinct exterior
+camera compositions and a cleared collection lane; persistent two-slot trolleys, through
+hatches, supported transfer/retraction and sequence-owned completion. Named gameplay
+coordinates, access rules and scan eligibility remain unchanged. Camera-arm probes now
+use world-space spatially filtered blockers (including moving/instanced geometry).
+One shadow directional remains; clerestory fills are consolidated, eight redundant
+interior fills removed, static fittings instanced and material registration event-driven.
+Editor-only samples distinguish CPU update time, presentation intervals and draw submissions.
+Initial live evidence: `scripts/dev/warehouse-r3-loading.jpg`, `warehouse-r3-preparation.jpg`,
+`warehouse-r3-frame-samples.jpg` (1282x752 windows). First implementation sample was still
+slow: ~62–65ms median frame intervals, ~70–75ms p95, ~17–19ms p95 warehouse update,
+9,549 all-pass draw submissions, 362 material instances, 80 lights / one shadow light.
+Cold preparation was 34.43s, including 30.24s first-feed shader compilation. These are
+not an unchanged pre-work baseline and not GPU timings. Later static batching and 72-light
+revision require a comparable live sample; no sustained-lag fix is claimed from code counts.
+Fresh loading critic rejected faint corner text; increased it to 14px and higher contrast.
+Final rendered review, single/paired handoff replay and exact-resolution acceptance remain
+pending; not an AT BAR claim. Lint/build pass; editor preview recovery needed after a host
+`Object has been destroyed` error unloaded its world during inspection.
+
 **Warehouse entry / optical / workers — user-approved implementation, PARTIAL / OPEN QA, Codex 2026-08-28.**
 User-directed scope: cancellable staged construction without advancing mission time;
 stable landing illumination across optical/chase cuts; explicit Tomas atlas variants;

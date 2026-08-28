@@ -45,7 +45,7 @@ const CEL_HEIGHT_TINT = 0.2;
 /**
  * The roughness floor for a surface that is allowed to keep a sheen, and why there is one.
  *
- * `captureNewMaterials` clamps every MeshStandardMaterial in the building to roughness 0.78,
+ * `registerMaterials` clamps every MeshStandardMaterial in the building to roughness 0.78,
  * and the cel branch is the branch that ships - so no surface in Warehouse 07 has been able
  * to show a specular highlight of a lamp for as long as the look has existed. That clamp is
  * right for the racking, the cladding and the stock; it is wrong for the floor, and it cost
@@ -107,15 +107,14 @@ function beveledRail(width: number, height: number, length: number): THREE.Extru
  * Warehouse-only material and silhouette treatment.
  *
  * It owns an exact snapshot of every material it touches, which makes the editor F10 A/B
- * meaningful rather than an approximation. Newly streamed character materials are picked
- * up by the inexpensive periodic traversal after their GLB finishes loading.
+ * meaningful rather than an approximation. Asset owners explicitly register newly loaded
+ * subtrees; no full warehouse traversal is performed during the gameplay tick.
  */
 export class WarehouseCelStyle {
   public readonly accents = ENGINE.SceneNode.create({ name: 'WarehouseCelSilhouetteAccents' });
 
   private readonly snapshots = new Map<THREE.MeshStandardMaterial, MaterialSnapshot>();
   private enabled = false;
-  private refreshClock = 0;
 
   public constructor() {
     const material = new THREE.MeshStandardMaterial({
@@ -139,12 +138,11 @@ export class WarehouseCelStyle {
 
   public setEnabled(root: THREE.Object3D, enabled: boolean): void {
     if (this.enabled === enabled) {
-      if (enabled) this.captureNewMaterials(root);
+      if (enabled) this.registerMaterials(root);
       return;
     }
     this.enabled = enabled;
     this.accents.visible = enabled;
-    this.refreshClock = 0;
     if (enabled) {
       setPaintBandingLook('warehouseCel');
       /*
@@ -157,7 +155,7 @@ export class WarehouseCelStyle {
       const centre = new THREE.Vector3();
       root.getWorldPosition(centre);
       setPaintHeightGradient(CEL_HEIGHT_TINT, centre.z, 140, -1.5, 5.5);
-      this.captureNewMaterials(root);
+      this.registerMaterials(root);
     } else {
       this.restoreMaterials();
       // Cel banding is now the global house treatment; only restore warehouse material edits.
@@ -166,15 +164,9 @@ export class WarehouseCelStyle {
     }
   }
 
-  public tick(root: THREE.Object3D, deltaTime: number): void {
+  /** Call after a streamed model is ready, or after adding runtime-owned materials. */
+  public registerMaterials(root: THREE.Object3D): void {
     if (!this.enabled) return;
-    this.refreshClock -= deltaTime;
-    if (this.refreshClock > 0) return;
-    this.refreshClock = 0.75;
-    this.captureNewMaterials(root);
-  }
-
-  private captureNewMaterials(root: THREE.Object3D): void {
     root.traverse((object) => {
       const mesh = object as THREE.Mesh;
       if (!mesh.isMesh) return;

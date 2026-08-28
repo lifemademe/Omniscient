@@ -22,6 +22,9 @@ import { createWarehouseVisitor, WarehouseCargoNode, WarehouseWorkerNode } from 
 import { loadWarehouseSave, updateWarehouseSave } from './persistence.js';
 import { WarehouseAudio } from './WarehouseAudio.js';
 import { WarehouseCelStyle } from './WarehouseCelStyle.js';
+import { WarehouseCameraBlockers } from './WarehouseCameraBlockers.js';
+import { WarehouseCollection } from './WarehouseCollection.js';
+import { WarehousePerformance } from './WarehousePerformance.js';
 import { DroneCargoRope } from './DroneCargoRope.js';
 import { WarehouseDroneFeedback } from './WarehouseDroneFeedback.js';
 import { WarehouseHUD } from './WarehouseHUD.js';
@@ -555,13 +558,12 @@ export class WarehouseRig extends ENGINE.SceneNode {
   private readonly dockedCargo: Array<{ node: WarehouseCargoNode; doorId: WarehouseDoorId; slot: number }> = [];
   private readonly scannedCargo = new Set<WarehouseCargoNode>();
   private readonly lastInboundScanSubject = new THREE.Vector3();
-  private deliveredCargo: {
-    node: WarehouseCargoNode;
-    from: THREE.Vector3;
-    to: THREE.Vector3;
-    elapsed: number;
-    duration: number;
-  } | null = null;
+  private readonly collections = new Map<WarehouseDoorId, WarehouseCollection>();
+  private readonly cameraBlockers = new WarehouseCameraBlockers();
+  private readonly framePerformance = new WarehousePerformance();
+  private readonly blockerAnchor = new THREE.Vector3();
+  private readonly blockerTarget = new THREE.Vector3();
+  private readonly blockerDirection = new THREE.Vector3();
   private activeCase: GeneratedWarehouseCase | null = null;
   private evidence = emptyEvidence();
   private selectedDoor: WarehouseDoorId = 'service-a';
@@ -739,6 +741,17 @@ export class WarehouseRig extends ENGINE.SceneNode {
       await warehousePreparationYield(signal);
     }
     costs.facilityAttachmentMs = performance.now() - attachmentStart;
+    for (const id of WAREHOUSE_DOOR_IDS) {
+      const collection = new WarehouseCollection(WAREHOUSE_DOORS[id], {
+        setOpen: open => this.environment.setServiceCargoOpen(id, open),
+        isOpen: () => this.environment.isServiceCargoOpen(id),
+        isClosed: () => this.environment.isServiceCargoClosed(id),
+      });
+      this.collections.set(id, collection);
+      this.add(collection.root);
+    }
+    this.cameraBlockers.rebuild(this.environment.root, mesh => this.isCameraBlocker(mesh));
+    for (const collection of this.collections.values()) this.cameraBlockers.addMovingRoot(collection.root, mesh => this.isCameraBlocker(mesh));
     this.add(this.celStyle.accents);
     this.buildDrone();
     this.add(this.cargoRope.root);
@@ -1694,6 +1707,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.add(worker);
       this.workers.push(worker);
       await awaitWarehousePreparation(worker.whenReady(), signal);
+      this.celStyle.registerMaterials(worker);
       await warehousePreparationYield(signal);
     }
   }
@@ -1825,6 +1839,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       cargo.position.copy(this.environment.packagePosition(delivery.aisle, delivery.bay));
       cargo.visible = delivery.index >= this.inboundAudit.resolved;
       this.add(cargo);
+      this.celStyle.registerMaterials(cargo);
       this.inboundCargo.push(cargo);
     }
     for (const [index, worker] of this.workers.entries()) {
@@ -1900,6 +1915,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       cargo.position.copy(this.environment.packagePosition(data.aisle, data.bay));
       this.add(cargo);
       this.cargo = cargo;
+      this.celStyle.registerMaterials(cargo);
     }
     if (data.definition.id === 'package-5018') {
       const duplicateData: GeneratedWarehouseCase = { ...data, measuredWeight: 50 };
@@ -1908,6 +1924,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       duplicate.position.copy(this.environment.packagePosition(4, data.bay));
       this.add(duplicate);
       this.duplicateCargo = duplicate;
+      this.celStyle.registerMaterials(duplicate);
       this.environment.setDuplicateAisle(true);
     }
     const hasVisitor = data.definition.subjectType !== 'worker'
@@ -1916,6 +1933,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (hasVisitor) {
       this.visitor = createWarehouseVisitor(seedFrom(data.visitorName), data.visitorName, data.assignedDoorId);
       this.add(this.visitor.root);
+      const visitor = this.visitor;
+      void visitor.rig.whenReady().then(() => {
+        if (!this.disposed && this.visitor === visitor) this.celStyle.registerMaterials(visitor.root);
+      }).catch(() => { /* The rig's asset error UI owns load failures. */ });
     }
     const occupiedIndex = WAREHOUSE_DOOR_IDS.indexOf(data.assignedDoorId);
     this.selectedDoor = WAREHOUSE_DOOR_IDS[(occupiedIndex + 1) % WAREHOUSE_DOOR_IDS.length];
@@ -1946,6 +1967,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
 
   private clearCaseEntities(): void {
+    for (const collection of this.collections.values()) collection.reset();
     if (this.pursuit) {
       this.pursuit.destroy();
       this.pursuit = null;
@@ -1982,7 +2004,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     if (this.cargo?.parent) this.cargo.parent.remove(this.cargo);
     this.cargo = null;
-    this.deliveredCargo = null;
     if (this.duplicateCargo?.parent) this.duplicateCargo.parent.remove(this.duplicateCargo);
     this.duplicateCargo = null;
     this.dockedCargo.length = 0;
@@ -2511,6 +2532,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
 
   private isCinematicActive(): boolean {
+    for (const collection of this.collections.values()) if (collection.active) return true;
     return this.pursuit !== null || this.containmentResponse !== null;
   }
 
@@ -3503,6 +3525,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const response = new WarehouseContainmentResponse(zone);
     this.containmentResponse = response;
     this.add(response.officer.root);
+    this.registerVisitorMaterials(response.officer);
     this.view = 'cctv';
     this.selectedZone = zone;
     this.hud?.setView(this.view);
@@ -3673,6 +3696,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const response = new WarehouseContainmentResponse(zone);
     this.containmentResponse = response;
     this.add(response.officer.root);
+    this.registerVisitorMaterials(response.officer);
     this.view = 'cctv';
     this.selectedZone = zone;
     this.hud?.setView(this.view);
@@ -3782,8 +3806,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
      */
     this.feedback.verdictPulse(this.scanSubjectPosition(), correct);
     this.hud?.flashVerdict(correct);
-    if (decision === 'release') this.performCargoHandoff();
-    else if (decision === 'quarantine') this.environment.setTransferDockState(active.assignedDoorId, 'quarantined');
+    if (decision === 'quarantine') this.environment.setTransferDockState(active.assignedDoorId, 'quarantined');
     if (decision === 'deny-lockdown') {
       this.environment.lockdownServiceDoor(active.assignedDoorId);
       this.environment.setTransferDockState(active.assignedDoorId, 'locked');
@@ -3806,11 +3829,17 @@ export class WarehouseRig extends ENGINE.SceneNode {
       if (active.definition.critical || this.integrity <= 0) {
         this.hud?.flash(active.definition.critical ? 'CRITICAL BREACH // RESTORING MOVEMENT CHECKPOINT' : 'INTEGRITY LOST // SHIFT TERMINATED', 3);
         if (this.mode === 'story') {
-          window.setTimeout(() => { this.integrity = 3; this.beginStoryMovement(); }, 1800);
+          const restore = () => { if (this.disposed || this.activeCase !== active) return; this.integrity = 3; this.beginStoryMovement(); };
+          if (decision !== 'release' || !this.performCargoHandoff(restore)) window.setTimeout(restore, 1800);
         } else this.finish(false);
       } else {
         this.hud?.flash('DECISION CONTRADICTS THE RECORD // CASE RESET', 2.2);
-        window.setTimeout(() => this.mode === 'story' ? this.spawnStoryCase() : this.spawnCase(this.director?.caseForStage(this.stage, this.tools) ?? null), 900);
+        const restore = () => {
+          if (this.disposed || this.activeCase !== active) return;
+          if (this.mode === 'story') this.spawnStoryCase();
+          else this.spawnCase(this.director?.caseForStage(this.stage, this.tools) ?? null);
+        };
+        if (decision !== 'release' || !this.performCargoHandoff(restore)) window.setTimeout(restore, 900);
       }
       return;
     }
@@ -3837,48 +3866,31 @@ export class WarehouseRig extends ENGINE.SceneNode {
     const is5018 = active.definition.id === 'package-5018';
     this.hud?.flash(is5018 ? '5018 LOADS SEALED // SERVICE C CONTAINMENT COVER LOCKED' : 'CASE RESOLVED', is5018 ? 4 : 1.5);
     if (is5018) this.sound.play('anomaly');
-    const deliveryDelay = decision === 'release'
-      ? getAccessibilityPreferences().reducedMotion ? 900 : 5200
-      : is5018 ? 3500 : 1200;
-    window.setTimeout(() => this.advance(), deliveryDelay);
+    const complete = () => {
+      if (this.disposed || this.activeCase !== active) return;
+      if (decision === 'release') this.hud?.appendSystem('COLLECTION', 'LOAD RECEIVED // COLLECTION COMPLETE');
+      this.advance();
+    };
+    if (decision !== 'release' || !this.performCargoHandoff(complete)) window.setTimeout(complete, is5018 ? 3500 : 1200);
   }
 
-  private performCargoHandoff(): void {
+  private performCargoHandoff(complete: () => void): boolean {
     const active = this.activeCase;
-    if (!active) return;
+    if (!active || !this.visitor) return false;
     const handoffDoor = active.assignedDoorId;
     const staged = this.dockedCargo.filter((entry) => entry.doorId === handoffDoor);
-    const cargo = staged[0]?.node;
-    if (!cargo) return;
+    const collection = this.collections.get(handoffDoor);
+    if (!staged.length || !collection) return false;
     this.environment.setTransferDockState(handoffDoor, 'releasing');
-    cargo.carried = false;
-    const reducedMotion = getAccessibilityPreferences().reducedMotion;
-    this.deliveredCargo = {
-      node: cargo,
-      from: cargo.position.clone(),
-      to: WAREHOUSE_DOORS[handoffDoor].visitorPosition.clone().add(new THREE.Vector3(0, 0.08, 0)),
-      elapsed: 0,
-      duration: reducedMotion ? 0.08 : 3.2,
-    };
-    this.environment.cycleServiceDoor(handoffDoor);
+    collection.start(staged.map(entry => entry.node), this.visitor, getAccessibilityPreferences().reducedMotion, complete);
+    this.releaseOpticalOnBlur();
     this.hud?.setBell(false, 0);
     this.selectedDoor = handoffDoor;
     this.view = 'cctv';
-    if (handoffDoor === active.assignedDoorId) {
-      const receiver = this.visitor;
-      receiver?.rig.gesture('open');
-      if (receiver && active.visitorIntent === 'collection') {
-        const exit = WAREHOUSE_DOORS[handoffDoor].pursuit.officerStart.clone();
-        window.setTimeout(() => {
-          if (this.activeCase !== active || this.visitor !== receiver || this.pursuit) return;
-          receiver.rig.walk(exit, { interrupt: true, locomotion: 'walk', pace: 1.1 });
-          cargo.visible = false;
-        }, reducedMotion ? 160 : 3400);
-      }
-    }
     this.syncDoorHud();
     this.hud?.setView(this.view);
     this.syncPointerMode();
+    return true;
   }
 
   /**
@@ -3958,6 +3970,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     this.pursuit = new WarehousePursuit(active.assignedDoorId, this.visitor, authored);
     this.add(this.pursuit.officer.root);
+    this.registerVisitorMaterials(this.pursuit.officer);
     this.pursuitPhase = 'lockdown';
     this.selectedDoor = active.assignedDoorId;
     this.view = 'cctv';
@@ -3991,15 +4004,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (frame.complete) this.finishPoliceResponse();
   }
 
-  private updateDeliveredCargo(deltaTime: number): void {
-    const delivery = this.deliveredCargo;
-    if (!delivery) return;
-    delivery.elapsed += deltaTime;
-    const progress = Math.min(1, delivery.elapsed / Math.max(0.01, delivery.duration));
-    const eased = progress * progress * (3 - 2 * progress);
-    delivery.node.position.lerpVectors(delivery.from, delivery.to, eased);
-    delivery.node.position.y += Math.sin(progress * Math.PI) * 0.09;
-    if (progress >= 1) this.deliveredCargo = null;
+  private registerVisitorMaterials(visitor: WarehouseVisitor): void {
+    void visitor.rig.whenReady().then(() => {
+      if (!this.disposed && visitor.root.parent === this) this.celStyle.registerMaterials(visitor.root);
+    }).catch(() => { /* Asset failure is reported by the character loader. */ });
   }
 
   private finishPoliceResponse(): void {
@@ -4111,7 +4119,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
 
   public requestExit(): void {
-    if (this.isCinematicActive()) {
+    if (this.pursuit || this.containmentResponse) {
       this.skipPursuit();
       return;
     }
@@ -4574,15 +4582,21 @@ export class WarehouseRig extends ENGINE.SceneNode {
     else this.cameraProbeRight.normalize();
     this.cameraProbeUp.crossVectors(this.cameraProbeRight, this.cameraDirection).normalize();
     let safeDistance = distance;
+    // The warehouse is translated 1200m from the menu. Rays and the spatial index
+    // must use world coordinates, while the arm/boundary solver stays rig-local.
+    this.localToWorld(this.blockerAnchor.copy(anchor));
+    this.localToWorld(this.blockerTarget.copy(desired));
+    this.blockerDirection.copy(this.blockerTarget).sub(this.blockerAnchor).normalize();
+    const candidates = this.cameraBlockers.query(this.blockerAnchor, this.blockerTarget);
     for (const [right, up] of CAMERA_PROBE_OFFSETS) {
       this.cameraProbeOrigin.copy(anchor)
         .addScaledVector(this.cameraProbeRight, right)
         .addScaledVector(this.cameraProbeUp, up);
-      this.cameraRaycaster.set(this.cameraProbeOrigin, this.cameraDirection);
+      this.localToWorld(this.cameraProbeOrigin);
+      this.cameraRaycaster.set(this.cameraProbeOrigin, this.blockerDirection);
       this.cameraRaycaster.near = 0.04;
       this.cameraRaycaster.far = distance;
-      const hit = this.cameraRaycaster.intersectObject(this.environment.root, true)
-        .find((entry) => this.isCameraBlocker(entry.object));
+      const hit = this.cameraRaycaster.intersectObjects(candidates, false)[0];
       if (hit) safeDistance = Math.min(safeDistance, Math.max(0.18, hit.distance - 0.28));
     }
     return safeDistance;
@@ -4690,6 +4704,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
   public override tickPrePhysics(deltaTime: number): void {
     super.tickPrePhysics(deltaTime);
     if (!this.mounted) return;
+    const frameStarted = this.framePerformance.begin();
     this.elapsed += deltaTime;
     this.input?.tick(deltaTime);
     const droneSpeed = deltaTime > 0
@@ -4716,7 +4731,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.cargoRope.tick(deltaTime, this.ropeAnchor);
     this.feedback.setOpticalHeld(this.opticalAimHeld && this.view === 'drone');
     this.feedback.setTargets(this.opticalAimHeld ? this.opticalTargets() : []);
-    this.updateDeliveredCargo(deltaTime);
     /*
      * The intake lights while there is something to bring it, and only then.
      *
@@ -4730,8 +4744,8 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.environment.setVerifiedIntakeGuide(this.inboundAudit !== null && this.carried !== null);
     this.hud?.tick(deltaTime);
     this.environment.tick(deltaTime);
-    this.celStyle.tick(this, deltaTime);
     this.visitor?.rig.idle(deltaTime);
+    for (const collection of this.collections.values()) collection.tick(deltaTime);
     this.updatePursuit(deltaTime);
     this.updateContainmentResponse(deltaTime);
     this.updateInbound(deltaTime);
@@ -4768,6 +4782,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     else FEEDBACK_FACING.identity();
     this.feedback.tick(deltaTime, FEEDBACK_FACING);
     this.keepActive();
+    this.framePerformance.end(frameStarted, `${this.view}/${this.perspective}/${this.selectedDoor}`, this);
   }
 
   public unmount(): void {
