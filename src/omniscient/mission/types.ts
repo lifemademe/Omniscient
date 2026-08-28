@@ -537,6 +537,8 @@ export interface MissionRequirement {
 }
 
 export interface MissionDefinition {
+  /** Resolved-state objective; never displayed before the repair succeeds. */
+  resolutionObjective?: string;
   id: string;
   version: number;
   contactId: string;

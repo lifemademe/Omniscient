@@ -19,6 +19,7 @@
  * with content, because on a remote surface these strings arrive over the network.
  */
 
+import * as ENGINE from '@gnsx/genesys.js';
 import { injectConsoleChrome } from './console-chrome.js';
 import { setRoomToneFocus } from '../audio/RoomTone.js';
 import { accessibleTextMilliseconds } from '../accessibility/preferences.js';
@@ -642,6 +643,20 @@ export const TERMINAL_CSS = `
 }
 .omni-terminal__input::placeholder { color: #3f6b48; }
 .omni-terminal__input:disabled { opacity: 0.4; }
+.omni-resolution-continue { margin-top: 12px; }
+.omni-resolution-continue[hidden] { display: none; }
+.omni-resolution-continue .ui-layout { position: static; }
+.omni-resolution-continue .ui-button {
+  width: 100%; min-height: 38px; border-radius: 2px;
+  font: 12px 'Courier New', monospace; letter-spacing: 0.14em;
+  color: #d8ffb0; background: #14291b; border: 1px solid #537e50;
+  box-shadow: none; text-transform: uppercase;
+}
+.omni-resolution-continue .ui-button:hover { background: #203c28; }
+.omni-cv--resolving .omni-terminal__entry,
+.omni-cv--resolving .omni-terminal__hint,
+.omni-cv--resolving .omni-suggest,
+.omni-cv--resolving .omni-observed { display: none !important; }
 .omni-terminal--contact .omni-terminal__input {
   min-width: 0;
   padding: 7px 8px;
@@ -797,7 +812,14 @@ export class LocalSurface implements InterventionSurface {
   private compactTimer: number | null = null;
   private compactOnArrival = false;
 
-  constructor(private readonly container: HTMLElement) {}
+  private continueSlot: HTMLDivElement | null = null;
+  private continueButton: ENGINE.Button | null = null;
+
+  constructor(
+    private readonly container: HTMLElement,
+    private readonly uiManager?: ENGINE.UIManager,
+    private readonly onContinue?: () => void
+  ) {}
 
   public get connected(): boolean {
     return this.root !== null;
@@ -902,6 +924,24 @@ export class LocalSurface implements InterventionSurface {
     input.placeholder = 'transmit...';
     entry.append(caret, input);
     foot.append(suggestions, hint, noteFlag, entry);
+
+    if (this.uiManager && this.onContinue) {
+      const slot = document.createElement('div');
+      slot.className = 'omni-resolution-continue';
+      slot.hidden = true;
+      foot.appendChild(slot);
+      this.continueSlot = slot;
+      this.continueButton = new ENGINE.Button(this.uiManager, {
+        label: 'Continue', position: 'none', variant: 'outline', disabled: true,
+        onClick: () => {
+          this.continueButton?.setDisabled(true);
+          this.onContinue?.();
+        },
+      });
+      await this.continueButton.initialize();
+      const element = this.continueButton.getElement()?.element;
+      if (element) slot.appendChild(element);
+    }
 
     root.append(session, head, where, tabs, hintStrip, log, panel, extra, foot);
 
@@ -1358,6 +1398,21 @@ export class LocalSurface implements InterventionSurface {
       'omni-cv--leaving'
     );
     shell.classList.add('omni-cv--resolving');
+    if (this.continueSlot) this.continueSlot.hidden = false;
+    this.continueButton?.setLabel('Signal settling…');
+    this.continueButton?.setDisabled(true);
+    // The narrower result panel rewraps the final words during its 320ms transition.
+    // Re-anchor once it settles; afterwards the player owns the transcript scroll.
+    this.connectionTimers.push(window.setTimeout(() => {
+      if (this.shell === shell && this.logElement) {
+        this.logElement.scrollTop = this.logElement.scrollHeight;
+      }
+    }, 360));
+  }
+
+  public enableResolutionContinue(): void {
+    this.continueButton?.setLabel('Continue →');
+    this.continueButton?.setDisabled(false);
   }
 
   /**
@@ -1368,6 +1423,8 @@ export class LocalSurface implements InterventionSurface {
    * fully assembled interface on the first frame.
    */
   public beginConnection(compactOnArrival = false): void {
+    if (this.continueSlot) this.continueSlot.hidden = true;
+    this.continueButton?.setDisabled(true);
     const shell = this.shell;
     if (!shell) return;
     this.compactOnArrival = compactOnArrival;
@@ -1426,6 +1483,9 @@ export class LocalSurface implements InterventionSurface {
   }
 
   public detach(): void {
+    this.continueButton?.destroy();
+    this.continueButton = null;
+    this.continueSlot = null;
     this.clearConnectionTimers();
     this.cancelConsoleOpen();
     this.shell?.remove();

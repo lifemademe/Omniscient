@@ -2819,6 +2819,9 @@ function buildBeaconMast(scene: ContactScene): void {
    */
   const backdropRoot = ENGINE.SceneNode.create({ name: 'Night' });
   for (const part of createNightBackdrop(MOONLIGHT_AT)) {
+    if (part.name === 'Sky' && part.material instanceof THREE.MeshBasicMaterial) {
+      part.material.color.multiplyScalar(0.72);
+    }
     backdropRoot.add(meshOf(part.name, part.geometry, part.material));
   }
   scene.registerProp('backdrop', backdropRoot);
@@ -2885,7 +2888,7 @@ function buildBeaconMast(scene: ContactScene): void {
      * the sky it was drawn on; the tone curve had eaten it. This is the colour that survives
      * the pipeline, not the colour of the thing.
      */
-    top: '#9fb0d4',
+    top: '#344153',
     underside: '#1b2132',
     drift: 0.22,
   });
@@ -2972,8 +2975,23 @@ function buildBeaconMast(scene: ContactScene): void {
 
   const lensGeo = new THREE.CylinderGeometry(0.28, 0.28, 0.34, 10);
   lensGeo.translate(0, beaconY + 0.08, 0);
-  const lens = meshOf('BeaconLens', lensGeo, MAT.beaconLit);
+  const beaconLensMaterial = MAT.beaconLit.clone();
+  beaconLensMaterial.color.set('#98703b');
+  const lens = meshOf('BeaconLens', lensGeo, beaconLensMaterial);
   beaconRoot.add(lens);
+
+  // Cage ribs retain a physical lens silhouette even at peak illumination.
+  for (let rib = 0; rib < 4; rib++) {
+    const angle = rib * Math.PI / 2;
+    const bar = new THREE.BoxGeometry(0.032, 0.39, 0.032);
+    bar.translate(Math.cos(angle) * 0.285, beaconY + 0.08, Math.sin(angle) * 0.285);
+    beaconRoot.add(meshOf('LensCage', bar, MAT.metal));
+  }
+  for (const y of [beaconY - 0.105, beaconY + 0.265]) {
+    const rim = new THREE.CylinderGeometry(0.305, 0.305, 0.035, 10);
+    rim.translate(0, y, 0);
+    beaconRoot.add(meshOf('LensRim', rim, MAT.metal));
+  }
 
   /**
    * Brighter, and reaching further, because the fault was two luminance values deep.
@@ -3052,8 +3070,8 @@ function buildBeaconMast(scene: ContactScene): void {
   const halo: ENGINE.MeshNode[] = [];
   const haloThresholds: number[] = [];
   for (const [size, opacity, threshold] of [
-    [1.5, 0.52, 0.18],
-    [3.0, 0.3, 0.34],
+    [1.1, 0.23, 0.18],
+    [2.2, 0.09, 0.34],
   ] as const) {
     const quad = new THREE.PlaneGeometry(size, size);
     quad.translate(0, beaconY + 0.08, 0);
@@ -3084,7 +3102,7 @@ function buildBeaconMast(scene: ContactScene): void {
     new THREE.MeshBasicMaterial({
       color: new THREE.Color('#ffd27a'),
       transparent: true,
-      opacity: 0.035,
+      opacity: 0.009,
       depthWrite: false,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
@@ -3129,7 +3147,7 @@ function buildBeaconMast(scene: ContactScene): void {
         }
       }
       const dark = strength < 0.48;
-      lens.material = dark ? MAT.beaconDark : MAT.beaconLit;
+      lens.material = dark ? MAT.beaconDark : beaconLensMaterial;
       glow.intensity = 15 * strength;
       // The bloom goes with it. A glow left hanging round a dead lens is the single most
       // obvious way for this whole effect to look like a bug.
@@ -3151,7 +3169,7 @@ function buildBeaconMast(scene: ContactScene): void {
          * change when the thing it is about comes good says the thing did not matter.
          */
         roomToneSwell();
-        lens.material = MAT.beaconLit;
+        lens.material = beaconLensMaterial;
         glow.intensity = 18;
         for (const shell of halo) shell.visible = true;
         sweepRoot.visible = true;
@@ -3166,7 +3184,7 @@ function buildBeaconMast(scene: ContactScene): void {
   // the town." None of that existed either. The feed now visibly leaves the light, stops
   // at the bracket, and leaves again in a direction that is not the light - which is the
   // whole deduction, sitting there for anybody who looks.
-  const spliceAt = new THREE.Vector3(0.3, 2.6, 0.36);
+  const spliceAt = new THREE.Vector3(0.05, 2.78, 1.08);
 
   const feedDown = new THREE.TubeGeometry(
     new THREE.CatmullRomCurve3([
@@ -3198,14 +3216,41 @@ function buildBeaconMast(scene: ContactScene): void {
   scene.registerProp('feed-away', meshOf('FeedAway', feedAway, MAT.dark));
 
   // -- The splice bracket - the object the whole mission turns on -----------
-  const spliceBody = new THREE.BoxGeometry(0.24, 0.18, 0.14);
-  spliceBody.translate(0, 0.09, 0);
+  const enclosurePaint = new THREE.MeshStandardMaterial({
+    color: '#7f897b', roughness: 1, metalness: 0,
+  });
+  const mountingArm = new THREE.BoxGeometry(0.07, 0.065, 0.76);
+  mountingArm.translate(spliceAt.x, spliceAt.y + 0.06, 0.7);
+  scene.registerProp('splice-bracket', meshOf('SpliceBracket', mountingArm, MAT.metal));
+  const spliceBody = new THREE.BoxGeometry(0.24, 0.18, 0.028);
+  spliceBody.translate(0, 0.09, -0.056);
   const spliceRoot = ENGINE.SceneNode.create({ name: 'SpliceBox', position: spliceAt.clone() });
-  spliceRoot.add(meshOf('SpliceBody', spliceBody, MAT.equipment));
+  spliceRoot.add(meshOf('SpliceBody', spliceBody, enclosurePaint));
+
+  // The open enclosure and chunky terminals must survive the conversation raster.
+  for (const x of [-0.12, 0.12]) {
+    const side = new THREE.BoxGeometry(0.018, 0.18, 0.14);
+    side.translate(x, 0.09, 0);
+    spliceRoot.add(meshOf('SpliceSide', side, enclosurePaint));
+  }
+  const tray = new THREE.BoxGeometry(0.25, 0.018, 0.14);
+  tray.translate(0, 0.009, 0);
+  spliceRoot.add(meshOf('SpliceTray', tray, MAT.metal));
+  const terminals = new THREE.BoxGeometry(0.18, 0.035, 0.04);
+  terminals.translate(0, 0.04, 0.03);
+  spliceRoot.add(meshOf('SpliceTerminals', terminals, MAT.brass));
+  const fittedUnit = meshOf('FittedIsolator', new THREE.BoxGeometry(0.11, 0.09, 0.065), MAT.equipment);
+  fittedUnit.position.set(0, 0.108, 0.014);
+  fittedUnit.visible = false;
+  const isolatorSwitch = meshOf('IsolatorSwitch', new THREE.BoxGeometry(0.026, 0.034, 0.018), MAT.brass);
+  isolatorSwitch.position.set(0, 0, 0.039);
+  fittedUnit.add(isolatorSwitch);
+  spliceRoot.add(fittedUnit);
+  spliceRoot.scale.setScalar(1.45);
 
   const lidGeo = new THREE.BoxGeometry(0.24, 0.02, 0.14);
   lidGeo.translate(0, 0.01, 0);
-  const lid = meshOf('SpliceLid', lidGeo, MAT.metal);
+  const lid = meshOf('SpliceLid', lidGeo, enclosurePaint);
   const lidPivot = ENGINE.SceneNode.create({
     name: 'LidPivot',
     position: new THREE.Vector3(0, 0.18, -0.07),
@@ -3217,15 +3262,21 @@ function buildBeaconMast(scene: ContactScene): void {
     anchors: { default: new THREE.Vector3(0, 0.1, 0.08) },
     actions: {
       open: (tweener) => {
+        scene.setCertainty('splice-box', CERTAINTY.DESCRIBED);
         tweener.add((t) => lidPivot.rotation.set(-1.2 * t, 0, 0), {
           duration: 0.9,
           easing: Ease.outCubic,
           channel: 'splice-lid',
         });
       },
+      steady: () => {
+        scene.setCertainty('splice-box', CERTAINTY.KNOWN);
+        fittedUnit.visible = true;
+        lidPivot.rotation.x = -1.2;
+      },
       spark: (tweener) => {
         tweener.add(
-          (t) => spliceRoot.position.setX(0.3 + Math.sin(t * Math.PI * 6) * 0.015 * (1 - t)),
+          (t) => spliceRoot.position.setX(spliceAt.x + Math.sin(t * Math.PI * 6) * 0.015 * (1 - t)),
           {
             duration: 0.5,
             easing: Ease.linear,
@@ -3237,6 +3288,14 @@ function buildBeaconMast(scene: ContactScene): void {
   });
 
   // -- Tomas ----------------------------------------------------------------
+  scene.onReset(() => {
+    beaconClock = 0;
+    beaconSteady = false;
+    fittedUnit.visible = false;
+    lidPivot.rotation.x = 0;
+    spliceRoot.position.copy(spliceAt);
+  });
+
   //
   // He was not in his own scene at all: the player spent the entire request talking to
   // somebody who had never been rendered.
@@ -3262,47 +3321,8 @@ function buildBeaconMast(scene: ContactScene): void {
     // somewhere dangerous.
     colors: { garment: '#a8582c', underlayer: '#3f4a52' },
     position: new THREE.Vector3(0.62, platformY + 0.03, 0.55),
-    /**
-     * Turned round to face the lens, three-quarter.
-     *
-     * At -0.72*PI he faced (-0.77, 0, -0.64) and the camera sits at (4.4, 3.9, 4.4), so
-     * the default shot was the back of a man's coat: no eyes, no face, no read on the one
-     * person in the frame. Solved rather than nudged - +0.247*PI points him exactly at the
-     * lens, and 0.40 is three quarters of the way there, which keeps a shoulder turned to
-     * the rail he is holding instead of squaring him up like a portrait.
-     */
-    /**
-     * Turned round to face the lens.
-     *
-     * At -0.72*PI he faced (-0.77, 0, -0.64) against a camera at (4.4, 3.9, 4.4), so the
-     * default shot was the back of a man's coat - no face, no eyes, no read on the only
-     * person in frame. Solved rather than nudged: +0.247*PI points him exactly at the lens
-     * and +0.20 is a hair off it, which keeps a shoulder turned toward the rail instead of
-     * squaring him up like a passport photograph.
-     *
-     * The turn had a cost and it is worth recording: it swung his shoulder away from the
-     * rail he was holding and put the old grip 11cm out of reach. Facing and reach are one
-     * problem, not two, and moving a contact without re-running scripts/dev/reach.py is
-     * how three of them ended up not touching anything in the first place.
-     */
-    rotation: new THREE.Euler(0, Math.PI * 0.2, 0),
-    /**
-     * Both hands on the guardrail.
-     *
-     * The rail went from shin height to 1.05m in the same audit that measured the rest of
-     * the room, and this is the other half of it: a barrier only reads as a barrier when
-     * somebody is holding it. He is watching his own light go out from two metres up a
-     * lattice in the wind, and a man in that position has his hands on the rail.
-     */
-    /**
-     * One hand on the rail, which is what the comment above always said.
-     *
-     * Both were authored, and the left needed 0.720 against a 0.623 arm - it could never
-     * land, and before the generator learned to fall back it drew a straight arm pointing
-     * at a rail it was not touching. Sliding the grip along the rail only bought 0.06, so
-     * the honest fix is the one the prose already described: braced with one hand, the
-     * other free.
-     */
+    // Face the working camera, with the near-side hand braced on the guardrail.
+    rotation: new THREE.Euler(0, -Math.PI * 0.15, 0),
     handsOn: {
       /*
        * z 0.94, not 0.75. The handrail runs along z 0.94 at y 3.07, and the height
@@ -3312,7 +3332,7 @@ function buildBeaconMast(scene: ContactScene): void {
        * 0.925 rather than 0.94 so the palm meets the near face of a 45mm rail rather
        * than floating at its centre line.
        */
-      right: new THREE.Vector3(0.85, 3.07, 0.925),
+      right: new THREE.Vector3(0.22, 3.07, 0.925),
     },
     // He is six metres up a lattice on a headland at night. The one figure in the cast
     // with weather on him gets the larger idle - still under two centimetres at the head,
@@ -3460,23 +3480,11 @@ function buildBeaconMast(scene: ContactScene): void {
     'face-fill',
     ENGINE.PointLightNode.create({
       name: 'FaceFill',
-      position: new THREE.Vector3(2.6, 3.1, 2.8),
-      /*
-     * 12, from 5.5. Tomas has to read in VALUE, not in hue.
-     *
-     * A critic put it plainly: this frame "reads only in colour - orange hi-vis on blue",
-     * which Law 1 forbids outright. Measured, he sat at 15 against water at 26 - the only
-     * thing telling him apart from the sea was that he is orange, and desaturated he
-     * disappeared into a 74% value plateau.
-     *
-     * The sea now carries its own texture, which broke the plateau, and this is the other
-     * half: he is standing directly beneath a lit beacon, so the light on him is the most
-     * motivated in the scene. Nothing else moves and nothing is darkened - the sea stays
-     * where it is and he comes up off it.
-     */
-    intensity: 12,
+      position: new THREE.Vector3(0.55, 3.5, 1.4),
+      // A local cool floor keeps his features readable through the beacon's dark phase.
+      intensity: 4,
       color: new THREE.Color('#9fb6cc'),
-      distance: 5.5,
+      distance: 1.8,
       decay: 1.5,
     })
   );
@@ -3508,87 +3516,18 @@ function buildBeaconMast(scene: ContactScene): void {
     if (!weathered) console.warn('[scene] salt and rust touched nothing on the mast');
   });
 
-  /**
-   * The establishing shot. Round to the landward side, and up.
-   *
-   * The old one held everything and arranged nothing. Projected through the 46 degree lens,
-   * Tomas landed at screen x 0.506, the beacon at 0.500 and the splice box at 0.495 - three
-   * subjects stacked on one vertical line inside thirteen thousandths of the frame's width,
-   * which is a totem pole. His perpendicular distance from the camera axis was 0.42m, three
-   * centimetres under the 0.45-0.90 band the rule at the top of this file exists to enforce,
-   * and that rule exists precisely to stop a person standing on top of the evidence.
-   *
-   * The beacon was worse. It landed at y 0.119 and the REQUEST banner runs 0.072 to 0.115,
-   * so the object the entire mission is about sat four thousandths of frame height under the
-   * interface and read as clipped.
-   *
-   * ## What this one holds, and why it is worth the move
-   *
-   * From (0, 4.95, 6.0) looking at (0.5, 4.0, -0.2), 6.29m:
-   *
-   *     the beacon lens   x 0.427  y 0.170     top third, clear of the banner
-   *     Tomas's chest     x 0.528  y 0.667     lower right, whole figure in frame
-   *     the splice box    x 0.477  y 0.792     between them, at the foot of the mast
-   *     the harbour       x 0.025  y 0.762     the town the light is for
-   *     perpendicular 0.82m, inside the band
-   *
-   * Three subjects at three heights on three slightly different verticals, which is a
-   * composition rather than a stack. And THE HARBOUR IS IN IT - the old framing looked out
-   * over open sea, so the mission never once showed the thing the light exists for.
-   *
-   * Checked by `scripts/dev/probe-mast.ts`, which fails the build of this shot if any of the
-   * above stops being true.
-   */
+  // Leave the beacon below the request band and the man inside the clear scene area.
   scene.registerShot('default', {
-    position: new THREE.Vector3(0, 4.95, 6),
-    target: new THREE.Vector3(0.5, 4, -0.2),
+    position: new THREE.Vector3(0, 4.9, 7),
+    target: new THREE.Vector3(1.5, 3.95, -0.2),
     // Held while the call opens. Wide shots take the larger float: the same offset in metres
     // covers less of the frame the further back the lens sits.
     drift: 0.085,
   });
-  /**
-   * The join on the bracket - and the shot the mission actually lives in.
-   *
-   * ## What was wrong, and it was not the aim
-   *
-   * The aim was never wrong; it has always pointed at the splice box at (0.3, 2.6, 0.36).
-   * The note this replaces is a careful piece of work about clearing the guardrail and
-   * clearing Tomas's torso, and every measurement in it was right. It solved the wrong
-   * problem, because clearing Tomas is not the same as INCLUDING him, and at 1.07m out he
-   * was not merely behind the console panel - he was outside the frustum entirely:
-   *
-   *     Tomas head    x 0.864  y -1.296     1.3 frame-heights above the top edge
-   *     Tomas feet    x 0.709  y  1.078     below the bottom edge
-   *     camera 0.65m from his face
-   *
-   * A capture cannot show you that, which is how it survived: there is nothing in the
-   * picture to notice the absence of. `scripts/dev/probe-mast.ts` settles it in one run, and
-   * it matters more here than anywhere else in the game because the mission holds this shot
-   * for 34 of its 44 seconds. Three quarters of a conversation with a man who was not there.
-   *
-   * ## What replaces it
-   *
-   * From (-1.10, 2.65, 2.0) looking at (0.45, 2.95, 0.3), 2.32m:
-   *
-   *     Tomas head     x 0.611  y 0.137     whole head, clear of the REQUEST banner
-   *     Tomas chest    x 0.613  y 0.317
-   *     Tomas feet     x 0.622  y 0.988     the full figure, right of frame
-   *     the splice box x 0.471  y 0.681     2.13m out - a 24cm box across a ninth of the width
-   *     perpendicular 0.46m, inside the 0.45-0.90 band
-   *
-   * A two-shot: the man on the right, the thing he is working on at lower left, both legible,
-   * neither in front of the other. The camera sits at 2.65 against his eyeline at 3.67, so it
-   * looks UP at him, which is the correct angle for somebody two metres up a lattice and the
-   * one the old shot could not have because it was level with his chest.
-   *
-   * The old note's occlusion work is preserved rather than discarded - the sightline to the
-   * box crosses the guardrail plane at z 0.94 at y 2.70, between the mid rail at 2.56 and the
-   * handrail at 3.07, and 0.18m from the nearest upright. That check is now in the probe, so
-   * it cannot be lost again by somebody moving the camera for a different reason.
-   */
+  // Two-shot composed for the clear left region, including the wider Console panel.
   scene.registerShot('mast-cable', {
-    position: new THREE.Vector3(-1.1, 2.65, 2),
-    target: new THREE.Vector3(0.45, 2.95, 0.3),
+    position: new THREE.Vector3(-1.35, 3.15, 2.65),
+    target: new THREE.Vector3(1.0, 3.05, 0.55),
     duration: 2.4,
     /*
      * This is the shot TOMAS-REVIEW measured being held for 34 of the mission's 44 seconds
@@ -3599,32 +3538,12 @@ function buildBeaconMast(scene: ContactScene): void {
      * same metres cover nearly three times as much of the frame. Tuned in screen terms, not
      * world terms - which is the only way a drift number means anything.
      */
-    drift: 0.05,
+    drift: 0.025,
   });
-  /**
-   * The payoff, and the man it is for.
-   *
-   * The old framing was a light on a stick against a black sky. Tomas projected to y 1.430 -
-   * a frame and a half below the bottom edge - and the harbour was not in it either, so at
-   * the moment his problem is solved the shot contained neither the person nor the town.
-   * It was also, measurably, a weaker picture than the establishing shot it followed: that
-   * one has a coastline and a scatter of harbour lights, this one had four white cloud slabs.
-   *
-   * From (0.2, 5.6, 4.4) looking at (0.2, 4.6, -0.2), 4.71m:
-   *
-   *     the beacon lens   x 0.459  y 0.221
-   *     Tomas's head      x 0.589  y 0.802     watching it, bottom right
-   *     the harbour       x 0.055  y 0.783     bottom left, the same height as him
-   *
-   * A light, the man who fixed it, and the town it is for, in one frame. That is the mission
-   * in a picture, and it is the last thing the player sees before the call ends.
-   *
-   * Held on the same side of the mast as the other two shots, so none of the three cuts
-   * crosses the line.
-   */
+  // The steady lamp and Tomas stay together in the closing frame.
   scene.registerShot('beacon', {
-    position: new THREE.Vector3(0.2, 5.6, 4.4),
-    target: new THREE.Vector3(0.2, 4.6, -0.2),
+    position: new THREE.Vector3(0.1, 4.85, 6.8),
+    target: new THREE.Vector3(1.4, 3.95, -0.2),
     duration: 2.2,
   });
 

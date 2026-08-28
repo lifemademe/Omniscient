@@ -54,7 +54,7 @@ import { MowerPlot } from './link/MowerPlot.js';
 import { playM4SSHandoff } from './link/M4SSHandoff.js';
 import { DriveKeys } from './view/mowing.js';
 import { installSceneJump } from './dev/SceneJump.js';
-import { playWarp } from './art/warp.js';
+import { playSignalClose, playWarp } from './art/warp.js';
 import { applyShadowPolicy, castShadows } from './art/shadows.js';
 import { SystemPanel } from './menu/SystemPanel.js';
 import { createSeaLife } from './geometry/seaLife.js';
@@ -394,7 +394,13 @@ const SCREEN_SHOT: CameraShot = {
 };
 
 /** Seconds spent at the machine after a request resolves, before the next signal. */
-const HOME_DWELL = 5.5;
+const HOME_DWELL = 2.8;
+
+/** One readable look at the new branch, with the CRT casing still in frame. */
+const RESULT_SHOT: CameraShot = {
+  position: new THREE.Vector3(0.16, 0.43, -60.13),
+  target: new THREE.Vector3(0, 0.27, -61.05),
+};
 
 /**
  * Seconds the Contact View is held after a request resolves, before the camera leaves.
@@ -550,6 +556,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private pauseRemaining = 0;
   /** Seconds left holding the Contact View after a resolution. Zero when not holding. */
   private resolveHold = 0;
+  private resolutionPending = false;
+  private recentlyResolved: string | undefined;
   /** The wordmark at the head of the menu. Only ever visible on the menu itself. */
   private facilityPlate: THREE.Object3D | null = null;
   /** Counting down to leaving a LOST request - see closeLostRequest. */
@@ -924,6 +932,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (ENGINE.isPublishedGame()) return;
 
     for (const request of this.queue) {
+      const id = request.mission.contactId;
+      if (this.answered.includes(id) || this.signals.find((signal) => signal.id === id)?.state === SignalState.Resolved) {
+        this.setSignalState(id, SignalState.Resolved);
+        this.openable.delete(id);
+        continue;
+      }
       this.setSignalState(request.mission.contactId, SignalState.Waiting);
       this.openable.add(request.mission.contactId);
     }
@@ -2306,7 +2320,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       return;
     }
 
-    this.phone = new LocalSurface(container);
+    this.phone = new LocalSurface(container, world.uiManager, () => this.returnHome());
 
     /**
      * §222: the conversation appears on the desktop AND on any paired second screen.
@@ -2907,6 +2921,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
    */
   private leaveContact(): void {
     if (this.phase !== Phase.Contact) return;
+    if (this.resolutionPending) {
+      if (this.resolveHold <= 0) this.returnHome();
+      return;
+    }
 
     /*
      * A lost request that is already on its way out leaves by the other door.
@@ -3750,221 +3768,68 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * resolution set going, and then the camera goes home.
    */
   private holdThenReturnHome(acknowledgementDelayMs = 0): void {
-    setCursorVisible(false);
+    this.resolutionPending = true;
+    // Reading time is unbounded now: record success before waiting, not after Continue.
+    const id = this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
+    if (id) {
+      this.setSignalState(id, SignalState.Resolved);
+      this.openable.delete(id);
+      if (!this.answered.includes(id)) this.answered.push(id);
+      this.topUpGlobe();
+      this.persist();
+    }
+    setCursorVisible(true);
     this.phone?.beginResolution();
-
-    /*
-     * Let the authored result shot land first, then breathe a fraction closer into it.
-     *
-     * Outcome transitions frequently start a 1.4-2.2 second prop/camera cue on the same
-     * frame as this hook. Moving immediately would cancel the very payoff this hold exists
-     * to show. At 2.35 seconds those moves are settled; a 3.5% push that preserves the
-     * current target reads as attention, not as a new shot, and finishes before departure.
-     */
-    const resolvedScene = this.scene;
-    const settleDelay = Math.max(2.35, acknowledgementDelayMs / 1000 + 0.25);
-    this.cameraTweener.add(() => undefined, {
-      duration: 0.01,
-      delay: settleDelay,
-      channel: 'resolve-settle',
-      onComplete: () => {
-        if (this.phase !== Phase.Contact || this.scene !== resolvedScene) return;
-        const settle: CameraShot = {
-          position: this.cameraPosition.clone().lerp(this.cameraTarget, 0.035),
-          target: this.cameraTarget.clone(),
-        };
-        this.moveTo(settle, 1.35);
-      },
-    });
+    // Let the authored repair and acknowledgement finish before enabling Continue.
     this.resolveHold = Math.max(RESOLVE_HOLD, acknowledgementDelayMs / 1000 + 1.35);
   }
 
   private returnHome(): void {
-    // The carrier falls away as the camera pulls back. Solving a request and leaving one
-    // should sound the same from here on: the difference was in the verdict cue, and the
-    // link closing is the link closing.
+    if (this.phase !== Phase.Contact || !this.resolutionPending) return;
+    this.resolutionPending = false;
+    this.resolveHold = 0;
     audio.setOnAir(false);
     setCursorVisible(false);
-
-    /**
-     * The pull back into the machine.
-     *
-     * Fired here rather than at the outcome, because this is the moment the CAMERA starts
-     * moving - the effect is the room rushing past, and it has nothing to be past until
-     * the shot begins. Matched to the home move's own duration so the green is gone by the
-     * time the workstation settles rather than hanging over it.
-     *
-     * It also does a job beyond looking good. The cut from somebody's cellar to a desk
-     * sixty units away is the hardest edit in the game, and until now it was a straight
-     * camera move between two unrelated rooms. Green at the edges says who is doing the
-     * moving.
-     */
-    const warpContainer = this.getWorld()?.gameContainer;
-    /**
-     * Its own duration, and deliberately longer than the camera move.
-     *
-     * Matching the shot exactly sounded right and played wrong: two seconds is not long
-     * enough to register as an event, so it read as a flash. Running past the end of the
-     * move means the machine is still pulling as the desk settles, which is the right way
-     * round - the arrival should finish under it rather than the other way about.
-     */
-    if (warpContainer) playWarp(warpContainer);
-
-    /**
-     * The tube closes back over you.
-     *
-     * Blended rather than snapped, and timed to ride the warp: by the time the desk
-     * settles the curvature, the scanlines and the vignette are back, so the arrival home
-     * is a change of medium and not just a change of address. Leaving for a diorama is the
-     * same move in reverse - see `mountScene`.
-     */
-    setRetroLook('console');
-    // The room's air comes home with the picture. Both halves of "a change of medium".
-    setRoomTone('home');
-    adaptiveScore.setState('home');
-
-    /**
-     * And the room goes with you.
-     *
-     * This was missing, and it is the whole of the reported fault: solving a request left
-     * the diorama LIVE. `leaveLostRequest` has always deactivated it, `mountScene`
-     * deactivates the previous one on the way in - but returning home mounts nothing, so
-     * the success path had nowhere the scene was ever put away, and it stayed in the world
-     * with everything in it still rendering.
-     *
-     * Reported against Adaeze because hers is the brightest set in the game and the only
-     * one with weather. A directional sun, a skylight and a 62-unit unlit sky shell do not
-     * stop existing when the camera is somewhere else: they were lighting the workstation
-     * from sixty units away, which is why the console room's walls came back blown to
-     * white and its desk to flat saturated blue. Every other room leaked too - it was only
-     * visible when the room that leaked had a sun in it.
-     *
-     * Here rather than after the camera settles, matching the two paths that already did
-     * it. The warp is over the top of this and the retro look has just changed on the same
-     * tick, so the medium is already announcing the cut.
-     */
+    this.phone?.setLeaving(true);
     this.releaseUnit(false);
     this.post?.clearOutlineSelection();
-    // Anything a beat asked the world to do later is not going to happen now.
     this.cueTweener.clear();
 
-    /**
-     * The room is held for the first half second of the move home, and this is a two-frame
-     * change that fixes the hardest edit in the game.
-     *
-     * It used to run here, on the same tick `moveTo(HOME_SHOT)` starts. Frame-stepped at
-     * 30fps that reads as: one frame of the porch at mean luminance 28.6, the next at 1.4,
-     * and then a 2.2 second fade up into the workstation. A hard cut out and a slow fade in.
-     *
-     * An asymmetric transition is the shape of a LEVEL LOAD. A symmetric one is the shape of
-     * a move, and the whole fiction here is that the machine is pulling back through its own
-     * link rather than that the game is changing scene. The warp overlay cannot cover for it:
-     * it is deliberately edge-weighted, so during the cut the middle of the frame - which is
-     * where the room was - has nothing in it at all.
-     *
-     * 0.45s, which is a fifth of the home move. Long enough that the camera has visibly left
-     * before the room goes, short enough that a scene with a sun in it is not lighting the
-     * workstation for any length of time - the leak this deactivate was added to fix.
-     *
-     * Guarded on identity rather than on a flag: if anything mounts another scene inside that
-     * half second, the one this closure is holding is already gone and deactivating it twice
-     * would be the fault in the other direction.
-     */
-    const leaving = this.scene;
-    this.scene = null;
-    this.cameraTweener.add(() => undefined, {
-      duration: 0.01,
-      delay: 0.45,
-      channel: 'scene-teardown',
-      onComplete: () => leaving?.deactivate(),
-    });
-
-    this.setPhase(Phase.Home);
-    this.screen = Screen.Tree;
-    this.phone?.setVisible(false);
-    this.pauseRemaining = HOME_DWELL;
-    this.moveTo(HOME_SHOT, HOME_SHOT.duration ?? 2.0);
-
-    /*
-     * Lean toward the tube while the branch draws, then sit back.
-     *
-     * Phase.Home is documented as "watching the tree grow" and HOME_DWELL gives it five and
-     * a half seconds - so the beat was authored long before I looked at it. What was missing
-     * is that the camera spends those seconds at HOME_SHOT, where the CRT is a small shape
-     * across a room, and the game therefore holds for five seconds on something the player
-     * cannot read.
-     *
-     * A PARTIAL push, deliberately. Going all the way to SCREEN_SHOT is the full-face
-     * framing the globe uses, and arriving there would read as entering the globe rather
-     * than as looking at the tree - the same move meaning two different things is how a
-     * camera language stops being one. A push that stops short says "look at this"; one that
-     * arrives says "we are going in".
-     *
-     * Timed inside the dwell rather than replacing it: it starts once the home move has
-     * settled and is back before the dwell expires, so nothing downstream has to know this
-     * happened.
-     */
-    const lean = {
-      position: HOME_SHOT.position.clone().lerp(SCREEN_SHOT.position, 0.34),
-      target: HOME_SHOT.target.clone().lerp(SCREEN_SHOT.target, 0.34),
-    };
-    this.cameraTweener.add(() => undefined, {
-      duration: 0.01,
-      delay: 2.2,
-      channel: 'tree-lean',
-      onComplete: () => {
-        if (this.phase !== Phase.Home) return;
-        this.moveTo(lean, 1.5);
-        this.cameraTweener.add(() => undefined, {
-          duration: 0.01,
-          /*
-           * Back before the dwell expires, not after.
-           *
-           * HOME_DWELL is 5.5s. The lean starts at 2.2 and takes 1.5, so sitting back at 1.8
-           * after it puts the camera home at 5.2 - a beat of stillness before whatever comes
-           * next takes the shot. At 2.6 the return was still in flight when the dwell ended
-           * and got cancelled by the next camera move, which is not a fault anybody would
-           * see but is a move that never finishes.
-           */
-          delay: 1.8,
-          channel: 'tree-sit-back',
-          onComplete: () => {
-            if (this.phase === Phase.Home) this.moveTo(HOME_SHOT, 1.2);
-          },
-        });
-      },
-    });
-
-    // Resolving Mirela's request is what puts Tomas on the globe - §163's consequence
-    // chain, visible before the player knows why.
     const resolvedId = this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
     if (resolvedId) {
       this.setSignalState(resolvedId, SignalState.Resolved);
-      // Appended rather than sorted: this list IS the order, and it is the only place the
-      // order exists.
+      this.openable.delete(resolvedId);
       if (!this.answered.includes(resolvedId)) this.answered.push(resolvedId);
+      this.recentlyResolved = resolvedId;
     }
     this.activeIndex = null;
-
     this.topUpGlobe();
     const written = this.persist();
-    /*
-     * Say that the save happened, where the eye is not. "Progress saves" is a promise a
-     * player cannot verify without quitting, so a small diegetic line - WRITING TO TAPE -
-     * sits in the lower right through the ride home and fades. The persist() above is the
-     * fact; this is the receipt.
-     */
-    this.flashSaveNote(written);
 
-    /*
-     * The last answer arms the ending. Everything in the queue resolved - not merely
-     * offered, RESOLVED - is the one condition; a lost request in cooldown keeps the
-     * machine honestly unfinished until it is answered too.
-     */
+    // Swap rooms only under an opaque carrier break; no flight through unrelated sets.
+    const leavingScene = this.scene;
+    const arrive = () => {
+      // Play may have ended or a development jump may have opened another room.
+      if (this.phase !== Phase.Contact || this.scene !== leavingScene || !this.session) return;
+      this.scene?.deactivate();
+      this.scene = null;
+      setRetroLook('console');
+      setRoomTone('home');
+      adaptiveScore.setState('home');
+      this.setPhase(Phase.Home);
+      this.screen = Screen.Tree;
+      this.phone?.setVisible(false);
+      this.cutTo(RESULT_SHOT);
+      this.revealProgress = 0;
+      this.pauseRemaining = HOME_DWELL;
+      this.flashSaveNote(written);
+    };
+    const container = this.getWorld()?.gameContainer;
+    if (container) playSignalClose(container, arrive);
+    else arrive();
+
     const allResolved = this.queue.every(
-      (request) =>
-        this.signals.find((signal) => signal.id === request.mission.contactId)?.state ===
-        SignalState.Resolved
+      (request) => this.signals.find((signal) => signal.id === request.mission.contactId)?.state === SignalState.Resolved
     );
     if (allResolved && !this.endingShown) this.endingDelay = 7.0;
   }
@@ -4143,6 +4008,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   /** Swap the diorama. One scene is live at a time - §133 foregrounds a single contact. */
   private mountScene(sceneId: string): void {
+    this.resolveHold = 0;
+    this.resolutionPending = false;
     this.releaseUnit(false);
     // A delayed cue belongs to the room that asked for it. Nothing here should fire into
     // the next one, and a `prop.` cue naming a prop the new scene does not have is silent.
@@ -4970,7 +4837,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (this.globeHandoff > 0) {
       this.globeHandoff -= deltaTime;
       if (this.globeHandoff <= 0) {
-        this.globeScreen?.attach(this.signals, this.openable, this.answered);
+        this.globeScreen?.attach(this.signals, this.openable, this.answered, this.recentlyResolved);
+        this.recentlyResolved = undefined;
       }
     }
 
@@ -5009,7 +4877,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.resolveHold -= deltaTime;
       if (this.resolveHold <= 0) {
         this.resolveHold = 0;
-        this.returnHome();
+        this.phone?.enableResolutionContinue();
       }
     }
 

@@ -137,7 +137,6 @@ export const CONSOLE_CHROME_CSS = `
  */
 .omni-cv--resolving .omni-cv__readouts,
 .omni-cv--resolving .omni-cv__actions,
-.omni-cv--resolving .omni-objective,
 .omni-cv--resolving .omni-tabs,
 .omni-cv--resolving .omni-suggest,
 .omni-cv--resolving .omni-terminal__input,

@@ -125,6 +125,7 @@ export const MISSION_02: MissionDefinition = {
   sceneId: 'scene-beacon-mast',
   archetype: 'diagnosis',
   objective: 'Find out why the harbour light keeps going out, and make it hold.',
+  resolutionObjective: 'Harbour light stabilised.',
   // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
   reopeningSay: 'It went out twice more since last time. I kept the log going anyway.',
   urgency: Urgency.Timed,
@@ -607,7 +608,7 @@ export const MISSION_02: MissionDefinition = {
            * the consequence - both on the same tick would read as one switch being thrown.
            * See registerLightBeat('beacon').
            */
-          environment: 'prop.steady:beacon@2.8,light.hold:beacon@3.3',
+          environment: 'prop.steady:splice-box,prop.steady:beacon@2.8,light.hold:beacon@3.3',
         },
         // A wrong part is fitted and the request is lost with it. See `fitted-wrong`.
         onWrong: { to: 'fitted-wrong' },

@@ -884,6 +884,38 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
+**F-1 globe / Tomas / completion subpass IN LOOP — Codex, 2026-08-28:**
+User-directed follow-up to the 03:41 recording. Bar: §3, §4.2/4.3/4.6 and the
+beacon silhouette reference for value hierarchy. Tomas and the junction must remain
+readable beside both contact panels; the repaired hardware and steady beacon must
+register before a player-controlled Continue; one composed CRT return should lead
+to a globe with truthful counts and a clear completion record. Runtime code only.
+Implementation and rendered gauntlet complete; local commit receipt pending below.
+Globe cards are compact, clustered labels use separate rows and leaders without moving
+their geographic dots, and resolved contacts retain truthful counts after editor reveal.
+The latest answer is highlighted in history and acknowledged on the globe. Tomas faces
+the working camera with a near-side rail grip; the splice enclosure sits forward of the
+rail on a bracket, exposes its terminals, and gains the fitted isolator on success.
+Local beacon/cage/halo and cloud tuning preserve the night hierarchy; a short-range cool
+fill holds his features during the dim phase without washing the scaffold. No shared
+material, saved scene, puzzle solution, or dialogue changes.
+Success is saved before an unbounded reading hold. Continue enables after the repair beat;
+the closing words re-anchor after the panel narrows. An opaque carrier break covers the
+cut to one readable CRT/tree shot (2.8s dwell), then the existing move enters the globe.
+Evidence: `scripts/dev/F1-tomas-r5-wide.jpg`, `F1-tomas-r5-close.jpg`,
+`F1-tomas-r5-console-0.jpg`, `F1-tomas-r5-console-2.jpg`,
+`F1-tomas-r5-console-full.jpg`, `F1-tomas-r5-complete-full.jpg`,
+`F1-tomas-r5-return-sheet.jpg`, `F1-tomas-r5-return-1.jpg`,
+`F1-tomas-r5-return-11.jpg`, and `F1-globe-r5-cluster.jpg` (all in `scripts/dev/`).
+Independent Tomas critic: **AT BAR** after five rendered rounds. Fresh cross-screen
+smoothing critic: **AT BAR**, including the final words/Continue, physical CRT beat,
+globe acknowledgment and clustered labels. The history subtitle is intentionally secondary.
+`pnpm lint`, `pnpm build`, and editor build passed; final bundle values and live R5 were
+checked. Captures cover 1282×752 and 1707×1019 windows and the normal repair path, not
+every mission or paired-phone flow. Existing editor `endPlay`/dispose “ensure failed”
+dialog recurred on preview exit; dismissing it restored readiness. This subpass does not
+close the broader F-1 environmental/menu gaps recorded below.
+
 **F-1 menu detail correction PAUSED — Codex, 2026-08-27:** User-directed follow-up to
 the accepted broad composition: restrain lamp haze/dust and shade gloss, articulate the
 cable connector and keep its route clear of the lamp, remove CRT hover-name duplication.

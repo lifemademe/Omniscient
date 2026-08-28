@@ -91,23 +91,24 @@ export function layoutLabels(
   projections: ReadonlyArray<{ x: number; y: number; signal: Signal }>
 ): Map<string, { x: number; y: number }> {
   const layout = new Map<string, { x: number; y: number }>();
-  const placed: Array<{ x: number; y: number }> = [];
+  const placed: Array<{ x: number; y: number; width: number }> = [];
 
   for (const projected of [...projections].sort((a, b) => a.y - b.y)) {
+    const width = Math.max(LABEL_GAP_X, projected.signal.name.length * 3.8 + 12);
+    const x = projected.signal.offworld ? projected.x : Math.max(8, Math.min(CANVAS_W - width - 8, projected.x));
     let y = projected.y;
-
-    // Loop rather than test once - three in a cluster need three different rows.
-    for (let guard = 0; guard < projections.length; guard++) {
-      const clash = placed.find(
-        (other) =>
-          Math.abs(other.x - projected.x) < LABEL_GAP_X && Math.abs(other.y - y) < LABEL_GAP_Y
+    // Search neighbouring rows in both directions. Geographic dots never move.
+    for (let row = 0; row <= projections.length * 2; row++) {
+      const offset = Math.ceil(row / 2) * LABEL_GAP_Y * (row % 2 ? 1 : -1);
+      y = Math.max(14, Math.min(CANVAS_H - 14, projected.y + offset));
+      const clash = placed.some((other) =>
+        x < other.x + other.width && x + width > other.x && Math.abs(other.y - y) < LABEL_GAP_Y
       );
       if (!clash) break;
-      y = clash.y + LABEL_GAP_Y;
     }
 
-    const spot = { x: projected.x, y };
-    placed.push(spot);
+    const spot = { x, y };
+    placed.push({ ...spot, width });
     layout.set(projected.signal.id, spot);
   }
 
@@ -165,7 +166,7 @@ const HIT_RADIUS = 16;
  * vertically; Y only needs to clear one line of text.
  */
 const LABEL_GAP_X = 34;
-const LABEL_GAP_Y = 11;
+const LABEL_GAP_Y = 13;
 
 const GLOBE_CSS = `
 .omni-globe {
@@ -198,6 +199,22 @@ const GLOBE_CSS = `
 .omni-cv--globe { pointer-events: none; }
 .omni-cv__body--globe { grid-template-columns: min(23vw, 260px) 1fr; }
 .omni-cv__readouts--globe { width: 100%; }
+.omni-cv--globe .omni-card { padding: 9px 11px; margin-bottom: 6px; }
+.omni-cv--globe .omni-meter,
+.omni-cv--globe .omni-card__sub { display: none; }
+.omni-cv--globe .omni-card__value { font-size: 16px; }
+.omni-globe__leader {
+  position: absolute; height: 1px; transform-origin: left center;
+  background: rgba(127,224,138,.35); pointer-events: none;
+}
+.omni-globe__name--selected { background: #183923; outline: 1px solid #7fe08a; }
+.omni-globe__completion {
+  position: absolute; z-index: 5; top: 9%; left: 50%; transform: translateX(-50%);
+  padding: 10px 18px; color: #cfe6c4; background: #09190f;
+  border-bottom: 1px solid #7fe08a; font-size: 13px; letter-spacing: .12em;
+  text-transform: uppercase; pointer-events: none; white-space: nowrap;
+}
+.omni-globe__completion[hidden] { display: none; }
 /*
  * The record shelf: what the machine has already done, in the order it did it.
  *
@@ -241,7 +258,8 @@ const GLOBE_CSS = `
   color: rgba(159, 216, 168, 0.55);
 }
 .omni-record__row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
   gap: 9px;
   align-items: baseline;
   padding: 4px 8px;
@@ -250,11 +268,14 @@ const GLOBE_CSS = `
   font-size: calc(11px + var(--omni-font-boost, 0px));
   color: rgba(159, 216, 168, 0.8);
 }
+.omni-record__row--recent { border-left-color: #d8ffb0; background: #183923; color: #d8ffb0; }
+.omni-record__row > span:not(.omni-record__where) { white-space: nowrap; }
 .omni-record__n {
   letter-spacing: 0.14em;
   color: #7fe08a;
 }
 .omni-record__where {
+  grid-column: 2;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -652,6 +673,10 @@ export class GlobeScreen {
   private inputEnabled = true;
   /** Contact ids in completion order, from the save. See OmniscientRig.answered. */
   private answeredOrder: readonly string[] = [];
+  private recentlyResolved: string | undefined;
+  private completionElement: HTMLElement | null = null;
+  private completionRemaining = 0;
+  private readonly leaderEls = new Map<string, HTMLElement>();
   /** Where each visible label ended up after de-collision. Also the hit-test targets. */
   private readonly layout = new Map<string, { x: number; y: number }>();
   /** The countdown line inside the open tip, rewritten in place each frame. */
@@ -690,8 +715,11 @@ export class GlobeScreen {
   public attach(
     signals: Signal[],
     openable: ReadonlySet<string>,
-    answeredOrder: readonly string[] = []
+    answeredOrder: readonly string[] = [],
+    recentlyResolved?: string
   ): void {
+    this.recentlyResolved = recentlyResolved;
+    this.completionRemaining = recentlyResolved ? 8 : 0;
     this.answeredOrder = answeredOrder;
     this.signals = signals;
     this.openable = openable;
@@ -716,6 +744,7 @@ export class GlobeScreen {
 
     if (this.root) {
       this.root.style.display = 'flex';
+      this.renderCompletion();
       return;
     }
 
@@ -723,6 +752,13 @@ export class GlobeScreen {
 
     const root = document.createElement('div');
     root.className = 'omni-globe';
+
+    const completion = document.createElement('div');
+    completion.className = 'omni-globe__completion';
+    completion.setAttribute('role', 'status');
+    root.appendChild(completion);
+    this.completionElement = completion;
+    this.renderCompletion();
 
     const stage = document.createElement('div');
     stage.className = 'omni-globe__stage';
@@ -878,6 +914,8 @@ export class GlobeScreen {
     this.tipEl = null;
     this.tipForId = null;
     this.nameEls.clear();
+    this.leaderEls.clear();
+    this.completionElement = null;
   }
 
   /** Advance rotation, cooldowns and the drawing. */
@@ -931,6 +969,10 @@ export class GlobeScreen {
   }
 
   public update(deltaTime: number): void {
+    if (this.completionRemaining > 0 && this.root?.style.display !== 'none') {
+      this.completionRemaining = Math.max(0, this.completionRemaining - deltaTime);
+      if (this.completionRemaining === 0) this.renderCompletion();
+    }
     if (!this.root || this.root.style.display === 'none') return;
 
     this.pulse = (this.pulse + deltaTime / 1.4) % 1;
@@ -965,7 +1007,7 @@ export class GlobeScreen {
   private renderRecord(): void {
     const strip = this.recordStrip;
     if (!strip) return;
-    const key = this.answeredOrder.join('|');
+    const key = `${this.answeredOrder.join('|')}:${this.recentlyResolved ?? ''}`;
     if (key === this.renderedRecordKey) return;
     this.renderedRecordKey = key;
 
@@ -982,6 +1024,7 @@ export class GlobeScreen {
       if (!signal) return;
       const row = document.createElement('div');
       row.className = 'omni-record__row';
+      row.classList.toggle('omni-record__row--recent', id === this.recentlyResolved);
 
       const n = document.createElement('b');
       n.className = 'omni-record__n';
@@ -1007,6 +1050,13 @@ export class GlobeScreen {
   }
 
   /** One margin readout, matching the Contact View's. */
+  private renderCompletion(): void {
+    if (!this.completionElement) return;
+    const contact = this.signals.find((signal) => signal.id === this.recentlyResolved);
+    this.completionElement.hidden = !contact || this.completionRemaining <= 0;
+    this.completionElement.textContent = contact ? `Link resolved // ${contact.name}` : '';
+  }
+
   private buildCard(label: string): GlobeCard {
     const card = document.createElement('div');
     card.className = 'omni-card';
@@ -1276,12 +1326,28 @@ export class GlobeScreen {
       }
 
       name.style.display = spot ? 'block' : 'none';
+      let leader = this.leaderEls.get(signal.id);
+      if (!leader) {
+        leader = document.createElement('span');
+        leader.className = 'omni-globe__leader';
+        this.marks.prepend(leader);
+        this.leaderEls.set(signal.id, leader);
+      }
+      leader.hidden = !spot || signal.offworld === true || Math.hypot(spot.x - projected.x, spot.y - projected.y) < 2;
       if (!spot) continue;
+
+      const dx = (spot.x - projected.x) * this.scale + 8;
+      const dy = (spot.y - projected.y) * this.scale;
+      leader.style.left = `${projected.x * this.scale}px`;
+      leader.style.top = `${projected.y * this.scale}px`;
+      leader.style.width = `${Math.hypot(dx, dy)}px`;
+      leader.style.transform = `rotate(${Math.atan2(dy, dx)}rad)`;
 
       seen.add(signal.id);
       name.className =
         `omni-globe__name omni-globe__name--${this.stateClass(signal)}` +
         (signal.offworld ? ' omni-globe__name--offworld' : '');
+      name.classList.toggle('omni-globe__name--selected', signal.id === this.selectedId);
       name.style.left = `${spot.x * this.scale}px`;
       name.style.top = `${spot.y * this.scale}px`;
 

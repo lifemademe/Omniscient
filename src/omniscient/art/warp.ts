@@ -164,3 +164,21 @@ export function playWarp(container: HTMLElement, seconds = 3.4): void {
 
 /** The colour this is keyed to, exported so a caller can match a light or a cue to it. */
 export const WARP_GREEN = ACCENT.knowledge;
+
+/** An opaque carrier break covers a room swap without travelling through world space. */
+export function playSignalClose(container: HTMLElement, onCovered: () => void): void {
+  const cover = document.createElement('div');
+  cover.style.cssText = 'position:absolute;inset:0;z-index:9000;background:#020705;pointer-events:auto;opacity:0;';
+  container.appendChild(cover);
+  const close = cover.animate([{ opacity: 0 }, { opacity: 1 }], {
+    duration: 240, easing: 'ease-in', fill: 'forwards',
+  });
+  void close.finished.then(() => {
+    if (!cover.isConnected) return;
+    onCovered();
+    const open = cover.animate([{ opacity: 1 }, { opacity: 0 }], {
+      delay: 80, duration: 360, easing: 'ease-out', fill: 'forwards',
+    });
+    void open.finished.then(() => cover.remove()).catch(() => cover.remove());
+  }).catch(() => cover.remove());
+}
