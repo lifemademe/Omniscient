@@ -43,7 +43,7 @@ import {
 import { decorMesh } from '../art/mesh.js';
 import { carInterior } from '../geometry/carInterior.js';
 import { createRainGlass } from '../art/rainGlass.js';
-import { CERTAINTY } from '../art/certainty.js';
+import { CERTAINTY, cloneKeepingShader } from '../art/certainty.js';
 import { createFloodwater } from '../art/floodwater.js';
 import { createRipples } from '../art/ripples.js';
 import { createTorchlight } from '../art/torchlight.js';
@@ -56,6 +56,7 @@ import { applyWaterline } from '../art/waterline.js';
 import { aimLight, applyShadowPolicy, castShadows } from '../art/shadows.js';
 import { CONTACT_GESTURES } from './gestures.js';
 import { placeRigged } from './riggedContact.js';
+import { dressRepairShop } from './repairShopDressing.js';
 import {
   buildStationScreen,
   SCREEN_H,
@@ -445,7 +446,9 @@ function buildRepairShop(scene: ContactScene): void {
    */
   const board = new THREE.BoxGeometry(3.4, 1.6, 0.03);
   board.translate(-0.1, 1.62, -1.805);
-  scene.registerProp('pegboard', meshOf('Pegboard', board, MAT.pegboard));
+  const repairPegboard = cloneKeepingShader(MAT.pegboard) as THREE.MeshStandardMaterial;
+  repairPegboard.color.multiplyScalar(0.62);
+  scene.registerProp('pegboard', meshOf('Pegboard', board, repairPegboard));
 
   /**
    * Growth over the top of the board - §264, and the second interior that admits the theme.
@@ -773,54 +776,12 @@ function buildRepairShop(scene: ContactScene): void {
    * behaviour a lamp wants. The channel and the caps are standard materials and do get
    * pulled, which is also correct: the steel is inferred, the light is on.
    */
-  /*
-   * ## What the batten is for, restated after the work lamp became a cone
-   *
-   * This was 1.1, and the note below still explains why it was modest: a batten that
-   * out-lit the workbench would be a beautifully made mistake. That reasoning is intact -
-   * what changed underneath it is which fixture lights the PEGBOARD.
-   *
-   * The old work lamp was a point light with 5.5m of reach, so it lit the bench, the back
-   * wall, the pegboard and the tools on it all at once. Turning it into the 3m cone the
-   * shade actually implies gave the bench the pool it never had - and took the pegboard
-   * with it, measured at 31% of the frame under luma 10 where it had been 9%. That wall
-   * carries the evidence the mission's note refers to; it cannot go dark to buy contrast
-   * somewhere else.
-   *
-   * So the pegboard goes back on the fixture that is really above it. The batten is cold
-   * and the bench pool is warm, so the two do not compete for the same read: the eye still
-   * goes to the radio because the radio is in the only warm light in the room, and the
-   * wall is legible because the strip light over it is on.
-   */
-  /*
-   * 1.6, down from 2.4 - a critic measured what 2.4 actually did.
-   *
-   * It was raised to 2.4 to stop the pegboard going dark when the work lamp became a cone,
-   * and it did that. It also made the tube's two glow discs the brightest field in the
-   * frame at 124, against the woman at 57-60 - so the brightest thing in a room whose
-   * subject is a person was a pool of light on BARE PLASTER. She was the third thing the
-   * eye found, after both pools.
-   *
-   * 1.6 still carries the pegboard, which is what the raise was for, without the wall
-   * out-reading the person standing in front of it.
-   */
-  /*
-   * 2.2. Back up, because the tube is bright again and it is the room's real overhead.
-   *
-   * Of the top 0.5% of the frame, 71% belonged to the bench pool, 26% to this strip, and
-   * 1.8% to the woman. The room the bar sets gets 98.9% of its top range from ONE source -
-   * every value in it is a single falloff, and the subject sits at that light's edge. This
-   * room had three co-equal lights and the subject was lit by the weakest of them.
-   *
-   * A batten over bare plaster is the one of the three with no claim to be a key: it is
-   * ambient, it lights a wall nobody is asked to look at, and at 2.4 it was the brightest
-   * field in the frame. It still has to carry the pegboard, which is what it was raised for.
-   */
-  const BATTEN_LEVEL = 3.8;
+  // The reflector sends light into the shop, not back onto the plaster beside the tube.
+  const BATTEN_LEVEL = 2.6;
 
   const tubeRoot = ENGINE.SceneNode.create({ name: 'BattenTube', position: BATTEN_AT.clone() });
   tubeRoot.add(meshOf('Tube', batten.body, MAT.tube));
-  const battenLamps: ENGINE.PointLightNode[] = [];
+  const battenLamps: ENGINE.SpotLightNode[] = [];
   let battenTime = 0;
   scene.registerProp('batten-tube', tubeRoot, {
     idle: (dt) => {
@@ -830,39 +791,27 @@ function buildRepairShop(scene: ContactScene): void {
     },
   });
 
-  /*
-   * And the light it makes - three points along the tube, a third of a budget each.
-   *
-   * LIGHT.fill rather than a fluorescent green-white, and the restraint is the point. This
-   * room is built on exactly two colours of light: a warm work lamp on the bench and cold
-   * daylight from the door, and every object in it separates because it has a warm side and
-   * a cold side. A third hue would muddy the one arrangement that is working. The GREEN
-   * lives in the tube's own material instead, where it says fluorescent up close without
-   * spilling a third colour over the room.
-   *
-   * 1.1 each, and modest on purpose. §187 wants one key plus controlled practicals; the
-   * work lamp is the key and stays several times this at the bench, so the eye still goes
-   * to the radio. A batten that out-lit the workbench would be a beautifully made mistake.
-   *
-   * The count and the spacing were both changed after looking at it - see the note on the
-   * anchors in `createFluorescentBatten` for what two points did to the wall.
-   */
+  // Three outward-facing samples approximate the shielded fluorescent tube.
   for (const [id, anchor] of [
     ['batten-lamp-a', batten.anchors.lampA],
     ['batten-lamp-b', batten.anchors.lampB],
     ['batten-lamp-c', batten.anchors.lampC],
   ] as [string, THREE.Vector3][]) {
-    const lamp = ENGINE.PointLightNode.create({
+    const lamp = ENGINE.SpotLightNode.create({
       name: 'BattenLamp',
       position: BATTEN_AT.clone().add(anchor),
       // Overwritten every frame by the flicker above; this is only what frame zero sees,
       // so it tracks BATTEN_LEVEL rather than sitting at a stale number.
       intensity: BATTEN_LEVEL,
-      color: new THREE.Color(LIGHT.fill),
+      color: new THREE.Color('#b6c6cc'),
       // Far enough down the wall to reach the tools, which is the whole job.
       distance: 4.2,
       decay: 1.5,
+      angle: 0.9,
+      penumbra: 0.85,
+      castShadow: false,
     });
+    lamp.lookAt(new THREE.Vector3(-1.05, 0.85, BATTEN_AT.z + anchor.z));
     battenLamps.push(lamp);
     scene.registerProp(id, lamp);
   }
@@ -980,41 +929,23 @@ function buildRepairShop(scene: ContactScene): void {
    * not. That has already put a connector on the floor for several weeks - see the note on
    * connector-b, which is the same mistake with a different prop.
    */
-  const shelf = createShelfStack('mirela-shelf');
+  const shelf = createShelfStack('mirela-shelf', false);
   const SHELF_AT = new THREE.Vector3(-2.1, 0, -1.4);
 
   const shelfRoot = ENGINE.SceneNode.create({ name: 'Shelf', position: SHELF_AT.clone() });
   shelfRoot.add(meshOf('ShelfBody', shelf.body, MAT.timber));
   scene.registerProp('shelf', shelfRoot);
 
-  const crateRoot = ENGINE.SceneNode.create({ name: 'ShelfCrates', position: SHELF_AT.clone() });
-  /*
-   * Dark, and the number that decided it is not the one I expected.
-   *
-   * `MAT.plastic` was obviously wrong the moment the SUSPECTED box came off these - its own
-   * note calls it "the lightest thing in the room", and a pale featureless cube on this
-   * shelf was "the single most-reported fault in this game" before the tier existed. It went
-   * to `timberDark` on that argument and the frame was sampled rather than admired: crates
-   * at luma 58-69, the wall behind them at 57, the floor at 54.
-   *
-   * So the fault was never brightness. It was CONTRAST - nine points of separation from the
-   * surface behind, which is not a subtle object, it is an invisible one, and no amount of
-   * hue makes a shape read against a value it matches. `MAT.dark` at #2b2724 drops them
-   * cleanly below the wall, and the lids in the shelf's own light timber (see props.ts) give
-   * each crate a bright band across the top. Two values, which is what reads at four metres.
-   *
-   * It also settles a second measurement: a crate under the bench came out at luma 117
-   * against the Kestrel-3 at 112. §187 gives the eye to the brightest thing in frame and
-   * that has to be the radio, not the storage.
-   */
-  crateRoot.add(meshOf('ShelfCrateMesh', shelf.fittings, MAT.dark));
-  scene.registerProp('shelf-crates', crateRoot);
+  // The shelves hold identifiable repair stock rather than undifferentiated crates.
+  dressRepairShop(scene);
 
   const bench = createWorkbench();
   const benchRoot = ENGINE.SceneNode.create({ name: 'Bench', position: new THREE.Vector3(0, 0, -0.5) });
   // Worked, not fresh. The bench was measuring brighter than the set standing on it - see
   // MAT.worktop, which exists because of this frame.
-  benchRoot.add(meshOf('BenchTop', bench.body, MAT.worktop));
+  const repairWorktop = cloneKeepingShader(MAT.worktop) as THREE.MeshStandardMaterial;
+  repairWorktop.color.multiplyScalar(0.54);
+  benchRoot.add(meshOf('BenchTop', bench.body, repairWorktop));
   benchRoot.add(meshOf('BenchLegs', bench.fittings, MAT.metal));
   scene.registerProp('bench', benchRoot);
 
@@ -1540,6 +1471,22 @@ function buildRepairShop(scene: ContactScene): void {
   carrierRoot.add(carrierLive);
   setRoot.add(carrierRoot);
 
+  // Power is present even while the carrier is dead: this is the symptom Mirela describes.
+  const powerRoot = ENGINE.SceneNode.create({
+    name: 'PowerPilot',
+    position: new THREE.Vector3(-0.222, 0.136, 0.188),
+  });
+  powerRoot.add(meshOf('PowerBezel', new THREE.CircleGeometry(0.023, 12), MAT.metal));
+  const powerDim = meshOf('PowerDim', new THREE.CircleGeometry(0.017, 12),
+    new THREE.MeshBasicMaterial({ color: '#493b2e', toneMapped: false }));
+  const powerLive = meshOf('PowerLive', new THREE.CircleGeometry(0.017, 12),
+    new THREE.MeshBasicMaterial({ color: '#d5aa62', toneMapped: false }));
+  powerDim.position.z = powerLive.position.z = 0.002;
+  powerDim.visible = false;
+  powerRoot.add(powerDim);
+  powerRoot.add(powerLive);
+  setRoot.add(powerRoot);
+
   // The rating plate, under the controls on the front panel.
   const plate = createRatingPlate();
   if (plate) {
@@ -1706,6 +1653,7 @@ function buildRepairShop(scene: ContactScene): void {
   scene.registerProp('transmitter', setRoot, {
     // Inked: Mirela's set - the thing on the bench that stopped working.
     inked: true,
+    labelPlacement: 'below',
     anchors: set.anchors,
     actions: {
       /** Mirela turns the set round so the camera can see the connectors. */
@@ -1946,6 +1894,8 @@ function buildRepairShop(scene: ContactScene): void {
         const from = leverRoot.rotation.x;
         const to = mainsOn ? -0.9 : 0;
         mainsOn = !mainsOn;
+        powerLive.visible = mainsOn;
+        powerDim.visible = !mainsOn;
         tweener.add((t) => leverRoot.rotation.set(from + (to - from) * t, 0, 0), {
           duration: 0.28,
           easing: Ease.outBack,
@@ -1955,9 +1905,14 @@ function buildRepairShop(scene: ContactScene): void {
     },
   });
 
-  // Mirela herself, generated rather than imported. §209: she stands and idles - every
-  // instruction she is given is performed by the bench, the set or the switch, never by
-  // her body - so a well-posed static figure is worth more than a rig with no clips.
+  scene.onReset(() => {
+    mainsOn = true;
+    leverRoot.rotation.x = 0;
+    powerLive.visible = true;
+    powerDim.visible = false;
+  });
+
+  // Keep her authored model and work pose; frame the person beside her set.
   const mirela = addContact(scene, 'Mirela', {
     seed: 'mirela-vasc',
     height: 1.66,
@@ -1968,25 +1923,10 @@ function buildRepairShop(scene: ContactScene): void {
     // own work rather than somebody in the middle of it.
     lean: 0.16,
     reach: 0.85,
-    /**
-     * Both hands on the bench, either side of the set.
-     *
-     * Named in scene space - these are points on her actual bench top at y 0.78, just
-     * clear of the transmitter which spans x -0.26 to 0.26 - and the arm angles are
-     * solved to reach them. That is the difference between this and the pose attempt that
-     * was reverted: an authored ANGLE looks right from one camera and foreshortens from
-     * the next, and a hand told to land on the bench lands on it from all of them.
-     *
-     * The left hand rests flat behind the set and the right sits nearer the front edge,
-     * because a person working with something does not place their hands symmetrically.
-     */
-    /*
-     * Moved back 0.12 with her - see the position below - so the solved pose is
-     * untouched and only where she stands has changed.
-     */
+    // Both palms land on the tabletop (z -0.95 to -0.05), clear of the set.
     handsOn: {
-      left: new THREE.Vector3(-0.36, 0.79, -0.84),
-      right: new THREE.Vector3(-0.44, 0.79, -1.22),
+      left: new THREE.Vector3(-0.36, 0.815, -0.84),
+      right: new THREE.Vector3(-0.55, 0.815, -0.72),
     },
       // Goggles pushed up. She works on other people's electronics all day.
       headgear: 'band',
@@ -2038,21 +1978,8 @@ function buildRepairShop(scene: ContactScene): void {
      * set, clear of the transmitter's x span, and nothing about the arms changes.
      */
     position: new THREE.Vector3(-0.72, 0, -1.14),
-    /**
-     * Turned toward the set, which she was not.
-     *
-     * Asked directly - is she supposed to be facing right instead of the radio? She was.
-     * She stands at (-0.72, -1.02) and the Kestrel-3 sits at (0, -0.5), so the bearing to
-     * it is 54 degrees; her yaw was 0.58π, which is 104. Fifty degrees past it, looking out
-     * of the shot over the thing she is describing.
-     *
-     * Not taken all the way to 54. Her hands are IK'd to two points on the bench either
-     * side of the set, and swinging her fully square to it turns those into a reach across
-     * her own body; 0.40π lands at 72 degrees, which reads as somebody looking down at
-     * their work while still angled to the room. The remaining 18 degrees is the difference
-     * between attending to something and staring at it.
-     */
-    rotation: new THREE.Euler(0, Math.PI * 0.4, 0),
+    // Three-quarter to the link, attending to the set without hiding her face in profile.
+    rotation: new THREE.Euler(0, Math.PI * 0.3, 0),
   });
 
   // A work lamp over the bench. §187: one key plus controlled practicals - and a
@@ -2124,30 +2051,8 @@ function buildRepairShop(scene: ContactScene): void {
      * player can see instead of away from a point in the air beside it.
      */
     position: new THREE.Vector3(0.49, 1.41, -0.56),
-    /*
-     * 8, down from 11. The pool stays; it stops out-ranking the person.
-     *
-     * At 11 this owned 71% of the frame's brightest pixels and clipped at 241. The bench is
-     * what the mission is about and it must still read as an island - but the light the
-     * player follows first has to be the one on the face, or the room is a still life with
-     * somebody standing behind it.
-     */
-    /*
-     * 13, and the previous value was a straight contradiction of the note beside it.
-     *
-     * The comment above says the intensity comes UP to hold the pool, because narrowing the
-     * cone from 0.62 to 0.36 puts the same flux through about a third of the area. It was
-     * then written as 5.5, DOWN from 8. Measured on the bench directly beneath the lamp
-     * against bench a third of a frame away:
-     *
-     *   working earlier   +49.5   a real pool
-     *   after brightening  +1.8   washed out by ambient and fills
-     *   after narrowing   -12.1   the lit spot was darker than the unlit bench
-     *
-     * A critic put it plainly - the only fixture that could key this room emits nothing, the
-     * shade is 17/19/19 and the bench under it 24/22/20. The lamp was off in all but name.
-     */
-    intensity: 8,
+    // A controlled work pool; the tabletop must stay below the caller's face.
+    intensity: 4.5,
     color: new THREE.Color(LIGHT.key),
     // Short, so the pool ends inside the bench instead of on the far wall.
     distance: 3.0,
@@ -2396,40 +2301,11 @@ function buildRepairShop(scene: ContactScene): void {
       name: 'BenchBounce',
       // Just above the bench top and in front of the set, so it throws up onto the radio's
       // face and onto hers rather than washing the wall behind them.
-      position: new THREE.Vector3(0.1, 0.98, 0.45),
-      /*
-       * Raised with the lamp that causes it.
-       *
-       * This stands in for light coming back off a pale timber benchtop, so its strength is
-       * a function of how hard that benchtop is lit - and the benchtop went from a general
-       * 98 to a 161 pool when the work lamp became a cone. At 0.8 it was calibrated to the
-       * old flat bench and left her reading 20 levels darker than before while the surface
-       * in front of her got brighter, which is the one thing bounce light exists to prevent.
-       *
-       * It is also the right instrument for the job. She is BEHIND the bench, so the pool
-       * itself cannot reach her; the only honest way a woman leaning over her own work gets
-       * lit is from the work.
-       */
-      /*
-       * ## 4.6 and 4.2m of reach - this is what lights the right third
-       *
-       * A critic measured the frame in thirds: left 84.1, middle 60.0, right 23.2, with 37%
-       * of the frame's 16px tiles both dark AND flat against 0.4% in the room used as the
-       * bar. Boosting that third 3.2x brings up a hammer, a chisel, the pegboard grid, a
-       * board on the bench and the bench underside - all modelled, all present, none of them
-       * visible. The room ended at the bench.
-       *
-       * The anglepoise hangs against that wall and lights only the bench, which is what a
-       * shade does. What reaches the wall behind a lit bench is the BOUNCE off it, and this
-       * light is exactly that - a pale worked benchtop under a strong practical throws a
-       * great deal back up. It was calibrated at 1.8 for a bench that was much dimmer.
-       *
-       * Motivated, and it is the only source in the room positioned to do this job: the
-       * batten is on the far wall and the door is behind the camera.
-       */
-      intensity: 4.6,
-      color: new THREE.Color('#ffd9ae'),
-      distance: 4.2,
+      position: new THREE.Vector3(-0.65, 1.35, -0.48),
+      // Broad reflected bench light: no separate spotlight aimed at her face.
+      intensity: 5.2,
+      color: new THREE.Color('#e7cfac'),
+      distance: 3.0,
       decay: 1.6,
     })
   );
@@ -2449,13 +2325,17 @@ function buildRepairShop(scene: ContactScene): void {
     if (!wall) return;
     const stained = applyFloodstain(wall as unknown as THREE.Object3D, 0.26, 0.85);
     if (!stained) console.warn('[scene] flood staining touched nothing on the wall');
+    for (const id of ['shelf', 'bench', 'bench-store']) {
+      const furniture = scene.nodeFor(id);
+      if (furniture) applyFloodstain(furniture as unknown as THREE.Object3D, 0.26, 0.85);
+    }
   });
 
   scene.registerShot('default', {
     // Target raised to chest height rather than bench height, so she is in the frame
     // instead of cropped at the shoulders by a camera aimed at the furniture.
-    position: new THREE.Vector3(1.32, 1.46, 1.82),
-    target: new THREE.Vector3(-0.34, 1.06, -0.72),
+    position: new THREE.Vector3(0.65, 1.58, 1.65),
+    target: new THREE.Vector3(0.0, 1.14, -0.72),
   });
 
   /*

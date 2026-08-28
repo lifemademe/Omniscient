@@ -147,6 +147,15 @@ export const SCAN_CSS = `
   border-left: 0;
   border-right: 2px solid ${ACCENT.data};
 }
+/* Compact evidence captions stay with their object, clear of the caller's silhouette. */
+.omni-scan__t--below .omni-scan__leader { display: none; }
+.omni-scan__t--below .omni-scan__tag {
+  left: calc(-1 * var(--rx));
+  right: auto;
+  top: calc(var(--ry) + 6px);
+  border-left: 2px solid ${ACCENT.data};
+  border-right: 0;
+}
 
 /*
  * Corner furniture, from the mockup's COASTAL RELAY 7 // STORM CELL 04.
@@ -213,6 +222,7 @@ const MAX_R = 110;
 export interface ScanTarget {
   id: string;
   node: THREE.Object3D;
+  labelPlacement?: 'side' | 'below';
 }
 
 interface Marker {
@@ -357,6 +367,7 @@ export class ScanTargets {
     this.markers = targets.map((target, index) => {
       const root = document.createElement('div');
       root.className = 'omni-scan__t';
+      root.classList.toggle('omni-scan__t--below', target.labelPlacement === 'below');
 
       const box = document.createElement('div');
       box.className = 'omni-scan__box';

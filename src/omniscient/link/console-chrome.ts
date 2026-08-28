@@ -320,6 +320,23 @@ export const CONSOLE_CHROME_CSS = `
 .omni-cv--compact .omni-card__value { font-size: calc(11px + var(--omni-font-boost, 0px)); }
 .omni-cv--compact .omni-meter,
 .omni-cv--compact .omni-card__sub { display: none; }
+/* The opening caller owns the frame; telemetry remains available on deliberate focus. */
+.omni-cv--quiet-readouts .omni-cv__readouts {
+  pointer-events: auto;
+}
+.omni-cv--quiet-readouts .omni-cv__readouts:is(:hover, :focus-within) {
+  width: min(21vw, 248px);
+  gap: 10px;
+}
+.omni-cv--quiet-readouts .omni-cv__readouts:is(:hover, :focus-within) .omni-card {
+  display: block;
+  padding: 9px 11px;
+}
+.omni-cv--quiet-readouts .omni-cv__readouts:is(:hover, :focus-within) .omni-card__label {
+  margin-bottom: 5px;
+}
+.omni-cv--quiet-readouts .omni-cv__readouts:is(:hover, :focus-within) .omni-meter { display: flex; }
+.omni-cv--quiet-readouts .omni-cv__readouts:is(:hover, :focus-within) .omni-card__sub { display: block; }
 /*
  * The meter is a channel cut into the plate, with lamps in it.
  *

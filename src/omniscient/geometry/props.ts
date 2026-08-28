@@ -630,7 +630,7 @@ export function createMainsSwitch(): PropParts {
 }
 
 /** Shelving with a few crates - background mass for the repair shop (§186). */
-export function createShelfStack(seedKey = 'shelf'): PropParts {
+export function createShelfStack(seedKey = 'shelf', stocked = true): PropParts {
   const rng = createRng(seedFrom(seedKey));
   const body: THREE.BufferGeometry[] = [];
   const fittings: THREE.BufferGeometry[] = [];
@@ -643,7 +643,7 @@ export function createShelfStack(seedKey = 'shelf'): PropParts {
     plank.translate(0, 0.5 + level * 0.52, 0);
     body.push(plank);
 
-    const crateCount = 1 + Math.floor(rng() * 3);
+    const crateCount = stocked ? 1 + Math.floor(rng() * 3) : 0;
     for (let i = 0; i < crateCount; i++) {
       const w = range(rng, 0.16, 0.32);
       const h = range(rng, 0.14, 0.26);
@@ -688,7 +688,9 @@ export function createShelfStack(seedKey = 'shelf'): PropParts {
 
   return {
     body: mergeGeometries(body, false) ?? new THREE.BoxGeometry(0.1, 0.1, 0.1),
-    fittings: mergeGeometries(fittings, false) ?? new THREE.BoxGeometry(0.1, 0.1, 0.1),
+    fittings: fittings.length > 0
+      ? mergeGeometries(fittings, false) ?? fittings[0]
+      : new THREE.BufferGeometry(),
     anchors: { top: new THREE.Vector3(0, 1.6, 0) },
   };
 }

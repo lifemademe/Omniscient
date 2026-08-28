@@ -779,6 +779,7 @@ export class LocalSurface implements InterventionSurface {
   private readonly connectionTimers: number[] = [];
   /** Delayed collapse of telemetry once the player has had time to read it. */
   private compactTimer: number | null = null;
+  private compactOnArrival = false;
 
   constructor(private readonly container: HTMLElement) {}
 
@@ -1095,7 +1096,7 @@ export class LocalSurface implements InterventionSurface {
     const element = this.objectiveText;
     if (!element || text === this.objectiveShown) return;
     this.objectiveShown = text;
-    this.shell?.classList.remove('omni-cv--compact');
+    if (!this.compactOnArrival) this.shell?.classList.remove('omni-cv--compact');
     if (this.compactTimer !== null) window.clearTimeout(this.compactTimer);
     this.compactTimer = null;
 
@@ -1350,9 +1351,10 @@ export class LocalSurface implements InterventionSurface {
    * caller's room and acknowledgement gesture a clean beat instead of burying both under a
    * fully assembled interface on the first frame.
    */
-  public beginConnection(): void {
+  public beginConnection(compactOnArrival = false): void {
     const shell = this.shell;
     if (!shell) return;
+    this.compactOnArrival = compactOnArrival;
     this.clearConnectionTimers();
     shell.classList.remove(
       'omni-cv--leaving',
@@ -1362,6 +1364,14 @@ export class LocalSurface implements InterventionSurface {
       'omni-cv--compact'
     );
     shell.classList.add('omni-cv--connecting');
+    shell.classList.toggle('omni-cv--quiet-readouts', compactOnArrival);
+    if (compactOnArrival) shell.classList.add('omni-cv--compact');
+    const readouts = shell.querySelector<HTMLElement>('.omni-cv__readouts');
+    if (readouts) {
+      readouts.tabIndex = compactOnArrival ? 0 : -1;
+      readouts.title = compactOnArrival ? 'Focus or hover to expand link telemetry' : 'Link telemetry';
+      readouts.setAttribute('aria-label', readouts.title);
+    }
 
     this.connectionTimers.push(
       window.setTimeout(() => {

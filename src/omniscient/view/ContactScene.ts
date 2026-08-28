@@ -70,6 +70,8 @@ export interface RegisteredProp {
   idle?: (deltaTime: number, node: ENGINE.SceneNode) => void;
   /** Drawn in ink by the outline pass. See registerProp's `inked`. */
   inked?: boolean;
+  /** Optional caption placement for evidence whose side callout would cross the caller. */
+  labelPlacement?: 'side' | 'below';
   /** How much the machine knows about this prop. ART_DIRECTION §1. */
   certainty?: number;
   /** Live only below SHAPED: the guess standing in for the prop. ART_DIRECTION §1 tier 1. */
@@ -319,6 +321,7 @@ export class ContactScene extends ENGINE.SceneNode {
        * evidence: the radio, the beacon, the run of pipe, the lock.
        */
       inked?: boolean;
+      labelPlacement?: 'side' | 'below';
     } = {}
   ): void {
     /*
@@ -341,6 +344,7 @@ export class ContactScene extends ENGINE.SceneNode {
       anchors: options.anchors ?? {},
       idle: options.idle,
       inked: options.inked,
+      labelPlacement: options.labelPlacement,
     });
   }
 
@@ -550,10 +554,10 @@ export class ContactScene extends ENGINE.SceneNode {
     if (raised > 0 && this.live) this.applyCertainties();
   }
 
-  public scanTargets(): { id: string; node: ENGINE.SceneNode }[] {
-    const out: { id: string; node: ENGINE.SceneNode }[] = [];
+  public scanTargets(): { id: string; node: ENGINE.SceneNode; labelPlacement?: 'side' | 'below' }[] {
+    const out: { id: string; node: ENGINE.SceneNode; labelPlacement?: 'side' | 'below' }[] = [];
     for (const [id, prop] of this.props) {
-      if (prop.inked) out.push({ id, node: prop.node });
+      if (prop.inked) out.push({ id, node: prop.node, labelPlacement: prop.labelPlacement });
     }
     return out;
   }

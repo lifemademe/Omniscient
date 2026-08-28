@@ -3186,7 +3186,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.overhead = false;
     this.screen = Screen.Tree;
     this.globeScreen?.detach();
-    this.phone?.beginConnection();
+    this.phone?.beginConnection(signalId === MIRELA_SIGNAL);
     this.phone?.setVisible(true);
 
     const request = this.queue[index];
