@@ -889,7 +889,7 @@ the accepted broad composition: restrain lamp haze/dust and shade gloss, articul
 cable connector and keep its route clear of the lamp, remove CRT hover-name duplication.
 Bar: §3/§4.1, desk-room reference for restraint and readable chunky hardware. Runtime menu
 only; C-1's earlier beam judgment does not settle the user's close-up concern. Implementation
-commit recorded in the follow-up ledger entry. The lamp has local rough enamel, 22 dimmer,
+commit `fae018d`. The lamp has local rough enamel, 22 dimmer,
 smaller motes, and no additive cone shell. The connector has a dark grip, metal rectangular
 nose, strain relief and one green inset; its sockets match. It reaches for the selected
 socket from the CRT's left shoulder instead of following the pointer across the lamp.
