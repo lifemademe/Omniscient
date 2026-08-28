@@ -858,6 +858,28 @@ there is no assertion that can be written.
 ## 13. THE LEDGER
 
 **Warehouse loading / entrances / collection / render cost — IMPLEMENTED / OPEN QA, Codex 2026-08-28.**
+Performance follow-up, implementation `fa17b12`: skip shadow-map regeneration only in the
+unlit normal prepass; suspend five finite-range workstation lights during warehouse play
+and restore their saved visibility on exit/failure; opt the bespoke-physics warehouse art
+out of Rapier; cache static blocker bounds and partition merged/instanced scenery into
+query-only exact-triangle chunks. Main-render dynamic shadows, all camera clearance probes,
+rendered geometry, beam effects, scan eligibility and bespoke cargo physics remain intact.
+Controlled initial drone view, approximately 1280x720: before median 58.8–59.5ms,
+p95 64.3–65.9ms, 8,076 all-pass draws. After: three 300-frame full-width samples median
+27.3/28.8/27.7ms, p95 30.4/31.9/32.9ms, warehouse update p95 2.0ms, 4,033 all-pass draws.
+These are presentation intervals and CPU/update measurements, not GPU timings; approximately
+17 to 35–37fps in this view, not a 60fps or whole-mission claim. Earlier intermediate build
+still spent ~11.15ms/frame in camera triangle intersections; spatial triangle partitioning
+removed that hotspot without replacing triangles with coarse boxes. Live equivalence check:
+600 seeded 3.3m rays, 193 hits, zero distance differences versus all 964 reference blocker
+meshes. Temporary diagnostic hooks were removed; final source passes lint/build.
+Evidence: `scripts/dev/warehouse-perf-fix-drone.jpg` and
+`scripts/dev/warehouse-perf-final-drone.jpg`. Fresh rendered-only critic
+`warehouse_performance_visual_check` reopened the final and prior drone captures:
+**AT BAR for preservation only**, no material lighting/pixel/rack-label/drone regression.
+No additional full-collection, moving-door, tight-aisle, pursuit or 1080p acceptance is claimed;
+the broader OPEN QA below remains. Rendering cost is still substantial.
+
 User-approved runtime-only follow-up to the warehouse entry item below. Bar: true-stage
 loading relay; distinct goods/reception/plant CCTV compositions with visitor/load first;
 supported hatch-to-trolley transfer with visible receipt and departure; lower measured
