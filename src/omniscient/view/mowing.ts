@@ -91,6 +91,7 @@ interface Weed {
   x: number;
   z: number;
   cut: boolean;
+  originalScale: THREE.Vector3;
 }
 
 /**
@@ -140,9 +141,13 @@ export class MowingField {
       // without one is not a plant, so it is skipped rather than defaulted to the origin -
       // where it would sit in the middle of the bank as a weed that can never be cut.
       const at = instances[index]?.position;
-      if (!at || !this.inside(at.x, at.z)) continue;
-      this.weeds.push({ node, index, x: at.x, z: at.z, cut: false });
-      this.push(this.weedCells, at.x, at.z, this.weeds.length - 1);
+      const size = instances[index]?.scale;
+      if (!at || !size) continue;
+      node.updateWorldMatrix(true, false);
+      const worldAt = at.clone().applyMatrix4(node.matrixWorld);
+      if (!this.inside(worldAt.x, worldAt.z)) continue;
+      this.weeds.push({ node, index, x: worldAt.x, z: worldAt.z, cut: false, originalScale: size.clone() });
+      this.push(this.weedCells, worldAt.x, worldAt.z, this.weeds.length - 1);
     }
   }
 
@@ -217,7 +222,7 @@ export class MowingField {
     }
     for (const weed of this.weeds) {
       if (!weed.cut) continue;
-      this.flatten(weed, 1 / 0.12);
+      this.flatten(weed, true);
       weed.cut = false;
     }
     this.cutCount = 0;
@@ -351,16 +356,14 @@ export class MowingField {
    * thick-stemmed plant under a rotary deck: it does not become short grass, it becomes a
    * mess on the ground.
    */
-  private flatten(weed: Weed, factor = 0.12): void {
-    const instances = weed.node.instances;
-    if (!instances) return;
-    const size = instances[weed.index]?.scale;
-    if (!size) return;
-    size.y *= factor;
-    size.x *= factor < 1 ? 1.15 : 1 / 1.15;
-    size.z *= factor < 1 ? 1.15 : 1 / 1.15;
-    // Reassigned rather than mutated in place: the node uploads on assignment.
-    weed.node.instances = instances;
+  private flatten(weed: Weed, restore = false): void {
+    const transform = weed.node.instances[weed.index];
+    if (!transform) return;
+    const scale = weed.originalScale.clone();
+    if (!restore) scale.multiply(new THREE.Vector3(1.15, 0.12, 1.15));
+    // Assignment only changes the data array. This API also updates the render matrices
+    // and culling bounds; restore from the original to avoid cumulative scale drift.
+    weed.node.updateInstance(weed.index, { ...transform, scale });
   }
 }
 
@@ -684,9 +687,8 @@ export class MowerDrive {
    * information the game is asking them to act on. A chase camera aimed at the vehicle
    * puts the vehicle in the middle of the frame and the work at the edges.
    *
-   * Low, at 0.72m. This is a knee-high machine and a camera at head height would look down
-   * on a lawn; from just above the housing the unmown bank stands up against the horizon
-   * and you can see where you have been.
+   * Above the tallest bank weeds, but still attached to the unit. The work ahead of the
+   * deck must remain visible even before the first pass has cleared the foliage.
    */
   public shot(): { position: THREE.Vector3; target: THREE.Vector3 } {
     const back = new THREE.Vector3(Math.sin(this.heading), 0, Math.cos(this.heading));
@@ -696,7 +698,7 @@ export class MowerDrive {
     return {
       position: new THREE.Vector3(
         this.at.x - back.x * (1.15 + cameraImpact * 0.06) + right.x * kick * 0.025,
-        DECK_Y + 0.55 + cameraImpact * 0.035,
+        DECK_Y + 0.98 + cameraImpact * 0.035,
         this.at.z - back.z * (1.15 + cameraImpact * 0.06) + right.z * kick * 0.025
       ),
       target: new THREE.Vector3(this.at.x + back.x * 2.2, 0.12, this.at.z + back.z * 2.2),

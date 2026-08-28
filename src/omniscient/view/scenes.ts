@@ -94,7 +94,8 @@ import { createClump } from './../geometry/foliage.js';
 import { grassTufts, greenhouse, rocks } from '../geometry/outdoors.js';
 import { meadow, meadowGround, stepWind, WIND } from '../geometry/meadow.js';
 import { stylisedWater } from '../geometry/water.js';
-import { rows, scatter } from '../geometry/planting.js';
+import { scatter } from '../geometry/planting.js';
+import { seedlingRows, tintSeedlings } from '../geometry/seedlings.js';
 import {
   crateLid,
   createMainsSwitch,
@@ -3637,6 +3638,11 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    */
   const fieldRoot = ENGINE.SceneNode.create({ name: 'Field' });
   for (const part of createFieldBackdrop(SUNLIGHT_AT)) {
+    // Hold the painted sky below paper-white so greenhouse ribs do not own the value
+    // contrast. This is the backdrop only, not an exposure change to the sunny field.
+    if (part.name === 'Sky' && part.material instanceof THREE.MeshBasicMaterial) {
+      part.material.color.multiplyScalar(0.58);
+    }
     fieldRoot.add(meshOf(part.name, part.geometry, part.material));
   }
   scene.registerProp('backdrop', fieldRoot);
@@ -3812,60 +3818,23 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   /**
    * Two banks of the same crop, and the difference between them is the mission.
    *
-   * Modelled plants now, not generated clumps - but the rule they were built under has not
-   * changed and could not: the ONLY thing that differs between these beds is health.
-   * Nothing else in the scene varies across that line, which is exactly the deduction the
-   * player has to make, and §131 says the environment has to carry it rather than the
-   * dialogue. So the contrast is deliberately stronger than realism strictly needs.
-   *
-   * Same rows, same spacing, same species. West is twice the size and properly green; east
-   * is stunted and yellowing. A player who looks at the beds should be able to point at the
-   * line without being told there is one.
+   * Same spacing and species, different vigour. The east bed has broad green rosettes;
+   * the shaded west bed has pale, stretched stems with fewer leaves. Flowering wild carrot
+   * made both beds read as white flowers rather than the seedlings the request describes.
    */
-  const BED_ROWS = 7;
-  const BED_COLS = 3;
   const BED_Z = -1.9;
   const BED_TOP = BED_SOIL_TOP;
 
   scene.registerProp(
     'rows-healthy',
-    rows(rng, {
-      modelUrl: '@project/assets/models/Plants/SM_WildCarrot_01.glb',
-      at: new THREE.Vector3(0.65, BED_TOP, BED_Z),
-      rows: BED_ROWS,
-      perRow: BED_COLS,
-      rowGap: 0.62,
-      plantGap: 0.4,
-      // The asset is a metre tall; this is a seedling bed.
-      scale: [0.26, 0.34],
-    })
+    seedlingRows(rng, new THREE.Vector3(0.65, BED_TOP, BED_Z))
   );
 
-  const failing = rows(rng, {
-    modelUrl: '@project/assets/models/Plants/SM_WildCarrot_01.glb',
-    at: new THREE.Vector3(-1.45, BED_TOP, BED_Z),
-    rows: BED_ROWS,
-    perRow: BED_COLS,
-    rowGap: 0.62,
-    plantGap: 0.4,
-    /**
-     * Stunted, not absent.
-     *
-     * Half the size read as no size at all. The shade plane over this bed darkens whatever
-     * is under it, so plants at 0.15 disappeared into it and the bed said "nothing was ever
-     * planted here" - a different request from Adaeze's, and the wrong one.
-     *
-     * So the difference is carried by colour and vigour rather than by scale. That is also
-     * the truthful version: a seedling in shade goes pale and leggy, it does not shrink to
-     * a tenth of its neighbour. Three quarters the size, visibly yellow, clearly worse.
-     */
-    scale: [0.2, 0.26],
-  });
-  // Yellowing as well as stunted. Two signals, because the player reads this across four
-  // metres of set at a shallow angle and through the shade that is causing it.
+  const failing = seedlingRows(rng, new THREE.Vector3(-1.45, BED_TOP, BED_Z), true);
+  // Shape carries the diagnosis even without colour.
   const FAILING_PALE = new THREE.Color('#cfc47e');
   const FAILING_LIT = new THREE.Color('#d8d08b');
-  failing.colors = FAILING_PALE.clone();
+  tintSeedlings(failing, FAILING_PALE);
 
   /*
    * The sunlight the two interventions earn.
@@ -3894,7 +3863,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
           (t) => {
             const eased = Ease.inOutCubic(t);
             recoverySun.intensity = 5.8 * eased;
-            failing.setInstanceColors(FAILING_PALE.clone().lerp(FAILING_LIT, eased));
+            tintSeedlings(failing, FAILING_PALE.clone().lerp(FAILING_LIT, eased));
             node.position.y = baseY + Math.sin(eased * Math.PI) * 0.015;
           },
           {
@@ -3903,7 +3872,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
             channel: 'seedling-recovery',
             onComplete: () => {
               recoverySun.intensity = 5.8;
-              failing.setInstanceColors(FAILING_LIT.clone());
+              tintSeedlings(failing, FAILING_LIT);
               node.position.y = baseY;
             },
           }
@@ -3913,7 +3882,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   });
   scene.onReset(() => {
     recoverySun.intensity = 0.001;
-    failing.setInstanceColors(FAILING_PALE.clone());
+    tintSeedlings(failing, FAILING_PALE);
     failing.position.y = 0;
   });
 
@@ -4269,7 +4238,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
      * tree - including its whole base - were behind her and it read as a log hanging in
      * the air. Being nearer also makes her larger, which she needed.
      */
-    position: new THREE.Vector3(-1.12, 0, 2.72),
+    position: new THREE.Vector3(-1.05, 0, 3.7),
     rotation: new THREE.Euler(0, Math.PI * 0.13, 0),
     /**
      * One hand down on the end of the bed, the other hanging.
@@ -4510,7 +4479,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * nothing to be warm against and the whole frame just read as tinted. This is the
        * blue of the sky overhead at the moment the sun is orange on the horizon.
        */
-      position: new THREE.Vector3(-0.9, 3.0, 5.0),
+      position: new THREE.Vector3(-0.7, 2.3, 4.4),
       /*
        * Down from 22, and this is the number that was stopping this room having a sun.
        *
@@ -4525,18 +4494,10 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * filling. Kept rather than cut because it is what keeps a contact's face off
        * black on the shadow side, which is the one thing this scene may not trade.
        */
-      /*
-       * Down from 9, keeping the ratio the note above worked out.
-       *
-       * The arithmetic there is still right and its inputs changed. At 3.2 it arrives at
-       * her from 2.7m at about 1.0 against a key of 2.3 on a surface facing the sun -
-       * a bit over two to one, which is the outdoor-with-sky-fill ratio that note was
-       * after. What it must not do is fall to nothing: this is the only light her front
-       * ever sees, and a contact who is a silhouette in daylight is the fault this whole
-       * light was added to fix.
-       */
-      intensity: 3.2,
-      color: new THREE.Color('#7d9ecc'),
+      // The rendered imported figure needs camera-side fill beneath her brim; keep the
+      // daylight key unchanged and lift only the caller's immediate working area.
+      intensity: 7.0,
+      color: new THREE.Color('#b3c5dc'),
       distance: 18,
       decay: 1.15,
     })
@@ -4901,6 +4862,8 @@ function buildSeedlingTunnel(scene: ContactScene): void {
          */
         { centre: new THREE.Vector3(1.3, 0, -1.5), radius: 2.2, scale: 0.25 },
         { centre: new THREE.Vector3(2.2, 0, 0.4), radius: 2.2, scale: 0.3 },
+        // Standing room at the mouth: her legs must not disappear into long grass.
+        { centre: new THREE.Vector3(-1.05, 0, 3.7), radius: 0.8, scale: 0.18 },
       ],
       y: 0,
   });
@@ -5064,7 +5027,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     { x: -1.05, z: 1.0, radius: 1.15, kind: 'bed' as const },
     { x: -3.7, z: -0.4, radius: 0.72, kind: 'trunk' as const },
     // Adaeze herself. The machine is hers and it is not going to run over her.
-    { x: -1.12, z: 2.72, radius: 0.6, kind: 'person' as const },
+    { x: -1.05, z: 3.7, radius: 0.6, kind: 'person' as const },
   ];
 
   const mowingField = new MowingField(BANK);
@@ -5475,14 +5438,14 @@ function buildSeedlingTunnel(scene: ContactScene): void {
 
   scene.registerProp(
     'sun-disc',
-    meshOf('SunDisc', faceViewer(new THREE.CircleGeometry(2.6, 48), SUN_AT), MAT.sunDisc)
+    meshOf('SunDisc', faceViewer(new THREE.CircleGeometry(0.75, 24), SUN_AT), MAT.sunDisc)
   );
   scene.registerProp(
     'sun-halo',
     // Nudged behind the disc along the same viewing axis, so the halo cannot poke through.
     meshOf(
       'SunHalo',
-      faceViewer(new THREE.CircleGeometry(6.0, 48), SUN_AT.clone().add(new THREE.Vector3(0, 0, -0.4))),
+      faceViewer(new THREE.CircleGeometry(1.6, 24), SUN_AT.clone().add(new THREE.Vector3(0, 0, -0.4))),
       MAT.sunHalo
     )
   );
@@ -5602,42 +5565,14 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   );
 
   scene.registerShot('default', {
-    /*
-     * Down the tunnel, so both banks are in frame at once and the difference between them
-     * is the first thing read. Outside the mouth rather than inside it - from inside, the
-     * nearest hoop sat across the lens and the two banks, the entire puzzle, were behind
-     * it. Tilted up once there was a sky to tilt into, because the neighbour's tree is the
-     * cause of the whole request and its crown was being cropped by the top edge.
-     *
-     * ## And then down to the waterline
-     *
-     * At 3.65m this looked down ON the smallholding: a plan of a field with things arranged
-     * on it. Dropping to 1.9m puts the lens at the height of somebody standing in the
-     * field, which does three things at once. The water gets a horizon instead of being a
-     * shape lying on the ground. The tree gets its height back. And the beds are seen along
-     * their length rather than from above, so the two banks read as rows rather than as
-     * rectangles. An evening is only worth having if the camera is low enough to be in it.
-     */
-    /*
-     * Back to 7.4m from her, because low is not the same as close.
-     *
-     * The first drop put the lens 4.4m from Adaeze while its subject was 13m away, and a
-     * 1.71m person at four metres fills a frame - she stopped being someone standing in a
-     * field and became a wall on the left of it. Height and distance are separate
-     * decisions and I had changed both at once.
-     *
-     * Her perpendicular offset is 1.64m, wider than the 0.45-0.9 band at the top of this
-     * file. That band was written for a camera looking down at a nine-metre set; with a
-     * horizon, a lake and a sunset in shot she wants to be further out of the middle, not
-     * less. The rule's purpose - that the contact frames the subject rather than blocking
-     * it - is better served here by breaking its number.
-     */
-    position: new THREE.Vector3(2.4, 2.0, 9.2),
-    target: new THREE.Vector3(-2.0, 1.5, -6.5),
+    // Keep the caller at readable conversational distance, with the two beds beyond her.
+    // The higher inspection shot below clears the front hoop and exposes leaf silhouettes.
+    position: new THREE.Vector3(2.4, 2.65, 6.9),
+    target: new THREE.Vector3(-1.3, 0.7, -0.9),
   });
   scene.registerShot('tunnel-rows', {
-    position: new THREE.Vector3(2.6, 1.6, 3.0),
-    target: new THREE.Vector3(-1.1, 0.4, -0.5),
+    position: new THREE.Vector3(1.5, 2.35, 4.5),
+    target: new THREE.Vector3(-0.15, 0.35, -0.8),
     duration: 2.4,
   });
   scene.registerShot('neighbour-tree', {

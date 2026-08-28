@@ -857,6 +857,27 @@ there is no assertion that can be written.
 
 ## 13. THE LEDGER
 
+**Adaeze / unfinished End call — user-directed D-1 continuation, PARTIAL / OPEN QA, Codex 2026-08-28.**
+Bar: supplied `20260828-1648-11.8269595.mp4`, §3/§4.3: Adaeze and two contrasting seedling
+beds read before scenic clutter; the tended side has short grass without seed heads; the
+mower visibly cuts every registered weed; unfinished End call reaches the globe without a
+flight through empty space or the desk. Runtime code only, unchanged puzzle and daylight intent.
+Runtime changes: covered unfinished-call return with stale-callback/input guards; original-scale
+weed restoration and engine `updateInstance` render uploads; higher mower camera; no seed heads
+inside maintained short-grass patches; same-crop healthy and leggy seedling geometry; closer caller,
+clearer inspection framing, camera-side fill and quieter sky/sun. No mission progression changes.
+Evidence: `scripts/dev/adaeze-r6-opening.jpg`, `adaeze-r6-beds.jpg`, `adaeze-r6-beds-large.jpg`,
+and `adaeze-r3-exit-sheet.jpg`. Earlier mower-camera evidence: `adaeze-r2-mower-before.jpg` (not
+proof of cutting; it predates final seedling colour/framing). Fresh rendered-only critic
+`adaeze_critic`: exit **AT BAR** (garden fades directly to globe, nine waiting/zero answered,
+no empty world or desk exposed). Garden remains **BELOW BAR**: bright horizon/greenhouse takes
+the eye before Adaeze. Critic confirms related healthy/failing silhouettes, no healthy-side wheat,
+and coherent sunny low-poly/pixel garden. Do not close the caller-first hierarchy item.
+`pnpm lint`, `pnpm build`, editor bundle refresh and live mission-to-mower handoff passed.
+Sustained mowing, visible fern flattening across a driven strip and reset restoration still need
+hands-on QA: available preview key taps did not produce a meaningful drive, so no cutting success
+is claimed. Local implementation commit receipt follows; no push.
+
 **Lucian menu-room leak — user-reported correction, AT BAR (scoped regression), Codex 2026-08-28.**
 Bar: the supplied `codex-clipboard-885d0203-b8f1-429a-9e1c-e84d165a5fe6.png` with no solid
 menu room in the district, and the same room restored on returning home. Workstation geometry

@@ -521,6 +521,8 @@ export function meadow(rng: Rng, options: MeadowOptions): ENGINE.SceneNode {
       const z = at.z + range(rng, -depth / 2, depth / 2);
       const lush = lushAt(x, z);
       if (lush === null || lush < 0.35) continue;
+      // Kept ground can carry short grass, but never tall stalks gone to seed.
+      if (options.short?.some((patch) => Math.hypot(x - patch.centre.x, z - patch.centre.z) < patch.radius)) continue;
 
       position.set(x, y, z);
       quaternion.setFromAxisAngle(UP, range(rng, 0, Math.PI * 2));

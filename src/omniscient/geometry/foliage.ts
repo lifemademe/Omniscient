@@ -30,7 +30,7 @@ export interface FoliagePart {
  * Built lying in XY with the base at the origin and the tip at +Y, so callers can bend
  * and place it by rotation without unpicking the shape.
  */
-function leafBlade(length: number, width: number): THREE.BufferGeometry {
+export function leafBlade(length: number, width: number): THREE.BufferGeometry {
   const shape = new THREE.Shape();
   shape.moveTo(0, 0);
   // Out to the widest point a third of the way up, then taper to a point.

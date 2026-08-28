@@ -575,6 +575,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private answered: string[] = [];
   /** True while the departure sequence is running - see leaveContact. */
   private leaving = false;
+  private contactDeparture = 0;
+  private cancelContactClose: (() => void) | null = null;
   private screen: Screen = Screen.Tree;
   private menu: MainMenu | null = null;
   private picker: Picker | null = null;
@@ -2499,7 +2501,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * route out of the menu and go back up on every route in, and a rule enforced at six
    * call sites is a rule that holds until somebody adds a seventh.
    */
-  private setPhase(next: Phase): void {
+  private setPhase(next: Phase, preserveDeparture = false): void {
+    if (!preserveDeparture) this.cancelContactDeparture();
     this.phase = next;
     // Resuming a contact can interrupt the CRT approach before its delayed handoff.
     // A stale handoff must never attach the globe over the contact's room and controls.
@@ -2940,7 +2943,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * never feel trapped in a conversation they are not ready for.
    */
   private leaveContact(): void {
-    if (this.phase !== Phase.Contact) return;
+    if (this.phase !== Phase.Contact || this.leaving) return;
     if (this.resolutionPending) {
       if (this.resolveHold <= 0) this.returnHome();
       return;
@@ -2980,14 +2983,42 @@ export class OmniscientRig extends ENGINE.SceneNode {
      *
      * Guarded, because END CALL is a button and a button can be pressed twice.
      */
-    if (this.leaving) return;
     this.leaving = true;
+    const departure = ++this.contactDeparture;
+    const leavingScene = this.scene;
+    const contactId = this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
     setCursorVisible(false);
 
     audio.play('disconnect');
     audio.setOnAir(false);
     this.phone?.setLeaving(true);
     this.post?.clearOutlineSelection();
+    // Disconnect the session now: delayed dialogue or a second input cannot resolve an
+    // unfinished request while its last picture is fading away.
+    this.session?.end();
+    this.releaseUnit(false);
+    this.cueTweener.clear();
+    this.cameraTweener.cancel('contact-input');
+
+    const current = () => departure === this.contactDeparture && this.leaving && !!this.session;
+    const arrive = () => {
+      if (!current() || this.phase !== Phase.Contact || this.scene !== leavingScene) return;
+      if (contactId) {
+        this.setSignalState(contactId, SignalState.Waiting);
+        this.openable.add(contactId);
+      }
+      this.activeIndex = null;
+      this.scene?.deactivate();
+      this.scene = null;
+      this.showGlobe(true);
+    };
+    const reveal = () => {
+      if (!current() || this.phase !== Phase.Choosing) return;
+      this.cancelContactClose = null;
+      this.leaving = false;
+      this.globeScreen?.setInputEnabled(true);
+      setCursorVisible(true);
+    };
 
     const drift = this.cameraPosition.clone().lerp(this.cameraTarget, -0.06);
     this.moveTo({ position: drift, target: this.cameraTarget.clone() }, 0.62);
@@ -2997,24 +3028,24 @@ export class OmniscientRig extends ENGINE.SceneNode {
       delay: 0.62,
       channel: 'leave-contact',
       onComplete: () => {
-        this.leaving = false;
-        const contactId =
-          this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
-        if (contactId) {
-          this.setSignalState(contactId, SignalState.Waiting);
-          this.openable.add(contactId);
+        if (!current() || this.phase !== Phase.Contact || this.scene !== leavingScene) return;
+        const container = this.getWorld()?.gameContainer;
+        if (container) this.cancelContactClose = playSignalClose(container, arrive, reveal);
+        else {
+          arrive();
+          reveal();
         }
-        this.activeIndex = null;
-
-        this.phone?.setLeaving(false);
-        this.releaseUnit(false);
-        this.session?.end();
-        this.cueTweener.clear();
-        this.scene?.deactivate();
-        this.scene = null;
-        this.showGlobe();
       },
     });
+  }
+
+  /** Invalidate delayed exits when another route takes ownership or play ends. */
+  private cancelContactDeparture(): void {
+    this.contactDeparture += 1;
+    this.cameraTweener.cancel('leave-contact');
+    this.cancelContactClose?.();
+    this.cancelContactClose = null;
+    this.leaving = false;
   }
 
   /** Back to the machine from the globe. */
@@ -3067,25 +3098,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * over from there - so it still reads as looking through OMNISCIENT_'s own display,
    * while the points stay big enough to click.
    */
-  /**
-   * Back to the globe, and it now leaves the way solving leaves.
-   *
-   * Reported as ending a call feeling faster than finishing one, and it was: this did a
-   * 1.6s move and nothing else, while `returnHome` fires the green warp and blends the CRT
-   * curvature back over 2 seconds. Two exits from the same place, one of which was a cut
-   * and one a transition - and the one that felt cheap was the one the player takes when
-   * they are unsure, which is the worst place in the game to feel like you have been
-   * hurried out.
-   *
-   * The warp is doing real work rather than decorating. The cut from somebody's cellar to
-   * a screen sixty units away is the hardest edit here, and green at the edges is what
-   * says who is doing the moving. It was written for the other door and there was never a
-   * reason it belonged to only one of them.
-   */
-  private showGlobe(): void {
-    // Whatever brought us here, the departure is over. A latch that only clears on its own
-    // happy path is a latch that eventually sticks - and a stuck one makes END CALL dead.
-    this.leaving = false;
+  /** An unfinished call instead supplies an opaque cover and skips the CRT approach. */
+  private showGlobe(covered = false): void {
+    // Covered arrivals retain the input latch until their reveal has finished.
+    this.leaving = covered;
 
     /*
      * Nobody is inside a contact. This IS the globe, so say so about every signal.
@@ -3111,7 +3127,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.openable.add(signal.id);
     }
     const warpContainer = this.getWorld()?.gameContainer;
-    if (warpContainer) playWarp(warpContainer);
+    if (warpContainer && !covered) playWarp(warpContainer);
     setRetroLook('console');
     // Home. The desk lamp's hum, the CRT's line whistle and the sea through the window -
     // the only room the player hears for minutes at a time.
@@ -3122,11 +3138,23 @@ export class OmniscientRig extends ENGINE.SceneNode {
     else if (anomaly && !anomaly.hidden) adaptiveScore.setState('anomaly');
     else adaptiveScore.setState('globe', this.answered.length);
 
-    this.setPhase(Phase.Choosing);
+    this.setPhase(Phase.Choosing, covered);
     setCursorVisible(false);
-    this.globeScreen?.setInputEnabled(true);
+    this.globeScreen?.setInputEnabled(!covered);
     this.screen = Screen.Globe;
     this.phone?.setVisible(false);
+
+    if (covered) {
+      // End call is a carrier break, not the menu's approach through the CRT or a
+      // completed request's tree reveal. Attach the destination before uncovering it.
+      this.cameraTweener.cancel('camera');
+      this.cameraTweener.cancel('globe-input');
+      this.globeHandoff = 0;
+      this.cutTo(SCREEN_SHOT);
+      this.globeScreen?.attach(this.signals, this.openable, this.answered);
+      this.recentlyResolved = undefined;
+      return;
+    }
 
     // Matched to returnHome's 2.0s. The handover still lands just before the move ends, so
     // the globe is under the camera by the time it settles rather than arriving after it.
@@ -4255,7 +4283,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * Contact phase only. On the globe or the menu there is no diorama to look down at.
    */
   private toggleOverview(): void {
-    if (this.phase !== Phase.Contact || !this.scene?.hasShot('overview')) return;
+    if (this.phase !== Phase.Contact || this.leaving || !this.scene?.hasShot('overview')) return;
     this.overhead = !this.overhead;
     this.applyEnvironmentCue(this.overhead ? 'camera.pan:overview' : 'camera.pan:default');
   }
@@ -4938,6 +4966,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
   }
 
   public override endPlay(): boolean {
+    this.cancelContactDeparture();
     if (this.navigator) {
       this.getWorld()?.inputManager?.removeInputHandler(this.navigator);
       this.navigator.dispose();
