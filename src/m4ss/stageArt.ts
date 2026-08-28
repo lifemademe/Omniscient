@@ -1668,6 +1668,37 @@ export function bushTexture(seed: string, size = 160, dead = false): THREE.Canva
   g.fillStyle = brown;
   g.fillRect(cx - Math.round(collarW * 0.8), by + bh, Math.round(collarW * 1.6), rim);
 
+  // Branching cultures, not lantern handles. Forks and an asymmetric root silhouette
+  // stay legible through the final pixel grid; dead cultures visibly droop instead.
+  const branches = dead ? [
+    [[-15, 0], [-31, 9], [-40, 28], [-53, 36]],
+    [[15, 4], [28, 20], [34, 42], [45, 47]],
+    [[-5, 22], [-11, 43], [-2, 56]],
+    [[-31, 9], [-47, 14], [-54, 25]],
+    [[28, 20], [48, 25], [56, 36]],
+  ] : [
+    [[-15, -6], [-32, -10], [-47, -29], [-62, -25]],
+    [[15, 6], [34, -2], [42, -29], [59, -44]],
+    [[-5, 22], [-13, 40], [2, 50], [8, 42]],
+    [[-32, -10], [-29, -31], [-36, -44]],
+    [[34, -2], [54, 8], [66, 2]],
+  ];
+  for (const points of branches) {
+    for (let j = 1; j < points.length; j++) {
+      const [ax, ay] = points[j - 1];
+      const [bx, by] = points[j];
+      const steps = Math.max(Math.abs(bx - ax), Math.abs(by - ay));
+      for (let i = 0; i <= steps; i++) {
+        const tx = cx + Math.round((ax + (bx - ax) * i / steps) * size / 160);
+        const ty = cy + Math.round((ay + (by - ay) * i / steps) * size / 160);
+        g.fillStyle = brown;
+        g.fillRect(tx - 3, ty - 3, 7, 7);
+        g.fillStyle = dead ? '#75604a' : '#a8c66a';
+        g.fillRect(tx - 2, ty - 2, 4, 3);
+      }
+    }
+  }
+
   /*
    * NO painted glow. A first version stamped two faded discs behind the fitting and they
    * did what discs drawn with a radius always do - gave the lamp a visible circular edge,

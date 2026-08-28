@@ -33,6 +33,8 @@
  * player sees is unchanged.
  */
 
+import { floorSupported, settleGround } from './groundRest.js';
+
 export interface Particle {
   id: number;
   x: number;
@@ -1256,6 +1258,9 @@ export function step(state: MassState, input: Input): MassState {
   const T = TUNING;
   const { particles, world } = state;
   const dt = T.dt;
+  const restingBody = input.move === 0 && !input.anchor && !input.recall &&
+    !state.attached && state.regroup <= 0 && !draftOn(state) ? owned(state) : [];
+  const restingX = floorSupported(restingBody, world) ? centroid(restingBody).x : null;
   /*
    * A red growth is not something you can aim at.
    *
@@ -2694,6 +2699,16 @@ export function step(state: MassState, input: Input): MassState {
     if (!gate) continue;
     if (button.restY === undefined) button.restY = button.y;
     button.y = button.restY - gate.lift * (gate.h + 4);
+  }
+
+  if (restingX !== null && state.regroup <= 0 && !state.attached &&
+      restingBody.length === state.owned.size && restingBody.every(p => state.owned.has(p.id)) &&
+      floorSupported(restingBody, world)) {
+    settleGround(restingBody, restingX, dt, p => insideAnySolid(p, world) ||
+      (world.crushers ?? []).some(c => {
+        const rect = crusherRect(c);
+        return p.x > rect.x && p.x < rect.x + rect.w && p.y > rect.y && p.y < rect.y + rect.h;
+      }));
   }
 
   // Slow motion decays on its own; the rig sets it and reads it back to scale real time.

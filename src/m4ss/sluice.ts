@@ -296,12 +296,8 @@ export const THE_SLUICE: World = {
     // Moved up and west on direction, 2026-08-27, from (630, 590).
     { id: 't1', x: 590, y: 550 },
     /*
-     * p2 is dead, and unlike g1/g2 nothing wakes it.
-     *
-     * The g-growths are dead as a PUZZLE - the drop plate turns them on and they become
-     * the climb out of the sump. This one is dead permanently: it is scenery that reads as
-     * a growth, which is what the stage now uses to fill the middle of the frame instead
-     * of the three live growths that were removed from it.
+     * p2 shares the gallery's nutrient feed. All dormant cultures wake from the drop
+     * plate; an identical-looking growth must not secretly be unusable scenery.
      */
     { id: 'p2', x: 540, y: 420, live: false },
 
@@ -449,8 +445,7 @@ export const THE_SLUICE: World = {
       radius: 26,
       pressed: false,
       opens: ['s1', 'b1'],
-      // g3 went with the other two; the button now wakes the two rungs that are left.
-      activates: ['g1', 'g2'],
+      activates: ['g1', 'g2', 'p2'],
     },
     /*
      * 460px/s, against stage two's 420 and a crawl of fifteen.

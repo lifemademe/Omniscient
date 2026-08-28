@@ -994,5 +994,43 @@ console.log('\n=== M4SS STAGE ONE ===\n');
   );
 }
 
+// Approved ground-only stopping: use a long unobstructed floor so walls cannot fake rest.
+for (const grams of [40, 14, 8]) {
+  for (const landing of [false, true]) {
+    const world = freshLab();
+    world.width = 12000;
+    world.start = { x: 2000, y: 560 };
+    world.exit = { x: 11900, y: 560 };
+    world.tiles = [{ x: 0, y: 620, w: 12000, h: 300 }];
+    world.gates = [];
+    world.buttons = [];
+    world.anchors = [];
+    const state = makeState(world, grams);
+    run(state, 2, () => IDLE);
+    if (landing) {
+      for (const p of owned(state)) {
+        p.y -= 220;
+        p.py = p.y - 260 * TUNING.dt;
+        p.px = p.x - 320 * TUNING.dt;
+        p.grounded = false;
+      }
+      let ticks = 0;
+      while (ticks++ < 240 && !owned(state).some(p => p.grounded)) step(state, IDLE);
+    } else {
+      run(state, 1, () => ({ ...IDLE, move: 1 }));
+    }
+    run(state, 0.3, () => IDLE);
+    const start = home(state).x;
+    let creep = 0;
+    run(state, 5, () => {
+      creep = Math.max(creep, Math.abs(home(state).x - start));
+      return IDLE;
+    });
+    check(`${grams}g settles after ${landing ? 'landing' : 'walking'} within 0.3s`,
+      creep < 1, `five-second creep ${creep.toFixed(3)}px`);
+    check('ground rest preserves mass and a single body', mass(state) === grams && components(owned(state)).length === 1);
+  }
+}
+
 console.log(failures === 0 ? '\nALL CHECKS PASSED\n' : `\n${failures} FAILED\n`);
 process.exit(failures === 0 ? 0 : 1);

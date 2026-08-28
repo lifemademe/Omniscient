@@ -99,12 +99,11 @@ interface Icon {
  * thing in it - which is what the mission's hint promises.
  */
 const ICONS: Icon[] = [
-  { x: 120, y: 34, label: ['specimen', 'M4SS'], kind: 'folder', id: 'specimen' },
-  { x: 120, y: 100, label: ['Documents'], kind: 'folder' },
-  { x: 120, y: 166, label: ['Pictures'], kind: 'folder' },
-  { x: 196, y: 34, label: ['Home'], kind: 'home' },
-  { x: 196, y: 100, label: ['tank.log'], kind: 'doc' },
-  { x: 196, y: 166, label: ['Trash'], kind: 'bin' },
+  { x: 124, y: 43, label: ['specimen', 'M4SS'], kind: 'folder', id: 'specimen' },
+  { x: 194, y: 46, label: ['Documents'], kind: 'folder' },
+  { x: 249, y: 46, label: ['Pictures'], kind: 'folder' },
+  { x: 194, y: 85, label: ['Home'], kind: 'home' },
+  { x: 249, y: 85, label: ['Trash'], kind: 'bin' },
 ];
 
 export class StationDesktop {
@@ -173,7 +172,7 @@ export class StationDesktop {
     this.drawMenuBar(ctx);
     this.drawTaskbar(ctx);
 
-    this.surface.applyScanlines(0.1);
+    this.surface.applyScanlines(0.035);
     this.surface.commit();
   }
 
@@ -217,11 +216,38 @@ export class StationDesktop {
 
   // -- icons ---------------------------------------------------------------------------
   private drawIcon(ctx: CanvasRenderingContext2D, icon: Icon): void {
+    const specimen = icon.id === 'specimen';
     const lit = icon.id === 'specimen' && this.state !== 'idle';
-    if (lit) {
-      ctx.fillStyle = C.select;
-      ctx.fillRect(icon.x - 13, icon.y - 5, 58, 54);
+    ctx.save();
+    if (!specimen) {
+      // Integer-sized utility glyphs: fractional canvas scaling would soften the pixels.
+      ctx.globalAlpha = 0.55;
+      const { x, y } = icon;
+      ctx.fillStyle = icon.kind === 'folder' ? C.folderDark : '#8a939f';
+      if (icon.kind === 'folder') {
+        ctx.fillRect(x, y, 8, 3);
+        ctx.fillRect(x, y + 3, 20, 13);
+        ctx.fillStyle = C.folder;
+        ctx.fillRect(x, y + 3, 20, 2);
+      } else if (icon.kind === 'home') {
+        for (let i = 0; i < 6; i++) ctx.fillRect(x + 8 - i, y + i, 4 + i * 2, 1);
+        ctx.fillRect(x + 3, y + 6, 15, 11);
+        ctx.fillStyle = '#3a4554';
+        ctx.fillRect(x + 8, y + 10, 5, 7);
+      } else {
+        ctx.fillRect(x + 2, y + 2, 18, 2);
+        ctx.fillRect(x + 4, y + 5, 14, 12);
+        ctx.fillStyle = '#3a4554';
+        for (let i = 0; i < 3; i++) ctx.fillRect(x + 6 + i * 4, y + 7, 1, 8);
+      }
+      icon.label.forEach((line, i) => textAt(ctx, x + 10 - line.length * 2, y + 21 + i * 8, line, C.label, 1));
+      ctx.restore();
+      return;
     }
+    ctx.fillStyle = lit ? C.select : '#233c5c';
+    ctx.fillRect(icon.x - 13, icon.y - 5, 58, 54);
+    ctx.fillStyle = lit ? C.screenCyan : '#597e9b';
+    ctx.fillRect(icon.x - 13, icon.y - 5, 2, 54);
 
     const x = icon.x;
     const y = icon.y;
@@ -273,25 +299,30 @@ export class StationDesktop {
     icon.label.forEach((line, i) => {
       textAt(ctx, x + 15 - (line.length * 4) / 2, y + 31 + i * 8, line, lit ? '#ffffff' : C.label, 1);
     });
+    ctx.restore();
+    if (specimen) {
+      textAt(ctx, x - 2, y + 54, '11 DAYS OF FEED', C.screenCyan, 1);
+    }
   }
 
   // -- the terminal --------------------------------------------------------------------
   private drawTerminal(ctx: CanvasRenderingContext2D): void {
-    const x = 258;
-    const y = 150;
-    const w = 200;
-    const h = 96;
+    // Fully inside the common visible band, not half hidden behind the chat console.
+    const x = 112;
+    const y = 132;
+    const w = 180;
+    const h = 107;
 
-    ctx.fillStyle = C.win;
+    ctx.fillStyle = '#526880';
     ctx.fillRect(x - 2, y - 2, w + 4, h + 4);
-    ctx.fillStyle = C.winBar;
+    ctx.fillStyle = '#243b55';
     ctx.fillRect(x, y, w, 13);
-    textAt(ctx, x + 4, y + 4, 'Terminal', '#ffffff', 1);
+    textAt(ctx, x + 4, y + 4, 'tank.log // PELAGIC 9', '#ffffff', 1);
     for (let i = 0; i < 3; i++) {
       ctx.fillStyle = i === 2 ? '#c8402c' : '#8fa2b8';
       ctx.fillRect(x + w - 38 + i * 12, y + 3, 9, 7);
     }
-    ctx.fillStyle = C.winBody;
+    ctx.fillStyle = '#121c28';
     ctx.fillRect(x, y + 13, w, h - 13);
 
     /*
@@ -301,22 +332,25 @@ export class StationDesktop {
      * only place on the screen where the player can see that she has been doing this for
      * eleven days and nobody has read any of it.
      */
+    const contained = isM4ssContained();
     const lines: Array<[string, string]> = [
       ['keller@pelagic9:~$ tail feed', C.screenGreen],
       ['d09 0412  mass 40  tank empty', C.taskInk],
       ['d10 2251  mass 28  +12 held', C.taskInk],
       ['d11 0330  mass 40  rejoined', C.taskInk],
-      ['', C.taskInk],
+      [contained ? 'CONTAINMENT: CONTAINED' : 'CONTAINMENT: BREACHED', contained ? C.live : C.warn],
       ['11 days. nobody has read this.', C.screenCyan],
       ['keller@pelagic9:~$', C.screenGreen],
     ];
     lines.forEach(([line, colour], i) => {
-      if (line) textAt(ctx, x + 5, y + 19 + i * 11, line, colour, 1);
+      if (line) textAt(ctx, x + 5, y + 19 + i * 11, line, mix(colour, '#121c28', 0.22), 1);
     });
     if (this.caret) {
       ctx.fillStyle = C.screenGreen;
       ctx.fillRect(x + 5 + 18 * 4 + 2, y + 19 + 6 * 11 - 1, 3, 7);
     }
+    const mins = 14 * 60 + 3 + Math.floor(this.time / 4);
+    textAt(ctx, x + 5, y + h - 10, `STATION TIME ${pad(Math.floor(mins / 60) % 24)}:${pad(mins % 60)}`, C.taskInk, 1);
   }
 
   // -- the file, opening ---------------------------------------------------------------
@@ -326,7 +360,7 @@ export class StationDesktop {
     const fy = ICONS[0].y + 12;
     const x = Math.round(fx + (112 - fx) * t);
     const y = Math.round(fy + (60 - fy) * t);
-    const w = Math.max(4, Math.round(216 * t));
+    const w = Math.max(4, Math.round(180 * t));
     const h = Math.max(4, Math.round(150 * t));
 
     ctx.fillStyle = C.win;
@@ -374,7 +408,7 @@ export class StationDesktop {
     const contained = this.resolution === 'contained';
     const x = 112;
     const y = 211;
-    const w = 216;
+    const w = 180;
     const h = 31;
     ctx.fillStyle = C.ink;
     ctx.fillRect(x - 2, y - 2, w + 4, h + 4);

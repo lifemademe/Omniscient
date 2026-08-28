@@ -331,20 +331,13 @@ for (const c of W.crushers ?? []) {
    * which is that every growth held back is released by this one plate. A rung can be added
    * or dropped; a rung that nothing wakes is the bug.
    */
-  /*
-   * The g-growths specifically, not every dead growth in the level.
-   *
-   * The first generalisation counted all of them, and it failed the moment p2 was made
-   * permanently dead on direction - correctly flagging that a dead growth had no waker, but
-   * flagging it as a bug when it is the intent. Dead means two different things here: the
-   * g-growths are held back by a PUZZLE and the plate is what releases them, while p2 is
-   * scenery that happens to be growth-shaped. Only the first kind needs a waker.
-   */
-  const dead = W.anchors.filter((a) => a.live === false && a.id!.startsWith('g'));
+  // The approved shared-feed rule now includes upper p2, not just the return-gallery rungs.
+  const dead = W.anchors.filter((a) => a.live === false);
   check(
     'the thing that wakes them is at the top of the column',
     // At the top of the column: east of the pier and a long way above the machine floor.
-    (plate.activates ?? []).length === dead.length && plate.y < FLOOR_TOP - 300 && plate.x > 900,
+    dead.every(a => plate.activates?.includes(a.id!)) &&
+      (plate.activates ?? []).length === dead.length && plate.y < FLOOR_TOP - 300 && plate.x > 900,
     `wakes ${(plate.activates ?? []).length} of ${dead.length} dead, at (${plate.x}, ${plate.y})`
   );
   // A red growth is not a growth you can be handed early by a second switch.
@@ -875,6 +868,45 @@ console.log(`\nthe sporelings - what counts as touching you`);
   place(body, bodyAt.x, bodyAt.y);
   step(body, IDLE);
   check('but the body itself still is', body.stunned > 0, `stunned ${body.stunned.toFixed(2)}s`);
+}
+
+// Exercise the actual plate and latch rule, not just its activation-id list.
+{
+  const state = makeState(freshSluice(), 14);
+  const plate = state.world.buttons.find(b => b.id === 'drop')!;
+  const place = (s: MassState, x: number, y: number): void => {
+    const at = home(s);
+    for (const p of owned(s)) {
+      p.x += x - at.x;
+      p.y += y - at.y;
+      p.px = p.x;
+      p.py = p.y;
+      p.grounded = false;
+    }
+  };
+  for (const id of ['g1', 'g2', 'p2']) {
+    const dormant = makeState(freshSluice(), 40);
+    const growth = dormant.world.anchors.find(a => a.id === id)!;
+    place(dormant, growth.x, growth.y + 50);
+    run(dormant, 0.15, () => ({ ...IDLE, anchor: growth }));
+    check(`${id} rejects a latch before the plate`, growth.live === false && !dormant.attached);
+  }
+  place(state, plate.x, plate.y - 8);
+  run(state, 0.3, () => IDLE);
+  check('standing on drop presses the actual plate', plate.pressed);
+  for (const id of ['g1', 'g2', 'p2']) {
+    const growth = state.world.anchors.find(a => a.id === id)!;
+    check(`${id} wakes after drop`, growth.live === true);
+    place(state, growth.x, growth.y + 50);
+    step(state, IDLE);
+    run(state, 0.15, () => ({ ...IDLE, anchor: growth }));
+    check(`${id} accepts a latch after drop`, state.attached);
+  }
+  check('drop preserves both gate openings', ['s1', 'b1'].every(id => state.world.gates.find(g => g.id === id)?.open));
+  const restarted = freshSluice();
+  check('restart restores all dormant growths', ['g1', 'g2', 'p2'].every(id => restarted.anchors.find(a => a.id === id)?.live === false));
+  check('restart resets drop and both gates', !restarted.buttons.find(b => b.id === 'drop')?.pressed &&
+    ['s1', 'b1'].every(id => !restarted.gates.find(g => g.id === id)?.open));
 }
 
 console.log(failures === 0 ? '\nall clear\n' : `\n${failures} failed\n`);

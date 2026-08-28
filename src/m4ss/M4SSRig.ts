@@ -532,6 +532,7 @@ export class M4SSRig extends ENGINE.SceneNode {
   private latched: Anchor | null = null;
   private recalling = false;
   private splitHold = 0;
+  private growthNoticeUntil = 0;
   private carry = 0;
   private readonly detach: Array<() => void> = [];
   /** Built once, whichever of the two entry points got here first. See mount. */
@@ -725,6 +726,7 @@ export class M4SSRig extends ENGINE.SceneNode {
    */
   public unmount(): void {
     if (!this.mounted) return;
+    this.clearInput();
     this.mounted = false;
     this.setTickEnabled(false);
     this.camera?.setActive(false);
@@ -2634,7 +2636,7 @@ export class M4SSRig extends ENGINE.SceneNode {
       this.artMaterial({
         map: glowTexture('slime-glow', '#b9e86a'),
         transparent: true,
-        opacity: 0.42,
+        opacity: 0.22,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       })
@@ -3198,11 +3200,14 @@ export class M4SSRig extends ENGINE.SceneNode {
     if (this.paused === paused) return;
     this.paused = paused;
     if (this.pauseVeil) this.pauseVeil.style.display = paused ? 'flex' : 'none';
-    if (paused) {
-      this.held.clear();
-      this.recalling = false;
-      this.splitHold = 0;
-    }
+    this.clearInput();
+  }
+
+  private clearInput(): void {
+    this.held.clear();
+    this.recalling = false;
+    this.latched = null;
+    this.splitHold = 0;
   }
 
   public isPaused(): boolean {
@@ -3277,6 +3282,9 @@ export class M4SSRig extends ENGINE.SceneNode {
           note = `too heavy for the draught - hold SPACE to shed below ${draught.draft.liftMass + 1}`;
         }
       }
+      if (state.time < this.growthNoticeUntil) {
+        note = 'Growth feed restored — return route active.';
+      }
       this.hudNote.textContent = note;
     }
   }
@@ -3285,6 +3293,9 @@ export class M4SSRig extends ENGINE.SceneNode {
 
   private listen(): void {
     const down = (e: KeyboardEvent): void => {
+      if (this.paused || document.hidden || !document.hasFocus()) return;
+      // A held key surviving a pause/focus change is not a new command.
+      if (e.repeat && !this.held.has(e.code)) return;
       /*
        * The standalone boot has no menu, so the first keystroke is the first gesture the
        * browser will accept an AudioContext from. Inside the console this is a no-op
@@ -3303,9 +3314,9 @@ export class M4SSRig extends ENGINE.SceneNode {
       if (e.code === 'Space') e.preventDefault();
     };
     const up = (e: KeyboardEvent): void => {
-      this.held.delete(e.code);
+      const wasHeld = this.held.delete(e.code);
       if (e.code === 'KeyQ') this.recalling = false;
-      if (e.code === 'Space' && this.state) {
+      if (e.code === 'Space' && wasHeld && !this.paused && this.state) {
         const shed = split(this.state, this.splitFraction());
         if (shed > 0) {
           this.voice.play('split');
@@ -3316,6 +3327,7 @@ export class M4SSRig extends ENGINE.SceneNode {
       }
     };
     const press = (e: MouseEvent): void => {
+      if (this.paused || document.hidden) return;
       audio.unlock();
       this.grab(e);
     };
@@ -3325,13 +3337,19 @@ export class M4SSRig extends ENGINE.SceneNode {
     const release = (): void => {
       this.latched = null;
     };
+    const loseFocus = (): void => this.setPaused(true);
+    const visibility = (): void => { if (document.hidden) loseFocus(); };
 
+    addEventListener('blur', loseFocus);
+    document.addEventListener('visibilitychange', visibility);
     addEventListener('keydown', down);
     addEventListener('keyup', up);
     addEventListener('mousedown', press);
     addEventListener('mouseup', release);
     addEventListener('mousemove', hover);
     this.detach.push(
+      () => removeEventListener('blur', loseFocus),
+      () => document.removeEventListener('visibilitychange', visibility),
       () => removeEventListener('mousemove', hover),
       () => removeEventListener('keydown', down),
       () => removeEventListener('keyup', up),
@@ -3521,11 +3539,9 @@ export class M4SSRig extends ENGINE.SceneNode {
       this.splitHold = Math.min(SPLIT_MAX, this.splitHold + deltaTime * SPLIT_RATE);
     }
 
-    const move: -1 | 0 | 1 = this.held.has('KeyD')
-      ? 1
-      : this.held.has('KeyA')
-        ? -1
-        : 0;
+    const right = this.held.has('KeyD') || this.held.has('ArrowRight');
+    const left = this.held.has('KeyA') || this.held.has('ArrowLeft');
+    const move: -1 | 0 | 1 = right === left ? 0 : right ? 1 : -1;
 
     /*
      * Fixed step, the same one the harness uses, with the leftover carried. A simulation that
@@ -3859,6 +3875,8 @@ export class M4SSRig extends ENGINE.SceneNode {
     this.vignette = null;
 
     this.state = makeState(STAGES[this.stageIndex](), 40);
+    this.clearInput();
+    this.growthNoticeUntil = 0;
     this.cleared = false;
     this.swallowed = false;
     this.latched = null;
@@ -3972,6 +3990,9 @@ export class M4SSRig extends ENGINE.SceneNode {
     for (const button of world.buttons) {
       if (button.pressed && !this.heardButtons.has(button)) {
         this.heardButtons.add(button);
+        if (this.stageIndex === 2 && button.activates?.length) {
+          this.growthNoticeUntil = state.time + 4;
+        }
         this.voice.play(button.force !== undefined ? 'heavy' : 'button');
         this.burst(button.x, button.y - 6, '#ffd27a', 8, 190);
         // The heavy button is the one place the camera itself flinches. See follow().

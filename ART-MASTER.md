@@ -884,6 +884,38 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
+**Dana/M4SS approved contact/control pass — 2026-08-28: AT BAR (scoped visuals; Codex).**
+User-directed scope: readable specimen-first desktop, visible station log, distinct usable
+cultures and a defined slime silhouette; wake all dormant Sluice cultures from the drop
+plate and stop neutral-input ground drift without changing flight/swing dynamics.
+Bar: supplied `20260828-0730-59.7657624.mp4`, §3/§4.3/§4.5 and M4SS-ART-BIBLE §2–4.
+Implemented: specimen-first desktop with compact utility icons and an unobscured station
+log/time/containment panel; lighter local scanlines; restrained slime halo and branching
+culture silhouettes. `drop` wakes g1/g2/p2 through the existing live transition and announces
+the restored feed in the HUD. Input clears on pause/focus loss/restart/exit, ignores paused
+presses and cancels opposing directions. Ground settling removes only supported whole-body
+horizontal drift, excluding air/rope/recall/regroup/updraft movement.
+
+Evidence: `scripts/dev/dana-r2-idle-small.jpg`, `dana-r2-selected-small.jpg`,
+`dana-r2-selected-large.jpg`, `dana-r2-returned-small.jpg`, `dana-r2-returned-large.jpg`,
+`m4ss-r2-stage3-small.jpg`, `m4ss-r2-focus-pause.jpg` (all under `scripts/dev/`). Captures
+include native window chrome: 1282×752 and 1707×1019, not a claimed exact 1920×1080 matrix.
+Fresh rendered-only critic `dana_m4ss_final_critic`: **AT BAR** for both scopes after
+rejecting R1's lamp-like growth silhouette. Non-blocking notes: generic specimen-folder
+shape and low contrast at the outermost culture tendrils. No claim of whole-stage M-1 closure.
+
+Verification: `pnpm lint`, `pnpm build` and editor bundle build passed. All three existing
+M4SS simulation harnesses passed; approved regression coverage extends stage/sluice harnesses:
+40g/14g/8g walking and 320px/s landing settle after 0.3s with five-second centroid creep
+rounding to **0.000px**; mass/connectivity preserved. Real plate press wakes all three,
+rejects their latches before activation and accepts them afterwards, opens s1/b1, and fresh
+stage resets plate/gates/growths. Existing swing/throw/recall/lift checks remain green.
+Live pause/Space/resume preserved 40g; real focus loss paused; file selection/open/return
+checked. Still needs human held-key/focus-loss-during-Space replay and full-HD capture matrix;
+the desktop automation only offers key taps, not sustained holds. Growth activation is
+simulation-proved, not yet captured as an in-game plate-to-growth sequence. Local commit
+receipt follows this implementation commit. No scene edits, migration or push.
+
 **Dorin contact pass — user-directed D-1g extension, 2026-08-28: AT BAR (scoped visual pass, Codex).**
 Bar: worried person first, old lock second, inhabited home third; crisp night-time PS1
 staging, reachable working pose, readable pin board, and entry that precedes "I am in".
