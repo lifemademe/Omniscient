@@ -876,7 +876,7 @@ and coherent sunny low-poly/pixel garden. Do not close the caller-first hierarch
 `pnpm lint`, `pnpm build`, editor bundle refresh and live mission-to-mower handoff passed.
 Sustained mowing, visible fern flattening across a driven strip and reset restoration still need
 hands-on QA: available preview key taps did not produce a meaningful drive, so no cutting success
-is claimed. Local implementation commit receipt follows; no push.
+is claimed. Local implementation/evidence commit: `7dfae66`; no push.
 
 **Lucian menu-room leak — user-reported correction, AT BAR (scoped regression), Codex 2026-08-28.**
 Bar: the supplied `codex-clipboard-885d0203-b8f1-429a-9e1c-e84d165a5fe6.png` with no solid
