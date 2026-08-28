@@ -963,6 +963,7 @@ YYYY-MM-DD  ID    agent      status   bar / evidence / commit
 2026-08-27  A-1   claude     IN LOOP  warehouse + M4SS growths + certainty audited: no hue-only mechanic found
 2026-08-27  P-C1  claude     OPEN     baseline judged: "adjacent, not connected"; hands narrower than wrists
 2026-08-27  P-C1  claude     PAUSED   3 rounds: r1 gap CLOSED; still "an assembly of primitives" / dd8aae0
+2026-08-27  D-1f  Codex      note     User-directed rule (§12.7): exclude Vasile's entire contact subtree from flood wetness, including late-loaded meshes; room and props unchanged. pnpm lint/build and editor build passed; no rendered verdict, D-1f remains OPEN.
 ```
 
 ---

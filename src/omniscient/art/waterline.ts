@@ -114,7 +114,8 @@ function install(material: THREE.Material, level: { value: number }): void {
 }
 
 /**
- * Wet everything in a subtree that crosses the given world height.
+ * Wet everything in a subtree that crosses the given world height, except an optional
+ * excluded subtree. Collect the exclusion on each call so late-loaded meshes stay dry too.
  *
  * Must run AFTER the certainty pass rather than during the scene build, and the reason is
  * the same one that has bitten every material change in this project: MeshNode's material
@@ -135,10 +136,17 @@ function install(material: THREE.Material, level: { value: number }): void {
  * Returns the number of materials wetted, so a caller that expected some and got none finds
  * out immediately rather than by looking at a screenshot a day later.
  */
-export function applyWaterline(root: THREE.Object3D, level: number): number {
+export function applyWaterline(
+  root: THREE.Object3D,
+  level: number,
+  excludedRoot: THREE.Object3D | null = null
+): number {
   let wetted = 0;
+  const excluded = new Set<THREE.Object3D>();
+  excludedRoot?.traverse((object) => excluded.add(object));
 
   root.traverse((object) => {
+    if (excluded.has(object)) return;
     const mesh = renderTargetOf(object);
     if (!mesh) return;
 

@@ -8779,19 +8779,22 @@ function buildFloodedCellar(scene: ContactScene): void {
    */
 
   /**
-   * Everything standing in the flood gets wet at the line.
+   * The room and props get wet at the line; Vasile is deliberately excluded.
    *
    * A finisher rather than a call here, because a material touched during a build does not
    * survive - see ContactScene.registerFinisher. It runs after the certainty pass has done
    * its cloning, so this wets the materials that are actually being drawn.
    *
-   * Applied to the whole scene rather than to a list of props, and that is deliberate: a
-   * list is a set of chances to forget one, and the object somebody forgets is the object
-   * that stands dry in six inches of water and ruins the shot. The shader is a function of
-   * height, so anything that does not reach the line is untouched at no cost.
+   * Keep the room-wide traversal so new props inherit the effect, but skip the contact's
+   * whole subtree, including late-loaded meshes. The current shader samples height before
+   * skinning and treats his entire body as submerged; his normal material must stay intact.
    */
   scene.registerFinisher(() => {
-    applyWaterline(scene as unknown as THREE.Object3D, WATER_LEVEL);
+    applyWaterline(
+      scene as unknown as THREE.Object3D,
+      WATER_LEVEL,
+      scene.nodeFor('contact') as unknown as THREE.Object3D | null
+    );
   });
 }
 
