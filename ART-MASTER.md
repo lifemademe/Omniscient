@@ -884,6 +884,20 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
+**F-1 user correction, Codex 2026-08-27:** Mirela's standing and walk depth moved back
+24 cm with wrist targets lifted clear of the tabletop and the near reach shortened.
+Contact-only footer spacing now gives the
+suggestions/status/input room above the bottom bezel; input focus darkens the interior
+instead of drawing the general bright ring. No warehouse layout or lighting changes.
+Live captures: `scripts/dev/F1-mirela-clearance-unfocused.jpg`,
+`scripts/dev/F1-mirela-clearance-focused.jpg`, and
+`scripts/dev/F1-mirela-clearance-small-window.jpg` prove UI states; final pose is
+`scripts/dev/F1-mirela-clearance-r2.jpg` and `scripts/dev/F1-mirela-clearance-r2-idle.jpg`.
+Lint, compilation and editor build pass; full-size and 1282×752 layouts inspected.
+Independent critic: **AT BAR for this correction** — forearm above the tabletop, hand
+naturally occluded by the transmitter, spacing/focus coherent. The broader F-1
+environmental gaps below remain open.
+
 | ID | Surface | Item | Bar | Status | Evidence |
 | --- | --- | --- | --- | --- | --- |
 | **F-1** | First five minutes | Cold boot → menu → globe → Mirela connection → first request reads as one authored, judge-ready sequence | `ART-DIRECTION-v1.png`, desk-room and contact-scene references; §3/§4.1/§4.3/§4.6 | `PAUSED` — Codex, 2026-08-27 | User-requested Mirela pass, commit `9c9625c`: revised framing/pose, controlled practicals and existing bench bounce (no new face spotlight), repair stock/ledger/local wear, powered-but-silent pilot, attached transmitter caption, compact opening telemetry with working hover/focus expansion. Seven rendered rounds; fresh cohesion critic confirms Mirela → transmitter, one coherent crisp repair shop, but **NOT AT BAR: flood history remains too subtle at the opening camera; request sits far below identity across empty chat space.** Next: make the existing low flood line read without sacrificing the person/set hierarchy, then judge the entire cold-boot sequence. Evidence: `scripts/dev/F1-mirela-contact-r7.jpg`, `scripts/dev/F1-mirela-final-sequence-sheet.jpg`, `scripts/dev/F1-mirela-telemetry-expanded.jpg`, `scripts/dev/F1-mirela-power-off.jpg`. `pnpm lint`, `pnpm build`, MCP build passed; isolated-save live arrival, telemetry expansion and power-off pilot verified. Full mission not replayed. |

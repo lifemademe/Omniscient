@@ -1913,6 +1913,7 @@ function buildRepairShop(scene: ContactScene): void {
   });
 
   // Keep her authored model and work pose; frame the person beside her set.
+  const mirelaDepth = -1.38;
   const mirela = addContact(scene, 'Mirela', {
     seed: 'mirela-vasc',
     height: 1.66,
@@ -1923,10 +1924,11 @@ function buildRepairShop(scene: ContactScene): void {
     // own work rather than somebody in the middle of it.
     lean: 0.16,
     reach: 0.85,
-    // Both palms land on the tabletop (z -0.95 to -0.05), clear of the set.
+    // The rig solves wrist joints, so leave room below them for the palms/fingers.
+    // Keep the reach near the back edge to avoid pulling her torso into the bench.
     handsOn: {
-      left: new THREE.Vector3(-0.36, 0.815, -0.84),
-      right: new THREE.Vector3(-0.55, 0.815, -0.72),
+      left: new THREE.Vector3(-0.36, 0.88, -0.86),
+      right: new THREE.Vector3(-0.55, 0.88, -0.86),
     },
       // Goggles pushed up. She works on other people's electronics all day.
       headgear: 'band',
@@ -1965,19 +1967,9 @@ function buildRepairShop(scene: ContactScene): void {
       garment: '#42525c',
       underlayer: '#c2b79c',
     },
-    /*
-     * Back 0.12, off the bench.
-     *
-     * She stood at z -1.02 and the bench top runs from -0.95 to -0.05, so her centre
-     * cleared the far edge by 7cm and the front of her did not: a torso is about
-     * 16cm deep, which put her front surface a hand's width inside the top, at the
-     * height her hips are. Reported as being inside the table.
-     *
-     * The hand targets moved by the same 0.12 so the pose she is solved into is
-     * exactly the pose she had - the left hand is still flat on the bench behind the
-     * set, clear of the transmitter's x span, and nothing about the arms changes.
-     */
-    position: new THREE.Vector3(-0.72, 0, -1.14),
+    // Leave clearance for the rig's leaning torso, not just its root. Hand targets stay
+    // on the tabletop; the existing IK reaches forward from this safer standing depth.
+    position: new THREE.Vector3(-0.72, 0, mirelaDepth),
     // Three-quarter to the link, attending to the set without hiding her face in profile.
     rotation: new THREE.Euler(0, Math.PI * 0.3, 0),
   });
@@ -2501,7 +2493,7 @@ function buildRepairShop(scene: ContactScene): void {
              * STRAIGHT RIGHT, AT HER OWN DEPTH, because the bench is the real constraint.
              *
              * createWorkbench is 2.4 by 0.9 at a root of (0, 0, -0.5), so it occupies x
-             * -1.2..1.2 and z -0.95..-0.05. She stands at z -1.14, nineteen centimetres
+             * -1.2..1.2 and z -0.95..-0.05. She stands at z -1.38, forty-three centimetres
              * behind its back edge. The previous target gained half a metre of z on the way
              * across, which walked her straight through the tabletop - `walk` is a straight
              * line and does not know the furniture is there.
@@ -2522,7 +2514,7 @@ function buildRepairShop(scene: ContactScene): void {
              * `pace` scales the animation and the travel together so the planted foot stays
              * planted - see WalkOptions.
              */
-            mirela?.walk(new THREE.Vector3(0.9, 0, -1.14), {
+            mirela?.walk(new THREE.Vector3(0.9, 0, mirelaDepth), {
               back: true,
               dwell: 1.4,
               pace: 0.7,

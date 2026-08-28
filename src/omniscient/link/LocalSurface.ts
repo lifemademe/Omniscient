@@ -529,6 +529,11 @@ export const TERMINAL_CSS = `
   border-top: 1px solid #23422c;
   padding: 8px 10px 10px;
 }
+/* Reserve breathing room below the reply controls, taking it from the scrolling chat. */
+.omni-terminal--contact .omni-terminal__foot {
+  flex-shrink: 0;
+  padding: 12px 12px clamp(28px, 5vh, 52px);
+}
 /*
  * The note flag - the one thing on screen that says the box below has changed job.
  *
@@ -637,6 +642,17 @@ export const TERMINAL_CSS = `
 }
 .omni-terminal__input::placeholder { color: #3f6b48; }
 .omni-terminal__input:disabled { opacity: 0.4; }
+.omni-terminal--contact .omni-terminal__input {
+  min-width: 0;
+  padding: 7px 8px;
+  background: #102018;
+}
+/* A recessed active field replaces the general-purpose bright keyboard-focus ring. */
+.omni-cv .omni-terminal--contact .omni-terminal__input:focus {
+  outline: none !important;
+  background: #020705;
+  box-shadow: inset 0 0 0 1px #263e30 !important;
+}
 /*
  * ## The horizontal lines were HERE, and they were CSS
  *
@@ -792,7 +808,7 @@ export class LocalSurface implements InterventionSurface {
     this.injectStyles();
 
     const root = document.createElement('div');
-    root.className = 'omni-terminal';
+    root.className = 'omni-terminal omni-terminal--contact';
 
     const session = document.createElement('div');
     session.className = 'omni-terminal__session';
