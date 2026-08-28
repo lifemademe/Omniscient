@@ -874,7 +874,8 @@ first-pass feedback that too little of the failing bed was shaded. Final capture
 failing rows shaded, healthy rows sunlit, and pruning withdrawing shade while plants stay pale.
 Builder reopened the transition sheet; live End call / re-entry restored canopy, shade and 0/2.
 `pnpm lint`, `pnpm build` and editor bundle refresh passed. Earlier caller-first and mower QA
-remain open; this is not a whole-garden approval. Implementation commit reference follows.
+remain open; this is not a whole-garden approval. Local implementation/evidence commit:
+`7ec21c9`. No push.
 
 **Adaeze / unfinished End call — user-directed D-1 continuation, PARTIAL / OPEN QA, Codex 2026-08-28.**
 Bar: supplied `20260828-1648-11.8269595.mp4`, §3/§4.3: Adaeze and two contrasting seedling
