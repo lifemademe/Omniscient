@@ -1269,6 +1269,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     if (!archive.storyCompleted) return;
     const display = createWarehouseArchiveDisplay(archive);
     display.position.copy(WORKSTATION_ORIGIN);
+    display.visible = this.phase !== Phase.Contact;
     this.add(display);
     this.warehouseArchiveDisplay = display;
   }
@@ -2503,6 +2504,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // Resuming a contact can interrupt the CRT approach before its delayed handoff.
     // A stale handoff must never attach the globe over the contact's room and controls.
     if (next !== Phase.Choosing) this.globeHandoff = 0;
+    // The workstation is another place, not distant contact scenery. Airless contacts
+    // (especially Lucian's city and bridge) can see past the fog that used to conceal it.
+    // Restore on every route home, including interrupted/resumed contacts and dev jumps.
+    const showWorkstation = next !== Phase.Contact;
+    if (this.workstation) this.workstation.visible = showWorkstation;
+    if (this.deskAir) this.deskAir.root.visible = showWorkstation;
+    if (this.warehouseArchiveDisplay) this.warehouseArchiveDisplay.visible = showWorkstation;
     if (this.facilityPlate) this.facilityPlate.visible = next === Phase.Menu;
   }
 

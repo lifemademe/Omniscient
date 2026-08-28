@@ -857,6 +857,21 @@ there is no assertion that can be written.
 
 ## 13. THE LEDGER
 
+**Lucian menu-room leak — user-reported correction, AT BAR (scoped regression), Codex 2026-08-28.**
+Bar: the supplied `codex-clipboard-885d0203-b8f1-429a-9e1c-e84d165a5fe6.png` with no solid
+menu room in the district, and the same room restored on returning home. Workstation geometry
+was never hidden; distance/fog concealed it in other contacts. Runtime phase ownership now
+hides the workstation, its air and archive display during Contact, restoring on exit. No
+scene-file edits or Lucian geometry changes.
+Evidence: `scripts/dev/lucian-isolation-city.jpg`, `lucian-isolation-bridge.jpg`,
+`lucian-isolation-bridge-large.jpg`, and `lucian-isolation-menu.jpg` in the same directory.
+Live replay used the isolated Lucian choice checkpoint, watch ending, Continue, then The Machine.
+City and bridge have no menu-room intrusion; the menu room returns intact. Fresh rendered-only
+critic `lucian_isolation_critic`: **AT BAR** for this narrow regression, not unpictured states.
+Builder reopened the captures. `pnpm lint`, `pnpm build`, editor `buildProject` passed;
+editor exited play successfully. City/menu game content is 1280x720; larger bridge capture is
+1707x1019 including window chrome. Local implementation/evidence commit receipt follows; no push.
+
 **Lucian ending asset finish — user-requested continuation, AT BAR (visual), Codex 2026-08-28.**
 The previous verdict covered choice readability, not a finished asset bar. User's new capture
 `codex-clipboard-d7bf5712-3eb9-4938-be19-da288fa5c4fe.png` reopens the cabin and bridge.
