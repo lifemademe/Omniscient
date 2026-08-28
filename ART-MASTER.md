@@ -906,12 +906,12 @@ Vasile first, junctions second, submerged school furniture/reflection third; exp
 show the drain, return to Vasile precedes acknowledgement and player-held Continue.
 Live rotations, wrong-route feedback, success and Continue checked in isolated save namespace.
 `pnpm lint`, `pnpm build`, and editor build passed. Sound not judged. This does not close
-all D-1f work or certify the editor runtime: preview teardown reported two errors (the
-preceding run identified endPlay/removeFromParent ensures), and exiting the save-namespace
+all D-1f work or certify the editor runtime: preview teardown reported two
+endPlay/removeFromParent ensures (no flood shader error), and exiting the save-namespace
 reload raised a Sandbox Studio main-process `Object has been destroyed` error. Editor
-recovery remains separate; no claim of an error-free shutdown.
-Implementation receipt: initial local commit `fc5312f`; retry code and evidence in this
-entry's commit (explicit hash added in the following receipt commit).
+was recovered via Return to Editor; no claim of an error-free shutdown.
+Implementation receipt: initial local commit `fc5312f`; retry code and rendered evidence
+committed locally as `c9cc4bd` (not pushed).
 
 **Tomas switch-box clearances — user-directed geometry correction, 2026-08-28:**
 Wrist target pulled back 14.5 cm; upper cable routed to a rear gland
