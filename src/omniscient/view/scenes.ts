@@ -6982,8 +6982,8 @@ function buildFloodedCellar(scene: ContactScene): void {
   waterGeo.translate(0, WATER_LEVEL, 0);
   const flood = createFloodwater();
   // Keep a broken practical reflection, not a second white lamp on the floor.
-  flood.material.roughness = 0.46;
-  flood.material.metalness = 0.04;
+  flood.material.roughness = 0.32;
+  flood.material.metalness = 0.18;
   const waterMesh = meshOf('Water', waterGeo, flood.material);
   waterMesh.traverse((object) => { object.userData.noWaterline = true; });
 
@@ -7629,8 +7629,8 @@ function buildFloodedCellar(scene: ContactScene): void {
    */
   const ripples = createRipples({
     level: WATER_LEVEL,
-    bounds: [-3.1, 3.1, -1.8, 2.2],
-    every: 2.2,
+    bounds: [-2.7, 0.8, -1.55, 1.1],
+    every: 0.9,
     seed: 'cellar-ripples',
   });
   scene.registerProp('ripples', ripples.root, { idle: (dt) => ripples.idle(dt) });
@@ -8298,7 +8298,7 @@ function buildFloodedCellar(scene: ContactScene): void {
   const bulkheadGuard = meshOf(
     'BulkheadGuard',
     mergeGeometries(housing, false) ?? housing[0],
-    MAT.metal
+    new THREE.MeshStandardMaterial({ color: '#353b38', roughness: 0.88, metalness: 0.1 })
   );
   bulkheadGuard.traverse((o) => {
     o.userData.noShadowCast = true;
@@ -8334,7 +8334,7 @@ function buildFloodedCellar(scene: ContactScene): void {
     name: 'Bulkhead',
     position: lampAt.clone().add(new THREE.Vector3(0, -0.06, 0.44)),
     // Support Vasile without the clipped wall halo or mirror-white flood reflection.
-    intensity: 5.4,
+    intensity: 1.1,
     color: new THREE.Color('#ffdcae'),
     distance: 7,
     decay: 1.3,
@@ -8360,12 +8360,12 @@ function buildFloodedCellar(scene: ContactScene): void {
    * at the moment the player wins is a punishment for winning. A cellar with the flood gone is
    * a cellar somebody can work in; the lamp reaching further is the whole idea.
    *
-   * The restrained 5.4 to 6.05 lift keeps the lamp subordinate to Vasile.
+   * The restrained 1.1 to 1.3 lift keeps the lamp subordinate to Vasile.
    */
   scene.registerLightBeat(
     'cellar',
     (t) => {
-      bulkheadLamp.intensity = 5.4 + t * 0.65;
+      bulkheadLamp.intensity = 1.1 + t * 0.2;
     },
     3.2
   );
@@ -8429,8 +8429,8 @@ function buildFloodedCellar(scene: ContactScene): void {
        * On his eyeline now and inside its own range, coming from the camera side so it
        * lands on the cheek the lens can actually see.
        */
-      position: new THREE.Vector3(-0.55, 1.8, -0.35),
-      intensity: 3.8,
+      position: new THREE.Vector3(0.05, 1.85, -1.0),
+      intensity: 7.0,
       color: new THREE.Color('#d4c6ae'),
       distance: 4.5,
       decay: 1.35,
@@ -8456,10 +8456,8 @@ function buildFloodedCellar(scene: ContactScene): void {
        * with it.
        */
       position: new THREE.Vector3(0.2, 2.15, 0.3),
-      // 6.0 down to 3.6. Measured off the frame the copper span came out at 165 and the
-      // wall behind Vasile at 111-170 - the wash had stopped being a wash and become the
-      // room's ambient, which is how a flooded cellar ends up brighter than its own lamp.
-      intensity: 3.6,
+      // Evidence gets a quiet wash; the wall must not outrank the person describing it.
+      intensity: 1.4,
       color: new THREE.Color('#ffd8b0'),
       distance: 9,
       decay: 1.05,

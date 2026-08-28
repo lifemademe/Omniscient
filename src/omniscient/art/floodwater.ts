@@ -32,8 +32,8 @@
  *
  * Two crossed wave sets at different rates, deliberately not harmonically related, so the
  * pattern never visibly repeats. Slow: this is a cellar that has been filling for days, not
- * open water. `USE_UV` is forced on because a standard material without a map has no `vUv`
- * to sample, and a flat plane's UV is a perfectly good stand-in for world position.
+ * open water. A dedicated varying carries the plane UV: the engine's optional `vUv`
+ * is not available on every mapless standard-material shader variant.
  */
 
 import * as THREE from 'three';
@@ -66,19 +66,19 @@ export function createFloodwater(color = '#131f24'): Floodwater {
     metalness: 0.30,
   });
 
-  // No map, so no vUv - and the ripple needs one. Cheaper than adding a varying by hand.
-  material.defines = { ...material.defines, USE_UV: '' };
-
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uWaterTime = time;
+    shader.vertexShader = shader.vertexShader
+      .replace('void main() {', 'varying vec2 vFloodUv;\nvoid main() {')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFloodUv = uv;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('void main() {', 'uniform float uWaterTime;\nvoid main() {')
+      .replace('void main() {', 'uniform float uWaterTime;\nvarying vec2 vFloodUv;\nvoid main() {')
       .replace(
         '#include <normal_fragment_maps>',
         [
           '#include <normal_fragment_maps>',
           '{',
-          '  vec2 wp = vUv * 9.0;',
+          '  vec2 wp = vFloodUv * 9.0;',
           '  float t = uWaterTime;',
           '  float nx = sin(wp.x * 3.1 + t * 0.55) * 0.5',
           '           + sin(wp.x * 1.7 - wp.y * 2.3 + t * 0.31) * 0.5;',

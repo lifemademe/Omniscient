@@ -884,7 +884,7 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
-**Vasile contact pass — user-directed D-1f extension, 2026-08-28: IN LOOP (Codex).**
+**Vasile contact pass — user-directed D-1f extension, 2026-08-28: AT BAR (scoped visual pass, Codex).**
 Bar: Vasile first, routing junctions second, a recognizably flooded school cellar third;
 crisp PS1 treatment, readable untimed pipe board, and a visible drain followed by a human
 acknowledgement. Source recording: `20260828-0556-25.2420282.mp4` supplied by the user.
@@ -893,10 +893,25 @@ wording, board layout and the ending hold. No save reset or puzzle-rule change.
 Implemented: restrained lamp/glass and water reflection, closer human-led shots, classroom
 storage, junction labels, enlarged continuous pipe paths with fixed endpoints, and a 19.5 cm
 drain followed by the reassurance shot before Vasile's closing speech. Build and lint pass.
-Visual evidence and fresh critic verdict remain PENDING: live window capture repeatedly
-failed with `foreground window did not report a process id`, including after window
-reselection. No AT BAR claim; source recording is baseline only, not proof of this change.
-Implementation receipt: local commit `fc5312f`; fresh rendered capture/critic still required.
+Retry closed the rendered gaps: lamp guard/glow subdued, face fill and pipe wash balanced,
+pipe board sized to its console container so Send remains visible at 1282x752. Fixed the
+runtime flood shader's undeclared `vUv` with its own UV varying; restrained reflected light
+and visible ripples now establish water while Vasile stays matte. Rules/save data unchanged.
+Evidence: `scripts/dev/vasile-r4-opening.jpg`, `scripts/dev/vasile-r4-board.jpg`, and
+`scripts/dev/vasile-r4-resolve-0.jpg` through `vasile-r4-resolve-3.jpg` (approximately
+0.2/2/5/8 seconds after success). Earlier iteration evidence: `vasile-r2-opening.jpg`
+(lamp first), `vasile-r2-board.jpg` (Send below fold), `vasile-r3-opening.jpg` (water absent).
+Fresh opening critic and separate whole-surface smoothing critic both returned AT BAR:
+Vasile first, junctions second, submerged school furniture/reflection third; exposed objects
+show the drain, return to Vasile precedes acknowledgement and player-held Continue.
+Live rotations, wrong-route feedback, success and Continue checked in isolated save namespace.
+`pnpm lint`, `pnpm build`, and editor build passed. Sound not judged. This does not close
+all D-1f work or certify the editor runtime: preview teardown reported two errors (the
+preceding run identified endPlay/removeFromParent ensures), and exiting the save-namespace
+reload raised a Sandbox Studio main-process `Object has been destroyed` error. Editor
+recovery remains separate; no claim of an error-free shutdown.
+Implementation receipt: initial local commit `fc5312f`; retry code and evidence in this
+entry's commit (explicit hash added in the following receipt commit).
 
 **Tomas switch-box clearances — user-directed geometry correction, 2026-08-28:**
 Wrist target pulled back 14.5 cm; upper cable routed to a rear gland

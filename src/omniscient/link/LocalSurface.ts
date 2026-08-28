@@ -131,7 +131,7 @@ export const TERMINAL_CSS = `
 }
 /* Pipe routing is the task on this tab, not a message waiting at the foot of a chat. */
 .omni-terminal__log--pipes > :first-child { margin-top: 0; }
-.omni-terminal__log--pipes { padding: 4px 0 12px; }
+.omni-terminal__log--pipes { padding: 4px 0 12px; container-type: size; }
 .omni-line__who {
   display: block;
   font-size: calc(11px + var(--omni-font-boost, 0px));

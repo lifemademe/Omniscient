@@ -518,22 +518,23 @@ const BOARD_CSS = `
    It does not leak the answer and does not cross §157's boundary. The fill runs on the
    board the player is looking at, using the rotations the player set, and every input to it
    is already on their screen. It reports what they have built, not what they should. */
-.omni-board--pipes { gap: 12px; }
+.omni-board--pipes { gap: 6px; padding: 6px 10px; }
 .omni-board--pipes .omni-board__grid {
   grid-template-columns: minmax(0, 1fr);
   justify-items: center;
-  gap: 10px;
+  gap: 6px;
 }
 .omni-board--pipes .omni-board__foot {
   flex-direction: column;
   align-items: stretch;
-  gap: 9px;
+  gap: 6px;
 }
 .omni-board--pipes .omni-board__status { line-height: 1.45; }
 .omni-board--pipes .omni-board__send { align-self: center; min-width: 132px; }
 .omni-board__pipes {
   display: grid;
-  width: min(100%, 288px, 36vh);
+  /* Reserve space for prompt, instructions and Send inside the actual console height. */
+  width: min(100%, 288px, max(132px, calc(100cqh - 138px)));
   gap: 0;
   border: 1px solid rgba(127, 224, 138, 0.32);
 }
@@ -2540,7 +2541,7 @@ export class BoardPanel {
        * decoration, and this is the sentence that turns it into an instrument.
        */
       this.status.textContent =
-        view.note ?? 'lit pieces have water in them - turn the rest until it reaches the outfall';
+        view.note ?? 'Blue pieces carry water. Connect the outfall.';
       this.wires.replaceChildren();
       return;
     }
