@@ -884,7 +884,8 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
-**Ileana / globe integration — rendered gauntlet accepted, receipt pending — Codex, 2026-08-28:** User-directed follow-up
+**Ileana / globe integration AT BAR — Codex, 2026-08-28:** Implementation and rendered
+evidence commit `c4acc0c`. User-directed follow-up
 to the 05:01 recording. Bar: Ileana's whole face and her photographs remain readable
 beside chat and the relations board; an open, grounded box and five addressed letters
 carry the request and its resolution. Keep the emptied-house practical lighting and
