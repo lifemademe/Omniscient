@@ -887,7 +887,8 @@ diagnostic pass. Replayed all three real choice/cue paths using isolated capture
 cabin/rain reveal, phone pulse, red signal crossing, deceleration, acknowledgement and Continue
 hold remain visible. This is visual/runtime replay evidence, not a complete campaign or audio
 listening pass; earlier lifecycle teardown assertions remain outside this asset-only scope.
-Implementation commit receipt follows after the local commit; no push.
+Implementation and evidence: local commit `910acec`. No push. Editor exit initially timed
+out, then `getState` confirmed ready and out of play; no scene save was performed.
 
 **Lucian contact / three interventions — user-directed D-1 extension, AT BAR (visual), Codex 2026-08-28.**
 Scope: evidence hierarchy, bold speed rule, distinct lights/call/watch performances and delayed
