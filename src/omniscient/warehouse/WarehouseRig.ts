@@ -727,7 +727,10 @@ export class WarehouseRig extends ENGINE.SceneNode {
       if (batch.done) break;
       await warehousePreparationYield(signal);
     }
-    // Registration/physics is work too. Attach bounded groups rather than letting
+    // This mission uses constrainDrone, exact mesh rays and its own cargo rope,
+    // not Rapier contacts. Do not register the visual facility as physics bodies.
+    this.environment.root.setPhysicsEnabled(false, true);
+    // Registration is work too. Attach bounded groups rather than letting
     // one recursive beginPlay traverse the entire finished facility in a single turn.
     const facilityNodes = [...this.environment.root.children];
     for (const node of facilityNodes) this.environment.root.remove(node);
@@ -750,8 +753,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.collections.set(id, collection);
       this.add(collection.root);
     }
-    this.cameraBlockers.rebuild(this.environment.root, mesh => this.isCameraBlocker(mesh));
-    for (const collection of this.collections.values()) this.cameraBlockers.addMovingRoot(collection.root, mesh => this.isCameraBlocker(mesh));
     this.add(this.celStyle.accents);
     this.buildDrone();
     this.add(this.cargoRope.root);
@@ -774,10 +775,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
     }
     await awaitWarehousePreparation(this.waitForNodesToLoad(), signal);
     signal.throwIfAborted();
+    this.setPhysicsEnabled(false, true);
     costs.personnelMs = performance.now() - personnelStart;
     progress('cameras', 'Preparing CCTV, chase and optical feeds');
     this.configurePost();
     this.setCelVisualsEnabled(this.celVisualsEnabled, false);
+    // Index after asset/material readiness, so query proxies inherit the actual
+    // mesh sidedness rather than a loader's temporary material.
+    this.cameraBlockers.rebuild(this.environment.root, mesh => this.isCameraBlocker(mesh));
+    for (const collection of this.collections.values()) this.cameraBlockers.addMovingRoot(collection.root, mesh => this.isCameraBlocker(mesh));
     const world = this.getWorld();
     const camera = this.camera;
     const renderer = world?.getRenderer();
@@ -4809,6 +4815,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.savedFallbackCamera = null;
     }
     this.feedback.dispose();
+    this.cameraBlockers.clear();
     this.sound.dispose();
     this.camera?.setActive(false);
     world?.inputManager?.exitPointerLock();

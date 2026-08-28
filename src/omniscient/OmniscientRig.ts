@@ -516,6 +516,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   /** What the desk lamp was authored at, so the wobble is a deviation and not a drift. */
   private deskLampBase = 0;
+  private readonly workstationLocalLights: ENGINE.SceneNode[] = [];
+  private readonly warehouseHiddenLights = new Map<ENGINE.SceneNode, boolean>();
   /** The workstation lights, kept so the panel can reach them. */
   private lightRig: {
     key: ENGINE.DirectionalLightNode;
@@ -1773,6 +1775,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     castShadows(lamp as unknown as THREE.Object3D, { mapSize: 1024, radius: 3, normalBias: 0.02, bias: -0.0004 });
     lamp.lookAt(lampAt.clone().add(new THREE.Vector3(0.16, -1, 0.22)));
     this.add(lamp);
+    this.workstationLocalLights.push(lamp);
 
     /*
      * The air the bulb is standing in.
@@ -1821,16 +1824,16 @@ export class OmniscientRig extends ENGINE.SceneNode {
      * the stack rather than above it so the plate faces catch it and the room behind does
      * not.
      */
-    this.add(
-      ENGINE.PointLightNode.create({
+    const menuFill = ENGINE.PointLightNode.create({
         name: 'MenuFill',
         position: WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(-0.72, 1.0, -0.42)),
         intensity: 2.4,
         color: new THREE.Color('#cfe0ee'),
         distance: 1.9,
         decay: 1.6,
-      })
-    );
+      });
+    this.add(menuFill);
+    this.workstationLocalLights.push(menuFill);
 
     /**
      * Daylight through the workstation window.
@@ -1904,6 +1907,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     // and the floor rather than terminating on the desk.
     windowKey.lookAt(WORKSTATION_ORIGIN.clone().add(new THREE.Vector3(-1.15, 0.35, 0.5)));
     this.add(windowKey);
+    this.workstationLocalLights.push(windowKey);
 
     /**
      * The screen lights the room.
@@ -1936,6 +1940,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
         decay: 1.4,
       });
     this.add(bounce);
+    this.workstationLocalLights.push(bounce);
 
     const glow = ENGINE.PointLightNode.create({
         name: 'ScreenGlow',
@@ -1946,6 +1951,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
         decay: 1.8,
       });
     this.add(glow);
+    this.workstationLocalLights.push(glow);
 
     this.lightRig = { key, sky, lamp, windowKey, bounce, glow };
 
@@ -3432,6 +3438,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
       ? { color: this.fog.getFogColor().clone(), near: this.fog.getFogNear(), far: this.fog.getFogFar() }
       : null;
     presentationChanged = true;
+    // These finite-range room lights cannot reach the warehouse, but their
+    // shadow passes and shader light slots still cost work when left visible.
+    // Keep global key/sky lighting untouched; restore exact visibility on exit.
+    for (const light of this.workstationLocalLights) {
+      this.warehouseHiddenLights.set(light, light.visible);
+      light.visible = false;
+    }
     this.tracePanel?.destroy();
     this.tracePanel = null;
     this.warehouseLaunchPanel?.destroy();
@@ -3550,6 +3563,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   /** Also used when preparation fails before a WarehouseRig could be attached. */
   private restoreWarehousePresentation(): void {
+    for (const [light, visible] of this.warehouseHiddenLights) light.visible = visible;
+    this.warehouseHiddenLights.clear();
     this.applyCelPost();
     setRetroLook(this.warehousePreviousRetroLook);
     if (this.warehouseFog && this.fog) {

@@ -214,6 +214,8 @@ class PaintPass implements ComposerPass {
     const previousTarget = renderer.getRenderTarget();
     const previousOverride = scene.overrideMaterial;
     const previousAutoClear = renderer.autoClear;
+    const previousShadowAutoUpdate = renderer.shadowMap.autoUpdate;
+    const previousShadowNeedsUpdate = renderer.shadowMap.needsUpdate;
     const previousAlpha = renderer.getClearAlpha();
     renderer.getClearColor(this.clearColor);
 
@@ -267,6 +269,10 @@ class PaintPass implements ComposerPass {
 
     try {
       scene.overrideMaterial = this.normalMaterial;
+      // Normals are unlit. Rebuilding every light's shadow map here doubles the
+      // shadow work and uses the prepass's deliberately hidden geometry.
+      renderer.shadowMap.autoUpdate = false;
+      renderer.shadowMap.needsUpdate = false;
       renderer.autoClear = true;
       renderer.setRenderTarget(this.normalTarget);
       renderer.setClearColor(0x000000, 0);
@@ -277,6 +283,8 @@ class PaintPass implements ComposerPass {
       this.prepassHidden.length = 0;
       scene.overrideMaterial = previousOverride;
       renderer.autoClear = previousAutoClear;
+      renderer.shadowMap.autoUpdate = previousShadowAutoUpdate;
+      renderer.shadowMap.needsUpdate = previousShadowNeedsUpdate;
       renderer.setClearColor(this.clearColor, previousAlpha);
       renderer.setRenderTarget(previousTarget);
     }

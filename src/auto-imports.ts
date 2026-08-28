@@ -171,6 +171,7 @@ import './omniscient/warehouse/types.js';
 import './omniscient/warehouse/WarehouseAudio.js';
 import './omniscient/warehouse/WarehouseAutomation.js';
 import './omniscient/warehouse/WarehouseCameraBlockers.js';
+import './omniscient/warehouse/WarehouseCameraGeometry.js';
 import './omniscient/warehouse/WarehouseCelStyle.js';
 import './omniscient/warehouse/WarehouseCollection.js';
 import './omniscient/warehouse/WarehouseContainmentResponse.js';

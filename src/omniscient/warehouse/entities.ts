@@ -236,6 +236,8 @@ export class WarehouseCargoNode extends ENGINE.SceneNode {
       this.add(edge);
     }
     this.add(box, tape, label, rearLabel, ...sealParts, ...cartonDressing(data.packageId));
+    // Cargo movement and docking are owned by WarehouseRig/DroneCargoRope.
+    this.setPhysicsEnabled(false, true);
   }
 }
 
