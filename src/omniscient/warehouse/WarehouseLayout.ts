@@ -25,6 +25,7 @@ export interface WarehouseSecurityZoneLayout {
 }
 
 const AISLE_CENTERS = [-19, -12, -5, 2, 9] as const;
+const REAR_WALL_Z = -29.2;
 
 export const WAREHOUSE_AISLE_COUNT = AISLE_CENTERS.length;
 
@@ -47,7 +48,7 @@ export const WAREHOUSE_LAYOUT = {
     height: 10.5,
     wallX: 24.2,
     frontZ: 29.2,
-    rearZ: -29.2,
+    rearZ: REAR_WALL_Z,
     roofY: 10.5,
   },
   rack: {
@@ -72,7 +73,18 @@ export const WAREHOUSE_LAYOUT = {
     hold: new THREE.Vector3(20.2, 0, 19),
   },
   cradle: new THREE.Vector3(0, 0, 22),
-  truck: new THREE.Vector3(0, 0, -34.2),
+  // Rear cargo opening, not the centre of a solid placeholder trailer.
+  truck: new THREE.Vector3(0, 0, REAR_WALL_Z - 0.8),
+  loadingBay: {
+    constructionWidth: 11.6,
+    constructionHeight: 6,
+    width: 3.8,
+    height: 4.45,
+    trailerHalfWidth: 1.24,
+    trailerDeck: 1.14,
+    trailerHeight: 2.62,
+    trailerDepth: 7.4,
+  },
   receiving: {
     apronFrontZ: -16.5,
     freightSpawnZ: -27.2,

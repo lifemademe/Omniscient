@@ -28,6 +28,7 @@ import { WarehouseSetDressing } from './WarehouseSetDressing.js';
 import { MEZZANINE_BOUNDS, WarehouseFacilities } from './WarehouseFacilities.js';
 import { keepCelSheen } from './WarehouseCelStyle.js';
 import { WarehouseTransferDock } from './WarehouseTransferDock.js';
+import { buildWarehouseLoadingBay } from './WarehouseLoadingBay.js';
 
 import type {
   WarehouseDoorId,
@@ -647,10 +648,6 @@ export class WarehouseEnvironment {
       this.daylight.root,
       mesh('Roof', new THREE.BoxGeometry(shell.width, 0.3, shell.length), ROOF_DECK, new THREE.Vector3(0, shell.roofY, 0))
     );
-
-    const rearDoor = mesh('RearLoadingDoor', new THREE.BoxGeometry(11.2, 6, 0.22), STEEL, new THREE.Vector3(0, 3, shell.rearZ + 0.2));
-    this.rearDoor = rearDoor;
-    this.root.add(rearDoor);
 
     this.buildRacks();
     this.buildServiceDoors();
@@ -1413,31 +1410,6 @@ export class WarehouseEnvironment {
   }
 
   /**
-   * The night truck, which was a box with four wheels on it.
-   *
-   * The objective line says "receive the NIGHT truck", so this is the one prop in the mission
-   * the player is explicitly told to look for. What was there was a 9.5 by 5.3 by 8.5 metre
-   * slab, a thinner slab stuck to its front, a bumper and four cylinders - measured off a
-   * capture, an unbroken black rectangle filling a third of the frame with no feature on it
-   * anywhere.
-   *
-   * Three things fix that, in order of how much each one does:
-   *
-   *  - MARKER LAMPS. A trailer at night is recognised by its outline of amber markers before
-   *    anything else about it is visible, and they are emissive, so they do not wait on the
-   *    exterior having any light in it. This is what turns the rectangle into a vehicle.
-   *  - A DOCK LAMP over the opening - see buildDockLamps. The rear apron had no light of its
-   *    own at all, so everything here was invisible regardless of what it was made of, and
-   *    detailing an unlit object is work nobody ever sees.
-   *  - THE ANATOMY. Corrugated sides, a top rail and skirt, chassis beams, landing gear,
-   *    mudflaps, wheel hubs. Merged into two meshes, so the whole vehicle still costs about
-   *    what it cost as a box.
-   *
-   * The footprint is unchanged. It is 9.5m wide because the dock seal is 10.1m wide, and
-   * narrowing one without the other opens a gap in the one place in this building where a gap
-   * would read as a hole in the wall.
-   */
-  /**
    * Conduit, sprinkler main and cable tray - what the fixtures are hanging FROM.
    *
    * The lamps were on stems into nothing. A stem that stops in mid-air reads as a prop
@@ -1653,134 +1625,12 @@ export class WarehouseEnvironment {
   }
 
   private buildTruck(): void {
-    const truck = ENGINE.SceneNode.create({ name: 'InboundTruck', position: WAREHOUSE_LAYOUT.truck.clone() });
-    const BODY = new THREE.MeshStandardMaterial({ color: '#273538', roughness: 0.78, metalness: 0.3 });
-    const RIB = new THREE.MeshStandardMaterial({ color: '#1c2729', roughness: 0.84, metalness: 0.26 });
-    const RUBBER = new THREE.MeshStandardMaterial({ color: '#080a09', roughness: 1 });
-    const MARKER = new THREE.MeshStandardMaterial({
-      color: '#c08a2c',
-      emissive: '#c26a10',
-      emissiveIntensity: 2.1,
-      roughness: 0.34,
-    });
-    const bodyZ = -2.5;
-    const halfLength = 4.25;
-    truck.add(
-      mesh('Trailer', new THREE.BoxGeometry(9.5, 5.3, 8.5), BODY, new THREE.Vector3(0, 3.0, bodyZ)),
-      mesh('TrailerDark', new THREE.BoxGeometry(8.9, 4.7, 0.15), DARK_STEEL, new THREE.Vector3(0, 3, 1.78)),
-      mesh('RearBumper', new THREE.BoxGeometry(9.6, 0.32, 0.34), STEEL, new THREE.Vector3(0, 0.45, 1.92)),
-      mesh('DockSeal', new THREE.BoxGeometry(10.1, 5.8, 0.26), new THREE.MeshStandardMaterial({ color: '#111615', roughness: 0.98 }), new THREE.Vector3(0, 3.0, 2.0))
-    );
-
-    /*
-     * Corrugation, a top rail and a skirt - the three lines that read as a trailer side.
-     *
-     * Merged per material: a rib every 55cm over 8.5 metres on two faces is about thirty
-     * boxes, and thirty draw calls for surface texture on a background prop is not a trade
-     * worth making.
-     */
-    const ribs: THREE.BufferGeometry[] = [];
-    const frame: THREE.BufferGeometry[] = [];
-    for (const side of [-1, 1]) {
-      const x = side * 4.76;
-      for (let z = bodyZ - halfLength + 0.5; z < bodyZ + halfLength - 0.4; z += 0.55) {
-        ribs.push(boxGeometry(new THREE.Vector3(0.06, 4.5, 0.1), new THREE.Vector3(x, 3.05, z)));
-      }
-      // Top rail and skirt, proud of the face so each carries its own line of light.
-      frame.push(boxGeometry(new THREE.Vector3(0.16, 0.2, 8.5), new THREE.Vector3(x, 5.55, bodyZ)));
-      frame.push(boxGeometry(new THREE.Vector3(0.16, 0.34, 8.5), new THREE.Vector3(x, 0.62, bodyZ)));
-      // Chassis beam, landing leg and foot, on the underside where the body stops.
-      frame.push(boxGeometry(new THREE.Vector3(0.2, 0.34, 7.9), new THREE.Vector3(side * 1.45, 0.2, bodyZ)));
-      frame.push(boxGeometry(new THREE.Vector3(0.24, 0.9, 0.24), new THREE.Vector3(side * 2.6, 0.45, bodyZ - 3.1)));
-      frame.push(boxGeometry(new THREE.Vector3(0.52, 0.1, 0.52), new THREE.Vector3(side * 2.6, 0.05, bodyZ - 3.1)));
-      // A mudflap behind the rear axle, which is the detail that says "road vehicle".
-      frame.push(boxGeometry(new THREE.Vector3(0.05, 0.78, 1.05), new THREE.Vector3(side * 3.75, 0.42, -2.15)));
-    }
-    truck.add(
-      mesh('TrailerRibs', mergeGeometries(ribs, false) ?? new THREE.BoxGeometry(0.1, 0.1, 0.1), RIB),
-      mesh('TrailerFrame', mergeGeometries(frame, false) ?? new THREE.BoxGeometry(0.1, 0.1, 0.1), STEEL)
-    );
-
-    /*
-     * Marker lamps, and they are the reason any of this reads at all.
-     *
-     * Emissive, so they do not depend on the exterior lighting: at night the amber outline
-     * along a trailer's roof line is recognised before its shape is, and the rear apron is
-     * the darkest place in the level. Five a side plus the rear top corners, which is the
-     * real arrangement and also happens to draw the two lines - roof and rear edge - that
-     * tell you how big the thing is.
-     */
-    const markers: THREE.BufferGeometry[] = [];
-    for (const side of [-1, 1]) {
-      for (let index = 0; index < 5; index++) {
-        const z = bodyZ - halfLength + 0.9 + index * 1.62;
-        markers.push(boxGeometry(new THREE.Vector3(0.09, 0.16, 0.34), new THREE.Vector3(side * 4.82, 5.24, z)));
-      }
-      markers.push(boxGeometry(new THREE.Vector3(0.34, 0.16, 0.09), new THREE.Vector3(side * 4.1, 5.52, bodyZ + halfLength - 0.02)));
-    }
-    truck.add(mesh('TrailerMarkers', mergeGeometries(markers, false) ?? new THREE.BoxGeometry(0.1, 0.1, 0.1), MARKER));
-
-    for (const x of [-3.75, 3.75]) {
-      for (const z of [-4.8, -2.9]) {
-        const wheel = mesh('TruckWheel', new THREE.CylinderGeometry(0.72, 0.72, 0.38, 18), RUBBER, new THREE.Vector3(x, 0.72, z));
-        wheel.rotation.z = Math.PI / 2;
-        truck.add(wheel);
-        // A hub, so a wheel is a wheel rather than a black disc.
-        const hub = mesh('TruckHub', new THREE.CylinderGeometry(0.24, 0.24, 0.42, 12), STEEL, new THREE.Vector3(x, 0.72, z));
-        hub.rotation.z = Math.PI / 2;
-        truck.add(hub);
-      }
-      const tail = mesh(
-        'TruckTailLamp',
-        new THREE.BoxGeometry(0.42, 0.22, 0.06),
-        new THREE.MeshStandardMaterial({ color: '#a33e32', emissive: '#6a130d', emissiveIntensity: 2.2, roughness: 0.32 }),
-        new THREE.Vector3(x, 1.05, 1.94)
-      );
-      truck.add(tail);
-    }
-    this.root.add(truck);
-    this.buildDockLamps();
-  }
-
-  /**
-   * Two gooseneck lamps over the rear opening, aimed at the trailer.
-   *
-   * The rear apron carried no light of its own, so everything beyond that wall rendered at a
-   * median luma in the teens - which is why the truck could stay a black rectangle for so
-   * long without anybody being able to say what was wrong with it. A dock with no dock lamps
-   * is the actual omission; the truck was merely where it showed.
-   *
-   * A real light rather than an emissive cheat, because the point is to land illumination on
-   * geometry that has none of its own.
-   */
-  private buildDockLamps(): void {
-    const housing = new THREE.MeshStandardMaterial({ color: '#1b2122', roughness: 0.78, metalness: 0.34 });
-    const lens = new THREE.MeshStandardMaterial({
-      color: '#d9b877',
-      emissive: '#e0a24c',
-      emissiveIntensity: 2.4,
-      roughness: 0.3,
-    });
-    for (const x of [-6.2, 6.2]) {
-      const lamp = ENGINE.SceneNode.create({
-        name: 'DockLamp',
-        position: new THREE.Vector3(x, 0, WAREHOUSE_LAYOUT.shell.rearZ - 0.4),
-      });
-      lamp.add(
-        mesh('DockLampArm', new THREE.BoxGeometry(0.11, 0.11, 1.5), housing, new THREE.Vector3(0, 6.6, -0.7)),
-        mesh('DockLampShade', new THREE.CylinderGeometry(0.46, 0.26, 0.34, 12), housing, new THREE.Vector3(0, 6.42, -1.38)),
-        mesh('DockLampLens', new THREE.CylinderGeometry(0.25, 0.25, 0.06, 12), lens, new THREE.Vector3(0, 6.24, -1.38))
-      );
-      lamp.add(ENGINE.PointLightNode.create({
-        name: 'DockLampLight',
-        color: '#f0b871',
-        intensity: 42,
-        distance: 24,
-        decay: 1.6,
-        position: new THREE.Vector3(0, 6.05, -1.38),
-      }));
-      this.root.add(lamp);
-    }
+    const bay = buildWarehouseLoadingBay();
+    this.rearDoor = bay.shutter;
+    this.root.add(bay.root);
+    const label = readableLabelPanel('InboundDockLabel', '01 // INBOUND', 2.8, 0.45,
+      '#c9ab6a', new THREE.Vector3(0, 5.25, 0.24));
+    bay.root.add(label.root);
   }
 
   private buildLights(): void {
@@ -2744,7 +2594,7 @@ export class WarehouseEnvironment {
     for (const door of this.serviceDoors.values()) door.tick(deltaTime);
     for (const dock of this.transferDocks.values()) dock.tick(deltaTime);
     if (this.rearDoor) {
-      this.rearDoor.position.y = THREE.MathUtils.damp(this.rearDoor.position.y, 3 + this.rearDoorTarget * 6.2, 2.6, deltaTime);
+      this.rearDoor.scale.y = THREE.MathUtils.damp(this.rearDoor.scale.y, 1 - this.rearDoorTarget * 0.97, 2.6, deltaTime);
     }
     for (const [id, gates] of this.securityGates) {
       const locked = this.lockedSecurityZones.has(id);

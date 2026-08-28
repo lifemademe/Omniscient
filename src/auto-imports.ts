@@ -169,6 +169,7 @@ import './omniscient/warehouse/WarehouseInboundAudit.js';
 import './omniscient/warehouse/WarehouseIntruder.js';
 import './omniscient/warehouse/WarehouseLaunchPanel.js';
 import './omniscient/warehouse/WarehouseLayout.js';
+import './omniscient/warehouse/WarehouseLoadingBay.js';
 import './omniscient/warehouse/WarehouseOpsPanel.js';
 import './omniscient/warehouse/WarehousePursuit.js';
 import './omniscient/warehouse/WarehouseRig.js';

@@ -248,7 +248,6 @@ export class WarehouseFacilities {
     this.buildForklift(bucket, -21.4, -21.6, Math.PI * 0.5, true);
     this.buildPalletTruck(bucket, 4.6, 20.9, 0.22);
     this.buildPalletTruck(bucket, -10.2, -20.4, -0.6);
-    this.buildInboundTruck(bucket, 7.6, -26.4);
     this.buildChargingBay(bucket, -22.2, -18.4);
     this.buildMezzanine(bucket);
     this.buildLooseLife(bucket);
@@ -735,89 +734,6 @@ export class WarehouseFacilities {
     box(bucket.rail, 0.34, 0.05, 0.05, gripX, 1.24, gripZ, rotY);
   }
 
-  /**
-   * The inbound trailer, backed onto the receiving dock.
-   *
-   * A comment on the receiving zone marker has said "clear of the inbound truck and its dock
-   * seal, which own the middle of receiving" for as long as that marker has existed. There
-   * was no truck. The zone was being kept clear for a vehicle nobody had built, and the
-   * middle of receiving was empty floor.
-   *
-   * Built from inside, because that is the only side the drone ever sees: an opening in the
-   * wall with a trailer's interior beyond it. The parts that matter for the read are the
-   * ones that say "this is a vehicle and not a corridor" - a floor at dock height rather
-   * than at warehouse height, ribbed side walls that converge, a roller door stowed in its
-   * housing above the opening, and the leveller plate bridging the gap with a visible seam.
-   *
-   * The dock seal is what frames it. Three foam bumpers, compressed where the trailer has
-   * pushed into them, are the difference between a lorry parked at a hole and a lorry docked.
-   */
-  private buildInboundTruck(bucket: Buckets, x: number, dockZ: number): void {
-    const DECK = 1.14;      // trailer floor, a lorry bed above the warehouse slab
-    const HALF = 1.24;      // internal half-width
-    const HEAD = 2.62;      // internal height
-    const DEEP = 7.4;       // how far back it runs
-
-    // The seal: two side pads and a header, squashed against the trailer's face.
-    for (const side of [-1, 1] as const) {
-      box(bucket.rubber, 0.3, HEAD + 0.5, 0.42, x + side * (HALF + 0.32), (HEAD + 0.5) / 2, dockZ + 0.1);
-    }
-    box(bucket.rubber, HALF * 2 + 0.94, 0.34, 0.42, x, HEAD + 0.52, dockZ + 0.1);
-
-    // The leveller: a plate from the dock edge onto the trailer bed, and the lip that lands
-    // on it. The step in height is the whole reason this object exists.
-    box(bucket.deck, HALF * 2 - 0.1, 0.06, 1.5, x, DECK - 0.03, dockZ + 0.62);
-    box(bucket.steel, HALF * 2 - 0.1, 0.04, 0.34, x, DECK - 0.05, dockZ - 0.12);
-
-    // Bed, roof and side walls of the trailer itself.
-    box(bucket.bodyDark, HALF * 2, 0.12, DEEP, x, DECK - 0.06, dockZ - DEEP / 2);
-    box(bucket.bodyDark, HALF * 2 + 0.3, 0.14, DEEP, x, DECK + HEAD + 0.07, dockZ - DEEP / 2);
-    for (const side of [-1, 1] as const) {
-      box(bucket.body, 0.12, HEAD, DEEP, x + side * HALF, DECK + HEAD / 2, dockZ - DEEP / 2);
-    }
-    // The far bulkhead, so the trailer ends somewhere instead of running into the dark.
-    box(bucket.body, HALF * 2, HEAD, 0.12, x, DECK + HEAD / 2, dockZ - DEEP);
-
-    /*
-     * Ribs down both walls. A trailer's interior is corrugated, and at this distance the
-     * ribs are the only thing that tells the eye it is looking down a box rather than at a
-     * flat wall - they converge, and convergence is the depth cue.
-     */
-    for (let i = 0; i < 9; i++) {
-      const rz = dockZ - 0.5 - i * 0.78;
-      for (const side of [-1, 1] as const) {
-        box(bucket.bodyDark, 0.05, HEAD - 0.2, 0.09, x + side * (HALF - 0.07), DECK + HEAD / 2, rz);
-      }
-    }
-
-    // The roller door, stowed in its housing over the opening, with its bottom rail showing.
-    box(bucket.steel, HALF * 2 + 0.16, 0.44, 0.5, x, DECK + HEAD - 0.16, dockZ - 0.28);
-    box(bucket.rail, HALF * 2 + 0.1, 0.09, 0.12, x, DECK + HEAD - 0.42, dockZ - 0.16);
-
-    /*
-     * Part-unloaded, because a full trailer and an empty one both read as a wall. Two stacks
-     * left at the back and one pulled to the lip is a load somebody is halfway through, and
-     * it puts three depths of object down the length of the box.
-     */
-    for (const [px, pz, ph] of [
-      [-0.6, 1.5, 1.5],
-      [0.62, 1.4, 1.15],
-      [-0.5, 3.6, 1.35],
-      [0.66, 4.2, 0.95],
-      [0.0, 6.1, 1.25],
-    ] as const) {
-      // The pallet under each stack: a dark band that stops the boxes floating on the bed.
-      box(bucket.bodyDark, 1.0, 0.13, 0.9, x + px, DECK + 0.07, dockZ - pz);
-      box(bucket.body, 0.96, ph, 0.86, x + px, DECK + 0.14 + ph / 2, dockZ - pz);
-      // A strap over the top of the taller ones.
-      if (ph > 1.2) {
-        box(bucket.rail, 1.0, 0.03, 0.05, x + px, DECK + 0.16 + ph, dockZ - pz);
-      }
-    }
-
-    // One box down on the leveller, where somebody set it and went to do something else.
-    box(bucket.body, 0.62, 0.5, 0.56, x - 0.42, DECK + 0.25, dockZ + 0.68);
-  }
 
   /** Where the trucks live overnight, which is the reason there are batteries in a warehouse. */
   private buildChargingBay(bucket: Buckets, x: number, z: number): void {
