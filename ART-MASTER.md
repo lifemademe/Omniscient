@@ -884,6 +884,34 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
+**F-1 globe / Tomas / completion correction PAUSED — Codex, 2026-08-28:**
+User-directed follow-up to the 04:29 recording. Reopens the prior subpass: the
+no-prior-knowledge route left the splice box suspected until success, and the
+answered record repeated the opening complaint. Bar: readable repair hardware
+before choosing a part, an unobstructed face, compact accessible observations,
+visible steady beacon before success copy, and earned CRT growth with a truthful
+knowledge/outcome receipt. Runtime construction and presentation only; no puzzle
+answers, saved-scene transforms or shared materials changed.
+Code pass implemented: all four no-prior-knowledge feed-tracing transitions open the
+box (transition cameras override beat framing, so the cue belongs on those edges),
+the bag also opens it, and repeated opening preserves the current lid angle.
+The descending cable uses its shape instead of a face-crossing suspected volume;
+local cool fill is adjusted and observations have a bounded, scrollable height.
+Tomas's final words/status wait 3.6s for the 2.8s lamp/3.3s hold cues; outcome/save
+remain immediate and Continue waits for both visual and audio acknowledgement.
+CRT growth refreshes after the solved-request floor and replays from call-entry
+growth; the return receipt names an actually learned fact. Globe history now uses
+resolved copy and selection emphasizes its leader and dot as well as its name.
+Final `pnpm lint`, `pnpm build`, and `git diff --check` passed. The first editor
+bundle built, but fresh rendered evidence is **not available**: the existing
+endPlay/dispose ensure error recurred, and the Computer Use preview handle failed
+twice with `foreground window did not report a process id`. MCP subsequently
+reported `Editor world is not loaded` with play inactive. Final source corrections
+are not confirmed in the live bundle. No critic verdict; **not AT BAR**. Next:
+restore editor readiness, rebuild, capture BOTH knowledge routes through the bag,
+then the settling/Continue/CRT/globe sequence at gameplay and small-window sizes;
+run a fresh critic against the bar above before closing this subpass.
+
 **F-1 globe / Tomas / completion subpass AT BAR — Codex, 2026-08-28:**
 User-directed follow-up to the 03:41 recording. Bar: §3, §4.2/4.3/4.6 and the
 beacon silhouette reference for value hierarchy. Tomas and the junction must remain

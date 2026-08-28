@@ -191,7 +191,12 @@ export const TERMINAL_CSS = `
   flex-wrap: wrap;
   align-items: center;
   gap: 5px;
-  padding: 7px 10px;
+  padding: 5px 10px;
+  max-height: min(112px, 17vh);
+  overflow-y: auto;
+  flex-shrink: 0;
+  scrollbar-width: thin;
+  scrollbar-color: #35603f #0d1c14;
   border-bottom: 1px solid #1a2f21;
 }
 .omni-observed[hidden] { display: none; }
@@ -211,12 +216,12 @@ export const TERMINAL_CSS = `
   text-transform: uppercase;
 }
 .omni-observed__item {
-  padding: 4px 9px;
+  padding: 3px 7px;
   background: #0d1c14;
   border: 1px solid #2b5c39;
   color: #cfe6c4;
   font: inherit;
-  font-size: calc(12px + var(--omni-font-boost, 0px));
+  font-size: calc(11px + var(--omni-font-boost, 0px));
   line-height: 1.3;
   text-align: left;
   cursor: pointer;
@@ -1394,7 +1399,6 @@ export class LocalSurface implements InterventionSurface {
       'omni-cv--connecting',
       'omni-cv--acquiring',
       'omni-cv--ready',
-      'omni-cv--compact',
       'omni-cv--leaving'
     );
     shell.classList.add('omni-cv--resolving');

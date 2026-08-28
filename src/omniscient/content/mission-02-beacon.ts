@@ -126,6 +126,7 @@ export const MISSION_02: MissionDefinition = {
   archetype: 'diagnosis',
   objective: 'Find out why the harbour light keeps going out, and make it hold.',
   resolutionObjective: 'Harbour light stabilised.',
+  resolutionDelayMs: 3600,
   // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
   reopeningSay: 'It went out twice more since last time. I kept the log going anyway.',
   urgency: Urgency.Timed,
@@ -280,7 +281,7 @@ export const MISSION_02: MissionDefinition = {
         'I am halfway up the mast now.',
       suggest: ['follow the supply wire', 'when did it start', 'tell me about Mirela'],
       on: {
-        ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable,prop.point:contact' },
+        ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable,prop.open:splice-box,prop.point:contact' },
         ASK_TIMING: { to: 'timing', environment: 'prop.point:contact' },
         ASK_SISTER: { to: 'sister-blind', environment: 'prop.point:contact' },
         ADMIT_UNCERTAINTY: { to: 'timing', environment: 'prop.point:contact' },
@@ -296,7 +297,7 @@ export const MISSION_02: MissionDefinition = {
       say: 'Say again - the wind is taking it. I am holding on with one hand up here.',
       suggest: ['follow the supply wire', 'when did it start', 'tell me about Mirela'],
       on: {
-        ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
+        ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable,prop.open:splice-box' },
         ASK_TIMING: { to: 'timing' },
         ASK_SISTER: { to: 'sister-blind' },
       },
@@ -312,7 +313,7 @@ export const MISSION_02: MissionDefinition = {
         'perhaps I only notice. It is not the weather, it was clear all day.',
       suggest: ['follow the supply wire', 'tell me about Mirela'],
       on: {
-        ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
+        ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable,prop.open:splice-box' },
         ASK_SISTER: { to: 'sister-blind' },
       },
       onUnrecognised: { to: 'clarify-blind' },
@@ -326,7 +327,7 @@ export const MISSION_02: MissionDefinition = {
         'morning, she would not stop going on about it. Why - what has that to do with my mast?',
       suggest: ['follow the supply wire'],
       on: {
-        ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable' },
+        ASK_FEED: { to: 'feed-traced-slow', environment: 'camera.pan:mast-cable,prop.open:splice-box' },
       },
       onUnrecognised: { to: 'clarify-blind' },
     },
@@ -554,7 +555,7 @@ export const MISSION_02: MissionDefinition = {
        * That is the division of labour the whole game is built on, finally as a verb.
        */
       id: 'the-bag',
-      framing: 'camera.pan:mast-cable',
+      framing: 'camera.pan:mast-cable,prop.open:splice-box',
       tempo: Tempo.Act,
       say:
         'Right - hold on.\n\n' +

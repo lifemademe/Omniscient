@@ -113,6 +113,7 @@ export function createSignals(): Signal[] {
       longitude: 38.0,
       name: 'Tomas Vasc',
       label: 'The harbour light keeps going out.',
+      resolvedLabel: 'Harbour light stabilised.',
       // Appears once Mirela's request resolves - because that is what caused it.
       state: SignalState.Dormant,
       hidden: true,

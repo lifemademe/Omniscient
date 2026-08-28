@@ -3263,7 +3263,10 @@ function buildBeaconMast(scene: ContactScene): void {
     actions: {
       open: (tweener) => {
         scene.setCertainty('splice-box', CERTAINTY.DESCRIBED);
-        tweener.add((t) => lidPivot.rotation.set(-1.2 * t, 0, 0), {
+        scene.setCertainty('feed-down', CERTAINTY.DESCRIBED);
+        scene.setCertainty('feed-away', CERTAINTY.DESCRIBED);
+        const from = lidPivot.rotation.x;
+        tweener.add((t) => lidPivot.rotation.set(from + (-1.2 - from) * t, 0, 0), {
           duration: 0.9,
           easing: Ease.outCubic,
           channel: 'splice-lid',
@@ -3480,9 +3483,9 @@ function buildBeaconMast(scene: ContactScene): void {
     'face-fill',
     ENGINE.PointLightNode.create({
       name: 'FaceFill',
-      position: new THREE.Vector3(0.55, 3.5, 1.4),
+      position: new THREE.Vector3(0.05, 3.65, 1.5),
       // A local cool floor keeps his features readable through the beacon's dark phase.
-      intensity: 4,
+      intensity: 4.6,
       color: new THREE.Color('#9fb6cc'),
       distance: 1.8,
       decay: 1.5,
@@ -3566,7 +3569,8 @@ function buildBeaconMast(scene: ContactScene): void {
      * in the feed and not in the lamp. The splice box is on the mast in frame, so it is
      * the one that performs.
      */
-    ['feed-down', CERTAINTY.SUSPECTED],
+    // A cable's bounds are not its silhouette: a suspected volume cut through his face.
+    ['feed-down', CERTAINTY.SHAPED],
     /*
      * SHAPED, not SUSPECTED, and the reason is a rule rather than a preference.
      *

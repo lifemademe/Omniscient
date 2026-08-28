@@ -669,6 +669,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
   private revealFrom = 0;
   private revealProgress = 1;
   private pulse = 0;
+  private contactGrowthStart = 0;
+  private latestContactFact: string | null = null;
 
   constructor() {
     super();
@@ -2349,6 +2351,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
       // Presentation only, and it never touches mission state - see PlayerMessage's `aim`.
       onAim: (to) => this.scene?.aim(to),
       onKnowledgeGained: (factIds) => {
+        const latest = factIds[factIds.length - 1];
+        if (latest) this.latestContactFact = this.knowledge.getFact(latest)?.label ?? this.latestContactFact;
         audio.play('learn');
         adaptiveScore.accentKnowledge(this.scene?.sceneId ?? '');
         this.revealGrowth();
@@ -2363,6 +2367,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
         this.scene?.learn(factIds);
       },
       onResolved: () => {
+        // recordOutcome has now applied the solved-request growth floor as well.
+        this.revealGrowth();
         adaptiveScore.setState('resolution');
         const acknowledgementDelay = audio.playContactPayoff(this.scene?.sceneId ?? '') ?? 0;
         window.setTimeout(() => audio.play('solved'), acknowledgementDelay);
@@ -2673,7 +2679,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
    * doubts the save can read what is on it, which is the only reassurance that survives
    * scepticism.
    */
-  private flashSaveNote(written: boolean): void {
+  private flashSaveNote(written: boolean, memory?: string): void {
     const container = this.getWorld()?.gameContainer;
     if (!container) return;
 
@@ -2681,22 +2687,10 @@ export class OmniscientRig extends ENGINE.SceneNode {
     const note = document.createElement('div');
     note.style.cssText = [
       'position:absolute',
-      /*
-       * 27%, not 50%, and the reasoning above survives the change intact.
-       *
-       * "It sits above the desk rather than in the corner of the window, which is where the
-       * shot is taking the eye anyway" is right, and it is right for a reason that makes
-       * centring wrong: the eye is at the middle of that shot BECAUSE THE TUBE IS THERE. So a
-       * centred note lands on the CRT and covers the knowledge tree - which has just grown by
-       * one branch, which is the reward the whole mission was for. The receipt was printed
-       * over the thing it is a receipt for.
-       *
-       * 27% puts it in the desk lamp's pool, which is lit, empty, on the same surface, and on
-       * the way the eye is already travelling. Off the tube by about five per cent of the
-       * frame at the settled shot.
-       */
-      'left:27%',
-      'bottom:12%',
+      // At the result shot, put the knowledge receipt BELOW the tube; never over its growth.
+      // Other save receipts retain their existing position in the lamp's pool.
+      memory ? 'left:50%' : 'left:27%',
+      memory ? 'bottom:4%' : 'bottom:12%',
       'transform:translateX(-50%)',
       'z-index:30',
       'padding:10px 22px',
@@ -2708,15 +2702,26 @@ export class OmniscientRig extends ENGINE.SceneNode {
       'opacity:0',
       'transition:opacity 0.5s ease',
       'pointer-events:none',
+      'max-width:72%',
+      'text-align:center',
     ].join(';');
-    note.textContent = 'WRITING TO TAPE';
+    if (memory) {
+      const learned = document.createElement('div');
+      learned.textContent = `RETAINED // ${memory}`;
+      learned.style.cssText = 'font-size:13px;line-height:1.5;letter-spacing:.05em;color:#d8ffb0;margin-bottom:5px';
+      note.appendChild(learned);
+    }
+    const status = document.createElement('div');
+    status.textContent = 'WRITING TO TAPE';
+    if (memory) status.style.cssText = 'font-size:10px;letter-spacing:.14em;color:#7fa584';
+    note.appendChild(status);
     container.appendChild(note);
 
     // A tape does not write instantly and should not claim to. Three dots, then the receipt.
     let dots = 0;
     const ticking = window.setInterval(() => {
       dots = (dots + 1) % 4;
-      note.textContent = `WRITING TO TAPE${'.'.repeat(dots)}`;
+      status.textContent = `WRITING TO TAPE${'.'.repeat(dots)}`;
     }, 260);
 
     requestAnimationFrame(() => (note.style.opacity = '1'));
@@ -2731,17 +2736,17 @@ export class OmniscientRig extends ENGINE.SceneNode {
        * already has a sound for a mechanism refusing a piece.
        */
       audio.play(written ? 'seat' : 'reject');
-      note.textContent = written
+      status.textContent = written
         ? answered === 1
           ? 'TAPE WRITTEN - 1 ANSWERED'
           : `TAPE WRITTEN - ${String(answered)} ANSWERED`
         : 'TAPE WILL NOT WRITE - PROGRESS NOT SAVED';
-      note.style.color = written ? '#d8ffb0' : '#c2483a';
+      status.style.color = written ? '#a6c991' : '#c2483a';
     }, 1500);
     // Held a good while afterwards. This is the one moment in the game where the player is
     // being asked to trust something they cannot see, so it stays until they have read it.
-    window.setTimeout(() => (note.style.opacity = '0'), 4200);
-    window.setTimeout(() => note.remove(), 4900);
+    window.setTimeout(() => (note.style.opacity = '0'), memory ? HOME_DWELL * 1000 - 500 : 4200);
+    window.setTimeout(() => note.remove(), memory ? HOME_DWELL * 1000 : 4900);
   }
 
   private persist(): boolean {
@@ -3221,6 +3226,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
       dustNode.visible = true;
       dustNode.startEmitting();
     }
+    this.contactGrowthStart = this.tree?.segmentCount ?? 0;
+    this.latestContactFact = null;
     this.session.start(request.mission, request.contact);
     this.cameraTweener.add(() => undefined, {
       duration: 0.01,
@@ -3781,7 +3788,8 @@ export class OmniscientRig extends ENGINE.SceneNode {
     setCursorVisible(true);
     this.phone?.beginResolution();
     // Let the authored repair and acknowledgement finish before enabling Continue.
-    this.resolveHold = Math.max(RESOLVE_HOLD, acknowledgementDelayMs / 1000 + 1.35);
+    const visualDelay = this.activeIndex === null ? 0 : (this.queue[this.activeIndex]?.mission.resolutionDelayMs ?? 0) / 1000;
+    this.resolveHold = Math.max(RESOLVE_HOLD, visualDelay + 1.35, acknowledgementDelayMs / 1000 + 1.35);
   }
 
   private returnHome(): void {
@@ -3796,6 +3804,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.cueTweener.clear();
 
     const resolvedId = this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.contactId;
+    const memory = this.latestContactFact ?? (this.activeIndex === null ? undefined : this.queue[this.activeIndex]?.mission.resolutionObjective);
     if (resolvedId) {
       this.setSignalState(resolvedId, SignalState.Resolved);
       this.openable.delete(resolvedId);
@@ -3820,9 +3829,12 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.screen = Screen.Tree;
       this.phone?.setVisible(false);
       this.cutTo(RESULT_SHOT);
+      // Replay all growth earned on this call, not just its last invisible mid-call tick.
+      this.tree?.setState(this.knowledge.toTreeState());
+      this.revealFrom = Math.min(1, this.contactGrowthStart / Math.max(1, this.tree?.segmentCount ?? 1));
       this.revealProgress = 0;
       this.pauseRemaining = HOME_DWELL;
-      this.flashSaveNote(written);
+      this.flashSaveNote(written, memory);
     };
     const container = this.getWorld()?.gameContainer;
     if (container) playSignalClose(container, arrive);

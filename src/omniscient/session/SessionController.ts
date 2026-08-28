@@ -77,6 +77,8 @@ export class SessionController {
   private notice: string | null = null;
   /** Last device report, so the surface can show it without re-grading anything. */
   private deviceNote: string | null = null;
+  private resolutionTimer: ReturnType<typeof setTimeout> | null = null;
+  private settling = false;
 
   constructor(
     private readonly surface: InterventionSurface,
@@ -382,6 +384,7 @@ export class SessionController {
 
   private apply(step: MissionStep): void {
     if (!this.contact) return;
+    const resolutionDelay = step.outcome ? this.runtime?.definition.resolutionDelayMs ?? 0 : 0;
 
     if (step.confirming) {
       /*
@@ -401,7 +404,7 @@ export class SessionController {
     }
     this.confirming = null;
 
-    if (step.say) {
+    if (step.say && resolutionDelay === 0) {
       this.push({ source: 'contact', name: this.contact.name, body: step.say });
     }
 
@@ -412,7 +415,20 @@ export class SessionController {
     if (step.outcome) {
       // The relationship, not just the knowledge. See KnowledgeStore.recordOutcome.
       this.knowledge.recordOutcome(this.contact.id, true, step.outcome.trust);
-      this.push({ source: 'system', name: 'OMNISCIENT_', body: step.outcome.say });
+      if (resolutionDelay > 0) {
+        this.settling = true;
+        const contactName = this.contact.name;
+        const outcomeSay = step.outcome.say;
+        this.resolutionTimer = setTimeout(() => {
+          this.resolutionTimer = null;
+          this.settling = false;
+          if (step.say) this.push({ source: 'contact', name: contactName, body: step.say });
+          this.push({ source: 'system', name: 'OMNISCIENT_', body: outcomeSay });
+          this.present();
+        }, resolutionDelay);
+      } else {
+        this.push({ source: 'system', name: 'OMNISCIENT_', body: step.outcome.say });
+      }
       this.hooks.onResolved?.(step.outcome, this.runtime?.calledBack ?? false);
     }
 
@@ -448,6 +464,9 @@ export class SessionController {
 
   /** Detach from the surface. Safe to call repeatedly. */
   public end(): void {
+    if (this.resolutionTimer !== null) clearTimeout(this.resolutionTimer);
+    this.resolutionTimer = null;
+    this.settling = false;
     this.unsubscribe?.();
     this.unsubscribe = null;
     this.runtime = null;
@@ -519,6 +538,7 @@ export class SessionController {
        * stays a sentence about the request and the progress stays a fact about the play.
        */
       objective: ((): string => {
+        if (this.settling) return 'Verifying the repair…';
         if (finished && !this.failed) return definition.resolutionObjective ?? 'Request resolved.';
         const tasks = this.runtime.taskProgress();
         return tasks ? `${definition.objective}  ${tasks.done}/${tasks.total}` : definition.objective;

@@ -208,6 +208,8 @@ const GLOBE_CSS = `
   background: rgba(127,224,138,.35); pointer-events: none;
 }
 .omni-globe__name--selected { background: #183923; outline: 1px solid #7fe08a; }
+.omni-globe__name--muted { opacity: .65; }
+.omni-globe__leader--selected { height: 2px; background: #d8ffb0; z-index: 2; }
 .omni-globe__completion {
   position: absolute; z-index: 5; top: 9%; left: 50%; transform: translateX(-50%);
   padding: 10px 18px; color: #cfe6c4; background: #09190f;
@@ -1033,16 +1035,10 @@ export class GlobeScreen {
       const name = document.createElement('span');
       name.textContent = signal.name;
 
-      /*
-       * The place, from the signal's own label.
-       *
-       * `label` is authored as "PORTU VECH - it worked yesterday", and the half after the
-       * dash is what they said when they called - which is the wrong half here. A finished
-       * request is remembered by where it was, not by the complaint that opened it.
-       */
+      // Remember the result, not an opening complaint that now contradicts the record.
       const where = document.createElement('span');
       where.className = 'omni-record__where';
-      where.textContent = signal.label.split(' - ')[0] ?? '';
+      where.textContent = signal.resolvedLabel ?? 'Request resolved.';
 
       row.append(n, name, where);
       strip.appendChild(row);
@@ -1334,6 +1330,7 @@ export class GlobeScreen {
         this.leaderEls.set(signal.id, leader);
       }
       leader.hidden = !spot || signal.offworld === true || Math.hypot(spot.x - projected.x, spot.y - projected.y) < 2;
+      leader.classList.toggle('omni-globe__leader--selected', signal.id === this.selectedId);
       if (!spot) continue;
 
       const dx = (spot.x - projected.x) * this.scale + 8;
@@ -1348,6 +1345,7 @@ export class GlobeScreen {
         `omni-globe__name omni-globe__name--${this.stateClass(signal)}` +
         (signal.offworld ? ' omni-globe__name--offworld' : '');
       name.classList.toggle('omni-globe__name--selected', signal.id === this.selectedId);
+      name.classList.toggle('omni-globe__name--muted', this.selectedId !== null && signal.id !== this.selectedId);
       name.style.left = `${spot.x * this.scale}px`;
       name.style.top = `${spot.y * this.scale}px`;
 

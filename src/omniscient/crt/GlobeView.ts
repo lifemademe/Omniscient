@@ -25,6 +25,8 @@ export interface Signal {
   longitude: number;
   /** Short label shown when selected, e.g. "PORTU VECH - it worked yesterday". */
   label: string;
+  /** Completed-request receipt, distinct from the caller's original complaint. */
+  resolvedLabel?: string;
   /** Who is calling. Shown against the point on the globe. */
   name: string;
   state: SignalState;
@@ -437,7 +439,8 @@ export class GlobeView {
 
       const flare = this.flares.find((f) => f.id === signal.id);
       // A flaring signal is SOLID for the duration - the reveal must not strobe.
-      const color = flare ? PALETTE.unknown : this.colorFor(signal, pulse);
+      const baseColor = this.colorFor(signal, pulse);
+      const color = flare ? PALETTE.unknown : signal.id === selectedId && baseColor ? PALETTE.active : baseColor;
       const offworldUnknown = signal.offworld === true && signal.state === SignalState.Unknown;
       if (!color && !offworldUnknown) continue;
 
