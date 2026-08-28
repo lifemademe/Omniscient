@@ -857,6 +857,25 @@ there is no assertion that can be written.
 
 ## 13. THE LEDGER
 
+**Adaeze tree / sunlight — user-directed continuation, AT BAR (scoped visual), Codex 2026-08-28.**
+Bar: the supplied `codex-clipboard-d6d04956-d51e-430b-a6dc-bce826c8eb7c.png`, improved so
+the tree casts legible shade onto the failing bed, healthy seedlings stay mostly sunlit,
+and pruning admits light without instantly healing plants. Branches should read as an
+asymmetric, tapering low-poly tree rather than parallel spokes. Runtime builders only.
+Replaced the independent shade rectangle with real canopy shadows; sun, sky and disc share
+one high-sun direction. Uses engine-owned shadow camera settings. Staggered tapered boughs
+bend and fork; the overhang extends along the nursery rather than across the healthy bank.
+Camera-side fill preserves the caller beneath her brim. Existing pruning/reset cues retained.
+Evidence: `scripts/dev/adaeze-tree-r2-opening.jpg`, `adaeze-tree-r2-beds.jpg`,
+`adaeze-tree-r2-canopy.jpg`, `adaeze-tree-r2-cut-15.jpg`, `adaeze-tree-r2-cut-sheet.jpg`,
+and `adaeze-tree-r2-reentry.jpg`. Captured at 1280×720 game area, with window chrome.
+Fresh rendered-only critic `adaeze_tree_critic`: **AT BAR** for tree/shadow scope after
+first-pass feedback that too little of the failing bed was shaded. Final captures show most
+failing rows shaded, healthy rows sunlit, and pruning withdrawing shade while plants stay pale.
+Builder reopened the transition sheet; live End call / re-entry restored canopy, shade and 0/2.
+`pnpm lint`, `pnpm build` and editor bundle refresh passed. Earlier caller-first and mower QA
+remain open; this is not a whole-garden approval. Implementation commit reference follows.
+
 **Adaeze / unfinished End call — user-directed D-1 continuation, PARTIAL / OPEN QA, Codex 2026-08-28.**
 Bar: supplied `20260828-1648-11.8269595.mp4`, §3/§4.3: Adaeze and two contrasting seedling
 beds read before scenic clutter; the tended side has short grass without seed heads; the

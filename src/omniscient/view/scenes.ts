@@ -3594,14 +3594,15 @@ function buildBeaconMast(scene: ContactScene): void {
  * both made and both had to have fixed.
  */
 /**
- * Mid-afternoon, high and off to the left.
+ * High tropical sun, slightly to the west.
  *
  * This is the position the BACKDROP paints its glow at, and it has to agree with where the
  * light actually comes from or the sky brightens on one bearing while the shadows fall on
  * another - which nobody can name but everybody feels. Raised from (5.5, 7.5, 1.5), which
  * was a low evening sun on the wrong side of the set.
  */
-const SUNLIGHT_AT = new THREE.Vector3(-9, 16, -10);
+// Shared direction for sky, disc and shadow-casting key. High sun keeps shade on the west bed.
+const SUNLIGHT_AT = new THREE.Vector3(-3.6, 24, -3.6);
 
 function buildSeedlingTunnel(scene: ContactScene): void {
 
@@ -3839,7 +3840,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   /*
    * The sunlight the two interventions earn.
    *
-   * It begins effectively off. The cut removes the authored shade plane and the mower
+   * It begins effectively off. The cut removes the shadow-casting branches and the mower
    * clears the bank; the final beat then lets a warm, low source rake across the weak row.
    * The plants only warm slightly—they do not become healthy in three seconds—but their
    * material and silhouette stop looking abandoned, which is the no-UI payoff the mission
@@ -3886,38 +3887,8 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     failing.position.y = 0;
   });
 
-  /**
-   * The shade itself, as a real object.
-   *
-   * This is the fix for the thing a playtester said plainly: they solved the request and
-   * still did not understand why one side was dying. The dialogue explains it twice, and
-   * §131 is clear that explaining is not the job - the environment has to carry it.
-   *
-   * It could not. Shadow casting is off across the whole project, for a good reason: the
-   * rig spans sixty units and one directional shadow map cannot cover both ends, so the
-   * set outside its bounds renders fully shadowed. Which meant the shade this entire
-   * request turns on was never in the scene at all. The player was told about a shadow,
-   * shown a tunnel with no shadow in it, and then told the shadow had been dealt with.
-   *
-   * So it is geometry: a dark panel lying over the failing bank, with a hard edge down
-   * the middle of the tunnel exactly where she says the line runs. It slides off when the
-   * limbs come off, which is the moment the whole request exists for and the first time
-   * cause and effect are in the same frame.
-   */
-  const shadeGeo = new THREE.PlaneGeometry(1.7, 5.0);
-  shadeGeo.rotateX(-Math.PI / 2);
-  shadeGeo.translate(-1.05, 0.235, -0.2);
-  const shadeMesh = meshOf(
-    'ShadeLine',
-    shadeGeo,
-    new THREE.MeshBasicMaterial({
-      color: '#0e1712',
-      transparent: true,
-      opacity: 0.52,
-      depthWrite: false,
-    })
-  );
-  scene.registerProp('shade', shadeMesh, {
+  // Preserve the observation/cue anchor; shade now comes from the removable canopy.
+  scene.registerProp('shade', ENGINE.SceneNode.create({ name: 'ShadeAnchor' }), {
     anchors: { default: new THREE.Vector3(-1.05, 0.3, -0.2) },
   });
 
@@ -3940,10 +3911,9 @@ function buildSeedlingTunnel(scene: ContactScene): void {
      * Thicker on the side it reaches, not just longer. With the six evenly spaced limbs
      * only ONE genuinely made it out over the tunnel, so the cause of the entire request
      * was a single arm - and once that arm is cut there has to be a tree left standing.
-     * Four more on the same bearing means the crowded side reads as crowded both before
-     * the cut and after it.
+     * Two staggered boughs deepen that side without rebuilding the parallel-spoke fan.
      */
-    extraToward: 4,
+    extraToward: 2,
     /*
      * The hoops span x = -2.05 to 2.05 and the tree stands at x = -3.7, so 1.7 out from
      * its own trunk is the hoop line to the centimetre. A limb that gets past it is over
@@ -4035,8 +4005,6 @@ function buildSeedlingTunnel(scene: ContactScene): void {
        * let go.
        */
       clear: (tweener) => {
-        const shadeMaterial = shadeMesh.material as THREE.MeshBasicMaterial;
-        const shadeFrom = shadeMesh.position.x;
 
         /**
          * Where each cut limb ends up, worked out from its own geometry.
@@ -4148,10 +4116,6 @@ function buildSeedlingTunnel(scene: ContactScene): void {
               fall.node.quaternion.slerpQuaternions(fall.spin, fall.turn, t);
               fall.node.scale.setScalar(1 - (1 - CLOSES_TO) * t);
             }
-            // The light arrives as the limbs go. The shade retreats the same way they
-            // do, so the player watches one thing cause the other.
-            shadeMesh.position.setX(shadeFrom - t * 2.6);
-            shadeMaterial.opacity = 0.52 * (1 - t);
           },
           {
             duration: 1.4,
@@ -4275,233 +4239,45 @@ function buildSeedlingTunnel(scene: ContactScene): void {
   // High and hard from the west, because the whole request turns on a shadow. A soft key
   // would light both banks evenly and there would be nothing to see.
   const sunLight = ENGINE.DirectionalLightNode.create({
-      name: 'Sun',
-      /**
-       * Directional, and this is the change that makes it read as sunlight.
-       *
-       * It was a PointLight with a 26m range, and everything wrong with the light in this
-       * scene followed from that. A point light radiates from a spot, so its DIRECTION
-       * changes across the field and its brightness falls away with distance - and falloff
-       * with distance is the single most reliable cue the eye has for artificial light. It
-       * also meant nothing past the ring was lit at all, which is why the ground and the
-       * lake had to be made unlit to stop them going black.
-       *
-       * The sun is 150 million kilometres away. Its rays are parallel, every surface with
-       * the same orientation gets the same light wherever it stands, and it does not
-       * attenuate over a smallholding. A DirectionalLightNode is that, exactly.
-       */
-      position: SUNLIGHT_AT.clone(),
-      /**
-       * Intensity in a completely different currency now.
-       *
-       * A point light's 30 was 30 at its own position falling to nothing by 26 metres. A
-       * directional light's number is what every lit surface gets, everywhere, so it is a
-       * much smaller figure - and this is a low evening sun, which is weak as well as warm.
-       */
-      /**
-       * Up from 2.1, to buy back the shadow.
-       *
-       * Lifting the skylight alone would restore the brightness and flatten the picture,
-       * because a hemisphere fills shadow and light equally - the shadow would come up with
-       * everything else and there would be no point having cast it. The sun is what makes
-       * the difference between the two, so it rises too, and the balance is read off the
-       * gap rather than off either number alone.
-       */
-      /**
-       * Afternoon: stronger and much less orange.
-       *
-       * A low sun is weak and warm because its light has crossed a lot of atmosphere; a
-       * mid-afternoon one has not, so it is brighter and close to white with only a trace
-       * of warmth left in it. #ffb473 was doing a lot of the sunset's work on its own.
-       */
-      /*
-       * 5.2, and the jump is a consequence of fixing the aim rather than a taste change.
-       *
-       * While the sun was pointed backwards it was contributing almost nothing to the
-       * ground and the hemisphere was carrying the whole field on its own - so the old
-       * intensity was never measured against a sun that was actually hitting anything. With
-       * the aim corrected the ground fell to luma 67, which is dusk. This is what an
-       * afternoon costs once the light is going the right way.
-       */
-      /**
-       * Down from 8, and this is the whole answer to "is anything still over-lit".
-       *
-       * 8 was set for a sun seven degrees above the horizon, where cos on level ground is
-       * 0.12 and the key delivered under 1. The sun was then aimed properly - it is at
-       * (-9, 16, -10), which is fifty degrees up and cos 0.765 - so the same number started
-       * delivering 6.1 instead of 0.96, a six-fold increase that nothing was rebalanced
-       * for. Everything in the shot was sitting on the shoulder of the tone curve.
-       *
-       * Measured through the actual pipeline rather than adjusted by eye: ACES at exposure
-       * 0.62, three's own 1/PI on the Lambert BRDF, and the surface albedos this scene
-       * uses. At 8 the grass rendered 203/255, the ground 223 and the timber 179 - the
-       * whole set inside the top fifth of the range with nothing left to separate one
-       * material from another. At 3.0 they land 137, 96 and 85, which is a lit afternoon
-       * with somewhere to go above it.
-       *
-       * For scale, the only other directional in the game is Tomas's moon at 1.9.
-       */
-      intensity: 3.0,
-      color: new THREE.Color('#fff1d8'),
-    })
-
-  /**
-   * Aimed from the sun the player can actually see.
-   *
-   * This is the correction that matters as much as the light type. The old lamp sat up and
-   * to the RIGHT at (5.5, 7.5, 1.5) while the visible disc is far left and far back over
-   * the water - so every object in the scene was lit from one side while the sun was
-   * plainly on the other. Nobody could have named it and everybody would have felt it.
-   *
-   * A directional light's position does not affect its brightness, only its direction, so
-   * this sits on the line between the scene and the disc and looks at the beds. The
-   * elevation works out at about seven degrees, which is a sun on the horizon rather than
-   * the fifty degrees the point lamp was firing from - and low light travelling almost
-   * horizontally is what rakes across a field instead of falling onto it.
-   */
-  /**
-   * Skylight, which a low sun cannot do without.
-   *
-   * A sun seven degrees above the horizon strikes level ground at grazing incidence - the
-   * cosine works out around 0.12 - so the field, the beds and the paths receive almost
-   * nothing from it however bright it is. That is physically right and it left the ground
-   * reading at 44 where it had been over 100.
-   *
-   * The answer is not to crank the sun, which would blow out everything vertical while the
-   * ground stayed dark. It is that at sunset half the light in the world comes from the
-   * SKY - a huge warm dome overhead - and this scene had no such thing. A hemisphere lights
-   * upward-facing surfaces from above, which is exactly the set of surfaces the low sun
-   * cannot reach.
-   */
-  scene.registerProp(
-    'skylight',
-    ENGINE.HemisphereLightNode.create({
-      name: 'Skylight',
-      position: new THREE.Vector3(0, 14, -6),
-      /**
-       * Raised from 1.5 when the ground started taking light.
-       *
-       * Measured before and after the ground became a lit material: grass fell 68.6 to
-       * 42.6, soil 54.2 to 32.2, the whole field about 38 percent darker, while the sky
-       * held at 134.7 because it is unlit and never moved. That is §261 arriving on
-       * schedule - a 7 degree sun meets level ground at a glancing angle and delivers
-       * almost nothing to it, so the ground is the skylight's job and always was. The old
-       * 1.5 was balanced against a ground that ignored light completely, so it was never
-       * carrying the field; it only had to tint the props.
-       */
-      /*
-       * Down from 2.5, because the sun is doing more of the work now.
-       *
-       * The skylight had to carry the ground under a 7 degree sun. A 40 degree one reaches
-       * level ground perfectly well, so the fill steps back to being fill - and its colour
-       * changes with the sky it represents, from a sunset's warm dome to an afternoon blue.
-       */
-      /*
-       * Down from 2.2, in step with the key.
-       *
-       * A hemisphere does not attenuate either, so it was adding its full 2.2 to every
-       * up-facing surface in the room on top of an over-bright sun. Held at a quarter of
-       * the key, which is about what an open sky is worth against direct sun on a clear
-       * afternoon - and it is still the thing carrying the ground, which is what it is for.
-       */
-      intensity: 0.75,
-      // The sky as it actually is overhead in this shot, and the ground bouncing back.
-      color: new THREE.Color('#a9c9e8'),
-      groundColor: new THREE.Color('#4a5237'),
-    })
+    name: 'Sun',
+    position: SUNLIGHT_AT.clone(),
+    intensity: 3,
+    color: new THREE.Color('#fff1d8'),
+    castShadow: true,
+    shadowMapSize: 2048,
+    shadowCameraLeft: -12,
+    shadowCameraRight: 12,
+    shadowCameraTop: 12,
+    shadowCameraBottom: -12,
+    shadowNear: 0.5,
+    shadowFar: 60,
+    shadowBias: -0.00015,
+    shadowNormalBias: 0.025,
+    shadowRadius: 1.5,
+  });
+  // LightNode sends its rays along local +Z. One direction owns the sky and the key.
+  // Configure the engine's public shadow properties; the wrapper has no THREE.shadow.
+  sunLight.quaternion.setFromUnitVectors(
+    new THREE.Vector3(0, 0, 1),
+    SUNLIGHT_AT.clone().negate().normalize()
   );
-
-  /**
-   * Aimed so the tree lays its shadow across the beds.
-   *
-   * The neighbour's tree stands at x -3.7 and the two raised beds are at x +/-1.05, so the
-   * sun has to sit further out on the tree's own side for the shadow to travel toward them.
-   * At this position the light arrives about 40 degrees above the horizon, which throws a
-   * roughly five metre shadow off a four and a half metre tree - far enough to reach the
-   * near bed and break across its frame.
-   *
-   * That is the point of the change and not a detail: a shadow lying over the thing the
-   * mission is ABOUT ties the two together in one image. The tree is the neighbour's, the
-   * beds are Adaeze's, and the shadow is the problem.
-   */
-  sunLight.position.set(-15, 13, -7);
-  // aimLight, not lookAt - see art/shadows.ts. lookAt aims these lights backwards.
-  aimLight(sunLight as unknown as THREE.Object3D, new THREE.Vector3(0.4, 0.25, -0.2));
-  /**
-   * The sun casts, and the frustum is sized to the set rather than to the world.
-   *
-   * A directional shadow map spends its whole budget across one orthographic box, so the
-   * box wants to be the smallest one containing everything the camera can see throw a
-   * shadow - the beds, the greenhouse, the two trees, the contact. Twenty-six metres covers
-   * that; the hills and the far hedge are backdrop and unlit, so they are outside the pass
-   * by policy anyway and cost nothing to leave out.
-   *
-   * A low evening sun is the hardest case for acne, because rays hit the ground at a
-   * glancing angle and the depth difference across one faceted polygon is large. That is
-   * what the normal bias is for - it offsets along the surface normal instead of pushing
-   * the whole map away from the light, which is the only version that works on flat-shaded
-   * geometry without detaching contact shadows from their objects.
-   */
-  castShadows(sunLight as unknown as THREE.Object3D, { extent: 26, radius: 3, normalBias: 0.04 });
   scene.registerProp('sun', sunLight);
-
-  /**
-   * Sky fill, moved round to the camera side.
-   *
-   * It was at (-2.5, 4.5, 3.5) - nearly straight up from Adaeze - and the sun is out past
-   * her at +x. Her apron faces +z and got a grazing angle from both, so the one pale mass
-   * on the one person in the scene rendered as a dark grey rectangle and she read as a
-   * silhouette in full daylight. This is the same fault Ileana had and the same fix: put
-   * some of the ambient where the camera is, because a figure lit only from behind has no
-   * front however carefully the front was built (§235).
-   */
-  scene.registerProp(
-    'skyfill',
-    ENGINE.PointLightNode.create({
-      name: 'SkyFill',
-      /**
-       * Brought closer and up, and strengthened.
-       *
-       * Sampled off the default shot, Adaeze read (44, 49, 41) against a field at (101,
-       * 108, 88) - the one person in the scene was the DARKEST thing in it, on ground more
-       * than twice her brightness. That is the fault the whole lighting pass is about: a
-       * contact is the subject of their own diorama and cannot be a silhouette in daylight.
-       *
-       * The sun is out past her, so this is the only light her front ever sees. It now
-       * sits where the camera does, which is the only place a fill can be if the job is
-       * making a face readable.
-       */
-      /**
-       * Cooler, because the key is now genuinely warm.
-       *
-       * Most of what sells an hour of the day is the SPLIT: a warm key against a cool fill,
-       * the fill being skylight rather than sunlight. With a neutral fill the warm key had
-       * nothing to be warm against and the whole frame just read as tinted. This is the
-       * blue of the sky overhead at the moment the sun is orange on the horizon.
-       */
-      position: new THREE.Vector3(-0.7, 2.3, 4.4),
-      /*
-       * Down from 22, and this is the number that was stopping this room having a sun.
-       *
-       * A point light at 22 with decay 1.15 arrives at her from three metres at about
-       * 22 / 3^1.15 = 6.1 effective, against a key of 5.2. That is a one-to-one
-       * key-to-fill ratio, which is not afternoon light - it is a photograph taken
-       * with the flash on. Nothing can read as sunlit while the fill matches the sun,
-       * however warm the sun is or however hard it casts.
-       *
-       * At 9 it arrives at about 2.5 against a key of 8, which is a bit over three to
-       * one - the ratio you get outdoors on a clear day with the sky doing the
-       * filling. Kept rather than cut because it is what keeps a contact's face off
-       * black on the shadow side, which is the one thing this scene may not trade.
-       */
-      // The rendered imported figure needs camera-side fill beneath her brim; keep the
-      // daylight key unchanged and lift only the caller's immediate working area.
-      intensity: 7.0,
-      color: new THREE.Color('#b3c5dc'),
-      distance: 18,
-      decay: 1.15,
-    })
-  );
+  scene.add(ENGINE.HemisphereLightNode.create({
+    name: 'SkyLight',
+    intensity: 0.75,
+    color: new THREE.Color('#a9c9e8'),
+    groundColor: new THREE.Color('#4a5237'),
+  }));
+  // Low camera-side skylight keeps Adaeze's face readable beneath her brim without
+  // filling the distant seedling shadow. The stronger overhead sun owns the bed contrast.
+  scene.registerProp('skyfill', ENGINE.PointLightNode.create({
+    name: 'SkyFill',
+    position: new THREE.Vector3(-0.7, 2.0, 5.4),
+    intensity: 10,
+    color: new THREE.Color('#b3c5dc'),
+    distance: 7,
+    decay: 1.15,
+  }));
 
   // -- Shots ----------------------------------------------------------------
   /**
@@ -5088,8 +4864,6 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     quaternion: cut.node.quaternion.clone(),
     scale: cut.node.scale.clone(),
   }));
-  const shadeAt = shadeMesh.position.x;
-  const shadeOpacity = (shadeMesh.material as THREE.MeshBasicMaterial).opacity;
 
   scene.onReset(() => {
     for (const limb of asFound) {
@@ -5097,8 +4871,6 @@ function buildSeedlingTunnel(scene: ContactScene): void {
       limb.node.quaternion.copy(limb.quaternion);
       limb.node.scale.copy(limb.scale);
     }
-    shadeMesh.position.setX(shadeAt);
-    (shadeMesh.material as THREE.MeshBasicMaterial).opacity = shadeOpacity;
     // The leaf bits go back where they started and out of sight, or a re-opened request
     // shows five icosahedra hanging in the air where a branch used to be.
     for (const puff of limbPuffs) {
@@ -5295,7 +5067,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * Two hundredths of screen space per metre at this distance; guessing was never going to
    * find it.
    */
-  const LAKE_SUN_X = -36;
+  const LAKE_SUN_X = SUNLIGHT_AT.x * 2;
   /**
    * Subdivided, because the swell is real displacement now.
    *
@@ -5391,24 +5163,8 @@ function buildSeedlingTunnel(scene: ContactScene): void {
     )
   );
 
-  /**
-   * The sun itself, as an object low over the water.
-   *
-   * Separate from the light that illuminates the set, and it has to be. The scene's key is
-   * a PointLight with a 26m range - it exists to light Adaeze and the beds, and it cannot
-   * be moved to the horizon without the whole foreground going dark. So the thing the
-   * player reads as the sun is a disc in the distance, and the thing doing the lighting is
-   * a lamp near the subject wearing the same colour. Every set in this game is lit that way
-   * once you look; this is the first one where the audience can see the sun as well.
-   */
-  /**
-   * In front of the hills, not behind them.
-   *
-   * At z=-62 it was beyond the backdrop's hill line and simply never appeared - a sun
-   * hidden by the landscape it is meant to be setting over. Pulled forward to sit just
-   * above the ridge, which is where a low sun actually reads from, and raised so it clears
-   * the water rather than sitting in it.
-   */
+  // The disc occupies the same high-sun bearing as the directional key and sky glow.
+  // It is intentionally above the contact framing, not a second sunset on the horizon.
   /**
    * Turned to face the viewer, which is why it was an egg.
    *
@@ -5423,7 +5179,7 @@ function buildSeedlingTunnel(scene: ContactScene): void {
    * one point near the origin is within a degree or two of correct for all of them - a
    * per-frame billboard would cost an update to save nothing anybody could measure.
    */
-  const SUN_AT = new THREE.Vector3(LAKE_SUN_X, 6.4, -42);
+  const SUN_AT = SUNLIGHT_AT.clone().multiplyScalar(2);
   const EYE_AT = new THREE.Vector3(0, 2, 4);
 
   const faceViewer = (geometry: THREE.BufferGeometry, at: THREE.Vector3): THREE.BufferGeometry => {

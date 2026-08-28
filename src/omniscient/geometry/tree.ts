@@ -43,8 +43,7 @@ export interface TreeOptions {
    * with only one limb genuinely over the tunnel the crown that the whole request is about
    * was a single arm with a lollipop on the end of it.
    *
-   * These are drawn after the six, so a tree that asks for none draws exactly the same
-   * random numbers it always did.
+   * Main limbs keep varied heights and bearings; extras deepen only the reaching side.
    */
   extraToward?: number;
   /**
@@ -238,7 +237,7 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
      */
     // The extras spread over the same span of trunk as the six, so they fork in among
     // them rather than all leaving from one collar.
-    const up = reaching ? 0.38 + ((i - 6) / Math.max(1, extra - 1)) * 0.5 : 0.34 + i * 0.12;
+    const up = reaching ? 0.27 + ((i - 6) / Math.max(1, extra - 1)) * 0.43 : [0.18, 0.62, 0.38, 0.87, 0.48, 0.97][i];
     const age = 1 - (up - 0.34) / 0.6;
     const lean = -(0.37 + age * 0.78 + range(rng, 0, 0.12));
 
@@ -272,12 +271,25 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
       .lerp(upper.top, up)
       .addScaledVector(out, girth * 0.72);
 
-    const limb = new THREE.CylinderGeometry(0.045, 0.1, length, 6);
-    limb.rotateZ(lean);
-    limb.rotateY(swing);
-    const mid = from.clone().addScaledVector(dir, length / 2);
-    limb.translate(mid.x, mid.y, mid.z);
-    limbParts.push(limb);
+    // A bough changes direction as it grows. Two tapered sections give each fork a
+    // shoulder instead of making the crown a fan of straight, parallel poles.
+    const reach = options.overhangPast !== undefined && dir.x > 0.35
+      ? Math.min(length, (options.overhangPast + 0.48 * options.size - from.x) / dir.x)
+      : length;
+    const elbow = from.clone().addScaledVector(dir, reach * 0.52);
+    const tip = elbow.clone().addScaledVector(dir, reach * 0.48);
+    tip.y += range(rng, 0.08, 0.3) * options.size;
+    tip.z += jitter(rng, 0.28) * options.size;
+    const segment = (start: THREE.Vector3, end: THREE.Vector3, bottom: number, top: number): void => {
+      const axis = end.clone().sub(start);
+      const part = new THREE.CylinderGeometry(top, bottom, axis.length(), 6);
+      part.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, axis.normalize()));
+      const centre = start.clone().add(end).multiplyScalar(0.5);
+      part.translate(centre.x, centre.y, centre.z);
+      limbParts.push(part);
+    };
+    segment(from, elbow, 0.13 * options.size, 0.075 * options.size);
+    segment(elbow, tip, 0.076 * options.size, 0.025 * options.size);
 
     /**
      * Secondary forks, and clusters where they end.
@@ -293,7 +305,7 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
      * silhouette this game's whole art direction is built on and costs less than the
      * spheres it replaces.
      */
-    const forkAt = from.clone().addScaledVector(dir, length * 0.62);
+    const forkAt = elbow;
 
     const leafCluster = (centre: THREE.Vector3, radius: number): void => {
       const blob = new THREE.IcosahedronGeometry(radius, 0);
@@ -301,6 +313,8 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
       blob.scale(range(rng, 0.85, 1.25), range(rng, 0.7, 0.95), range(rng, 0.85, 1.25));
       blob.rotateY(range(rng, 0, Math.PI * 2));
       blob.rotateX(jitter(rng, 0.5));
+      // The overhang runs along the nursery, not across its healthy half.
+      if (options.overhangPast !== undefined && dir.x > 0.35) blob.scale(1, 1, 2.05);
       blob.translate(centre.x, centre.y, centre.z);
       leafParts.push(blob);
     };
@@ -310,7 +324,7 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
       // the limb it came off, which is what makes a crown spread rather than spike.
       const lean2 = lean - side * range(rng, 0.16, 0.34) - 0.1;
       const swing2 = swing + side * range(rng, 0.34, 0.6);
-      const length2 = length * range(rng, 0.38, 0.52);
+      const length2 = reach * range(rng, 0.25, 0.38);
       const dir2 = UP.clone().applyAxisAngle(Z_AXIS, lean2).applyAxisAngle(Y_AXIS, swing2);
 
       const twig = new THREE.CylinderGeometry(0.022, 0.045, length2, 5);
@@ -329,15 +343,15 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
        * crown has mass between its edges, which is also what stops the light finding gaps
        * straight through it.
        */
-      leafCluster(forkAt.clone().addScaledVector(dir2, length2 * 1.02), 0.66 - i * 0.02);
-      leafCluster(forkAt.clone().addScaledVector(dir2, length2 * 0.5), 0.54 - i * 0.02);
+      leafCluster(forkAt.clone().addScaledVector(dir2, length2 * 1.02), range(rng, 0.48, 0.72) * options.size);
+      if (side > 0) leafCluster(forkAt.clone().addScaledVector(dir2, length2 * 0.52), 0.49 * options.size);
     }
 
     // And one at the end of the limb itself, so the fork is inside the crown rather than
     // poking out of the front of it.
-    leafCluster(from.clone().addScaledVector(dir, length * 1.04), 0.76 - i * 0.03);
+    leafCluster(tip, range(rng, 0.58, 0.78) * options.size);
     // And one at the fork itself, which is where a real crown is thickest.
-    leafCluster(forkAt.clone().addScaledVector(dir, 0.12), 0.6 - i * 0.02);
+    leafCluster(forkAt.clone().addScaledVector(dir, 0.12), 0.55 * options.size);
 
     /*
      * And now the only decision that needed the whole limb built first.
@@ -347,7 +361,6 @@ export function buildTree(rng: Rng, options: TreeOptions): GeneratedTree {
      * guessing from the swing. A limb angled the right way but too short to get there is
      * not the neighbour's problem and does not get cut.
      */
-    const tip = from.clone().addScaledVector(dir, length * 1.04);
     const overhanging = options.overhangPast !== undefined && tip.x > options.overhangPast;
     if (overhanging) {
       cutParts.push({ limbs: limbParts, leaves: leafParts, from, direction: dir.clone() });
