@@ -33,6 +33,8 @@
 
 # Contains the local Sandbox Studio MCP bearer token — do not commit
 .mcp.json
+.codex/
+.claude/settings.local.json
 
 # Generated previews and debug captures. Regenerate with:
 #   pnpm exec tsx scripts/preview-tree.ts

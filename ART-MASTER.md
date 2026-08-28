@@ -19,6 +19,23 @@ says so by name in §3, and the reason is written down.
 
 ## 0. How to use this — for Claude, for Codex, for anyone
 
+### Approved jam roadmap — 2026-08-28
+
+The user approved [JAM-IMPLEMENTATION-PLAN.md](JAM-IMPLEMENTATION-PLAN.md) as the current
+production sequence. Keep the full playable game; target the Sandbox Studio Beta Creators
+Game Jam (Overgrown, September 11), not GMTK eligibility. Stabilize gameplay before the
+shared illustrated/cel baseline, then run one bounded procedural Mirela trial. The installed
+img2threejs skill is now available; older statements below that it is missing are historical.
+No whole-cast replacement, renderer migration, new mission, or blanket post-process filter.
+Existing surface laws, references and M4SS's colour script still apply. The roadmap supersedes
+calendar/scope assumptions below, not their recorded evidence.
+
+Credential safety: removing `.codex/config.toml` from tracking preserves its local copy and
+prevents future inclusion; it does NOT revoke the exposed token. Issuer-side rotation remains
+unconfirmed and must be handled by the owner. Do not print credentials or rewrite history.
+The user explicitly requested the current push on 2026-08-28; that permission does not mean
+the token has been rotated or the build is ready for public distribution.
+
 You are picking this up mid-flight. Somebody else was here yesterday.
 
 **Read in this order:** §3 (the five laws) → §13 (the ledger) → the one surface section for
