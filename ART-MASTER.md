@@ -916,8 +916,8 @@ AT BAR claim. Live editor review at 1282×752 checked the window, cumulative pin
 opening/entry sequence. Evidence: `scripts/dev/dorin-fix-window.jpg`,
 `dorin-fix-lock-before.jpg`, `dorin-fix-lock-pin3.jpg`, `dorin-fix-lock-pin2.jpg`, and
 `dorin-fix-door-1.jpg` through `dorin-fix-door-4.jpg` (about 1.9-second intervals).
-`pnpm lint`, `pnpm build` and editor build passed. Implementation/evidence commit: recorded
-in the following receipt commit (local only).
+`pnpm lint`, `pnpm build` and editor build passed. Implementation/evidence commit:
+`603aac6` (local, not pushed).
 
 **Vasile contact pass — user-directed D-1f extension, 2026-08-28: AT BAR (scoped visual pass, Codex).**
 Bar: Vasile first, routing junctions second, a recognizably flooded school cellar third;
