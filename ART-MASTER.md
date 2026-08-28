@@ -884,7 +884,8 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
-**F-1 globe / Tomas / completion correction PAUSED — Codex, 2026-08-28:**
+**F-1 globe / Tomas / completion correction AT BAR — Codex, 2026-08-28:**
+Implementation `776f09d`; final telemetry correction and rendered evidence `64562f9`.
 User-directed follow-up to the 04:29 recording. Reopens the prior subpass: the
 no-prior-knowledge route left the splice box suspected until success, and the
 answered record repeated the opening complaint. Bar: readable repair hardware
@@ -902,15 +903,28 @@ remain immediate and Continue waits for both visual and audio acknowledgement.
 CRT growth refreshes after the solved-request floor and replays from call-entry
 growth; the return receipt names an actually learned fact. Globe history now uses
 resolved copy and selection emphasizes its leader and dot as well as its name.
-Final `pnpm lint`, `pnpm build`, and `git diff --check` passed. The first editor
-bundle built, but fresh rendered evidence is **not available**: the existing
-endPlay/dispose ensure error recurred, and the Computer Use preview handle failed
-twice with `foreground window did not report a process id`. MCP subsequently
-reported `Editor world is not loaded` with play inactive. Final source corrections
-are not confirmed in the live bundle. No critic verdict; **not AT BAR**. Next:
-restore editor readiness, rebuild, capture BOTH knowledge routes through the bag,
-then the settling/Continue/CRT/globe sequence at gameplay and small-window sizes;
-run a fresh critic against the bar above before closing this subpass.
+The final correction keeps telemetry compact during verification and final status
+updates; neither objective change expands readouts over the repair payoff.
+Resumed from the earlier editor-readiness pause and rebuilt the final live bundle.
+Both no-prior-knowledge and genuinely learned shared-supply routes were inspected
+through the open box and kit, at 1282×752 and 1707×1019. Captures used the existing
+isolated capture namespace; the normal player save was untouched.
+Evidence, all under `scripts/dev/`: `F1-tomas-r6-blind-close.jpg`,
+`F1-tomas-r6-blind-kit.jpg`, `F1-tomas-r7-known-close.jpg`,
+`F1-tomas-r7-known-full.jpg`, `F1-tomas-r7-known-kit-full.jpg`;
+`F1-tomas-r7-resolve-sheet.jpg` with full frames `-resolve-3.jpg`,
+`-resolve-4.jpg`, `-resolve-7.jpg`; `F1-tomas-r7-return-sheet.jpg`
+with full frames `-return-1.jpg`, `-return-3.jpg`, `-return-11.jpg`;
+`F1-globe-r7-selected-tomas.jpg`, plus small-window first-repair
+`F1-tomas-r6-return-2.jpg` and `F1-tomas-r6-return-11.jpg`.
+Fresh Tomas critic: **AT BAR** at both sizes, with readable hand/rail separation.
+Separate fresh sequence critic: **AT BAR** — visible repair before acknowledgement,
+earned CRT growth and retained lesson, truthful answered history, clear next selection.
+Keyboard selection and the player-controlled Continue hold were also inspected.
+`pnpm lint`, `pnpm build`, final MCP editor build, and `git diff --check` passed.
+The existing endPlay/dispose ensure error still appeared on an earlier preview exit;
+it did not prevent the final rebuild/capture and remains outside this visual subpass.
+This closes this correction only, not the broader F-1 ledger item.
 
 **F-1 globe / Tomas / completion subpass AT BAR — Codex, 2026-08-28:**
 User-directed follow-up to the 03:41 recording. Bar: §3, §4.2/4.3/4.6 and the
