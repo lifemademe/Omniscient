@@ -13,6 +13,8 @@ import { RotorWashVFX } from '../vfx/library.js';
 import { seedFrom } from '../core/rng.js';
 
 import { WarehouseEnvironment } from './art.js';
+import { prepareWarehouseAssets } from './prepareWarehouseAssets.js';
+import { awaitWarehousePreparation, warehousePreparationYield, type WarehousePreparationStage } from './preparation.js';
 import { captureWarehouseFrame, warehouseArchiveKey } from './archive.js';
 import { CASE_DECK, STORY_MOVEMENTS, TOOL_UNLOCK_STAGE, WAREHOUSE_DECK_VERSION, storyQuestNumber } from './content.js';
 import { WarehouseDirector } from './director.js';
@@ -337,9 +339,13 @@ class WarehouseInput extends ENGINE.BaseInputHandler {
   }
 
   public override handleKeyUp(event: KeyboardEvent): boolean {
-    if (isTextEntry(event.target)) return false;
     this.held.delete(event.code);
     return ['KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(event.code);
+  }
+
+  public clear(): void {
+    this.held.clear();
+    this.gamepadMoveX = this.gamepadMoveY = this.gamepadLookX = this.gamepadLookY = 0;
   }
 
   public override handleMouseMove(event: MouseEvent): boolean {
@@ -652,7 +658,13 @@ export class WarehouseRig extends ENGINE.SceneNode {
   };
 
   private readonly releaseOpticalOnBlur = (): void => {
+    this.input?.clear();
+    this.droneVelocity.set(0, 0, 0);
     this.setOpticalAim(false);
+  };
+
+  private readonly releaseOnHidden = (): void => {
+    if (document.hidden) this.releaseOpticalOnBlur();
   };
 
   /**
@@ -663,7 +675,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
    * and lose the camera control that goes with it.
    */
   private readonly releaseOpticalOnLockChange = (): void => {
-    if (!document.pointerLockElement) this.setOpticalAim(false);
+    if (!document.pointerLockElement) this.releaseOpticalOnBlur();
   };
 
   public constructor() {
@@ -684,28 +696,136 @@ export class WarehouseRig extends ENGINE.SceneNode {
     if (this.mode === 'daily') this.tools = ['optical', 'history', 'thermal', 'uv', 'xray', 'acoustic'];
     const config: WarehouseRunConfig = { mode: this.mode, seed: this.seed, deckVersion: WAREHOUSE_DECK_VERSION, unlockedTools: this.tools };
     this.director = new WarehouseDirector(config);
-    this.environment.build();
-    this.add(this.environment.root);
-    this.add(this.celStyle.accents);
-    this.buildDrone();
-    this.add(this.cargoRope.root);
-    this.buildCamera();
-    this.buildWorkers();
     this.setTickEnabled(true);
   }
 
   public override beginPlay(): boolean {
     if (!super.beginPlay()) return false;
-    this.mount();
     return true;
   }
 
+  private prepared = false;
+  private disposed = false;
+
+  /** Construction never advances the director or installs gameplay input. */
+  public async prepare(signal: AbortSignal, progress: (stage: WarehousePreparationStage, detail: string) => void): Promise<void> {
+    const costs: Record<string, number> = {};
+    const started = performance.now();
+    progress('facility', 'Building the facility');
+    this.visible = false;
+    // Assemble detached: Object3D's multi-add recursively invokes the engine's
+    // lifecycle hook when attached to a playing world. Enter that world only once.
+    const steps = this.environment.buildSteps();
+    for (;;) {
+      signal.throwIfAborted();
+      const batchStart = performance.now();
+      const batch = steps.next();
+      costs.longestConstructionBatchMs = Math.max(costs.longestConstructionBatchMs ?? 0, performance.now() - batchStart);
+      costs.constructionCpuMs = (costs.constructionCpuMs ?? 0) + performance.now() - batchStart;
+      if (batch.done) break;
+      await warehousePreparationYield(signal);
+    }
+    // Registration/physics is work too. Attach bounded groups rather than letting
+    // one recursive beginPlay traverse the entire finished facility in a single turn.
+    const facilityNodes = [...this.environment.root.children];
+    for (const node of facilityNodes) this.environment.root.remove(node);
+    this.add(this.environment.root);
+    const attachmentStart = performance.now();
+    for (let offset = 0; offset < facilityNodes.length; offset += 24) {
+      signal.throwIfAborted();
+      const batchStart = performance.now();
+      for (const node of facilityNodes.slice(offset, offset + 24)) this.environment.root.add(node);
+      costs.longestAttachmentBatchMs = Math.max(costs.longestAttachmentBatchMs ?? 0, performance.now() - batchStart);
+      await warehousePreparationYield(signal);
+    }
+    costs.facilityAttachmentMs = performance.now() - attachmentStart;
+    this.add(this.celStyle.accents);
+    this.buildDrone();
+    this.add(this.cargoRope.root);
+    this.buildCamera();
+    costs.facilityMs = performance.now() - started;
+    progress('personnel', 'Preparing personnel and animation');
+    const personnelStart = performance.now();
+    await prepareWarehouseAssets({ signal });
+    await this.buildWorkers(signal);
+    const preparedCargo: WarehouseCargoNode[] = [];
+    const sample = this.director?.caseForStage(1, this.tools);
+    if (sample) {
+      for (const packageId of ['1000', '1001', '1002', '1003']) {
+        const cargo = WarehouseCargoNode.create({ name: 'PreparedCargo' });
+        cargo.configure({ ...sample, packageId });
+        cargo.position.copy(DRONE_START);
+        this.add(cargo);
+        preparedCargo.push(cargo);
+      }
+    }
+    await awaitWarehousePreparation(this.waitForNodesToLoad(), signal);
+    signal.throwIfAborted();
+    costs.personnelMs = performance.now() - personnelStart;
+    progress('cameras', 'Preparing CCTV, chase and optical feeds');
+    this.configurePost();
+    this.setCelVisualsEnabled(this.celVisualsEnabled, false);
+    const world = this.getWorld();
+    const camera = this.camera;
+    const renderer = world?.getRenderer();
+    if (!world || !camera || !renderer) throw new Error('Warehouse renderer is unavailable');
+    this.savedFallbackCamera = world.fallbackCamera;
+    world.fallbackCamera = camera.getCamera();
+    camera.setActive(true);
+    this.visible = true;
+    const native = renderer.asWebGPU() ?? renderer.asWebGL();
+    if (!native) throw new Error('Warehouse rendering backend is unavailable');
+    // GameLoop renders its root scene, which contains World; use the same cache key.
+    const renderScene = world.parent instanceof THREE.Scene ? world.parent : world;
+    const oldDoor = this.selectedDoor;
+    const restoreFeedback = this.feedback.prepareVisibility();
+    const culling: Array<[THREE.Object3D, boolean]> = [];
+    this.traverse(node => { culling.push([node, node.frustumCulled]); node.frustumCulled = false; });
+    const compileStart = performance.now();
+    // Hidden personnel and pooled feedback still need their actual materials prepared.
+    for (const worker of this.workers) worker.visible = true;
+    try {
+      for (const feed of [...WAREHOUSE_DOOR_IDS, 'drone', 'optical'] as const) {
+        signal.throwIfAborted();
+        this.view = feed === 'drone' || feed === 'optical' ? 'drone' : 'cctv';
+        if (feed !== 'drone' && feed !== 'optical') this.selectedDoor = feed;
+        this.perspective = feed === 'optical' ? 'first' : 'third';
+        this.applyCamera();
+        this.updateWorldMatrix(true, true);
+        const feedCompileStart = performance.now();
+        await awaitWarehousePreparation<unknown>(native.compileAsync(renderScene, camera.getCamera()), signal);
+        costs[`${feed}CompileMs`] = performance.now() - feedCompileStart;
+        signal.throwIfAborted();
+        const renderStart = performance.now();
+        await warehousePreparationYield(signal);
+        costs[`${feed}FirstFrameWaitMs`] = performance.now() - renderStart;
+      }
+      costs.cameraPreparationMs = performance.now() - compileStart;
+    } finally {
+      restoreFeedback();
+      for (const [node, culled] of culling) node.frustumCulled = culled;
+      for (const cargo of preparedCargo) this.remove(cargo);
+      for (const worker of this.workers) worker.visible = false;
+      this.selectedDoor = oldDoor;
+      this.view = 'cctv';
+      this.perspective = 'third';
+      this.lastShot = '';
+      if (!signal.aborted && !this.disposed) this.applyCamera();
+    }
+    signal.throwIfAborted();
+    this.prepared = true;
+    costs.totalMs = performance.now() - started;
+    this.userData.warehousePreparation = costs;
+    console.info('[Warehouse preparation]', JSON.stringify(costs));
+  }
+
   public mount(): void {
-    if (this.mounted) return;
-    this.mounted = true;
+    if (this.mounted || !this.prepared || this.disposed) return;
     const world = this.getWorld();
     const container = world?.gameContainer;
     if (!world || !container) return;
+    this.mounted = true;
+    for (const worker of this.workers) worker.held = false;
     this.input = new WarehouseInput(this);
     /*
      * The engine's default controller owns WASD, Q and pointer-lock mouse movement before
@@ -727,7 +847,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
      * view instead of the void at the world origin. The default is put back on unmount
      * because the workstation owns its own failures.
      */
-    this.savedFallbackCamera = world.fallbackCamera;
+    this.savedFallbackCamera ??= world.fallbackCamera;
     if (this.camera) world.fallbackCamera = this.camera.getCamera();
 
     container.addEventListener('contextmenu', this.blockContextMenu);
@@ -735,6 +855,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     window.addEventListener('mouseup', this.releaseOptical, true);
     window.addEventListener('blur', this.releaseOpticalOnBlur);
     document.addEventListener('pointerlockchange', this.releaseOpticalOnLockChange);
+    document.addEventListener('visibilitychange', this.releaseOnHidden);
     setPointerLockAllowed(true);
     this.hud = new WarehouseHUD(
       container,
@@ -773,7 +894,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.sound.start();
     setRoomTone(null);
     adaptiveScore.setState('warehouse', 0);
-    this.configurePost();
     this.setCelVisualsEnabled(this.celVisualsEnabled, false);
     this.keepActive();
     this.beginCurrent();
@@ -1158,19 +1278,16 @@ export class WarehouseRig extends ENGINE.SceneNode {
       material: new THREE.MeshStandardMaterial({
         color: '#ffe6c4',
         emissive: '#ffc98a',
-        /*
-         * 1.5, not 3.4. This is a 7cm bulb, and at 3.4 with bloom on it was expanding into the
-         * largest bright shape on the machine - a yellow blob under a black airframe, brighter
-         * than the sensor it is meant to support. The lamp reads as a lamp at half the value
-         * now that the body behind it is dark.
-         */
-        emissiveIntensity: 1.5,
+        // Keep the small lens readable without a bloom halo; illumination is independent.
+        emissiveIntensity: 0.55,
         roughness: 0.24,
       }),
     });
     lampGlass.position.set(0, -0.1, -0.36);
 
-    this.droneVisual.add(shell, dome, nose, visor, strake, eye, grip, lamp, lampGlass);
+    this.droneVisual.add(shell, dome, nose, visor, strake, eye, grip, lampGlass);
+    // Optical and tight chase views hide only the airframe, never a scene light.
+    this.drone.add(lamp);
     this.feedback.bindGripper(grip);
 
     /*
@@ -1545,15 +1662,16 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
 
   private buildCamera(): void {
-    const camera = ENGINE.ViewTargetCameraNode.create({ name: 'WarehouseCamera', fov: 68, near: 0.05, far: 180, startActive: true });
+    const camera = ENGINE.ViewTargetCameraNode.create({ name: 'WarehouseCamera', fov: 68, near: 0.05, far: 180, startActive: false });
     this.add(camera);
     this.camera = camera;
     this.applyCamera();
   }
 
-  private buildWorkers(): void {
+  private async buildWorkers(signal: AbortSignal): Promise<void> {
     const routes = WAREHOUSE_LAYOUT.workerRoutes;
     for (let i = 0; i < routes.length; i++) {
+      signal.throwIfAborted();
       const delivery = INBOUND_AUDIT_DELIVERIES[i];
       const worker = WarehouseWorkerNode.create({ name: `WarehouseWorker-${i + 1}` });
       worker.configure(
@@ -1568,11 +1686,15 @@ export class WarehouseRig extends ENGINE.SceneNode {
           helmet: delivery.helmet,
           gloves: delivery.gloves,
           equipmentIndex: i,
+          appearance: delivery.appearance,
         } : { equipmentIndex: i }
       );
       worker.visible = false;
+      worker.held = true;
       this.add(worker);
       this.workers.push(worker);
+      await awaitWarehousePreparation(worker.whenReady(), signal);
+      await warehousePreparationYield(signal);
     }
   }
 
@@ -1832,7 +1954,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
       this.containmentResponse.destroy();
       this.containmentResponse = null;
     }
-    this.intruder?.removeFromParent();
+    if (this.intruder?.parent) this.intruder.parent.remove(this.intruder);
     this.intruder = null;
     this.intrusion = null;
     this.breachEntryTimer = -1;
@@ -1842,7 +1964,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.environment.setRearDoorOpen(0);
     this.sound.setEmergency(false);
     for (const worker of this.workers) worker.resumeRoute();
-    for (const cargo of this.inboundCargo) cargo.removeFromParent();
+    for (const cargo of this.inboundCargo) cargo.parent?.remove(cargo);
     this.inboundCargo.length = 0;
     this.inboundAudit = null;
     this.inboundIntakeCargo = null;
@@ -1855,19 +1977,19 @@ export class WarehouseRig extends ENGINE.SceneNode {
     this.pursuitPhase = '';
     if (this.carried) {
       this.cargoRope.detach();
-      this.carried.removeFromParent();
+      this.carried.parent?.remove(this.carried);
       this.carried = null;
     }
-    this.cargo?.removeFromParent();
+    if (this.cargo?.parent) this.cargo.parent.remove(this.cargo);
     this.cargo = null;
     this.deliveredCargo = null;
-    this.duplicateCargo?.removeFromParent();
+    if (this.duplicateCargo?.parent) this.duplicateCargo.parent.remove(this.duplicateCargo);
     this.duplicateCargo = null;
     this.dockedCargo.length = 0;
     this.scannedCargo.clear();
     this.environment.resetTransferDocks();
     this.environment.setDuplicateAisle(false);
-    this.visitor?.root.removeFromParent();
+    if (this.visitor?.root.parent) this.visitor.root.parent.remove(this.visitor.root);
     this.visitor = null;
   }
 
@@ -2107,6 +2229,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
 
   /** Move to a view and bring the HUD and the pointer with it. */
   private applyView(view: WarehouseView): void {
+    this.input?.clear();
     this.view = view;
     this.hud?.setView(view);
     this.syncPointerMode();
@@ -2138,6 +2261,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
 
   public toggleConsole(): void {
+    this.input?.clear();
     if (this.isCinematicActive()) return;
     this.setOpticalAim(false);
     const next: WarehouseView = this.view === 'console' ? 'drone' : 'console';
@@ -2418,7 +2542,6 @@ export class WarehouseRig extends ENGINE.SceneNode {
 
   public scanFromOpticalInput(): void {
     if (!this.opticalAimHeld || this.view !== 'drone') {
-      this.hud?.flash('HOLD RIGHT MOUSE FOR OPTICAL VIEW // LEFT CLICK TO SCAN', 1.5);
       return;
     }
     this.scan();
@@ -4648,7 +4771,8 @@ export class WarehouseRig extends ENGINE.SceneNode {
   }
 
   public unmount(): void {
-    if (!this.mounted) return;
+    if (this.disposed) return;
+    this.disposed = true;
     this.mounted = false;
     const world = this.getWorld();
     if (this.input) world?.inputManager?.removeInputHandler(this.input);
@@ -4657,6 +4781,7 @@ export class WarehouseRig extends ENGINE.SceneNode {
     window.removeEventListener('mouseup', this.releaseOptical, true);
     window.removeEventListener('blur', this.releaseOpticalOnBlur);
     document.removeEventListener('pointerlockchange', this.releaseOpticalOnLockChange);
+    document.removeEventListener('visibilitychange', this.releaseOnHidden);
     if (this.suspendedPlayerController) {
       world?.inputManager?.addInputHandler(this.suspendedPlayerController);
       this.suspendedPlayerController = null;

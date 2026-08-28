@@ -630,7 +630,12 @@ export class WarehouseEnvironment {
   private verifiedIntakeGuideLevel = 0;
   private verifiedIntakeStatus: THREE.MeshStandardMaterial | null = null;
 
+  /** Synchronous tooling compatibility; runtime consumes the bounded steps below. */
   public build(): void {
+    for (const _step of this.buildSteps()) { /* consume */ }
+  }
+
+  public *buildSteps(): Generator<void> {
     const { shell } = WAREHOUSE_LAYOUT;
     const floor = mesh('WarehouseFloor', new THREE.BoxGeometry(shell.width, 0.3, shell.length), FLOOR, new THREE.Vector3(0, -0.17, 0));
     this.root.add(floor);
@@ -649,29 +654,43 @@ export class WarehouseEnvironment {
       mesh('Roof', new THREE.BoxGeometry(shell.width, 0.3, shell.length), ROOF_DECK, new THREE.Vector3(0, shell.roofY, 0))
     );
 
-    this.buildRacks();
+    yield;
+    yield* this.buildRacks();
     this.buildServiceDoors();
+    yield;
     this.buildStations();
+    yield;
     this.buildConveyors();
+    yield;
     this.buildSecurityZones();
     this.buildRackEndProtection();
+    yield;
     this.buildFloorNavigation();
+    yield;
     this.buildCeilingServices();
+    yield;
     this.buildTruck();
+    yield;
     this.buildLights();
+    yield;
     this.buildFloorWear();
+    yield;
     this.buildDressing();
+    yield;
     this.automation.build();
     this.root.add(this.automation.root);
+    yield;
     this.setDressing.build();
     this.root.add(this.setDressing.root);
+    yield;
     // Vehicles, mezzanine, office and loose life. Built and parented here, never in a field.
     this.facilities.build();
     this.root.add(this.facilities.root);
+    yield;
     buildRain(this.root);
   }
 
-  private buildRacks(): void {
+  private *buildRacks(): Generator<void> {
     const rng = createRng(seedFrom('warehouse-racks'));
     for (const [index, x] of WAREHOUSE_LAYOUT.rack.centers.entries()) {
       const aisle = index + 1;
@@ -807,6 +826,7 @@ export class WarehouseEnvironment {
       // the building running out rather than as stock having moved.
       const strippedBay = 1 + Math.floor(rng() * (BAY_Z.length - 2));
       for (const [bayIndex, bayZ] of BAY_Z.entries()) {
+        yield;
         const stock = bayStock[bayIndex];
         const emptyChance = bayIndex === strippedBay ? 0.62 : bayFill[bayIndex];
         for (const [level, levelY] of LEVEL_Y.entries()) {
@@ -987,6 +1007,8 @@ export class WarehouseEnvironment {
         if (!pieces.length) continue;
         const geometry = mergeGeometries(pieces, false);
         if (geometry) this.root.add(mesh(name, geometry, material));
+        for (const piece of pieces) piece.dispose();
+        yield;
       }
       /*
        * A continuous location strip down each rack face, numbered in tens.

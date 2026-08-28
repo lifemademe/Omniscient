@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 
 import type { WarehouseSecurityZoneId } from './types.js';
+import type { WarehouseWorkerAppearance } from './workerAppearance.js';
 
 export type InboundAuditPhase =
   | 'scan-worker'
@@ -17,6 +18,7 @@ export interface InboundAuditDelivery {
   index: number;
   workerId: string;
   workerName: string;
+  appearance: WarehouseWorkerAppearance;
   packageId: string;
   packageDelivererName: string;
   aisle: number;
@@ -103,6 +105,7 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     index: 0,
     workerId: 'WX-1142',
     workerName: 'Joao Mara',
+    appearance: 'tomas-2',
     // 1024: aisle 1, bay 024. It read 1124, which spells bay 124 on a rack that stops at
     // 100 - the manifest, the rack ruler and the carton all disagreed.
     packageId: '1024',
@@ -121,6 +124,7 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     index: 1,
     workerId: 'WX-2087',
     workerName: 'Maya Wong',
+    appearance: 'tomas-3',
     packageId: '2046',
     packageDelivererName: 'Maya Wong',
     aisle: 2,
@@ -140,6 +144,7 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     index: 2,
     workerId: 'WX-3319',
     workerName: 'Rui Alves',
+    appearance: 'tomas-2',
     packageId: '3072',
     packageDelivererName: 'Paulo Silva',
     aisle: 3,
@@ -156,6 +161,7 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     index: 3,
     workerId: 'WX-4461',
     workerName: 'Arthur Lewis',
+    appearance: 'tomas-4',
     // 4097, not 4088: bay 88 lands between two physical rack bays, on an upright, where
     // there is no shelf to stand a carton on. See warehouseRackBayIndex.
     packageId: '4097',
@@ -174,6 +180,7 @@ export const INBOUND_AUDIT_DELIVERIES: readonly InboundAuditDelivery[] = [
     index: 4,
     workerId: 'WX-5198',
     workerName: 'Camila Sato',
+    appearance: 'original',
     // 5023, not 5013: bay 13 is in the same class of gap as 4088 was.
     packageId: '5023',
     packageDelivererName: 'Camila Sato',

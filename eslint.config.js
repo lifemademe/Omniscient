@@ -25,7 +25,8 @@ export default [
    * made `pnpm lint` pass or fail depending on whether the last build had written it yet,
    * which is a check nobody can trust.
    */
-  { ignores: ['src/.virtual-entry.ts'] },
+  // The editor's minified output is not source and must never be auto-fixed by lint.
+  { ignores: ['src/.virtual-entry.ts', '.dist/**'] },
   // Add your custom overrides below:
   // {
   //   rules: {

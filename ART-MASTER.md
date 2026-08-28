@@ -857,6 +857,41 @@ there is no assertion that can be written.
 
 ## 13. THE LEDGER
 
+**Warehouse entry / optical / workers — user-approved implementation, PARTIAL / OPEN QA, Codex 2026-08-28.**
+User-directed scope: cancellable staged construction without advancing mission time;
+stable landing illumination across optical/chase cuts; explicit Tomas atlas variants;
+dark request backing and one feed-local scan instruction. Existing layout, camera
+poses, scan eligibility and delivery identities remain the bar. Runtime-only changes.
+Implemented staged construction and bounded scene attachment, abort/retry ownership,
+cached assets/animation/immutable texture preparation, actual root-scene camera warmup,
+stable drone lights and input clearing. Joao/Rui use atlas 2, Maya 3, Arthur 4, Camila original.
+Badge/equipment bone attachments use decorative Three meshes to avoid SceneNode teardown.
+Live diagnostics caught duplicate begin/end lifecycle calls in the first pass; detached
+assembly, single-node attachment and parent-owned removal corrected those warehouse stacks.
+Lint now excludes generated `.dist` output so auto-fix never rewrites the editor bundle.
+`pnpm lint`, `pnpm build` and editor refresh passed. Fresh rendered-only critic
+`warehouse_render_critic`: initial hint too small; enlarged hint is **AT BAR for scoped HUD /
+lamp presentation only** in `scripts/dev/warehouse-r2-hint.jpg`. Not a worker-art approval.
+Evidence: `scripts/dev/warehouse-r1-preparing.png` (loading card),
+`warehouse-r2-cancel-before.jpg` / `warehouse-r2-cancel-after.jpg` (Escape during facility
+preparation returns to globe), `warehouse-r2-large.jpg`, `warehouse-r2-optical.jpg` /
+`warehouse-r2-optical-release.jpg` (live optical/airframe return), and
+`warehouse-r2-preparation-costs.jpg` (console measurements). Captures are 1282x752 and
+1708x1020 window captures, not exact 1920x1080/1280x720 acceptance captures.
+Measured cold preparation: 25.72s total, 142ms construction CPU, longest construction batch
+16.6ms, longest attachment batch 29.8ms, personnel 2.74s, first shader compile 20.06s.
+Repeat: 6.67s total, 111ms construction CPU, max attachment 19.5ms, personnel 1.42s.
+Camera paint-wait samples ranged 74–1580ms; these include scheduling and are NOT GPU timings.
+RMB first/repeat click tool round trips were 83/89ms, with optical and release visibly
+rendering, but this is NOT a measured input-to-present guarantee. No multi-second RMB stall
+observed. Repeat entry, cancellation and saved movement 02 resume reached gameplay; visitor
+CCTV acquisition also worked. Warehouse-filtered live console contained preparation timing
+records without the earlier warehouse lifecycle errors; unrelated editor errors remain.
+Still OPEN: sustained RMB + UI release/focus loss/denied lock/tight fallback, forced-load
+failure/retry, complete delivery scans/docking/pursuit, five worker close-ups and fresh
+worker-art judgement, exact-resolution captures and frame-level latency thresholds.
+Implementation receipt is recorded in the local commit follow-up. No push.
+
 **Adaeze residual canopy shadow — user-reported correction, AT BAR (scoped), Codex 2026-08-28.**
 Bar: `codex-clipboard-b35c620e-1a86-433d-9927-1a8bfbb38dc0.png` without the broad rear-bed
 canopy shadow after pruning; unchanged sunlight, healthy bed and pale seedling state.

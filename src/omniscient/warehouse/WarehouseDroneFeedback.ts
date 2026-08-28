@@ -326,6 +326,13 @@ export class WarehouseDroneFeedback {
     }
   }
 
+  /** Expose pooled effects only behind the loading screen, then restore eligibility. */
+  public prepareVisibility(): () => void {
+    const nodes: Array<[THREE.Object3D, boolean]> = [];
+    this.root.traverse(node => { nodes.push([node, node.visible]); node.visible = true; });
+    return () => { for (const [node, visible] of nodes) node.visible = visible; };
+  }
+
   /**
    * World in, local out.
    *

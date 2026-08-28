@@ -264,7 +264,7 @@ export function loadGesture(name: GestureName): Promise<THREE.AnimationClip | nu
    * that helper matches on `[^"\\s'<>]+`, which stops at a space, and three of these four
    * files have spaces in their names.
    */
-  const pending = ENGINE.resolvePath(ENGINE.AssetPath.fromString(GESTURES[name])).then(
+  const loading = ENGINE.resolvePath(ENGINE.AssetPath.fromString(GESTURES[name])).then(
     (resolved) =>
       new Promise<THREE.AnimationClip | null>((resolve) => {
         loader.load(
@@ -297,6 +297,24 @@ export function loadGesture(name: GestureName): Promise<THREE.AnimationClip | nu
       })
   );
 
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const pending = Promise.race([
+    loading,
+    new Promise<null>((resolve) => {
+      timeout = setTimeout(() => {
+        console.warn(`[gesture] ${name}: loading timed out`);
+        resolve(null);
+      }, 30000);
+    }),
+  ]).catch((error: unknown) => {
+    console.warn(`[gesture] ${name} failed to load`, error);
+    return null;
+  }).finally(() => clearTimeout(timeout));
   cache.set(name, pending);
+  void pending.then((clip) => {
+    // An interrupted/failed load is not a cached absence forever. Guard the
+    // identity so an old request cannot evict a newer retry of the same clip.
+    if (!clip && cache.get(name) === pending) cache.delete(name);
+  });
   return pending;
 }

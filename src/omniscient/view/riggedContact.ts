@@ -34,7 +34,7 @@
 import * as ENGINE from '@gnsx/genesys.js';
 import * as THREE from 'three';
 
-import { capHighlights, debakeHighlights } from '../art/debake.js';
+import { clonePreparedCharacterMap, loadCharacterMapOverride } from './riggedTextures.js';
 import { applyShadowPolicy } from '../art/shadows.js';
 import { HIPS, loadGesture, type GestureName } from './gestures.js';
 
@@ -66,6 +66,8 @@ export interface RiggedOptions {
   /** Name of the clip to play, or true for the first one the file happens to carry. */
   clip?: string | true;
   modelUrl: string;
+  /** Optional atlas for this instance only; the original model remains unchanged. */
+  baseColorTextureUrl?: string;
   position: THREE.Vector3;
   rotation?: THREE.Euler;
   /** Metres. The model is scaled to this so it stands beside the procedural cast. */
@@ -315,6 +317,10 @@ function poleFor(root: ENGINE.SceneNode, side: 'left' | 'right'): THREE.Vector3 
 
 export interface RiggedContact {
   root: ENGINE.SceneNode;
+  /** Loaded, normalized and textured, or rejected on a failed/timed-out asset. */
+  whenReady: () => Promise<void>;
+  /** Prebind shared clips while a loading overlay still owns the screen. */
+  prepareAnimations: (names: readonly GestureName[]) => Promise<void>;
   /** Resolved once the mesh has loaded. Empty before that. */
   bones: Record<string, THREE.Object3D>;
   /**
@@ -428,9 +434,14 @@ export function placeRigged(name: string, options: RiggedOptions): RiggedContact
   const model = ENGINE.ModelMeshNode.create({
     name: `${name}Model`,
     modelUrl: options.modelUrl,
-    useDynamicMaterials: true,
+    // This helper clones after load, including explicit preloads outside beginPlay.
+    useDynamicMaterials: false,
   });
   root.add(model);
+
+  let modelPrepared = false;
+  let texturePreparation: Promise<void> = Promise.resolve();
+  let readiness: Promise<void> | null = null;
 
   let mixer: THREE.AnimationMixer | null = null;
   /**
@@ -887,6 +898,35 @@ const ARRIVE = 0.06;
 
   const contact: RiggedContact = {
     root,
+    whenReady: () => {
+      readiness ??= new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error(`Character preparation timed out: ${name}`)), 30000);
+        void (async () => {
+          if (!modelPrepared) {
+            if (model.isLoading()) await model.waitForLoad();
+            else await model.loadModel(ENGINE.AssetPath.fromString(options.modelUrl));
+          }
+          if (!modelPrepared) throw new Error(`Character model failed to load: ${name}`);
+          await texturePreparation;
+        })().then(resolve, reject).finally(() => clearTimeout(timeout));
+      });
+      return readiness;
+    },
+    prepareAnimations: async (names) => {
+      await contact.whenReady();
+      for (const gesture of names) {
+        let timeout: ReturnType<typeof setTimeout> | undefined;
+        const clip = await Promise.race([
+          loadGesture(gesture),
+          new Promise<never>((_resolve, reject) => {
+            timeout = setTimeout(() => reject(new Error(`Character animation timed out: ${gesture}`)), 30000);
+          }),
+        ]).finally(() => clearTimeout(timeout));
+        if (!clip) throw new Error(`Character animation failed to load: ${gesture}`);
+        mixer ??= new THREE.AnimationMixer(model);
+        mixer.clipAction(fitHips(clip));
+      }
+    },
     bones: {},
     rest: {},
     restPositions: {},
@@ -1146,10 +1186,15 @@ const ARRIVE = 0.06;
      * Once per material, not once per mesh - a character is usually one texture over several
      * meshes, and debaking it twice would eat the garment's own weave the second time round.
      */
-    const debaked = new Set<THREE.Texture>();
+    const maps = new Map<THREE.Texture, THREE.Texture>();
+    const textureTasks: Promise<void>[] = [];
     loaded.traverse((child) => {
       const mesh = child as THREE.Mesh;
       if (!mesh.isMesh) return;
+      // Loading outside beginPlay does not trigger the engine's dynamic-material
+      // clone. Always own the material before applying instance appearance.
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map((material) => material.clone()) : mesh.material.clone();
       for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
         /*
          * Take the shine off the MATERIAL, not only out of the texture.
@@ -1209,8 +1254,19 @@ const ARRIVE = 0.06;
           standard.needsUpdate = true;
         }
         const map = standard.map;
-        if (!map || debaked.has(map)) continue;
-        debaked.add(map);
+        if (!map) continue;
+        if (options.baseColorTextureUrl) {
+          textureTasks.push(loadCharacterMapOverride(options.baseColorTextureUrl, map).then((variant) => {
+            standard.map = variant;
+            standard.needsUpdate = true;
+          }));
+          continue;
+        }
+        const cached = maps.get(map);
+        if (cached) {
+          standard.map = cached;
+          continue;
+        }
         /*
          * Harder than the default, because a character's cloth is dark.
          *
@@ -1226,7 +1282,9 @@ const ARRIVE = 0.06;
          * excess there is small - this removes highlights that jump off their surroundings,
          * not everything pale.
          */
-        debakeHighlights(map, { threshold: 0.07, strength: 1, blur: 32 });
+        const preparedMap = clonePreparedCharacterMap(map);
+        maps.set(map, preparedMap);
+        standard.map = preparedMap;
         /*
          * And a hard ceiling on top of it.
          *
@@ -1238,9 +1296,10 @@ const ARRIVE = 0.06;
          * 0.62 is above skin and well under blown white, so faces keep their modelling and
          * the white blobs on near-black cloth come down to a value cloth can actually be.
          */
-        capHighlights(map, 0.62);
       }
     });
+    texturePreparation = Promise.all(textureTasks).then(() => undefined);
+    void texturePreparation.catch(() => undefined);
 
     /*
      * ## The people did not cast shadows. Any of them. Ever.
@@ -1439,6 +1498,7 @@ const ARRIVE = 0.06;
         `${named}->${side} ${miss.toFixed(2)}off arm${(arm?.reach ?? 0).toFixed(2)}`
       );
     }
+    modelPrepared = true;
     if (reached.length) {
       // Printed on purpose: the result of this experiment is a number, and a number that
       // only exists inside the running game is a number nobody can act on. Through devLog

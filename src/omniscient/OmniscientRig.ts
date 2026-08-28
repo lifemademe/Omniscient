@@ -39,7 +39,7 @@ import {
   loadM4ssStage,
   saveGame,
 } from './session/persistence.js';
-import { installCursor, setCursorVisible } from './art/cursor.js';
+import { installCursor, setCursorVisible, setPointerLockAllowed } from './art/cursor.js';
 import { getRetroLookName, installRetro, retroAcquire, setRetroLook, setRetroScreenQuad, setRetroSharpQuads } from './art/retro.js';
 import { projectScreenQuad } from './art/screenQuad.js';
 import { setRoomTone, stopRoomTone } from './audio/RoomTone.js';
@@ -96,6 +96,8 @@ import { installSoundCaptions } from './accessibility/SoundCaptions.js';
 import { VFX_LIBRARY } from './vfx/library.js';
 import { TracePanel } from './warehouse/TracePanel.js';
 import { WarehouseLaunchPanel } from './warehouse/WarehouseLaunchPanel.js';
+import { WarehouseLoadingPanel } from './warehouse/WarehouseLoadingPanel.js';
+import { warehousePreparationYield } from './warehouse/preparation.js';
 import { loadWarehouseSave, updateWarehouseSave } from './warehouse/persistence.js';
 import { WarehouseDirector } from './warehouse/director.js';
 import { WarehouseRig } from './warehouse/WarehouseRig.js';
@@ -651,7 +653,9 @@ export class OmniscientRig extends ENGINE.SceneNode {
   /** The desk and the room around it, held for the outline prepass. See buildWorkstation. */
   private workstation: ENGINE.SceneNode | null = null;
   private warehouse: WarehouseRig | null = null;
-  private warehouseFog: { near: number; far: number } | null = null;
+  private warehousePreparation: AbortController | null = null;
+  private warehouseLoading: WarehouseLoadingPanel | null = null;
+  private warehouseFog: { color: THREE.Color; near: number; far: number } | null = null;
   private warehouseArchiveDisplay: ENGINE.SceneNode | null = null;
   /*
    * Defaults TRUE, and it is worth saying so here because the whole room's lighting hangs
@@ -3313,7 +3317,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   /** Offer deterministic post-story variants without hiding them behind a key chord. */
   private openWarehouseLaunch(): void {
-    if (this.warehouseLaunchPanel || this.warehouse) return;
+    if (this.warehouseLaunchPanel || this.warehouse || this.warehousePreparation || this.warehouseLoading) return;
     const container = this.getWorld()?.gameContainer;
     if (!container) return;
     const archive = loadWarehouseSave();
@@ -3388,7 +3392,46 @@ export class OmniscientRig extends ENGINE.SceneNode {
 
   /** Hand the active camera, input, atmosphere, and score to the runtime facility. */
   private enterWarehouse(mode: WarehouseMode): void {
-    if (this.warehouse) return;
+    if (this.warehouse || this.warehousePreparation || this.warehouseLoading) return;
+    void this.prepareWarehouse(mode);
+  }
+
+  private async prepareWarehouse(mode: WarehouseMode): Promise<void> {
+    const world = this.getWorld();
+    if (!world) return;
+    const preparation = new AbortController();
+    this.warehousePreparation = preparation;
+    const loading = new WarehouseLoadingPanel(world, () => preparation.abort());
+    this.warehouseLoading = loading;
+    const ownsAttempt = (): boolean => this.warehousePreparation === preparation && this.warehouseLoading === loading;
+    let presentationChanged = false;
+    setPointerLockAllowed(false);
+    world.inputManager?.exitPointerLock();
+    setCursorVisible(true);
+    try {
+    // Abandon the UI asset wait immediately on Cancel. The panel owns cleanup of any
+    // widgets that finish initializing later, and both promises retain rejection handlers.
+    const initialized = new Promise<void>((resolve, reject) => {
+      const abort = (): void => reject(preparation.signal.reason);
+      preparation.signal.addEventListener('abort', abort, { once: true });
+      loading.initialize().then(() => {
+        preparation.signal.removeEventListener('abort', abort);
+        resolve();
+      }, (error: unknown) => {
+        preparation.signal.removeEventListener('abort', abort);
+        reject(error);
+      });
+      if (preparation.signal.aborted) abort();
+    });
+    await Promise.all([warehousePreparationYield(preparation.signal), initialized]);
+    preparation.signal.throwIfAborted();
+    if (!ownsAttempt()) return;
+    // Snapshot before the first presentation mutation, including failures before rig.add.
+    this.warehousePreviousRetroLook = getRetroLookName();
+    this.warehouseFog = this.fog
+      ? { color: this.fog.getFogColor().clone(), near: this.fog.getFogNear(), far: this.fog.getFogFar() }
+      : null;
+    presentationChanged = true;
     this.tracePanel?.destroy();
     this.tracePanel = null;
     this.warehouseLaunchPanel?.destroy();
@@ -3396,14 +3439,7 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.globeScreen?.detach();
     this.phone?.setVisible(false);
     this.menu?.setEnabled(false);
-    setCursorVisible(false);
     audio.play('connect');
-    audio.setOnAir(true);
-    this.warehousePreviousRetroLook = getRetroLookName();
-
-    this.warehouseFog = this.fog
-      ? { near: this.fog.getFogNear(), far: this.fog.getFogFar() }
-      : null;
     /*
      * The warehouse gets its OWN haze rather than none at all.
      *
@@ -3441,37 +3477,95 @@ export class OmniscientRig extends ENGINE.SceneNode {
       this.refreshWarehouseArchiveDisplay();
     };
     rig.onExit = (result) => this.exitWarehouse(result);
-    this.add(rig);
     this.warehouse = rig;
-    rig.setCelVisualsEnabled(this.warehouseCelEnabled, false);
+    this.add(rig);
     this.applyWarehouseCelPost(true);
     setRetroLook(this.warehouseCelEnabled ? 'warehouseCel' : this.warehousePreviousRetroLook, true);
+    await rig.prepare(preparation.signal, (stage, detail) => loading.setStage(stage, detail));
+    preparation.signal.throwIfAborted();
+    if (!ownsAttempt()) return;
+    rig.setCelVisualsEnabled(this.warehouseCelEnabled, false);
+    audio.setOnAir(true);
     rig.mount();
+    loading.destroy();
+    this.warehouseLoading = null;
+    } catch (error) {
+      // endPlay invalidates ownership before aborting. A late asset/compile settlement
+      // must never restore the camera, input or globe of a different session.
+      if (!ownsAttempt()) {
+        loading.destroy();
+        return;
+      }
+      this.warehouse?.unmount();
+      if (this.warehouse) this.remove(this.warehouse);
+      this.warehouse = null;
+      if (presentationChanged) this.restoreWarehousePresentation();
+      if (preparation.signal.aborted) {
+        loading.destroy();
+        this.warehouseLoading = null;
+        this.warehouseLaunchPanel?.destroy();
+        this.warehouseLaunchPanel = null;
+        this.tracePanel?.destroy();
+        this.tracePanel = null;
+        this.showGlobe();
+      } else {
+        console.error('Warehouse preparation failed', error);
+        loading.setError('The warehouse link could not be prepared. Your progress is unchanged.', () => {
+          if (this.warehouseLoading !== loading) return;
+          loading.destroy();
+          this.warehouseLoading = null;
+          this.enterWarehouse(mode);
+        });
+        // The failed attempt no longer owns a rig; Cancel returns without saving.
+        preparation.signal.addEventListener('abort', () => {
+          if (this.warehouseLoading !== loading) return;
+          loading.destroy();
+          this.warehouseLoading = null;
+          this.warehouseLaunchPanel?.destroy();
+          this.warehouseLaunchPanel = null;
+          this.tracePanel?.destroy();
+          this.tracePanel = null;
+          this.showGlobe();
+        }, { once: true });
+      }
+    } finally {
+      if (this.warehousePreparation === preparation) this.warehousePreparation = null;
+    }
   }
 
   /** Return from the bonus world and reconstitute the globe's post-game state. */
-  private exitWarehouse(_result: WarehouseRunResult | null): void {
+  private exitWarehouse(_result: WarehouseRunResult | null, saveProgress = true): void {
     if (!this.warehouse) return;
     this.warehouse.unmount();
-    this.warehouse.removeFromParent();
+    this.remove(this.warehouse);
     this.warehouse = null;
+    this.restoreWarehousePresentation();
+    if (saveProgress) {
+      this.synchronizeWarehouseSignals();
+      this.persist();
+      this.refreshWarehouseArchiveDisplay();
+    }
+    this.showGlobe();
+  }
+
+  /** Also used when preparation fails before a WarehouseRig could be attached. */
+  private restoreWarehousePresentation(): void {
     this.applyCelPost();
     setRetroLook(this.warehousePreviousRetroLook);
     if (this.warehouseFog && this.fog) {
       // Colour too, not just the distances - see mountScene: a room that retunes the global
       // fog owes the next room every part of it back, and the colour was the part this
       // forgot. Left set, it would have tinted the workstation on the way home.
-      this.fog.setFogColor(new THREE.Color(LIGHT.haze));
+      this.fog.setFogColor(this.warehouseFog.color);
       this.fog.setFogNear(this.warehouseFog.near);
       this.fog.setFogFar(this.warehouseFog.far);
     }
     this.warehouseFog = null;
     this.camera?.setActive(true);
     audio.setOnAir(false);
-    this.synchronizeWarehouseSignals();
-    this.persist();
-    this.refreshWarehouseArchiveDisplay();
-    this.showGlobe();
+    setPointerLockAllowed(false);
+    this.getWorld()?.inputManager?.exitPointerLock();
+    setCursorVisible(true);
   }
 
   /**
@@ -5006,7 +5100,13 @@ export class OmniscientRig extends ENGINE.SceneNode {
     this.releaseUnit(false);
     this.m4ss?.unmount();
     this.m4ss = null;
+    // Invalidate first: pending async preparation may reject after this rig has ended.
+    const warehousePreparation = this.warehousePreparation;
+    this.warehousePreparation = null;
+    warehousePreparation?.abort();
     this.warehouse?.unmount();
+    this.warehouseLoading?.destroy();
+    this.warehouseLoading = null;
     this.warehouse = null;
     adaptiveScore.dispose();
     stopRoomTone();

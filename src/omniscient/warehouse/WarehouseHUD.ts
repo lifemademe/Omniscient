@@ -48,6 +48,11 @@ const CSS = `
 .omni-cv.warehouse-hud {
   color: #cfe6c4;
 }
+/* The warehouse can put bright shelving behind the request, unlike the night contacts. */
+.warehouse-hud .omni-objective {
+  background: linear-gradient(90deg, rgba(13, 30, 20, 0.97), rgba(6, 15, 10, 0.95));
+}
+.warehouse-hud .omni-objective__tag { color: #8cba92; }
 /* CCTV grain, over the picture only - it used to inset 35px and 29px by hand to miss the
    old top strip and footer, which are gone. */
 .warehouse-hud[data-view=cctv] .omni-cv__stage::after {
@@ -384,13 +389,6 @@ const CSS = `
   left: 12px;
   top: 10px;
 }
-.warehouse-hud__optical::after {
-  content: 'RMB held // LMB scan';
-  position: absolute;
-  right: 12px;
-  top: 10px;
-  color: #d8ffb0;
-}
 .warehouse-hud__optical-readout { position: absolute; left: 12px; bottom: 10px; color: #4f9a5e; }
 .warehouse-hud__optical-readout span { color: #d8ffb0; }
 
@@ -410,10 +408,15 @@ const CSS = `
 .warehouse-hud__opticalhint {
   pointer-events: none;
   position: absolute;
-  left: 14px;
+  left: 150px;
+  right: 14px;
   bottom: 92px;
-  font-size: calc(10px + var(--omni-font-boost, 0px));
-  letter-spacing: 0.18em;
+  width: fit-content;
+  padding: 5px 10px;
+  background: rgba(6, 15, 10, 0.92);
+  font-size: calc(14px + var(--omni-font-boost, 0px));
+  line-height: 1.5;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: #7fb98a;
   text-shadow: 0 1px 2px rgba(3, 8, 6, 0.95);
@@ -475,10 +478,12 @@ const CSS = `
 /* Held: the legend brightens to the console's live-value colour, and still does not become a
    button. State is carried by the tool plate above it, which IS one. */
 .warehouse-hud[data-optical=true] .warehouse-hud__opticalhint { color: #d8ffb0; }
-.warehouse-hud:not([data-view=drone]) .warehouse-hud__opticalhint { opacity: 0.58; }
+.warehouse-hud:not([data-view=drone]) .warehouse-hud__opticalhint,
+.warehouse-hud[data-help=true] .warehouse-hud__opticalhint { display: none; }
 
 @media (max-width: 760px) {
-  .warehouse-hud__opticalhint, .warehouse-hud__controls { display: none; }
+  .warehouse-hud__controls { display: none; }
+  .warehouse-hud__opticalhint { left: 132px; right: 8px; font-size: 13px; }
   .warehouse-hud__optical { inset: 8%; }
   .warehouse-hud__tools { bottom: 88px; }
   .warehouse-hud__doors { bottom: 128px; }
@@ -835,14 +840,8 @@ export class WarehouseHUD {
     this.helpSheet.dataset.shown = 'false';
     this.helpSheet.innerHTML = WAREHOUSE_HELP_SHEET;
 
-    /*
-     * The permanent keymap strip and the optical legend are no longer appended.
-     *
-     * They are still BUILT - setKeymap still writes to the strip, and the optical hint still
-     * tracks the mode - so nothing that talks to them had to change, and either can be put
-     * back by adding it to this list. They simply are not on screen: the help sheet says the
-     * same things on demand, and a frame is worth more than a legend that is read twice.
-     */
+    // One feed-local scan hint replaces repeating the control instruction in the chat.
+    // The complete movement keymap stays on the help sheet.
     frame.stage.append(
       this.speedLines,
       optical,
@@ -855,6 +854,7 @@ export class WarehouseHUD {
       this.doors,
       this.helpButton,
       this.helpSheet,
+      this.opticalHint,
       this.feed
     );
     frame.column.appendChild(this.ops.root);
@@ -1078,7 +1078,9 @@ export class WarehouseHUD {
   public setOpticalAim(active: boolean): void {
     this.opticalAim = active;
     this.root.dataset.optical = String(active);
-    this.opticalHint.textContent = active ? 'RMB // optical held' : 'RMB // hold optical';
+    this.opticalHint.textContent = active
+      ? 'OPTICAL HELD // LMB SCAN // RELEASE RMB TO FLY'
+      : 'HOLD RMB: OPTICAL // LMB: SCAN';
     if (this.root.dataset.view === 'drone') this.setView('drone');
   }
 
@@ -1120,6 +1122,7 @@ export class WarehouseHUD {
   public toggleHelp(force?: boolean): void {
     const shown = force ?? this.helpSheet.dataset.shown !== 'true';
     this.helpSheet.dataset.shown = String(shown);
+    this.root.dataset.help = String(shown);
   }
 
   /*

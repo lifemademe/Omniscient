@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { placeRigged } from '../view/riggedContact.js';
 import { WAREHOUSE_DOORS } from './WarehouseServiceDoors.js';
 import { WAREHOUSE_LAYOUT } from './WarehouseLayout.js';
+import { WAREHOUSE_WORKER_TEXTURES, type WarehouseWorkerAppearance } from './workerAppearance.js';
 
 import type { Blackboard, BehaviorStatus as BehaviorStatusType } from '@gnsx/genesys.js';
 import type { RiggedContact } from '../view/riggedContact.js';
@@ -268,6 +269,7 @@ export interface WarehouseWorkerStyle {
   helmet?: string;
   gloves?: string;
   equipmentIndex?: number;
+  appearance?: WarehouseWorkerAppearance;
 }
 
 export interface WarehouseWorkerFugitiveWaypoint {
@@ -305,6 +307,7 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
   public fugitiveZone: WarehouseSecurityZoneId = 'receiving';
   public escapeSeconds: number | null = null;
   private rig: RiggedContact | null = null;
+  private readiness: Promise<void> = Promise.resolve();
   private route: THREE.Vector3[] = [];
   private routeIndex = 0;
   private dwell = 0;
@@ -328,7 +331,7 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
     id: string,
     position: THREE.Vector3,
     route: readonly THREE.Vector3[],
-    vest: string,
+    _vest: string,
     authorized = true,
     style: WarehouseWorkerStyle = {}
   ): void {
@@ -341,6 +344,7 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
     this.setName(`Worker-${id}`);
     const rig = placeRigged(`WorkerRig-${id}`, {
       modelUrl: '@project/assets/models/Tomas.glb',
+      baseColorTextureUrl: WAREHOUSE_WORKER_TEXTURES[style.appearance ?? 'original'],
       position: new THREE.Vector3(),
       rotation: new THREE.Euler(0, Math.PI, 0),
       height: 1.76,
@@ -348,50 +352,17 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
       settleWrists: 0.35,
     });
     this.rig = rig;
-    const vestRoot = ENGINE.SceneNode.create({ name: 'ProceduralHiVisVest' });
-    const vestMaterial = new THREE.MeshStandardMaterial({ color: vest, roughness: 0.82, transparent: true, opacity: 0.86 });
-    const reflectiveMaterial = new THREE.MeshStandardMaterial({
-      color: '#c9d8b8',
-      emissive: '#7f9b73',
-      emissiveIntensity: 0.75,
-      roughness: 0.36,
-    });
-    for (const side of [-1, 1]) {
-      const panel = ENGINE.MeshNode.create({
-        name: side > 0 ? 'VestFront' : 'VestBack',
-        geometry: new THREE.BoxGeometry(0.46, 0.54, 0.028),
-        material: vestMaterial,
-      });
-      panel.position.set(0, 1.16, side * 0.135);
-      const reflector = ENGINE.MeshNode.create({
-        name: 'VestReflector',
-        geometry: new THREE.BoxGeometry(0.43, 0.045, 0.012),
-        material: reflectiveMaterial,
-      });
-      reflector.position.set(0, 1.13, side * 0.155);
-      vestRoot.add(panel, reflector);
-    }
-    for (const x of [-0.17, 0.17]) {
-      const strap = ENGINE.MeshNode.create({
-        name: 'VestShoulderStrap',
-        geometry: new THREE.BoxGeometry(0.075, 0.3, 0.29),
-        material: vestMaterial,
-      });
-      strap.position.set(x, 1.38, 0);
-      vestRoot.add(strap);
-    }
-    const helmet = ENGINE.MeshNode.create({
-      name: 'ProceduralHelmet',
-      geometry: new THREE.SphereGeometry(0.15, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.58),
-      material: new THREE.MeshStandardMaterial({ color: style.helmet ?? '#d8b84f', roughness: 0.55 }),
-    });
-    helmet.position.set(0, 1.72, 0);
-    const badge = ENGINE.MeshNode.create({
-      name: 'WorkerBadge',
-      geometry: createWarehouseLabelGeometry(0.18, 0.07),
-      material: makeLabel(id.slice(-4), '#e0a24c'),
-    });
-    badge.position.set(0.13, 1.25, 0.155);
+    // Tomas already carries a helmet and workwear. Rigid duplicate vest/glove/hat
+    // shells hid the atlas and floated when the skeleton crouched or ran.
+    // Wearables have no physics, input or gameplay lifecycle. Raw meshes can be
+    // reparented onto animated bones without ending a SceneNode's play lifecycle.
+    const badge = new THREE.Mesh(
+      createWarehouseLabelGeometry(0.18, 0.07),
+      makeLabel(id.slice(-4), '#e0a24c')
+    );
+    badge.name = 'WorkerBadge';
+    badge.position.set(0.13, 1.25, -0.19);
+    badge.rotation.y = Math.PI;
     const contactShadow = ENGINE.MeshNode.create({
       name: 'WorkerContactShadow',
       geometry: new THREE.CircleGeometry(0.42, 20),
@@ -405,27 +376,26 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
     });
     contactShadow.rotation.x = -Math.PI / 2;
     contactShadow.position.y = 0.012;
-    const gloves = new THREE.MeshStandardMaterial({ color: style.gloves ?? '#263532', roughness: 0.9 });
-    const equipment = ENGINE.SceneNode.create({ name: `WorkerEquipment-${style.equipmentIndex ?? 0}` });
-    for (const side of [-1, 1]) {
-      const glove = ENGINE.MeshNode.create({
-        name: 'ProtectiveGlove',
-        geometry: new THREE.BoxGeometry(0.09, 0.14, 0.08),
-        material: gloves,
-      });
-      glove.position.set(side * 0.38, 0.88, 0.02);
-      equipment.add(glove);
-    }
+    const equipment = new THREE.Group();
+    equipment.name = `WorkerEquipment-${style.equipmentIndex ?? 0}`;
     if ((style.equipmentIndex ?? 0) % 2 === 0) {
-      const pouch = ENGINE.MeshNode.create({
-        name: 'ScannerPouch',
-        geometry: new THREE.BoxGeometry(0.18, 0.24, 0.11),
-        material: new THREE.MeshStandardMaterial({ color: '#202b2a', roughness: 0.84 }),
-      });
+      const pouch = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.24, 0.11),
+        new THREE.MeshStandardMaterial({ color: '#202b2a', roughness: 0.84 })
+      );
+      pouch.name = 'ScannerPouch';
       pouch.position.set(-0.26, 0.86, -0.12);
       equipment.add(pouch);
     }
-    this.add(rig.root, vestRoot, helmet, badge, equipment, contactShadow);
+    this.add(rig.root, badge, equipment, contactShadow);
+    this.readiness = rig.whenReady().then(async () => {
+      this.updateMatrixWorld(true);
+      const chest = rig.bones.spine2 ?? rig.bones.spine;
+      chest?.attach(badge);
+      rig.bones.hips?.attach(equipment);
+      await rig.prepareAnimations(['walk', 'run', 'crouchIdle', 'crouchWalk']);
+    });
+    void this.readiness.catch(() => undefined);
     const tree = ENGINE.BehaviorTreeNode.create({
       name: 'WarehouseWorkerBehavior',
       tickInterval: 0.05,
@@ -436,6 +406,10 @@ export class WarehouseWorkerNode extends ENGINE.SceneNode {
     });
     this.add(tree);
     this.setTickEnabled(true);
+  }
+
+  public whenReady(): Promise<void> {
+    return this.readiness;
   }
 
   public advanceRoute(deltaTime: number): void {
