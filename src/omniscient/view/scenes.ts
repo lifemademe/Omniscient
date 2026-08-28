@@ -58,6 +58,8 @@ import { CONTACT_GESTURES } from './gestures.js';
 import { placeRigged } from './riggedContact.js';
 import { dressRepairShop } from './repairShopDressing.js';
 import { dressSchoolCellar } from './schoolCellarDressing.js';
+import { doorstepPerformance } from './doorstepPerformance.js';
+import { dressDoorstep } from './doorstepDressing.js';
 import {
   buildStationScreen,
   SCREEN_H,
@@ -9018,10 +9020,8 @@ function buildNightDoor(scene: ContactScene): void {
    * backdrop - so cutting the opening without this would trade a door-shaped wall for a
    * door-shaped hole through the house onto the sky. Worse than the bug it fixes.
    *
-   * A shallow box, unlit and nearly black, with its faces turned inward. It only has to
-   * survive being looked into from the doorstep for the two seconds the door is open, and
-   * at that angle a hall is a dark volume with a floor catching a little light and
-   * something faint at the far end of it.
+   * A shallow inward-facing hall. Opening the door reveals its landing light, stair
+   * return and domestic details, with enough depth for Dorin to step inside.
    */
   const hallRoot = ENGINE.SceneNode.create({ name: 'Hall' });
   const HALL_D = 2.4;
@@ -9050,7 +9050,7 @@ function buildNightDoor(scene: ContactScene): void {
   // Floor and ceiling.
   const hallFloor = new THREE.PlaneGeometry(HALL_W, HALL_D);
   hallFloor.rotateX(-Math.PI / 2);
-  hallFloor.translate(DOOR_X, 0.01, back + HALL_D / 2);
+  hallFloor.translate(DOOR_X, 0.14, back + HALL_D / 2);
   hall.push(hallFloor);
   const hallCeil = new THREE.PlaneGeometry(HALL_W, HALL_D);
   hallCeil.rotateX(Math.PI / 2);
@@ -9059,11 +9059,25 @@ function buildNightDoor(scene: ContactScene): void {
   // The two side walls, each turned to face the middle.
   for (const side of [-1, 1] as const) {
     const wall = new THREE.PlaneGeometry(HALL_D, HALL_H);
-    wall.rotateY(side * (Math.PI / 2));
+    wall.rotateY(-side * (Math.PI / 2));
     wall.translate(DOOR_X + side * (HALL_W / 2), HALL_H / 2, back + HALL_D / 2);
     hall.push(wall);
   }
-  hallRoot.add(meshOf('HallShell', mergeGeometries(hall, false) ?? hall[0], MAT.hallDark));
+  hallRoot.add(meshOf('HallShell', mergeGeometries(hall, false) ?? hall[0],
+    new THREE.MeshStandardMaterial({ color: '#796b54', roughness: 0.96 })));
+  // A stair return and skirting give the opened door a human-scale depth cue.
+  const hallJoinery: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < 3; i++) {
+    const tread = new THREE.BoxGeometry(0.68, 0.15 * (i + 1), 0.3);
+    tread.translate(DOOR_X + 0.3, 0.14 + 0.075 * (i + 1), back + 0.85 - i * 0.3);
+    hallJoinery.push(tread);
+  }
+  for (const side of [-1, 1]) {
+    const skirting = new THREE.BoxGeometry(0.025, 0.12, HALL_D);
+    skirting.translate(DOOR_X + side * (HALL_W / 2 - 0.02), 0.2, back + HALL_D / 2);
+    hallJoinery.push(skirting);
+  }
+  hallRoot.add(meshOf('HallJoinery', mergeGeometries(hallJoinery, false) ?? hallJoinery[0], MAT.timber));
 
   /**
    * The landing light, arriving down the stairs.
@@ -9079,7 +9093,7 @@ function buildNightDoor(scene: ContactScene): void {
    */
   const spill = new THREE.PlaneGeometry(0.9, 1.5);
   spill.rotateX(-Math.PI / 2);
-  spill.translate(DOOR_X + 0.1, 0.02, -0.55 - HALL_D + 0.8);
+  spill.translate(DOOR_X + 0.1, 0.145, -0.55 - HALL_D + 0.8);
   hallRoot.add(meshOf('HallSpill', spill, MAT.landingSpill));
 
   /*
@@ -9830,6 +9844,7 @@ function buildNightDoor(scene: ContactScene): void {
        * beat the player earned and the door opening is only its consequence.
        */
       open: (tweener, node) => {
+        performance.open();
         /*
          * The pick comes out first.
          *
@@ -10152,6 +10167,7 @@ function buildNightDoor(scene: ContactScene): void {
        * keyway under that line is the world contradicting the man.
        */
       pick: (tweener) => {
+        performance.work();
         pick.visible = true;
         pickTip.visible = true;
         pickTip.position.set(0, 0, 0);
@@ -10243,6 +10259,7 @@ function buildNightDoor(scene: ContactScene): void {
     // handle already pushed down by whoever went in last time.
     handleNode.rotation.set(0, 0, 0);
     doorRoot.rotation.set(0, 0, 0);
+    hallLight.intensity = 0.001;
   });
 
   // -- The landing window he keeps looking at -------------------------------
@@ -10252,10 +10269,13 @@ function buildNightDoor(scene: ContactScene): void {
 
   const upperGlass = new THREE.PlaneGeometry(0.8, 1.02);
   upperGlass.translate(0.42, 3.5, -0.24);
-  scene.registerProp('landing', meshOf('Landing', upperGlass, MAT.landingLight));
+  const landing = meshOf('Landing', upperGlass, MAT.landingLight);
+  dressDoorstep(hallRoot, landing);
+  scene.registerProp('landing', landing);
 
   // -- Dorin ----------------------------------------------------------------
-  addContact(scene, 'Dorin', {
+  const workingHands: { left?: THREE.Vector3; right?: THREE.Vector3 } = {};
+  const dorin = addContact(scene, 'Dorin', {
     seed: 'dorin-apostol',
     height: 1.8,
     build: 0.5,
@@ -10270,37 +10290,21 @@ function buildNightDoor(scene: ContactScene): void {
     temperament: 'tired',
     garment: 'coat',
     colors: { garment: '#2f3138', underlayer: '#8f8778' },
-    position: new THREE.Vector3(0.62, 0, 0.62),
-    rotation: new THREE.Euler(0, -Math.PI * 0.72, 0),
-    /**
-     * No hand targets, and a raised rest instead.
-     *
-     * Both hands were authored onto the lock and both were out of reach - 0.877 and 1.007
-     * against a 0.626 arm. That is not a tuning miss: solved across a grid of positions
-     * and facings, there is NO placement that reaches that lock and still keeps him off
-     * the camera's own sightline, because the lock is 2cm of brass on a door he has to
-     * stand beside rather than in front of.
-     *
-     * So he gets a working rest: forearms up and forward, which at this distance and with
-     * the lock mostly behind his own body reads exactly as a man doing something to a door
-     * at two in the morning. The lock does not need his fingers on it; the hint highlights
-     * it and Dorin says what he is doing.
-     */
+    position: new THREE.Vector3(0.75, 0, 0.7),
+    rotation: new THREE.Euler(0, -Math.PI * 0.42, 0),
+    // The runtime performance moves him within reach before enabling the hand targets.
     reach: 0.9,
-    /*
-     * And settle his wrists.
-     *
-     * Reported as a hand bent oddly on the idle, with the reasonable question of whether
-     * the hand IK was doing it. It was not - he has no hand targets, so no solver ever
-     * touches him, and what was showing is the shared Mixamo idle's own wrist angle on
-     * somebody standing with his arms down rather than holding anything. Two thirds of the
-     * way back to the pose the model shipped in, which takes the break out and leaves the
-     * hand still moving with the arm.
-     */
+    handsOn: workingHands,
+    // Keep the idle wrist relaxed before he takes hold of the tools.
     settleWrists: 0.65,
     // Two in the morning, cold, and his mother has not answered since yesterday.
     liveliness: 1.25,
   });
+  const performance = doorstepPerformance(dorin, workingHands, pick);
+  scene.registerProp('doorstep-performance', ENGINE.SceneNode.create({ name: 'DoorstepPerformance' }), {
+    idle: (dt) => performance.idle(dt),
+  });
+  scene.onReset(() => performance.reset());
 
   // -- Light -----------------------------------------------------------------
   /**
@@ -10502,8 +10506,7 @@ function buildNightDoor(scene: ContactScene): void {
        *
        * The cause is the same one the fluorescent batten hit in Mirela's shop: a point light
        * a few centimetres from a surface, where the falloff term is enormous. There is a hood
-       * modelled over this bulb and it cannot help - nothing in this project casts shadows,
-       * so the hood is a shape, not an occluder.
+       * modelled over this bulb, but occlusion alone cannot fix that near-to-far ratio.
        *
        * Two changes, and neither is "turn it down":
        *
@@ -10515,11 +10518,11 @@ function buildNightDoor(scene: ContactScene): void {
        *    and at 1.25 it is about sixteen. The pool stays tight because `distance` still
        *    bounds it, which is what the note above is really asking for.
        *
-       * Intensity rises to 11 to keep the door where it was, since a slacker decay means less
-       * light arrives at the middle distances.
+       * The current pass restrains intensity to 2.3 so the facade supports Dorin's face
+       * instead of becoming the first read.
        */
       position: porchAt.clone().add(new THREE.Vector3(0, 0, 0.45)),
-      intensity: 11,
+      intensity: 2.3,
       color: new THREE.Color('#ffd49a'),
       distance: 5,
       decay: 1.25,
@@ -10530,7 +10533,7 @@ function buildNightDoor(scene: ContactScene): void {
     normalBias: 0.02,
     bias: -0.0005,
   });
-  scene.registerProp('porch', porchKey);;
+  scene.registerProp('porch', porchKey);
 
   /**
    * The sky, which this scene did not have.
@@ -10576,17 +10579,18 @@ function buildNightDoor(scene: ContactScene): void {
    */
   const stepBounce = ENGINE.PointLightNode.create({
     name: 'StepBounce',
-      // Dropped to 1.15 and widened to 2.1 on the second pass: at chest height with a
-      // 1.75 reach his coat and face read and his legs sat at 9 against a path at 12, so
-      // he faded into the ground he was standing on. A bounce off a step comes from low
-      // down anyway - it was at the wrong height as well as the wrong radius.
-    position: new THREE.Vector3(0.12, 1.15, 1.18),
-    intensity: 3.4,
+    // Local warm bounce keeps his turned face readable without brightening the street.
+    position: new THREE.Vector3(0.38, 1.4, 1.18),
+    intensity: 5.0,
     color: new THREE.Color('#ffc98d'),
     distance: 2.1,
     decay: 1.3,
   });
   scene.registerProp('step-bounce', stepBounce);
+  scene.onReset(() => {
+    stepBounce.intensity = 5;
+    stepBounce.distance = 2.1;
+  });
 
   /*
    * ## F10's third beat: the light on the step comes from inside the house
@@ -10606,7 +10610,7 @@ function buildNightDoor(scene: ContactScene): void {
   scene.registerLightBeat(
     'threshold',
     (t) => {
-      stepBounce.intensity = 3.4 + t * 1.2;
+      stepBounce.intensity = 5.0 + t * 0.6;
       stepBounce.distance = 2.1 + t * 0.9;
     },
     2.4
@@ -10707,6 +10711,22 @@ function buildNightDoor(scene: ContactScene): void {
     // lock used to be is a push-in on a door handle.
     target: new THREE.Vector3(0.2, 1.0, -0.22),
     duration: 2.0,
+  });
+  scene.registerShot('landing', {
+    position: new THREE.Vector3(-1.55, 2.1, 5.0),
+    target: new THREE.Vector3(0.3, 2.25, -0.25),
+    duration: 1.2,
+  });
+  scene.registerShot('working', {
+    // Left of his crouch: retain the tool contact without looking through his shoulder.
+    position: new THREE.Vector3(-1.1, 1.4, 2.5),
+    target: new THREE.Vector3(0.6, 1.0, 0.12),
+    duration: 1.0,
+  });
+  scene.registerShot('entry', {
+    position: new THREE.Vector3(-1.05, 1.7, 3.6),
+    target: new THREE.Vector3(-0.05, 1.14, -0.65),
+    duration: 1.2,
   });
 
   /**

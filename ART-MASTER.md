@@ -884,6 +884,28 @@ was green somewhere.
 
 Ordered by value per hour. Take from the top.
 
+**Dorin contact pass — user-directed D-1g extension, 2026-08-28: AT BAR (scoped visual pass, Codex).**
+Bar: worried person first, old lock second, inhabited home third; crisp night-time PS1
+staging, reachable working pose, readable pin board, and entry that precedes "I am in".
+Source: user recording `20260828-0649-44.1681924.mp4`. Scope: runtime scene choreography,
+local lights/hallway, lock UI, landing-window shot, and resolution presentation. Preserve
+puzzle rules, saved progress, existing house identity and global rendering.
+Implemented: restrained porch light and turned opening pose; walk/crouch with tool-following
+hand targets and a working camera clear of the console; top-aligned, full-width pin board
+with confirmed order and Dorin's actual per-pin feedback; framed landing window and a
+shallow inhabited hall. Door opening, entry and final words now occur in that order.
+Evidence: `scripts/dev/dorin-r3-opening.jpg`, `dorin-r2-landing.jpg`, `dorin-r2-lock.jpg`,
+`dorin-r3-working.jpg`, `dorin-r3-pin-set.jpg`, `dorin-r2-feedback.jpg` (failed pin),
+`dorin-r3-entry-0.jpg` through `dorin-r3-entry-4.jpg` (roughly 2.2-second intervals),
+`dorin-r3-result.jpg`, and `dorin-r3-return.jpg`. R2 landing/lock/feedback are unchanged in R3.
+R1 was NOT AT BAR: `dorin-r1-working.jpg` showed a camera inside the working pose.
+Fresh R3 critic returned AT BAR, noting hand/tool separation as non-blocking polish;
+separate whole-scene smoothing critic also returned AT BAR. Ordered captures prove the
+work/entry/resolution states, not exhaustive animation smoothness or aspect-ratio coverage.
+`pnpm lint`, `pnpm build`, and editor build passed. Live isolated-save review confirmed
+failed-pin feedback, sequence progression, entry before final reply, and return to globe.
+Implementation/evidence commit: recorded in the receipt immediately below after commit.
+
 **Vasile contact pass — user-directed D-1f extension, 2026-08-28: AT BAR (scoped visual pass, Codex).**
 Bar: Vasile first, routing junctions second, a recognizably flooded school cellar third;
 crisp PS1 treatment, readable untimed pipe board, and a visible drain followed by a human

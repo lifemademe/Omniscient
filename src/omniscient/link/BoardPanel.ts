@@ -678,9 +678,28 @@ const BOARD_CSS = `
  * object: the pin you look at is the button you press, so it keeps every bit of the existing
  * click and ordering logic untouched.
  */
+.omni-board--lock { gap: 12px; padding: 12px 10px 16px; }
+.omni-board--lock .omni-board__grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+.omni-board--lock .omni-board__foot { align-items: flex-start; }
+.omni-board--lock .omni-board__status {
+  font-size: calc(13px + var(--omni-font-boost, 0px));
+  line-height: 1.5;
+}
+.omni-board__lock-sequence {
+  color: #e0be82;
+  font-size: calc(12px + var(--omni-font-boost, 0px));
+  line-height: 1.5;
+  padding: 8px 10px;
+  border-left: 2px solid #a78048;
+  background: rgba(224, 162, 76, 0.04);
+}
 .omni-board__lock {
+  --pin-unit: clamp(1px, 0.18vh, 1.5px);
   position: relative;
-  padding: 10px 12px 8px;
+  padding: 14px 8px 10px;
   border: 1px solid rgba(127, 224, 138, 0.28);
   border-radius: 3px;
   background: rgba(6, 14, 9, 0.9);
@@ -690,22 +709,22 @@ const BOARD_CSS = `
  * belongs to the lock rather than to the machine reading it, and because the order numerals
  * are already amber - the two amber things are the two things about the lock's own state.
  *
- * 34px is the housing's 10px of padding plus 24 into the stack; both numbers are fixed here
- * on purpose, because the line has to stay still while the pins move through it.
+ * The housing padding plus 24 units into the stack. The line scales with the pins,
+ * but stays still while they move through it.
  */
 .omni-board__lock::after {
   content: "";
   position: absolute;
   left: 10px;
   right: 10px;
-  top: 34px;
+  top: calc(14px + 24 * var(--pin-unit));
   height: 1px;
   background: rgba(224, 162, 76, 0.5);
   pointer-events: none;
 }
 .omni-board__pins {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   /* NOT wrap. Five pins are a row, and a row that folds is not a lock any more. */
   flex-wrap: nowrap;
   align-items: flex-start;
@@ -713,18 +732,25 @@ const BOARD_CSS = `
 .omni-board__pin {
   flex: 1 1 0;
   min-width: 0;
+  min-height: 108px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 0;
+  gap: 6px;
+  padding: 0 0 8px;
   border: 0;
   background: none;
-  color: rgba(207, 233, 210, 0.7);
+  color: #b9d6bd;
   font: inherit;
-  font-size: calc(9px + var(--omni-font-boost, 0px));
+  font-size: calc(12px + var(--omni-font-boost, 0px));
   letter-spacing: 0.06em;
   cursor: pointer;
+}
+.omni-board__pin:hover { background: rgba(127, 224, 138, 0.06); }
+.omni-board__pin:focus-visible {
+  outline: 1px solid #a9dcad;
+  outline-offset: 2px;
+  background: rgba(127, 224, 138, 0.08);
 }
 /*
  * The stack: driver over key, with the gap between them that has to reach the shear line.
@@ -736,7 +762,7 @@ const BOARD_CSS = `
 .omni-board__pin-stack {
   position: relative;
   width: 100%;
-  height: 56px;
+  height: calc(56 * var(--pin-unit));
   transition: transform 0.16s cubic-bezier(0.2, 0.9, 0.3, 1);
 }
 .omni-board__pin-driver,
@@ -749,17 +775,18 @@ const BOARD_CSS = `
 /* Steel, and dull - a driver pin is the part you are not trying to place. */
 .omni-board__pin-driver {
   top: 0;
-  height: 28px;
+  height: calc(28 * var(--pin-unit));
   background: linear-gradient(90deg, rgba(120, 136, 124, 0.5), rgba(168, 184, 170, 0.85), rgba(120, 136, 124, 0.5));
 }
 /* Brass, and warm - the key pin is the one the pick is under. */
 .omni-board__pin-key {
-  top: 32px;
-  height: 24px;
+  top: calc(32 * var(--pin-unit));
+  height: calc(24 * var(--pin-unit));
   background: linear-gradient(90deg, rgba(150, 104, 44, 0.55), rgba(224, 172, 92, 0.95), rgba(150, 104, 44, 0.55));
 }
-.omni-board__pin:hover .omni-board__pin-stack { transform: translateY(-2px); }
-.omni-board__pin--picked .omni-board__pin-stack { transform: translateY(-6px); }
+.omni-board__pin:hover .omni-board__pin-stack { transform: translateY(calc(-2 * var(--pin-unit))); }
+.omni-board__pin--picked .omni-board__pin-stack,
+.omni-board__pin--picked:hover .omni-board__pin-stack { transform: translateY(calc(-6 * var(--pin-unit))); }
 /* Set pins hold a little light, so a solved stack reads at a glance from across the panel. */
 .omni-board__pin--picked .omni-board__pin-key {
   background: linear-gradient(90deg, rgba(180, 128, 56, 0.7), rgba(255, 208, 130, 1), rgba(180, 128, 56, 0.7));
@@ -767,8 +794,8 @@ const BOARD_CSS = `
 }
 /* The number is the readout: a pin's place in the order the player is proposing. */
 .omni-board__pin-order {
-  min-height: 15px;
-  font-size: calc(13px + var(--omni-font-boost, 0px));
+  min-height: 20px;
+  font-size: calc(14px + var(--omni-font-boost, 0px));
   color: #e0a24c;
   letter-spacing: 0.04em;
 }
@@ -902,6 +929,7 @@ export class BoardPanel {
   private cellButtons: HTMLButtonElement[] = [];
   /** Lock pins, by id. */
   private pinButtons = new Map<string, { button: HTMLButtonElement; order: HTMLSpanElement }>();
+  private lockSequence: HTMLDivElement | null = null;
   /** The order the player is proposing, pin ids front to back. */
   private order: string[] = [];
   /** The one thing out of the bag the player has hold of. */
@@ -1047,6 +1075,7 @@ export class BoardPanel {
     this.view = view ?? null;
     this.element.classList.toggle('omni-board--relations', view?.kind === 'relations');
     this.element.classList.toggle('omni-board--pipes', view?.kind === 'pipes');
+    this.element.classList.toggle('omni-board--lock', view?.kind === 'lock');
     /*
      * The camera feed belongs to the chase and to nothing else.
      *
@@ -1105,6 +1134,7 @@ export class BoardPanel {
 
   private build(view: DeviceView): void {
     this.grid.replaceChildren();
+    this.lockSequence = null;
     this.personButtons.clear();
     this.slotButtons.clear();
     this.cellButtons = [];
@@ -2209,10 +2239,8 @@ export class BoardPanel {
   /**
    * The lock: a row of pins, tapped into an order.
    *
-   * Tap a pin to add it to the sequence, tap it again to take it and everything after it
-   * back off - because a lock is worked in order and undoing the third pin necessarily
-   * undoes the fourth and fifth. Making the control behave the way the mechanism behaves
-   * is cheaper to learn than any label explaining it would be.
+   * Each press is tried immediately. The runtime confirms the growing sequence or drops
+   * the set; the panel only displays that result, never grades a pin itself.
    */
   private buildLock(pins: Array<{ id: string; label: string }>): void {
     /*
@@ -2231,6 +2259,7 @@ export class BoardPanel {
       const button = document.createElement('button');
       button.className = 'omni-board__pin';
       button.type = 'button';
+      button.setAttribute('aria-label', `Try ${pin.label}`);
 
       /*
        * Stack first, numeral under it. The numeral used to sit on top, which put a
@@ -2305,6 +2334,10 @@ export class BoardPanel {
 
     // The housing, not the bare row - see buildLock's header for why the shear line needs it.
     this.grid.appendChild(housing);
+    this.lockSequence = document.createElement('div');
+    this.lockSequence.className = 'omni-board__lock-sequence';
+    this.lockSequence.setAttribute('role', 'status');
+    this.grid.appendChild(this.lockSequence);
   }
 
   /**
@@ -2506,7 +2539,14 @@ export class BoardPanel {
       for (const [id, parts] of this.pinButtons) {
         const at = this.order.indexOf(id);
         parts.button.classList.toggle('omni-board__pin--picked', at >= 0);
+        parts.button.setAttribute('aria-pressed', String(at >= 0));
         parts.order.textContent = at >= 0 ? String(at + 1) : '';
+      }
+      if (this.lockSequence) {
+        const sequence = this.order.map((id) => view.pins.find((pin) => pin.id === id)?.label ?? id);
+        this.lockSequence.textContent = sequence.length > 0
+          ? `Confirmed ${view.set}/${view.pins.length}: ${sequence.join(' → ')}`
+          : `Confirmed 0/${view.pins.length} — no pins set`;
       }
 
       /*

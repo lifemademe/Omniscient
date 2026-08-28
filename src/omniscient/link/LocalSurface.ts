@@ -132,6 +132,9 @@ export const TERMINAL_CSS = `
 /* Pipe routing is the task on this tab, not a message waiting at the foot of a chat. */
 .omni-terminal__log--pipes > :first-child { margin-top: 0; }
 .omni-terminal__log--pipes { padding: 4px 0 12px; container-type: size; }
+/* The lock is an instrument, not a short transcript anchored beside the input. */
+.omni-terminal__log--lock > :first-child { margin-top: 0; }
+.omni-terminal__log--lock { padding: 4px 0 12px; }
 .omni-line__who {
   display: block;
   font-size: calc(11px + var(--omni-font-boost, 0px));
@@ -787,6 +790,8 @@ export class LocalSurface implements InterventionSurface {
   /** Last focus state handed to RoomTone, so the duck is edge-triggered. */
   private roomToneOnConsole = false;
   private lastState: SurfaceState | null = null;
+  private lockReplyAfter: number | null = null;
+  private lockFeedback: string | null = null;
   /**
    * The way out of a request, held so it can be locked.
    *
@@ -1577,6 +1582,10 @@ export class LocalSurface implements InterventionSurface {
   }
 
   private dispatch(message: PlayerMessage): void {
+    if (message.kind === 'device' && message.submission.kind === 'lock') {
+      // Mark the transcript boundary BEFORE synchronous session dispatch returns a reply.
+      this.lockReplyAfter = this.lastState?.transcript.length ?? 0;
+    }
     /*
      * Remember whether the player SPOKE, as opposed to looked something up.
      *
@@ -1676,8 +1685,22 @@ export class LocalSurface implements InterventionSurface {
     if (talkingTo !== this.talkingTo || state.transcript.length < this.renderedCount) {
       this.logElement.replaceChildren();
       this.renderedCount = 0;
+      this.lockReplyAfter = null;
+      this.lockFeedback = null;
     }
     this.talkingTo = talkingTo;
+    if (state.device?.kind !== 'lock') {
+      this.lockReplyAfter = null;
+      this.lockFeedback = null;
+    } else if (this.lockReplyAfter !== null) {
+      const reply = state.transcript.slice(this.lockReplyAfter).find((entry) => entry.source === 'contact');
+      if (reply) {
+        // The first paragraph is his actual pin reading. On a dropped set the rest repeats
+        // the working instructions; those remain available in Chat rather than burying it.
+        this.lockFeedback = reply.body.split(/\n\s*\n/, 1)[0];
+        this.lockReplyAfter = null;
+      }
+    }
     /**
      * One blip per line that arrives, and a stagger so they do not all land at once.
      *
@@ -1815,7 +1838,9 @@ export class LocalSurface implements InterventionSurface {
     this.renderTabs(state);
     this.renderPanel(state);
     this.renderExtra(state);
-    this.board?.update(state.device);
+    this.board?.update(state.device?.kind === 'lock' && this.lockFeedback
+      ? { ...state.device, note: state.device.note ?? this.lockFeedback }
+      : state.device);
 
     // While confirming or writing a note, the free-text field is not the way in.
     const typing = state.awaitingInput && !state.confirming;
@@ -1934,6 +1959,7 @@ export class LocalSurface implements InterventionSurface {
      */
     const onConsole = this.tab === 'console';
     this.panelElement.classList.toggle('omni-terminal__log--pipes', onConsole && state.device?.kind === 'pipes');
+    this.panelElement.classList.toggle('omni-terminal__log--lock', onConsole && state.device?.kind === 'lock');
     if (onConsole !== this.roomToneOnConsole) {
       this.roomToneOnConsole = onConsole;
       setRoomToneFocus(onConsole);

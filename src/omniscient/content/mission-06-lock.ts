@@ -94,6 +94,9 @@ export const MISSION_06: MissionDefinition = {
   sceneId: 'scene-night-door',
   archetype: 'diagnosis',
   objective: 'Get Dorin through his mother’s door without breaking it.',
+  resolutionPendingObjective: 'The lock has released. Dorin is going inside…',
+  resolutionObjective: 'Door open, undamaged. His mother is safe.',
+  resolutionDelayMs: 9500,
   // Said once, on the first re-contact after a lost attempt. See reopeningSay in types.
   reopeningSay: 'The door has not moved. Neither have I, much.',
   urgency: Urgency.Timed,
@@ -143,6 +146,7 @@ export const MISSION_06: MissionDefinition = {
         'The landing light. It has been on since he got here, which he says means nothing ' +
         'because she leaves it on, and he keeps looking up at it anyway.',
       keywords: ['window', 'light'],
+      cue: 'camera.push:landing,camera.push:default@3.2',
     },
     {
       id: 'hint-hands',
@@ -314,7 +318,7 @@ export const MISSION_06: MissionDefinition = {
        * else's hands are shaking.
        */
       id: 'working',
-      framing: 'camera.push-in:lock',
+      framing: 'camera.push-in:working',
       tempo: Tempo.Act,
       /**
        * The method, said out loud, because it is not guessable.
@@ -352,7 +356,10 @@ export const MISSION_06: MissionDefinition = {
         lock: HER_DOOR,
         // F10: the bounce on the step warms with the door, so the light reaching him is the
         // house's. See registerLightBeat('threshold').
-        onSolved: { to: 'solved', environment: 'prop.open:door,light.open:threshold' },
+        onSolved: {
+          to: 'solved',
+          environment: 'prop.open:door,light.open:threshold@2,camera.push:entry@1.7',
+        },
         onWrong: { to: 'working' },
         /*
          * Points at the report rather than just announcing the failure.
@@ -400,7 +407,7 @@ export const MISSION_06: MissionDefinition = {
     },
     {
       id: 'solved',
-      gesture: 'prop.nod:contact',
+      gesture: 'prop.nod:contact@9.2',
       tempo: Tempo.Respond,
       say:
         'That is it - that is the whole thing turning. I am in.\n\n...She is on the landing. ' +

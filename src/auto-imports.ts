@@ -139,6 +139,8 @@ import './omniscient/session/SessionController.js';
 import './omniscient/vfx/library.js';
 import './omniscient/view/character-node.js';
 import './omniscient/view/ContactScene.js';
+import './omniscient/view/doorstepDressing.js';
+import './omniscient/view/doorstepPerformance.js';
 import './omniscient/view/gestures.js';
 import './omniscient/view/mowing.js';
 import './omniscient/view/pixelFont.js';
